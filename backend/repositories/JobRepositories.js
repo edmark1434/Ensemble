@@ -1405,7 +1405,7 @@ async function expireJobImmediatelyRepositories(jobId, accountIds) {
 
         const updateRes = await client.query(`
             UPDATE jobs
-            SET status = 'Expired',
+            SET status = 'Closed',
                 updated_at = NOW()
             WHERE job_id = $1
             RETURNING *;
@@ -1540,7 +1540,7 @@ async function autoExpireJobsRepositories() {
             }
 
             await client.query(`
-                UPDATE jobs SET status = 'Expired', updated_at = NOW() WHERE job_id = $1
+                UPDATE jobs SET status = 'Closed', updated_at = NOW() WHERE job_id = $1
             `, [jobId]);
 
             expiredJobs.push(jobId);

@@ -92,7 +92,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
             description: j.description || "",
             category: j.category,
             difficulty: j.experience_level,
-            status: j.status,
+            status: j.status?.toLowerCase() === "open" ? "Open" : "Closed",
             priceRange: !j.rate_credits_max
               ? `${j.rate_credits_min?.toLocaleString() || 0}+`
               : `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
@@ -208,7 +208,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
                           : "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {job.status}
+                      {job.status === "Open" ? "Open" : "Closed"}
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300">
                       {job.category}
@@ -284,7 +284,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
                           : "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {job.status}
+                      {job.status === "Open" ? "Open" : "Closed"}
                     </span>
                     <span className="px-2.5 py-1 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300">
                       {job.category}

@@ -2,14 +2,10 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   TrendingUp,
-  Star,
   CheckCircle2,
   ArrowRight,
   Plus,
   Loader2,
-  HelpCircle,
-  User,
-  Users,
   Briefcase,
   SlidersHorizontal,
   Sparkles,
@@ -61,6 +57,42 @@ export const JobPostsInfoGuide: React.FC = () => {
     },
   ];
 
+  const jobStatuses = [
+    {
+      name: "Open",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+      summary: "Actively accepting proposals within application window",
+      desc: "Job is live on the marketplace. A live countdown timer shows remaining application intake time (12h, 24h, 3d, 7d, 14d). Freelancers can submit pitches (10 credits submission fee).",
+    },
+    {
+      name: "Closed",
+      badgeClass: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+      summary: "Intake concluded; proposals locked",
+      desc: "Application window has expired, required seats were hired, or author closed early. Submissions are locked. If closed without a hire, applicant submission fees are refunded automatically.",
+    },
+  ];
+
+  const refundPolicies = [
+    {
+      title: "Client 100% Posting Fee Refund",
+      amount: "50 Credits Refunded",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+      desc: "If an open job receives 0 proposals during its active window, or if the client force-closes the job with 0 proposals, the 50-credit posting fee is immediately refunded back to the client wallet.",
+    },
+    {
+      title: "Freelancer 100% Submission Fee Refund",
+      amount: "10 Credits Per Applicant",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
+      desc: "If a job's application window expires without the client hiring anyone, all applicant submission fees (10 credits each) are returned immediately to the freelancers' wallets.",
+    },
+    {
+      title: "Application Window Presets",
+      amount: "12h · 24h · 3d · 7d · 14d",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+      desc: "Clients choose how long their job post collects proposals. A live countdown timer is shown on the job details page for full transparency to both clients and applicants.",
+    },
+  ];
+
   const jobTypeCriteria = [
     {
       type: "Budget Range Format",
@@ -106,6 +138,26 @@ export const JobPostsInfoGuide: React.FC = () => {
       effect: "Grants prominent visibility on Job Market browse and Home page Latest Job Posts.",
     },
     {
+      name: "Open",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
+          Open
+        </span>
+      ),
+      condition: "Active within application intake window with open hiring seats remaining.",
+      effect: "Actively accepting proposals from creators. A live countdown timer displays remaining intake time.",
+    },
+    {
+      name: "Closed",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40">
+          Closed
+        </span>
+      ),
+      condition: "Application window countdown expired, positions filled, or job closed early by author with 0 proposals.",
+      effect: "Proposal submissions are locked. Automated refunds are processed (50c client refund if 0 applicants; 10c proposal refunds if closed without hire).",
+    },
+    {
       name: "Budget Range",
       badge: (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-[11px] font-semibold shadow-2xs">
@@ -125,16 +177,6 @@ export const JobPostsInfoGuide: React.FC = () => {
       ),
       condition: "Client provides starting floor without an upper ceiling constraint.",
       effect: "Freelancers and studios can propose their custom rate and delivery milestones without limits.",
-    },
-    {
-      name: "Open",
-      badge: (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
-          Open
-        </span>
-      ),
-      condition: "Unfilled hiring seats remain available.",
-      effect: "Actively accepting proposals from all eligible creators.",
     },
   ];
 
@@ -158,24 +200,81 @@ export const JobPostsInfoGuide: React.FC = () => {
 
   return (
     <div
-      className="space-y-6 w-full animate-fade-in"
-      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      className="space-y-6 w-full animate-fade-in font-['Plus_Jakarta_Sans',sans-serif]"
     >
-      {/* Header */}
+      {/* Header - Strictly No Icon Beside Title */}
       <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300">
-            <HelpCircle className="w-4 h-4" />
-          </span>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-            How Job Market Ranking & The "Rising" Badge Work
-          </h1>
-        </div>
-        <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
-          Jobs on the platform are ordered using a <strong>100-Point Type-Aware Discovery Algorithm</strong>.
-          This ensures new clients who write comprehensive briefs and set fair budgets compete equally
-          with established clients, while keeping fresh opportunities visible to freelancers.
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          Job Market Ranking, Lifecycle & Status Guide
+        </h1>
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 mt-1.5 leading-relaxed max-w-4xl">
+          Jobs on the platform are ordered using a <strong>100-Point Type-Aware Discovery Algorithm</strong> and operate on transparent application windows with automated refund protections.
         </p>
+      </div>
+
+      {/* Section: Job Listing Lifecycle: Open vs Closed */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+            Job Listing Statuses (Open vs Closed)
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+            Job listings are strictly categorized as <strong>Open</strong> or <strong>Closed</strong> across all marketplace browsing lists.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {jobStatuses.map((js) => (
+            <div
+              key={js.name}
+              className="p-4 rounded-xl border border-gray-200/90 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] space-y-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-0.5 rounded-full border text-xs font-bold ${js.badgeClass}`}>
+                  {js.name}
+                </span>
+                <span className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
+                  {js.summary}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                {js.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Section: Application Window & Automated Refund Guarantees */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs space-y-4">
+        <div className="border-l-4 border-l-amber-400 pl-3">
+          <h2 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+            Application Window Intake & Automated Refunds
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+            Every published job post has a set window and guaranteed automatic refunds to protect user balances.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {refundPolicies.map((rp) => (
+            <div
+              key={rp.title}
+              className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] flex flex-col justify-between space-y-3"
+            >
+              <div>
+                <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-mono font-bold mb-2 ${rp.badgeClass}`}>
+                  {rp.amount}
+                </span>
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                  {rp.title}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-zinc-400 mt-2 leading-relaxed">
+                  {rp.desc}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Section 1: The 4 Scoring Pillars (Clean Table) */}
@@ -310,10 +409,10 @@ export const JobPostsInfoGuide: React.FC = () => {
       <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xs">
         <div className="p-5 border-b border-gray-200 dark:border-white/10">
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">
-            Job Card Badges & Indicators
+            Job Card Badges & Status Indicators
           </h2>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-            Clear visual tags attached to each job card across browsing lists and details views.
+            Clear visual status and qualification tags displayed on job cards and listings.
           </p>
         </div>
 

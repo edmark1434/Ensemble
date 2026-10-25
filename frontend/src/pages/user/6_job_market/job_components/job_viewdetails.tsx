@@ -18,6 +18,49 @@ interface JobViewDetailsProps {
   onToggleSave?: (jobId: string) => void;
 }
 
+const CircularProgress: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}> = ({ percentage, size = 36, strokeWidth = 3.5 }) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0 select-none"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-gray-200 dark:stroke-white/10"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-blue-600 dark:stroke-blue-500 transition-all duration-500 ease-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono text-gray-800 dark:text-zinc-100">
+        {clamped}%
+      </span>
+    </div>
+  );
+};
+
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
@@ -236,29 +279,41 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                             <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.jobTypeLabel}</strong></span>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.bayesianScore * 35).toFixed(1)}
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.bayesianScore * 35).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.bayesianScore * 100} size={34} strokeWidth={3} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.freshnessScore * 25).toFixed(1)}
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.freshnessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.freshnessScore * 100} size={34} strokeWidth={3} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.completenessScore * 25).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.completenessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.completenessScore * 100} size={34} strokeWidth={3} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.availabilityScore * 15).toFixed(1)}
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.availabilityScore * 15).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.availabilityScore * 100} size={34} strokeWidth={3} />
                             </div>
                           </div>
 

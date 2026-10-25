@@ -50,6 +50,49 @@ import type { Job } from "../job_components/job_lists";
 import { computeJobRankingBreakdown } from "../job_ranking";
 import { formatDistanceToNow } from "date-fns";
 
+const CircularProgress: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}> = ({ percentage, size = 36, strokeWidth = 3.5 }) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0 select-none"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-gray-200 dark:stroke-white/10"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-blue-600 dark:stroke-blue-500 transition-all duration-500 ease-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono text-gray-800 dark:text-zinc-100">
+        {clamped}%
+      </span>
+    </div>
+  );
+};
+
 const JobFullPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -210,7 +253,7 @@ const JobFullPage: React.FC = () => {
     try {
       const res = await api.post(`/api/jobs/${job.id}/expire-now`);
       if (res.data?.success) {
-        setActionSuccessMsg(res.data.message || "Job expired and 50 credits refunded to your wallet.");
+        setActionSuccessMsg(res.data.message || "Job closed and 50 credits refunded to your wallet.");
         setReloadTrigger((prev) => prev + 1);
         setIsExpireModalOpen(false);
       }
@@ -261,6 +304,7 @@ const JobFullPage: React.FC = () => {
   const appDeadlineTime = job?.applicationDeadline ? new Date(job.applicationDeadline).getTime() : null;
   const isWindowExpired = Boolean(
     job?.status?.toLowerCase() === "expired" ||
+    job?.status?.toLowerCase() === "closed" ||
     (appDeadlineTime && appDeadlineTime <= nowTime)
   );
   const hoursRemaining = appDeadlineTime ? Math.max(0, Math.round((appDeadlineTime - nowTime) / (1000 * 60 * 60))) : null;
@@ -574,12 +618,12 @@ const JobFullPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Expired Job Notice */}
-              {job.status?.toLowerCase() === "expired" && (
+              {/* Closed Job Notice */}
+              {(job.status?.toLowerCase() === "expired" || job.status?.toLowerCase() === "closed") && (
                 <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40 p-4 flex items-center justify-between gap-3 text-xs text-zinc-700 dark:text-zinc-300">
                   <div className="flex items-center gap-2 font-semibold">
                     <CheckCircle2 className="h-4 w-4 text-zinc-500 shrink-0" />
-                    <span>This job post has expired.</span>
+                    <span>This job post is closed.</span>
                   </div>
                   <span className="text-zinc-500 dark:text-zinc-400">
                     {job.isOwnPost ? "Posting fee was refunded to your wallet." : "Proposal intake has closed."}
@@ -1106,30 +1150,53 @@ const JobFullPage: React.FC = () => {
                           <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
                             <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.jobTypeLabel}</strong></span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.bayesianScore * 35).toFixed(1)}
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Trust <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(35)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.bayesianScore * 35).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.bayesianScore * 100} size={36} strokeWidth={3.5} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.freshnessScore * 25).toFixed(1)}
+
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Freshness <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(25)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.freshnessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.freshnessScore * 100} size={36} strokeWidth={3.5} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.completenessScore * 25).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Brief & Bid <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(25)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.completenessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.completenessScore * 100} size={36} strokeWidth={3.5} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.availabilityScore * 15).toFixed(1)}
+
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Open Seats <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(15)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.availabilityScore * 15).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.availabilityScore * 100} size={36} strokeWidth={3.5} />
                             </div>
                           </div>
 
@@ -1323,8 +1390,8 @@ const JobFullPage: React.FC = () => {
               {/* Job Activity Insights (2.D) */}
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 space-y-3.5 shadow-sm backdrop-blur-xl">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-blue-500" /> Activity on this Job
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+                    Activity on this Job
                   </h3>
                   <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-mono">Live stats</span>
                 </div>
@@ -1334,7 +1401,7 @@ const JobFullPage: React.FC = () => {
                     <span className="font-bold text-gray-900 dark:text-white font-mono">{job.applicantsCount}</span>
                   </div>
                   <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
-                    <span className="text-gray-500 dark:text-zinc-400">Interviewing / Shortlisted:</span>
+                    <span className="text-gray-500 dark:text-zinc-400">Shortlisted:</span>
                     <span className="font-bold text-amber-500 font-mono">{job.shortlistedCount ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
