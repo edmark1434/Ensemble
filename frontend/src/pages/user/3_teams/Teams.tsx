@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Briefcase, CheckCircle2, Grid3x3, List, Plus, Search, UserPlus, Users } from "lucide-react";
+import { ArrowUpRight, Briefcase, CheckCircle2, Crown, Grid3x3, List, Plus, Search, UserPlus, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
@@ -8,6 +8,18 @@ import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import EditTeamModal, { type TeamFormValues } from "./team_modals/EditTeamModal";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
+
+interface TeamCreationEligibility {
+  allowed: boolean;
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  unlimited: boolean;
+  planName: string;
+  code: string | null;
+  message: string | null;
+}
 
 interface Team {
   team_id: string;
@@ -60,6 +72,41 @@ export default function Teams() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [eligibility, setEligibility] = useState<TeamCreationEligibility | null>(null);
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+
+  const loadEligibility = useCallback(async () => {
+    try {
+      const response = await api.get("/api/teams/creation-eligibility");
+      if (response.data?.success && response.data.data) {
+        setEligibility(response.data.data as TeamCreationEligibility);
+      }
+    } catch (error: unknown) {
+      console.error("Unable to load team creation eligibility", error);
+    }
+  }, []);
+
+  const handleCreateTeamClick = () => {
+    void continueIfAccountVerified(
+      () => {
+        if (eligibility && !eligibility.allowed) {
+          setIsLimitModalOpen(true);
+          return;
+        }
+        setIsCreateModalOpen(true);
+      },
+      false,
+      "Account Verification is required before creating a Team. Please verify your identity first."
+    );
+  };
+
+  const handleJoinWithCodeClick = () => {
+    void continueIfAccountVerified(
+      () => setIsJoinModalOpen(true),
+      false,
+      "Account Verification is required before joining a Team with an invite code. Please verify your identity first."
+    );
+  };
 
   const getImageUrl = (path?: string) => {
     if (!path) return "";
@@ -91,7 +138,8 @@ export default function Teams() {
 
   useEffect(() => {
     void loadTeams(true);
-  }, [loadTeams]);
+    void loadEligibility();
+  }, [loadTeams, loadEligibility]);
 
   const createTeam = async ({ photo, ...teamValues }: TeamFormValues & { photo: File }) => {
     if (!photo.type.startsWith("image/")) {
@@ -132,6 +180,7 @@ export default function Teams() {
       ]);
       setActiveTab("general");
       void loadTeams(false);
+      void loadEligibility();
     } catch (error: unknown) {
       showErrorToast(getApiError(error, "Unable to create team"));
     } finally {
@@ -160,6 +209,7 @@ export default function Teams() {
       setJoinCode("");
       setActiveTab("general");
       void loadTeams(false);
+      void loadEligibility();
     } catch (error: unknown) {
       showErrorToast(getApiError(error, "Unable to join team"));
     } finally {
@@ -282,10 +332,16 @@ export default function Teams() {
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
                         team.current_user_role === "Owner"
                           ? "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                          : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                          ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
                           : "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
                       }`}
                     >
-                      {team.current_user_role}
+                      {team.current_user_role === "Owner"
+                        ? "Team Leader"
+                        : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                        ? "Representative"
+                        : "Member"}
                     </span>
                   )}
 
@@ -402,10 +458,16 @@ export default function Teams() {
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                       team.current_user_role === "Owner"
                         ? "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                        : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                        ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
                         : "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
                     }`}
                   >
-                    {team.current_user_role}
+                    {team.current_user_role === "Owner"
+                      ? "Team Leader"
+                      : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                      ? "Representative"
+                      : "Member"}
                   </span>
                 )}
 
@@ -446,7 +508,7 @@ export default function Teams() {
         {/* Action Bar (Identical Layout to /projects) */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
           <button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={handleCreateTeamClick}
             className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group cursor-pointer"
           >
             <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
@@ -454,12 +516,24 @@ export default function Teams() {
           </button>
 
           <button
-            onClick={() => setIsJoinModalOpen(true)}
+            onClick={handleJoinWithCodeClick}
             className="shrink-0 flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-5 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition hover:scale-105 cursor-pointer shadow-xs"
           >
             <UserPlus className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
             <span>Join with Code</span>
           </button>
+
+          {eligibility && (
+            <div className="shrink-0 flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-2.5 text-xs shadow-xs">
+              <Users className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+              <span className="font-semibold text-gray-800 dark:text-zinc-200">
+                {eligibility.unlimited ? "Unlimited Teams" : `${eligibility.used} / ${eligibility.limit} Teams`}
+              </span>
+              <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-zinc-300">
+                {eligibility.planName}
+              </span>
+            </div>
+          )}
 
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
@@ -603,7 +677,7 @@ export default function Teams() {
                   : "You are not a member of any general team yet. Create your own team or join one with an invite code."
               }
               actionLabel="Create a Team"
-              onAction={() => setIsCreateModalOpen(true)}
+              onAction={handleCreateTeamClick}
               className="my-4"
             />
           ) : (
@@ -677,6 +751,64 @@ export default function Teams() {
                 className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? "Joining..." : "Join Team"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Team Creation Limit Modal */}
+      {isLimitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <Crown className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                  Team Creation Limit Reached
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  Subscription plan entitlement reached
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-4 text-xs space-y-2">
+              <div className="flex justify-between items-center text-gray-600 dark:text-zinc-300">
+                <span>Current Plan</span>
+                <span className="font-bold text-gray-900 dark:text-white">{eligibility?.planName || "Free"}</span>
+              </div>
+              <div className="flex justify-between items-center text-gray-600 dark:text-zinc-300">
+                <span>Teams Created</span>
+                <span className="font-bold text-gray-900 dark:text-white">
+                  {eligibility?.used || 0} / {eligibility?.unlimited ? "Unlimited" : (eligibility?.limit || 1)}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 pt-2 border-t border-gray-200 dark:border-white/10 leading-relaxed">
+                Your current <span className="font-semibold text-gray-900 dark:text-white">{eligibility?.planName || "Free"}</span> plan allows creating up to <span className="font-semibold text-gray-900 dark:text-white">{eligibility?.limit || 1} team{eligibility?.limit === 1 ? "" : "s"}</span>. Upgrade to Premium or Business to create more collaborative team workspaces.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLimitModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-white/15 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLimitModalOpen(false);
+                  navigate("/settings", { state: { tab: "subscription" } });
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>Upgrade Plan</span>
+                <ArrowUpRight className="h-4 w-4" />
               </button>
             </div>
           </div>

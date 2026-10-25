@@ -1,6 +1,6 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp } from "lucide-react";
+import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
@@ -62,6 +62,12 @@ export interface Job {
   shortlistedCount?: number;
   clientHireRate?: number;
   clientLastActive?: string;
+  applicationDeadline?: string;
+  isUrgent?: boolean;
+  hardDeadline?: string;
+  freeExtensionCount?: number;
+  applicationExtendedAt?: string;
+  postingFeeCredits?: number;
 }
 
 interface JobListProps {
@@ -236,26 +242,21 @@ const JobList: React.FC<JobListProps> = ({
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
                       
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                           <Send className="h-3 w-3" />
                           <span>{job.applicantsCount || 0} Proposals</span>
                         </div>
+                        {job.hasProposed && (
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600/90 backdrop-blur-sm text-white text-[10px] font-bold border border-emerald-400/30 shadow-xs">
+                            <Check className="h-3 w-3" />
+                            <span>Applied</span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Bottom-left Hiring Type Tag */}
+                      {/* Bottom-left Difficulty Tag */}
                       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
-                        {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team") ? (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                            <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
-                            <span>Team</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                            <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
-                            <span>Individual</span>
-                          </span>
-                        )}
                         <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                           {job.difficulty || "Beginner"}
                         </span>
@@ -461,19 +462,8 @@ const JobList: React.FC<JobListProps> = ({
                   )}
                 </div>
 
-                {/* Bottom-left Hiring Type Tag on Thumbnail */}
+                {/* Bottom-left Difficulty Tag on Thumbnail */}
                 <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
-                  {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team") ? (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                      <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
-                      <span>Team</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                      <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
-                      <span>Individual</span>
-                    </span>
-                  )}
                   <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                     {job.difficulty || "Beginner"}
                   </span>
@@ -499,6 +489,11 @@ const JobList: React.FC<JobListProps> = ({
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {job.category || "General"}
                       </span>
+                      {job.hasProposed && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
+                          <Check className="h-2.5 w-2.5" /> Applied
+                        </span>
+                      )}
                       {rankInfo.isRisingJob && (
                         <button
                           type="button"

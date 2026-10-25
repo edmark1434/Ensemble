@@ -17,10 +17,23 @@ export interface GalleryItem {
   file_url?: string;
   file_mimetype?: string;
   created_at: string;
+  member_name?: string;
+  member_avatar?: string;
+  member_is_leader?: boolean;
+  member_is_proposer?: boolean;
 }
 
 interface ProfileGalleryProps {
-  accountId: string;
+  accountId?: string;
+  memberAccounts?: {
+    account_id: string;
+    display_name: string;
+    handle?: string;
+    avatar_path?: string;
+    is_leader?: boolean;
+    is_proposer?: boolean;
+  }[];
+  unlimited?: boolean;
   isOwner?: boolean;
 }
 
@@ -33,7 +46,12 @@ const constructAssetUrl = (path: string | undefined): string | undefined => {
   return `${cloudfrontUrl}/${cleanPath}`;
 };
 
-export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOwner = false }) => {
+export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({
+  accountId = "",
+  memberAccounts,
+  unlimited = false,
+  isOwner = false,
+}) => {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -62,22 +80,56 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
     setItemToEdit(item);
   };
 
+  const memberIdsKey = Array.isArray(memberAccounts) && memberAccounts.length > 0
+    ? memberAccounts.map((m) => m.account_id).join(",")
+    : "";
+
   const fetchGalleries = useCallback(async () => {
-    if (!accountId) return;
     try {
       setLoading(true);
+      if (Array.isArray(memberAccounts) && memberAccounts.length > 0) {
+        const results = await Promise.allSettled(
+          memberAccounts.map(async (m) => {
+            const res = await api.get(`/api/accounts/${m.account_id}/galleries`);
+            const rawList: GalleryItem[] = Array.isArray(res.data) ? res.data : [];
+            return rawList.map((g) => ({
+              ...g,
+              member_name: m.display_name || m.handle || "Member",
+              member_avatar: constructAssetUrl(m.avatar_path),
+              member_is_leader: Boolean(m.is_leader),
+              member_is_proposer: Boolean(m.is_proposer),
+            }));
+          })
+        );
+        const combined: GalleryItem[] = [];
+        for (const r of results) {
+          if (r.status === "fulfilled" && Array.isArray(r.value)) {
+            combined.push(...r.value);
+          }
+        }
+        setItems(combined);
+        return;
+      }
+
+      if (!accountId) {
+        setItems([]);
+        return;
+      }
       const res = await api.get(`/api/accounts/${accountId}/galleries`);
-      setItems(res.data);
+      setItems(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch galleries:", err);
     } finally {
       setLoading(false);
     }
-  }, [accountId]);
+  }, [accountId, memberIdsKey]);
 
   useEffect(() => {
     fetchGalleries();
   }, [fetchGalleries]);
+
+  const isMultiMember = Boolean(Array.isArray(memberAccounts) && memberAccounts.length > 0);
+  const showLimit = !unlimited && !isMultiMember;
 
   return (
     <div className="flex-1 space-y-4">
@@ -85,15 +137,15 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
         <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
           <ImageIcon className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
-          {isOwner ? "My Gallery" : "Gallery"}
+          {isOwner ? "My Gallery" : isMultiMember ? "Combined Team Gallery" : "Gallery"}
           <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500 lowercase">
-            ({items.length}/5)
+            {showLimit ? `(${items.length}/5)` : `(${items.length})`}
           </span>
         </h4>
 
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium">
-            {items.length} active media
+            {items.length} active media{isMultiMember ? ` across ${memberAccounts?.length} members` : ""}
           </span>
 
           {isOwner && (
@@ -177,7 +229,35 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
                       {item.description}
                     </p>
                   )}
+                  {item.member_name && (
+                    <div className="mt-2 flex items-center gap-1.5 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-100">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-white/20 text-[10px] font-bold text-white">
+                        <span>By {item.member_name}</span>
+                        {item.member_is_leader && (
+                          <span className="px-1 py-0.1 rounded text-[8.5px] bg-amber-500 text-white">
+                            Team Leader
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
+
+                {/* Persistent Member Badge on Top Left when Combined Team Gallery */}
+                {item.member_name && (
+                  <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md border border-white/20 text-[10px] font-bold text-white shadow-sm">
+                      {item.member_avatar && (
+                        <img
+                          src={item.member_avatar}
+                          alt={item.member_name}
+                          className="h-3.5 w-3.5 rounded-full object-cover shrink-0"
+                        />
+                      )}
+                      <span className="truncate max-w-[110px]">{item.member_name}</span>
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}

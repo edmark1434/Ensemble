@@ -147,7 +147,7 @@ export function StandingBadges({ standing }: { standing?: PublicStanding | null 
   );
 }
 
-export function AccountRecordSection() {
+export function AccountRecordSection({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   const [record, setRecord] = useState<OwnRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 

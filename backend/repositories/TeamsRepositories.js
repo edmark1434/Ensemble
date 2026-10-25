@@ -15,6 +15,20 @@ async function createTeam(data, ownerUserId) {
 }
 
 async function getUserId(accountId) { return (await pool.query('SELECT user_id FROM users WHERE account_id=$1', [accountId])).rows[0]?.user_id || null; }
+async function isAccountVerified(accountId) {
+  if (!accountId) return false;
+  const res = await pool.query(
+    `SELECT COALESCE(v.is_verified, FALSE)
+        AND (avs.expires_at IS NULL OR avs.expires_at > NOW()) AS is_verified
+     FROM accounts a
+     LEFT JOIN verifications v ON v.account_id = a.account_id
+     LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+     WHERE a.account_id = $1 AND a.deleted_at IS NULL
+     LIMIT 1`,
+    [accountId]
+  );
+  return Boolean(res.rows[0]?.is_verified);
+}
 async function isActiveTeamOwner(teamAccountId, requesterAccountId) {
   return Boolean((await pool.query(`SELECT 1 FROM teams t
     JOIN users u ON u.account_id=$2
@@ -50,7 +64,7 @@ async function getActiveTeamOwnerAccountIds(teamAccountId) {
     [teamAccountId])).rows.map((row) => row.account_id);
 }
 async function getTeam(teamId, accountId) {
-  return (await pool.query(`SELECT t.*,a.display_name,a.handle,a.tagline,a.description,a.status AS account_status,f.path AS avatar_path,
+  return (await pool.query(`SELECT t.*,a.display_name,a.handle,a.tagline,a.description,a.status AS account_status,f.path AS avatar_path, a.banner_preset,
     COALESCE(mc.member_count,0)::int member_count,tm.role current_user_role,tm.status current_user_status,
     COALESCE(v.is_verified,FALSE) is_business_verified,v.verified_at business_verified_at,
     COALESCE(cv.is_verified,FALSE)
@@ -73,7 +87,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     COALESCE(t.team_type, 'standard') AS team_type,
     t.job_id,
     COALESCE(t.is_archived, FALSE) AS is_archived,
-    a.display_name,a.handle,a.description,f.path avatar_path,
+    a.display_name,a.handle,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
     count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
@@ -89,7 +103,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
 async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }
-async function listJoinRequests(teamId, search='') { return (await pool.query(`SELECT tm.team_id,u.account_id,a.display_name,a.handle,f.path AS avatar_path,tm.role,tm.status,COALESCE(tm.updated_at,tm.joined_at) AS requested_at FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND tm.status='Pending' AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%') ORDER BY COALESCE(tm.updated_at,tm.joined_at) DESC`,[teamId,search])).rows; }
+async function listJoinRequests(teamId, search='') { return (await pool.query(`SELECT tm.team_id,u.account_id,a.display_name,a.handle,f.path AS avatar_path, a.banner_preset,tm.role,tm.status,COALESCE(tm.updated_at,tm.joined_at) AS requested_at FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND tm.status='Pending' AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%') ORDER BY COALESCE(tm.updated_at,tm.joined_at) DESC`,[teamId,search])).rows; }
 async function upsertMembership(teamId,userId,role,status,invitedBy=null) { return (await pool.query(`INSERT INTO team_members(team_id,user_id,role,status,invited_by_account_id,invited_at,deleted_at) VALUES($1,$2,$3,$4::varchar,$5,CASE WHEN $4::varchar='Invited'::varchar THEN NOW() END,NULL) ON CONFLICT(team_id,user_id) DO UPDATE SET role=EXCLUDED.role,status=EXCLUDED.status,invited_by_account_id=EXCLUDED.invited_by_account_id,invited_at=EXCLUDED.invited_at,deleted_at=NULL,updated_at=NOW() RETURNING *`,[teamId,userId,role,status,invitedBy])).rows[0]; }
 async function updateMembership(teamId,userId,fields) { const allowed=['role','status']; const entries=Object.entries(fields).filter(([k])=>allowed.includes(k)); const vals=entries.map(([,v])=>v); vals.push(teamId,userId); return (await pool.query(`UPDATE team_members SET ${entries.map(([k],i)=>`${k}=$${i+1}`).join(',')},updated_at=NOW() WHERE team_id=$${vals.length-1} AND user_id=$${vals.length} RETURNING *`,vals)).rows[0]||null; }
 async function updateTeam(teamId, accountId, data) { const client=await pool.connect(); try { await client.query('BEGIN'); const a=(await client.query(`UPDATE accounts SET display_name=COALESCE($3,display_name),handle=COALESCE($4,handle),description=COALESCE($5,description),tagline=COALESCE($6,tagline),avatar_file_id=COALESCE($7,avatar_file_id) WHERE account_id=$1 AND EXISTS(SELECT 1 FROM teams WHERE team_id=$2 AND account_id=$1) RETURNING *`,[accountId,teamId,data.name,data.handle,data.description,data.tagline,data.avatarFileId])).rows[0]; const t=(await client.query(`UPDATE teams SET visibility=COALESCE($2,visibility),join_policy=COALESCE($3,join_policy),category=COALESCE($4,category),website=COALESCE($5,website),location=COALESCE($6,location),updated_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId,data.visibility,data.joinPolicy,data.category,data.website,data.location])).rows[0]; await client.query('COMMIT'); return {...t,...a}; } catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();} }
@@ -98,7 +112,7 @@ async function findByCode(code){return (await pool.query(`SELECT * FROM teams WH
 async function getTeamInvitePreview(code, accountId = null) {
   return (await pool.query(`
     SELECT t.team_id, t.join_code, t.category, t.visibility, t.join_policy, t.website, t.location,
-      a.display_name, a.handle, a.tagline, a.description, f.path AS avatar_path,
+      a.display_name, a.handle, a.tagline, a.description, f.path AS avatar_path, a.banner_preset,
       COALESCE(mc.member_count, 0)::int AS member_count,
       tm.role AS current_user_role, tm.status AS current_user_status,
       COALESCE(v.is_verified, FALSE) AS is_business_verified,
@@ -336,5 +350,172 @@ async function addReport(teamId,accountId,data){const team=await getTeam(teamId,
 async function getTeamInbox(teamId){return TeamInbox.findOne({team_id:String(teamId),deleted_at:null});}
 async function createTeamInbox(team,members){const now=new Date();const isContractual = team.team_type === 'contractual' || Boolean(team.job_id);const conversationType = isContractual ? 'engagement' : 'group';const result=await TeamInbox.insertOne({team_id:String(team.team_id),team_account_id:String(team.account_id),job_id:team.job_id?String(team.job_id):null,listing_type:isContractual?'job':null,listing_title:team.display_name,conversation_name:team.display_name,conversation_type:conversationType,conversation_image_key:team.avatar_path||null,members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),pinned_messages:[],created_at:now,updated_at:now,deleted_at:null});return TeamInbox.findOne({_id:result.insertedId});}
 async function syncTeamInboxMembers(teamId,members){const inbox=await getTeamInbox(teamId);if(!inbox)return null;const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});const teamRes = await pool.query('SELECT t.team_type, t.job_id FROM teams t WHERE t.team_id = $1', [teamId]);const isContractual = teamRes.rows[0]?.team_type === 'contractual' || Boolean(teamRes.rows[0]?.job_id);const updateFields = { members: merged, updated_at: now };if (isContractual && inbox.conversation_type !== 'engagement') { updateFields.conversation_type = 'engagement'; updateFields.listing_type = 'job'; if (teamRes.rows[0]?.job_id) updateFields.job_id = String(teamRes.rows[0].job_id); }await TeamInbox.updateOne({_id:inbox._id},{$set:updateFields});return TeamInbox.findOne({_id:inbox._id});}
-module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers};
+async function getTeamCreationEligibility(accountId) {
+  const query = `
+    WITH identity AS (
+      SELECT u.user_id, u.account_id
+      FROM users u
+      WHERE u.account_id = $1
+      LIMIT 1
+    ), active_subscription AS (
+      SELECT s.plan_id, p.name AS plan_name
+      FROM subscriptions s
+      JOIN identity ON identity.user_id = s.user_id
+      JOIN plans p ON p.plan_id = s.plan_id
+      WHERE UPPER(s.status) = 'ACTIVE'
+        AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+      ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC
+      LIMIT 1
+    ), default_free_plan AS (
+      SELECT p.plan_id, p.name AS plan_name
+      FROM plans p
+      WHERE p.amount_php_cents = 0 OR LOWER(p.name) = 'free'
+      ORDER BY p.amount_php_cents ASC
+      LIMIT 1
+    ), effective_plan AS (
+      SELECT
+        COALESCE((SELECT plan_id FROM active_subscription), (SELECT plan_id FROM default_free_plan)) AS plan_id,
+        COALESCE((SELECT plan_name FROM active_subscription), (SELECT plan_name FROM default_free_plan), 'Free') AS plan_name
+    ), entitlement AS (
+      SELECT pf.value
+      FROM effective_plan ep
+      JOIN plan_features pf ON pf.plan_id = ep.plan_id
+      JOIN features f ON f.feature_id = pf.feature_id
+      WHERE f.feature_key = 'team_creation'
+      LIMIT 1
+    ), usage AS (
+      SELECT COUNT(DISTINCT t.team_id)::int AS team_count
+      FROM teams t
+      JOIN team_members tm ON tm.team_id = t.team_id
+      JOIN identity ON identity.user_id = tm.user_id
+      WHERE tm.role = 'Owner'
+        AND tm.status = 'Active'
+        AND t.deleted_at IS NULL
+        AND (t.team_type IS NULL OR t.team_type <> 'contractual')
+    )
+    SELECT
+      identity.user_id,
+      COALESCE((SELECT plan_name FROM effective_plan), 'Free') AS plan_name,
+      (SELECT value FROM entitlement) AS feature_value,
+      COALESCE((SELECT team_count FROM usage), 0) AS team_count
+    FROM identity;
+  `;
+  const result = await pool.query(query, [accountId]);
+  const row = result.rows[0];
+  const used = Number(row?.team_count || 0);
+  const planName = row?.plan_name || 'Free';
+  const rawValue = typeof row?.feature_value === 'string' ? row.feature_value.trim() : '';
+  const unlimited = rawValue.toLowerCase() === 'unlimited';
+  const numericLimit = /^\d+$/.test(rawValue) ? Number(rawValue) : null;
+  const validLimit = unlimited || (Number.isSafeInteger(numericLimit) && numericLimit >= 0);
+  const effectiveLimit = validLimit ? (unlimited ? null : numericLimit) : (planName.toLowerCase() === 'free' ? 1 : null);
+  const effectiveUnlimited = unlimited || (effectiveLimit === null && validLimit);
+
+  let allowed = true;
+  let code = null;
+  let message = null;
+
+  if (!effectiveUnlimited) {
+    const limitNum = effectiveLimit ?? 1;
+    if (used >= limitNum) {
+      allowed = false;
+      code = 'TEAM_CREATION_LIMIT_REACHED';
+      message = `Your ${planName} plan allows ${limitNum} team creation${limitNum === 1 ? '' : 's'}. You have reached this limit. Upgrade your plan to create more teams.`;
+    }
+  }
+
+  return {
+    allowed,
+    limit: effectiveUnlimited ? null : (effectiveLimit ?? 1),
+    used,
+    remaining: effectiveUnlimited ? null : Math.max(0, (effectiveLimit ?? 1) - used),
+    unlimited: effectiveUnlimited,
+    planName,
+    code,
+    message,
+  };
+}
+
+async function getTeamMemberLimitEligibility(teamId) {
+  const query = `
+    WITH team_owner AS (
+      SELECT tm.user_id, u.account_id
+      FROM team_members tm
+      JOIN users u ON u.user_id = tm.user_id
+      WHERE tm.team_id = $1 AND tm.role = 'Owner' AND tm.status = 'Active'
+      LIMIT 1
+    ), active_subscription AS (
+      SELECT s.plan_id, p.name AS plan_name
+      FROM subscriptions s
+      JOIN team_owner o ON o.user_id = s.user_id
+      JOIN plans p ON p.plan_id = s.plan_id
+      WHERE UPPER(s.status) = 'ACTIVE'
+        AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+      ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC
+      LIMIT 1
+    ), default_free_plan AS (
+      SELECT p.plan_id, p.name AS plan_name
+      FROM plans p
+      WHERE p.amount_php_cents = 0 OR LOWER(p.name) = 'free'
+      ORDER BY p.amount_php_cents ASC
+      LIMIT 1
+    ), effective_plan AS (
+      SELECT
+        COALESCE((SELECT plan_id FROM active_subscription), (SELECT plan_id FROM default_free_plan)) AS plan_id,
+        COALESCE((SELECT plan_name FROM active_subscription), (SELECT plan_name FROM default_free_plan), 'Free') AS plan_name
+    ), entitlement AS (
+      SELECT pf.value
+      FROM effective_plan ep
+      JOIN plan_features pf ON pf.plan_id = ep.plan_id
+      JOIN features f ON f.feature_id = pf.feature_id
+      WHERE f.feature_key = 'collaborators'
+      LIMIT 1
+    ), member_counts AS (
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'Active')::int AS active_count
+      FROM team_members
+      WHERE team_id = $1
+    )
+    SELECT
+      COALESCE((SELECT plan_name FROM effective_plan), 'Free') AS owner_plan_name,
+      (SELECT value FROM entitlement) AS feature_value,
+      COALESCE((SELECT active_count FROM member_counts), 0) AS active_member_count;
+  `;
+  const result = await pool.query(query, [teamId]);
+  const row = result.rows[0];
+  const activeCount = Number(row?.active_member_count || 0);
+  const planName = row?.owner_plan_name || 'Free';
+  const rawValue = typeof row?.feature_value === 'string' ? row.feature_value.trim() : '';
+  const unlimited = rawValue.toLowerCase() === 'unlimited';
+  const numericLimit = /^\d+$/.test(rawValue) ? Number(rawValue) : null;
+  const validLimit = unlimited || (Number.isSafeInteger(numericLimit) && numericLimit >= 0);
+  const effectiveLimit = validLimit ? (unlimited ? null : numericLimit) : (planName.toLowerCase() === 'free' ? 3 : (planName.toLowerCase() === 'premium' ? 10 : 20));
+  const effectiveUnlimited = unlimited || (effectiveLimit === null && validLimit);
+
+  let allowed = true;
+  let code = null;
+  let message = null;
+
+  if (!effectiveUnlimited) {
+    const limitNum = effectiveLimit ?? 3;
+    if (activeCount >= limitNum) {
+      allowed = false;
+      code = 'TEAM_MEMBER_LIMIT_REACHED';
+      message = `This team has reached its limit of ${limitNum} member${limitNum === 1 ? '' : 's'} for the team owner's ${planName} plan. The team owner must upgrade to invite or add more members.`;
+    }
+  }
+
+  return {
+    allowed,
+    limit: effectiveUnlimited ? null : (effectiveLimit ?? 3),
+    activeCount,
+    remaining: effectiveUnlimited ? null : Math.max(0, (effectiveLimit ?? 3) - activeCount),
+    unlimited: effectiveUnlimited,
+    ownerPlanName: planName,
+    code,
+    message,
+  };
+}
+
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility};
 

@@ -16,7 +16,7 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
   message = "Your job post is now live. Freelancers can now send their applications and you'll be notified.",
   onConfirm,
   onClose,
-  autoCloseMs = 2800,
+  autoCloseMs = 4500,
 }) => {
   const handleAction = () => {
     if (onConfirm) onConfirm();
@@ -26,7 +26,7 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    // Auto-close timer
+    // Auto-close timer allowing user to celebrate and enjoy confetti
     const timer = setTimeout(() => {
       handleAction();
     }, autoCloseMs);
@@ -37,15 +37,13 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="relative z-[300]">
-      {/* Base SuccessModal with built-in confetti trigger */}
-      <SuccessModal
-        isOpen={isOpen}
-        title={title}
-        message={message}
-        onConfirm={handleAction}
-      />
-    </div>
+    <SuccessModal
+      isOpen={isOpen}
+      title={title}
+      message={message}
+      onConfirm={handleAction}
+      standalone={true}
+    />
   );
 };
 

@@ -9,8 +9,10 @@ const {
     reserveCashout,
     applyCashoutStatus,
     markCashoutNotificationStatus,
+    transferAccountCredits,
 } = require('../repositories/CashoutRepositories');
 const { createCashoutNotificationOnce } = require('../repositories/NotificationRepositories');
+const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const {
@@ -394,4 +396,80 @@ async function reconcileCashoutsServices() {
     }
 }
 
-module.exports = { CashoutError, payloadValidation, getWalletOverviewServices, searchPhilippineAddressesServices, createCashoutRecordsServices, handleCashoutWebhookServices, reconcileCashoutsServices };
+async function transferCreditsServices({ senderAccountId, recipientAccountId, amountCredits, notes }) {
+    if (!senderAccountId) throw new CashoutError('Sender account is required.', 401, 'UNAUTHORIZED');
+    if (!recipientAccountId) throw new CashoutError('Recipient account is required.', 422, 'MISSING_RECIPIENT');
+    if (String(senderAccountId) === String(recipientAccountId)) {
+        throw new CashoutError('You cannot transfer funds to yourself.', 422, 'SELF_TRANSFER_NOT_ALLOWED');
+    }
+    const amount = Number(amountCredits);
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+        throw new CashoutError('Transfer amount must be a positive whole credit.', 422, 'INVALID_AMOUNT');
+    }
+
+    const trimmedNotes = notes ? String(notes).trim().slice(0, 255) : null;
+
+    const result = await transferAccountCredits({
+        senderAccountId,
+        recipientAccountId,
+        amountCredits: amount,
+        notes: trimmedNotes,
+    });
+
+    const io = getIo();
+    try {
+        const notifRecipient = await createNotificationServices({
+            message: `You received ${amount.toLocaleString()} credits from @${result.sender.handle}${trimmedNotes ? `: "${trimmedNotes}"` : '.'}`,
+            is_read: false,
+            reference_table: 'credit_transactions',
+            reference_prefix: 'FUND_TRANSFER_RECEIVED',
+            reference_path: '/settings',
+            reference_id: result.transaction.credit_transaction_id,
+            account_id: recipientAccountId,
+        });
+
+        const notifSender = await createNotificationServices({
+            message: `Successfully transferred ${amount.toLocaleString()} credits to @${result.recipient.handle}.`,
+            is_read: false,
+            reference_table: 'credit_transactions',
+            reference_prefix: 'FUND_TRANSFER_SENT',
+            reference_path: '/settings',
+            reference_id: result.transaction.credit_transaction_id,
+            account_id: senderAccountId,
+        });
+
+        if (io) {
+            io.to(String(recipientAccountId)).emit('notification', notifRecipient);
+            io.to(String(recipientAccountId)).emit('walletBalanceUpdated', { type: 'CREDIT_RECEIVED', amount });
+            io.to(String(senderAccountId)).emit('notification', notifSender);
+            io.to(String(senderAccountId)).emit('walletBalanceUpdated', { type: 'CREDIT_SENT', amount });
+        }
+    } catch (e) {
+        console.error('Failed to dispatch transfer notification:', e.message);
+    }
+
+    return {
+        success: true,
+        message: `Successfully transferred ${amount.toLocaleString()} credits to @${result.recipient.handle}.`,
+        data: {
+            transaction: result.transaction,
+            recipient: {
+                account_id: result.recipient.account_id,
+                display_name: result.recipient.display_name,
+                handle: result.recipient.handle,
+            },
+            amount_credits: amount,
+        },
+    };
+}
+
+module.exports = {
+    CashoutError,
+    payloadValidation,
+    getWalletOverviewServices,
+    searchPhilippineAddressesServices,
+    createCashoutRecordsServices,
+    handleCashoutWebhookServices,
+    reconcileCashoutsServices,
+    transferCreditsServices,
+};

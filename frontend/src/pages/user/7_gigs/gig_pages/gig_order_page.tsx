@@ -7,6 +7,7 @@ import api from "@/lib/axios";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 import useGlobalState from "@/lib/global_state";
 import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
@@ -367,6 +368,7 @@ const GigOrderPage: React.FC = () => {
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+      <FloatingCreditsPill />
       {/* Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid

@@ -10,6 +10,8 @@ const cloudfrontUrl = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
 export function getImageUrl(path?: string | null) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith("/job_banners/") || path.startsWith("job_banners/")) {
+    return path.startsWith("/") ? path : `/${path}`;
+  }
   return `${cloudfrontUrl}/${path.replace(/^\/+/, "")}`;
 }
-

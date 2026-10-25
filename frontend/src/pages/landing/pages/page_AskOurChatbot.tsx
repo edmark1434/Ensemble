@@ -535,6 +535,9 @@ const PageAskOurChatbot: React.FC = () => {
                 commands={CHATBOT_COMMANDS}
                 defaultModel={selectedModel}
                 defaultEffort="High"
+                showPlus={false}
+                showModel={false}
+                showEffort={false}
                 radius={16}
                 width="100%"
                 onSend={(text, detail) => {

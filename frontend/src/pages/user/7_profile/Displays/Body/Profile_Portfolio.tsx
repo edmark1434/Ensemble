@@ -17,6 +17,9 @@ export interface PortfolioItem {
   views?: number;
   likes?: number;
   createdAt?: string;
+  memberName?: string;
+  memberAvatar?: string;
+  memberRoleLabel?: string;
 }
 
 interface ProfilePortfolioProps {
@@ -272,6 +275,18 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                       {item.type === "project" && (
                         <span className="text-[9px] text-gray-500 dark:text-zinc-500 font-bold flex items-center gap-1">
                           <Heart className="h-2.5 w-2.5 text-red-400/70" /> {item.likes || 0}
+                        </span>
+                      )}
+                      {item.memberName && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-[9px] font-bold text-gray-700 dark:text-zinc-200 truncate max-w-[120px]">
+                          {item.memberAvatar && (
+                            <img
+                              src={item.memberAvatar}
+                              alt={item.memberName}
+                              className="h-3 w-3 rounded-full object-cover shrink-0"
+                            />
+                          )}
+                          <span className="truncate">{item.memberName}</span>
                         </span>
                       )}
                     </div>

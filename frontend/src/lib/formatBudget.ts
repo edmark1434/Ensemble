@@ -96,14 +96,7 @@ export function getJobBudgetType(job: {
   isTeam?: boolean;
   posted_as?: string;
   positionsNeeded?: number;
-}): "open" | "ranged" | "pooled" {
-  const isTeam = Boolean(
-    job.hiring_type === "team" ||
-    job.is_team ||
-    job.isTeam ||
-    job.posted_as === "Team"
-  );
-  if (isTeam) return "pooled";
+}): "open" | "ranged" {
   const min = Number(job.minBudget ?? job.rate_credits_min) || 0;
   const max = Number(job.maxBudget ?? job.rate_credits_max) || 0;
   if (min > 0 && (!max || max === 0)) return "open";

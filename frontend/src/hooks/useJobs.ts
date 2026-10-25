@@ -111,10 +111,14 @@ export const useJobs = () => {
         }
     };
 
-    const updateProposalStatus = async (proposalId: string, statusData: any) => {
+    const updateProposalStatus = async (proposalId: string, statusData: any, rejectReason?: string) => {
         setLoading(true);
         try {
-            const res = await api.put(`/api/jobs/proposals/${proposalId}/status`, statusData);
+            const payload =
+                typeof statusData === 'string'
+                    ? { status: statusData, ...(rejectReason ? { rejectReason, rejection_reason: rejectReason } : {}) }
+                    : statusData;
+            const res = await api.put(`/api/jobs/proposals/${proposalId}/status`, payload);
             return res.data;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update status');
@@ -216,6 +220,32 @@ export const useJobs = () => {
         }
     };
 
+    const extendApplicationWindow = async (jobId: string, durationHours: number) => {
+        setLoading(true);
+        try {
+            const res = await api.post(`/api/jobs/${jobId}/extend-window`, { durationHours });
+            return res.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to extend application window');
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const expireJobImmediately = async (jobId: string) => {
+        setLoading(true);
+        try {
+            const res = await api.post(`/api/jobs/${jobId}/expire-now`);
+            return res.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to expire job');
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return {
         loading,
         error,
@@ -234,6 +264,8 @@ export const useJobs = () => {
         toggleJobSave,
         sendJobOffer,
         acceptJobOffer,
-        rejectContract
+        rejectContract,
+        extendApplicationWindow,
+        expireJobImmediately
     };
 };

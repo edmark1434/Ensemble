@@ -1,5 +1,6 @@
 import { getBudgetDisplayInfo, getJobBudgetType } from "@/lib/formatBudget";
 import { getImageUrl } from "@/lib/utils";
+import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
 import React, { useState, useEffect, useMemo } from "react";
 import { Filter } from "lucide-react";
@@ -165,7 +166,7 @@ const JobMain: React.FC = () => {
           applicantsCount: parseInt(j.applicant_count) || 0,
           savesCount: parseInt(j.saves_count) || 0,
           timeline: `${j.timeline_min}-${j.timeline_max} Days`,
-          thumbnail: getImageUrl(j.thumbnail_path) || "/placeholder.svg",
+          thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
           skills: j.tags || [],
           isSaved: j.is_saved || false,
           isOwnPost: Boolean(j.is_own_post),
@@ -276,10 +277,12 @@ const JobMain: React.FC = () => {
   };
 
   const tabFilteredJobs = useMemo(() => {
+    const isAppliedTab = location.pathname.includes("/applied");
     const isSavedTab = location.pathname.includes("/saved-posts");
     const isMyPostsTab = location.pathname.includes("/my-job-post");
 
     return jobsList.filter((job) => {
+      if (isAppliedTab) return Boolean(job.hasProposed);
       if (isSavedTab) return job.isSaved && job.status !== "Closed";
       if (isMyPostsTab) return job.isOwnPost;
       return job.status !== "Closed"; // Default postings tab
@@ -381,6 +384,7 @@ const JobMain: React.FC = () => {
   const isInfoTab = location.pathname.includes("/jobs/info");
 
   const getParentRoute = () => {
+    if (location.pathname.includes("/applied")) return "/jobs/applied";
     if (location.pathname.includes("/saved-posts")) return "/jobs/saved-posts";
     if (location.pathname.includes("/my-job-post")) return "/jobs/my-job-post";
     return "/jobs/postings";

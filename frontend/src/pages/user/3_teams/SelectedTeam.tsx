@@ -31,6 +31,7 @@ import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 import EditTeamModal, {
   type TeamFormValues,
 } from "./team_modals/EditTeamModal";
@@ -222,6 +223,12 @@ export default function SelectedTeam() {
 
   const requestToJoin = async () => {
     if (saving) return;
+    const verified = await continueIfAccountVerified(
+      () => {},
+      false,
+      "Account Verification is required before joining a Team. Please verify your identity first."
+    );
+    if (!verified) return;
     setSaving(true);
     try {
       const response = await api.post(`/api/teams/${id}/join`);
@@ -611,7 +618,7 @@ export default function SelectedTeam() {
             </div>
             <p className="mt-2 text-gray-500 dark:text-zinc-400">{team.description}</p>
             <p className="mt-3 text-sm text-gray-500 dark:text-zinc-500">
-              @{team.handle} · {team.member_count} members · Owner:{" "}
+              @{team.handle} · {team.member_count} members · Team Leader:{" "}
               {team.owner_name}
             </p>
           </div>
@@ -690,7 +697,13 @@ export default function SelectedTeam() {
         {membership?.status === "Invited" && (
           <div className="mb-6 flex gap-2">
             <button
-              onClick={() => void mutate("/invitations/accept", "patch")}
+              onClick={() =>
+                void continueIfAccountVerified(
+                  () => void mutate("/invitations/accept", "patch"),
+                  false,
+                  "Account Verification is required before accepting a Team invitation. Please verify your identity first."
+                )
+              }
               className="cursor-pointer rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-5 py-2 text-sm font-medium text-white transition shadow-sm"
             >
               Accept invitation
@@ -753,7 +766,7 @@ export default function SelectedTeam() {
           isOwner={membership?.role === "Owner"}
           canAddFunds={canAddFunds}
           onAddFunds={() => void openAddFundsModal()}
-          canViewMarketplaceProposals={activeMember && ["Owner", "Admin"].includes(membership?.role || "")}
+          canViewMarketplaceProposals={activeMember && ["Owner", "Representative", "Admin"].includes(membership?.role || "")}
           saving={saving}
           onSuspend={(account) =>
             void mutate(`/members/${account}/suspend`, "patch")
@@ -798,6 +811,7 @@ export default function SelectedTeam() {
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         team={team}
+        onInvited={() => void loadTeam(false)}
       />
 
       <LeaveTeamModal
@@ -1133,7 +1147,7 @@ function TeamMarketplaceSection({
         <TeamMarketplaceProposals teamAccountId={team.account_id} type={type} />
       ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">
-          Only an active Team Owner or Admin can view Team {singular.toLowerCase()} proposals.
+          Only the Team Leader or an authorized Representative can view Team {singular.toLowerCase()} proposals.
         </div>
       )}
     </section>
@@ -1196,9 +1210,6 @@ function TeamTabContent({
       <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6">
         <h3 className="mb-2 text-lg font-semibold">About this Team</h3>
         <p className="text-gray-500 dark:text-zinc-400">{team.description}</p>
-        <p className="mt-4 text-sm text-gray-500 dark:text-zinc-500">
-          Category: {team.category || "—"} · Location: {team.location || "—"}
-        </p>
       </div>
     );
   if (active === "tasks") return <TeamTaskDashboard teamId={team.team_id} />;
@@ -1439,80 +1450,128 @@ function TeamTabContent({
       </div>
     );
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {members.map((member) => (
-        <div
-          key={member.account_id}
-          className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4"
-        >
-          {member.avatar_path ? (
-            <img
-              src={imageUrl(member.avatar_path)}
-              alt={member.display_name}
-              className="h-12 w-12 rounded-full object-cover"
-            />
-          ) : (
-            <div className="grid h-12 w-12 place-items-center rounded-full bg-blue-500/20">
-              {member.display_name.slice(0, 2)}
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold">{member.display_name}</p>
-            <p className="text-xs text-gray-500 dark:text-zinc-500">
-              @{member.handle} · {member.role} · {member.status}
+    <div className="space-y-4">
+      {canManage && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-gray-600 dark:text-zinc-300 flex items-start gap-2.5">
+          <ShieldCheck className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="space-y-0.5 leading-relaxed">
+            <p className="font-bold text-gray-900 dark:text-white">
+              General Team Role &amp; Proposal Permissions
             </p>
-            {canManage && member.role !== "Owner" && (
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <select
-                  value={member.role}
-                  disabled={saving}
-                  onChange={(event) =>
-                    onRole(member.account_id, event.target.value)
-                  }
-                  className="rounded bg-gray-100 dark:bg-white/10 px-1 text-gray-600 dark:text-zinc-300"
-                >
-                  <option>Admin</option>
-                  <option>Manager</option>
-                  <option>Member</option>
-                </select>
-                {member.status === "Suspended" ? (
-                  <button
-                    disabled={saving}
-                    onClick={() => onRestore(member.account_id)}
-                    className="cursor-pointer text-emerald-500 dark:text-emerald-300 hover:text-emerald-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Restore
-                  </button>
-                ) : (
-                  <button
-                    disabled={saving}
-                    onClick={() => onSuspend(member.account_id)}
-                    className="cursor-pointer text-amber-500 dark:text-amber-300 hover:text-amber-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Suspend
-                  </button>
-                )}
-                <button
-                  disabled={saving}
-                  onClick={() => onRemove(member)}
-                  className="cursor-pointer text-red-500 dark:text-red-400 hover:text-red-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Remove
-                </button>
-                {isOwner && member.status === "Active" && (
-                  <button
-                    disabled={saving}
-                    onClick={() => onTransfer(member.account_id)}
-                    className="cursor-pointer text-blue-500 dark:text-blue-400 hover:text-blue-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Transfer ownership
-                  </button>
-                )}
-              </div>
-            )}
+            <p>
+              By default, new members join as <strong className="text-gray-900 dark:text-white">Member</strong>. Assigning the <strong className="text-blue-600 dark:text-blue-400">Representative</strong> role grants that member permission to <strong className="text-gray-900 dark:text-white">Send Proposals to Job Posts</strong> on behalf of this Team (with you automatically included as <strong className="text-gray-900 dark:text-white">Team Leader</strong>). Only grant <strong className="text-blue-600 dark:text-blue-400">Representative</strong> to members you fully trust.
+            </p>
           </div>
         </div>
-      ))}
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {members.map((member) => {
+          const roleLabel =
+            member.role === "Owner"
+              ? "Team Leader"
+              : member.role === "Representative" || member.role === "Admin"
+              ? "Representative"
+              : member.role === "Manager"
+              ? "Member"
+              : member.role;
+          const selectRoleValue =
+            member.role === "Representative" || member.role === "Admin"
+              ? "Representative"
+              : "Member";
+
+          return (
+            <div
+              key={member.account_id}
+              className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4"
+            >
+              {member.avatar_path ? (
+                <img
+                  src={imageUrl(member.avatar_path)}
+                  alt={member.display_name}
+                  className="h-12 w-12 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-500/20 font-semibold">
+                  {member.display_name.slice(0, 2)}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-semibold truncate">{member.display_name}</p>
+                  {member.role === "Owner" ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                      Team Leader
+                    </span>
+                  ) : roleLabel === "Representative" ? (
+                    <span
+                      className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30"
+                      title="Can send job proposals on behalf of the Team"
+                    >
+                      Representative (Can Propose)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                      Member
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-500 mt-0.5">
+                  @{member.handle} · {member.status}
+                </p>
+                {canManage && member.role !== "Owner" && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                    <select
+                      value={selectRoleValue}
+                      disabled={saving}
+                      onChange={(event) =>
+                        onRole(member.account_id, event.target.value)
+                      }
+                      className="rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-zinc-800 px-2 py-1 text-xs font-medium text-gray-700 dark:text-zinc-200 outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="Member">Member (Default)</option>
+                      <option value="Representative">Representative (Can Send Proposals)</option>
+                    </select>
+                    {member.status === "Suspended" ? (
+                      <button
+                        disabled={saving}
+                        onClick={() => onRestore(member.account_id)}
+                        className="cursor-pointer text-emerald-500 dark:text-emerald-300 hover:text-emerald-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Restore
+                      </button>
+                    ) : (
+                      <button
+                        disabled={saving}
+                        onClick={() => onSuspend(member.account_id)}
+                        className="cursor-pointer text-amber-500 dark:text-amber-300 hover:text-amber-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Suspend
+                      </button>
+                    )}
+                    <button
+                      disabled={saving}
+                      onClick={() => onRemove(member)}
+                      className="cursor-pointer text-red-500 dark:text-red-400 hover:text-red-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Remove
+                    </button>
+                    {isOwner && member.status === "Active" && (
+                      <button
+                        disabled={saving}
+                        onClick={() => onTransfer(member.account_id)}
+                        className="cursor-pointer text-blue-500 dark:text-blue-400 hover:text-blue-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Transfer Team Leader
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

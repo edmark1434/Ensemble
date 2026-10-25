@@ -1,6 +1,6 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState } from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, Loader2, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
@@ -18,9 +18,53 @@ interface JobViewDetailsProps {
   onToggleSave?: (jobId: string) => void;
 }
 
+const CircularProgress: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}> = ({ percentage, size = 36, strokeWidth = 3.5 }) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0 select-none"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-gray-200 dark:stroke-white/10"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-blue-600 dark:stroke-blue-500 transition-all duration-500 ease-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono text-gray-800 dark:text-zinc-100">
+        {clamped}%
+      </span>
+    </div>
+  );
+};
+
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const rankInfo = selectedJob ? computeJobRankingBreakdown(selectedJob) : null;
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
@@ -137,17 +181,6 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedJob.category}
                     </span>
-                    {isTeamHiring ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 flex items-center gap-1">
-                        <Users className="h-2.5 w-2.5" />
-                        Team Project
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 flex items-center gap-1">
-                        <User className="h-2.5 w-2.5" />
-                        Individual
-                      </span>
-                    )}
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedJob.difficulty}
                     </span>
@@ -246,29 +279,41 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                             <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.jobTypeLabel}</strong></span>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.bayesianScore * 35).toFixed(1)}
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.bayesianScore * 35).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.bayesianScore * 100} size={34} strokeWidth={3} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.freshnessScore * 25).toFixed(1)}
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.freshnessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.freshnessScore * 100} size={34} strokeWidth={3} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.completenessScore * 25).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.completenessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.completenessScore * 100} size={34} strokeWidth={3} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.availabilityScore * 15).toFixed(1)}
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.availabilityScore * 15).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.availabilityScore * 100} size={34} strokeWidth={3} />
                             </div>
                           </div>
 
@@ -648,29 +693,63 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      data-tour="job-detail-view-full"
-                      onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
-                      className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
-                    >
-                      View Full
-                    </button>
-                    <button
-                      data-tour="job-detail-send-proposal"
-                      onClick={() => {
-                        if (isGuestMode) return setIsModalOpen(true);
-                        void continueIfAccountVerified(
-                          () => navigate(`/jobs/${selectedJob.id}/make-proposal`),
-                          false,
-                          "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
-                        );
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
-                    >
-                      <Send className="h-3.5 w-3.5" /> 
-                      {isGuestMode ? "Login to Apply" : "Send Proposal"}
-                    </button>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        data-tour="job-detail-view-full"
+                        onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
+                        className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                      >
+                        View Full
+                      </button>
+                      <button
+                        data-tour="job-detail-send-proposal"
+                        disabled={isCheckingAccess}
+                        onClick={async () => {
+                          if (isCheckingAccess) return;
+                          if (isGuestMode) return setIsModalOpen(true);
+                          setIsCheckingAccess(true);
+                          try {
+                            await continueIfAccountVerified(
+                              () => navigate(`/jobs/${selectedJob.id}/make-proposal`),
+                              false,
+                              "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                            );
+                          } finally {
+                            setIsCheckingAccess(false);
+                          }
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 ${
+                          isCheckingAccess ? "opacity-80 cursor-wait" : "active:scale-[0.98] cursor-pointer"
+                        }`}
+                      >
+                        {isCheckingAccess ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Opening...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-3.5 w-3.5" /> 
+                            <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
+                            {!isGuestMode && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white tracking-wide">
+                                <CreditIcon className="h-2.5 w-2.5 text-amber-300" /> 10 Cr
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {!isGuestMode && (
+                      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 text-center flex items-center justify-center gap-1">
+                        <span>Requires</span>
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-0.5">
+                          <CreditIcon className="h-3 w-3 text-amber-500" /> 10 Credits
+                        </span>
+                        <span>to send proposal (charged at checkout)</span>
+                      </div>
+                    )}
                   </div>
                 )
               ) : (
@@ -683,7 +762,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                   <button
                     onClick={() => navigate(`/jobs/edit/${selectedJob.id}`)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 py-3 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-blue-600/40 bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 py-3 text-xs font-bold transition shadow-2xs cursor-pointer"
                   >
                     <Edit2 className="h-3.5 w-3.5" /> Edit Job Post
                   </button>

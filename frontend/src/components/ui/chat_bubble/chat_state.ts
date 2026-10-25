@@ -12,6 +12,7 @@ import type {
 
 export interface ChatTarget {
   id: string;
+  windowId?: string;
   name: string;
   avatarUrl?: string;
   account_id?: string;

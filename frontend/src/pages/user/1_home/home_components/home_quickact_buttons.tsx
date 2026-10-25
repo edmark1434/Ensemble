@@ -38,7 +38,7 @@ export const HomeQuickActButtons: React.FC = () => {
       return;
     }
     if (label === "Post a Job") {
-      navigate("/jobs/postings/choose");
+      navigate("/jobs/create");
       return;
     }
     navigate(path);

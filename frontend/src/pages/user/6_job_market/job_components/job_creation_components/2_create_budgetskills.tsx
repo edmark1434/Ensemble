@@ -1,5 +1,24 @@
 import React, { type FormEvent } from "react";
-import { ArrowRight, X, Plus, Minus, HelpCircle, Info, Calendar, AlertCircle, Sparkles, Trash2 } from "lucide-react";
+import { 
+  ArrowRight, 
+  ArrowLeft,
+  X, 
+  Plus, 
+  Minus, 
+  HelpCircle, 
+  Info, 
+  Calendar, 
+  AlertCircle, 
+  Sparkles, 
+  Trash2,
+  Calculator,
+  Clock,
+  Coins,
+  CheckCircle2,
+  Users,
+  RefreshCw,
+  InfinityIcon
+} from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SkillsAutocomplete } from "./SkillsAutocomplete";
 
@@ -31,6 +50,17 @@ interface CreateBudgetSkillsProps {
   setBudgetType?: (val: "range" | "open") => void;
   preScopedMilestones?: any[];
   setPreScopedMilestones?: React.Dispatch<React.SetStateAction<any[]>>;
+  applicationWindowHours?: number;
+  setApplicationWindowHours?: (val: number) => void;
+  isUrgent?: boolean;
+  setIsUrgent?: (val: boolean) => void;
+  hasHardDeadline?: boolean;
+  setHasHardDeadline?: (val: boolean) => void;
+  hardDeadline?: string;
+  setHardDeadline?: (val: string) => void;
+  title?: string;
+  description?: string;
+  category?: string;
   onBack: () => void;
   onAdvance: () => void;
 }
@@ -58,11 +88,22 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   isLockedToSingle = false,
   minPositions,
   isFixedBudget = false,
-  hidePositions = false,
+  hidePositions = true,
   budgetType = "range",
   setBudgetType,
   preScopedMilestones = [],
   setPreScopedMilestones,
+  applicationWindowHours = 72,
+  setApplicationWindowHours,
+  isUrgent = false,
+  setIsUrgent,
+  hasHardDeadline = false,
+  setHasHardDeadline,
+  hardDeadline = "",
+  setHardDeadline,
+  title = "",
+  description = "",
+  category = "",
   onBack,
   onAdvance,
 }) => {
@@ -78,7 +119,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
 
   React.useEffect(() => {
     if (skills.length >= 3 && errors.skills) {
-      setErrors(prev => {
+      setErrors((prev) => {
         const { skills: _, ...rest } = prev;
         return rest;
       });
@@ -87,7 +128,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
 
   const daysUntilDeadline = React.useMemo(() => {
     if (!deadline) return null;
-    const parts = deadline.split('-');
+    const parts = deadline.split("-");
     if (parts.length !== 3) return null;
     const [y, m, d] = parts;
     if (!y || !m || !d || y.length !== 4) return null;
@@ -102,134 +143,228 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   const maxTimelineNum = parseInt(maxTimeline, 10);
   const minTimelineNum = parseInt(minTimeline, 10);
 
+  const rawMinBudget = parseInt(minBudget.replace(/\D/g, ""), 10) || 0;
+  const rawMaxBudget = parseInt(maxBudget.replace(/\D/g, ""), 10) || 0;
+
+  const isBudgetRangeInvalid = React.useMemo(() => {
+    if (budgetType !== "range" || isFixedBudget) return false;
+    return rawMinBudget > 0 && rawMaxBudget > 0 && rawMaxBudget < rawMinBudget;
+  }, [budgetType, isFixedBudget, rawMinBudget, rawMaxBudget]);
+
+  React.useEffect(() => {
+    if (budgetType === "range" && !isFixedBudget) {
+      if (rawMinBudget > 0 && rawMaxBudget > 0 && rawMaxBudget < rawMinBudget) {
+        setErrors((prev) => ({
+          ...prev,
+          maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(minBudget)} Credits).`,
+        }));
+      } else if (
+        errors.maxBudget &&
+        errors.maxBudget.includes("cannot be lower than minimum budget")
+      ) {
+        setErrors((prev) => {
+          const { maxBudget: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
+  }, [budgetType, isFixedBudget, rawMinBudget, rawMaxBudget, minBudget, errors.maxBudget, setErrors, formatCommaString]);
+
+  const minCutoffDateString = React.useMemo(() => {
+    const intakeHours = applicationWindowHours || 72;
+    const minDays = !isNaN(minTimelineNum) && minTimelineNum > 0 ? minTimelineNum : 1;
+    const minMs = Date.now() + (intakeHours + minDays * 24) * 60 * 60 * 1000;
+    return new Date(minMs).toISOString().split("T")[0];
+  }, [applicationWindowHours, minTimelineNum]);
+
+  const handleAutoAdjustCutoff = () => {
+    const intakeHours = applicationWindowHours || 72;
+    const turnDays = !isNaN(maxTimelineNum) && maxTimelineNum > 0 
+      ? maxTimelineNum 
+      : (!isNaN(minTimelineNum) && minTimelineNum > 0 ? minTimelineNum : 3);
+    const safeMs = Date.now() + (intakeHours + turnDays * 24) * 60 * 60 * 1000;
+    const safeDate = new Date(safeMs).toISOString().split("T")[0];
+    setHardDeadline?.(safeDate);
+    setErrors((prev) => {
+      const { hardDeadline: _, ...r } = prev;
+      return r;
+    });
+  };
+
+  const handleAutoFitTurnaround = () => {
+    let targetDateStr = hardDeadline;
+    if (!hasHardDeadline || !targetDateStr) {
+      const defaultCutoffMs = Date.now() + 14 * 24 * 60 * 60 * 1000;
+      targetDateStr = new Date(defaultCutoffMs).toISOString().split("T")[0];
+      setHasHardDeadline?.(true);
+      setHardDeadline?.(targetDateStr);
+    }
+
+    const parts = targetDateStr.split("-");
+    if (parts.length !== 3) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const totalDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (totalDays <= 0) return;
+
+    const intakeDays = Math.max(1, Math.ceil((applicationWindowHours || 24) / 24));
+    const availableDays = totalDays - intakeDays;
+
+    if (availableDays <= 1) {
+      setMinTimeline("1");
+      setMaxTimeline("1");
+    } else if (availableDays <= 3) {
+      setMinTimeline("1");
+      setMaxTimeline(String(Math.max(1, availableDays - 1)));
+    } else if (availableDays <= 6) {
+      const buffer = 1;
+      const maxDays = availableDays - buffer;
+      const minDays = Math.max(1, Math.round(maxDays * 0.6));
+      setMinTimeline(String(minDays));
+      setMaxTimeline(String(maxDays));
+    } else {
+      const buffer = Math.max(2, Math.round(availableDays * 0.2));
+      const maxDays = Math.max(2, availableDays - buffer);
+      const minDays = Math.max(1, Math.round(maxDays * 0.6));
+      setMinTimeline(String(minDays));
+      setMaxTimeline(String(maxDays));
+    }
+
+    setErrors((prev) => {
+      const { minTimeline: _, maxTimeline: __, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const timelineProgressInfo = React.useMemo(() => {
+    const intakeHours = applicationWindowHours || 72;
+    const turnDays = !isNaN(maxTimelineNum) && maxTimelineNum > 0 
+      ? maxTimelineNum 
+      : (!isNaN(minTimelineNum) && minTimelineNum > 0 ? minTimelineNum : 3);
+    const turnHours = turnDays * 24;
+    const plannedHours = intakeHours + turnHours;
+
+    let deadlineHours = plannedHours;
+    let bufferHours = 0;
+    let bufferDays = 0;
+
+    if (hasHardDeadline && hardDeadline) {
+      const parts = hardDeadline.split("-");
+      if (parts.length === 3) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const diffMs = target.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          const totalCutoffHours = diffDays * 24;
+          if (totalCutoffHours > plannedHours) {
+            deadlineHours = totalCutoffHours;
+            bufferHours = totalCutoffHours - plannedHours;
+            bufferDays = Math.round(bufferHours / 24);
+          }
+        }
+      }
+    }
+
+    let appPercent = Math.round((intakeHours / deadlineHours) * 100);
+    let turnPercent = Math.round((turnHours / deadlineHours) * 100);
+    let bufferPercent = bufferHours > 0 ? 100 - appPercent - turnPercent : 0;
+
+    if (bufferHours > 0) {
+      appPercent = Math.max(15, Math.min(45, appPercent));
+      turnPercent = Math.max(20, Math.min(50, turnPercent));
+      bufferPercent = Math.max(10, 100 - appPercent - turnPercent);
+    } else {
+      appPercent = Math.max(25, Math.min(65, appPercent));
+      turnPercent = 100 - appPercent;
+      bufferPercent = 0;
+    }
+
+    const appLabel = intakeHours <= 24 ? `${intakeHours}h Intake` : `${Math.round(intakeHours / 24)}d Intake`;
+    const turnLabel = minTimelineNum && maxTimelineNum && minTimelineNum !== maxTimelineNum 
+      ? `${minTimelineNum}–${maxTimelineNum}d Work`
+      : `${turnDays}d Work`;
+    const bufferLabel = bufferDays > 0 ? `${bufferDays}d Buffer` : null;
+
+    return {
+      appPercent,
+      turnPercent,
+      bufferPercent,
+      bufferDays,
+      appLabel,
+      turnLabel,
+      bufferLabel,
+    };
+  }, [applicationWindowHours, maxTimelineNum, minTimelineNum, hasHardDeadline, hardDeadline]);
+
+  const isCutoffBeforeIntake = React.useMemo(() => {
+    if (!hasHardDeadline || !hardDeadline) return false;
+    return hardDeadline < minCutoffDateString;
+  }, [hasHardDeadline, hardDeadline, minCutoffDateString]);
+
   const isTimelineExceedingDeadline = React.useMemo(() => {
-    if (daysUntilDeadline === null) return false;
-    if (!isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline) return true;
-    if (!isNaN(minTimelineNum) && minTimelineNum > daysUntilDeadline) return true;
+    if (!hasHardDeadline || !hardDeadline) return false;
+    if (hardDeadline < minCutoffDateString) return true;
+    const parts = hardDeadline.split("-");
+    if (parts.length !== 3) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (!isNaN(maxTimelineNum) && maxTimelineNum > diffDays) return true;
+    if (!isNaN(minTimelineNum) && minTimelineNum > diffDays) return true;
     return false;
-  }, [daysUntilDeadline, maxTimelineNum, minTimelineNum]);
+  }, [hasHardDeadline, hardDeadline, maxTimelineNum, minTimelineNum, minCutoffDateString]);
 
   return (
-    <div className="space-y-5 text-left">
-      <div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Budget Allocation & Requirements</h2>
-        <p className="text-xs text-gray-600 dark:text-zinc-300">Establish operational metric scopes, timelines and targeted skill sets.</p>
-      </div>
-
-      {/* 1. Positions Count Block */}
-      {!hidePositions && (
-        <>
-          <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-1.5">
-                <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Positions Needed <span className="text-red-500">*</span></label>
-                <div className="group relative flex items-center">
-                  <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                    The number of freelancers you want to hire for this specific job post.
-                  </div>
-                </div>
-              </div>
-              <span className="text-[10px] text-gray-600 dark:text-zinc-400">
-                {isLockedToSingle ? "Individual hire (1 assignment slot)." : "Number of open assignment slots."}
-              </span>
-            </div>
-            {isLockedToSingle ? (
-              <div className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 font-bold text-xs select-none">
-                1 Position (Individual)
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-dark-base p-1">
-                <button
-                  type="button"
-                  disabled={positions <= effectiveMin}
-                  onClick={() => setPositions(prev => Math.max(effectiveMin, prev - 1))}
-                  className={`h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none transition-all ${
-                    positions <= effectiveMin
-                      ? "opacity-30 cursor-not-allowed"
-                      : "hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95"
-                  }`}
-                >
-                  <Minus className="h-3 w-3" />
-                </button>
-                <span className="w-6 text-center font-mono font-bold text-xs select-none">{positions}</span>
-                <button
-                  type="button"
-                  onClick={() => setPositions(prev => prev + 1)}
-                  className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          <hr className="border-gray-100 dark:border-white/5" />
-        </>
-      )}
-
-      {/* 2. Budget Estimate Range or Fixed Project Budget */}
-      <div className="space-y-1.5">
-        {isFixedBudget ? (
+    <div className="text-left space-y-8">
+      {/* 2-Column Studio Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        {/* LEFT COLUMN: Budget, Timeline, and Milestones */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+          
+          {/* Header */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
-                Total Project Budget <span className="text-red-500">*</span>
-              </label>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                Fixed Allocation
-              </span>
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mb-2">
-              The total credits to be distributed across milestone roles in Step 4. No freelancer bidding is required.
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+              Budget Allocation & Requirements
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
+              Establish operational budget benchmarks, delivery schedules, and milestone roadmaps.
             </p>
-            <div className="relative">
-              <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-                <CreditIcon className="h-4 w-4" />
-              </div>
-              <input
-                type="text"
-                placeholder="e.g. 1,000"
-                value={formatCommaString(maxBudget || minBudget)}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, "");
-                  setMinBudget(val);
-                  setMaxBudget(val);
-                  setErrors(prev => {
-                    const { minBudget: _a, maxBudget: _b, ...r } = prev;
-                    return r;
-                  });
-                }}
-                className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-4 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                  errors.minBudget || errors.maxBudget
-                    ? "border-red-500/50 focus:border-red-500"
-                    : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                }`}
-              />
-            </div>
-            {(errors.minBudget || errors.maxBudget) && (
-              <p className="text-[11px] text-red-400 mt-1">{errors.minBudget || errors.maxBudget}</p>
-            )}
           </div>
-        ) : (
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
-                {budgetType === "open" ? "Starting Minimum Bid" : "Budget Estimate Range"} <span className="text-red-500">*</span>
-              </label>
 
-              {setBudgetType && (
-                <div className="flex items-center p-0.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[11px] font-bold self-start sm:self-auto">
+          {/* Section 1: Budget Estimate Range or Fixed Project Budget */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">1</div>
+                  <label className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">
+                    Set Budget ({isFixedBudget ? "Total Project Budget" : budgetType === "open" ? "Starting Minimum Bid" : "Budget Estimate Range"}) <span className="text-red-500">*</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  {budgetType === "open"
+                    ? "Set your floor expectation. Freelancers will submit proposals at or above this amount."
+                    : "Specify the planned credit allocation for the entire project scope."}
+                </p>
+              </div>
+
+              {!isFixedBudget && setBudgetType && (
+                <div className="flex items-center p-1 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-xs font-bold self-start sm:self-auto shrink-0 select-none">
                   <button
                     type="button"
                     onClick={() => {
                       setBudgetType("range");
-                      setErrors(prev => {
+                      setErrors((prev) => {
                         const { maxBudget: _, ...r } = prev;
                         return r;
                       });
                     }}
-                    className={`px-3 py-1 rounded-lg transition-all ${
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
                       budgetType === "range"
                         ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-sm"
                         : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
@@ -242,516 +377,818 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                     onClick={() => {
                       setBudgetType("open");
                       setMaxBudget("");
-                      setErrors(prev => {
+                      setErrors((prev) => {
                         const { maxBudget: _, ...r } = prev;
                         return r;
                       });
                     }}
-                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
                       budgetType === "open"
                         ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-sm"
                         : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
-                    <Sparkles className="h-3 w-3 text-amber-500" />
-                    <span>Open Bid (Min Only)</span>
+                    <InfinityIcon className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+                    <span>Open Bid</span>
                   </button>
                 </div>
               )}
             </div>
 
-            {budgetType === "open" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
-                <div className="relative">
-                  <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+            {/* Inputs Area */}
+            {isFixedBudget ? (
+              <div>
+                <div className="relative h-12 flex items-center">
+                  <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
                     <CreditIcon className="h-4 w-4" />
                   </div>
                   <input
                     type="text"
-                    placeholder="Starting Minimum Bid (e.g. 500)"
+                    placeholder="Total Budget (e.g. 1,000)"
                     value={formatCommaString(minBudget)}
-                    onChange={e => {
-                      setMinBudget(e.target.value.replace(/\D/g, ""));
-                      setErrors(prev => {
-                        const { minBudget: _, ...r } = prev;
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/\D/g, "");
+                      setMinBudget(cleaned);
+                      setMaxBudget(cleaned);
+                      setErrors((prev) => {
+                        const { minBudget: _, maxBudget: __, ...r } = prev;
                         return r;
                       });
                     }}
-                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                      errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                    className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                      errors.minBudget || errors.maxBudget
+                        ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
+                        : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     }`}
                   />
-                  <div className="group absolute right-2.5 top-2.5 flex items-center">
-                    <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                      The minimum starting bid you expect applicants to bid from.
+                </div>
+                {(errors.minBudget || errors.maxBudget) && (
+                  <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget || errors.maxBudget}</p>
+                )}
+              </div>
+            ) : budgetType === "open" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                <div>
+                  <div className="relative h-12 flex items-center">
+                    <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
+                      <CreditIcon className="h-4 w-4" />
                     </div>
+                    <input
+                      type="text"
+                      placeholder="Starting Minimum Bid (e.g. 500)"
+                      value={formatCommaString(minBudget)}
+                      onChange={(e) => {
+                        setMinBudget(e.target.value.replace(/\D/g, ""));
+                        setErrors((prev) => {
+                          const { minBudget: _, ...r } = prev;
+                          return r;
+                        });
+                      }}
+                      className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                        errors.minBudget
+                          ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
+                          : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      }`}
+                    />
                   </div>
-                  {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
+                  {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget}</p>}
                 </div>
 
-                <div className="flex items-center gap-2.5 p-3 rounded-xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] text-xs text-gray-600 dark:text-zinc-300">
-                  <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
-                  <span className="text-[11px] leading-relaxed">
-                    <strong>No Maximum Ceiling:</strong> Freelancers can submit competitive open bids at or above your starting minimum.
-                  </span>
+                <div className="flex items-center gap-3 px-4 h-12 rounded-xl border border-dashed border-gray-300 dark:border-white/15 bg-gray-50/70 dark:bg-white/[0.02] text-gray-700 dark:text-zinc-300">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400">
+                    <InfinityIcon className="h-4 w-4" />
+                  </div>
+                  <div className="text-xs leading-tight min-w-0">
+                    <span className="font-bold text-gray-900 dark:text-white block truncate">No Upper Limit</span>
+                    <span className="text-[11px] text-gray-500 dark:text-zinc-400 block truncate">Proposals will quote flexible scopes</span>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="relative">
-                  <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-                    <CreditIcon className="h-4 w-4" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Min Value"
-                    value={formatCommaString(minBudget)}
-                    onChange={e => {
-                      setMinBudget(e.target.value.replace(/\D/g, ""));
-                      setErrors(prev => {
-                        const { minBudget, ...r } = prev;
-                        return r;
-                      });
-                    }}
-                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                      errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                    }`}
-                  />
-                  <div className="group absolute right-2.5 top-2.5 flex items-center">
-                    <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                      The minimum credits you are willing to spend for this job.
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                  <div>
+                    <div className="relative h-12 flex items-center">
+                      <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
+                        <CreditIcon className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Minimum Credits (e.g. 500)"
+                        value={formatCommaString(minBudget)}
+                        onChange={(e) => {
+                          const cleaned = e.target.value.replace(/\D/g, "");
+                          setMinBudget(cleaned);
+                          const minVal = parseInt(cleaned, 10) || 0;
+                          if (rawMaxBudget > 0 && minVal > 0 && rawMaxBudget < minVal) {
+                            setErrors((prev) => ({
+                              ...prev,
+                              minBudget: undefined as any,
+                              maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(cleaned)} Credits).`,
+                            }));
+                          } else {
+                            setErrors((prev) => {
+                              const { minBudget: _, maxBudget: mErr, ...r } = prev;
+                              if (mErr && mErr.includes("cannot be lower than minimum budget")) {
+                                return r;
+                              }
+                              return { ...r, ...(mErr ? { maxBudget: mErr } : {}) };
+                            });
+                          }
+                        }}
+                        className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          errors.minBudget
+                            ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
                     </div>
+                    {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget}</p>}
                   </div>
-                  {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
-                </div>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-                    <CreditIcon className="h-4 w-4" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Max Value"
-                    value={formatCommaString(maxBudget)}
-                    onChange={e => {
-                      setMaxBudget(e.target.value.replace(/\D/g, ""));
-                      setErrors(prev => {
-                        const { maxBudget, ...r } = prev;
-                        return r;
-                      });
-                    }}
-                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                      errors.maxBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                    }`}
-                  />
-                  <div className="group absolute right-2.5 top-2.5 flex items-center">
-                    <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                      The maximum credits you are willing to spend for this job.
+
+                  <div>
+                    <div className="relative h-12 flex items-center">
+                      <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
+                        <CreditIcon className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Maximum Credits (e.g. 1,500)"
+                        value={formatCommaString(maxBudget)}
+                        onChange={(e) => {
+                          const cleaned = e.target.value.replace(/\D/g, "");
+                          setMaxBudget(cleaned);
+                          const maxVal = parseInt(cleaned, 10) || 0;
+                          if (rawMinBudget > 0 && maxVal > 0 && maxVal < rawMinBudget) {
+                            setErrors((prev) => ({
+                              ...prev,
+                              maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(minBudget)} Credits).`,
+                            }));
+                          } else {
+                            setErrors((prev) => {
+                              const { maxBudget: _, ...r } = prev;
+                              return r;
+                            });
+                          }
+                        }}
+                        className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          errors.maxBudget
+                            ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
                     </div>
+                    {errors.maxBudget && !isBudgetRangeInvalid && (
+                      <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.maxBudget}</p>
+                    )}
                   </div>
-                  {errors.maxBudget && <p className="text-[11px] text-red-400 mt-1">{errors.maxBudget}</p>}
                 </div>
+
+                {/* Active Budget Range Warning Callout */}
+                {isBudgetRangeInvalid && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-semibold flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      Maximum budget cannot be lower than the minimum budget ({formatCommaString(minBudget)} Credits). Please raise the maximum cap.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
-            {(minBudget || maxBudget) && (
-              <div className="mt-2 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10">
-                <div className="flex items-start gap-2 text-gray-700 dark:text-zinc-300">
-                  <Info className="h-4 w-4 mt-0.5 text-gray-400" />
-                  <div className="text-xs">
-                    <span className="block font-medium mb-0.5 text-gray-900 dark:text-white">
-                      {budgetType === "open" ? "Open Bidding Benchmark" : "Target Budget Benchmark"}
-                    </span>
+            {/* Benchmark Note */}
+            {(minBudget || maxBudget) && !isBudgetRangeInvalid && (
+              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10 flex items-start gap-2.5 text-xs">
+                <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-gray-900 dark:text-white">
+                    {budgetType === "open" ? "Open Bidding Benchmark" : "Target Budget Benchmark"}
+                  </p>
+                  <p className="text-gray-600 dark:text-zinc-300 leading-relaxed">
                     {budgetType === "open" ? (
-                      <span>Starting from {minBudget ? formatCommaString(minBudget) : "0"} Credits (Open Bidding)</span>
+                      <>Freelancers can submit proposals starting from <strong>{formatCommaString(minBudget)} Credits</strong>.</>
                     ) : (
-                      <span>{minBudget ? formatCommaString(minBudget) : "0"} - {maxBudget ? formatCommaString(maxBudget) : "0"} credits</span>
+                      <>Targeting <strong>{minBudget ? formatCommaString(minBudget) : "0"} &ndash; {maxBudget ? formatCommaString(maxBudget) : "0"} Credits</strong>.</>
                     )}
                     {positions > 1 && (
-                      <span className="block mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
-                        That's approx.{" "}
-                        <strong className="text-gray-700 dark:text-gray-300">
-                          {formatCommaString(String(Math.floor(parseInt(minBudget.replace(/\D/g, "") || "0") / positions)))}
-                          {budgetType === "open" ? "+ credits min" : ` - ${formatCommaString(String(Math.floor(parseInt(maxBudget.replace(/\D/g, "") || "0") / positions)))} credits`}
-                        </strong>{" "}
-                        per person
+                      <span className="block mt-1 font-medium text-blue-600 dark:text-blue-400">
+                        Divided across {positions} positions: approx.{" "}
+                        {formatCommaString(String(Math.floor(parseInt(minBudget.replace(/\D/g, "") || "0") / positions)))}
+                        {budgetType === "open" ? "+ credits min" : ` &ndash; ${formatCommaString(String(Math.floor(parseInt(maxBudget.replace(/\D/g, "") || "0") / positions)))} credits`}{" "}
+                        per creator.
                       </span>
                     )}
-                    <span className="block mt-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
-                      {budgetType === "open"
-                        ? "Freelancers will submit competitive bids starting from this amount. You can negotiate terms in chat before accepting."
-                        : "Freelancers will use this benchmark to structure milestone bids. You can negotiate terms in chat before accepting."}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Step 2: Set Application Window */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">2</div>
+                  <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Set Application Window
+                  </h3>
+                  {(applicationWindowHours <= 24 || isUrgent) && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10 tracking-wide select-none">
+                      Rush
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  How long this post accepts proposals before auto-closing.
+                </p>
+              </div>
+            </div>
+
+            {/* Presets Grid: Rush, Urgent, Quick, Standard, Extended */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+              {[
+                { name: "Rush", time: "12 Hours", days: "Same-day", hours: 12 },
+                { name: "Urgent", time: "24 Hours", days: "1 Day", hours: 24 },
+                { name: "Quick", time: "3 Days", days: "72 Hours", hours: 72 },
+                { name: "Standard", time: "7 Days", days: "1 Week", hours: 168 },
+                { name: "Extended", time: "14 Days", days: "2 Weeks", hours: 336 },
+              ].map((preset) => {
+                const isSelected = applicationWindowHours === preset.hours;
+                return (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => {
+                      setApplicationWindowHours?.(preset.hours);
+                      setIsUrgent?.(preset.hours <= 24);
+                      // application window selection only dictates application_deadline, not project completion deadline
+                      if (!minTimeline && !maxTimeline) {
+                        if (preset.hours <= 12) {
+                          setMinTimeline("1");
+                          setMaxTimeline("2");
+                        } else if (preset.hours <= 24) {
+                          setMinTimeline("1");
+                          setMaxTimeline("3");
+                        } else if (preset.hours <= 72) {
+                          setMinTimeline("2");
+                          setMaxTimeline("4");
+                        } else if (preset.hours <= 168) {
+                          setMinTimeline("3");
+                          setMaxTimeline("5");
+                        } else {
+                          setMinTimeline("7");
+                          setMaxTimeline("14");
+                        }
+                        setErrors((prev) => {
+                          const { minTimeline: _, maxTimeline: __, ...rest } = prev;
+                          return rest;
+                        });
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1.5 ${
+                      isSelected
+                        ? "bg-blue-50/90 dark:bg-blue-500/15 border-blue-600 dark:border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                        : "bg-white dark:bg-dark-base/40 border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                    }`}
+                  >
+                    <span className={`text-[11px] font-bold tracking-wide uppercase ${
+                      isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-500 dark:text-zinc-400"
+                    }`}>
+                      {preset.name}
+                    </span>
+                    <span className={`text-sm font-black whitespace-nowrap ${
+                      isSelected ? "text-blue-700 dark:text-blue-200" : "text-gray-900 dark:text-white"
+                    }`}>
+                      {preset.time}
+                    </span>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+                      isSelected
+                        ? "bg-blue-600 text-white font-bold"
+                        : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400"
+                    }`}>
+                      {preset.days}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Clean Gray Closing Indicator (No icon) */}
+            <div className="rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-4 py-3 text-xs text-gray-600 dark:text-zinc-400">
+              Intake closes: <strong className="text-gray-900 dark:text-zinc-200">{new Date(Date.now() + applicationWindowHours * 60 * 60 * 1000).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong> &bull; You will get 50% of the credits used on posting refunded if no one sends a proposal.
+            </div>
+          </div>
+
+          {/* Step 3: Set Timeline (Project Working Turnaround (Upon Hire)) */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">3</div>
+                  <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Set Timeline (Project Working Turnaround (Upon Hire)) <span className="text-red-500">*</span>
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  How many days the hired freelancer has to deliver work once the contract starts and escrow is funded.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {isFixedBudget ? (
+                <div className="space-y-1.5 max-w-sm">
+                  <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
+                    Target Turnaround (Days) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 3 Days"
+                    min="1"
+                    value={maxTimeline}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMaxTimeline(val);
+                      setMinTimeline(val);
+                      setErrors((prev) => {
+                        const { maxTimeline: _, minTimeline: __, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                      isTimelineExceedingDeadline
+                        ? "border-amber-500 ring-2 ring-amber-500/20"
+                        : errors.maxTimeline || errors.minTimeline
+                        ? "border-red-500 ring-2 ring-red-500/20"
+                        : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    }`}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
+                      Estimated Turnaround Range (Days) <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAutoFitTurnaround}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 text-[11px] font-bold transition cursor-pointer shadow-xs active:scale-95"
+                      title="Automatically calculate min and max turnaround days to fit within your application window and deadline, leaving a safe buffer period."
+                    >
+                      <RefreshCw className="h-3 w-3 text-blue-500" />
+                      <span>Auto-Adjust with Buffer</span>
+                    </button>
+                  </div>
+
+                  {/* 3 Clickable Presets stretched cleanly across */}
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[
+                      { label: "Rush", range: "1 – 2 Days", min: "1", max: "2" },
+                      { label: "Standard", range: "3 – 5 Days", min: "3", max: "5" },
+                      { label: "Polished", range: "7 – 10 Days", min: "7", max: "10" },
+                    ].map((preset) => {
+                      const isActive = minTimeline === preset.min && maxTimeline === preset.max;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setMinTimeline(preset.min);
+                            setMaxTimeline(preset.max);
+                            setErrors((prev) => {
+                              const { minTimeline: _, maxTimeline: __, ...rest } = prev;
+                              return rest;
+                            });
+                          }}
+                          className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                            isActive
+                              ? "bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-500/20"
+                              : "bg-white dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-white/10"
+                          }`}
+                        >
+                          <Clock className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-white" : "text-gray-500 dark:text-zinc-400"}`} />
+                          <span>{preset.label}</span>
+                          <span className={`text-[10px] font-normal ${isActive ? "text-blue-100" : "text-gray-400 dark:text-zinc-500"}`}>
+                            ({preset.range})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Min Days (e.g. 1)"
+                        min="1"
+                        value={minTimeline}
+                        onChange={(e) => {
+                          setMinTimeline(e.target.value);
+                          setErrors((prev) => {
+                            const { minTimeline: _, ...r } = prev;
+                            return r;
+                          });
+                        }}
+                        className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          errors.minTimeline
+                            ? "border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Max Days (e.g. 3)"
+                        min="1"
+                        value={maxTimeline}
+                        onChange={(e) => {
+                          setMaxTimeline(e.target.value);
+                          setErrors((prev) => {
+                            const { maxTimeline: _, ...r } = prev;
+                            return r;
+                          });
+                        }}
+                        className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          isTimelineExceedingDeadline
+                            ? "border-amber-500 ring-2 ring-amber-500/20"
+                            : errors.maxTimeline
+                            ? "border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Optional Hard Calendar Completion Cutoff */}
+              <div className="border-t border-gray-100 dark:border-white/5 pt-3 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={hasHardDeadline}
+                    onChange={(e) => setHasHardDeadline?.(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="text-left">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-blue-500 transition">
+                      This project has a strict calendar completion cutoff (optional)
+                    </span>
+                    <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                      Use this only if your project has a fixed real-world event date or broadcast screening deadline.
+                    </p>
+                  </div>
+                </label>
+
+                {hasHardDeadline && (
+                  <div className="pl-7 pt-1 max-w-md space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        min={minCutoffDateString}
+                        value={hardDeadline}
+                        onChange={(e) => setHardDeadline?.(e.target.value)}
+                        className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 px-4 py-2.5 text-xs font-semibold text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+                          isCutoffBeforeIntake
+                            ? "border-red-500 ring-2 ring-red-500/20"
+                            : isTimelineExceedingDeadline
+                            ? "border-amber-500 ring-2 ring-amber-500/20"
+                            : "border-gray-300 dark:border-white/10"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAutoAdjustCutoff}
+                        className={`shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isCutoffBeforeIntake || isTimelineExceedingDeadline
+                            ? "bg-blue-600 hover:bg-blue-500 text-white shadow-sm ring-2 ring-blue-500/20"
+                            : "bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-200"
+                        }`}
+                        title="Automatically adjust date to fit both Application Window and Turnaround"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Auto-Adjust</span>
+                      </button>
+                    </div>
+                    {isCutoffBeforeIntake ? (
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                        <span>⚠️ Cutoff (${hardDeadline}) is too early for intake + turnaround.</span>
+                        <button
+                          type="button"
+                          onClick={handleAutoAdjustCutoff}
+                          className="underline hover:text-red-700 dark:hover:text-red-300 font-bold shrink-0 cursor-pointer"
+                        >
+                          Auto-Fix Date
+                        </button>
+                      </div>
+                    ) : isTimelineExceedingDeadline ? (
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                        <span>Turnaround exceeds hard calendar cutoff.</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleAutoFitTurnaround}
+                            className="underline hover:text-amber-700 dark:hover:text-amber-300 font-bold shrink-0 cursor-pointer"
+                          >
+                            Auto-Fit Turnaround
+                          </button>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={handleAutoAdjustCutoff}
+                            className="underline hover:text-amber-700 dark:hover:text-amber-300 font-bold shrink-0 cursor-pointer"
+                          >
+                            Extend Cutoff Date
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Sticky Studio Sidebar (Skills, Positions, Live Summary Preview) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6 lg:sticky lg:top-6">
+          
+          {/* Step 4: Required Skills */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 space-y-3">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">4</div>
+                <label className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">
+                  Required Skills <span className="text-red-500">*</span>
+                </label>
+              </div>
+              <span className={`text-xs font-semibold ${skills.length >= 3 ? "text-emerald-600 dark:text-emerald-400" : "text-gray-500 dark:text-zinc-400"}`}>
+                {skills.length}/6 Added {skills.length >= 3 ? "✓" : "(Min 3 req.)"}
+              </span>
+            </div>
+            <SkillsAutocomplete
+              skills={skills}
+              setSkills={setSkills}
+              error={errors.skills}
+              maxSkills={6}
+              hideHeader={true}
+              jobTitle={title}
+              jobDescription={description}
+              jobCategory={category}
+            />
+          </div>
+
+          {/* Card 2: Positions Needed / Assignment Slots */}
+          {!hidePositions && (
+            <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
+                    Positions Needed <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                    {isLockedToSingle ? "Single creator assignment" : "Number of open creator slots"}
+                  </p>
+                </div>
+
+                {isLockedToSingle ? (
+                  <div className="px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-bold text-xs select-none">
+                    1 Creator
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 border border-gray-300 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-dark-base p-1">
+                    <button
+                      type="button"
+                      disabled={positions <= effectiveMin}
+                      onClick={() => setPositions((prev) => Math.max(effectiveMin, prev - 1))}
+                      className={`h-8 w-8 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm text-gray-900 dark:text-white focus:outline-none transition-all ${
+                        positions <= effectiveMin
+                          ? "opacity-30 cursor-not-allowed"
+                          : "hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95"
+                      }`}
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="w-8 text-center font-mono font-bold text-xs select-none text-gray-900 dark:text-white">
+                      {positions}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPositions((prev) => prev + 1)}
+                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card 3: Live Scope & Financial Summary (Clean Neutral Gray) */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-5 space-y-4">
+            <div className="flex items-center gap-2 text-gray-900 dark:text-white border-b border-gray-200 dark:border-white/10 pb-3">
+              <Calculator className="h-4 w-4 text-gray-500 dark:text-zinc-400 shrink-0" />
+              <h4 className="text-xs font-bold uppercase tracking-wider">Step 2 Overview</h4>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              
+              {/* Budget Line */}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-zinc-400">Target Budget:</span>
+                <span className={`font-bold ${isBudgetRangeInvalid ? "text-red-500" : "text-gray-900 dark:text-white"}`}>
+                  {minBudget ? (
+                    budgetType === "open" ? (
+                      `From ${formatCommaString(minBudget)} Cr (Open)`
+                    ) : (
+                      `${formatCommaString(minBudget)} ~ ${maxBudget ? formatCommaString(maxBudget) : "0"} Cr`
+                    )
+                  ) : (
+                    <span className="text-gray-400 italic">Unset</span>
+                  )}
+                </span>
+              </div>
+
+              {/* Positions / Contract Scope Line */}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-zinc-400">Awarded Scope:</span>
+                <span className="font-bold text-gray-900 dark:text-white">
+                  1 Project Workspace Contract
+                </span>
+              </div>
+
+              {/* Timeline Line */}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-zinc-400">Duration:</span>
+                <span className="font-bold text-gray-900 dark:text-white">
+                  {minTimeline && maxTimeline
+                    ? `${minTimeline} – ${maxTimeline} Days`
+                    : maxTimeline
+                    ? `${maxTimeline} Days`
+                    : <span className="text-gray-400 italic">Unset</span>}
+                </span>
+              </div>
+
+              {/* Deadline Line */}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 dark:text-zinc-400">Final Deadline:</span>
+                <span className="font-bold text-gray-900 dark:text-white">
+                  {hasHardDeadline && hardDeadline ? `${hardDeadline} ${daysUntilDeadline !== null ? `(${daysUntilDeadline}d left)` : ""}` : <span className="text-gray-500 font-normal">Flexible</span>}
+                </span>
+              </div>
+
+              {/* Skills Line */}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-white/10">
+                <span className="text-gray-500 dark:text-zinc-400">Target Skills:</span>
+                <span className={`font-bold ${skills.length >= 3 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500"}`}>
+                  {skills.length} of 6 {skills.length >= 3 ? "(Ready)" : "(Min 3 req.)"}
+                </span>
+              </div>
+
+              {/* Visual Project Lifecycle Bar (Progress Line with Legend) */}
+              <div className="pt-3 border-t border-gray-200 dark:border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                  <span>Project Schedule Map</span>
+                  <span
+                    className="text-red-500 dark:text-red-400 font-bold flex items-center gap-1"
+                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    <span>DEADLINE</span>
+                    {hasHardDeadline && hardDeadline ? (
+                      <span className="text-red-600 dark:text-red-400 font-extrabold">
+                        ({hardDeadline})
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 font-normal capitalize">
+                        (Flexible)
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {/* The Sleek Segmented Bar with Buffer */}
+                <div className="h-3.5 w-full rounded-full overflow-hidden flex bg-gray-200 dark:bg-zinc-800 shadow-inner">
+                  {/* Segment 1: Application Window (Gray) */}
+                  <div
+                    style={{ width: `${timelineProgressInfo.appPercent}%` }}
+                    className="bg-gray-400 dark:bg-zinc-500 border-r border-white/60 dark:border-zinc-800 transition-all duration-300"
+                    title={`Application Window: ${timelineProgressInfo.appLabel}`}
+                  />
+
+                  {/* Segment 2: Working Turnaround (Light Blue / Sky) */}
+                  <div
+                    style={{ width: `${timelineProgressInfo.turnPercent}%` }}
+                    className={`bg-sky-400 dark:bg-sky-500 transition-all duration-300 ${
+                      timelineProgressInfo.bufferPercent > 0 || (hasHardDeadline && hardDeadline) ? "border-r border-white/60 dark:border-zinc-800" : ""
+                    }`}
+                    title={`Working Turnaround: ${timelineProgressInfo.turnLabel}`}
+                  />
+
+                  {/* Segment 3: Empty Buffer Time before Deadline */}
+                  {timelineProgressInfo.bufferPercent > 0 && (
+                    <div
+                      style={{ width: `${timelineProgressInfo.bufferPercent}%` }}
+                      className="bg-zinc-200/70 dark:bg-zinc-700/40 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.06)_4px,rgba(0,0,0,0.06)_8px)] dark:bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.06)_4px,rgba(255,255,255,0.06)_8px)] transition-all duration-300"
+                      title={`Buffer before Deadline: ${timelineProgressInfo.bufferLabel}`}
+                    />
+                  )}
+
+                  {/* Terminal Point: Deadline */}
+                  {hasHardDeadline && hardDeadline && (
+                    <div
+                      className="w-2 h-full bg-red-500 shrink-0"
+                      title={`Final Cutoff Deadline: ${hardDeadline}`}
+                    />
+                  )}
+                </div>
+
+                {/* Legend Below the Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gray-400 dark:bg-zinc-500 shrink-0" />
+                    <span className="text-gray-600 dark:text-zinc-400 font-medium">Application</span>
+                    <span className="text-gray-900 dark:text-zinc-200 font-bold">({timelineProgressInfo.appLabel})</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400 dark:bg-sky-500 shrink-0" />
+                    <span className="text-gray-600 dark:text-zinc-400 font-medium">Timeline</span>
+                    <span className="text-sky-600 dark:text-sky-400 font-bold">({timelineProgressInfo.turnLabel})</span>
+                  </div>
+
+                  {timelineProgressInfo.bufferPercent > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full border border-dashed border-zinc-400 dark:border-zinc-500 bg-zinc-200/80 dark:bg-zinc-700/60 shrink-0" />
+                      <span className="text-gray-500 dark:text-zinc-400 font-medium">Buffer</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-bold">({timelineProgressInfo.bufferLabel})</span>
+                    </div>
+                  )}
+
+                  {/* Deadline as last part */}
+                  <div
+                    className="flex items-center gap-1.5 font-semibold text-red-500 dark:text-red-400"
+                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 ring-2 ring-red-500/20" />
+                    <span>Deadline</span>
+                    <span className="font-bold text-red-600 dark:text-red-400">
+                      {hasHardDeadline && hardDeadline ? `(${hardDeadline})` : "(Flexible)"}
                     </span>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
 
-      <hr className="border-gray-100 dark:border-white/5" />
-
-      {/* 3. Required Skills */}
-      <SkillsAutocomplete 
-        skills={skills} 
-        setSkills={setSkills} 
-        error={errors.skills} 
-        maxSkills={6} 
-      />
-
-      <hr className="border-gray-100 dark:border-white/5" />
-
-      {/* 4. Project Deadline & Timeline */}
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
-              Project Deadline <span className="text-red-500">*</span>
-            </label>
-            <div className="group relative flex items-center">
-              <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                Timeline is the expected duration of work, while Deadline is the strict final delivery date you actually need it by.
-              </div>
             </div>
           </div>
-          <div className={`relative flex items-center rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all overflow-hidden ${errors.deadline ? "border-red-500/50 focus-within:border-red-500" : "border-gray-200 dark:border-white/10 focus-within:border-blue-500/50"}`}>
-            <input 
-              id="project-deadline-input"
-              type="date" 
-              min={new Date().toISOString().split('T')[0]}
-              value={deadline} 
-              onClick={(e) => {
-                try {
-                  if ('showPicker' in HTMLInputElement.prototype) {
-                    e.currentTarget.showPicker();
-                  }
-                } catch (err) {
-                  // Ignore if showPicker is unsupported or throws
-                }
-              }}
-              onKeyDown={(e) => {
-                // Allow Tab for accessibility, but block all other typing
-                if (e.key !== 'Tab') {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => { 
-                const newDate = e.target.value;
-                setDeadline(newDate); 
-                setErrors(prev => { const {deadline, maxTimeline, minTimeline, ...r} = prev; return r; }); 
-                
-                if (newDate) {
-                  const parts = newDate.split('-');
-                  if (parts.length === 3 && parts[0].length === 4) {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-                    
-                    if (!isNaN(selected.getTime())) {
-                      const diffTime = selected.getTime() - today.getTime();
-                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                      
-                      // Auto-suggest timeline if timeline has not been set yet
-                      if (!maxTimeline && !minTimeline) {
-                        if (diffDays >= 1) {
-                          const maxAllowed = Math.max(1, diffDays - 1);
-                          setMaxTimeline(String(maxAllowed));
-                          setMinTimeline(String(Math.max(1, maxAllowed - 1)));
-                        } else if (diffDays === 0) {
-                          setMaxTimeline("1");
-                          setMinTimeline("1");
-                        }
-                      }
-                    }
-                  }
-                }
-              }} 
-              className="flex-1 cursor-pointer bg-transparent px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none [&::-webkit-calendar-picker-indicator]:hidden [color-scheme:light] dark:[color-scheme:dark]" 
-            />
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  const el = document.getElementById('project-deadline-input') as HTMLInputElement;
-                  if (el && 'showPicker' in HTMLInputElement.prototype) {
-                    el.showPicker();
-                  }
-                } catch (err) {}
-              }}
-              className="flex items-center justify-center border-l border-gray-200 dark:border-white/10 px-3.5 py-2.5 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5 transition-colors focus:outline-none"
-            >
-              <Calendar className="h-4 w-4" />
-            </button>
+
+          {/* Steps helper banner (Positioned below Step 2 Overview) */}
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-3.5 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed">
+            Follow the numbered steps <strong className="text-gray-700 dark:text-zinc-300">[1] to [4]</strong> to configure your project budget, intake window, turnaround, and skills.
           </div>
-          {errors.deadline && <p className="text-[11px] text-red-400">{errors.deadline}</p>}
-          {deadline && (
-            <div className="flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 mt-1 gap-1">
-              <span>
-                Setting deadline to {deadline} calculates a suggested timeline with a 1-day allowance. You can still adjust it below.
-              </span>
-              {daysUntilDeadline !== null && daysUntilDeadline >= 1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const maxAllowed = Math.max(1, daysUntilDeadline - 1);
-                    setMaxTimeline(String(maxAllowed));
-                    setMinTimeline(isFixedBudget ? String(maxAllowed) : String(Math.max(1, maxAllowed - 1)));
-                    setErrors(prev => { const { maxTimeline, minTimeline, ...r } = prev; return r; });
-                  }}
-                  className="shrink-0 text-blue-500 hover:text-blue-600 dark:text-blue-400 font-semibold underline"
-                >
-                  Apply suggested ({Math.max(1, daysUntilDeadline - 1)} {Math.max(1, daysUntilDeadline - 1) === 1 ? 'day' : 'days'})
-                </button>
-              )}
-            </div>
-          )}
+
         </div>
 
-        {isFixedBudget ? (
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
-              Project Timeline (Days) <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                placeholder="e.g. 3 Days"
-                min="1"
-                value={maxTimeline}
-                onChange={e => {
-                  const val = e.target.value;
-                  setMaxTimeline(val);
-                  setMinTimeline(val);
-                  setErrors(prev => {
-                    const { maxTimeline, minTimeline, ...r } = prev;
-                    return r;
-                  });
-                }}
-                className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                  isTimelineExceedingDeadline
-                    ? "border-amber-500/80 focus:border-amber-500 dark:border-amber-400/80"
-                    : errors.maxTimeline || errors.minTimeline
-                    ? "border-red-500/50 focus:border-red-500"
-                    : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                }`}
-              />
-              <div className="group absolute right-2.5 top-2.5 flex items-center">
-                <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                <div className="absolute bottom-full right-0 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-left text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
-                  The expected timeline in days. Total hours (days × 24) will be distributed across milestone deliverables in Step 4.
-                </div>
-              </div>
-            </div>
-            {isTimelineExceedingDeadline && daysUntilDeadline !== null && (
-              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs mt-1.5">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-xs text-amber-700 dark:text-amber-300">
-                    Project timeline exceeds deadline
-                  </p>
-                  <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90 leading-relaxed">
-                    The project timeline ({maxTimelineNum} {maxTimelineNum === 1 ? 'day' : 'days'}) cannot be longer than the days until deadline ({daysUntilDeadline} {daysUntilDeadline === 1 ? 'day' : 'days'} away). Please adjust the timeline or extend the deadline.
-                  </p>
-                </div>
-              </div>
-            )}
-            {!isTimelineExceedingDeadline && (errors.maxTimeline || errors.minTimeline) && (
-              <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline || errors.minTimeline}</p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
-              Project Timeline Range (Days) <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="relative">
-                <input
-                  type="number"
-                  placeholder="Min Days"
-                  min="1"
-                  value={minTimeline}
-                  onChange={e => {
-                    setMinTimeline(e.target.value);
-                    setErrors(prev => {
-                      const { minTimeline, ...r } = prev;
-                      return r;
-                    });
-                  }}
-                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                    daysUntilDeadline !== null && !isNaN(minTimelineNum) && minTimelineNum > daysUntilDeadline
-                      ? "border-amber-500/80 focus:border-amber-500 dark:border-amber-400/80"
-                      : errors.minTimeline
-                      ? "border-red-500/50 focus:border-red-500"
-                      : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                  }`}
-                />
-                <div className="group absolute right-2.5 top-2.5 flex items-center">
-                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
-                    The minimum days expected to complete the project (e.g. 1 for a rush job).
-                  </div>
-                </div>
-                {errors.minTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.minTimeline}</p>}
-              </div>
-              <div className="relative">
-                <input
-                  type="number"
-                  placeholder="Max Days"
-                  min="1"
-                  value={maxTimeline}
-                  onChange={e => {
-                    setMaxTimeline(e.target.value);
-                    setErrors(prev => {
-                      const { maxTimeline, ...r } = prev;
-                      return r;
-                    });
-                  }}
-                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                    daysUntilDeadline !== null && !isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline
-                      ? "border-amber-500/80 focus:border-amber-500 dark:border-amber-400/80"
-                      : errors.maxTimeline
-                      ? "border-red-500/50 focus:border-red-500"
-                      : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                  }`}
-                />
-                <div className="group absolute right-2.5 top-2.5 flex items-center">
-                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                  <div className="absolute bottom-full right-0 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
-                    The absolute maximum days allowed to complete the project.
-                  </div>
-                </div>
-                {errors.maxTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline}</p>}
-              </div>
-            </div>
-            {isTimelineExceedingDeadline && daysUntilDeadline !== null && (
-              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs mt-1.5">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-xs text-amber-700 dark:text-amber-300">
-                    Project timeline exceeds deadline
-                  </p>
-                  <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90 leading-relaxed">
-                    {(!isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline)
-                      ? `Maximum timeline (${maxTimelineNum} ${maxTimelineNum === 1 ? 'day' : 'days'}) cannot exceed the days until deadline (${daysUntilDeadline} ${daysUntilDeadline === 1 ? 'day' : 'days'} away).`
-                      : `Minimum timeline (${minTimelineNum} ${minTimelineNum === 1 ? 'day' : 'days'}) cannot exceed the days until deadline (${daysUntilDeadline} ${daysUntilDeadline === 1 ? 'day' : 'days'} away).`
-                    } Please adjust your timeline range or extend the deadline.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* 1.C: Milestone Pre-Scoping for Single-Hire Jobs */}
-      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-white/5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
-              Pre-Scoped Milestones / Delivery Roadmap <span className="text-gray-400 font-normal lowercase">(optional)</span>
-            </label>
-            <div className="group relative flex items-center">
-              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-center text-[10px] text-gray-700 dark:text-gray-300 shadow-lg group-hover:block z-10 pointer-events-none">
-                Pre-define the phases you expect so applicants can adopt or adjust them directly when proposing instead of inventing from scratch.
-              </div>
-            </div>
-          </div>
-          {setPreScopedMilestones && preScopedMilestones.length < 4 && (
-            <button
-              type="button"
-              onClick={() => {
-                const count = preScopedMilestones.length + 1;
-                setPreScopedMilestones([
-                  ...preScopedMilestones,
-                  { title: count === 1 ? "Phase 1: Initial Draft / Prototype" : `Phase ${count}: Final Delivery & Polish`, budget_percentage: 50, duration_hours: 24 }
-                ]);
-              }}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              <Plus className="h-3 w-3" /> Add Phase
-            </button>
-          )}
-        </div>
+      {/* FULL-WIDTH ACTION FOOTER */}
+      <div className="pt-6 border-t border-gray-200 dark:border-white/10 flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="px-6 py-3 rounded-xl border border-gray-300 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition text-sm focus:outline-none shadow-sm flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" /> Go Back
+        </button>
 
-        {preScopedMilestones.length === 0 ? (
-          <p className="text-[11px] text-gray-400 dark:text-zinc-500 italic">
-            No pre-defined milestones. Applicants will propose their own milestone roadmap. Click "Add Phase" if you have a structured multi-phase expectation.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {preScopedMilestones.map((m, idx) => (
-              <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02]">
-                <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 w-12 shrink-0">Phase {idx + 1}</span>
-                <input
-                  type="text"
-                  placeholder="Phase name (e.g. Wireframe / Mockup)"
-                  value={m.title}
-                  onChange={(e) => {
-                    const updated = [...preScopedMilestones];
-                    updated[idx].title = e.target.value;
-                    setPreScopedMilestones(updated);
-                  }}
-                  className="flex-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-2.5 py-1.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
-                />
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <div className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-zinc-400 shrink-0">
-                    <span>Allocation:</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={m.budget_percentage}
-                      onChange={(e) => {
-                        const updated = [...preScopedMilestones];
-                        updated[idx].budget_percentage = Math.max(1, Math.min(100, parseInt(e.target.value) || 0));
-                        setPreScopedMilestones(updated);
-                      }}
-                      className="w-14 rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-1.5 py-1 text-center text-xs text-gray-900 dark:text-white"
-                    />
-                    <span>%</span>
-                  </div>
-                  {setPreScopedMilestones && (
-                    <button
-                      type="button"
-                      onClick={() => setPreScopedMilestones(preScopedMilestones.filter((_, i) => i !== idx))}
-                      className="p-1 text-gray-400 hover:text-red-500 transition-colors ml-auto sm:ml-0"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5 mt-2">
-        <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
-        <button 
-          type="button" 
-          disabled={Boolean(isTimelineExceedingDeadline)}
+        <button
+          type="button"
+          disabled={Boolean(isTimelineExceedingDeadline || isBudgetRangeInvalid)}
           onClick={() => {
-            if (isTimelineExceedingDeadline) return;
+            if (isTimelineExceedingDeadline || isBudgetRangeInvalid) return;
             onAdvance();
-          }} 
-          title={isTimelineExceedingDeadline ? "Cannot continue: Project timeline exceeds the deadline" : undefined}
-          className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition focus:outline-none ${
+          }}
+          title={
             isTimelineExceedingDeadline
+              ? "Cannot continue: Project timeline exceeds the deadline"
+              : isBudgetRangeInvalid
+              ? "Cannot continue: Maximum budget cannot be lower than minimum budget"
+              : undefined
+          }
+          className={`min-w-[220px] px-8 py-3.5 flex items-center justify-center gap-2.5 rounded-xl text-sm font-bold transition focus:outline-none ${
+            isTimelineExceedingDeadline || isBudgetRangeInvalid
               ? "bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-zinc-500 cursor-not-allowed shadow-none"
-              : "bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/20"
+              : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/35 active:scale-[0.99]"
           }`}
         >
-          Continue to Terms <ArrowRight className="h-3.5 w-3.5" />
+          Continue to Terms <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+
     </div>
   );
 };

@@ -549,7 +549,8 @@ async function recordMilestoneAction({
                  WHERE tcw.contract_id = $1
                    AND twt.deleted_at IS NULL
                    AND (
-                     twt.job_milestone_id = p.job_milestone_id
+                     twt.contract_milestone_id = $2
+                     OR twt.job_milestone_id = p.job_milestone_id
                      OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
                      OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
                    )
@@ -602,7 +603,8 @@ async function recordMilestoneAction({
                     WHERE tcw.contract_id = $1
                       AND twt.deleted_at IS NULL
                       AND (
-                        twt.job_milestone_id = p.job_milestone_id
+                        twt.contract_milestone_id = $2
+                     OR twt.job_milestone_id = p.job_milestone_id
                         OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
                         OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
                       )
@@ -627,7 +629,8 @@ async function recordMilestoneAction({
                     WHERE tcw.contract_id = $1
                       AND twt.deleted_at IS NULL
                       AND (
-                        twt.job_milestone_id = p.job_milestone_id
+                        twt.contract_milestone_id = $2
+                     OR twt.job_milestone_id = p.job_milestone_id
                         OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
                         OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
                       )
@@ -653,7 +656,8 @@ async function recordMilestoneAction({
                     WHERE tcw.contract_id = $1
                       AND twt.deleted_at IS NULL
                       AND (
-                        twt.job_milestone_id = p.job_milestone_id
+                        twt.contract_milestone_id = $2
+                     OR twt.job_milestone_id = p.job_milestone_id
                         OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
                         OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
                       )

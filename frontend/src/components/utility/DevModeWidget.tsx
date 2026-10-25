@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Code, Coins, Loader2 } from "lucide-react";
 import api from "@/lib/axios";
 import { showSuccessToast, showErrorToast } from "./toast";
+import useGlobalState from "@/lib/global_state";
 
 export const DevModeWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -33,10 +34,32 @@ export const DevModeWidget: React.FC = () => {
       const res = await api.post("/api/accounts/dev/add-credits", { amount });
       showSuccessToast(res.data.message || `Added ${amount} credits!`);
       
-      // Optionally reload the page to refresh globally stored credits
+      // 1. Store in sessionStorage so animation persists even if the user or browser reloads
+      try {
+        sessionStorage.setItem(
+          "ensemble:pending_credits_delta",
+          JSON.stringify({ diff: amount, time: Date.now() })
+        );
+      } catch (_) {}
+
+      // 2. Update global user state immediately for instant live header animation without needing reload
+      const curUser = useGlobalState.getState().user;
+      if (curUser) {
+        const curBal = Number(curUser.wallet?.balance_credits || 0);
+        const nextBal = curBal + amount;
+        useGlobalState.getState().setUser({
+          ...curUser,
+          wallet: {
+            ...(curUser.wallet || {}),
+            balance_credits: nextBal,
+          },
+        });
+      }
+
+      // Close the widget gracefully
       setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+        setIsOpen(false);
+      }, 350);
     } catch (err: any) {
       showErrorToast(err.response?.data?.error || "Failed to add credits");
     } finally {
@@ -74,7 +97,7 @@ export const DevModeWidget: React.FC = () => {
             <div className="p-4 space-y-4">
               <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/20 p-3 rounded-xl">
                 <p className="text-xs text-purple-800 dark:text-purple-200 leading-relaxed">
-                  <strong>Warning:</strong> You are using a dev tool to manipulate account state. Adding credits will reload the page to refresh your balance globally.
+                  <strong>Notice:</strong> Adding credits updates your balance globally in real time with live header animation, and persists even across page reloads.
                 </p>
               </div>
 

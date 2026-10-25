@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Check, Loader2 } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
 
@@ -8,6 +9,7 @@ interface SuccessModalProps {
   message: string;
   buttonText?: string;
   onConfirm: () => void;
+  standalone?: boolean;
 }
 
 const SuccessModal: React.FC<SuccessModalProps> = ({
@@ -16,6 +18,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
   message,
   buttonText = "Okay, got it!",
   onConfirm,
+  standalone = false,
 }) => {
   const [status, setStatus] = useState<"loading" | "success">("loading");
   const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
@@ -25,17 +28,20 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       setStatus("loading");
       const timer = setTimeout(() => {
         setStatus("success");
-      }, 1800);
+      }, 1400);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  return (
-    /* Adjusted layout bounds to shift modal center offset precisely into the main right-hand panel view context */
-    <div className={`fixed top-0 bottom-0 right-0 left-0 ${isCollapsed ? 'md:left-20' : 'md:left-64'} z-50 flex items-center justify-center p-4 bg-white/80 dark:bg-black/85 backdrop-blur-md animate-fade-in overflow-hidden`}>
-
+  const modalContent = (
+    /* Adjusted layout bounds to shift modal center offset precisely into the view context */
+    <div
+      className={`fixed inset-0 ${
+        standalone ? "" : isCollapsed ? "md:left-20" : "md:left-64"
+      } z-[10000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-hidden`}
+    >
       {/* --- VIBRANT BACKGROUND BLUR GLOW BLOBS --- */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/2 left-1/3 -translate-y-1/2 w-72 h-72 rounded-full bg-yellow-500/10 blur-[80px] animate-pulse duration-[4s]" />
@@ -71,8 +77,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       )}
 
       {/* --- MAIN MODAL CARD CONTAINER --- */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/90 p-8 text-center shadow-2xl min-h-[320px] flex flex-col justify-center items-center backdrop-blur-xl z-10 overflow-hidden">
-
+      <div className="relative w-full max-w-sm rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/95 p-8 text-center shadow-2xl min-h-[320px] flex flex-col justify-center items-center backdrop-blur-xl z-10 overflow-hidden">
         {status === "loading" ? (
           <div className="space-y-4 animate-fade-in flex flex-col items-center">
             <div className="relative flex items-center justify-center">
@@ -80,15 +85,19 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
               <div className="absolute inset-0 rounded-full bg-blue-500/10 blur-md animate-ping" />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-700 dark:text-zinc-200 tracking-wide">Syncing with Marketplace...</p>
-              <p className="text-[11px] text-gray-500 dark:text-zinc-500 mt-1">Deploying platform structural data parameters</p>
+              <p className="text-sm font-bold text-gray-700 dark:text-zinc-200 tracking-wide">
+                Syncing with Marketplace...
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-500 mt-1">
+                Deploying platform structural data parameters
+              </p>
             </div>
           </div>
         ) : (
           <div className="animate-scale-up flex flex-col items-center w-full relative">
             <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20 text-green-400 shadow-[0_0_25px_rgba(34,197,94,0.15)]">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 text-[#0d0f1a] shadow-lg shadow-green-500/30">
-                <Check className="h-5 w-5 stroke-" />
+                <Check className="h-5 w-5 stroke-[2.5]" />
               </div>
             </div>
 
@@ -101,7 +110,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
 
             <button
               onClick={onConfirm}
-              className="w-full rounded-full bg-green-500 px-6 py-3 text-xs font-bold uppercase tracking-wider text-[#0d0f1a] transition-all hover:bg-green-400 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-green-500/20"
+              className="w-full rounded-full bg-green-500 px-6 py-3 text-xs font-bold uppercase tracking-wider text-[#0d0f1a] transition-all hover:bg-green-400 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-green-500/20 cursor-pointer"
             >
               {buttonText}
             </button>
@@ -133,6 +142,8 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       `}</style>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
 };
 
 export default SuccessModal;

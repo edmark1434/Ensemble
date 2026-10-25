@@ -1,16 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   TrendingUp,
-  Star,
   CheckCircle2,
   ArrowRight,
   Plus,
-  HelpCircle,
-  User,
-  Users,
+  Loader2,
   Briefcase,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
@@ -18,6 +16,7 @@ import useGlobalState from "@/lib/global_state";
 export const JobPostsInfoGuide: React.FC = () => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
 
   const rankingPillars = [
     {
@@ -36,49 +35,71 @@ export const JobPostsInfoGuide: React.FC = () => {
       detail: "Days since publication + applicant count",
       purpose: "Gives newly published job posts immediate visibility so freelancers can discover and apply quickly.",
       rules:
-        "New jobs (< 7 days old) with fewer than 3 proposals per seat get the full 25 pts. Tapers smoothly to 0 after 14 days as proposals accumulate.",
+        "New jobs (< 7 days old) with fewer than 3 proposals receive the full 25 pts. Tapers smoothly to 0 over 14 days as proposals accumulate.",
     },
     {
       num: "03",
       weight: "25 pts",
-      title: "Type-Aware Brief Quality",
+      title: "Scope & Brief Quality",
       detail: "Scope, budget realism, skills & attachments",
       purpose: "Incentivizes well-defined scopes and fair budgets; unlocks the Rising badge for high-effort briefs.",
       rules:
-        "Evaluated against tailored criteria for Open Bid, Budget Range, or Team Milestone Pool jobs. Reaching 85%+ quality unlocks the Rising badge.",
+        "Evaluated against tailored criteria for Budget Range or Open Bid job posts. Reaching 85%+ quality unlocks the Rising badge.",
     },
     {
       num: "04",
       weight: "15 pts",
-      title: "Seat-Aware Open Capacity",
-      detail: "Proposals per open hiring seat",
+      title: "Open Capacity & Low Congestion",
+      detail: "Active proposal count",
       purpose: "Prevents applicant pile-ons and redistributes traffic to jobs that still genuinely need applicants.",
       rules:
-        "Measures competition per seat. When an individual job reaches 15+ proposals (or all seats are hired), it steps back so unapplied jobs rise to the top.",
+        "Monitors application volume. Jobs with fewer applicants receive top capacity score, while heavily applied jobs step back so newer listings gain visibility.",
+    },
+  ];
+
+  const jobStatuses = [
+    {
+      name: "Open",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+      summary: "Actively accepting proposals within application window",
+      desc: "Job is live on the marketplace. A live countdown timer shows remaining application intake time (12h, 24h, 3d, 7d, 14d). Freelancers can submit pitches (10 credits submission fee).",
+    },
+    {
+      name: "Closed",
+      badgeClass: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+      summary: "Intake concluded; proposals locked",
+      desc: "Application window has expired, required seats were hired, or author closed early. Submissions are locked. If closed without a hire, applicant submission fees are refunded automatically.",
+    },
+  ];
+
+  const refundPolicies = [
+    {
+      title: "Client 100% Posting Fee Refund",
+      amount: "50 Credits Refunded",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+      desc: "If an open job receives 0 proposals during its active window, or if the client force-closes the job with 0 proposals, the 50-credit posting fee is immediately refunded back to the client wallet.",
+    },
+    {
+      title: "Freelancer 100% Submission Fee Refund",
+      amount: "10 Credits Per Applicant",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20",
+      desc: "If a job's application window expires without the client hiring anyone, all applicant submission fees (10 credits each) are returned immediately to the freelancers' wallets.",
+    },
+    {
+      title: "Application Window Presets",
+      amount: "12h · 24h · 3d · 7d · 14d",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+      desc: "Clients choose how long their job post collects proposals. A live countdown timer is shown on the job details page for full transparency to both clients and applicants.",
     },
   ];
 
   const jobTypeCriteria = [
     {
-      type: "Individual — Open Bid",
-      badge: "Floor Benchmark",
-      badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
-      icon: <User className="h-4 w-4 text-blue-500 shrink-0" />,
-      desc: "Client sets a minimum starting floor; freelancers pitch their custom milestones and pricing.",
-      rows: [
-        { criteria: "Detailed Scope of Work", weight: "+30%", rule: "Description contains 150+ characters describing deliverables and project context." },
-        { criteria: "Realistic Floor Benchmark", weight: "+20%", rule: "Minimum budget is set to at least 300 Credits." },
-        { criteria: "Relevant Skill Tags", weight: "+20%", rule: "At least 3 specific tags added (e.g. Color Grading, Premiere Pro, Sound Design)." },
-        { criteria: "Custom Visual / Cover", weight: "+15%", rule: "Uploaded custom project thumbnail image or reference brief attachments." },
-        { criteria: "Timeline & Workflow Terms", weight: "+15%", rule: "Delivery timeline specified and Portfolio / NDA usage preferences selected." },
-      ],
-    },
-    {
-      type: "Individual — Budget Range",
+      type: "Budget Range Format",
       badge: "Min – Max Range",
       badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
       icon: <Briefcase className="h-4 w-4 text-emerald-500 shrink-0" />,
-      desc: "Client defines a fixed minimum and maximum budget bracket for 1 or more seats.",
+      desc: "Client defines a minimum and maximum budget bracket. Proposers define their phased milestone delivery within this ceiling.",
       rows: [
         { criteria: "Project Deliverables Scope", weight: "+25%", rule: "Clear scope and deliverables explanation (140+ characters)." },
         { criteria: "Focused Min–Max Spread", weight: "+25%", rule: "Realistic budget span where Max budget is within 3x of Min budget." },
@@ -88,17 +109,17 @@ export const JobPostsInfoGuide: React.FC = () => {
       ],
     },
     {
-      type: "Team — Milestone Pool",
-      badge: "Shared Credit Pool",
-      badgeClass: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:border-purple-500/20",
-      icon: <Users className="h-4 w-4 text-purple-500 shrink-0" />,
-      desc: "Multi-role production where a collective budget pool is distributed across structured milestones.",
+      type: "Open Bid Format",
+      badge: "Floor Benchmark",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
+      icon: <Sparkles className="h-4 w-4 text-blue-500 shrink-0" />,
+      desc: "Client sets a minimum starting floor with no upper ceiling. Proposers pitch their own custom roadmap rates and terms.",
       rows: [
-        { criteria: "Structured Milestone Shares", weight: "+30%", rule: "2 or more milestone phases defined with credit % allocations and seat counts." },
-        { criteria: "Milestone Task Checklists", weight: "+20%", rule: "Specific task breakdown defined inside each milestone phase." },
-        { criteria: "Comprehensive Production Brief", weight: "+20%", rule: "Detailed overview explaining team workflow and production goals (140+ chars)." },
-        { criteria: "Multi-Disciplinary Skills", weight: "+15%", rule: "At least 3 relevant skill tags spanning the required specialist roles." },
-        { criteria: "Cover Visual & Schedule", weight: "+15%", rule: "Custom cover visual and realistic production timeline attached." },
+        { criteria: "Detailed Scope of Work", weight: "+30%", rule: "Description contains 150+ characters describing deliverables and project context." },
+        { criteria: "Realistic Floor Benchmark", weight: "+20%", rule: "Minimum budget is set to at least 300 Credits." },
+        { criteria: "Relevant Skill Tags", weight: "+20%", rule: "At least 3 specific tags added (e.g. Color Grading, Premiere Pro, Sound Design)." },
+        { criteria: "Custom Visual / Cover", weight: "+15%", rule: "Uploaded custom project thumbnail image or reference brief attachments." },
+        { criteria: "Timeline & Workflow Terms", weight: "+15%", rule: "Delivery timeline specified and Portfolio / NDA usage preferences selected." },
       ],
     },
   ];
@@ -113,30 +134,8 @@ export const JobPostsInfoGuide: React.FC = () => {
           <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/50 dark:via-white/30 to-transparent pointer-events-none" />
         </span>
       ),
-      condition: "Job age ≤ 7 days, < 3 proposals per seat, client reviews = 0, AND Brief Quality Score ≥ 85%.",
+      condition: "Job age ≤ 7 days, < 3 proposals, client reviews = 0, AND Brief Quality Score ≥ 85%.",
       effect: "Grants prominent visibility on Job Market browse and Home page Latest Job Posts.",
-    },
-    {
-      name: "Individual",
-      badge: (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-300 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
-          <User className="h-3 w-3 text-gray-600 dark:text-zinc-400" />
-          <span>Individual</span>
-        </span>
-      ),
-      condition: "Single-freelancer or multi-seat individual hiring model.",
-      effect: "Freelancers submit direct proposals with their own rate and milestones.",
-    },
-    {
-      name: "Team Project",
-      badge: (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-300 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
-          <Users className="h-3 w-3 text-gray-600 dark:text-zinc-400" />
-          <span>Team</span>
-        </span>
-      ),
-      condition: "Multi-creator milestone pool hiring model.",
-      effect: "Freelancers apply for dedicated milestone roles from a shared credit pool.",
     },
     {
       name: "Open",
@@ -145,43 +144,137 @@ export const JobPostsInfoGuide: React.FC = () => {
           Open
         </span>
       ),
-      condition: "Unfilled hiring seats remain available.",
-      effect: "Actively accepting proposals from all eligible creators.",
+      condition: "Active within application intake window with open hiring seats remaining.",
+      effect: "Actively accepting proposals from creators. A live countdown timer displays remaining intake time.",
+    },
+    {
+      name: "Closed",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40">
+          Closed
+        </span>
+      ),
+      condition: "Application window countdown expired, positions filled, or job closed early by author with 0 proposals.",
+      effect: "Proposal submissions are locked. Automated refunds are processed (50c client refund if 0 applicants; 10c proposal refunds if closed without hire).",
+    },
+    {
+      name: "Budget Range",
+      badge: (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-[11px] font-semibold shadow-2xs">
+          <span>Budget Range</span>
+        </span>
+      ),
+      condition: "Client specifies min and max budget ceiling.",
+      effect: "Proposals are submitted with milestone roadmaps at or below the max budget ceiling.",
+    },
+    {
+      name: "Open Bid",
+      badge: (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 text-[11px] font-semibold shadow-2xs">
+          <Sparkles className="h-3 w-3" />
+          <span>Open Bid</span>
+        </span>
+      ),
+      condition: "Client provides starting floor without an upper ceiling constraint.",
+      effect: "Freelancers and studios can propose their custom rate and delivery milestones without limits.",
     },
   ];
 
-  const handleCreateJob = () => {
+  const handleCreateJob = async () => {
+    if (isCheckingAccess) return;
     if (isGuestMode) {
       navigate("/login");
       return;
     }
-    continueIfAccountVerified(
-      () => navigate("/jobs/postings/choose"),
-      false,
-      "Account Verification is required to post a job. Please verify your identity to proceed."
-    );
+    setIsCheckingAccess(true);
+    try {
+      await continueIfAccountVerified(
+        () => navigate("/jobs/create"),
+        false,
+        "Account Verification is required to post a job. Please verify your identity to proceed."
+      );
+    } finally {
+      setIsCheckingAccess(false);
+    }
   };
 
   return (
     <div
-      className="space-y-6 w-full animate-fade-in"
-      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      className="space-y-6 w-full animate-fade-in font-['Plus_Jakarta_Sans',sans-serif]"
     >
-      {/* Header */}
+      {/* Header - Strictly No Icon Beside Title */}
       <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300">
-            <HelpCircle className="w-4 h-4" />
-          </span>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-            How Job Market Ranking & The "Rising" Badge Work
-          </h1>
-        </div>
-        <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
-          Jobs on the platform are ordered using a <strong>100-Point Type-Aware Discovery Algorithm</strong>.
-          This ensures new clients who write comprehensive briefs and set fair budgets compete equally
-          with established clients, while keeping fresh opportunities visible to freelancers.
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          Job Market Ranking, Lifecycle & Status Guide
+        </h1>
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 mt-1.5 leading-relaxed max-w-4xl">
+          Jobs on the platform are ordered using a <strong>100-Point Type-Aware Discovery Algorithm</strong> and operate on transparent application windows with automated refund protections.
         </p>
+      </div>
+
+      {/* Section: Job Listing Lifecycle: Open vs Closed */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+            Job Listing Statuses (Open vs Closed)
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+            Job listings are strictly categorized as <strong>Open</strong> or <strong>Closed</strong> across all marketplace browsing lists.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {jobStatuses.map((js) => (
+            <div
+              key={js.name}
+              className="p-4 rounded-xl border border-gray-200/90 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] space-y-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-0.5 rounded-full border text-xs font-bold ${js.badgeClass}`}>
+                  {js.name}
+                </span>
+                <span className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
+                  {js.summary}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                {js.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Section: Application Window & Automated Refund Guarantees */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs space-y-4">
+        <div className="border-l-4 border-l-amber-400 pl-3">
+          <h2 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+            Application Window Intake & Automated Refunds
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+            Every published job post has a set window and guaranteed automatic refunds to protect user balances.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {refundPolicies.map((rp) => (
+            <div
+              key={rp.title}
+              className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] flex flex-col justify-between space-y-3"
+            >
+              <div>
+                <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-mono font-bold mb-2 ${rp.badgeClass}`}>
+                  {rp.amount}
+                </span>
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                  {rp.title}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-zinc-400 mt-2 leading-relaxed">
+                  {rp.desc}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Section 1: The 4 Scoring Pillars (Clean Table) */}
@@ -316,10 +409,10 @@ export const JobPostsInfoGuide: React.FC = () => {
       <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xs">
         <div className="p-5 border-b border-gray-200 dark:border-white/10">
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">
-            Job Card Badges & Indicators
+            Job Card Badges & Status Indicators
           </h2>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-            Clear visual tags attached to each job card across browsing lists and details views.
+            Clear visual status and qualification tags displayed on job cards and listings.
           </p>
         </div>
 
@@ -374,10 +467,22 @@ export const JobPostsInfoGuide: React.FC = () => {
           <button
             type="button"
             onClick={handleCreateJob}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shadow-xs active:scale-98 cursor-pointer"
+            disabled={isCheckingAccess}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shadow-xs ${
+              isCheckingAccess ? "opacity-80 cursor-wait" : "active:scale-98 cursor-pointer"
+            }`}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Post a Job</span>
+            {isCheckingAccess ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Opening...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Post a Job</span>
+              </>
+            )}
           </button>
         </div>
       </div>

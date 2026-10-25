@@ -6,8 +6,6 @@ import {
   Clock,
   ArrowRight,
   Bookmark,
-  Users,
-  User,
   Send,
   Edit2,
   Film,
@@ -245,19 +243,8 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                         </div>
                       </div>
 
-                      {/* Bottom-left Hiring Type & Difficulty Tags */}
+                      {/* Bottom-left Difficulty Tag */}
                       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
-                        {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam) ? (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                            <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
-                            <span>Team</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                            <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
-                            <span>Individual</span>
-                          </span>
-                        )}
                         <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                           {job.difficulty || "Beginner"}
                         </span>

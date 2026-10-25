@@ -30,14 +30,18 @@ async function ensureContractualTeamProject(dbClient, {
   if (jobRes.rows.length === 0) return null;
   const job = jobRes.rows[0];
 
-  // 2. Fetch proposal milestone role (if specified)
+  // 2. Fetch proposal milestone role & included team members (if specified)
   const propRes = await dbClient.query(`
-    SELECT proposal_id, job_milestone_id, freelancer_account_id 
+    SELECT proposal_id, job_milestone_id, freelancer_account_id, proposed_by_account_id, included_member_account_ids
       FROM proposals 
      WHERE proposal_id = $1
   `, [proposalId]);
   const proposal = propRes.rows[0];
   const targetMilestoneId = proposal?.job_milestone_id || null;
+  const proposedByAccountId = proposal?.proposed_by_account_id || null;
+  const includedMemberAccountIds = Array.isArray(proposal?.included_member_account_ids)
+    ? proposal.included_member_account_ids.map(String).filter(Boolean)
+    : [];
 
   // 3. Check if contractual team already exists for this job
   let teamRes = await dbClient.query(`
@@ -105,13 +109,24 @@ async function ensureContractualTeamProject(dbClient, {
     `, [teamId, contractId, clientAccountId]);
     const workspaceId = wsRes.rows[0]?.workspace_id;
 
-    // F. Pre-populate tasks from job_milestones
-    const milestonesRes = await dbClient.query(`
-      SELECT job_milestone_id, title, description, tasks, order_index
+    // F. Pre-populate tasks from job_milestones or contract_milestones
+    let milestonesRes = await dbClient.query(`
+      SELECT job_milestone_id, NULL::uuid as contract_milestone_id, title, description, tasks, order_index
         FROM job_milestones
        WHERE job_id = $1
        ORDER BY order_index ASC
     `, [jobId]);
+
+    let isFromContractMilestones = false;
+    if (workspaceId && milestonesRes.rows.length === 0) {
+      milestonesRes = await dbClient.query(`
+        SELECT NULL::uuid as job_milestone_id, contract_milestone_id, name as title, description, COALESCE(tasks, '[]'::jsonb) as tasks, index as order_index
+          FROM contract_milestones
+         WHERE contract_id = $1
+         ORDER BY index ASC
+      `, [contractId]);
+      isFromContractMilestones = true;
+    }
 
     if (workspaceId && milestonesRes.rows.length > 0) {
       for (const ms of milestonesRes.rows) {
@@ -124,16 +139,19 @@ async function ensureContractualTeamProject(dbClient, {
         }
 
         const milestoneTitle = String(ms.title || 'Milestone Task').trim().slice(0, 160);
+        const jmId = isFromContractMilestones ? null : (ms.job_milestone_id || null);
+        const cmId = isFromContractMilestones ? ms.contract_milestone_id : null;
 
         if (taskItems.length === 0) {
           // Default single task for the milestone if no sub-tasks provided
           await dbClient.query(`
             INSERT INTO team_workspace_tasks (
-              workspace_id, job_milestone_id, title, description, status, priority, is_locked, created_by_account_id
-            ) VALUES ($1, $2, $3, $4, 'todo', 'normal', $5, $6)
+              workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, created_by_account_id
+            ) VALUES ($1, $2, $3, $4, $5, 'todo', 'normal', $6, $7)
           `, [
             workspaceId,
-            ms.job_milestone_id,
+            jmId,
+            cmId,
             milestoneTitle,
             ms.description || '',
             isLocked,
@@ -147,11 +165,12 @@ async function ensureContractualTeamProject(dbClient, {
             const taskDesc = typeof item === 'object' ? (item.description || '') : '';
             await dbClient.query(`
               INSERT INTO team_workspace_tasks (
-                workspace_id, job_milestone_id, title, description, status, priority, is_locked, sort_order, created_by_account_id
-              ) VALUES ($1, $2, $3, $4, 'todo', 'normal', $5, $6, $7)
+                workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, sort_order, created_by_account_id
+              ) VALUES ($1, $2, $3, $4, $5, 'todo', 'normal', $6, $7, $8)
             `, [
               workspaceId,
-              ms.job_milestone_id,
+              jmId,
+              cmId,
               taskTitle,
               taskDesc,
               isLocked,
@@ -174,16 +193,40 @@ async function ensureContractualTeamProject(dbClient, {
     `, [teamId, contractId, clientAccountId]);
   }
 
-  // 4. Register Freelancer in team_members
-  const freelancerUserRes = await dbClient.query(`
-    SELECT user_id FROM users WHERE account_id = $1 LIMIT 1
+  // 4. Register Freelancer (and all included team members if a Team proposal) in team_members
+  let extraTeamMemberAccountIds = [];
+  const teamCheck = await dbClient.query(`
+    SELECT t.team_id
+      FROM teams t
+     WHERE t.account_id = $1 AND t.deleted_at IS NULL
+     LIMIT 1
   `, [freelancerAccountId]);
-  if (freelancerUserRes.rows[0]?.user_id) {
-    await dbClient.query(`
-      INSERT INTO team_members (team_id, user_id, role, status)
-      VALUES ($1, $2, 'Member', 'Active')
-      ON CONFLICT (team_id, user_id) DO UPDATE SET status = 'Active'
-    `, [teamId, freelancerUserRes.rows[0].user_id]);
+
+  if (teamCheck.rows.length > 0) {
+    const tmRes = await dbClient.query(`
+      SELECT u.account_id
+        FROM team_members tm
+        JOIN users u ON u.user_id = tm.user_id
+       WHERE tm.team_id = $1 AND tm.status = 'Active'
+    `, [teamCheck.rows[0].team_id]);
+    extraTeamMemberAccountIds = tmRes.rows.map(r => r.account_id).filter(Boolean);
+  }
+
+  const candidateAccountIds = Array.from(
+    new Set([freelancerAccountId, proposedByAccountId, ...includedMemberAccountIds, ...extraTeamMemberAccountIds].filter(Boolean).map(String))
+  );
+
+  for (const accId of candidateAccountIds) {
+    const freelancerUserRes = await dbClient.query(`
+      SELECT user_id FROM users WHERE account_id = $1 LIMIT 1
+    `, [accId]);
+    if (freelancerUserRes.rows[0]?.user_id) {
+      await dbClient.query(`
+        INSERT INTO team_members (team_id, user_id, role, status)
+        VALUES ($1, $2, 'Member', 'Active')
+        ON CONFLICT (team_id, user_id) DO UPDATE SET status = 'Active'
+      `, [teamId, freelancerUserRes.rows[0].user_id]);
+    }
   }
 
   // 5. Get workspace ID
@@ -193,18 +236,23 @@ async function ensureContractualTeamProject(dbClient, {
   const primaryWorkspaceId = wsFind.rows[0]?.workspace_id;
 
   if (primaryWorkspaceId) {
-    // Add to team_workspace_members
-    await dbClient.query(`
-      INSERT INTO team_workspace_members (workspace_id, account_id, added_by_account_id)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (workspace_id, account_id) DO NOTHING
-    `, [primaryWorkspaceId, freelancerAccountId, clientAccountId]);
+    // Add freelancer / team account and all included member user accounts to team_workspace_members
+    for (const accId of candidateAccountIds) {
+      await dbClient.query(`
+        INSERT INTO team_workspace_members (workspace_id, account_id, added_by_account_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (workspace_id, account_id) DO NOTHING
+      `, [primaryWorkspaceId, accId, clientAccountId]);
+    }
+
+    // Determine the user account to assign tasks to (prefer person who submitted the proposal if freelancer is a team account)
+    const primaryAssigneeAccountId = proposedByAccountId || freelancerAccountId;
 
     // If freelancer applied for a specific milestone role, assign those tasks to them
     if (targetMilestoneId) {
       const tasksToAssign = await dbClient.query(`
         SELECT task_id FROM team_workspace_tasks 
-         WHERE workspace_id = $1 AND job_milestone_id = $2
+         WHERE workspace_id = $1 AND (job_milestone_id = $2 OR contract_milestone_id = $2)
       `, [primaryWorkspaceId, targetMilestoneId]);
 
       for (const t of tasksToAssign.rows) {
@@ -212,7 +260,20 @@ async function ensureContractualTeamProject(dbClient, {
           INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
           VALUES ($1, $2, $3)
           ON CONFLICT (task_id, account_id) DO NOTHING
-        `, [t.task_id, freelancerAccountId, clientAccountId]);
+        `, [t.task_id, primaryAssigneeAccountId, clientAccountId]);
+      }
+    } else {
+      // General/solo/team hire: assign all workspace tasks to the hired contributor/leader
+      const allTasks = await dbClient.query(`
+        SELECT task_id FROM team_workspace_tasks 
+         WHERE workspace_id = $1
+      `, [primaryWorkspaceId]);
+      for (const t of allTasks.rows) {
+        await dbClient.query(`
+          INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (task_id, account_id) DO NOTHING
+        `, [t.task_id, primaryAssigneeAccountId, clientAccountId]);
       }
     }
 
@@ -284,7 +345,9 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
  */
 async function getProjectTaskboard(teamId, viewerAccountId) {
   const query = `
-    SELECT twt.task_id, twt.workspace_id, twt.job_milestone_id,
+    SELECT twt.task_id, twt.workspace_id,
+           COALESCE(twt.job_milestone_id, twt.contract_milestone_id) as job_milestone_id,
+           twt.contract_milestone_id,
            twt.title, twt.description,
            CASE WHEN twt.status = 'in_review' THEN 'review' ELSE twt.status END as status,
            twt.priority,
@@ -292,8 +355,9 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
            twt.completed_at, twt.created_at,
            twt.created_by_account_id,
            CASE WHEN twt.created_by_account_id = j.client_account_id THEN true ELSE false END as is_contract_task,
-           jm.title as milestone_title, jm.order_index as milestone_order,
-           jm.budget_credits as milestone_budget,
+           COALESCE(jm.title, cm.name) as milestone_title,
+           COALESCE(jm.order_index, cm.index) as milestone_order,
+           COALESCE(jm.budget_credits, cm.credits) as milestone_budget,
            assignee_acc.account_id as assignee_account_id,
            assignee_acc.display_name as assignee_name,
            assignee_acc.handle as assignee_handle,
@@ -303,12 +367,13 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
       JOIN jobs j ON j.job_id = t.job_id
       JOIN team_workspace_tasks twt ON twt.workspace_id = tcw.workspace_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = twt.job_milestone_id
+      LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = twt.contract_milestone_id
       LEFT JOIN team_workspace_task_assignees twta ON twta.task_id = twt.task_id
       LEFT JOIN accounts assignee_acc ON assignee_acc.account_id = twta.account_id
       LEFT JOIN files assignee_f ON assignee_f.file_id = assignee_acc.avatar_file_id
      WHERE tcw.team_id = $1
        AND twt.deleted_at IS NULL
-     ORDER BY COALESCE(jm.order_index, 0) ASC, twt.sort_order ASC, twt.created_at ASC
+     ORDER BY COALESCE(jm.order_index, cm.index, 0) ASC, twt.sort_order ASC, twt.created_at ASC
   `;
   const res = await pool.query(query, [teamId]);
   return res.rows;
@@ -321,7 +386,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   // Verify permissions: Viewer must be assigned to task OR be the client owner
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id, j.client_account_id,
-           twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id
+           twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id,
+           twt.job_milestone_id, twt.contract_milestone_id
       FROM team_workspace_tasks twt
       JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
       JOIN teams t ON t.team_id = tcw.team_id
@@ -334,13 +400,54 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Task not found in this team project.');
   }
 
-  const { client_account_id, assignee_account_id, is_locked, created_by_account_id } = permRes.rows[0];
+  const { client_account_id, assignee_account_id, is_locked, created_by_account_id, job_milestone_id, contract_milestone_id } = permRes.rows[0];
+  const effectiveMilestoneId = contract_milestone_id || job_milestone_id;
   const isAssignee = String(viewerAccountId) === String(assignee_account_id);
   const isClient = String(viewerAccountId) === String(client_account_id);
   const isContractTask = String(created_by_account_id) === String(client_account_id);
 
-  if (!isAssignee && !isClient) {
-    throw new Error('You do not have permission to modify this task.');
+  // Check if viewer is a subcontractor in this workspace
+  const subRes = await pool.query(`
+    SELECT cs.assigned_milestone_id, cs.permissions, cs.parent_contractor_account_id
+      FROM contract_subcontractors cs
+      JOIN team_contract_workspaces tcw ON tcw.contract_id = cs.contract_id
+     WHERE tcw.team_id = $1 AND cs.account_id = $2
+     LIMIT 1
+  `, [teamId, viewerAccountId]);
+
+  const isSubcontractor = subRes.rows.length > 0;
+  if (isSubcontractor) {
+    const sub = subRes.rows[0];
+    const subPerms = sub.permissions || {};
+    // Strict milestone check: must belong to subcontractor's assigned milestone
+    if (sub.assigned_milestone_id && effectiveMilestoneId && String(sub.assigned_milestone_id) !== String(effectiveMilestoneId)) {
+      const err = new Error('Subcontractors can only view and modify tasks under their assigned contract milestone.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (status !== undefined && status !== null && subPerms.can_update_task_status === false) {
+      const err = new Error('Your subcontractor permissions do not allow modifying task status.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (isContractTask && (title !== undefined && title !== null)) {
+      throw new Error('Contract-defined milestone tasks cannot be renamed.');
+    }
+  } else if (!isAssignee && !isClient) {
+    // Check if viewer is the primary freelancer for this milestone's contract
+    const leadRes = await pool.query(`
+      SELECT 1 FROM team_contract_workspaces tcw
+        JOIN contracts c ON c.contract_id = tcw.contract_id
+        JOIN job_contracts jc ON jc.contract_id = c.contract_id
+        JOIN proposals p ON p.proposal_id = jc.proposal_id
+       WHERE tcw.team_id = $1 AND c.freelancer_account_id = $2
+         AND (p.job_milestone_id = $3 OR $3 IS NULL)
+       LIMIT 1
+    `, [teamId, viewerAccountId, job_milestone_id]);
+
+    if (leadRes.rows.length === 0) {
+      throw new Error('You do not have permission to modify this task.');
+    }
   }
 
   // Contract task title/description cannot be modified by contributors
@@ -348,8 +455,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Contract-defined milestone tasks cannot be edited.');
   }
 
-  // Only the person assigned to the task can change its status
-  if (status !== undefined && status !== null && !isAssignee) {
+  // Only the person assigned to the task, the primary contractor, or client can change its status
+  if (status !== undefined && status !== null && !isAssignee && !isClient && !isSubcontractor) {
     throw new Error('Only the assigned team member can change the status of this task.');
   }
 
@@ -402,7 +509,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
  * Create a new task on the taskboard.
  * Auto-assigns to the creator (the contributor). Clients cannot create tasks.
  */
-async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, checklist }) {
+async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, contract_milestone_id, checklist }) {
   const wsRes = await pool.query(`
     SELECT tcw.workspace_id, j.client_account_id
       FROM team_contract_workspaces tcw
@@ -422,14 +529,31 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
     throw error;
   }
 
+  const milestoneId = contract_milestone_id || job_milestone_id || null;
+  let validJobMilestoneId = null;
+  let validContractMilestoneId = null;
+
+  if (milestoneId) {
+    const cmCheck = await pool.query('SELECT contract_milestone_id FROM contract_milestones WHERE contract_milestone_id = $1 LIMIT 1', [milestoneId]);
+    if (cmCheck.rows.length > 0) {
+      validContractMilestoneId = milestoneId;
+    } else {
+      const jmCheck = await pool.query('SELECT job_milestone_id FROM job_milestones WHERE job_milestone_id = $1 LIMIT 1', [milestoneId]);
+      if (jmCheck.rows.length > 0) {
+        validJobMilestoneId = milestoneId;
+      }
+    }
+  }
+
   const taskRes = await pool.query(`
     INSERT INTO team_workspace_tasks (
-      workspace_id, job_milestone_id, title, description, status, priority, is_locked, checklist, created_by_account_id
-    ) VALUES ($1, $2, $3, $4, 'todo', COALESCE($5, 'normal'), FALSE, $6, $7)
+      workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, checklist, created_by_account_id
+    ) VALUES ($1, $2, $3, $4, $5, 'todo', COALESCE($6, 'normal'), FALSE, $7, $8)
     RETURNING *
   `, [
     workspace_id,
-    job_milestone_id || null,
+    validJobMilestoneId,
+    validContractMilestoneId,
     title,
     description || '',
     priority || 'normal',
@@ -478,9 +602,6 @@ async function deleteProjectTask(teamId, taskId, viewerAccountId) {
 
   const isCreator = String(viewerAccountId) === String(created_by_account_id);
   if (!isCreator) throw new Error('Unauthorized to delete this task; only its creator can remove it.');
-                       String(viewerAccountId) === String(created_by_account_id);
-
-  if (!isAuthorized) throw new Error('Unauthorized to delete this task');
 
   await pool.query(`
     UPDATE team_workspace_tasks SET deleted_at = NOW() WHERE task_id = $1
@@ -512,15 +633,29 @@ async function unlockSequentialMilestones(dbClient, contractId, completedMilesto
   const nextOrder = currentOrder + 1;
 
   // Unlock tasks for the next milestone in this workspace
+  // 1. Contract milestones
   await dbClient.query(`
     UPDATE team_workspace_tasks twt
        SET is_locked = FALSE, updated_at = NOW()
-      FROM job_milestones jm
+      FROM contract_milestones cm
      WHERE twt.workspace_id = $1
-       AND twt.job_milestone_id = jm.job_milestone_id
-       AND jm.job_id = $2
-       AND jm.order_index <= $3
-  `, [workspace_id, job_id, nextOrder]);
+       AND twt.contract_milestone_id = cm.contract_milestone_id
+       AND cm.contract_id = $2
+       AND cm.index <= $3
+  `, [workspace_id, contractId, nextOrder]);
+
+  // 2. Legacy job milestones (if applicable)
+  if (job_id) {
+    await dbClient.query(`
+      UPDATE team_workspace_tasks twt
+         SET is_locked = FALSE, updated_at = NOW()
+        FROM job_milestones jm
+       WHERE twt.workspace_id = $1
+         AND twt.job_milestone_id = jm.job_milestone_id
+         AND jm.job_id = $2
+         AND jm.order_index <= $3
+    `, [workspace_id, job_id, nextOrder]);
+  }
 
   await dbClient.query(`
     INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
@@ -687,11 +822,19 @@ async function getProjectMembers(teamId) {
            a.account_id, a.display_name, a.handle,
            f.path as avatar_path,
            tm.role as team_role,
-           jm.title as milestone_role,
-           jm.order_index as milestone_order,
-           c.contract_id,
+           COALESCE(jm.title, cs_jm.title, cs.role_title) as milestone_role,
+           COALESCE(jm.order_index, cs_jm.order_index) as milestone_order,
+           COALESCE(c.contract_id, cs.contract_id) as contract_id,
            c.status as contract_status,
-           tm.joined_at
+           tm.joined_at,
+           (tm.role = 'Subcontractor' OR cs.account_id IS NOT NULL) as is_subcontractor,
+           cs.parent_contractor_account_id,
+           lead_acc.display_name as parent_contractor_name,
+           lead_acc.handle as parent_contractor_handle,
+           lead_f.path as parent_contractor_avatar_path,
+           COALESCE(p.job_milestone_id, cs.assigned_milestone_id) as assigned_milestone_id,
+           COALESCE(jm.title, cs_jm.title) as assigned_milestone_title,
+           cs.permissions as subcontractor_permissions
       FROM teams t
       JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
       JOIN users u ON u.user_id = tm.user_id
@@ -701,8 +844,15 @@ async function getProjectMembers(teamId) {
       LEFT JOIN job_contracts jc ON jc.proposal_id = p.proposal_id
       LEFT JOIN contracts c ON c.contract_id = jc.contract_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = p.job_milestone_id
+      LEFT JOIN contract_subcontractors cs ON cs.account_id = a.account_id
+           AND cs.contract_id IN (
+             SELECT tcw2.contract_id FROM team_contract_workspaces tcw2 WHERE tcw2.team_id = t.team_id
+           )
+      LEFT JOIN accounts lead_acc ON lead_acc.account_id = cs.parent_contractor_account_id
+      LEFT JOIN files lead_f ON lead_f.file_id = lead_acc.avatar_file_id
+      LEFT JOIN job_milestones cs_jm ON cs_jm.job_milestone_id = cs.assigned_milestone_id
      WHERE t.team_id = $1
-     ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, 0) ASC
+     ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, cs_jm.order_index, 0) ASC
   `;
   const res = await pool.query(query, [teamId]);
   return res.rows;
@@ -712,89 +862,182 @@ async function getProjectMembers(teamId) {
  * Fetch unified sequential milestones pipeline for team project overview.
  */
 async function getProjectMilestones(teamId, viewerAccountId) {
-  const query = `
-    SELECT 
-      jm.job_milestone_id,
-      jm.title as milestone_title,
-      jm.description as milestone_description,
-      jm.order_index,
-      jm.budget_credits,
-      jm.tasks as milestone_tasks,
-      jm.duration_hours,
-      
-      -- Contract details
-      c.contract_id,
-      c.status as contract_status,
-      c.starts_at as contract_starts_at,
-      c.created_at as contract_created_at,
-      c.deadline_at as contract_overall_deadline,
-      COALESCE(
-        cm.deadline_at,
-        cm.started_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
-        c.starts_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
-        c.created_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
-        c.deadline_at
-      ) as deadline_at,
-      cm.contract_milestone_id,
-      COALESCE(cm.status, c.status, 'pending') as milestone_status,
-      cm.credits as milestone_credits,
-      cm.started_at,
-      cm.no_of_revisions_max,
-      (
-        SELECT COUNT(*)::int
-        FROM milestone_submits ms
-        WHERE ms.contract_milestone_id = cm.contract_milestone_id AND LOWER(ms.status) = 'revision_requested'
-      ) as revisions_used,
-      (
-        SELECT COALESCE(
-          json_agg(
-            json_build_object(
-              'id', ms.milestone_submit_id,
-              'message', ms.message,
-              'attachments', ms.attachments,
-              'status', ms.status,
-              'submitted_at', ms.submitted_at,
-              'responded_at', ms.responded_at
-            ) ORDER BY ms.submitted_at DESC
-          ),
-          '[]'::json
-        )
-        FROM milestone_submits ms
-        WHERE ms.contract_milestone_id = cm.contract_milestone_id
-      ) as submissions,
-      
-      -- Assignee details
-      freelancer_acc.account_id as assignee_account_id,
-      freelancer_acc.display_name as assignee_name,
-      freelancer_acc.handle as assignee_handle,
-      freelancer_f.path as assignee_avatar_path,
-      
-      -- Task counts for this milestone
-      (
-        SELECT COUNT(*) 
-        FROM team_workspace_tasks twt 
-        JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
-        WHERE tcw.team_id = t.team_id AND twt.job_milestone_id = jm.job_milestone_id AND twt.deleted_at IS NULL
-      ) as total_tasks,
-      (
-        SELECT COUNT(*) 
-        FROM team_workspace_tasks twt 
-        JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
-        WHERE tcw.team_id = t.team_id AND twt.job_milestone_id = jm.job_milestone_id AND twt.deleted_at IS NULL AND twt.status = 'completed'
-      ) as completed_tasks
+  // Check if job has legacy job_milestones
+  const jmCheck = await pool.query(`
+    SELECT 1 FROM job_milestones jm
+      JOIN teams t ON t.job_id = jm.job_id
+     WHERE t.team_id = $1
+     LIMIT 1
+  `, [teamId]);
 
-    FROM teams t
-    JOIN jobs j ON j.job_id = t.job_id
-    JOIN job_milestones jm ON jm.job_id = j.job_id
-    LEFT JOIN proposals p ON p.job_milestone_id = jm.job_milestone_id AND p.status IN ('Hired', 'accepted', 'active', 'completed')
-    LEFT JOIN job_contracts jc ON jc.proposal_id = p.proposal_id
-    LEFT JOIN contracts c ON c.contract_id = jc.contract_id AND c.status != 'Cancelled'
-    LEFT JOIN contract_milestones cm ON cm.contract_id = c.contract_id
-    LEFT JOIN accounts freelancer_acc ON freelancer_acc.account_id = p.freelancer_account_id
-    LEFT JOIN files freelancer_f ON freelancer_f.file_id = freelancer_acc.avatar_file_id
-    WHERE t.team_id = $1
-    ORDER BY jm.order_index ASC
-  `;
+  let query;
+  if (jmCheck.rows.length > 0) {
+    query = `
+      SELECT 
+        jm.job_milestone_id,
+        jm.title as milestone_title,
+        jm.description as milestone_description,
+        jm.order_index,
+        jm.budget_credits,
+        jm.tasks as milestone_tasks,
+        jm.duration_hours,
+        
+        -- Contract details
+        c.contract_id,
+        c.status as contract_status,
+        c.starts_at as contract_starts_at,
+        c.created_at as contract_created_at,
+        c.deadline_at as contract_overall_deadline,
+        COALESCE(
+          cm.deadline_at,
+          cm.started_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
+          c.starts_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
+          c.created_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
+          c.deadline_at
+        ) as deadline_at,
+        cm.contract_milestone_id,
+        COALESCE(cm.status, c.status, 'pending') as milestone_status,
+        cm.credits as milestone_credits,
+        cm.started_at,
+        cm.no_of_revisions_max,
+        (
+          SELECT COUNT(*)::int
+          FROM milestone_submits ms
+          WHERE ms.contract_milestone_id = cm.contract_milestone_id AND LOWER(ms.status) = 'revision_requested'
+        ) as revisions_used,
+        (
+          SELECT COALESCE(
+            json_agg(
+              json_build_object(
+                'id', ms.milestone_submit_id,
+                'message', ms.message,
+                'attachments', ms.attachments,
+                'status', ms.status,
+                'submitted_at', ms.submitted_at,
+                'responded_at', ms.responded_at
+              ) ORDER BY ms.submitted_at DESC
+            ),
+            '[]'::json
+          )
+          FROM milestone_submits ms
+          WHERE ms.contract_milestone_id = cm.contract_milestone_id
+        ) as submissions,
+        
+        -- Assignee details
+        freelancer_acc.account_id as assignee_account_id,
+        freelancer_acc.display_name as assignee_name,
+        freelancer_acc.handle as assignee_handle,
+        freelancer_f.path as assignee_avatar_path,
+        
+        -- Task counts for this milestone
+        (
+          SELECT COUNT(*) 
+          FROM team_workspace_tasks twt 
+          JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+          WHERE tcw.team_id = t.team_id AND twt.job_milestone_id = jm.job_milestone_id AND twt.deleted_at IS NULL
+        ) as total_tasks,
+        (
+          SELECT COUNT(*) 
+          FROM team_workspace_tasks twt 
+          JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+          WHERE tcw.team_id = t.team_id AND twt.job_milestone_id = jm.job_milestone_id AND twt.deleted_at IS NULL AND twt.status = 'completed'
+        ) as completed_tasks
+
+      FROM teams t
+      JOIN jobs j ON j.job_id = t.job_id
+      JOIN job_milestones jm ON jm.job_id = j.job_id
+      LEFT JOIN proposals p ON p.job_milestone_id = jm.job_milestone_id AND p.status IN ('Hired', 'accepted', 'active', 'completed')
+      LEFT JOIN job_contracts jc ON jc.proposal_id = p.proposal_id
+      LEFT JOIN contracts c ON c.contract_id = jc.contract_id AND c.status != 'Cancelled'
+      LEFT JOIN contract_milestones cm ON cm.contract_id = c.contract_id
+      LEFT JOIN accounts freelancer_acc ON freelancer_acc.account_id = p.freelancer_account_id
+      LEFT JOIN files freelancer_f ON freelancer_f.file_id = freelancer_acc.avatar_file_id
+      WHERE t.team_id = $1
+      ORDER BY jm.order_index ASC
+    `;
+  } else {
+    query = `
+      SELECT 
+        cm.contract_milestone_id as job_milestone_id,
+        cm.name as milestone_title,
+        cm.description as milestone_description,
+        cm.index as order_index,
+        cm.credits as budget_credits,
+        COALESCE(cm.tasks, '[]'::jsonb) as milestone_tasks,
+        COALESCE(cm.deadline, 72) as duration_hours,
+        
+        -- Contract details
+        c.contract_id,
+        c.status as contract_status,
+        c.starts_at as contract_starts_at,
+        c.created_at as contract_created_at,
+        c.deadline_at as contract_overall_deadline,
+        COALESCE(cm.deadline_at, c.deadline_at) as deadline_at,
+        cm.contract_milestone_id,
+        COALESCE(cm.status, c.status, 'pending') as milestone_status,
+        cm.credits as milestone_credits,
+        cm.started_at,
+        cm.no_of_revisions_max,
+        (
+          SELECT COUNT(*)::int
+          FROM milestone_submits ms
+          WHERE ms.contract_milestone_id = cm.contract_milestone_id AND LOWER(ms.status) = 'revision_requested'
+        ) as revisions_used,
+        (
+          SELECT COALESCE(
+            json_agg(
+              json_build_object(
+                'id', ms.milestone_submit_id,
+                'message', ms.message,
+                'attachments', ms.attachments,
+                'status', ms.status,
+                'submitted_at', ms.submitted_at,
+                'responded_at', ms.responded_at
+              ) ORDER BY ms.submitted_at DESC
+            ),
+            '[]'::json
+          )
+          FROM milestone_submits ms
+          WHERE ms.contract_milestone_id = cm.contract_milestone_id
+        ) as submissions,
+        
+        -- Assignee details
+        freelancer_acc.account_id as assignee_account_id,
+        freelancer_acc.display_name as assignee_name,
+        freelancer_acc.handle as assignee_handle,
+        freelancer_f.path as assignee_avatar_path,
+        
+        -- Task counts for this milestone
+        (
+          SELECT COUNT(*) 
+          FROM team_workspace_tasks twt 
+          JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+          WHERE tcw.team_id = t.team_id 
+            AND (twt.contract_milestone_id = cm.contract_milestone_id OR twt.job_milestone_id = cm.contract_milestone_id)
+            AND twt.deleted_at IS NULL
+        ) as total_tasks,
+        (
+          SELECT COUNT(*) 
+          FROM team_workspace_tasks twt 
+          JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+          WHERE tcw.team_id = t.team_id 
+            AND (twt.contract_milestone_id = cm.contract_milestone_id OR twt.job_milestone_id = cm.contract_milestone_id)
+            AND twt.deleted_at IS NULL 
+            AND twt.status = 'completed'
+        ) as completed_tasks
+
+      FROM teams t
+      JOIN team_contract_workspaces tcw ON tcw.team_id = t.team_id
+      JOIN contracts c ON c.contract_id = tcw.contract_id AND c.status != 'Cancelled'
+      JOIN contract_milestones cm ON cm.contract_id = c.contract_id
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN accounts freelancer_acc ON freelancer_acc.account_id = p.freelancer_account_id
+      LEFT JOIN files freelancer_f ON freelancer_f.file_id = freelancer_acc.avatar_file_id
+      WHERE t.team_id = $1
+      ORDER BY cm.index ASC
+    `;
+  }
   const res = await pool.query(query, [teamId]);
 
   let allPreviousCompleted = true;
@@ -860,6 +1103,444 @@ async function ensureContractualMember(teamId, accountId, role = 'Member') {
   `, [teamId, userId, role])).rows[0] || null;
 }
 
+async function getSubcontractProposals(teamId, viewerAccountId) {
+  const proposalsRes = await pool.query(`
+    SELECT p.proposal_id, p.team_id, p.contract_id, p.lead_account_id,
+           p.status, p.terms_accepted, p.terms_accepted_at,
+           p.proposal_notes, p.client_feedback,
+           p.reviewed_by_account_id, p.reviewed_at,
+           p.created_at, p.updated_at,
+           lead_acc.display_name as lead_name,
+           lead_acc.handle as lead_handle,
+           lead_f.path as lead_avatar_path,
+           rev_acc.display_name as reviewer_name,
+           rev_acc.handle as reviewer_handle
+      FROM team_subcontract_proposals p
+      JOIN accounts lead_acc ON lead_acc.account_id = p.lead_account_id
+      LEFT JOIN files lead_f ON lead_f.file_id = lead_acc.avatar_file_id
+      LEFT JOIN accounts rev_acc ON rev_acc.account_id = p.reviewed_by_account_id
+     WHERE p.team_id = $1
+     ORDER BY p.created_at DESC
+  `, [teamId]);
+
+  if (proposalsRes.rows.length === 0) return [];
+
+  const proposalIds = proposalsRes.rows.map((p) => p.proposal_id);
+
+  const membersRes = await pool.query(`
+    SELECT pm.proposal_member_id, pm.proposal_id, pm.contract_id,
+           pm.candidate_account_id, pm.role_title, pm.assigned_milestone_id,
+           pm.agreed_credits, pm.permissions, pm.status, pm.client_notes,
+           pm.decided_at, pm.created_at,
+           cand_acc.display_name as candidate_name,
+           cand_acc.handle as candidate_handle,
+           cand_f.path as candidate_avatar_path,
+           jm.title as milestone_title,
+           jm.order_index as milestone_order
+      FROM team_subcontract_proposal_members pm
+      JOIN accounts cand_acc ON cand_acc.account_id = pm.candidate_account_id
+      LEFT JOIN files cand_f ON cand_f.file_id = cand_acc.avatar_file_id
+      LEFT JOIN job_milestones jm ON jm.job_milestone_id = pm.assigned_milestone_id
+     WHERE pm.proposal_id = ANY($1::uuid[])
+     ORDER BY pm.created_at ASC
+  `, [proposalIds]);
+
+  const membersByProposal = {};
+  for (const m of membersRes.rows) {
+    if (!membersByProposal[m.proposal_id]) {
+      membersByProposal[m.proposal_id] = [];
+    }
+    membersByProposal[m.proposal_id].push(m);
+  }
+
+  return proposalsRes.rows.map((p) => ({
+    ...p,
+    members: membersByProposal[p.proposal_id] || [],
+  }));
+}
+
+async function createSubcontractProposal(teamId, viewerAccountId, { contract_id, members, proposal_notes, terms_accepted }) {
+  // 1. Verify contract belongs to team and viewer is the primary freelancer
+  const contractRes = await pool.query(`
+    SELECT c.contract_id, c.freelancer_account_id, j.client_account_id,
+           lead_acc.display_name as lead_name, lead_acc.handle as lead_handle
+      FROM team_contract_workspaces tcw
+      JOIN contracts c ON c.contract_id = tcw.contract_id
+      JOIN teams t ON t.team_id = tcw.team_id
+      JOIN jobs j ON j.job_id = t.job_id
+      JOIN accounts lead_acc ON lead_acc.account_id = c.freelancer_account_id
+     WHERE tcw.team_id = $1 AND c.contract_id = $2
+     LIMIT 1
+  `, [teamId, contract_id]);
+
+  if (contractRes.rows.length === 0) {
+    const err = new Error('Contract not found in this team project.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const { freelancer_account_id, client_account_id, lead_name, lead_handle } = contractRes.rows[0];
+
+  if (String(freelancer_account_id) !== String(viewerAccountId)) {
+    const err = new Error('Only the assigned contract freelancer can nominate subcontractors.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 2. Validate candidates
+  for (const m of members) {
+    const candId = m.candidate_account_id || m.account_id;
+    if (!candId) {
+      const err = new Error('Each team member must specify a valid account ID.');
+      err.statusCode = 422;
+      throw err;
+    }
+    if (String(candId) === String(client_account_id)) {
+      const err = new Error('Cannot add the project client as a subcontractor.');
+      err.statusCode = 422;
+      throw err;
+    }
+    if (String(candId) === String(viewerAccountId)) {
+      const err = new Error('You cannot nominate yourself as a subcontractor.');
+      err.statusCode = 422;
+      throw err;
+    }
+
+    // Check if already an active member in this project team
+    const existingActive = await pool.query(`
+      SELECT 1 FROM team_members tm
+      JOIN users u ON u.user_id = tm.user_id
+      WHERE tm.team_id = $1 AND u.account_id = $2 AND tm.status = 'Active'
+      LIMIT 1
+    `, [teamId, candId]);
+
+    if (existingActive.rows.length > 0) {
+      const candUser = await pool.query('SELECT handle, display_name FROM accounts WHERE account_id = $1', [candId]);
+      const handle = candUser.rows[0]?.handle || candUser.rows[0]?.display_name || 'User';
+      const err = new Error(`@${handle} is already an active member in this project workspace.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // 3. Insert proposal and members in transaction
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const propRes = await client.query(`
+      INSERT INTO team_subcontract_proposals (
+        team_id, contract_id, lead_account_id, status, terms_accepted, terms_accepted_at, proposal_notes
+      ) VALUES ($1, $2, $3, 'pending', $4, NOW(), $5)
+      RETURNING *
+    `, [
+      teamId,
+      contract_id,
+      viewerAccountId,
+      Boolean(terms_accepted),
+      proposal_notes?.trim() || null,
+    ]);
+
+    const proposal = propRes.rows[0];
+    const createdMembers = [];
+
+    for (const m of members) {
+      const candId = m.candidate_account_id || m.account_id;
+      const memRes = await client.query(`
+        INSERT INTO team_subcontract_proposal_members (
+          proposal_id, contract_id, candidate_account_id, role_title,
+          assigned_milestone_id, agreed_credits, permissions, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        RETURNING *
+      `, [
+        proposal.proposal_id,
+        contract_id,
+        candId,
+        m.role_title?.trim() || 'Video Editor',
+        m.assigned_milestone_id || null,
+        m.agreed_credits ? Number(m.agreed_credits) : null,
+        JSON.stringify(m.permissions || {
+          can_view_tasks: true,
+          can_update_task_status: true,
+          can_upload_drafts: true,
+          can_create_subtasks: false,
+        }),
+      ]);
+      createdMembers.push(memRes.rows[0]);
+    }
+
+    // Activity log
+    const wsRes = await client.query('SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1', [teamId]);
+    if (wsRes.rows[0]?.workspace_id) {
+      await client.query(`
+        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+        VALUES ($1, $2, 'subcontract_proposal_submitted', $3)
+      `, [
+        wsRes.rows[0].workspace_id,
+        viewerAccountId,
+        JSON.stringify({
+          proposal_id: proposal.proposal_id,
+          member_count: members.length,
+          contract_id,
+        }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ...proposal,
+      lead_name,
+      lead_handle,
+      client_account_id,
+      members: createdMembers,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, { decision, member_decisions, client_feedback }) {
+  // 1. Fetch proposal & verify client
+  const propRes = await pool.query(`
+    SELECT p.*, j.client_account_id, tcw.workspace_id,
+           lead_acc.display_name as lead_name, lead_acc.handle as lead_handle
+      FROM team_subcontract_proposals p
+      JOIN teams t ON t.team_id = p.team_id
+      JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN team_contract_workspaces tcw ON tcw.team_id = t.team_id
+      JOIN accounts lead_acc ON lead_acc.account_id = p.lead_account_id
+     WHERE p.proposal_id = $1 AND p.team_id = $2
+     LIMIT 1
+  `, [proposalId, teamId]);
+
+  if (propRes.rows.length === 0) {
+    const err = new Error('Subcontract proposal not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const proposal = propRes.rows[0];
+
+  if (String(viewerAccountId) !== String(proposal.client_account_id)) {
+    const err = new Error('Only the project client can approve or reject subcontract requests.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (proposal.status !== 'pending') {
+    const err = new Error(`This proposal has already been resolved (${proposal.status}).`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const membersRes = await pool.query(
+    'SELECT * FROM team_subcontract_proposal_members WHERE proposal_id = $1',
+    [proposalId]
+  );
+  const proposalMembers = membersRes.rows;
+
+  const decisionsMap = {};
+  if (Array.isArray(member_decisions)) {
+    for (const d of member_decisions) {
+      decisionsMap[d.proposal_member_id] = d;
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let approvedCount = 0;
+    let rejectedCount = 0;
+
+    for (const member of proposalMembers) {
+      const explicitDecision = decisionsMap[member.proposal_member_id];
+      const memberStatus = explicitDecision ? explicitDecision.status : (decision === 'rejected' ? 'rejected' : 'approved');
+      const clientNotes = explicitDecision?.client_notes || client_feedback || null;
+
+      if (memberStatus === 'approved') {
+        approvedCount++;
+        await client.query(`
+          UPDATE team_subcontract_proposal_members
+             SET status = 'approved',
+                 client_notes = $1,
+                 decided_at = NOW()
+           WHERE proposal_member_id = $2
+        `, [clientNotes, member.proposal_member_id]);
+
+        // Find candidate user_id
+        const userRes = await client.query('SELECT user_id FROM users WHERE account_id = $1 LIMIT 1', [member.candidate_account_id]);
+        const candUserId = userRes.rows[0]?.user_id;
+
+        if (candUserId) {
+          // 1. Add to team_members as Subcontractor
+          await client.query(`
+            INSERT INTO team_members (team_id, user_id, role, status, joined_at, invited_by_account_id)
+            VALUES ($1, $2, 'Subcontractor', 'Active', NOW(), $3)
+            ON CONFLICT (team_id, user_id)
+            DO UPDATE SET role = 'Subcontractor', status = 'Active', deleted_at = NULL, updated_at = NOW()
+          `, [teamId, candUserId, proposal.lead_account_id]);
+
+          // 2. Upsert into contract_subcontractors
+          await client.query(`
+            INSERT INTO contract_subcontractors (
+              contract_id, account_id, role_title, agreed_credits,
+              assigned_milestone_id, parent_contractor_account_id,
+              permissions, proposal_member_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (contract_id, account_id)
+            DO UPDATE SET
+              role_title = EXCLUDED.role_title,
+              agreed_credits = EXCLUDED.agreed_credits,
+              assigned_milestone_id = EXCLUDED.assigned_milestone_id,
+              parent_contractor_account_id = EXCLUDED.parent_contractor_account_id,
+              permissions = EXCLUDED.permissions,
+              proposal_member_id = EXCLUDED.proposal_member_id
+          `, [
+            proposal.contract_id,
+            member.candidate_account_id,
+            member.role_title,
+            member.agreed_credits,
+            member.assigned_milestone_id,
+            proposal.lead_account_id,
+            member.permissions,
+            member.proposal_member_id,
+          ]);
+
+          // 3. Auto-assign to tasks under the milestone if assigned_milestone_id exists
+          if (member.assigned_milestone_id && proposal.workspace_id) {
+            await client.query(`
+              INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+              SELECT twt.task_id, $1, $2
+                FROM team_workspace_tasks twt
+               WHERE twt.workspace_id = $3 AND twt.job_milestone_id = $4 AND twt.deleted_at IS NULL
+              ON CONFLICT (task_id, account_id) DO NOTHING
+            `, [
+              member.candidate_account_id,
+              viewerAccountId,
+              proposal.workspace_id,
+              member.assigned_milestone_id,
+            ]);
+          }
+        }
+      } else {
+        rejectedCount++;
+        await client.query(`
+          UPDATE team_subcontract_proposal_members
+             SET status = 'rejected',
+                 client_notes = $1,
+                 decided_at = NOW()
+           WHERE proposal_member_id = $2
+        `, [clientNotes, member.proposal_member_id]);
+      }
+    }
+
+    const finalStatus =
+      approvedCount > 0 && rejectedCount === 0
+        ? 'approved'
+        : approvedCount === 0 && rejectedCount > 0
+        ? 'rejected'
+        : 'partially_approved';
+
+    const updatedPropRes = await client.query(`
+      UPDATE team_subcontract_proposals
+         SET status = $1,
+             client_feedback = $2,
+             reviewed_by_account_id = $3,
+             reviewed_at = NOW(),
+             updated_at = NOW()
+       WHERE proposal_id = $4
+       RETURNING *
+    `, [
+      finalStatus,
+      client_feedback?.trim() || null,
+      viewerAccountId,
+      proposalId,
+    ]);
+
+    // Activity log
+    if (proposal.workspace_id) {
+      await client.query(`
+        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+        VALUES ($1, $2, 'subcontract_proposal_decided', $3)
+      `, [
+        proposal.workspace_id,
+        viewerAccountId,
+        JSON.stringify({
+          proposal_id: proposalId,
+          status: finalStatus,
+          approved_count: approvedCount,
+          rejected_count: rejectedCount,
+        }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ...updatedPropRes.rows[0],
+      lead_account_id: proposal.lead_account_id,
+      lead_handle: proposal.lead_handle,
+      approved_count: approvedCount,
+      rejected_count: rejectedCount,
+      members: proposalMembers.map((m) => ({
+        ...m,
+        status: decisionsMap[m.proposal_member_id]?.status || (decision === 'rejected' ? 'rejected' : 'approved'),
+      })),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function withdrawSubcontractProposal(teamId, proposalId, viewerAccountId) {
+  const propRes = await pool.query(`
+    SELECT * FROM team_subcontract_proposals
+     WHERE proposal_id = $1 AND team_id = $2
+     LIMIT 1
+  `, [proposalId, teamId]);
+
+  if (propRes.rows.length === 0) {
+    const err = new Error('Proposal not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const proposal = propRes.rows[0];
+  if (String(viewerAccountId) !== String(proposal.lead_account_id)) {
+    const err = new Error('Only the nominating freelancer can withdraw this proposal.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (proposal.status !== 'pending') {
+    const err = new Error('Only pending proposals can be withdrawn.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await pool.query(`
+    UPDATE team_subcontract_proposals
+       SET status = 'withdrawn', updated_at = NOW()
+     WHERE proposal_id = $1
+  `, [proposalId]);
+
+  await pool.query(`
+    UPDATE team_subcontract_proposal_members
+       SET status = 'withdrawn'
+     WHERE proposal_id = $1
+  `, [proposalId]);
+
+  return { success: true, proposal_id: proposalId, status: 'withdrawn' };
+}
+
 module.exports = {
   ensureContractualTeamProject,
   getTeamProjectDetails,
@@ -874,6 +1555,10 @@ module.exports = {
   getProjectHistory,
   getProjectMembers,
   getProjectMilestones,
+  getSubcontractProposals,
+  createSubcontractProposal,
+  decideSubcontractProposal,
+  withdrawSubcontractProposal,
   ensureContractualMember,
 };
 

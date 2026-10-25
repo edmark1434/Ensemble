@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -28,7 +28,14 @@ import {
   Building2,
   CheckCircle,
   MoreHorizontal,
-  XCircle
+  XCircle,
+  UserPlus,
+  ArrowRightLeft,
+  Trash2,
+  Loader2,
+  Coins,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/axios";
@@ -42,6 +49,40 @@ import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DetailedContract, MilestoneItem, MilestoneStatus, ContractStatus, CancellationRequest } from "./contracts";
+
+export interface ContractTeamMember {
+  account_id: string;
+  role_title: string;
+  agreed_credits: number | null;
+  notes: string | null;
+  created_at: string;
+  display_name: string;
+  handle: string;
+  avatar_url: string | null;
+  total_received_credits: number;
+}
+
+export interface ContractDistribution {
+  distribution_id: string;
+  contract_id: string;
+  distributed_by_account_id: string;
+  recipient_account_id: string;
+  amount_credits: number;
+  notes: string | null;
+  created_at: string;
+  recipient_name: string;
+  recipient_handle: string;
+  recipient_avatar: string | null;
+  distributor_name: string;
+  distributor_handle: string;
+}
+
+export interface TeamBudget {
+  total_rate_credits: number;
+  released_credits: number;
+  distributed_credits: number;
+  remaining_distributable_credits: number;
+}
 
 // ============================================================================
 // OFFICIAL PAPER CONTRACT DOCUMENT VIEW
@@ -168,19 +209,48 @@ const PaperContractDocument: React.FC<{ contract: DetailedContract }> = ({ contr
               </p>
             </div>
 
-            {/* Freelancer Box */}
+            {/* Freelancer / Team Box */}
             <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/80 space-y-1.5 print-exact">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block">
-                Party B: The Specialist (Contractor)
+                {contract.freelancerType === "Team" || (contract.includedTeamMembers && contract.includedTeamMembers.length > 0)
+                  ? "Party B: The Specialist Team (Contractor)"
+                  : "Party B: The Specialist (Contractor)"}
               </span>
-              <div className="font-extrabold text-sm text-zinc-900">
-                {contract.freelancerName}
+              <div className="font-extrabold text-sm text-zinc-900 flex items-center gap-2 flex-wrap">
+                <span>{contract.freelancerName}</span>
+                {(contract.freelancerType === "Team" || (contract.includedTeamMembers && contract.includedTeamMembers.length > 0)) && (
+                  <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
+                    Team / Studio
+                  </span>
+                )}
               </div>
               <div className="text-[11px] font-mono text-zinc-500">
                 Platform Account ID: {contract.freelancerAccountId || "Registered Platform Specialist"}
               </div>
+              {contract.includedTeamMembers && contract.includedTeamMembers.length > 0 && (
+                <div className="pt-1.5 mt-1 border-t border-zinc-200/80 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block">
+                    Included Team Members ({contract.includedTeamMembers.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {contract.includedTeamMembers.map((m, idx) => (
+                      <span
+                        key={m.account_id || idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-zinc-200 text-[10.5px] font-semibold text-zinc-800"
+                      >
+                        <span>{m.display_name || m.handle}</span>
+                        {m.is_leader && (
+                          <span className="px-1 py-0.1 rounded text-[8.5px] font-bold bg-amber-500 text-white">
+                            Team Leader
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-[11px] text-zinc-600 leading-normal pt-1">
-                Capacity: Independent specialist responsible for executing and delivering the agreed deliverables according to project specifications.
+                Capacity: Independent specialist {contract.includedTeamMembers && contract.includedTeamMembers.length > 0 ? "team " : ""}responsible for executing and delivering the agreed deliverables according to project specifications.
               </p>
             </div>
           </div>
@@ -585,6 +655,31 @@ export const ContractDetailsPage: React.FC = () => {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
+  // Subcontract Team & Allocation State
+  const [teamMembers, setTeamMembers] = useState<ContractTeamMember[]>([]);
+  const [distributions, setDistributions] = useState<ContractDistribution[]>([]);
+  const [teamBudget, setTeamBudget] = useState<TeamBudget | null>(null);
+  const [canManageTeam, setCanManageTeam] = useState(false);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Add Member Modal State
+  const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [memberSuggestions, setMemberSuggestions] = useState<any[]>([]);
+  const [searchingMembers, setSearchingMembers] = useState(false);
+  const [selectedEditor, setSelectedEditor] = useState<any | null>(null);
+  const [editorRole, setEditorRole] = useState("Video Editor");
+  const [editorAgreedCredits, setEditorAgreedCredits] = useState("");
+  const [editorNotes, setEditorNotes] = useState("");
+  const [addingMember, setAddingMember] = useState(false);
+
+  // Distribute Modal State
+  const [distributeModalOpen, setDistributeModalOpen] = useState(false);
+  const [allocations, setAllocations] = useState<Record<string, string>>({});
+  const [distributionNote, setDistributionNote] = useState("");
+  const [distributingFunds, setDistributingFunds] = useState(false);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
@@ -773,25 +868,151 @@ export const ContractDetailsPage: React.FC = () => {
     }
   }, [id, fetchCancellationRequest]);
 
+  const fetchTeamData = useCallback(async () => {
+    if (!id) return;
+    try {
+      setTeamLoading(true);
+      const res = await api.get(`/api/contracts/${id}/team`);
+      if (res.data?.success && res.data?.data) {
+        setTeamMembers(res.data.data.members || []);
+        setDistributions(res.data.data.distributions || []);
+        setTeamBudget(res.data.data.budget || null);
+        setCanManageTeam(Boolean(res.data.data.permissions?.can_manage_team));
+      }
+    } catch {
+      // Ignored if user not authorized to view team
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     fetchContractData();
-  }, [fetchContractData]);
+    fetchTeamData();
+  }, [fetchContractData, fetchTeamData]);
 
   // Real-time socket updates
   useEffect(() => {
     if (!id || !socket) return;
     const handleUpdate = () => {
       fetchContractData();
+      fetchTeamData();
     };
     socket.on(`contract:${id}:update`, handleUpdate);
     socket.on(`milestone:update`, handleUpdate);
-    socket.on(`notification`, handleUpdate);
+    socket.on("contractTeamUpdated", handleUpdate);
+    socket.on("notification", handleUpdate);
     return () => {
       socket.off(`contract:${id}:update`, handleUpdate);
       socket.off(`milestone:update`, handleUpdate);
-      socket.off(`notification`, handleUpdate);
+      socket.off("contractTeamUpdated", handleUpdate);
+      socket.off("notification", handleUpdate);
     };
-  }, [id, fetchContractData]);
+  }, [id, fetchContractData, fetchTeamData]);
+
+  // Live member search
+  useEffect(() => {
+    if (!addMemberModalOpen || !memberSearchQuery.trim() || selectedEditor) {
+      setMemberSuggestions([]);
+      return;
+    }
+    const timer = window.setTimeout(async () => {
+      setSearchingMembers(true);
+      try {
+        const { data } = await api.get("/api/accounts/search-users", {
+          params: { handle: memberSearchQuery.trim() },
+        });
+        const existingIds = new Set([
+          contract?.clientAccountId,
+          contract?.freelancerAccountId,
+          ...teamMembers.map((m) => m.account_id),
+        ]);
+        const filtered = (data.data || [])
+          .filter((u: any) => !existingIds.has(u.account_id))
+          .map((u: any) => ({
+            account_id: u.account_id,
+            handle: u.handle,
+            display_name: u.display_name,
+            avatar_url: u.avatar_url || (u.avatar_file_id ? constructAvatarUrl(u.avatar_file_id, u.display_name) : undefined),
+          }));
+        setMemberSuggestions(filtered);
+      } catch {
+        setMemberSuggestions([]);
+      } finally {
+        setSearchingMembers(false);
+      }
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [memberSearchQuery, selectedEditor, addMemberModalOpen, contract?.clientAccountId, contract?.freelancerAccountId, teamMembers]);
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEditor) return showErrorToast("Select an editor from search.");
+    if (!editorRole.trim()) return showErrorToast("Specify a role for this team member.");
+    setAddingMember(true);
+    try {
+      await api.post(`/api/contracts/${id}/team`, {
+        accountId: selectedEditor.account_id,
+        roleTitle: editorRole.trim(),
+        agreedCredits: editorAgreedCredits ? parseInt(editorAgreedCredits, 10) : null,
+        notes: editorNotes.trim() || undefined,
+      });
+      showSuccessToast(`Added @${selectedEditor.handle} to project team!`);
+      setAddMemberModalOpen(false);
+      setSelectedEditor(null);
+      setMemberSearchQuery("");
+      setEditorRole("Video Editor");
+      setEditorAgreedCredits("");
+      setEditorNotes("");
+    } catch (err: any) {
+      showErrorToast(err.response?.data?.message || "Failed to add team member.");
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberAccountId: string, handle: string) => {
+    if (!window.confirm(`Are you sure you want to remove @${handle} from this contract team?`)) return;
+    try {
+      await api.delete(`/api/contracts/${id}/team/${memberAccountId}`);
+      showSuccessToast(`Removed @${handle} from project team.`);
+    } catch (err: any) {
+      showErrorToast(err.response?.data?.message || "Failed to remove member.");
+    }
+  };
+
+  const handleDistributeFunds = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const recipients = Object.entries(allocations)
+      .map(([accountId, amt]) => ({ account_id: accountId, amount_credits: Number(amt) }))
+      .filter((r) => r.amount_credits > 0);
+
+    if (recipients.length === 0) {
+      return showErrorToast("Enter an allocation amount for at least one member.");
+    }
+
+    const totalAllocated = recipients.reduce((sum, r) => sum + r.amount_credits, 0);
+    const maxBudget = teamBudget?.remaining_distributable_credits || 0;
+    if (totalAllocated > maxBudget) {
+      return showErrorToast(`Total payout (${totalAllocated} cr) exceeds remaining contract budget (${maxBudget} cr).`);
+    }
+
+    setDistributingFunds(true);
+    try {
+      const res = await api.post(`/api/contracts/${id}/distribute-funds`, {
+        recipients,
+        notes: distributionNote.trim() || undefined,
+      });
+      showSuccessToast(res.data?.message || "Contract funds distributed successfully!");
+      setDistributeModalOpen(false);
+      setAllocations({});
+      setDistributionNote("");
+    } catch (err: any) {
+      showErrorToast(err.response?.data?.message || "Failed to distribute funds.");
+    } finally {
+      setDistributingFunds(false);
+    }
+  };
 
   const handleCopyId = () => {
     if (!id) return;
@@ -1637,6 +1858,243 @@ export const ContractDetailsPage: React.FC = () => {
                     </table>
                   </div>
                 </div>
+
+                {/* SECTION III: PROJECT TEAM & SUBCONTRACTS */}
+                <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-white/10 pb-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-indigo-500" />
+                        <h2 className="text-base font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                          III. Project Team &amp; Subcontracts
+                        </h2>
+                      </div>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        Creative specialists collaborating on this contract. The lead contractor can allocate and transfer funds upon milestone completion.
+                      </p>
+                    </div>
+
+                    {canManageTeam && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEditor(null);
+                            setMemberSearchQuery("");
+                            setEditorRole("Video Editor");
+                            setEditorAgreedCredits("");
+                            setEditorNotes("");
+                            setAddMemberModalOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-white/15 bg-white dark:bg-white/5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/10 transition shadow-2xs"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Add Editor
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            teamMembers.length === 0 ||
+                            (teamBudget?.remaining_distributable_credits || 0) <= 0
+                          }
+                          onClick={() => {
+                            const init: Record<string, string> = {};
+                            teamMembers.forEach((m) => {
+                              if (m.agreed_credits && m.agreed_credits > m.total_received_credits) {
+                                init[m.account_id] = String(m.agreed_credits - m.total_received_credits);
+                              } else {
+                                init[m.account_id] = "";
+                              }
+                            });
+                            setAllocations(init);
+                            setDistributionNote("");
+                            setDistributeModalOpen(true);
+                          }}
+                          title={
+                            (teamBudget?.remaining_distributable_credits || 0) <= 0
+                              ? "No released contract earnings available to distribute yet."
+                              : "Distribute contract earnings to your team members"
+                          }
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          Distribute Funds
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Fund Allocation Budget Summary Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50/70 dark:bg-white/[0.02] p-3 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">Total Contract</span>
+                      <span className="font-extrabold text-sm text-zinc-900 dark:text-white font-mono mt-0.5 block">
+                        {(teamBudget?.total_rate_credits || contract.totalValueCredits || 0).toLocaleString()} Cr
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/[0.04] p-3 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">Released to Lead</span>
+                      <span className="font-extrabold text-sm text-emerald-700 dark:text-emerald-300 font-mono mt-0.5 block">
+                        {(teamBudget?.released_credits || 0).toLocaleString()} Cr
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border border-purple-200 dark:border-purple-500/20 bg-purple-50/50 dark:bg-purple-500/[0.04] p-3 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 block">Paid to Team</span>
+                      <span className="font-extrabold text-sm text-purple-700 dark:text-purple-300 font-mono mt-0.5 block">
+                        {(teamBudget?.distributed_credits || 0).toLocaleString()} Cr
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border border-blue-200 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/[0.04] p-3 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">Distributable Pool</span>
+                      <span className="font-extrabold text-sm text-blue-700 dark:text-blue-300 font-mono mt-0.5 block">
+                        {(teamBudget?.remaining_distributable_credits || 0).toLocaleString()} Cr
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Team Members List */}
+                  {teamLoading ? (
+                    <div className="py-8 flex items-center justify-center text-xs text-zinc-400">
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading project team…
+                    </div>
+                  ) : teamMembers.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-zinc-200 dark:border-white/10 p-6 text-center space-y-2">
+                      <Users className="w-8 h-8 text-zinc-400 mx-auto" />
+                      <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        No additional video editors assigned under this contract yet.
+                      </p>
+                      <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                        {canManageTeam
+                          ? "As the lead contractor, you can add editors to collaborate under this contract and allocate earnings to them when milestones complete."
+                          : "The contractor has not added any sub-editors to this contract."}
+                      </p>
+                      {canManageTeam && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEditor(null);
+                            setMemberSearchQuery("");
+                            setEditorRole("Video Editor");
+                            setEditorAgreedCredits("");
+                            setEditorNotes("");
+                            setAddMemberModalOpen(true);
+                          }}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Add Video Editor
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-white/10">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-zinc-50 dark:bg-white/[0.02] border-b border-zinc-200 dark:border-white/10 font-bold uppercase text-[10px] text-zinc-500">
+                            <tr>
+                              <th className="px-4 py-3">Team Member</th>
+                              <th className="px-4 py-3">Contract Role</th>
+                              <th className="px-4 py-3 text-right">Agreed Target</th>
+                              <th className="px-4 py-3 text-right">Paid to Date</th>
+                              {canManageTeam && <th className="px-4 py-3 text-center w-12">Actions</th>}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-200 dark:divide-white/5 text-zinc-700 dark:text-zinc-300">
+                            {teamMembers.map((member) => (
+                              <tr key={member.account_id} className="hover:bg-zinc-50/50 dark:hover:bg-white/[0.01]">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    {member.avatar_url ? (
+                                      <img src={member.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover border border-zinc-200 dark:border-zinc-700" />
+                                    ) : (
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 font-bold text-xs text-white">
+                                        {(member.display_name || member.handle || "U")[0].toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-zinc-900 dark:text-white truncate">{member.display_name}</p>
+                                      <p className="text-[11px] text-zinc-400">@{member.handle}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30">
+                                    {member.role_title}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  {member.agreed_credits !== null ? (
+                                    <span className="font-semibold">{member.agreed_credits.toLocaleString()} Cr</span>
+                                  ) : (
+                                    <span className="text-zinc-400 italic">Flexible</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  <span className={`font-bold ${member.total_received_credits > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>
+                                    {member.total_received_credits.toLocaleString()} Cr
+                                  </span>
+                                </td>
+                                {canManageTeam && (
+                                  <td className="px-4 py-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveMember(member.account_id, member.handle)}
+                                      className="p-1 rounded text-zinc-400 hover:text-red-500 transition"
+                                      title="Remove from contract team"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Payout History Toggle */}
+                      {distributions.length > 0 && (
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setHistoryOpen(!historyOpen)}
+                            className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
+                          >
+                            {historyOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            <span>Past Distributions ({distributions.length})</span>
+                          </button>
+
+                          {historyOpen && (
+                            <div className="mt-2 space-y-2">
+                              {distributions.map((dist) => (
+                                <div
+                                  key={dist.distribution_id}
+                                  className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50/50 dark:bg-white/[0.01] p-3 text-xs"
+                                >
+                                  <div>
+                                    <p className="font-semibold text-zinc-900 dark:text-white">
+                                      Transferred to <span className="text-blue-600 dark:text-blue-400">@{dist.recipient_handle}</span>
+                                    </p>
+                                    <p className="text-[11px] text-zinc-400">
+                                      {new Date(dist.created_at).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                      {dist.notes && ` • "${dist.notes}"`}
+                                    </p>
+                                  </div>
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                    +{dist.amount_credits.toLocaleString()} Credits
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Right Column: Parties Involved & Escrow Policy (1 col) */}
@@ -1991,6 +2449,359 @@ export const ContractDetailsPage: React.FC = () => {
                 {actionLoading ? "Processing..." : "Confirm Decline"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD TEAM EDITOR MODAL */}
+      {addMemberModalOpen && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg rounded-2xl border border-zinc-200 dark:border-white/15 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                <UserPlus className="w-5 h-5" />
+                <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+                  Add Video Editor / Subcontractor
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddMemberModalOpen(false)}
+                className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddMember} className="space-y-4 text-xs">
+              <p className="text-zinc-600 dark:text-zinc-300">
+                Add an editor from Ensemble to collaborate under this contract. You can allocate milestone earnings to them upon completion.
+              </p>
+
+              <div>
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 block mb-1">
+                  Search Video Editor
+                </label>
+                {selectedEditor ? (
+                  <div className="flex items-center justify-between rounded-xl border border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-500/10 p-3">
+                    <div className="flex items-center gap-3">
+                      {selectedEditor.avatar_url ? (
+                        <img src={selectedEditor.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 font-bold text-xs text-white">
+                          {(selectedEditor.display_name || selectedEditor.handle || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-bold text-zinc-900 dark:text-white">{selectedEditor.display_name}</p>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400">@{selectedEditor.handle}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEditor(null);
+                        setMemberSearchQuery("");
+                      }}
+                      className="rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={memberSearchQuery}
+                      onChange={(e) => setMemberSearchQuery(e.target.value)}
+                      placeholder="Search editor by username (@handle)..."
+                      className="w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 py-2.5 pl-9 pr-10 text-xs text-zinc-900 dark:text-white outline-none focus:border-indigo-500"
+                    />
+                    {searchingMembers && (
+                      <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-zinc-400" />
+                    )}
+                    {memberSuggestions.length > 0 && (
+                      <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 py-1 shadow-xl">
+                        {memberSuggestions.map((u) => (
+                          <button
+                            key={u.account_id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedEditor(u);
+                              setMemberSuggestions([]);
+                            }}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-white/5"
+                          >
+                            {u.avatar_url ? (
+                              <img src={u.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" />
+                            ) : (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 font-bold text-xs text-white">
+                                {(u.display_name || u.handle || "U")[0].toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-zinc-900 dark:text-white">{u.display_name}</p>
+                              <p className="truncate text-[11px] text-zinc-400">@{u.handle}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 block mb-1">
+                  Contract Role
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editorRole}
+                  onChange={(e) => setEditorRole(e.target.value)}
+                  placeholder="e.g. Rough Cut Editor, Colorist, Sound Designer"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 px-3 py-2 text-xs text-zinc-900 dark:text-white outline-none focus:border-indigo-500"
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {["Video Editor", "Rough Cut Editor", "Colorist", "Sound & Audio", "Motion Graphics", "VFX Artist", "Assistant"].map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => setEditorRole(role)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition ${
+                        editorRole === role
+                          ? "bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40"
+                          : "border-zinc-200 dark:border-white/10 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 block mb-1">
+                  Agreed Target Split (Credits) <span className="font-normal text-zinc-400">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={editorAgreedCredits}
+                  onChange={(e) => setEditorAgreedCredits(e.target.value)}
+                  placeholder="e.g. 1500"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 px-3 py-2 text-xs text-zinc-900 dark:text-white outline-none focus:border-indigo-500"
+                />
+                <span className="text-[10px] text-zinc-400 mt-1 block">
+                  Target compensation to allocate to this editor upon completing their deliverables.
+                </span>
+              </div>
+
+              <div>
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 block mb-1">
+                  Notes / Scope Memo <span className="font-normal text-zinc-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editorNotes}
+                  onChange={(e) => setEditorNotes(e.target.value)}
+                  placeholder="e.g. Responsible for Episode 1 rough cut and scene transitions"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 px-3 py-2 text-xs text-zinc-900 dark:text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setAddMemberModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingMember || !selectedEditor || !editorRole.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm disabled:opacity-50"
+                >
+                  {addingMember && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Add to Project Team
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DISTRIBUTE TEAM FUNDS MODAL */}
+      {distributeModalOpen && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-xl rounded-2xl border border-zinc-200 dark:border-white/15 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <ArrowRightLeft className="w-5 h-5" />
+                <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+                  Distribute Contract Funds to Team
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDistributeModalOpen(false)}
+                className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDistributeFunds} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500 dark:text-blue-400 block">
+                    Distributable Contract Balance
+                  </span>
+                  <span className="text-2xl font-extrabold text-zinc-900 dark:text-white font-mono mt-0.5 block">
+                    {(teamBudget?.remaining_distributable_credits || 0).toLocaleString()} Credits
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    Released from contract escrow to your account wallet.
+                  </span>
+                </div>
+                <div className="text-right text-[11px] text-zinc-400 font-mono">
+                  <div>Released: {(teamBudget?.released_credits || 0).toLocaleString()} Cr</div>
+                  <div>Distributed: {(teamBudget?.distributed_credits || 0).toLocaleString()} Cr</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 block">
+                  Team Member Allocations
+                </label>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {teamMembers.map((member) => (
+                    <div
+                      key={member.account_id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50/50 dark:bg-white/[0.01]"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {member.avatar_url ? (
+                          <img src={member.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 font-bold text-xs text-white">
+                            {(member.display_name || member.handle || "U")[0].toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-bold text-zinc-900 dark:text-white truncate">{member.display_name}</p>
+                          <p className="text-[11px] text-zinc-400">
+                            @{member.handle} • <span className="text-indigo-500 font-semibold">{member.role_title}</span>
+                          </p>
+                          {member.agreed_credits !== null && (
+                            <p className="text-[10px] text-zinc-500">
+                              Target: {member.agreed_credits.toLocaleString()} Cr (Paid: {member.total_received_credits.toLocaleString()} Cr)
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          placeholder="0"
+                          value={allocations[member.account_id] ?? ""}
+                          onChange={(e) =>
+                            setAllocations({
+                              ...allocations,
+                              [member.account_id]: e.target.value,
+                            })
+                          }
+                          className="w-24 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-right font-mono text-xs text-zinc-900 dark:text-white outline-none focus:border-blue-500"
+                        />
+                        <span className="text-[11px] text-zinc-400">Cr</span>
+                        {member.agreed_credits && member.agreed_credits > member.total_received_credits && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAllocations({
+                                ...allocations,
+                                [member.account_id]: String(member.agreed_credits! - member.total_received_credits),
+                              })
+                            }
+                            className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            Match
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Total Calculation Strip */}
+              {(() => {
+                const totalAllocated = Object.values(allocations).reduce(
+                  (sum, v) => sum + (Number(v) || 0),
+                  0
+                );
+                const remaining = (teamBudget?.remaining_distributable_credits || 0) - totalAllocated;
+                return (
+                  <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between text-zinc-500">
+                      <span>Total Payout to Team:</span>
+                      <span className="font-bold text-zinc-900 dark:text-white">{totalAllocated.toLocaleString()} Credits</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-500 border-t border-zinc-200 dark:border-white/5 pt-1.5">
+                      <span>Lead Retained Balance:</span>
+                      <span className={`font-bold ${remaining < 0 ? "text-red-500" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {remaining.toLocaleString()} Credits
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 block mb-1">
+                  Distribution Note / Memo <span className="font-normal text-zinc-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={distributionNote}
+                  onChange={(e) => setDistributionNote(e.target.value)}
+                  placeholder="e.g. Final deliverable milestone compensation"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 px-3 py-2 text-xs text-zinc-900 dark:text-white outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setDistributeModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    distributingFunds ||
+                    Object.values(allocations).reduce((sum, v) => sum + (Number(v) || 0), 0) <= 0 ||
+                    Object.values(allocations).reduce((sum, v) => sum + (Number(v) || 0), 0) >
+                      (teamBudget?.remaining_distributable_credits || 0)
+                  }
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm disabled:opacity-50"
+                >
+                  {distributingFunds && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Confirm &amp; Distribute Funds
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

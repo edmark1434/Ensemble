@@ -28,9 +28,15 @@ import {
   Paperclip,
   ExternalLink,
   Sparkles,
-  TrendingUp
+  Eye,
+  Play,
+  RotateCcw,
+  TrendingUp,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import ShapeGrid from "@/components/ui/ShapeGrid";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
@@ -44,11 +50,55 @@ import type { Job } from "../job_components/job_lists";
 import { computeJobRankingBreakdown } from "../job_ranking";
 import { formatDistanceToNow } from "date-fns";
 
+const CircularProgress: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}> = ({ percentage, size = 36, strokeWidth = 3.5 }) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0 select-none"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-gray-200 dark:stroke-white/10"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-blue-600 dark:stroke-blue-500 transition-all duration-500 ease-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono text-gray-800 dark:text-zinc-100">
+        {clamped}%
+      </span>
+    </div>
+  );
+};
+
 const JobFullPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
+  const theme = useGlobalState((state) => state.theme);
 
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +108,11 @@ const JobFullPage: React.FC = () => {
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(true);
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(true);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const [isExtending, setIsExtending] = useState(false);
+  const [isExpiring, setIsExpiring] = useState(false);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
   const getTimeAgo = (date: Date) => {
     try {
@@ -165,7 +220,13 @@ const JobFullPage: React.FC = () => {
             screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
             shortlistedCount: parseInt(j.shortlisted_count) || 0,
             clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
-            clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined
+            clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined,
+            applicationDeadline: j.application_deadline,
+            isUrgent: Boolean(j.is_urgent),
+            hardDeadline: j.hard_deadline,
+            freeExtensionCount: parseInt(j.free_extension_count, 10) || 0,
+            applicationExtendedAt: j.application_extended_at,
+            postingFeeCredits: parseInt(j.posting_fee_credits, 10) || 50
           };
 
           setJob(mappedJob);
@@ -181,7 +242,72 @@ const JobFullPage: React.FC = () => {
     };
 
     fetchJobDetails();
-  }, [id]);
+  }, [id, reloadTrigger]);
+
+  const [isExpireModalOpen, setIsExpireModalOpen] = useState(false);
+
+  const handleExecuteExpireNow = async () => {
+    if (!job) return;
+    setIsExpiring(true);
+    setActionSuccessMsg(null);
+    try {
+      const res = await api.post(`/api/jobs/${job.id}/expire-now`);
+      if (res.data?.success) {
+        setActionSuccessMsg(res.data.message || "Job closed and 50 credits refunded to your wallet.");
+        setReloadTrigger((prev) => prev + 1);
+        setIsExpireModalOpen(false);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Failed to expire job");
+    } finally {
+      setIsExpiring(false);
+    }
+  };
+
+  const [countdown, setCountdown] = useState<string>("");
+
+  useEffect(() => {
+    if (!job?.applicationDeadline) {
+      setCountdown("");
+      return;
+    }
+
+    const calcTime = () => {
+      const targetTime = new Date(job.applicationDeadline).getTime();
+      const diffMs = targetTime - Date.now();
+
+      if (diffMs <= 0) {
+        setCountdown("00h 00m 00s");
+        return;
+      }
+
+      const totalSec = Math.floor(diffMs / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+
+      const pad = (n: number) => String(n).padStart(2, "0");
+      if (days > 0) {
+        setCountdown(`${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`);
+      } else {
+        setCountdown(`${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`);
+      }
+    };
+
+    calcTime();
+    const interval = setInterval(calcTime, 1000);
+    return () => clearInterval(interval);
+  }, [job?.applicationDeadline]);
+
+  const nowTime = new Date().getTime();
+  const appDeadlineTime = job?.applicationDeadline ? new Date(job.applicationDeadline).getTime() : null;
+  const isWindowExpired = Boolean(
+    job?.status?.toLowerCase() === "expired" ||
+    job?.status?.toLowerCase() === "closed" ||
+    (appDeadlineTime && appDeadlineTime <= nowTime)
+  );
+  const hoursRemaining = appDeadlineTime ? Math.max(0, Math.round((appDeadlineTime - nowTime) / (1000 * 60 * 60))) : null;
 
   const isTeam = Boolean(
     job?.is_team ||
@@ -254,7 +380,49 @@ const JobFullPage: React.FC = () => {
     }
   };
 
-  if (!loading && !job) {
+  if (loading) {
+    return (
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        {/* Background Grid */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Loading Job Post Details
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Retrieving project brief, budget specifications, and workflow terms...
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!job) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Job Post Not Found</h2>
@@ -363,18 +531,6 @@ const JobFullPage: React.FC = () => {
                   {job.category}
                 </span>
 
-                {isTeamHiring ? (
-                  <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 flex items-center gap-1.5 shadow-sm">
-                    <Users className="h-3 w-3" />
-                    Team Project
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 flex items-center gap-1.5 shadow-sm">
-                    <User className="h-3 w-3" />
-                    Individual
-                  </span>
-                )}
-
                 <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   {job.difficulty}
                 </span>
@@ -417,8 +573,8 @@ const JobFullPage: React.FC = () => {
                       <span>Posted {job.postedAt}</span>
                     </div>
                     {job.updatedAt && (
-                      <div className="flex items-center gap-1 text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 text-[11px] font-medium">
-                        <RefreshCw className="h-3 w-3" />
+                      <div className="flex items-center gap-1.5 text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-zinc-800 px-2.5 py-0.5 rounded-md border border-gray-300 dark:border-zinc-700 text-xs font-semibold shadow-2xs">
+                        <RefreshCw className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
                         <span>{job.updatedAt}</span>
                       </div>
                     )}
@@ -429,7 +585,7 @@ const JobFullPage: React.FC = () => {
                   {job.isManageablePost ? (
                     <button
                       onClick={() => navigate(`/jobs/edit/${job.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-500/20 transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-blue-600/40 bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-500/25 transition shadow-2xs cursor-pointer"
                       title="Edit Job Post"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
@@ -448,6 +604,66 @@ const JobFullPage: React.FC = () => {
                   ) : null}
                 </div>
               </div>
+
+              {/* Action Success Alert */}
+              {actionSuccessMsg && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/5 p-4 flex items-center justify-between text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>{actionSuccessMsg}</span>
+                  </div>
+                  <button onClick={() => setActionSuccessMsg(null)} className="text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-200">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Closed Job Notice */}
+              {(job.status?.toLowerCase() === "expired" || job.status?.toLowerCase() === "closed") && (
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40 p-4 flex items-center justify-between gap-3 text-xs text-zinc-700 dark:text-zinc-300">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <CheckCircle2 className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <span>This job post is closed.</span>
+                  </div>
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {job.isOwnPost ? "Posting fee was refunded to your wallet." : "Proposal intake has closed."}
+                  </span>
+                </div>
+              )}
+
+              {/* Application Window Status Banner (Shown to Owner & Applicants while Open / Active) */}
+              {job && job.applicationDeadline && (job.status === "Open" || job.status === "Active") && (
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100/70 dark:bg-zinc-900/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-l-amber-400 dark:border-l-amber-400 shadow-2xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm tracking-tight whitespace-nowrap">
+                      Application Window Status
+                    </span>
+                    {countdown && (
+                      <span
+                        className="px-2.5 py-0.5 rounded-md bg-gray-200/90 dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 text-xs font-bold tracking-tight whitespace-nowrap"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      >
+                        {countdown}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expire & Refund button: only visible if 0 proposals */}
+                  {(job.isManageablePost || job.isOwnPost) && (job.applicantsCount || 0) === 0 && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isExpiring}
+                        onClick={() => setIsExpireModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/60 text-gray-700 dark:text-zinc-300 hover:text-red-600 dark:hover:text-red-400 transition shadow-2xs active:scale-95 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span>{isExpiring ? "Processing..." : `Expire & Refund ${job.postingFeeCredits || 50} Cr`}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Main Thumbnail Banner with Overlays */}
               <div
@@ -524,41 +740,155 @@ const JobFullPage: React.FC = () => {
 
               {/* Project Briefs & Reference Attachments (1.B) */}
               {job.attachments && job.attachments.length > 0 && (
-                <section className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
-                    <Paperclip className="h-3.5 w-3.5 text-blue-500" />
-                    Project Briefs & Attached Documents ({job.attachments.length})
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <section className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <Paperclip className="h-3.5 w-3.5 text-blue-500" />
+                      Project Briefs & Attached Documents ({job.attachments.length})
+                    </h4>
+                    <span className="text-xs text-gray-400 dark:text-zinc-500 font-medium">
+                      {job.attachments.length} {job.attachments.length === 1 ? "file" : "files"} attached
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                     {job.attachments.map((att: any, idx: number) => {
                       const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
                       const fileUrl = att.url || (att.path ? `${cloudFrontUrl}/${att.path.replace(/^\//, "")}` : "#");
-                      const fileName = att.file_name || `Project Brief #${idx + 1}`;
-                      const sizeStr = att.size_bytes ? `${(att.size_bytes / 1024 / 1024).toFixed(1)} MB` : "";
+                      const fileName = att.name || att.file_name || `Project Brief #${idx + 1}`;
+                      const sizeBytes = att.size_bytes || att.size || 0;
+                      const mime = (att.mime_type || "").toLowerCase();
+                      const ext = (fileName.split(".").pop() || "").toLowerCase();
+                      const isImage = mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext);
+                      const isVideo = mime.startsWith("video/") || ["mp4", "webm", "mov", "mkv", "avi"].includes(ext);
+                      const isPdf = mime === "application/pdf" || ext === "pdf";
+
+                      const formatSize = (bytes: number) => {
+                        if (!bytes || bytes <= 0) return "";
+                        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                      };
+
                       return (
-                        <a
+                        <div
                           key={att.file_id || idx}
-                          href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                          className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:border-blue-500/50 hover:bg-blue-50/30 dark:hover:bg-blue-500/5 transition group cursor-pointer"
+                          className="group relative rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 overflow-hidden shadow-2xs hover:shadow-md hover:border-gray-300 dark:hover:border-white/20 transition-all flex flex-col justify-between"
                         >
-                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                            <FileText className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="font-semibold text-xs text-gray-900 dark:text-white truncate block group-hover:text-blue-500 transition-colors">
-                              {fileName}
-                            </span>
-                            {sizeStr && (
-                              <span className="text-[10px] text-gray-400 dark:text-zinc-500">
-                                {sizeStr}
-                              </span>
+                          {/* Visual Preview / Media Display */}
+                          <div className="relative w-full h-40 bg-gray-100 dark:bg-black/30 overflow-hidden flex items-center justify-center">
+                            {isImage && fileUrl !== "#" ? (
+                              <img
+                                src={fileUrl}
+                                alt={fileName}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = "none";
+                                }}
+                              />
+                            ) : isVideo && fileUrl !== "#" ? (
+                              <div className="relative w-full h-full bg-black/80 flex items-center justify-center">
+                                <video
+                                  src={fileUrl}
+                                  className="w-full h-full object-contain"
+                                  preload="metadata"
+                                />
+                                <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none group-hover:bg-black/40 transition-colors">
+                                  <span className="w-10 h-10 rounded-full bg-white/90 text-gray-900 flex items-center justify-center shadow-md">
+                                    <Play className="h-5 w-5 fill-current ml-0.5" />
+                                  </span>
+                                </div>
+                              </div>
+                            ) : isPdf ? (
+                              <div className="relative w-full h-full bg-red-50/50 dark:bg-red-950/20 flex flex-col items-center justify-center p-3 text-center">
+                                <div className="w-12 h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-2 shadow-xs">
+                                  <FileText className="h-6 w-6" />
+                                </div>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-500 text-white uppercase tracking-wider">
+                                  PDF Document
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="relative w-full h-full bg-gray-50 dark:bg-zinc-800/50 flex flex-col items-center justify-center p-3 text-center">
+                                <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-zinc-300 flex items-center justify-center mb-2 shadow-xs">
+                                  <Paperclip className="h-6 w-6" />
+                                </div>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300 uppercase tracking-wider">
+                                  {ext.toUpperCase() || "File"}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Action Overlay: Click to Preview / View */}
+                            {fileUrl !== "#" && (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                {isImage ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveLightboxImg(fileUrl)}
+                                    className="px-3 py-1.5 rounded-lg bg-white/90 text-gray-900 text-xs font-bold flex items-center gap-1.5 shadow-md hover:bg-white transition cursor-pointer"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    <span>View Image</span>
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 rounded-lg bg-white/90 text-gray-900 text-xs font-bold flex items-center gap-1.5 shadow-md hover:bg-white transition cursor-pointer"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    <span>Open File</span>
+                                  </a>
+                                )}
+                              </div>
                             )}
                           </div>
-                          <ExternalLink className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 shrink-0" />
-                        </a>
+
+                          {/* Info Bar at Bottom */}
+                          <div className="p-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-white dark:bg-zinc-900/60">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-gray-900 dark:text-white truncate" title={fileName}>
+                                {`Project Brief #${idx + 1}`}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-gray-600 dark:text-zinc-400 font-medium truncate max-w-[120px]" title={fileName}>
+                                  {fileName}
+                                </span>
+                                {sizeBytes > 0 && (
+                                  <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                                    • {formatSize(sizeBytes)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {fileUrl !== "#" && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                {isImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveLightboxImg(fileUrl)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    title="View full image"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={fileName}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition"
+                                  title="Download or open in new tab"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -820,30 +1150,53 @@ const JobFullPage: React.FC = () => {
                           <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
                             <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.jobTypeLabel}</strong></span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.bayesianScore * 35).toFixed(1)}
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Trust <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(35)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.bayesianScore * 35).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.bayesianScore * 100} size={36} strokeWidth={3.5} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.freshnessScore * 25).toFixed(1)}
+
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Freshness <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(25)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.freshnessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.freshnessScore * 100} size={36} strokeWidth={3.5} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.completenessScore * 25).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Brief & Bid <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(25)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.completenessScore * 25).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.completenessScore * 100} size={36} strokeWidth={3.5} />
                             </div>
-                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
-                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                {(rankInfo.availabilityScore * 15).toFixed(1)}
+
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 truncate">
+                                  Open Seats <span className="font-mono text-[10px] text-gray-400 dark:text-zinc-500">(15)</span>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                  {(rankInfo.availabilityScore * 15).toFixed(1)}
+                                </div>
                               </div>
+                              <CircularProgress percentage={rankInfo.availabilityScore * 100} size={36} strokeWidth={3.5} />
                             </div>
                           </div>
 
@@ -961,27 +1314,65 @@ const JobFullPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                    ) : isWindowExpired ? (
+                      <div className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/60 py-3.5 text-center text-xs font-bold text-zinc-500 dark:text-zinc-400 select-none">
+                        Application Window Closed
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          if (isGuestMode) return setIsModalOpen(true);
-                          void continueIfAccountVerified(
-                            () => navigate(`/jobs/${job.id}/make-proposal`),
-                            false,
-                            "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
-                          );
-                        }}
-                        className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
-                      >
-                        <Send className="h-4 w-4" />
-                        {isGuestMode ? "Login to Apply" : "Send Proposal"}
-                      </button>
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          disabled={isCheckingAccess}
+                          onClick={async () => {
+                            if (isCheckingAccess) return;
+                            if (isGuestMode) return setIsModalOpen(true);
+                            setIsCheckingAccess(true);
+                            try {
+                              await continueIfAccountVerified(
+                                () => navigate(`/jobs/${job.id}/make-proposal`),
+                                false,
+                                "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                              );
+                            } finally {
+                              setIsCheckingAccess(false);
+                            }
+                          }}
+                          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 ${
+                            isCheckingAccess ? "opacity-80 cursor-wait" : "active:scale-[0.98] cursor-pointer"
+                          }`}
+                        >
+                          {isCheckingAccess ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Opening...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4" />
+                              <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
+                              {!isGuestMode && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white tracking-wide">
+                                  <CreditIcon className="h-3 w-3 text-amber-300" /> 10 Cr
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </button>
+                        {!isGuestMode && (
+                          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 text-center flex items-center justify-center gap-1">
+                            <span>Requires</span>
+                            <span className="font-semibold text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-0.5">
+                              <CreditIcon className="h-3 w-3 text-amber-500" /> 10 Credits
+                            </span>
+                            <span>to submit proposal (charged at checkout)</span>
+                          </div>
+                        )}
+                      </div>
                     )
                   ) : (
                     <div className="flex gap-2">
                       <button
                         onClick={() => navigate(`/jobs/edit/${job.id}`)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 py-3 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-blue-600/40 bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 py-3 text-xs font-bold transition shadow-2xs cursor-pointer"
                       >
                         <Edit2 className="h-3.5 w-3.5" /> Edit Post
                       </button>
@@ -999,8 +1390,8 @@ const JobFullPage: React.FC = () => {
               {/* Job Activity Insights (2.D) */}
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 space-y-3.5 shadow-sm backdrop-blur-xl">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-blue-500" /> Activity on this Job
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+                    Activity on this Job
                   </h3>
                   <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-mono">Live stats</span>
                 </div>
@@ -1010,7 +1401,7 @@ const JobFullPage: React.FC = () => {
                     <span className="font-bold text-gray-900 dark:text-white font-mono">{job.applicantsCount}</span>
                   </div>
                   <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
-                    <span className="text-gray-500 dark:text-zinc-400">Interviewing / Shortlisted:</span>
+                    <span className="text-gray-500 dark:text-zinc-400">Shortlisted:</span>
                     <span className="font-bold text-amber-500 font-mono">{job.shortlistedCount ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
@@ -1170,6 +1561,89 @@ const JobFullPage: React.FC = () => {
                     alt="Lightbox Preview"
                     className="w-full h-full object-contain"
                   />
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Expire & Refund Confirmation Modal */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {isExpireModalOpen && (
+              <div className="fixed inset-0 z-[300000] flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => !isExpiring && setIsExpireModalOpen(false)}
+                  className="absolute inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-xs cursor-pointer"
+                />
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0, y: 8 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.95, opacity: 0, y: 8 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Crisp Header - Strictly NO icon beside title */}
+                  <div className="flex items-start justify-between pb-3 border-b border-gray-100 dark:border-white/10 mb-4">
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+                        Force Close Job Post
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                        Expire intake window immediately and refund posting fee
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isExpiring}
+                      onClick={() => setIsExpireModalOpen(false)}
+                      className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Crisp Body Description */}
+                  <div className="space-y-3 mb-5">
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                      {`Are you sure you want to force close and expire this job post immediately? Since 0 proposals have been submitted, the intake window will be terminated immediately and your full posting fee (${job?.postingFeeCredits || 50} Credits) will be refunded to your wallet.`}
+                    </p>
+
+                    <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] flex items-center justify-between text-xs font-semibold">
+                      <span className="text-gray-500 dark:text-zinc-400">
+                        Refund to Wallet:
+                      </span>
+                      <span className="text-blue-600 dark:text-blue-400 font-bold">
+                        {`${job?.postingFeeCredits || 50} Credits`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      disabled={isExpiring}
+                      onClick={() => setIsExpireModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isExpiring}
+                      onClick={handleExecuteExpireNow}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 transition cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      {isExpiring ? "Processing..." : "Force Close & Refund"}
+                    </button>
+                  </div>
                 </motion.div>
               </div>
             )}

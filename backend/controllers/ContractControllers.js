@@ -1,8 +1,15 @@
-const ContractRepositories = require('../repositories/ContractRepositories');
+﻿const ContractRepositories = require('../repositories/ContractRepositories');
 const { pool } = require('../lib/Database');
 const { getIo } = require('../lib/WebSocket');
 const { createNotificationServices } = require('../services/NotificationServices');
-const { getAuthorizedActorAccountIds } = require('../services/MarketplaceActorServices');
+const { getAuthorizedActorAccountIds, getAffiliatedAccountIds } = require('../services/MarketplaceActorServices');
+const {
+    ContractSubcontractError,
+    getContractTeamServices,
+    addContractSubcontractorServices,
+    removeContractSubcontractorServices,
+    distributeContractFundsServices,
+} = require('../services/ContractServices');
 
 async function sendJobOfferController(req, res) {
     try {
@@ -20,45 +27,109 @@ async function sendJobOfferController(req, res) {
 
         try {
             const propQ = await pool.query(`
-                SELECT p.freelancer_account_id, j.title, p.job_id 
+                SELECT p.freelancer_account_id,
+                       p.included_member_account_ids,
+                       j.title,
+                       p.job_id,
+                       f_acc.display_name AS freelancer_name,
+                       f_acc.handle AS freelancer_handle,
+                       f_acc.type AS freelancer_type,
+                       (
+                           SELECT u_lead.account_id
+                           FROM teams ft_lead
+                           JOIN team_members tm_lead ON tm_lead.team_id = ft_lead.team_id AND tm_lead.status = 'Active' AND tm_lead.role = 'Owner'
+                           JOIN users u_lead ON u_lead.user_id = tm_lead.user_id
+                           WHERE ft_lead.account_id = p.freelancer_account_id AND ft_lead.deleted_at IS NULL
+                           LIMIT 1
+                       ) AS team_leader_account_id,
+                       (
+                           SELECT a_lead.display_name
+                           FROM teams ft_lead
+                           JOIN team_members tm_lead ON tm_lead.team_id = ft_lead.team_id AND tm_lead.status = 'Active' AND tm_lead.role = 'Owner'
+                           JOIN users u_lead ON u_lead.user_id = tm_lead.user_id
+                           JOIN accounts a_lead ON a_lead.account_id = u_lead.account_id
+                           WHERE ft_lead.account_id = p.freelancer_account_id AND ft_lead.deleted_at IS NULL
+                           LIMIT 1
+                       ) AS team_leader_name
                 FROM proposals p 
                 JOIN jobs j ON p.job_id = j.job_id 
+                LEFT JOIN accounts f_acc ON f_acc.account_id = p.freelancer_account_id
                 WHERE p.proposal_id = $1
             `, [proposalId]);
-            const accQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [clientId]);
+            const accQ = await pool.query('SELECT handle, display_name FROM accounts WHERE account_id = $1', [clientId]);
             
             if (propQ.rows[0] && accQ.rows[0]) {
-                const freelancerAccQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [propQ.rows[0].freelancer_account_id]);
-                if (freelancerAccQ.rows[0]) {
-                    const { freelancer_account_id, title, job_id } = propQ.rows[0];
-                    const clientHandle = accQ.rows[0].handle;
-                    const freelancerHandle = freelancerAccQ.rows[0].handle;
-                    const contractId = result.contract_id || result.id || proposalId;
+                const {
+                    freelancer_account_id,
+                    included_member_account_ids,
+                    title,
+                    freelancer_name,
+                    freelancer_handle,
+                    freelancer_type,
+                    team_leader_account_id,
+                    team_leader_name,
+                } = propQ.rows[0];
+                const clientHandle = accQ.rows[0].handle;
+                const contractId = result.contract_id || result.id || proposalId;
+                const io = getIo();
 
+                const isTeamProposal = freelancer_type === 'Team' || Boolean(team_leader_account_id);
+
+                if (isTeamProposal && team_leader_account_id) {
+                    const teamDisplay = freelancer_name || `@${freelancer_handle}`;
+                    const leaderName = team_leader_name || 'your Team Leader';
+
+                    // 1. Notify the Team Leader directly to review & accept the contract offer
+                    const leaderNotif = await createNotificationServices({
+                        message: `@${clientHandle} sent a Contract Offer to your team ${teamDisplay} for "${title}". As Team Leader, review and accept the offer.`,
+                        reference_table: 'contracts',
+                        reference_prefix: 'offer_received',
+                        reference_path: `/jobs/proposals/sent/${proposalId}/offer/${contractId}`,
+                        reference_id: contractId,
+                        account_id: team_leader_account_id,
+                    });
+                    if (io) io.to(String(team_leader_account_id)).emit('notification', leaderNotif);
+
+                    // 2. Notify all other included team members that the offer was sent to their Team Leader
+                    const rawIncluded = Array.isArray(included_member_account_ids)
+                        ? included_member_account_ids
+                        : [];
+                    const otherMemberIds = Array.from(new Set(rawIncluded.map(String))).filter(
+                        (mId) => mId && mId !== String(team_leader_account_id)
+                    );
+
+                    for (const memberAccId of otherMemberIds) {
+                        const memberNotif = await createNotificationServices({
+                            message: `@${clientHandle} sent a Contract Offer for "${title}" to your Team Leader (${leaderName}) on team ${teamDisplay}. Once accepted, your copy of the contract will be issued.`,
+                            reference_table: 'contracts',
+                            reference_prefix: 'offer_received_member_info',
+                            reference_path: `/jobs/proposals/sent/${proposalId}`,
+                            reference_id: contractId,
+                            account_id: memberAccId,
+                        });
+                        if (io) io.to(String(memberAccId)).emit('notification', memberNotif);
+                    }
+                } else {
                     const notif1 = await createNotificationServices({
                         message: `@${clientHandle} Sent you a Contract Offer for ${title}`,
                         reference_table: 'contracts',
                         reference_prefix: 'offer_received',
                         reference_path: `/jobs/proposals/sent/${proposalId}/offer/${contractId}`,
                         reference_id: contractId,
-                        account_id: freelancer_account_id
+                        account_id: freelancer_account_id,
                     });
-
-                    const notif2 = await createNotificationServices({
-                        message: `You sent a Contract Offer to @${freelancerHandle} for ${title}`,
-                        reference_table: 'contracts',
-                        reference_prefix: 'offer_sent',
-                        reference_path: `/jobs/proposals/incoming/${proposalId}`,
-                        reference_id: contractId,
-                        account_id: clientId
-                    });
-
-                    const io = getIo();
-                    if (io) {
-                        io.to(String(freelancer_account_id)).emit('notification', notif1);
-                        io.to(String(clientId)).emit('notification', notif2);
-                    }
+                    if (io) io.to(String(freelancer_account_id)).emit('notification', notif1);
                 }
+
+                const notif2 = await createNotificationServices({
+                    message: `You sent a Contract Offer to @${freelancer_handle} for ${title}`,
+                    reference_table: 'contracts',
+                    reference_prefix: 'offer_sent',
+                    reference_path: `/jobs/proposals/incoming/${proposalId}`,
+                    reference_id: contractId,
+                    account_id: clientId,
+                });
+                if (io) io.to(String(clientId)).emit('notification', notif2);
             }
         } catch (notifErr) {
             console.error('Error sending contract offer notification:', notifErr);
@@ -97,32 +168,70 @@ async function acceptJobOfferController(req, res) {
 
         try {
             const propQ = await pool.query(`
-                SELECT j.client_account_id, j.title, p.freelancer_account_id 
+                SELECT j.client_account_id,
+                       j.title,
+                       p.freelancer_account_id,
+                       p.included_member_account_ids,
+                       f_acc.display_name AS freelancer_name,
+                       f_acc.handle AS freelancer_handle,
+                       f_acc.type AS freelancer_type,
+                       (
+                           SELECT u_lead.account_id
+                           FROM teams ft_lead
+                           JOIN team_members tm_lead ON tm_lead.team_id = ft_lead.team_id AND tm_lead.status = 'Active' AND tm_lead.role = 'Owner'
+                           JOIN users u_lead ON u_lead.user_id = tm_lead.user_id
+                           WHERE ft_lead.account_id = p.freelancer_account_id AND ft_lead.deleted_at IS NULL
+                           LIMIT 1
+                       ) AS team_leader_account_id
                 FROM job_contracts jc 
                 JOIN proposals p ON jc.proposal_id = p.proposal_id 
                 JOIN jobs j ON p.job_id = j.job_id 
+                LEFT JOIN accounts f_acc ON f_acc.account_id = p.freelancer_account_id
                 WHERE jc.contract_id = $1
             `, [contractId]);
 
             if (propQ.rows[0]) {
-                const { client_account_id, title, freelancer_account_id } = propQ.rows[0];
-                const fAccQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [freelancer_account_id]);
-                
-                if (fAccQ.rows[0]) {
-                    const freelancerHandle = fAccQ.rows[0].handle;
+                const {
+                    client_account_id,
+                    title,
+                    freelancer_handle,
+                    freelancer_name,
+                    included_member_account_ids,
+                    team_leader_account_id,
+                } = propQ.rows[0];
+                const io = getIo();
+
+                if (freelancer_handle) {
                     const notif = await createNotificationServices({
-                        message: `@${freelancerHandle} accepted your contract offer for ${title}`,
+                        message: `@${freelancer_handle} accepted your contract offer for ${title}`,
                         reference_table: 'contracts',
                         reference_prefix: 'offer_accepted',
                         reference_path: `/contracts/${contractId}`,
                         reference_id: contractId,
-                        account_id: client_account_id
+                        account_id: client_account_id,
                     });
-
-                    const io = getIo();
                     if (io) {
                         io.to(String(client_account_id)).emit('notification', notif);
                     }
+                }
+
+                // Notify all other included team members that their Team Leader accepted and their contract copy is ready
+                const rawIncluded = Array.isArray(included_member_account_ids)
+                    ? included_member_account_ids
+                    : [];
+                const otherMemberIds = Array.from(new Set(rawIncluded.map(String))).filter(
+                    (mId) => mId && mId !== String(team_leader_account_id || freelancerId)
+                );
+                for (const memberAccId of otherMemberIds) {
+                    const memberNotif = await createNotificationServices({
+                        message: `Your Team Leader accepted the contract offer for "${title}" (${freelancer_name || 'Team'}). Your official copy of the contract is now active in My Contracts.`,
+                        reference_table: 'contracts',
+                        reference_prefix: 'offer_accepted',
+                        reference_path: `/contracts/${contractId}`,
+                        reference_id: contractId,
+                        account_id: memberAccId,
+                    });
+                    if (io) io.to(String(memberAccId)).emit('notification', memberNotif);
                 }
             }
         } catch (notifErr) {
@@ -334,9 +443,9 @@ async function getCancellationRequestController(req, res) {
         const personalAccountId = req.user.account_id || req.user.accountId;
         const { contractId } = req.params;
 
-        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const affiliatedIds = await getAffiliatedAccountIds(personalAccountId);
         const { getActiveCancellationRequestService } = require('../services/MilestoneServices');
-        const request = await getActiveCancellationRequestService(contractId, actorIds[0]);
+        const request = await getActiveCancellationRequestService(contractId, affiliatedIds);
 
         return res.status(200).json({
             success: true,
@@ -414,6 +523,51 @@ async function withdrawCancellationRequestController(req, res) {
     }
 }
 
+async function getContractTeamController(req, res) {
+    try {
+        const personalAccountId = req.user?.account_id || req.user?.accountId;
+        const affiliatedIds = await getAffiliatedAccountIds(personalAccountId);
+        const data = await getContractTeamServices(req.params.contractId, affiliatedIds);
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        console.error('getContractTeamController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
+async function addContractSubcontractorController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await addContractSubcontractorServices(req.params.contractId, actorAccountId, req.body);
+        return res.status(201).json({ success: true, message: 'Team member added successfully', data });
+    } catch (err) {
+        console.error('addContractSubcontractorController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
+async function removeContractSubcontractorController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await removeContractSubcontractorServices(req.params.contractId, actorAccountId, req.params.memberAccountId);
+        return res.status(200).json({ success: true, message: 'Team member removed successfully', data });
+    } catch (err) {
+        console.error('removeContractSubcontractorController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
+async function distributeContractFundsController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await distributeContractFundsServices(req.params.contractId, actorAccountId, req.body);
+        return res.status(200).json({ success: true, message: 'Contract funds distributed successfully', data });
+    } catch (err) {
+        console.error('distributeContractFundsController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
 module.exports = {
     sendJobOfferController,
     acceptJobOfferController,
@@ -426,4 +580,8 @@ module.exports = {
     getCancellationRequestController,
     respondCancellationRequestController,
     withdrawCancellationRequestController,
+    getContractTeamController,
+    addContractSubcontractorController,
+    removeContractSubcontractorController,
+    distributeContractFundsController,
 };

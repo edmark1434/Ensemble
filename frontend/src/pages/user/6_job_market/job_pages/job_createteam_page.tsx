@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles } from "lucide-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -17,6 +18,7 @@ import CreateTeamMilestones, { type MilestoneFormItem } from "../job_components/
 import CreateTeamReview from "../job_components/job_creation_components/5_create_teamreview";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 
 const JobCreateTeamPostPage: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +27,14 @@ const JobCreateTeamPostPage: React.FC = () => {
   const isGlobalLoading = useGlobalState((state) => state.isLoading);
   const user = useGlobalState((state) => state.user);
   const [isCheckingVerification, setIsCheckingVerification] = useState(!isVerified);
+  const [isInitializingStudio, setIsInitializingStudio] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializingStudio(false);
+    }, 850);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +80,17 @@ const JobCreateTeamPostPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [hasReachedReview, setHasReachedReview] = useState(false);
+  const [maxReachedStep, setMaxReachedStep] = useState<number>(1);
+
+  useEffect(() => {
+    setMaxReachedStep((prev) => Math.max(prev, currentSlide));
+  }, [currentSlide]);
+
+  useEffect(() => {
+    if (hasReachedReview) {
+      setMaxReachedStep(4);
+    }
+  }, [hasReachedReview]);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
@@ -92,10 +113,14 @@ const JobCreateTeamPostPage: React.FC = () => {
   const [skillInput, setSkillInput] = useState("");
   const [minBudget, setMinBudget] = useState("");
   const [maxBudget, setMaxBudget] = useState("");
-  const [minTimeline, setMinTimeline] = useState("");
-  const [maxTimeline, setMaxTimeline] = useState("");
+  const [minTimeline, setMinTimeline] = useState("3");
+  const [maxTimeline, setMaxTimeline] = useState("5");
   const [deadline, setDeadline] = useState("");
   const [positions, setPositions] = useState(2);
+  const [applicationWindowHours, setApplicationWindowHours] = useState<number>(72);
+  const [isUrgent, setIsUrgent] = useState(false);
+  const [hasHardDeadline, setHasHardDeadline] = useState(false);
+  const [hardDeadline, setHardDeadline] = useState("");
 
   // --- STEP 3: TERMS ---
   const [portfolioUseAllowed, setPortfolioUseAllowed] = useState(false);
@@ -148,6 +173,14 @@ const JobCreateTeamPostPage: React.FC = () => {
         if (data.maxTimeline) setMaxTimeline(data.maxTimeline);
         if (data.deadline) setDeadline(data.deadline);
         if (data.positions) setPositions(data.positions);
+        if (data.previewUrl) {
+          setPreviewUrl(data.previewUrl);
+          if (data.thumbnail) setThumbnail(data.thumbnail);
+        }
+        if (data.applicationWindowHours) setApplicationWindowHours(data.applicationWindowHours);
+        if (data.isUrgent !== undefined) setIsUrgent(data.isUrgent);
+        if (data.hasHardDeadline !== undefined) setHasHardDeadline(data.hasHardDeadline);
+        if (data.hardDeadline) setHardDeadline(data.hardDeadline);
         if (Array.isArray(data.milestones) && data.milestones.length > 0) setMilestones(data.milestones);
         if (data.portfolioUseAllowed !== undefined) setPortfolioUseAllowed(data.portfolioUseAllowed);
         if (data.portfolioDuration) setPortfolioDuration(data.portfolioDuration);
@@ -174,6 +207,12 @@ const JobCreateTeamPostPage: React.FC = () => {
           maxTimeline,
           deadline,
           positions,
+          thumbnail: thumbnail || previewUrl || "",
+          previewUrl: previewUrl || "",
+          applicationWindowHours,
+          isUrgent,
+          hasHardDeadline,
+          hardDeadline,
           milestones,
           portfolioUseAllowed,
           portfolioDuration,
@@ -204,9 +243,10 @@ const JobCreateTeamPostPage: React.FC = () => {
       setSkills([]);
       setMinBudget("");
       setMaxBudget("");
-      setMinTimeline("");
-      setMaxTimeline("");
+      setMinTimeline("3");
+      setMaxTimeline("5");
       setDeadline("");
+      setApplicationWindowHours(72);
       setPositions(2);
       setPortfolioUseAllowed(false);
       setPortfolioDuration("");
@@ -314,12 +354,19 @@ const JobCreateTeamPostPage: React.FC = () => {
     if (minTimeline && maxTimeline && parseInt(maxTimeline) < parseInt(minTimeline)) {
       stepErrors.maxTimeline = "Max timeline cannot be lower than min timeline.";
     }
-    if (!deadline) {
-      stepErrors.deadline = "Deadline is required.";
-    } else {
+    const targetCutoff = (hasHardDeadline && hardDeadline) ? hardDeadline : "";
+    const intakeHours = applicationWindowHours || 168;
+    const minDays = parseInt(minTimeline) || 1;
+    const minAllowedCutoff = new Date(Date.now() + (intakeHours + minDays * 24) * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    if (hasHardDeadline && !hardDeadline) {
+      stepErrors.hardDeadline = "Please specify the calendar cutoff date or uncheck the option.";
+    } else if (hasHardDeadline && hardDeadline && hardDeadline < minAllowedCutoff) {
+      stepErrors.hardDeadline = `Calendar cutoff (${hardDeadline}) cannot be earlier than intake closing plus turnaround (${minAllowedCutoff}).`;
+    } else if (targetCutoff) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const parts = deadline.split('-');
+      const parts = targetCutoff.split('-');
       const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
       const diffTime = selected.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -328,10 +375,10 @@ const JobCreateTeamPostPage: React.FC = () => {
         stepErrors.deadline = "Deadline cannot be in the past.";
       } else {
         if (maxTimeline && parseInt(maxTimeline) > diffDays) {
-          stepErrors.maxTimeline = `Project timeline (${maxTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+          stepErrors.maxTimeline = `Project turnaround (${maxTimeline} days) cannot exceed calendar cutoff (${diffDays} days).`;
         }
         if (minTimeline && parseInt(minTimeline) > diffDays) {
-          stepErrors.minTimeline = `Min timeline (${minTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+          stepErrors.minTimeline = `Min turnaround (${minTimeline} days) cannot exceed calendar cutoff (${diffDays} days).`;
         }
       }
     }
@@ -532,7 +579,11 @@ const JobCreateTeamPostPage: React.FC = () => {
         rate_credits_max: rawMaxBudget,
         timeline_min: parseInt(minTimeline) || 0,
         timeline_max: parseInt(maxTimeline) || 0,
-        deadline,
+        deadline: (hasHardDeadline && hardDeadline) ? hardDeadline : null,
+        has_hard_deadline: Boolean(hasHardDeadline && hardDeadline),
+        application_window_hours: applicationWindowHours,
+        is_urgent: isUrgent || applicationWindowHours <= 24,
+        hard_deadline: hasHardDeadline && hardDeadline ? hardDeadline : null,
         no_of_hires: calculatedTotalHires,
         file_id: fileId,
         portfolio_use_allowed: portfolioUseAllowed,
@@ -550,6 +601,20 @@ const JobCreateTeamPostPage: React.FC = () => {
       } catch (_) {}
       setIsDraftRestored(false);
       setIsSuccessOpen(true);
+
+      // Decrement global wallet balance by publication fee (50) to trigger animated deduction
+      const curUser = useGlobalState.getState().user;
+      if (curUser) {
+        const curBal = Number(curUser.wallet?.balance_credits ?? 0);
+        const nextBal = Math.max(0, curBal - 50);
+        useGlobalState.getState().setUser({
+          ...curUser,
+          wallet: {
+            ...(curUser.wallet || {}),
+            balance_credits: nextBal,
+          },
+        });
+      }
     } catch (err: any) {
       console.error(err);
       const message = err.response?.data?.message || err.message || "Failed to submit team job post.";
@@ -559,16 +624,53 @@ const JobCreateTeamPostPage: React.FC = () => {
     }
   };
 
-  if (isCheckingVerification) {
+  if (isCheckingVerification || isGlobalLoading || isInitializingStudio) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-dark-base">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        {/* Background Grid */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Preparing Job Posting Studio
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Setting up your job creation workspace and restoring any saved draft...
+            </p>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+      {/* Floating Upper Right Credits Pill */}
+      <FloatingCreditsPill />
+
       {/* Background Grid Animation */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -587,7 +689,7 @@ const JobCreateTeamPostPage: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
+        className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6"
       >
         {/* Title Heading Display */}
         <motion.div
@@ -598,10 +700,10 @@ const JobCreateTeamPostPage: React.FC = () => {
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 mb-2">
             Team & Multi-Role Wizard (5 Steps)
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
             Creating a Team Job Post
           </h1>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
             Publish a collaborative team project with customizable milestones, deliverables, and role openings.
           </p>
         </motion.div>
@@ -641,7 +743,7 @@ const JobCreateTeamPostPage: React.FC = () => {
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 backdrop-blur-xl p-6 md:p-8 shadow-sm dark:shadow-2xl relative overflow-hidden"
+          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 lg:p-10 backdrop-blur-xl shadow-2xl space-y-6 relative overflow-hidden"
         >
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
@@ -684,6 +786,9 @@ const JobCreateTeamPostPage: React.FC = () => {
                 transition={{ duration: 0.3 }}
               >
                 <CreateBudgetSkills
+                  title={title}
+                  description={description}
+                  category={category}
                   skills={skills}
                   setSkills={setSkills}
                   skillInput={skillInput}
@@ -705,6 +810,14 @@ const JobCreateTeamPostPage: React.FC = () => {
                   errors={errors}
                   setErrors={setErrors}
                   formatCommaString={formatCommaString}
+                  applicationWindowHours={applicationWindowHours}
+                  setApplicationWindowHours={setApplicationWindowHours}
+                  isUrgent={isUrgent}
+                  setIsUrgent={setIsUrgent}
+                  hasHardDeadline={hasHardDeadline}
+                  setHasHardDeadline={setHasHardDeadline}
+                  hardDeadline={hardDeadline}
+                  setHardDeadline={setHardDeadline}
                   onBack={() => setCurrentSlide(1)}
                   onAdvance={() => handleSlide2Advance(false)}
                 />
@@ -736,6 +849,8 @@ const JobCreateTeamPostPage: React.FC = () => {
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(2)}
                   onAdvance={() => handleSlide3Advance(false)}
+                  isTeam={true}
+                  advanceButtonText="Continue to Milestones"
                 />
               </motion.div>
             )}
@@ -755,6 +870,7 @@ const JobCreateTeamPostPage: React.FC = () => {
                   maxBudget={maxBudget}
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
+                  category={category}
                   errors={errors}
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(3)}
@@ -782,6 +898,10 @@ const JobCreateTeamPostPage: React.FC = () => {
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
                   deadline={deadline}
+                  applicationWindowHours={applicationWindowHours}
+                  isUrgent={isUrgent || applicationWindowHours <= 24}
+                  hasHardDeadline={hasHardDeadline}
+                  hardDeadline={hardDeadline}
                   milestones={milestones}
                   postingAs={postingAs}
                   setPostingAs={setPostingAs}

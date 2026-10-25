@@ -52,7 +52,7 @@ async function listAuthorizedActors(personalAccountId) {
          WHERE t.deleted_at IS NULL
            AND ta.deleted_at IS NULL
            AND tm.status = 'Active'
-           AND tm.role IN ('Owner', 'Admin')
+           AND tm.role = 'Owner'
          ORDER BY team_id NULLS FIRST, display_name`,
         [personalAccountId]
     );

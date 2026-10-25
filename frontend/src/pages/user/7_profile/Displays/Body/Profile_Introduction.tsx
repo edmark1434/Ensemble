@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Edit2, Check, Bold, Italic, List, Eye, EyeOff, Play, AlertTriangle, User } from "lucide-react";
+import { Edit2, Check, Bold, Italic, List, Eye, EyeOff, Play, AlertTriangle, User, Clock, Sparkles, Loader2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api from "@/lib/axios.ts";
@@ -17,6 +17,7 @@ interface ProfileIntroductionProps {
   onSave?: (newIntro: string) => Promise<void> | void;
   accountId?: string;
   onViewMoreGallery?: () => void;
+  userName?: string;
 }
 
 const constructAssetUrl = (path: string | undefined): string | undefined => {
@@ -34,7 +35,8 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
   isLoading = false,
   onSave,
   accountId,
-  onViewMoreGallery
+  onViewMoreGallery,
+  userName = "",
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(introduction || "");
@@ -46,6 +48,96 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
   const [itemToEdit, setItemToEdit] = useState<GalleryItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<GalleryItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Joed AI Profile Introduction Generation & 180s (3-minute) Cooldown State
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiName, setAiName] = useState(userName || "");
+  const [aiAbout, setAiAbout] = useState("");
+  const [aiTone, setAiTone] = useState<"casual" | "direct" | "professional" | "narrative">("casual");
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (userName && !aiName) {
+      setAiName(userName);
+    }
+  }, [userName]);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownSeconds((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownSeconds]);
+
+  const formatCooldown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return mins > 0 ? `${mins}:${String(rem).padStart(2, "0")}` : `${secs}s`;
+  };
+
+  const INTRO_TONE_OPTIONS: {
+    id: "casual" | "direct" | "professional" | "narrative";
+    label: string;
+    desc: string;
+  }[] = [
+    {
+      id: "casual",
+      label: "Casual",
+      desc: "Warm, natural creator-to-client voice",
+    },
+    {
+      id: "direct",
+      label: "Direct",
+      desc: "Straightforward, highlights tools & deliverables",
+    },
+    {
+      id: "professional",
+      label: "Professional",
+      desc: "Polished, reliable studio-grade tone",
+    },
+    {
+      id: "narrative",
+      label: "Narrative",
+      desc: "Story-driven focus on creative pacing & flow",
+    },
+  ];
+
+  const handleGenerateIntroduction = async () => {
+    if (cooldownSeconds > 0 || isGeneratingAi) return;
+    if (!aiAbout.trim() && !aiName.trim()) {
+      toast.error("Please explain a bit about yourself so Joed AI can draft your introduction.");
+      return;
+    }
+
+    setIsGeneratingAi(true);
+    try {
+      const res = await api.post("/api/chat/generate-profile-introduction", {
+        name: aiName.trim(),
+        about: aiAbout.trim(),
+        tone: aiTone,
+      });
+
+      const generatedIntro = res.data?.data?.introduction;
+      if (generatedIntro) {
+        setContent(String(generatedIntro).slice(0, 3000));
+        setIsEditing(true);
+        setIsPreview(false);
+        setIsAiModalOpen(false);
+        setCooldownSeconds(180);
+        toast.success("Joed AI generated your profile introduction!");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Joed AI could not generate your introduction right now. Please try again.";
+      toast.error(msg);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
 
   const fetchFeaturedWorks = async () => {
     if (!accountId) {
@@ -211,7 +303,37 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                   <List className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAiModalOpen(true)}
+                  disabled={cooldownSeconds > 0 || isGeneratingAi}
+                  className={`relative overflow-hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shadow-xs active:scale-95 ${
+                    cooldownSeconds > 0
+                      ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-blue-400/40 shadow-blue-500/20 ring-1 ring-white/20 hover:shadow-md hover:shadow-blue-500/30 cursor-pointer"
+                  }`}
+                  title={
+                    cooldownSeconds > 0
+                      ? `Joed AI on cooldown (${formatCooldown(cooldownSeconds)})`
+                      : "Generate Profile Introduction with Joed AI"
+                  }
+                >
+                  {cooldownSeconds === 0 && (
+                    <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none animate-shine-gleam" />
+                  )}
+                  {cooldownSeconds > 0 ? (
+                    <>
+                      <Clock className="h-3 w-3 animate-spin text-zinc-400 dark:text-zinc-500 shrink-0" />
+                      <span>Cooldown ({formatCooldown(cooldownSeconds)})</span>
+                    </>
+                  ) : (
+                    <>
+                      <img src="/ensemble_lg.svg" alt="Ensemble" className="h-3.5 w-3.5 shrink-0 rounded-xs" />
+                      <span>Generate with Joed AI!</span>
+                    </>
+                  )}
+                </button>
                 <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-500">{content.length}/3000</span>
                 <button type="button" onClick={() => setIsPreview(!isPreview)} className={`p-1.5 rounded transition-colors flex items-center gap-1.5 px-3 ${isPreview ? 'bg-blue-500/20 text-blue-500' : 'hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300'}`} title="Toggle Preview">
                   {isPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -430,6 +552,194 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
           </div>
         )}
       </div>
+    
+      {/* ==================== JOED AI GENERATION MODAL ==================== */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {isAiModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                {/* Backdrop */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => !isGeneratingAi && setIsAiModalOpen(false)}
+                  className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+                />
+
+                {/* Modal Container */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  className="relative w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden z-10"
+                >
+                  {/* Modal Header */}
+                  <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src="/ensemble_lg.svg"
+                        alt="Ensemble"
+                        className="h-7 w-7 shrink-0 invert dark:invert-0 object-contain"
+                      />
+                      <div>
+                        <h3 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
+                          Generate Introduction with Joed AI?
+                        </h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Tailored directly for your creator profile.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isGeneratingAi}
+                      onClick={() => setIsAiModalOpen(false)}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-40"
+                      title="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 space-y-4 text-left">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                      Joed AI will read your <strong className="text-zinc-900 dark:text-white">Name</strong> and <strong className="text-zinc-900 dark:text-white">Background Notes</strong> below to draft a compelling introduction for your profile.
+                    </p>
+
+                    {/* Name input */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider block">
+                        Your Name
+                      </label>
+                      <input
+                        type="text"
+                        disabled={isGeneratingAi}
+                        value={aiName}
+                        onChange={(e) => setAiName(e.target.value)}
+                        placeholder="e.g. Alex Rivera"
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-900 dark:text-white outline-none focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+
+                    {/* Explain a bit about yourself */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                          Explain a bit about yourself <span className="text-red-500">*</span>
+                        </label>
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+                          {aiAbout.length}/600
+                        </span>
+                      </div>
+                      <textarea
+                        rows={3}
+                        maxLength={600}
+                        disabled={isGeneratingAi}
+                        value={aiAbout}
+                        onChange={(e) => setAiAbout(e.target.value)}
+                        placeholder="e.g. 5+ years experience editing YouTube long-form content and gaming montages. Specialized in Premiere Pro, After Effects, sound design, color grading, and retention-focused storytelling..."
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-900 dark:text-white outline-none focus:border-blue-500 transition-colors resize-none leading-relaxed custom-scrollbar"
+                      />
+                    </div>
+
+                    {/* Pitch Tone & Style */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                          Pitch Tone &amp; Style
+                        </label>
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                          Hover to preview tone
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {INTRO_TONE_OPTIONS.map((opt) => {
+                          const isSelected = aiTone === opt.id;
+                          return (
+                            <div key={opt.id} className="relative group flex-1 min-w-[85px]">
+                              <button
+                                type="button"
+                                disabled={isGeneratingAi}
+                                onClick={() => setAiTone(opt.id)}
+                                className={`w-full px-3 py-2 rounded-full border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 select-none ${
+                                  isSelected
+                                    ? "border-blue-600 bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+                                    : "border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                }`}
+                              >
+                                <span>{opt.label}</span>
+                              </button>
+
+                              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-30">
+                                <div className="rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-center shadow-xl">
+                                  <p className="text-[11px] font-bold text-zinc-900 dark:text-white">
+                                    {opt.label}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-600 dark:text-zinc-300 leading-snug mt-0.5">
+                                    {opt.desc}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 3-Minute Cooldown Notice */}
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/70 text-xs text-zinc-600 dark:text-zinc-300">
+                      <Clock className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-400" />
+                      <span className="font-medium">
+                        {cooldownSeconds > 0
+                          ? `Cooldown active: ${formatCooldown(cooldownSeconds)} remaining.`
+                          : "3-minute cooldown applies after generation."}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800 rounded-b-2xl bg-zinc-50/40 dark:bg-zinc-900/40 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      disabled={isGeneratingAi}
+                      onClick={() => setIsAiModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isGeneratingAi || cooldownSeconds > 0}
+                      onClick={handleGenerateIntroduction}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                        !isGeneratingAi && cooldownSeconds === 0
+                          ? "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/25 active:scale-[0.98] cursor-pointer"
+                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 cursor-not-allowed"
+                      }`}
+                    >
+                      {isGeneratingAi ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                          <span>Generating Introduction...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-white" />
+                          <span>Confirm &amp; Generate</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
     </div>
   );
 };

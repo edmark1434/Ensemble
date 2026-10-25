@@ -44,9 +44,9 @@ async function resolveMarketplaceActor(
     }
 
     const actor = await MarketplaceActorRepositories.getAuthorizedTeamActor(normalizedTeamId, personalId);
-    if (!actor || actor.membership_status !== 'Active' || !['Owner', 'Admin'].includes(actor.role)) {
+    if (!actor || actor.membership_status !== 'Active' || !['Owner', 'Representative', 'Admin'].includes(actor.role)) {
         throw new MarketplaceActorError(
-            'Only an active team Owner or Admin can perform marketplace actions for this team.',
+            'Only the Team Leader (Owner) or a trusted Representative can submit proposals for this team.',
             403,
             'TEAM_MARKETPLACE_FORBIDDEN'
         );

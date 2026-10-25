@@ -63,8 +63,11 @@ export interface PromptBarProps {
   commands?: PromptBarCommand[];
   models?: PromptBarModel[];
   defaultModel?: string;
+  showModel?: boolean;
   efforts?: string[];
   defaultEffort?: string;
+  showEffort?: boolean;
+  showPlus?: boolean;
   onEffortChange?: (effort: string) => void;
   busy?: boolean;
   onSend?: (text: string, detail: PromptBarSendDetail) => void;
@@ -223,8 +226,11 @@ const PromptBar: React.FC<PromptBarProps> = ({
   commands = DEFAULT_COMMANDS,
   models = DEFAULT_MODELS,
   defaultModel = '',
+  showModel = true,
   efforts = DEFAULT_EFFORTS,
   defaultEffort = '',
+  showEffort = true,
+  showPlus = true,
   onEffortChange,
   busy = false,
   onSend,
@@ -285,7 +291,7 @@ const PromptBar: React.FC<PromptBarProps> = ({
 
   const model = models.find(m => m.key === modelKey) ?? models[0];
   const token = dismissed ? null : parseToken(draft);
-  const open = plusOpen ? 'at' : (token?.kind ?? (modelOpen ? 'model' : effortOpen ? 'effort' : null));
+  const open = (plusOpen && showPlus) ? 'at' : (token?.kind ?? ((modelOpen && showModel) ? 'model' : (effortOpen && showEffort) ? 'effort' : null));
   const query = plusOpen ? '' : (token?.query ?? '');
   const list = useMemo<Row[]>(() => {
     if (open === 'at') return sources.filter(s => s.name.toLowerCase().includes(query));
@@ -766,24 +772,26 @@ const PromptBar: React.FC<PromptBarProps> = ({
         />
 
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="inline-grid h-7 w-7 flex-none cursor-pointer touch-manipulation place-items-center rounded-lg border-0 bg-transparent p-0 outline-none select-none [color:color-mix(in_srgb,var(--pb-ink)_60%,transparent)] [font:inherit] [-webkit-tap-highlight-color:transparent] [transition:background-color_150ms_ease,color_150ms_ease,transform_160ms_cubic-bezier(0.23,1,0.32,1)] active:[transform:scale(0.94)] data-[on]:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] data-[on]:[color:var(--pb-ink)] motion-reduce:active:[transform:none] [@media(hover:hover)_and_(pointer:fine)]:hover:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] [@media(hover:hover)_and_(pointer:fine)]:hover:[color:var(--pb-ink)]"
-            aria-label="Add files and sources"
-            aria-expanded={plusOpen}
-            data-on={plusOpen ? '' : undefined}
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => {
-              setModelOpen(false);
-              setEffortOpen(false);
-              setActive(0);
-              setPlusOpen(v => !v);
-              focusInput();
-            }}
-          >
-            <HugeiconsIcon icon={PlusSignIcon} size={16} strokeWidth={2} />
-          </button>
-          {models.length > 0 ? (
+          {showPlus && (
+            <button
+              type="button"
+              className="inline-grid h-7 w-7 flex-none cursor-pointer touch-manipulation place-items-center rounded-lg border-0 bg-transparent p-0 outline-none select-none [color:color-mix(in_srgb,var(--pb-ink)_60%,transparent)] [font:inherit] [-webkit-tap-highlight-color:transparent] [transition:background-color_150ms_ease,color_150ms_ease,transform_160ms_cubic-bezier(0.23,1,0.32,1)] active:[transform:scale(0.94)] data-[on]:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] data-[on]:[color:var(--pb-ink)] motion-reduce:active:[transform:none] [@media(hover:hover)_and_(pointer:fine)]:hover:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] [@media(hover:hover)_and_(pointer:fine)]:hover:[color:var(--pb-ink)]"
+              aria-label="Add files and sources"
+              aria-expanded={plusOpen}
+              data-on={plusOpen ? '' : undefined}
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => {
+                setModelOpen(false);
+                setEffortOpen(false);
+                setActive(0);
+                setPlusOpen(v => !v);
+                focusInput();
+              }}
+            >
+              <HugeiconsIcon icon={PlusSignIcon} size={16} strokeWidth={2} />
+            </button>
+          )}
+          {showModel && models.length > 0 && model ? (
             <button
               type="button"
               className="inline-flex h-7 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg border-0 bg-transparent px-2 text-[12px] font-medium outline-none select-none [color:color-mix(in_srgb,var(--pb-ink)_70%,transparent)] [font:inherit] [-webkit-tap-highlight-color:transparent] [transition:background-color_150ms_ease,color_150ms_ease] data-[on]:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] data-[on]:[color:var(--pb-ink)] [@media(hover:hover)_and_(pointer:fine)]:hover:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] [@media(hover:hover)_and_(pointer:fine)]:hover:[color:var(--pb-ink)] data-[max]:[color:var(--pb-spark)]! "
@@ -803,7 +811,7 @@ const PromptBar: React.FC<PromptBarProps> = ({
               <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2.4} />
             </button>
           ) : null}
-          {efforts.length > 0 ? (
+          {showEffort && efforts.length > 0 ? (
             <button
               type="button"
               className="inline-flex h-7 flex-none cursor-pointer touch-manipulation items-center gap-1 rounded-lg border-0 bg-transparent px-2 text-[12px] font-medium outline-none select-none [color:color-mix(in_srgb,var(--pb-ink)_70%,transparent)] [font:inherit] [-webkit-tap-highlight-color:transparent] [transition:background-color_150ms_ease,color_150ms_ease] data-[on]:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] data-[on]:[color:var(--pb-ink)] [@media(hover:hover)_and_(pointer:fine)]:hover:[background:color-mix(in_srgb,var(--pb-ink)_8%,transparent)] [@media(hover:hover)_and_(pointer:fine)]:hover:[color:var(--pb-ink)] data-[max]:[color:var(--pb-spark)]! "

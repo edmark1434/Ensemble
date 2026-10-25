@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { useOutletContext, useParams, useNavigate } from "react-router-dom";
 import JobList from "../job_components/job_lists";
 import type { JobMainContext } from "../job_main";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 const JobMyPostPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "Closed">("All");
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const { filteredJobs, loading, viewType, toggleSaveJob, handleReportJob } =
     useOutletContext<JobMainContext>();
   const { id } = useParams();
@@ -17,6 +18,16 @@ const JobMyPostPage: React.FC = () => {
     if (statusFilter !== "All" && job.status !== statusFilter) return false;
     return true;
   });
+
+  const handlePostClick = async () => {
+    if (isCheckingAccess) return;
+    setIsCheckingAccess(true);
+    try {
+      await continueIfAccountVerified(() => navigate("/jobs/create"));
+    } finally {
+      setIsCheckingAccess(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -49,11 +60,23 @@ const JobMyPostPage: React.FC = () => {
             You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!
           </p>
           <button
-            onClick={() => continueIfAccountVerified(() => navigate("/jobs/postings/choose"))}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            onClick={handlePostClick}
+            disabled={isCheckingAccess}
+            className={`flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 ${
+              isCheckingAccess ? "opacity-80 cursor-wait" : "cursor-pointer"
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            Post a Job
+            {isCheckingAccess ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Opening...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                <span>Post a Job</span>
+              </>
+            )}
           </button>
         </div>
       ) : (

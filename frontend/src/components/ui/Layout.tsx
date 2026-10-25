@@ -114,6 +114,10 @@ const Layout = () => {
   const isFloatingChatHidden = useGlobalState((state) => state.isFloatingChatHidden);
 
   const shouldHideFloatingChat = isInboxPage || isStaffView || isTeamProjectChat || isFloatingChatHidden || isAppealLimitedMember(user);
+  const hasBottomStickyBar =
+    location.pathname.startsWith("/jobs/proposals/received/") ||
+    location.pathname.startsWith("/jobs/proposals/incoming/details/") ||
+    location.pathname.startsWith("/jobs/proposals/sent/");
   const currentUserId = String(user?.account_id || "");
 
   const recentChats = useMemo(() => {
@@ -147,7 +151,8 @@ const Layout = () => {
           (m: any) => String(m.account_id) !== currentUserId
         );
         if (other) {
-          targetName = conv.conversation_name || other.name || other.username || conv.listing_title || "User";
+          const isNameListingTitle = conv.listing_title && conv.conversation_name === conv.listing_title;
+          targetName = (!isNameListingTitle && conv.conversation_name) || other.name || other.username || conv.listing_title || "User";
           targetAvatar = other.avatar_preset_url || targetAvatar;
           targetAccountId = String(other.account_id);
         }
@@ -172,8 +177,22 @@ const Layout = () => {
       };
     });
 
+    const floatingMap = new Map(
+      floatingWindows.map((fw) => [String(fw.inbox_id || fw.id), fw])
+    );
+    const mergedTargets = conversationTargets.map((ct) => {
+      const fw = floatingMap.get(String(ct.inbox_id || ct.id));
+      if (fw) {
+        return {
+          ...ct,
+          name: fw.name || ct.name,
+          avatarUrl: fw.avatarUrl || ct.avatarUrl,
+        };
+      }
+      return ct;
+    });
     const existingIds = new Set(
-      conversationTargets.map((c) => String(c.inbox_id || c.id))
+      mergedTargets.map((c) => String(c.inbox_id || c.id))
     );
     const additionalFloating = floatingWindows
       .filter((fw) => !existingIds.has(String(fw.inbox_id || fw.id)))
@@ -183,7 +202,7 @@ const Layout = () => {
           unreadCounts[String(fw.inbox_id || fw.id)] || fw.unreadCount || 0,
       }));
 
-    return [...additionalFloating, ...conversationTargets];
+    return [...additionalFloating, ...mergedTargets];
   }, [conversations, currentUserId, floatingWindows, unreadCounts, user]);
 
   const activeChatUser =
@@ -305,6 +324,7 @@ const Layout = () => {
             recentChats={recentChats}
             onSelectChat={(chat) => void openFloatingConversation(chat)}
             onRemoveChat={removeFloatingWindow}
+            bottomOffset={hasBottomStickyBar ? 84 : 12}
           />
         )}
         {!isStaffView && <CallOverlay />}

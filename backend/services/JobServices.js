@@ -9,18 +9,19 @@ async function createJobServices(jobData) {
     if (!jobData.title || !jobData.description) {
         throw new Error('Title and description are required.');
     }
-    if (jobData.deadline && (jobData.timeline_max || jobData.timeline_min)) {
+    const activeDeadline = jobData.hard_deadline || (jobData.has_hard_deadline !== false && !jobData.application_window_hours ? jobData.deadline : null);
+    if (activeDeadline && (jobData.timeline_max || jobData.timeline_min)) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let deadlineDate;
-        if (typeof jobData.deadline === 'string' && jobData.deadline.includes('-')) {
-            const parts = jobData.deadline.split('T')[0].split('-');
+        if (typeof activeDeadline === 'string' && activeDeadline.includes('-')) {
+            const parts = activeDeadline.split('T')[0].split('-');
             if (parts.length === 3) {
                 deadlineDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
             }
         }
         if (!deadlineDate || isNaN(deadlineDate.getTime())) {
-            deadlineDate = new Date(jobData.deadline);
+            deadlineDate = new Date(activeDeadline);
         }
         deadlineDate.setHours(0, 0, 0, 0);
         if (!isNaN(deadlineDate.getTime())) {
@@ -256,6 +257,18 @@ async function createJobInvitationServices(jobId, clientAccountId, freelancerAcc
     return invite;
 }
 
+async function extendApplicationWindowServices(jobId, accountIds, durationHours) {
+    return await JobRepositories.extendApplicationWindowRepositories(jobId, accountIds, durationHours);
+}
+
+async function expireJobImmediatelyServices(jobId, accountIds) {
+    return await JobRepositories.expireJobImmediatelyRepositories(jobId, accountIds);
+}
+
+async function reconcileExpiredJobsServices() {
+    return await JobRepositories.autoExpireJobsRepositories();
+}
+
 module.exports = {
     getActiveJobsByClientServices,
     createJobInvitationServices,
@@ -271,5 +284,8 @@ module.exports = {
     updateProposalStatusServices,
     getTermsOfServiceServices,
     toggleJobSaveServices,
-    deleteJobServices
+    deleteJobServices,
+    extendApplicationWindowServices,
+    expireJobImmediatelyServices,
+    reconcileExpiredJobsServices
 };

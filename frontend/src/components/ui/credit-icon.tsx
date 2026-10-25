@@ -29,10 +29,10 @@ export const CreditIcon = ({ className }: { className?: string }) => {
   }, []);
 
   return (
-    <div className={`inline-flex items-center justify-center shrink-0 ${className}`}>
-      <div className="scale-[1.6] w-full h-full flex items-center justify-center">
+    <span className={`inline-flex items-center justify-center shrink-0 ${className}`}>
+      <span className="scale-[1.6] w-full h-full flex items-center justify-center">
         {data && <DotLottieReact data={data} loop autoplay />}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 };

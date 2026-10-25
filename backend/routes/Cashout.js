@@ -1,11 +1,18 @@
 const router = require('express').Router();
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
-const { getWalletOverviewController, searchCashoutAddressesController, createCashoutRecordsController, cashoutWebhookController } = require('../controllers/CashoutControllers');
+const {
+    getWalletOverviewController,
+    searchCashoutAddressesController,
+    createCashoutRecordsController,
+    cashoutWebhookController,
+    transferCreditsController,
+} = require('../controllers/CashoutControllers');
 
 router.get('/wallets', [checkSession, requireAuth], getWalletOverviewController);
 router.get('/address-suggestions', [checkSession, requireAuth], searchCashoutAddressesController);
 router.post('/', [checkSession, requireAuth], createCashoutRecordsController);
+router.post('/transfer', [checkSession, requireAuth], transferCreditsController);
 router.post('/webhooks/xendit', cashoutWebhookController);
 
 module.exports = router;
