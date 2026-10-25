@@ -9,7 +9,6 @@ import {
     MessageSquare,
     Palette,
     ScrollText,
-    Scale,
     Users,
     Wallet,
     ChevronLeft,
@@ -67,7 +66,6 @@ let activityRecordsInitial: NavItem[] = [
     { label: "Deliveries", icon: LayoutDashboard, to: "/dashboard" },
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: ScrollText, to: "/contracts" },
-    { label: "Disputes", icon: Scale, to: "/contracts/disputes" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
     { label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];
@@ -86,7 +84,6 @@ const getSidenavTourId = (path: string) => {
     if (path === "/dashboard") return "sidenav-deliveries";
     if (path === "/terms-of-services") return "sidenav-tos";
     if (path === "/contracts") return "sidenav-contracts";
-    if (path === "/contracts/disputes") return "sidenav-disputes";
     if (path === "/transactions") return "sidenav-transactions";
     if (path === "/inbox") return "sidenav-inbox";
     return undefined;
