@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useOutletContext, useParams, useNavigate } from "react-router-dom";
+import { useOutletContext, useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Briefcase,
@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Star,
   MessageSquare,
+  Loader2,
   CheckSquare,
   Paperclip,
   Clock,
@@ -18,7 +19,15 @@ import {
   Tag,
   Pencil,
   Power,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  X,
+  UserMinus,
+  Sparkles,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import ProposalsList, { type ProposalStatus } from "../proposals_components/proposals_list";
@@ -42,35 +51,10 @@ const SUB_TAB_META: Record<
 > = {
   all: {
     description: "All candidate applications received for this job post across all lifecycle stages.",
-    tags: [
-      {
-        label: "PENDING",
-        className: "bg-amber-50 text-amber-950 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/50",
-      },
-      {
-        label: "SHORTLISTED",
-        className: "bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-400/50",
-      },
-      {
-        label: "ACCEPTED",
-        className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
-      },
-      {
-        label: "HIRED",
-        className: "bg-purple-50 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-400/50",
-      },
-      {
-        label: "DECLINED",
-        className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
-      },
-      {
-        label: "WITHDRAWN",
-        className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
-      },
-    ],
+    tags: [],
   },
   pending: {
-    description: "Fresh candidate applications waiting for your initial review, pitch evaluation, and screening check.",
+    description: "Fresh candidate applications waiting for your initial review and screening.",
     tags: [
       {
         label: "PENDING",
@@ -79,7 +63,7 @@ const SUB_TAB_META: Record<
     ],
   },
   shortlisted: {
-    description: "Top candidate proposals you have starred or bookmarked for prioritized review and interview.",
+    description: "Top candidate proposals you have starred or bookmarked for prioritized review.",
     tags: [
       {
         label: "SHORTLISTED",
@@ -88,10 +72,10 @@ const SUB_TAB_META: Record<
     ],
   },
   offersAndHired: {
-    description: "Candidates you have extended contract offers to (awaiting acceptance) and active hired contracts.",
+    description: "Candidates you have extended contract offers to and active hired contracts.",
     tags: [
       {
-        label: "ACCEPTED (OFFER)",
+        label: "ACCEPTED",
         className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
       },
       {
@@ -133,17 +117,63 @@ const getTimeAgo = (date: Date): string => {
 export const ProposalsIncomingPage: React.FC = () => {
   const { jobPostId } = useParams<{ jobPostId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const user = useGlobalState((state) => state.user);
 
   const { searchQuery, viewType } = useOutletContext<ProposalsMainContext>();
 
   const [proposals, setProposals] = useState<any[]>([]);
   const [targetJob, setTargetJob] = useState<any>(null);
   const [activeSubTab, setActiveSubTab] = useState<ProposalSubTab>("all");
+  const [loadingChatProposalId, setLoadingChatProposalId] = useState<string | null>(null);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingJob, setIsUpdatingJob] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "matrix">("cards");
-  const { fetchProposalsByJob, fetchJobs, updateProposalStatus, updateJob } = useJobs();
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+
+  // Shortlist confirmation modal state
+  const [shortlistTargetProposal, setShortlistTargetProposal] = useState<any | null>(null);
+  const [isUpdatingShortlist, setIsUpdatingShortlist] = useState(false);
+
+  // Extend Formal Contract Offer modal state
+  const [offerTargetProposal, setOfferTargetProposal] = useState<any | null>(null);
+  const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [contractStartsAt, setContractStartsAt] = useState("");
+  const [customMilestones, setCustomMilestones] = useState<any[]>([]);
+  const [isCustomizingMilestones, setIsCustomizingMilestones] = useState(false);
+  const [customBidAmount, setCustomBidAmount] = useState<number>(0);
+  const [isSendingOffer, setIsSendingOffer] = useState(false);
+
+  const [showLifecycleGuide, setShowLifecycleGuide] = useState<boolean>(() => {
+    const saved = localStorage.getItem("ensemble_proposals_show_guide");
+    return saved !== null ? saved === "true" : false;
+  });
+
+  const toggleLifecycleGuide = () => {
+    setShowLifecycleGuide((prev) => {
+      const next = !prev;
+      localStorage.setItem("ensemble_proposals_show_guide", String(next));
+      return next;
+    });
+  };
+  const { fetchProposalsByJob, fetchJobs, updateProposalStatus, updateJob, sendJobOffer } = useJobs();
+
+  // Load wallet balance for escrow validation
+  useEffect(() => {
+    let isMounted = true;
+    api.get("/api/accounts/wallet", { params: { type: "account_wallets" } })
+      .then((res) => {
+        if (isMounted) {
+          setWalletBalance(res.data?.wallet?.balance_credits || 0);
+        }
+      })
+      .catch((err) => console.error("Failed to load wallet balance:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -155,6 +185,7 @@ export const ProposalsIncomingPage: React.FC = () => {
           jobId: p.job_id,
           jobTitle: p.job_title || "Unknown Job",
           jobCategory: p.job_category || "Uncategorized",
+          clientAccountId: p.client_account_id,
           partyName: p.freelancer_name || p.freelancer_handle || "Unknown",
           partyAvatar: constructAvatarUrl(p.freelancer_avatar_path, p.freelancer_name || p.freelancer_handle),
           freelancerAccountId: p.freelancer_account_id,
@@ -268,6 +299,89 @@ export const ProposalsIncomingPage: React.FC = () => {
     } catch (err: any) {
       console.error("Failed to persist proposal status:", err);
       toast.error(err.response?.data?.message || err.message || "Failed to update proposal status");
+    }
+  };
+
+  const handleOpenShortlistConfirm = (proposal: any) => {
+    setShortlistTargetProposal(proposal);
+  };
+
+  const handleConfirmShortlist = async () => {
+    if (!shortlistTargetProposal) return;
+    setIsUpdatingShortlist(true);
+    const isShortlisted = shortlistTargetProposal.status === "Shortlisted";
+    const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
+    try {
+      await handleUpdateStatus(shortlistTargetProposal.id, nextStatus as ProposalStatus);
+      toast.success(
+        nextStatus === "Shortlisted"
+          ? `${shortlistTargetProposal.partyName} added to shortlist!`
+          : `${shortlistTargetProposal.partyName} moved back to pending review.`
+      );
+      setShortlistTargetProposal(null);
+    } catch {
+      toast.error("Failed to update status");
+    } finally {
+      setIsUpdatingShortlist(false);
+    }
+  };
+
+  const handleOpenHireModal = (proposal: any) => {
+    setOfferTargetProposal(proposal);
+    setCustomBidAmount(proposal.bidAmount || 0);
+    const count = (proposal.milestones || []).length || 1;
+    const initialMilestones = (proposal.milestones || []).map((m: any, idx: number) => ({
+      id: m.id || m.proposal_milestone_id || `m-${idx}`,
+      name: m.name || `Phase ${idx + 1}`,
+      description: m.description || "",
+      hours: parseFloat(m.hours) || 0,
+      revisions: parseInt(m.revisions, 10) || 0,
+      percentage: Number(m.percentage) || Math.round(100 / count),
+      tasks: Array.isArray(m.tasks) ? m.tasks.filter(Boolean) : (m.description ? [m.description] : []),
+    }));
+    setCustomMilestones(initialMilestones);
+    setIsCustomizingMilestones(false);
+    setAgreedToTerms(false);
+    setContractStartsAt("");
+    setIsAcceptConfirmOpen(true);
+  };
+
+  const handleConfirmSendOffer = async () => {
+    if (!offerTargetProposal) return;
+    const personalAccountId = user?.account_id;
+    const usesPersonalWallet = String(offerTargetProposal.clientAccountId) === String(personalAccountId);
+    const effectiveBid = isCustomizingMilestones && customBidAmount > 0 ? customBidAmount : offerTargetProposal.bidAmount;
+
+    if (usesPersonalWallet && walletBalance < effectiveBid) {
+      toast.error("Insufficient wallet balance to extend contract offer. Please top up your wallet credits.");
+      return;
+    }
+
+    try {
+      setIsSendingOffer(true);
+      await sendJobOffer(
+        offerTargetProposal.id,
+        effectiveBid,
+        contractStartsAt ? new Date(contractStartsAt).toISOString() : undefined,
+        isCustomizingMilestones ? customMilestones : undefined
+      );
+
+      setProposals((prev) =>
+        prev.map((p) =>
+          p.id === offerTargetProposal.id
+            ? { ...p, status: "Accepted", acceptedAt: new Date().toISOString() }
+            : p
+        )
+      );
+
+      setIsAcceptConfirmOpen(false);
+      setOfferTargetProposal(null);
+      toast.success(`Formal contract offer extended to ${offerTargetProposal.partyName}!`);
+    } catch (err: any) {
+      console.error("Failed to send job offer", err);
+      toast.error(err.response?.data?.message || err?.message || "Failed to extend contract offer.");
+    } finally {
+      setIsSendingOffer(false);
     }
   };
 
@@ -648,35 +762,75 @@ export const ProposalsIncomingPage: React.FC = () => {
           <span className="text-xs text-zinc-400 font-medium hidden sm:inline">
             {filtered.length} {filtered.length === 1 ? "applicant" : "applicants"}
           </span>
+
+          <button
+            type="button"
+            onClick={toggleLifecycleGuide}
+            title={showLifecycleGuide ? "Hide lifecycle guide" : "Show lifecycle guide"}
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              showLifecycleGuide
+                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60 shadow-2xs"
+                : "bg-white dark:bg-zinc-900/60 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+            }`}
+          >
+            <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[11px] font-medium">Guide</span>
+            {showLifecycleGuide ? (
+              <ChevronUp className="h-3 w-3 text-zinc-400" />
+            ) : (
+              <ChevronDown className="h-3 w-3 text-zinc-400" />
+            )}
+          </button>
         </div>
       </div>
 
       {/* Expectation & Status Tag Context Strip */}
-      <div className="p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shrink-0">
-            <Info className="h-4 w-4" />
-          </div>
-          <p className="text-zinc-700 dark:text-zinc-300 font-medium text-xs">
-            {currentMeta.description}
-          </p>
-        </div>
+      <AnimatePresence>
+        {showLifecycleGuide && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="p-2.5 sm:px-4 sm:py-3 rounded-2xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-3 text-xs shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shrink-0">
+                  <Info className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-zinc-600 dark:text-zinc-300 font-medium text-xs leading-relaxed">
+                  {currentMeta.description}
+                </p>
+              </div>
 
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 dark:text-zinc-500">
-            Expected Tags:
-          </span>
-          {currentMeta.tags.map((tag) => (
-            <span
-              key={tag.label}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-xs ${tag.className}`}
-            >
-              <Tag className="h-2.5 w-2.5 shrink-0 opacity-90" />
-              <span>{tag.label}</span>
-            </span>
-          ))}
-        </div>
-      </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {currentMeta.tags.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {currentMeta.tags.map((tag) => (
+                      <span
+                        key={tag.label}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-2xs ${tag.className}`}
+                      >
+                        <Tag className="h-2.5 w-2.5 shrink-0 opacity-80" />
+                        <span>{tag.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleLifecycleGuide}
+                  className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  title="Hide guide"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content: Cards or Comparison Matrix */}
       {filtered.length === 0 ? (
@@ -839,38 +993,52 @@ export const ProposalsIncomingPage: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
-                            onClick={() =>
-                              handleUpdateStatus(
-                                p.id,
-                                isShortlisted ? "Pending" : "Shortlisted"
-                              )
-                            }
+                            onClick={() => handleOpenShortlistConfirm(p)}
                             title={isShortlisted ? "Remove from Shortlist" : "Add to Shortlist"}
-                            className={`p-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
                               isShortlisted
-                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
-                                : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                                ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600/30 shadow-sm shadow-amber-500/25"
+                                : "bg-amber-50/80 dark:bg-amber-500/10 border-amber-300/80 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:border-amber-400 shadow-2xs"
                             }`}
                           >
-                            <Star className={`w-3.5 h-3.5 ${isShortlisted ? "fill-amber-500 text-amber-500" : ""}`} />
+                            <Star className={`w-3.5 h-3.5 ${isShortlisted ? "fill-white text-white" : "text-amber-600 dark:text-amber-400"}`} />
                           </button>
+                          {(isShortlisted || p.status === "Accepted" || p.status === "Hired") && (
+                            <button
+                              type="button"
+                              disabled={loadingChatProposalId === p.id}
+                              onClick={async () => {
+                                try {
+                                  setLoadingChatProposalId(p.id);
+                                  await openMarketplaceConversation({
+                                    contextType: "job_proposal",
+                                    contextId: p.id,
+                                    navigate,
+                                    targetName: p.partyName,
+                                    targetAvatar: p.partyAvatar,
+                                    listingTitle: p.jobTitle || targetJob?.title,
+                                  });
+                                } finally {
+                                  setLoadingChatProposalId(null);
+                                }
+                              }}
+                              title="Message Freelancer"
+                              className="p-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-blue-500 transition cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                              {loadingChatProposalId === p.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                              ) : (
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() =>
-                              void openMarketplaceConversation({
-                                contextType: "job_proposal",
-                                contextId: p.id,
-                                navigate,
+                              navigate(`/jobs/proposals/received/${p.id}`, {
+                                state: { returnTo: location.pathname + location.search },
                               })
                             }
-                            title="Message Freelancer"
-                            className="p-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-blue-500 transition cursor-pointer"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/jobs/proposals/received/${p.id}`)}
                             title="View Full Proposal"
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition cursor-pointer"
                           >
@@ -891,8 +1059,364 @@ export const ProposalsIncomingPage: React.FC = () => {
           viewType={viewType}
           showFilters={false}
           onUpdateStatus={handleUpdateStatus}
+          onShortlistCandidate={handleOpenShortlistConfirm}
+          onHireCandidate={handleOpenHireModal}
         />
       )}
+
+      {/* =========================================================================
+          MODALS: SHORTLIST CONFIRMATION & EXTEND FORMAL CONTRACT OFFER
+         ========================================================================= */}
+
+      {/* 1. Shortlist Confirmation Modal */}
+      <AnimatePresence>
+        {shortlistTargetProposal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`p-2 rounded-xl ${
+                      shortlistTargetProposal.status === "Shortlisted"
+                        ? "bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300"
+                        : "bg-amber-500/10 text-amber-500"
+                    }`}
+                  >
+                    {shortlistTargetProposal.status === "Shortlisted" ? (
+                      <UserMinus className="h-5 w-5" />
+                    ) : (
+                      <Star className="h-5 w-5 fill-amber-500 text-amber-500" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                      {shortlistTargetProposal.status === "Shortlisted"
+                        ? "Remove from Shortlist"
+                        : "Shortlist Candidate"}
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400">
+                      {targetJob?.title || "Job Post"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShortlistTargetProposal(null)}
+                  className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Candidate Info Strip */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                {shortlistTargetProposal.partyAvatar ? (
+                  <img
+                    src={shortlistTargetProposal.partyAvatar}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-white/10"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 font-bold flex items-center justify-center text-sm">
+                    {shortlistTargetProposal.partyName?.charAt(0)?.toUpperCase() || "C"}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-gray-900 dark:text-white block truncate text-xs sm:text-sm">
+                    {shortlistTargetProposal.partyName}
+                  </span>
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
+                    <span>{shortlistTargetProposal.freelancerType}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 font-semibold text-amber-500">
+                      <CreditIcon className="w-3 h-3" />
+                      {shortlistTargetProposal.bidAmount.toLocaleString()} Cr
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                {shortlistTargetProposal.status === "Shortlisted" ? (
+                  <>
+                    Are you sure you want to remove{" "}
+                    <strong className="text-gray-900 dark:text-white">
+                      {shortlistTargetProposal.partyName}
+                    </strong>{" "}
+                    from your shortlist and move them back to regular pending review?
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to shortlist{" "}
+                    <strong className="text-gray-900 dark:text-white">
+                      {shortlistTargetProposal.partyName}
+                    </strong>{" "}
+                    for this job post? Shortlisting highlights this candidate and bookmarks them
+                    for prioritized consideration and interview.
+                  </>
+                )}
+              </p>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShortlistTargetProposal(null)}
+                  disabled={isUpdatingShortlist}
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmShortlist}
+                  disabled={isUpdatingShortlist}
+                  className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer disabled:opacity-50 ${
+                    shortlistTargetProposal.status === "Shortlisted"
+                      ? "bg-zinc-800 hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                      : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                  }`}
+                >
+                  {isUpdatingShortlist
+                    ? "Updating..."
+                    : shortlistTargetProposal.status === "Shortlisted"
+                    ? "Remove from Shortlist"
+                    : "Confirm Shortlist"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Extend Formal Contract Offer Modal */}
+      <AnimatePresence>
+        {isAcceptConfirmOpen && offerTargetProposal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-2xl space-y-4 text-left my-6"
+            >
+              <div className="flex items-start justify-between border-b border-gray-100 dark:border-white/10 pb-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                      Extend Formal Contract Offer
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    Form a binding escrow milestone contract extended to{" "}
+                    <strong className="text-gray-700 dark:text-zinc-300">
+                      {offerTargetProposal.partyName}
+                    </strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcceptConfirmOpen(false);
+                    setOfferTargetProposal(null);
+                  }}
+                  className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Escrow Balance & Bid Strip */}
+              <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-zinc-400">Agreed Contract Escrow:</span>
+                  <span className="font-extrabold text-gray-900 dark:text-white flex items-center gap-1">
+                    <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
+                    {(isCustomizingMilestones && customBidAmount > 0
+                      ? customBidAmount
+                      : offerTargetProposal.bidAmount
+                    ).toLocaleString()}{" "}
+                    Credits
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-white/5 text-[11px]">
+                  <span className="text-gray-500 dark:text-zinc-400">Your Wallet Balance:</span>
+                  <span
+                    className={`font-bold ${
+                      walletBalance >=
+                      (isCustomizingMilestones && customBidAmount > 0
+                        ? customBidAmount
+                        : offerTargetProposal.bidAmount)
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-500"
+                    }`}
+                  >
+                    {walletBalance.toLocaleString()} Credits
+                  </span>
+                </div>
+              </div>
+
+              {/* Start Date */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-700 dark:text-zinc-300 block">
+                  Contract Start Date (Optional)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={contractStartsAt}
+                    onChange={(e) => setContractStartsAt(e.target.value)}
+                    className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const localDateTime = new Date(
+                        now.getTime() - now.getTimezoneOffset() * 60000
+                      )
+                        .toISOString()
+                        .slice(0, 16);
+                      setContractStartsAt(localDateTime);
+                    }}
+                    className="text-[11px] bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-bold px-3 py-2.5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/20 transition cursor-pointer"
+                  >
+                    Set to Now
+                  </button>
+                </div>
+              </div>
+
+              {/* Milestone Customization */}
+              <div className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+                    Negotiated Scope & Milestones
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomizingMilestones(!isCustomizingMilestones)}
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    {isCustomizingMilestones ? "Reset to Proposed" : "Customize Milestones"}
+                  </button>
+                </div>
+
+                {isCustomizingMilestones ? (
+                  <div className="space-y-2.5 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-600 dark:text-zinc-400 font-medium">
+                        Agreed Offer Amount (Credits):
+                      </span>
+                      <input
+                        type="number"
+                        min={10}
+                        value={customBidAmount || ""}
+                        onChange={(e) =>
+                          setCustomBidAmount(Math.max(10, parseInt(e.target.value) || 10))
+                        }
+                        className="w-28 text-right rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-2.5 py-1 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                      {customMilestones.map((m, idx) => (
+                        <div
+                          key={m.id || idx}
+                          className="p-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 space-y-1.5 text-xs"
+                        >
+                          <input
+                            type="text"
+                            value={m.name}
+                            onChange={(e) => {
+                              const updated = [...customMilestones];
+                              updated[idx].name = e.target.value;
+                              setCustomMilestones(updated);
+                            }}
+                            className="w-full rounded border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 px-2 py-1 text-[11px] font-semibold text-gray-900 dark:text-white"
+                          />
+                          <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                            <span>Hours:</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={m.hours}
+                              onChange={(e) => {
+                                const updated = [...customMilestones];
+                                updated[idx].hours = Math.max(1, parseInt(e.target.value) || 1);
+                                setCustomMilestones(updated);
+                              }}
+                              className="w-14 rounded border border-gray-200 dark:border-white/10 px-1 py-0.5"
+                            />
+                            <span>Revisions:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={m.revisions}
+                              onChange={(e) => {
+                                const updated = [...customMilestones];
+                                updated[idx].revisions = Math.max(0, parseInt(e.target.value) || 0);
+                                setCustomMilestones(updated);
+                              }}
+                              className="w-14 rounded border border-gray-200 dark:border-white/10 px-1 py-0.5"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                    Using candidate&apos;s proposed {offerTargetProposal.milestones?.length || 1}{" "}
+                    milestone phase
+                    {(offerTargetProposal.milestones?.length || 1) !== 1 ? "s" : ""}.
+                  </p>
+                )}
+              </div>
+
+              {/* Agreement Checkbox */}
+              <label className="flex items-start gap-2.5 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] cursor-pointer text-xs text-gray-600 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <span className="leading-relaxed">
+                  I agree to extend this formal offer and acknowledge that platform escrow will hold
+                  the contract amount upon candidate acceptance.
+                </span>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcceptConfirmOpen(false);
+                    setOfferTargetProposal(null);
+                  }}
+                  disabled={isSendingOffer}
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSendOffer}
+                  disabled={isSendingOffer || !agreedToTerms}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {isSendingOffer ? "Extending Offer..." : "Send Contract Offer"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

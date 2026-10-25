@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Layers,
@@ -13,7 +13,9 @@ import {
   Edit2,
   ExternalLink,
   MessageSquare,
+  Loader2,
   CheckCircle2,
+  XCircle,
   User,
   Users,
   Briefcase,
@@ -114,6 +116,8 @@ export interface ProposalsListProps {
   viewType?: ViewType;
   showFilters?: boolean;
   onUpdateStatus?: (id: string, newStatus: ProposalStatus, reason?: string) => void | Promise<void>;
+  onHireCandidate?: (proposal: ProposalItemData) => void;
+  onShortlistCandidate?: (proposal: ProposalItemData) => void;
 }
 
 export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType; showFilters?: boolean }> = ({
@@ -150,14 +154,147 @@ export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType; showFilters?:
   );
 };
 
+interface ProposalLifecycleStepperProps {
+  status?: string;
+}
+
+const ProposalLifecycleStepper: React.FC<ProposalLifecycleStepperProps> = ({ status }) => {
+  const s = (status || "").toLowerCase();
+
+  if (s === "rejected") {
+    return (
+      <div className="flex items-center text-[10px] sm:text-[11px] gap-1.5 whitespace-nowrap">
+        <span className="flex items-center gap-1 font-semibold text-gray-400 dark:text-zinc-500 shrink-0">
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 shrink-0" /> 01 PENDING
+        </span>
+        <div className="h-0.5 w-3 sm:w-4 rounded-full bg-rose-400/40 shrink-0" />
+        <span className="flex items-center gap-1 font-semibold text-rose-500 dark:text-rose-400 shrink-0">
+          <XCircle className="w-2.5 h-2.5 shrink-0" /> REJECTED
+        </span>
+      </div>
+    );
+  }
+
+  if (s === "withdrawn" || s === "archived") {
+    return (
+      <div className="flex items-center text-[10px] sm:text-[11px] gap-1.5 whitespace-nowrap">
+        <span className="flex items-center gap-1 font-semibold text-gray-400 dark:text-zinc-500 shrink-0">
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 shrink-0" /> 01 PENDING
+        </span>
+        <div className="h-0.5 w-3 sm:w-4 rounded-full bg-gray-300 dark:bg-zinc-700 shrink-0" />
+        <span className="flex items-center gap-1 font-semibold text-gray-500 dark:text-zinc-400 shrink-0">
+          <XCircle className="w-2.5 h-2.5 shrink-0" /> WITHDRAWN
+        </span>
+      </div>
+    );
+  }
+
+  const isHired = s === "hired";
+  const isAccepted = isHired || s === "accepted" || s === "approved";
+  const isShortlisted = isAccepted || s === "shortlisted";
+
+  return (
+    <div className="flex items-center text-[10px] sm:text-[11px] gap-1 sm:gap-1.5 whitespace-nowrap overflow-x-auto no-scrollbar">
+      {/* 01 PENDING */}
+      <span
+        className={`flex items-center gap-1 font-semibold shrink-0 ${
+          s === "pending" || !s
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-gray-400 dark:text-zinc-500"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+            s === "pending" || !s ? "bg-amber-500" : "bg-gray-400"
+          }`}
+        />
+        01 PENDING
+      </span>
+
+      {/* Divider 1-2 */}
+      <div
+        className={`h-0.5 w-2.5 sm:w-3.5 rounded-full shrink-0 ${
+          isShortlisted ? "bg-blue-500/40" : "bg-gray-200 dark:bg-white/10"
+        }`}
+      />
+
+      {/* 02 SHORTLISTED */}
+      <span
+        className={`flex items-center gap-1 font-semibold shrink-0 ${
+          isShortlisted
+            ? "text-blue-600 dark:text-blue-400"
+            : "text-gray-400 dark:text-zinc-500"
+        }`}
+      >
+        <Star
+          className={`w-2.5 h-2.5 shrink-0 ${
+            isShortlisted ? "fill-blue-500 text-blue-500" : ""
+          }`}
+        />
+        02 SHORTLISTED
+      </span>
+
+      {/* Divider 2-3 */}
+      <div
+        className={`h-0.5 w-2.5 sm:w-3.5 rounded-full shrink-0 ${
+          isAccepted ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"
+        }`}
+      />
+
+      {/* 03 ACCEPTED */}
+      <span
+        className={`flex items-center gap-1 font-semibold shrink-0 ${
+          isAccepted
+            ? "text-emerald-600 dark:text-emerald-400"
+            : "text-gray-400 dark:text-zinc-500"
+        }`}
+      >
+        <CheckCircle2
+          className={`w-2.5 h-2.5 shrink-0 ${
+            isAccepted ? "text-emerald-500" : ""
+          }`}
+        />
+        03 ACCEPTED
+      </span>
+
+      {/* Divider 3-4 */}
+      <div
+        className={`h-0.5 w-2.5 sm:w-3.5 rounded-full shrink-0 ${
+          isHired ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"
+        }`}
+      />
+
+      {/* 04 HIRED */}
+      <span
+        className={`flex items-center gap-1 font-semibold shrink-0 ${
+          isHired
+            ? "text-purple-600 dark:text-purple-400"
+            : "text-gray-400 dark:text-zinc-500"
+        }`}
+      >
+        <CheckCircle2
+          className={`w-2.5 h-2.5 shrink-0 ${
+            isHired ? "text-purple-500" : ""
+          }`}
+        />
+        04 HIRED
+      </span>
+    </div>
+  );
+};
+
 export const ProposalsList: React.FC<ProposalsListProps> = ({
   proposals,
   loading = false,
   viewType = "list",
   showFilters = true,
   onUpdateStatus,
+  onHireCandidate,
+  onShortlistCandidate,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
 
   const toggleMilestones = (id: string, e: React.MouseEvent) => {
@@ -277,7 +414,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   navigate(
                     item.type === "incoming"
                       ? `/jobs/proposals/received/${item.id}`
-                      : `/jobs/proposals/sent/${item.id}`
+                      : `/jobs/proposals/sent/${item.id}`,
+                    { state: { returnTo: location.pathname + location.search } }
                   )
                 }
                 className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-5"
@@ -303,26 +441,28 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
                     <div className="min-w-0 flex-1">
                       {/* Line 1: Proposer Name + Solo/Team badge + Rating + Status tag */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
-                          {item.partyName}
-                        </h3>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+                          <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
+                            {item.partyName}
+                          </h3>
 
-                        {isTeam ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-900 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-500/30 shrink-0">
-                            <Users className="h-2.5 w-2.5" /> Team
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 shrink-0">
-                            <User className="h-2.5 w-2.5" /> Solo
-                          </span>
-                        )}
+                          {isTeam ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-900 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-500/30 shrink-0">
+                              <Users className="h-2.5 w-2.5" /> Team
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 shrink-0">
+                              <User className="h-2.5 w-2.5" /> Solo
+                            </span>
+                          )}
 
-                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
-                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                          <span className="font-bold text-gray-700 dark:text-zinc-200">
-                            {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
-                          </span>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
+                            <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                            <span className="font-bold text-gray-700 dark:text-zinc-200">
+                              {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
+                            </span>
+                          </div>
                         </div>
 
                         {(() => {
@@ -338,13 +478,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         })()}
                       </div>
 
-                      {/* Line 2: Where it's sent to (Job Post Badge + Target Job Link) */}
-                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400 truncate pt-1 flex-wrap">
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500/30 shrink-0">
-                          <Briefcase className="h-2.5 w-2.5" /> Job Post
-                        </span>
-
-                        <span className="text-gray-400 dark:text-zinc-500 text-[11px]">For:</span>
+                      {/* Line 2: Target Job Link & Client */}
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400 pt-1 min-w-0">
+                        <span className="text-gray-400 dark:text-zinc-500 text-[11px] shrink-0 font-medium">For:</span>
 
                         <button
                           type="button"
@@ -352,29 +488,63 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                             e.stopPropagation();
                             navigate(`/jobs/postings/${item.jobId}`);
                           }}
-                          className="font-medium text-gray-700 dark:text-zinc-300 hover:text-blue-500 hover:underline transition-colors truncate inline-flex items-center gap-1"
+                          className="font-medium text-gray-700 dark:text-zinc-300 hover:text-blue-500 hover:underline transition-colors truncate inline-flex items-center gap-1 min-w-0"
                           title="View Job Post Details"
                         >
                           <span className="truncate">{item.jobTitle}</span>
                           <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
                         </button>
 
+                        {item.clientName && (
+                          <>
+                            <span className="text-gray-300 dark:text-zinc-700 shrink-0">•</span>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
+                              <span className="text-zinc-400 dark:text-zinc-500">by</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (item.clientAccountId) {
+                                    navigate(`/profile/${item.clientAccountId}`);
+                                  }
+                                }}
+                                className="font-semibold text-zinc-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 transition truncate max-w-[130px] inline-flex items-center gap-1 cursor-pointer"
+                                title={`Client: ${item.clientName}`}
+                              >
+                                <img
+                                  src={item.clientAvatar || getFallbackAvatarUrl(item.clientName)}
+                                  alt={item.clientName}
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = getFallbackAvatarUrl(item.clientName || "Client");
+                                  }}
+                                  className="w-3.5 h-3.5 rounded-full object-cover shrink-0"
+                                />
+                                <span className="truncate">{item.clientName}</span>
+                              </button>
+                            </span>
+                          </>
+                        )}
+
                         {item.target_milestone_title && (
-                          <span
-                            className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate ml-1"
-                            title={item.target_milestone_title}
-                          >
-                            <span className="opacity-70 text-[10px]">Role:</span>
-                            <span className="font-semibold truncate">{item.target_milestone_title}</span>
-                          </span>
+                          <>
+                            <span className="text-gray-300 dark:text-zinc-700 shrink-0">•</span>
+                            <span
+                              className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate shrink-0 max-w-[150px]"
+                              title={item.target_milestone_title}
+                            >
+                              <span className="opacity-70 text-[10px]">Role:</span>
+                              <span className="font-semibold truncate">{item.target_milestone_title}</span>
+                            </span>
+                          </>
                         )}
                       </div>
 
                       {/* Included Team Members Line (List View) */}
                       {isTeam && Array.isArray(item.includedTeamMembers) && item.includedTeamMembers.length > 0 && (
-                        <div className="flex items-center gap-2 pt-1.5 flex-wrap">
+                        <div className="flex items-center gap-2 pt-1 min-w-0">
                           <div className="flex -space-x-1.5 items-center shrink-0">
-                            {item.includedTeamMembers.slice(0, 4).map((m, idx) => {
+                            {item.includedTeamMembers.slice(0, 3).map((m, idx) => {
                               const mName = m.display_name || m.handle || "Member";
                               const mAvatar = constructAvatarUrl(m.avatar_path, mName);
                               return (
@@ -382,34 +552,34 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                                   key={m.account_id || idx}
                                   src={mAvatar}
                                   alt={mName}
-                                  title={`${mName}${m.is_leader ? " (Team Leader)" : ""}`}
+                                  title={`${mName}${m.is_leader ? " (Leader)" : ""}`}
                                   onError={(e) => {
                                     e.currentTarget.onerror = null;
                                     e.currentTarget.src = getFallbackAvatarUrl(mName);
                                   }}
-                                  className="h-5 w-5 rounded-full object-cover border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700"
+                                  className="h-4.5 w-4.5 rounded-full object-cover border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700"
                                 />
                               );
                             })}
+                            {item.includedTeamMembers.length > 3 && (
+                              <span className="h-4.5 w-4.5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-white dark:border-zinc-900 text-[9px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center shrink-0">
+                                +{item.includedTeamMembers.length - 3}
+                              </span>
+                            )}
                           </div>
                           <span className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                            {item.includedTeamMembers.map((m) => (
-                              <span key={m.account_id} className="mr-1.5 inline-flex items-center gap-1">
-                                <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
-                                  {m.display_name || m.handle}
-                                </strong>
-                                {m.is_leader && (
-                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white">
-                                    Team Leader
-                                  </span>
-                                )}
-                                {m.is_proposer && (
-                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white">
-                                    Proposer
-                                  </span>
-                                )}
-                              </span>
-                            ))}
+                            {(() => {
+                              const leader = item.includedTeamMembers.find((m: any) => m.is_leader) || item.includedTeamMembers[0];
+                              const leaderName = leader?.display_name || leader?.handle || "Leader";
+                              const othersCount = item.includedTeamMembers.length - 1;
+                              return (
+                                <span>
+                                  <strong className="font-semibold text-zinc-700 dark:text-zinc-200">{leaderName}</strong>
+                                  {leader?.is_leader && <span className="text-[10px] text-amber-600 dark:text-amber-400 ml-1">(Leader)</span>}
+                                  {othersCount > 0 && <span className="text-zinc-400 dark:text-zinc-500 ml-1">+{othersCount} other{othersCount > 1 ? "s" : ""}</span>}
+                                </span>
+                              );
+                            })()}
                           </span>
                         </div>
                       )}
@@ -431,74 +601,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
                   {/* 4-Stage Lifecycle Stepper */}
                   <div className="pt-2 mt-1 border-t border-gray-100 dark:border-white/5">
-                    <div className="flex items-center text-[10px] sm:text-[11px] gap-1 sm:gap-1.5 flex-wrap">
-                      <span
-                        className={`flex items-center gap-1 font-semibold ${
-                          item.status ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-zinc-500"
-                        }`}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> 01 PENDING
-                      </span>
-                      <div
-                        className={`h-0.5 w-3 sm:w-4 rounded-full ${
-                          item.shortlistedAt ||
-                          item.status === "Shortlisted" ||
-                          item.status === "Accepted" ||
-                          item.status === "Approved" ||
-                          item.status === "Hired"
-                            ? "bg-blue-500/40"
-                            : "bg-gray-200 dark:bg-white/10"
-                        }`}
-                      />
-                      <span
-                        className={`flex items-center gap-1 font-semibold ${
-                          item.shortlistedAt ||
-                          item.status === "Shortlisted" ||
-                          item.status === "Accepted" ||
-                          item.status === "Approved" ||
-                          item.status === "Hired"
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-gray-400 dark:text-zinc-500"
-                        }`}
-                      >
-                        <Star
-                          className={`w-2.5 h-2.5 shrink-0 ${
-                            item.shortlistedAt || item.status === "Shortlisted" ? "fill-blue-500 text-blue-500" : ""
-                          }`}
-                        />{" "}
-                        02 SHORTLISTED
-                      </span>
-                      <div
-                        className={`h-0.5 w-3 sm:w-4 rounded-full ${
-                          item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
-                            ? "bg-emerald-500/40"
-                            : "bg-gray-200 dark:bg-white/10"
-                        }`}
-                      />
-                      <span
-                        className={`flex items-center gap-1 font-semibold ${
-                          item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : item.status === "Rejected"
-                            ? "text-red-500"
-                            : "text-gray-400 dark:text-zinc-500"
-                        }`}
-                      >
-                        <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 03 ACCEPTED
-                      </span>
-                      <div
-                        className={`h-0.5 w-3 sm:w-4 rounded-full ${
-                          item.status === "Hired" ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"
-                        }`}
-                      />
-                      <span
-                        className={`flex items-center gap-1 font-semibold ${
-                          item.status === "Hired" ? "text-purple-600 dark:text-purple-400" : "text-gray-400 dark:text-zinc-500"
-                        }`}
-                      >
-                        <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 04 HIRED
-                      </span>
-                    </div>
+                    <ProposalLifecycleStepper status={item.status} />
                   </div>
                 </div>
 
@@ -588,23 +691,38 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Chat button */}
-                    <button
-                      type="button"
-                      title="Chat with Candidate"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void openMarketplaceConversation({
-                          contextType: "job_proposal",
-                          contextId: item.id,
-                          navigate,
-                        });
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
-                      <span>Chat</span>
-                    </button>
+                    {/* Chat button (Only shown if applicant is shortlisted, accepted, or hired) */}
+                    {(isShortlisted || isHired) && (
+                      <button
+                        type="button"
+                        disabled={loadingChatId === item.id}
+                        title={item.type === "sent" ? "Chat with Client" : "Chat with Candidate"}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            setLoadingChatId(item.id);
+                            await openMarketplaceConversation({
+                              contextType: "job_proposal",
+                              contextId: item.id,
+                              navigate,
+                              targetName: item.partyName,
+                              targetAvatar: item.partyAvatar,
+                              listingTitle: item.jobTitle,
+                            });
+                          } finally {
+                            setLoadingChatId(null);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {loadingChatId === item.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                        ) : (
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                        )}
+                        <span>Chat</span>
+                      </button>
+                    )}
 
                     {/* Shortlist */}
                     {item.type === "incoming" && !isHired && (
@@ -613,6 +731,10 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         title={isShortlisted ? "Remove from Shortlist" : "Save to Shortlist"}
                         onClick={async (e) => {
                           e.stopPropagation();
+                          if (onShortlistCandidate) {
+                            onShortlistCandidate(item);
+                            return;
+                          }
                           const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
                           try {
                             await onUpdateStatus?.(item.id, nextStatus as ProposalStatus);
@@ -623,13 +745,13 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                             toast.error("Failed to update status");
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition border cursor-pointer ${
                           isShortlisted
-                            ? "bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/25"
-                            : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-300 border-gray-200 dark:border-white/10 hover:border-amber-500/40 hover:text-amber-500"
+                            ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600/30 shadow-sm shadow-amber-500/25"
+                            : "bg-amber-50/80 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300/80 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:border-amber-400 shadow-2xs"
                         }`}
                       >
-                        <Star className={`h-3.5 w-3.5 ${isShortlisted ? "fill-amber-500 text-amber-500" : ""}`} />
+                        <Star className={`h-3.5 w-3.5 ${isShortlisted ? "fill-white text-white" : "text-amber-600 dark:text-amber-400"}`} />
                         <span>{isShortlisted ? "Shortlisted" : "Shortlist"}</span>
                       </button>
                     )}
@@ -646,6 +768,10 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (onHireCandidate) {
+                              onHireCandidate(item);
+                              return;
+                            }
                             navigate(`/jobs/proposals/received/${item.id}`);
                           }}
                           className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
@@ -661,7 +787,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/jobs/proposals/edit/${item.id}`);
+                          navigate(`/jobs/proposals/edit/${item.id}`, {
+                            state: { returnTo: "/jobs/proposals/sent" },
+                          });
                         }}
                         className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
                       >
@@ -678,7 +806,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         navigate(
                           item.type === "incoming"
                             ? `/jobs/proposals/received/${item.id}`
-                            : `/jobs/proposals/sent/${item.id}`
+                            : `/jobs/proposals/sent/${item.id}`,
+                          { state: { returnTo: location.pathname + location.search } }
                         );
                       }}
                       className="p-1.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
@@ -705,7 +834,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 navigate(
                   item.type === "incoming"
                     ? `/jobs/proposals/received/${item.id}`
-                    : `/jobs/proposals/sent/${item.id}`
+                    : `/jobs/proposals/sent/${item.id}`,
+                  { state: { returnTo: location.pathname + location.search } }
                 )
               }
               className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col justify-between gap-4"
@@ -771,39 +901,70 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   </div>
 
                   {/* Target Listing Line */}
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 truncate pt-0.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500/30 shrink-0">
-                      <Briefcase className="h-2.5 w-2.5" /> Job Post
-                    </span>
-                    <span className="text-gray-400 dark:text-zinc-500 text-[11px]">For:</span>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 pt-0.5 min-w-0">
+                    <span className="text-gray-400 dark:text-zinc-500 text-[11px] shrink-0 font-medium">For:</span>
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         navigate(`/jobs/postings/${item.jobId}`);
                       }}
-                      className="font-medium text-gray-700 dark:text-zinc-300 hover:text-blue-500 hover:underline transition-colors truncate inline-flex items-center gap-1"
+                      className="font-medium text-gray-700 dark:text-zinc-300 hover:text-blue-500 hover:underline transition-colors truncate inline-flex items-center gap-1 min-w-0"
                       title="View Job Post Details"
                     >
-                      <span className="truncate max-w-[200px]">{item.jobTitle}</span>
+                      <span className="truncate max-w-[170px]">{item.jobTitle}</span>
                       <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
                     </button>
+
+                    {item.clientName && (
+                      <>
+                        <span className="text-gray-300 dark:text-zinc-700 shrink-0">•</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
+                          <span className="text-zinc-400 dark:text-zinc-500">by</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (item.clientAccountId) {
+                                navigate(`/profile/${item.clientAccountId}`);
+                              }
+                            }}
+                            className="font-semibold text-zinc-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 transition truncate max-w-[110px] inline-flex items-center gap-1 cursor-pointer"
+                            title={`Client: ${item.clientName}`}
+                          >
+                            <img
+                              src={item.clientAvatar || getFallbackAvatarUrl(item.clientName)}
+                              alt={item.clientName}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = getFallbackAvatarUrl(item.clientName || "Client");
+                              }}
+                              className="w-3.5 h-3.5 rounded-full object-cover shrink-0"
+                            />
+                            <span className="truncate">{item.clientName}</span>
+                          </button>
+                        </span>
+                      </>
+                    )}
                     {item.target_milestone_title && (
-                      <span
-                        className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate"
-                        title={item.target_milestone_title}
-                      >
-                        <span className="opacity-70 text-[10px]">Role:</span>
-                        <span className="font-semibold truncate">{item.target_milestone_title}</span>
-                      </span>
+                      <>
+                        <span className="text-gray-300 dark:text-zinc-700 shrink-0">•</span>
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate shrink-0 max-w-[120px]"
+                          title={item.target_milestone_title}
+                        >
+                          <span className="opacity-70 text-[10px]">Role:</span>
+                          <span className="font-semibold truncate">{item.target_milestone_title}</span>
+                        </span>
+                      </>
                     )}
                   </div>
 
                   {/* Included Team Members Line (Grid View) */}
                   {isTeam && Array.isArray(item.includedTeamMembers) && item.includedTeamMembers.length > 0 && (
-                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <div className="flex items-center gap-2 pt-1 min-w-0">
                       <div className="flex -space-x-1.5 items-center shrink-0">
-                        {item.includedTeamMembers.slice(0, 4).map((m, idx) => {
+                        {item.includedTeamMembers.slice(0, 3).map((m, idx) => {
                           const mName = m.display_name || m.handle || "Member";
                           const mAvatar = constructAvatarUrl(m.avatar_path, mName);
                           return (
@@ -811,29 +972,34 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                               key={m.account_id || idx}
                               src={mAvatar}
                               alt={mName}
-                              title={`${mName}${m.is_leader ? " (Team Leader)" : ""}`}
+                              title={`${mName}${m.is_leader ? " (Leader)" : ""}`}
                               onError={(e) => {
                                 e.currentTarget.onerror = null;
                                 e.currentTarget.src = getFallbackAvatarUrl(mName);
                               }}
-                              className="h-5 w-5 rounded-full object-cover border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700"
+                              className="h-4.5 w-4.5 rounded-full object-cover border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700"
                             />
                           );
                         })}
+                        {item.includedTeamMembers.length > 3 && (
+                          <span className="h-4.5 w-4.5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-white dark:border-zinc-900 text-[9px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center shrink-0">
+                            +{item.includedTeamMembers.length - 3}
+                          </span>
+                        )}
                       </div>
                       <span className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                        {item.includedTeamMembers.map((m) => (
-                          <span key={m.account_id} className="mr-1.5">
-                            <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
-                              {m.display_name || m.handle}
-                            </strong>
-                            {m.is_leader ? (
-                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white">
-                                Leader
-                              </span>
-                            ) : null}
-                          </span>
-                        ))}
+                        {(() => {
+                          const leader = item.includedTeamMembers.find((m: any) => m.is_leader) || item.includedTeamMembers[0];
+                          const leaderName = leader?.display_name || leader?.handle || "Leader";
+                          const othersCount = item.includedTeamMembers.length - 1;
+                          return (
+                            <span>
+                              <strong className="font-semibold text-zinc-700 dark:text-zinc-200">{leaderName}</strong>
+                              {leader?.is_leader && <span className="text-[10px] text-amber-600 dark:text-amber-400 ml-1">(Leader)</span>}
+                              {othersCount > 0 && <span className="text-zinc-400 dark:text-zinc-500 ml-1">+{othersCount} other{othersCount > 1 ? "s" : ""}</span>}
+                            </span>
+                          );
+                        })()}
                       </span>
                     </div>
                   )}
@@ -958,74 +1124,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
                 {/* 4. 4-Stage Lifecycle Stepper */}
                 <div className="pt-2 border-t border-gray-100 dark:border-white/5">
-                  <div className="flex items-center text-[10px] gap-1 sm:gap-1.5 justify-between">
-                    <span
-                      className={`flex items-center gap-1 font-semibold ${
-                        item.status ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-zinc-500"
-                      }`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> 01 PENDING
-                    </span>
-                    <div
-                      className={`h-0.5 flex-1 rounded-full mx-1 ${
-                        item.shortlistedAt ||
-                        item.status === "Shortlisted" ||
-                        item.status === "Accepted" ||
-                        item.status === "Approved" ||
-                        item.status === "Hired"
-                          ? "bg-blue-500/40"
-                          : "bg-gray-200 dark:bg-white/10"
-                      }`}
-                    />
-                    <span
-                      className={`flex items-center gap-1 font-semibold ${
-                        item.shortlistedAt ||
-                        item.status === "Shortlisted" ||
-                        item.status === "Accepted" ||
-                        item.status === "Approved" ||
-                        item.status === "Hired"
-                          ? "text-blue-600 dark:text-blue-400"
-                          : "text-gray-400 dark:text-zinc-500"
-                      }`}
-                    >
-                      <Star
-                        className={`w-2.5 h-2.5 shrink-0 ${
-                          item.shortlistedAt || item.status === "Shortlisted" ? "fill-blue-500 text-blue-500" : ""
-                        }`}
-                      />{" "}
-                      02 SHORTLISTED
-                    </span>
-                    <div
-                      className={`h-0.5 flex-1 rounded-full mx-1 ${
-                        item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
-                          ? "bg-emerald-500/40"
-                          : "bg-gray-200 dark:bg-white/10"
-                      }`}
-                    />
-                    <span
-                      className={`flex items-center gap-1 font-semibold ${
-                        item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : item.status === "Rejected"
-                          ? "text-red-500"
-                          : "text-gray-400 dark:text-zinc-500"
-                      }`}
-                    >
-                      <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 03 ACCEPTED
-                    </span>
-                    <div
-                      className={`h-0.5 flex-1 rounded-full mx-1 ${
-                        item.status === "Hired" ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"
-                      }`}
-                    />
-                    <span
-                      className={`flex items-center gap-1 font-semibold ${
-                        item.status === "Hired" ? "text-purple-600 dark:text-purple-400" : "text-gray-400 dark:text-zinc-500"
-                      }`}
-                    >
-                      <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 04 HIRED
-                    </span>
-                  </div>
+                  <ProposalLifecycleStepper status={item.status} />
                 </div>
               </div>
 
@@ -1039,23 +1138,38 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   </span>
 
                   <div className="flex items-center gap-1.5">
-                    {/* Chat button */}
-                    <button
-                      type="button"
-                      title="Chat with Candidate"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void openMarketplaceConversation({
-                          contextType: "job_proposal",
-                          contextId: item.id,
-                          navigate,
-                        });
-                      }}
-                      className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1 transition cursor-pointer"
-                    >
-                      <MessageSquare className="h-3 w-3 text-blue-500" />
-                      <span>Chat</span>
-                    </button>
+                    {/* Chat button (Only shown if applicant is shortlisted, accepted, or hired) */}
+                    {(isShortlisted || isHired) && (
+                      <button
+                        type="button"
+                        disabled={loadingChatId === item.id}
+                        title={item.type === "sent" ? "Chat with Client" : "Chat with Candidate"}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            setLoadingChatId(item.id);
+                            await openMarketplaceConversation({
+                              contextType: "job_proposal",
+                              contextId: item.id,
+                              navigate,
+                              targetName: item.partyName,
+                              targetAvatar: item.partyAvatar,
+                              listingTitle: item.jobTitle,
+                            });
+                          } finally {
+                            setLoadingChatId(null);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1 transition cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {loadingChatId === item.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                        ) : (
+                          <MessageSquare className="h-3 w-3 text-blue-500" />
+                        )}
+                        <span>Chat</span>
+                      </button>
+                    )}
 
                     {/* Shortlist button */}
                     {item.type === "incoming" && !isHired && (
@@ -1064,6 +1178,10 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         title={isShortlisted ? "Remove from Shortlist" : "Save to Shortlist"}
                         onClick={async (e) => {
                           e.stopPropagation();
+                          if (onShortlistCandidate) {
+                            onShortlistCandidate(item);
+                            return;
+                          }
                           const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
                           try {
                             await onUpdateStatus?.(item.id, nextStatus as ProposalStatus);
@@ -1074,13 +1192,13 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                             toast.error("Failed to update status");
                           }
                         }}
-                        className={`p-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition border cursor-pointer ${
+                        className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition border cursor-pointer ${
                           isShortlisted
-                            ? "bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/25"
-                            : "bg-white dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/10 hover:border-amber-500/40 hover:text-amber-500"
+                            ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600/30 shadow-sm shadow-amber-500/25"
+                            : "bg-amber-50/80 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300/80 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:border-amber-400 shadow-2xs"
                         }`}
                       >
-                        <Star className={`h-3.5 w-3.5 ${isShortlisted ? "fill-amber-500 text-amber-500" : ""}`} />
+                        <Star className={`h-3.5 w-3.5 ${isShortlisted ? "fill-white text-white" : "text-amber-600 dark:text-amber-400"}`} />
                       </button>
                     )}
 
@@ -1092,7 +1210,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         navigate(
                           item.type === "incoming"
                             ? `/jobs/proposals/received/${item.id}`
-                            : `/jobs/proposals/sent/${item.id}`
+                            : `/jobs/proposals/sent/${item.id}`,
+                          { state: { returnTo: location.pathname + location.search } }
                         );
                       }}
                       className="p-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
@@ -1115,6 +1234,10 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (onHireCandidate) {
+                          onHireCandidate(item);
+                          return;
+                        }
                         navigate(`/jobs/proposals/received/${item.id}`);
                       }}
                       className="w-full py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
@@ -1129,7 +1252,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/jobs/proposals/edit/${item.id}`);
+                      navigate(`/jobs/proposals/edit/${item.id}`, {
+                        state: { returnTo: "/jobs/proposals/sent" },
+                      });
                     }}
                     className="w-full py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 text-gray-900 dark:text-white transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >

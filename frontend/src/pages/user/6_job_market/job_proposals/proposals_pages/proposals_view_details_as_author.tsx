@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   MessageSquare,
+  Loader2,
   ExternalLink,
   ShieldAlert,
   User,
@@ -78,10 +79,25 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const navigate = useNavigate();
   const theme = useGlobalState((state) => state.theme);
   const user = useGlobalState((state) => state.user);
-  const { pathname } = useLocation();
+  const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+  const location = useLocation();
+  const { pathname } = location;
   const { fetchProposalById, sendJobOffer, updateProposalStatus, loading } = useJobs();
 
+  const handleReturn = () => {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo);
+      return;
+    }
+    if (proposal?.jobId) {
+      navigate(`/jobs/proposals/incoming/${proposal.jobId}`);
+      return;
+    }
+    navigate("/jobs/proposals");
+  };
+
   const [proposal, setProposal] = useState<any | null>(null);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [actingTeamInfo, setActingTeamInfo] = useState<ActingTeamInfo | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
@@ -220,6 +236,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             clientTeamVisibility: p.client_team_visibility || undefined,
             freelancerTeamVisibility: p.freelancer_team_visibility || undefined,
             clientName,
+            clientHandle: p.client_handle,
             clientAvatar: constructAvatarUrl(p.client_avatar_path, clientName),
             freelancerName,
             freelancerHandle: p.freelancer_handle,
@@ -625,7 +642,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             <p className="text-xs text-gray-500 dark:text-zinc-400">This incoming proposal could not be retrieved.</p>
           </div>
           <button
-            onClick={() => navigate("/jobs/proposals")}
+            onClick={handleReturn}
             className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition cursor-pointer"
           >
             Return to Proposals
@@ -643,6 +660,19 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const overageRateBonus = Math.floor(milestoneAveragePayout * (proposal.additionalWorkRate / 100));
 
   // Status Styling Badge
+  const isShortlisted =
+    String(proposal?.status || "").toLowerCase() === "shortlisted";
+
+  const isHiredOrAccepted = ["accepted", "approved", "hired"].includes(
+    String(proposal?.status || "").toLowerCase()
+  );
+
+  const canChat = isShortlisted || isHiredOrAccepted;
+
+  const chatTargetName = isTeam
+    ? (actingTeamInfo?.name || actingTeamInfo?.team_name || proposal?.freelancerName)
+    : (proposal?.partyName || proposal?.freelancerName);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Approved":
@@ -715,11 +745,13 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/jobs/proposals")}
+              onClick={handleReturn}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-200 transition cursor-pointer shadow-2xs"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Return to Received Proposals</span>
+              <span>
+                {proposal?.jobTitle ? "Return to Job Applicants" : "Return to Received Proposals"}
+              </span>
             </button>
 
             <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
@@ -969,9 +1001,49 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                     <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white mt-0.5 line-clamp-1">
                       {proposal.jobTitle}
                     </h3>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                      Posted by <strong className="text-zinc-700 dark:text-zinc-300">You</strong> • Timeline: <strong className="text-zinc-700 dark:text-zinc-300">{proposal.jobTimeline}</strong>
-                    </p>
+
+                    {/* Client Identity (Me) & Timeline Strip */}
+                    <div className="flex items-center justify-between gap-3 mt-2.5 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800/70">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={
+                            proposal.clientAvatar ||
+                            constructAvatarUrl(user?.avatar_path, proposal.clientName || user?.display_name || "Client") ||
+                            getFallbackAvatarUrl(proposal.clientName || user?.display_name || "Client")
+                          }
+                          alt={proposal.clientName || user?.display_name || "Client"}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = getFallbackAvatarUrl(proposal.clientName || user?.display_name || "Client");
+                          }}
+                          className="w-8 h-8 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 bg-white dark:bg-zinc-800 shadow-2xs"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                              {proposal.clientName || user?.display_name || user?.name || "Client"}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 shrink-0">
+                              Client (You)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block truncate">
+                            {proposal.clientHandle || user?.handle ? `@${proposal.clientHandle || user?.handle} • ` : ""}Timeline: <strong className="font-semibold text-zinc-600 dark:text-zinc-300">{proposal.jobTimeline || "Flexible"}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {(proposal.clientAccountId || user?.account_id) && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewProfile(proposal.clientAccountId || user?.account_id)}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
+                        >
+                          <span>Profile</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Clean Job Description Snippet */}
@@ -1676,22 +1748,40 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
       {/* =========================================================================
           STATIONARY DECISION BAR (STICKY BOTTOM BAR FOR CLIENT / AUTHOR)
          ========================================================================= */}
-      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-md border-t border-gray-200 dark:border-white/10 p-4 z-40 shadow-lg">
+      <div
+        className="fixed bottom-0 right-0 z-40 transition-[left] duration-300 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-md border-t border-gray-200 dark:border-white/10 px-6 py-3.5 shadow-lg"
+        style={{ left: isSidebarCollapsed ? "5rem" : "16rem" }}
+      >
         <div className="mx-auto max-w-5xl flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() =>
-                openMarketplaceConversation({
-                  contextType: "job_proposal",
-                  contextId: proposal.id,
-                  navigate,
-                })
-              }
-              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-2 transition cursor-pointer"
-            >
-              <MessageSquare className="h-4 w-4 text-blue-500" />
-              <span>Chat with Candidate</span>
-            </button>
+            {canChat && (
+              <button
+                disabled={isOpeningChat}
+                onClick={async () => {
+                  try {
+                    setIsOpeningChat(true);
+                    await openMarketplaceConversation({
+                      contextType: "job_proposal",
+                      contextId: proposal.id,
+                      navigate,
+                      targetName: chatTargetName,
+                      targetAvatar: proposal.freelancerAvatar,
+                      listingTitle: proposal.jobTitle,
+                    });
+                  } finally {
+                    setIsOpeningChat(false);
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-2 transition cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isOpeningChat ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                ) : (
+                  <MessageSquare className="h-4 w-4 text-blue-500" />
+                )}
+                <span>Chat with Candidate</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -1715,24 +1805,24 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             )}
 
             {/* If pending review or shortlisted: author can shortlist, reject, or hire */}
-            {(proposal.status === "Pending" || proposal.status === "Shortlisted") && (
+            {(proposal.status === "Pending" || isShortlisted) && (
               <>
                 {/* Shortlist Toggle */}
-                {proposal.status === "Shortlisted" ? (
+                {isShortlisted ? (
                   <button
                     onClick={() => setIsUnshortlistModalOpen(true)}
-                    className="px-4 py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl border border-amber-600/30 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm shadow-amber-500/25 transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Star className="h-3.5 w-3.5 fill-amber-500" />
+                    <Star className="h-3.5 w-3.5 fill-white text-white" />
                     <span>Shortlisted</span>
                   </button>
                 ) : (
                   <button
                     onClick={handleShortlist}
                     disabled={isShortlisting}
-                    className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 hover:border-amber-500/40 hover:text-amber-500 text-xs font-semibold text-gray-700 dark:text-zinc-300 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2.5 rounded-xl border border-amber-300/80 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-xs font-bold text-amber-800 dark:text-amber-300 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
                   >
-                    <Star className="h-3.5 w-3.5" />
+                    <Star className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                     <span>{isShortlisting ? "Saving..." : "Shortlist"}</span>
                   </button>
                 )}

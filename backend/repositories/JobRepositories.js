@@ -1140,7 +1140,11 @@ async function updateProposalStatusRepositories(proposalId, accountIds, status, 
             UPDATE proposals p
             SET status = $1::varchar, 
                 reject_reason = $2, 
-                shortlisted_at = CASE WHEN $1::varchar = 'Shortlisted' THEN COALESCE(p.shortlisted_at, NOW()) ELSE p.shortlisted_at END,
+                shortlisted_at = CASE 
+                    WHEN $1::varchar = 'Shortlisted' THEN COALESCE(p.shortlisted_at, NOW()) 
+                    WHEN $1::varchar = 'Pending' THEN NULL 
+                    ELSE p.shortlisted_at 
+                END,
                 updated_at = NOW()
             FROM jobs j
             WHERE p.proposal_id = $3 AND p.job_id = j.job_id AND j.client_account_id = ANY($4::uuid[])

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useOutletContext, useNavigate, useLocation } from "react-router-dom";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
-import { Search, Info, Tag } from "lucide-react";
+import { Search, Info, Tag, HelpCircle, ChevronDown, ChevronUp, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import ProposalsList, {
   type ProposalStatus,
 } from "../proposals_components/proposals_list";
@@ -19,36 +20,11 @@ const SUB_TAB_META: Record<
   }
 > = {
   all: {
-    description: "Complete overview of all submitted applications across every lifecycle stage.",
-    tags: [
-      {
-        label: "PENDING",
-        className: "bg-amber-50 text-amber-950 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/50",
-      },
-      {
-        label: "SHORTLISTED",
-        className: "bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-400/50",
-      },
-      {
-        label: "ACCEPTED",
-        className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
-      },
-      {
-        label: "HIRED",
-        className: "bg-purple-50 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-400/50",
-      },
-      {
-        label: "DECLINED",
-        className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
-      },
-      {
-        label: "WITHDRAWN",
-        className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
-      },
-    ],
+    description: "Overview of all submitted proposals across every lifecycle stage.",
+    tags: [],
   },
   pending: {
-    description: "Applications submitted and awaiting client review, pitch evaluation, or screening checks.",
+    description: "Submitted proposals awaiting client review or screening.",
     tags: [
       {
         label: "PENDING",
@@ -57,7 +33,7 @@ const SUB_TAB_META: Record<
     ],
   },
   shortlisted: {
-    description: "Applications bookmarked and starred by the client for prioritized evaluation and interview.",
+    description: "Proposals starred by the client for prioritized evaluation and interview.",
     tags: [
       {
         label: "SHORTLISTED",
@@ -66,10 +42,10 @@ const SUB_TAB_META: Record<
     ],
   },
   offersAndHired: {
-    description: "Formal contract offers extended by the client ready for acceptance, plus active hired contracts.",
+    description: "Proposals with formal contract offers extended or active hired contracts.",
     tags: [
       {
-        label: "ACCEPTED (OFFER)",
+        label: "ACCEPTED",
         className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
       },
       {
@@ -79,7 +55,7 @@ const SUB_TAB_META: Record<
     ],
   },
   inactive: {
-    description: "Applications that have been declined by the client, withdrawn by you, or archived.",
+    description: "Proposals that were declined by the client, withdrawn, or archived.",
     tags: [
       {
         label: "DECLINED",
@@ -99,6 +75,19 @@ export const ProposalsSentPage: React.FC = () => {
   const [proposals, setProposals] = useState<any[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<ProposalSubTab>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [showLifecycleGuide, setShowLifecycleGuide] = useState<boolean>(() => {
+    const saved = localStorage.getItem("ensemble_proposals_show_guide");
+    return saved !== null ? saved === "true" : false;
+  });
+
+  const toggleLifecycleGuide = () => {
+    setShowLifecycleGuide((prev) => {
+      const next = !prev;
+      localStorage.setItem("ensemble_proposals_show_guide", String(next));
+      return next;
+    });
+  };
+
   const { fetchSentProposals } = useJobs();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,6 +104,7 @@ export const ProposalsSentPage: React.FC = () => {
           jobId: p.job_id,
           jobTitle: p.job_title || "Unknown Job",
           jobCategory: p.job_category || "Uncategorized",
+          clientAccountId: p.client_account_id,
           clientTeamId: p.client_team_id || undefined,
           freelancerTeamId: p.freelancer_team_id || undefined,
           actingTeamId: p.acting_team_id || p.freelancer_team_id || undefined,
@@ -124,6 +114,7 @@ export const ProposalsSentPage: React.FC = () => {
           partyName: p.freelancer_name || p.freelancer_handle || p.client_name || p.client_handle || "Unknown",
           partyAvatar: constructAvatarUrl(p.freelancer_avatar_path, p.freelancer_name || p.freelancer_handle),
           clientName: p.client_name || p.client_handle,
+          clientHandle: p.client_handle,
           clientAvatar: constructAvatarUrl(p.client_avatar_path, p.client_name || p.client_handle),
           rating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
           freelancerRating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
@@ -287,37 +278,78 @@ export const ProposalsSentPage: React.FC = () => {
           })}
         </div>
 
-        <span className="text-xs text-zinc-400 font-medium hidden sm:inline">
-          {filtered.length} {filtered.length === 1 ? "proposal" : "proposals"}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-zinc-400 font-medium hidden sm:inline">
+            {filtered.length} {filtered.length === 1 ? "proposal" : "proposals"}
+          </span>
+          <button
+            type="button"
+            onClick={toggleLifecycleGuide}
+            title={showLifecycleGuide ? "Hide lifecycle guide" : "Show lifecycle guide"}
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              showLifecycleGuide
+                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60 shadow-2xs"
+                : "bg-white dark:bg-zinc-900/60 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+            }`}
+          >
+            <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[11px] font-medium">Guide</span>
+            {showLifecycleGuide ? (
+              <ChevronUp className="h-3 w-3 text-zinc-400" />
+            ) : (
+              <ChevronDown className="h-3 w-3 text-zinc-400" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Expectation & Status Tag Context Strip */}
-      <div className="p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shrink-0">
-            <Info className="h-4 w-4" />
-          </div>
-          <p className="text-zinc-700 dark:text-zinc-300 font-medium text-xs">
-            {currentMeta.description}
-          </p>
-        </div>
+      <AnimatePresence>
+        {showLifecycleGuide && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="p-2.5 sm:px-4 sm:py-3 rounded-2xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-3 text-xs shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shrink-0">
+                  <Info className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-zinc-600 dark:text-zinc-300 font-medium text-xs leading-relaxed">
+                  {currentMeta.description}
+                </p>
+              </div>
 
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 dark:text-zinc-500">
-            Expected Tags:
-          </span>
-          {currentMeta.tags.map((tag) => (
-            <span
-              key={tag.label}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-xs ${tag.className}`}
-            >
-              <Tag className="h-2.5 w-2.5 shrink-0 opacity-90" />
-              <span>{tag.label}</span>
-            </span>
-          ))}
-        </div>
-      </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {currentMeta.tags.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {currentMeta.tags.map((tag) => (
+                      <span
+                        key={tag.label}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-2xs ${tag.className}`}
+                      >
+                        <Tag className="h-2.5 w-2.5 shrink-0 opacity-80" />
+                        <span>{tag.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleLifecycleGuide}
+                  className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  title="Hide guide"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Proposals List (Full-Width Grid or List) */}
       {filtered.length === 0 ? (
