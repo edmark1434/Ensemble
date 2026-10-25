@@ -417,7 +417,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
     let bufferHours = 0;
     let bufferDays = 0;
 
-    const activeDeadline = hasHardDeadline && hardDeadline ? hardDeadline : deadline;
+    const activeDeadline = hasHardDeadline && hardDeadline ? hardDeadline : null;
     if (activeDeadline) {
       const parts = activeDeadline.split("-");
       if (parts.length === 3) {
@@ -1002,11 +1002,11 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   <div>
                     <div
                       className={`text-base sm:text-lg font-black tracking-tight truncate ${
-                        (hasHardDeadline && hardDeadline) || deadline ? "text-red-500 dark:text-red-400" : "text-gray-900 dark:text-white"
+                        (hasHardDeadline && hardDeadline) ? "text-red-500 dark:text-red-400" : "text-gray-900 dark:text-white"
                       }`}
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
-                      {hasHardDeadline && hardDeadline ? hardDeadline : (deadline || "Flexible")}
+                      {hasHardDeadline && hardDeadline ? hardDeadline : "Flexible"}
                     </div>
                     <span className="text-[11px] text-gray-500 dark:text-zinc-400 block mt-1">
                       {hasHardDeadline && hardDeadline ? "Strict completion date" : "No hard calendar cutoff"}
@@ -1028,7 +1028,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   >
                     <span>DEADLINE:</span>
                     <span className="font-extrabold">
-                      {hasHardDeadline && hardDeadline ? hardDeadline : (deadline || "Flexible")}
+                      {hasHardDeadline && hardDeadline ? hardDeadline : "Flexible"}
                     </span>
                   </span>
                 </div>

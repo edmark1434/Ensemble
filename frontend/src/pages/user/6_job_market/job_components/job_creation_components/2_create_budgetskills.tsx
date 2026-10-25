@@ -622,8 +622,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                     onClick={() => {
                       setApplicationWindowHours?.(preset.hours);
                       setIsUrgent?.(preset.hours <= 24);
-                      const target = new Date(Date.now() + preset.hours * 60 * 60 * 1000);
-                      setDeadline(target.toISOString().split("T")[0]);
+                      // application window selection only dictates application_deadline, not project completion deadline
                       if (!minTimeline && !maxTimeline) {
                         if (preset.hours <= 12) {
                           setMinTimeline("1");
@@ -1039,11 +1038,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-gray-500 dark:text-zinc-400">Final Deadline:</span>
                 <span className="font-bold text-gray-900 dark:text-white">
-                  {deadline ? (
-                    `${deadline} ${daysUntilDeadline !== null ? `(${daysUntilDeadline}d left)` : ""}`
-                  ) : (
-                    <span className="text-gray-400 italic">Unset</span>
-                  )}
+                  {hasHardDeadline && hardDeadline ? `${hardDeadline} ${daysUntilDeadline !== null ? `(${daysUntilDeadline}d left)` : ""}` : <span className="text-gray-500 font-normal">Flexible</span>}
                 </span>
               </div>
 

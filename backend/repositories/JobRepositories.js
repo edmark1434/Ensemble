@@ -449,11 +449,11 @@ async function deleteJobRepositories(jobId, accountIds) {
                 const refundAmount = deletedJob.posting_fee_credits || 50;
 
                 await client.query(`
-                    UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                    UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
                 `, [refundAmount, clientWalletId]);
 
                 await client.query(`
-                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1) WHERE wallet_id = $2
                 `, [refundAmount, platformWalletId]);
 
                 await client.query(`
@@ -479,12 +479,12 @@ async function deleteJobRepositories(jobId, accountIds) {
                 const userWalletId = userWalletRes.rows[0].wallet_id;
                 // Credit user wallet +10
                 await client.query(`
-                    UPDATE wallets SET balance_credits = balance_credits + 10, updated_at = NOW() WHERE wallet_id = $1
+                    UPDATE wallets SET balance_credits = balance_credits + 10 WHERE wallet_id = $1
                 `, [userWalletId]);
 
                 // Deduct platform wallet -10
                 await client.query(`
-                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - 10), updated_at = NOW() WHERE wallet_id = $1
+                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - 10) WHERE wallet_id = $1
                 `, [platformWalletId]);
 
                 // Record transaction
@@ -1386,12 +1386,12 @@ async function expireJobImmediatelyRepositories(jobId, accountIds) {
                 refundedAmount = job.posting_fee_credits || 50;
 
                 await client.query(`
-                    UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
-                `, [refundAmount, clientWalletId]);
+                    UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+                `, [refundedAmount, clientWalletId]);
 
                 await client.query(`
-                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
-                `, [refundAmount, platformWalletId]);
+                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1) WHERE wallet_id = $2
+                `, [refundedAmount, platformWalletId]);
 
                 await client.query(`
                     INSERT INTO credit_transactions (
@@ -1399,7 +1399,7 @@ async function expireJobImmediatelyRepositories(jobId, accountIds) {
                     ) VALUES (
                         'Job Posting Fee Refund', $1, 'Completed', $2, $3, 'jobs', $4
                     )
-                `, [refundAmount, platformWalletId, clientWalletId, jobId]);
+                `, [refundedAmount, platformWalletId, clientWalletId, jobId]);
             }
         }
 
@@ -1473,11 +1473,11 @@ async function autoExpireJobsRepositories() {
                         const refundAmount = job.posting_fee_credits || 50;
 
                         await client.query(`
-                            UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                            UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
                         `, [refundAmount, clientWalletId]);
 
                         await client.query(`
-                            UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                            UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1) WHERE wallet_id = $2
                         `, [refundAmount, platformWalletId]);
 
                         await client.query(`
@@ -1511,11 +1511,11 @@ async function autoExpireJobsRepositories() {
                             const userWalletId = userWalletRes.rows[0].wallet_id;
 
                             await client.query(`
-                                UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                                UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
                             `, [refundAmount, userWalletId]);
 
                             await client.query(`
-                                UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                                UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1) WHERE wallet_id = $2
                             `, [refundAmount, platformWalletId]);
 
                             await client.query(`

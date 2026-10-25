@@ -354,7 +354,7 @@ const JobCreateTeamPostPage: React.FC = () => {
     if (minTimeline && maxTimeline && parseInt(maxTimeline) < parseInt(minTimeline)) {
       stepErrors.maxTimeline = "Max timeline cannot be lower than min timeline.";
     }
-    const targetCutoff = (hasHardDeadline && hardDeadline) ? hardDeadline : (deadline || "");
+    const targetCutoff = (hasHardDeadline && hardDeadline) ? hardDeadline : "";
     const intakeHours = applicationWindowHours || 168;
     const minDays = parseInt(minTimeline) || 1;
     const minAllowedCutoff = new Date(Date.now() + (intakeHours + minDays * 24) * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -579,7 +579,8 @@ const JobCreateTeamPostPage: React.FC = () => {
         rate_credits_max: rawMaxBudget,
         timeline_min: parseInt(minTimeline) || 0,
         timeline_max: parseInt(maxTimeline) || 0,
-        deadline,
+        deadline: (hasHardDeadline && hardDeadline) ? hardDeadline : null,
+        has_hard_deadline: Boolean(hasHardDeadline && hardDeadline),
         application_window_hours: applicationWindowHours,
         is_urgent: isUrgent || applicationWindowHours <= 24,
         hard_deadline: hasHardDeadline && hardDeadline ? hardDeadline : null,

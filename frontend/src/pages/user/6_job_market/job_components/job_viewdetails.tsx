@@ -707,7 +707,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                   <button
                     onClick={() => navigate(`/jobs/edit/${selectedJob.id}`)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 py-3 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-blue-600/40 bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 py-3 text-xs font-bold transition shadow-2xs cursor-pointer"
                   >
                     <Edit2 className="h-3.5 w-3.5" /> Edit Job Post
                   </button>
