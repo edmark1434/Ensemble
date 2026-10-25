@@ -121,6 +121,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         !["left", "removed"].includes(member.status || "active")
     )?.account_id;
   const isEngagement = conversation?.conversation_type === "engagement";
+  const isTicketThread = String(conversation?.conversation_type || "").toLowerCase() === "ticket";
   const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
     String(conversation?.conversation_type || "").toLowerCase()
   );
@@ -267,7 +268,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         await editMessage(editing._id, messageText);
       } else {
         const attachments = await Promise.all(
-          mediaList.map(uploadChatAttachment)
+          mediaList.map((media) => uploadChatAttachment(media, isTicketThread ? "ticket-attachments" : "chat-attachments"))
         );
         if (replyTo) {
           await replyMessage(

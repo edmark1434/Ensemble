@@ -37,9 +37,10 @@ export const chatAttachmentUrl = (attachmentKey: string): string => {
 
 export const uploadChatAttachment = async (
   media: UploadedMedia,
-  folder = "chat-attachments"
+  folder: string = "chat-attachments"
 ): Promise<ChatAttachmentPayload> => {
-  const { key } = await uploadFileWithIntent(media.file, folder);
+  const safeFolder = typeof folder === "string" && folder.trim() ? folder : "chat-attachments";
+  const { key } = await uploadFileWithIntent(media.file, safeFolder);
   return {
     attachment_id: media.id,
     attachment_type: media.type,
