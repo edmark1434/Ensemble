@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowRight,
@@ -81,13 +81,15 @@ const formatFileSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const EMPTY_FILES: File[] = [];
+
 export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
   job,
   selectedTosId,
   setSelectedTosId,
   tosContent,
   setTosContent,
-  workSampleFiles = [],
+  workSampleFiles = EMPTY_FILES,
   setWorkSampleFiles,
   onBack,
   onAdvance,
@@ -170,16 +172,20 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
   }, []);
 
   // Only show Job terms
-  const jobTerms = terms.filter((t) => t.terms_type === "jobs");
-  const effectiveTerms = jobTerms.length > 0 ? jobTerms : [
-    {
-      id: "default-standard",
-      terms_title: "Standard Platform Terms of Service",
-      terms_content: DEFAULT_STANDARD_TOS,
-      terms_type: "jobs",
-      is_default: true,
-    },
-  ];
+  const jobTerms = useMemo(() => terms.filter((t) => t.terms_type === "jobs"), [terms]);
+  const effectiveTerms = useMemo(() => {
+    return jobTerms.length > 0
+      ? jobTerms
+      : [
+          {
+            id: "default-standard",
+            terms_title: "Standard Platform Terms of Service",
+            terms_content: DEFAULT_STANDARD_TOS,
+            terms_type: "jobs",
+            is_default: true,
+          },
+        ];
+  }, [jobTerms]);
 
   // Set default if none selected, if placeholder is active, or if tosContent is empty
   useEffect(() => {
@@ -187,14 +193,18 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
       const currentValid = jobTerms.some((t) => t.id === selectedTosId);
       if (!selectedTosId || !currentValid || selectedTosId === "default-standard") {
         const defaultTerm = jobTerms.find((t) => t.is_default) || jobTerms[0];
-        setSelectedTosId(defaultTerm.id);
+        if (selectedTosId !== defaultTerm.id) {
+          setSelectedTosId(defaultTerm.id);
+        }
         if (!tosContent || tosContent === DEFAULT_STANDARD_TOS) {
           setTosContent(defaultTerm.terms_content);
         }
       }
     } else if (!selectedTosId && effectiveTerms.length > 0) {
       const defaultTerm = effectiveTerms.find((t) => t.is_default) || effectiveTerms[0];
-      setSelectedTosId(defaultTerm.id);
+      if (selectedTosId !== defaultTerm.id) {
+        setSelectedTosId(defaultTerm.id);
+      }
       if (!tosContent) {
         setTosContent(defaultTerm.terms_content);
       }

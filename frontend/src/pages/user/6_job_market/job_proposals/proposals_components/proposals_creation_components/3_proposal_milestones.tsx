@@ -534,8 +534,21 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
   useEffect(() => {
     if (!milestones || milestones.length === 0) {
       setMilestones(getTwoPhasePreset(totalTimelineHours));
+    } else {
+      const sum = milestones.reduce((acc, m) => acc + (Number(m.percentage) || 0), 0);
+      if (sum !== 100) {
+        const count = milestones.length;
+        const base = Math.floor(100 / count);
+        const rem = 100 - base * count;
+        setMilestones((prev) =>
+          prev.map((m, idx) => ({
+            ...m,
+            percentage: base + (idx === 0 ? rem : 0),
+          }))
+        );
+      }
     }
-  }, []);
+  }, [milestones.length, totalTimelineHours]);
 
   // Client Job Budget Info
   const rawMin = Number(job?.minBudget) || 0;

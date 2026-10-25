@@ -38,9 +38,16 @@ export const ProposalsMain: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewType, setViewType] = useState<ViewType>("grid");
+  const [viewType, setViewType] = useState<ViewType>(() => {
+    return (localStorage.getItem("ensemble_proposals_view_type") as ViewType) || "list";
+  });
   const [activeStatus, setActiveStatus] = useState<"All" | ProposalStatus>("All");
   const [childProposalsCounts, setChildProposalsCounts] = useState<Record<string, number> | null>(null);
+
+  const handleViewTypeChange = (newType: ViewType) => {
+    setViewType(newType);
+    localStorage.setItem("ensemble_proposals_view_type", newType);
+  };
 
   // Simulated initial loading timer
   useEffect(() => {
@@ -65,7 +72,7 @@ export const ProposalsMain: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4 pb-2">
           <ProposalsTabs />
           <div className="flex items-center gap-3">
-            <ProposalsListViewType viewType={viewType} onViewTypeChange={setViewType} />
+            <ProposalsListViewType viewType={viewType} onViewTypeChange={handleViewTypeChange} />
           </div>
         </div>
 

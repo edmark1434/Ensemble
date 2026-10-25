@@ -47,7 +47,8 @@ interface ProposalPitchProps {
   screeningAnswers?: { question: string; answer: string }[];
   setScreeningAnswers?: React.Dispatch<React.SetStateAction<{ question: string; answer: string }[]>>;
   onNext: () => void;
-  onBack: () => void;
+  onBack?: () => void;
+  onDiscard?: () => void;
 }
 
 export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
@@ -65,6 +66,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
   setScreeningAnswers,
   onNext,
   onBack,
+  onDiscard,
 }) => {
   const [showAddLink, setShowAddLink] = useState(false);
   const [linkInput, setLinkInput] = useState("");
@@ -702,7 +704,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
       <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-4">
         <button
           type="button"
-          onClick={onBack}
+          onClick={onBack || onDiscard}
           className="px-6 py-3 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 transition cursor-pointer shadow-xs flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />

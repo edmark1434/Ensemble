@@ -27,6 +27,7 @@ import {
   Minimize2,
   Briefcase,
   Crown,
+  Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job } from "../../../job_components/job_lists";
@@ -110,7 +111,13 @@ interface ProposalReviewProps {
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting?: boolean;
+  isEditMode?: boolean;
+  hasChanges?: boolean;
 }
+
+const EMPTY_FILES: File[] = [];
+const EMPTY_STRINGS: string[] = [];
+const EMPTY_ANSWERS: { question: string; answer: string }[] = [];
 
 export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   job,
@@ -120,13 +127,15 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   tosContent,
   milestones,
   actingTeamId,
-  includedMemberIds = [],
-  workSampleFiles = [],
-  screeningAnswers = [],
+  includedMemberIds = EMPTY_STRINGS,
+  workSampleFiles = EMPTY_FILES,
+  screeningAnswers = EMPTY_ANSWERS,
   onEditStep,
   onBack,
   onSubmit,
-  isSubmitting
+  isSubmitting,
+  isEditMode = false,
+  hasChanges = false,
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [agreedToFee, setAgreedToFee] = useState(false);
@@ -257,6 +266,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   }, [accountId, user?.avatar_preset_url, user?.avatar_url, user?.profile_photo, user?.avatar, user?.display_name, user?.username]);
 
   useEffect(() => {
+    if (isEditMode) return;
     let mounted = true;
     api.get("/api/accounts/wallet", { params: { type: "account_wallets" } })
       .then((res) => {
@@ -264,11 +274,15 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
           setWalletBalance(res.data?.wallet?.balance_credits || 0);
         }
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        if (err?.response?.status !== 401) {
+          console.error(err);
+        }
+      });
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     let isSubscribed = true;
@@ -407,6 +421,18 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
           )}
         </button>
       </div>
+
+      {isEditMode && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs">
+          <Info className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-bold block">Editing Policy Notice</span>
+            <p className="text-[11px] leading-relaxed opacity-90">
+              Proposals can only be modified while their status is <strong>Pending</strong>. Once your proposal is <strong>Shortlisted</strong> or <strong>Accepted</strong> by the client, proposal terms are locked to protect the agreed scope.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           SECTION 1: DIVIDED BY 2 (LEFT: PROPOSING IDENTITY CARD | RIGHT: TARGET JOB & PROPOSED BID)
@@ -1208,14 +1234,36 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
           <span>Back to Milestones</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setIsCheckoutModalOpen(true)}
-          className="flex items-center gap-2 px-7 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md hover:shadow-lg transition cursor-pointer"
-        >
-          <span>Proceed to Checkout</span>
-          <ArrowRight className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          {isEditMode && !hasChanges && (
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-medium hidden sm:inline">
+              No changes detected
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (isEditMode) {
+                if (hasChanges) {
+                  onSubmit();
+                }
+              } else {
+                setIsCheckoutModalOpen(true);
+              }
+            }}
+            disabled={isSubmitting || (isEditMode && !hasChanges)}
+            className={`flex items-center gap-2 px-7 py-2.5 rounded-xl font-bold text-xs transition shadow-md ${
+              isEditMode && !hasChanges
+                ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed shadow-none"
+                : "bg-blue-600 hover:bg-blue-500 text-white hover:shadow-lg cursor-pointer disabled:opacity-50"
+            }`}
+          >
+            <span>
+              {isEditMode ? (hasChanges ? "Save Changes" : "No Changes to Save") : "Proceed to Checkout"}
+            </span>
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* =========================================================================
