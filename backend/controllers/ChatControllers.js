@@ -6,6 +6,7 @@ const {
   generateProposalPitchDraft,
   generateProposalMilestonesDraft,
   generateJobSkillsDraft,
+  generateProfileIntroductionDraft,
 } = require('../services/ClaudeSupportServices');
 
 async function createDocumentationChatResponse(req, res) {
@@ -73,10 +74,25 @@ async function generateJobSkillsResponse(req, res) {
   }
 }
 
+
+async function generateProfileIntroductionResponse(req, res) {
+  try {
+    const draft = await generateProfileIntroductionDraft(req.body);
+    return res.status(200).json({ success: true, data: draft });
+  } catch (error) {
+    if (error instanceof ClaudeSupportError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Joed AI profile introduction generation failed:', error);
+    return res.status(500).json({ success: false, message: 'Joed AI could not generate your introduction right now. Please try again.' });
+  }
+}
+
 module.exports = {
   createDocumentationChatResponse,
   generateJobDraftResponse,
   generateProposalPitchResponse,
   generateProposalMilestonesResponse,
   generateJobSkillsResponse,
+  generateProfileIntroductionResponse,
 };

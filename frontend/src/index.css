@@ -239,3 +239,20 @@ body {
 .animate-badge-shine {
   animation: badge-shine 3s infinite;
 }
+
+
+/* Shimmer / Gleam animation for AI generate buttons */
+@keyframes shineGleam {
+  0% {
+    transform: translateX(-200%) skewX(-20deg);
+  }
+  30% {
+    transform: translateX(300%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(300%) skewX(-20deg);
+  }
+}
+.animate-shine-gleam {
+  animation: shineGleam 3s ease-in-out infinite;
+}
