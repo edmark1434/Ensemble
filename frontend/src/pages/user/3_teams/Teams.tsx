@@ -235,15 +235,10 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
     }
   };
 
-  // Split teams by type
-  const projectTeams = teams.filter((t) => t.team_type === "contractual");
+  // General agency & collective teams only (contractual workspaces are in /workspaces)
   const generalTeams = teams.filter((t) => t.team_type !== "contractual");
 
-  // Displayed teams based on active tab
-  let displayedTeams = activeTab === "general" ? generalTeams : projectTeams;
-
-  // Sorting
-  displayedTeams = [...displayedTeams].sort((a, b) => {
+  let displayedTeams = [...generalTeams].sort((a, b) => {
     if (sortMethod === "az") {
       return (a.display_name || "").localeCompare(b.display_name || "");
     }
@@ -255,16 +250,10 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
   const tabs = [
     {
-      id: "general",
+      id: "general" as const,
       label: "General Teams",
       icon: <Users className="h-4 w-4" />,
       count: generalTeams.length,
-    },
-    {
-      id: "projects",
-      label: "Project Workspaces",
-      icon: <Briefcase className="h-4 w-4" />,
-      count: projectTeams.length,
     },
   ];
 
@@ -520,7 +509,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-      <UserHeader pageTitle={defaultTab === "projects" || activeTab === "projects" ? "Workspaces" : "Teams"} />
+      <UserHeader pageTitle="Teams" />
 
       <div data-tour="teams-workspace" className="mx-auto max-w-7xl p-6 md:p-8">
         {/* Action Bar (Identical Layout to /projects) */}
@@ -557,7 +546,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
             <input
               type="text"
-              placeholder="Search teams or projects by title or keyword..."
+              placeholder="Search teams by title or keyword..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 shadow-xs"
@@ -574,14 +563,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as "projects" | "general");
-                    setSearchParams((prev) => {
-                      const next = new URLSearchParams(prev);
-                      next.set("tab", tab.id);
-                      return next;
-                    });
-                  }}
+                  onClick={() => setActiveTab("general")}
                   className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 cursor-pointer ${
                     isActive
                       ? "text-blue-600 dark:text-blue-400"

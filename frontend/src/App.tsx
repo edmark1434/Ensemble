@@ -18,6 +18,7 @@ import Home from '@/pages/user/1_home/Home.tsx'
 import Projects from '@/pages/user/2_projects/Projects.tsx'
 import Projects_Selection from '@/pages/user/2_projects/Projects_Selection.tsx'
 import Teams from '@/pages/user/3_teams/Teams.tsx'
+import Workspaces from '@/pages/user/3_teams/Workspaces.tsx'
 import SelectedTeam from '@/pages/user/3_teams/SelectedTeam.tsx'
 import TeamInvitePage from '@/pages/user/3_teams/TeamInvitePage.tsx'
 import TeamTaskWorkspace from '@/pages/user/3_teams/team_tasks/TeamTaskWorkspace.tsx'
@@ -266,7 +267,7 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
-          <Route path='/workspaces' element={<Teams defaultTab="projects" />} />
+          <Route path='/workspaces' element={<Workspaces />} />
           <Route path='/team-project/:id' element={<TeamProjectWorkspace />} />
 
           <Route path='/discovery' element={<DiscoveryPage />} />
