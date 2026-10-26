@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { buildPublicUrl } from "@/lib/s3";
 import { isGeneratedMarketProxy } from "@/lib/market-proxy";
 
+import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+
 const VALID_TYPES = ["image", "video", "audio"] as const;
 type MarketType = (typeof VALID_TYPES)[number];
 const MAX_LIMIT = 50;
@@ -15,12 +17,19 @@ export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams;
   const type = sp.get("type") as MarketType | null;
 
-  if (!type || !VALID_TYPES.includes(type)) {
+  if (type && !VALID_TYPES.includes(type)) {
     return NextResponse.json(
       { error: "type must be image, video or audio" },
       { status: 400 }
     );
   }
+
+  const view = sp.get("view") || "discover";
+  if (!["discover", "liked", "saved"].includes(view)) return NextResponse.json({ error: "Invalid collection." }, { status: 400 });
+  const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
+  const session = token ? await verifyEditorSession(token) : null;
+  if (view !== "discover" && !session) return NextResponse.json({ error: "Sign in to view your collection." }, { status: 401 });
+  const accountId = session?.account_id ?? "00000000-0000-0000-0000-000000000000";
 
   const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
   const limit = Math.min(
@@ -41,17 +50,35 @@ export async function GET(request: NextRequest) {
         "ma.price_credits",
         "ma.created_at"
       ])
-      .where((eb) =>
-        eb.exists(
-          eb
-            .selectFrom("market_media_assets as filter_link")
-            .innerJoin("media_assets as filter_media", "filter_media.media_asset_id", "filter_link.media_asset_id")
-            .select("filter_link.market_asset_id")
-            .whereRef("filter_link.market_asset_id", "=", "ma.market_asset_id")
-            .where("filter_media.type", "=", type)
-            .where("filter_media.deleted_at", "is", null)
-        )
+      .select((eb) => [
+        eb.exists(eb.selectFrom("asset_likes").select("market_asset_id")
+          .whereRef("asset_likes.market_asset_id", "=", "ma.market_asset_id")
+          .where("account_id", "=", accountId).where("deleted_at", "is", null)).as("is_liked"),
+        eb.exists(eb.selectFrom("asset_saves").select("market_asset_id")
+          .whereRef("asset_saves.market_asset_id", "=", "ma.market_asset_id")
+          .where("account_id", "=", accountId).where("deleted_at", "is", null)).as("is_saved"),
+        eb.selectFrom("asset_likes").select((count) => count.fn.countAll<number>().as("count"))
+          .whereRef("asset_likes.market_asset_id", "=", "ma.market_asset_id")
+          .where("deleted_at", "is", null).as("like_count"),
+      ])
+      .where((eb) => eb.exists(
+        eb.selectFrom("market_media_assets as filter_link")
+          .innerJoin("media_assets as filter_media", "filter_media.media_asset_id", "filter_link.media_asset_id")
+          .select("filter_link.market_asset_id")
+          .whereRef("filter_link.market_asset_id", "=", "ma.market_asset_id")
+          .$if(Boolean(type), (q) => q.where("filter_media.type", "=", type!))
+          .where("filter_media.deleted_at", "is", null)
+      ));
+    if (view !== "discover") {
+      query = query.where((eb) => view === "liked"
+        ? eb.exists(eb.selectFrom("asset_likes").select("market_asset_id")
+          .whereRef("asset_likes.market_asset_id", "=", "ma.market_asset_id")
+          .where("account_id", "=", accountId).where("deleted_at", "is", null))
+        : eb.exists(eb.selectFrom("asset_saves").select("market_asset_id")
+          .whereRef("asset_saves.market_asset_id", "=", "ma.market_asset_id")
+          .where("account_id", "=", accountId).where("deleted_at", "is", null))
       );
+    }
 
     if (search) {
       const pattern = `%${escapeLike(search)}%`;
@@ -74,19 +101,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Paginate listings rather than their linked media files.
-    const rows = await query
-      .orderBy("ma.created_at", "desc")
-      .orderBy("ma.market_asset_id")
-      .limit(limit + 1)
-      .offset((page - 1) * limit)
-      .execute();
+    const [rows, collectionCount] = await Promise.all([
+      query.orderBy("ma.created_at", "desc")
+        .orderBy("ma.market_asset_id")
+        .limit(limit + 1)
+        .offset((page - 1) * limit)
+        .execute(),
+      view === "discover" ? Promise.resolve(undefined) : query.clearSelect()
+        .innerJoin("market_media_assets as collection_link", "collection_link.market_asset_id", "ma.market_asset_id")
+        .innerJoin("media_assets as collection_media", "collection_media.media_asset_id", "collection_link.media_asset_id")
+        .innerJoin("files as collection_original", "collection_original.file_id", "collection_media.original_file_id")
+        .where("collection_media.deleted_at", "is", null)
+        .where("collection_original.deleted_at", "is", null)
+        .$if(Boolean(type), (q) => q.where("collection_media.type", "=", type!))
+        .select((eb) => eb.fn.countAll<number>().as("count"))
+        .executeTakeFirst(),
+    ]);
+    const totalMediaCount = collectionCount ? Number(collectionCount.count) : undefined;
 
     const hasMore = rows.length > limit;
     const listings = rows.slice(0, limit);
     const marketAssetIds = listings.map((row) => row.market_asset_id);
 
     if (marketAssetIds.length === 0) {
-      return NextResponse.json({ items: [], page, hasMore });
+      return NextResponse.json({ items: [], page, hasMore, totalMediaCount }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
     const [contentRows, showcaseRows] = await Promise.all([
@@ -121,6 +159,7 @@ export async function GET(request: NextRequest) {
           "proxy.path as proxy_path",
           "proxy.mime_type as proxy_mime_type",
           "thumb.path as thumbnail_path",
+          "u.account_id as owner_account_id",
           "u.first_name",
           "u.last_name"
         ])
@@ -225,7 +264,11 @@ export async function GET(request: NextRequest) {
         marketAssetId: listing.market_asset_id,
         name: listing.market_name,
         description: listing.description,
-        type,
+        type: type ?? assets[0]?.type ?? "image",
+        is_liked: listing.is_liked,
+        is_saved: listing.is_saved,
+        like_count: Number(listing.like_count || 0),
+        is_owner: content.some((row) => row.owner_account_id === session?.account_id),
         price_credits: listing.price_credits,
         preview: coverPreview,
         details: coverDetails,
@@ -240,7 +283,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ items, page, hasMore });
+    return NextResponse.json({ items, page, hasMore, totalMediaCount }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("Error listing market assets:", error);
     return NextResponse.json(

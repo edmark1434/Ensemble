@@ -42,7 +42,10 @@ const MenuButton = memo<{
   const IconComponent = item.icon;
 
   return (
-    <div
+    <button
+      type="button"
+      aria-label={item.ariaLabel}
+      aria-pressed={isActive}
       onClick={handleClick}
       className={cn(
         "flex items-center justify-center flex-none h-7.5 w-7.5 cursor-pointer rounded-sm transition-all duration-200",
@@ -60,7 +63,7 @@ const MenuButton = memo<{
           {item.label}
         </TooltipContent>
       </Tooltip>
-    </div>
+    </button>
   );
 });
 

@@ -1,4 +1,6 @@
 const {
+  reportAssetServices,
+  performEditorAssetActionServices,
   getAssetPostingEligibilityServices,
   listAssetsServices,
   getAssetServices,
@@ -242,7 +244,31 @@ async function deleteAssetReviewController(req, res) {
   } catch (error) { return handleAssetError(res, error); }
 }
 
+async function reportAssetController(req, res) {
+  try {
+    const report = await reportAssetServices(req.params.assetId, req.user.account_id, req.body);
+    return res.status(201).json({ success: true, report });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+// Only the editor server can call this bridge; it supplies its verified session identity.
+async function editorAssetActionController(req, res) {
+  try {
+    const { accountId, action, enabled, ...payload } = req.body || {};
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(accountId || ''))) {
+      return res.status(400).json({ error: 'Invalid account ID.' });
+    }
+    req.user = { account_id: accountId };
+    const { rejectRestrictedAccount, rejectSuspendedWrite } = require('../lib/AccountRestriction');
+    if (await rejectRestrictedAccount(req, res) || rejectSuspendedWrite(req, res)) return;
+    const result = await performEditorAssetActionServices(req.params.assetId, accountId, { action, enabled, ...payload });
+    return res.status(action === 'report' ? 201 : 200).json({ success: true, ...result });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
 module.exports = {
+  reportAssetController,
+  editorAssetActionController,
   getAssetPostingEligibilityController,
   listAssetsController,
   getAssetController,

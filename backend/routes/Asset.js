@@ -2,7 +2,8 @@ const router = require('express').Router();
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 const {
-  getAssetPostingEligibilityController,
+  reportAssetController,
+  editorAssetActionController,  getAssetPostingEligibilityController,
   listAssetsController,
   getAssetController,
   createAssetController,
@@ -30,6 +31,8 @@ const {
 
 const optionalAuth = require('../middleware/OptionalAuth');
 
+router.post('/internal/editor/:assetId/action', require('../middleware/RequireInternalSecret'), editorAssetActionController);
+
 router.get('/', optionalAuth, listAssetsController);
 router.get('/posting-eligibility', [checkSession, requireAuth], getAssetPostingEligibilityController);
 router.get('/:assetId', optionalAuth, getAssetController);
@@ -39,6 +42,7 @@ router.get('/:assetId/comments', optionalAuth, listCommentsController);
 router.use(checkSession, requireAuth);
 
 router.post('/', createAssetController);
+router.post('/:assetId/report', reportAssetController);
 router.post('/:assetId/purchase', purchaseAssetController);
 router.put('/:assetId/like', likeAssetController);
 router.delete('/:assetId/like', unlikeAssetController);

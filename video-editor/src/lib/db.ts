@@ -247,7 +247,16 @@ interface MarketAssetTagsTable {
   deleted_at: Date | null;
 }
 
+interface AssetEngagementTable {
+  market_asset_id: string;
+  account_id: string;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
 interface Database {
+  asset_likes: AssetEngagementTable;
+  asset_saves: AssetEngagementTable;
   files: FilesTable;
   media_assets: MediaAssetsTable;
   accounts: AccountsTable;

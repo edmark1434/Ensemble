@@ -274,6 +274,7 @@ function App() {
           <Route path='/assets/owned' element={<AssetsLibrary />} />
           <Route path='/assets/purchased' element={<AssetsLibrary />} />
           <Route path='/assets/saved' element={<AssetsLibrary />} />
+          <Route path='/assets/liked' element={<AssetsLibrary />} />
           <Route path='/assets/:assetId' element={<AssetDetails />} />
 
           {/* Reworked Job Market Sub-Routes */}

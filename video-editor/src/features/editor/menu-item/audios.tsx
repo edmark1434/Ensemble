@@ -1,23 +1,26 @@
+import { MediaSearchBar } from "@/components/media-search-bar";
+import { MarketCollection, MarketCollectionRows, type MarketCollectionView } from "./market-collection";
 import Draggable from "@/components/shared/draggable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { dispatch } from "@designcombo/events";
 import { ADD_AUDIO, ADD_ITEMS } from "@designcombo/state";
 import { IAudio } from "@designcombo/types";
-import { AudioLines, Loader2, PackageOpen, Pause, Play, Search } from "lucide-react";
+import { AudioLines, Loader2, Pause, Play } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { generateId } from "@designcombo/timeline";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { debounce } from "lodash";
 import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { useMarketAssets } from "@/hooks/use-market-assets";
+import { MarketAssetActions } from "@/components/market-asset-actions";
 import { MarketPriceBadge } from "@/components/market-price-badge";
-import { isMarketAssetBundle, MarketAssetDetails, type MarketAssetBundle } from "@/components/market-asset-browser";
+import { BundleIndicator, isMarketAssetBundle, MarketAssetCard, MarketAssetDetails, type MarketAssetBundle } from "@/components/market-asset-browser";
 import { addMarketAssetToTimeline } from "@/features/editor/utils/add-market-asset-to-timeline";
 
 export const Audios = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCollection, setSelectedCollection] = useState<MarketCollectionView | null>(null);
   const [selectedMarketAsset, setSelectedMarketAsset] = useState<MarketAssetBundle | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<IAudio[]>([]);
@@ -34,7 +37,7 @@ export const Audios = () => {
     loadMore: loadMoreMarket
   } = useMarketAssets<MarketAssetBundle>("audio");
 
-  const fetchMusic = async (query: string, pageNumber: number = 1) => {
+  const fetchMusic = useCallback(async (query: string, pageNumber: number = 1) => {
     if (pageNumber === 1) {
       loadMarket(query);
       setIsLoading(true);
@@ -91,19 +94,18 @@ export const Audios = () => {
       setIsLoading(false);
       setIsMoreLoading(false);
     }
-  };
+  }, [loadMarket]);
 
-  const debouncedFetch = useCallback(
-    debounce((query: string) => {
-      setPage(1);
-      fetchMusic(query, 1);
-    }, 500),
-    []
-  );
+  const debouncedFetch = useMemo(() => debounce((query: string) => {
+    setPage(1);
+    void fetchMusic(query, 1);
+  }, 500), [fetchMusic]);
 
   useEffect(() => {
-    fetchMusic("");
-  }, []);
+    void fetchMusic("");
+  }, [fetchMusic]);
+  useEffect(() => () => debouncedFetch.cancel(), [debouncedFetch]);
+
   const handleAddAudio = (payload: Partial<IAudio>) => {
     payload.id = generateId();
     payload.metadata = {
@@ -125,8 +127,7 @@ export const Audios = () => {
     });
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
+  const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     debouncedFetch(query);
   };
@@ -143,54 +144,27 @@ export const Audios = () => {
 
   const uniqueResults = searchResults;
 
+  const handleSearch = () => {
+    debouncedFetch.cancel();
+    setPage(1);
+    void fetchMusic(searchQuery);
+  };
+
   const handleClearSearch = () => {
+    debouncedFetch.cancel();
     setSearchQuery("");
-    fetchMusic("");
+    setPage(1);
+    void fetchMusic("");
   };
 
   // Main view
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden">
-    <div className={`flex flex-1 flex-col max-w-full h-full ${selectedMarketAsset ? "hidden" : ""}`}>
-      <div className="flex items-center gap-2 p-4">
-        <div className="relative flex-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="absolute left-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
-            onClick={() => fetchMusic(searchQuery)}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Search className="h-3 w-3" />
-            )}
-          </Button>
-          <Input
-            placeholder="Search Freesound audios..."
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                fetchMusic(searchQuery);
-              }
-            }}
-            className="pl-10"
-          />
-        </div>
-        {searchQuery && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleClearSearch}
-            disabled={isLoading}
-          >
-            Clear
-          </Button>
-        )}
-      </div>
+    <div className={`flex flex-1 flex-col max-w-full h-full ${selectedMarketAsset || selectedCollection ? "hidden" : ""}`}>
+      <MediaSearchBar value={searchQuery} placeholder="Search Freesound audios..." loading={isLoading}
+        onChange={handleSearchChange} onSearch={handleSearch} onClear={handleClearSearch} />
       <ScrollArea className="flex-1 h-full max-w-full px-4">
+        <MarketCollectionRows type="audio" onOpen={(view) => { setPlayingId(null); setSelectedCollection(view); }} />
         {isLoading && uniqueResults.length === 0 && marketAudios.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -204,13 +178,12 @@ export const Audios = () => {
           <div className="flex flex-col gap-2">
             {marketAudios.map((entry) => {
               const bundle = isMarketAssetBundle(entry) ? entry : null;
-              const audio = (bundle ? bundle.assets[0] : (entry as any).assets?.[0] ?? entry) as Partial<IAudio>;
-              const item = { ...audio, id: bundle?.marketAssetId ?? audio.id, name: bundle?.name ?? audio.name,
-                metadata: { ...audio.metadata, author: bundle?.metadata.author ?? audio.metadata?.author,
-                  price_credits: bundle?.price_credits ?? audio.metadata?.price_credits } } as Partial<IAudio>;
-              return <AudioItem key={bundle?.marketAssetId ?? item.id} item={item} onAdd={handleAddAudio}
+              const audio = entry.assets[0];
+              const item = { ...audio, id: bundle?.marketAssetId ?? audio?.id, name: bundle?.name ?? audio?.name,
+                metadata: { ...audio?.metadata, author: entry.metadata.author, price_credits: entry.price_credits } } as Partial<IAudio>;
+              return <AudioItem key={entry.marketAssetId} item={item} onAdd={handleAddAudio}
                 playingId={playingId} setPlayingId={setPlayingId} marketBundle={bundle ?? undefined}
-                onOpenBundle={setSelectedMarketAsset} />;
+                marketListing={entry} onOpenBundle={setSelectedMarketAsset} />;
             })}
             {uniqueResults.map((audio, index) => (
               <AudioItem
@@ -245,6 +218,7 @@ export const Audios = () => {
         )}
       </ScrollArea>
     </div>
+    {selectedCollection && <MarketCollection key={selectedCollection} view={selectedCollection} type="audio" onBack={() => setSelectedCollection(null)} />}
     {selectedMarketAsset && (
       <MarketAssetDetails
         bundle={selectedMarketAsset}
@@ -262,6 +236,7 @@ const AudioItem = ({
   playingId,
   setPlayingId,
   marketBundle,
+  marketListing,
   onOpenBundle
 }: {
   item: Partial<IAudio>;
@@ -269,6 +244,7 @@ const AudioItem = ({
   playingId: string | null;
   setPlayingId: (id: string | null) => void;
   marketBundle?: MarketAssetBundle;
+  marketListing?: MarketAssetBundle;
   onOpenBundle?: (bundle: MarketAssetBundle) => void;
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -313,17 +289,11 @@ const AudioItem = ({
     }
   };
 
-  return (
-    <Draggable
-      data={item}
-      renderCustomPreview={
-        <div
-          className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
-          <AudioLines className="text-muted-foreground" size={40} />
-        </div>
-      }
-      shouldDisplayPreview={!isDraggingOverTimeline}
-    >
+  if (marketListing && !marketBundle && (marketListing.assets[0]?.proxyStatus !== "ready" || !marketListing.assets[0]?.details?.src)) {
+    return <MarketAssetCard bundle={marketListing} layout="list" onOpen={(listing) => onOpenBundle?.(listing)} />;
+  }
+
+  const row = (
       <div
         className={`group relative flex items-center gap-3 cursor-pointer px-3 py-2 rounded transition-colors ${marketBundle ? "bg-secondary/70 hover:bg-secondary" : "hover:bg-zinc-800/50"}`}>
         <audio
@@ -339,8 +309,9 @@ const AudioItem = ({
           variant={marketBundle ? "secondary" : "ghost"}
           className={`h-8 w-8 rounded-full shrink-0 ${marketBundle ? "" : "bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10"}`}
           onClick={togglePlay}
+          aria-label={marketBundle ? `Open ${marketBundle.name} bundle` : isPlaying ? "Pause preview" : "Play preview"}
         >
-          {marketBundle ? <PackageOpen className="size-4" /> : isPlaying ? (
+          {marketBundle ? <BundleIndicator /> : isPlaying ? (
             <Pause className="size-4 fill-current" />
           ) : (
             <Play className="size-4 fill-current ml-0.5" />
@@ -370,6 +341,7 @@ const AudioItem = ({
           </span>
         </div>
 
+        {marketListing && <MarketAssetActions bundle={marketListing} menuOnly />}
         {isPlaying && (
           <div className="flex items-end gap-[2px] h-4 shrink-0">
             {[...Array(5)].map((_, i) => (
@@ -390,6 +362,8 @@ const AudioItem = ({
           </div>
         )}
       </div>
-    </Draggable>
   );
+  if (marketBundle) return row;
+  return <Draggable data={item} shouldDisplayPreview={!isDraggingOverTimeline}
+    renderCustomPreview={<div className="flex size-[120px] items-center justify-center rounded-md border border-primary bg-zinc-800"><AudioLines className="size-10 text-muted-foreground" /></div>}>{row}</Draggable>;
 };

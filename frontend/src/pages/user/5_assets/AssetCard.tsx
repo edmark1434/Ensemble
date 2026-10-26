@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image, Clapperboard, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image, Clapperboard, AudioLines, PanelsRightBottom, ShoppingCart, AlertTriangle, PackageOpen } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -16,14 +16,14 @@ function getTypeIcon(type: string) {
     case "video": return <Clapperboard className="h-3 w-3" />;
     case "image": return <Image className="h-3 w-3" />;
     case "audio": return <AudioLines className="h-3 w-3" />;
-    case "template": return <LayoutTemplate className="h-3 w-3" />;
+    case "template": return <PanelsRightBottom className="h-3 w-3" />;
     default: return null;
   }
 }
 
 export interface AssetCardProps {
   asset: AssetRecord;
-  view?: "discover" | "mine" | "purchased" | "saved";
+  view?: "discover" | "mine" | "purchased" | "saved" | "liked";
   engagementPending?: Set<string>;
   onUpdateEngagement?: (asset: AssetRecord, kind: "like" | "save") => void;
   onEdit?: (asset: AssetRecord) => void;
@@ -56,7 +56,8 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           <span className="relative overflow-hidden flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10 uppercase tracking-wider">
             <span className="relative z-10 flex items-center gap-1.5">
               {getTypeIcon(asset.type)}
-              {asset.type}
+              {asset.media_asset_count > 1 && <span title="Bundle: all included assets for one price" aria-label="Asset bundle"><PackageOpen className="h-3.5 w-3.5" /></span>}
+              {asset.type}{asset.media_asset_count > 1 ? " Bundle" : ""}
             </span>
             <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/30 to-transparent" />
           </span>
@@ -73,7 +74,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
               <CheckCircle2 className="h-3 w-3" /> Owned
             </span>
           )}
-          {asset.is_owner && (
+          {view === "mine" && asset.is_owner && (
             <>
               {asset.status === "published" ? (
                 <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-emerald-600 border-emerald-500">
@@ -171,7 +172,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           {asset.description || "No description provided."}
         </p>
 
-        {asset.is_owner && asset.review_status === "rejected" && (
+        {view === "mine" && asset.is_owner && asset.review_status === "rejected" && (
           <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 p-2 text-[11px] text-rose-300">
             <div className="flex items-start gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400 mt-0.5" />
@@ -183,7 +184,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           </div>
         )}
 
-        {asset.is_owner && asset.review_status === "pending" && (
+        {view === "mine" && asset.is_owner && asset.review_status === "pending" && (
           <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 p-2 text-[11px] text-sky-300">
             <div className="flex items-start gap-1.5">
               <Clock className="h-3.5 w-3.5 shrink-0 text-sky-400 mt-0.5" />
