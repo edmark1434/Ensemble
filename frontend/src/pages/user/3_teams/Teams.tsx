@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowUpRight, Briefcase, CheckCircle2, Crown, Grid3x3, List, Plus, Search, UserPlus, Users } from "lucide-react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import { uploadFileToIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
@@ -52,12 +52,30 @@ const TeamCardSkeleton = () => (
   </div>
 );
 
-export default function Teams() {
+interface TeamsProps {
+  defaultTab?: "general" | "projects";
+}
+
+export default function Teams({ defaultTab }: TeamsProps = {}) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "projects">("general");
+  const initialTab: "general" | "projects" =
+    defaultTab || (tabParam === "projects" || tabParam === "workspaces" ? "projects" : "general");
+  const [activeTab, setActiveTab] = useState<"general" | "projects">(initialTab);
+
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    } else if (tabParam === "projects" || tabParam === "workspaces") {
+      setActiveTab("projects");
+    } else if (tabParam === "general") {
+      setActiveTab("general");
+    }
+  }, [defaultTab, tabParam]);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sortMethod, setSortMethod] = useState<"default" | "az" | "members">("default");
@@ -502,7 +520,7 @@ export default function Teams() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-      <UserHeader pageTitle="Teams" />
+      <UserHeader pageTitle={defaultTab === "projects" || activeTab === "projects" ? "Workspaces" : "Teams"} />
 
       <div data-tour="teams-workspace" className="mx-auto max-w-7xl p-6 md:p-8">
         {/* Action Bar (Identical Layout to /projects) */}
@@ -556,7 +574,14 @@ export default function Teams() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as "projects" | "general")}
+                  onClick={() => {
+                    setActiveTab(tab.id as "projects" | "general");
+                    setSearchParams((prev) => {
+                      const next = new URLSearchParams(prev);
+                      next.set("tab", tab.id);
+                      return next;
+                    });
+                  }}
                   className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 cursor-pointer ${
                     isActive
                       ? "text-blue-600 dark:text-blue-400"

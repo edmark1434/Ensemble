@@ -266,6 +266,7 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
+          <Route path='/workspaces' element={<Teams defaultTab="projects" />} />
           <Route path='/team-project/:id' element={<TeamProjectWorkspace />} />
 
           <Route path='/discovery' element={<DiscoveryPage />} />
