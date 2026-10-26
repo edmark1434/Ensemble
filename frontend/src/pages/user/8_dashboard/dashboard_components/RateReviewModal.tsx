@@ -3,17 +3,20 @@ import { createPortal } from 'react-dom';
 import { X, Star, LoaderCircle, Clock, AlertTriangle } from 'lucide-react';
 import api from '@/lib/axios';
 import { showSuccessToast, showErrorToast } from '@/components/utility/toast';
+import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 
 interface RateReviewModalProps {
     isOpen: boolean;
     onClose: () => void;
     contractId: string;
     reviewTargetName: string;
+    reviewTargetHandle?: string;
     reviewTargetAvatar?: string;
     reviewTargetRole?: 'client' | 'freelancer';
     isFreelancerRole?: boolean;
     contractValue?: string | number;
     completedAt?: string | Date;
+    counterpartyHasReviewed?: boolean;
     onSuccess: () => void;
 }
 
@@ -67,11 +70,13 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
     onClose, 
     contractId, 
     reviewTargetName, 
+    reviewTargetHandle,
     reviewTargetAvatar,
     reviewTargetRole,
     isFreelancerRole, 
     contractValue, 
     completedAt,
+    counterpartyHasReviewed,
     onSuccess 
 }) => {
     const [rating, setRating] = useState<number>(0);
@@ -189,41 +194,42 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
 
     return createPortal(
         <div 
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in"
             onClick={onClose}
         >
             <div 
-                className="bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
                 onClick={(e) => e.stopPropagation()}
             >
                 
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/50">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        {reviewTargetAvatar ? (
-                            <img 
-                                src={`${import.meta.env.VITE_CLOUDFRONT_URL}${reviewTargetAvatar.startsWith('/') ? '' : '/'}${reviewTargetAvatar}`}
-                                alt={reviewTargetName}
-                                className="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-zinc-700 shrink-0"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                            />
-                        ) : (
-                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center border border-blue-300 dark:border-blue-500/30 shrink-0">
-                                {reviewTargetName.slice(0, 1).toUpperCase()}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <img 
+                            src={constructAvatarUrl(reviewTargetAvatar, reviewTargetName)}
+                            alt={reviewTargetName}
+                            className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shadow-2xs shrink-0"
+                            onError={(e) => { 
+                                (e.currentTarget as HTMLImageElement).src = getFallbackAvatarUrl(reviewTargetName); 
+                            }}
+                        />
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-sm font-bold text-zinc-900 dark:text-white truncate">
+                                    {reviewTargetName}
+                                </h2>
+                                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-md border bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 shrink-0">
+                                    {targetRoleLabel}
+                                </span>
                             </div>
-                        )}
-                        <div className="flex items-center gap-2 min-w-0">
-                            <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">
-                                Review {reviewTargetName}
-                            </h2>
-                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border bg-gray-100 text-gray-800 border-gray-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 shrink-0">
-                                {targetRoleLabel}
-                            </span>
+                            <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                                {reviewTargetHandle ? `@${reviewTargetHandle} • ` : ''}Rate your experience
+                            </div>
                         </div>
                     </div>
                     <button 
                         onClick={onClose}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors shrink-0"
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 cursor-pointer"
                         title="Close"
                     >
                         <X className="w-4 h-4" />
@@ -255,27 +261,40 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                         }
                     `}</style>
 
-                    {/* High-Contrast 24-Hour Warning Strip */}
-                    <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl bg-amber-100/70 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-xs">
-                        <div className="flex items-center gap-1.5 min-w-0 text-amber-950 dark:text-amber-200">
-                            <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
-                            <span className="text-[11px] font-semibold truncate">
-                                24h deadline to avoid Merit deduction <span className="text-[10px] font-normal opacity-80">(grace period)</span>
-                            </span>
+                    {/* Crisp Neutral 24-Hour Review Deadline Strip */}
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-zinc-100/90 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 text-xs">
+                        <div className="flex items-center gap-2 min-w-0 text-zinc-700 dark:text-zinc-300">
+                            <AlertTriangle className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                            <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-100">
+                                    {counterpartyHasReviewed ? (
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                            @{reviewTargetName} has submitted their review!
+                                        </span>
+                                    ) : (
+                                        "Review Window: 24h Grace Period"
+                                    )}
+                                </div>
+                                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                                    {counterpartyHasReviewed
+                                        ? "Submit yours to reveal mutual ratings and complete closeout"
+                                        : "Submit review before deadline to maintain Merit standing"}
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-1 font-mono font-bold text-[11px] text-amber-950 dark:text-amber-200 bg-amber-200/80 dark:bg-amber-500/25 px-2 py-0.5 rounded border border-amber-300/80 dark:border-amber-500/40 shrink-0 shadow-2xs">
-                            <Clock className="w-3 h-3 text-amber-800 dark:text-amber-400" />
+                        <div className="flex items-center gap-1.5 font-mono font-bold text-xs text-zinc-800 dark:text-zinc-100 bg-white dark:bg-zinc-700/90 px-2.5 py-1 rounded-lg border border-zinc-300/80 dark:border-zinc-600 shadow-2xs shrink-0">
+                            <Clock className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                             <span>{formatCountdown(timeLeftMs)}</span>
                         </div>
                     </div>
 
                     {/* High-Contrast Payout Info Strip (Freelancer only) */}
                     {isFreelancerRole && Boolean(numericValue) && (
-                        <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/[0.05] border border-gray-300 dark:border-white/10 text-xs">
-                            <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300">
+                        <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 text-xs">
+                            <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
                                 Net Earnings ({numericValue.toLocaleString()} - 10% fee):
                             </span>
-                            <span className="flex items-center gap-1.5 font-mono font-bold text-gray-900 dark:text-white text-xs">
+                            <span className="flex items-center gap-1.5 font-mono font-bold text-zinc-900 dark:text-white text-xs">
                                 <img src="/icons/lottie/credit.png" alt="credits" className="w-3.5 h-3.5 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 {net.toLocaleString()} Credits
                             </span>
@@ -285,7 +304,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                     {/* Rate Your Experience with Dynamic Tiers */}
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between h-7">
-                            <label className="text-xs font-bold text-gray-900 dark:text-white">
+                            <label className="text-xs font-bold text-zinc-900 dark:text-white">
                                 Rate your experience
                             </label>
                             <div className="h-6 flex items-center justify-end">
@@ -300,7 +319,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                                         )}
                                     </span>
                                 ) : (
-                                    <span className="h-6 inline-flex items-center px-2.5 text-xs font-medium text-gray-500 dark:text-zinc-400 bg-gray-100/80 dark:bg-white/5 rounded-full border border-gray-200 dark:border-white/10 transition-all duration-150">
+                                    <span className="h-6 inline-flex items-center px-2.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700 transition-all duration-150">
                                         Click a star (1 - 5)
                                     </span>
                                 )}
@@ -316,14 +335,14 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                                 const starFill = (isFilled && tier) ? tier.fill : "none";
                                 const starStroke = (isFilled && tier) ? tier.stroke : "currentColor";
                                 const starClassName = `w-11 h-11 sm:w-12 sm:h-12 transition-transform duration-150 ${
-                                    isFilled ? "" : "text-gray-300 dark:text-zinc-600 hover:text-gray-400"
+                                    isFilled ? "" : "text-zinc-300 dark:text-zinc-600 hover:text-zinc-400 dark:hover:text-zinc-500"
                                 }`;
 
                                 return (
                                     <button
                                         key={star}
                                         type="button"
-                                        className="p-1 rounded-xl transition-transform duration-150 transform hover:scale-115 active:scale-95 focus:outline-none"
+                                        className="p-1 rounded-xl transition-transform duration-150 transform hover:scale-115 active:scale-95 focus:outline-none cursor-pointer"
                                         onClick={() => setRating(star)}
                                         onMouseEnter={() => setHoverRating(star)}
                                         onMouseLeave={() => setHoverRating(0)}
@@ -344,15 +363,15 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                     {/* Written Feedback with Character Limit */}
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-gray-900 dark:text-white">
+                            <label className="text-xs font-bold text-zinc-900 dark:text-white">
                                 Write a review
                             </label>
-                            <span className={`text-[11px] font-mono font-semibold ${
+                            <span className={`text-[11px] font-mono font-medium ${
                                 feedback.length >= MAX_REVIEW_CHARS
                                     ? 'text-rose-600 dark:text-rose-400'
                                     : feedback.length >= MAX_REVIEW_CHARS - 50
                                     ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-gray-500 dark:text-zinc-400'
+                                    : 'text-zinc-400 dark:text-zinc-500'
                             }`}>
                                 {feedback.length} / {MAX_REVIEW_CHARS}
                             </span>
@@ -363,20 +382,20 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                             onChange={(e) => setFeedback(e.target.value.slice(0, MAX_REVIEW_CHARS))}
                             placeholder={`How was working with ${reviewTargetName}?`}
                             rows={3}
-                            className="w-full px-3.5 py-2.5 bg-gray-50/80 dark:bg-white/[0.04] border border-gray-300 dark:border-white/15 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600/30 resize-none text-xs leading-relaxed transition-all shadow-2xs"
+                            className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900/10 dark:focus:ring-white/10 resize-none text-xs leading-relaxed transition-all shadow-2xs"
                         />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="px-5 py-3.5 border-t border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-dark-surface/50 flex items-center justify-between gap-3">
+                <div className="px-5 py-3.5 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/80 flex items-center justify-between gap-3">
                     <span className="h-5 flex items-center text-[11px] font-medium">
                         {rating === 0 ? (
-                            <span className="text-amber-700 dark:text-amber-400 font-semibold">★ Rating required</span>
+                            <span className="text-zinc-500 dark:text-zinc-400">★ Rating required</span>
                         ) : !feedback.trim() ? (
-                            <span className="text-gray-600 dark:text-zinc-400">Please write a review</span>
+                            <span className="text-zinc-500 dark:text-zinc-400">Please write a review</span>
                         ) : (
-                            <span className="text-emerald-700 dark:text-emerald-400 font-bold">✓ Ready to submit</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Ready to submit</span>
                         )}
                     </span>
                     <div className="flex items-center gap-2">
@@ -384,7 +403,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                             type="button"
                             onClick={onClose}
                             disabled={isSubmitting}
-                            className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-gray-700 dark:text-zinc-300 hover:text-gray-950 dark:hover:text-white border border-gray-300 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 transition-all disabled:opacity-50"
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all disabled:opacity-50 cursor-pointer"
                         >
                             Cancel
                         </button>
@@ -392,7 +411,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                             type="button"
                             onClick={handleSubmit}
                             disabled={isSubmitting || rating === 0 || !feedback.trim()}
-                            className="flex items-center justify-center px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:scale-95"
+                            className="flex items-center justify-center px-4 py-1.5 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-black text-white dark:bg-white dark:hover:bg-zinc-100 dark:text-zinc-900 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xs active:scale-95 cursor-pointer"
                         >
                             {isSubmitting ? (
                                 <LoaderCircle className="w-3.5 h-3.5 animate-spin" />

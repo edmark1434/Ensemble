@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Briefcase,
@@ -20,6 +21,7 @@ import {
   MessageCircle,
   MoreVertical,
   ShieldCheck,
+  Star,
   Tag,
   Trash2,
   Users,
@@ -27,6 +29,7 @@ import {
 import api from '@/lib/axios';
 import UserHeader from '@/components/nav/user_header';
 import useGlobalState from '@/lib/global_state';
+import socket from '@/lib/socket';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { ProjectOverviewTab } from './ProjectOverviewTab';
@@ -39,8 +42,69 @@ import { ProjectHistoryTab } from './ProjectHistoryTab';
 import { ProjectChatTab } from './ProjectChatTab';
 import ReportTeamModal from '../team_modals/ReportTeamModal';
 import { RateReviewModal } from '@/pages/user/8_dashboard/dashboard_components/RateReviewModal';
+import { ProjectCompletionModal } from '@/components/ui/ProjectCompletionModal';
+import { ReviewThankYouModal } from '@/components/ui/ReviewThankYouModal';
 
 type TabType = 'overview' | 'taskboard' | 'project' | 'submissions' | 'info' | 'contract' | 'history' | 'chat';
+
+interface ReviewCountdownBadgeProps {
+  contractId: string;
+  reviewedAt?: string | null;
+}
+
+const ReviewCountdownBadge: React.FC<ReviewCountdownBadgeProps> = ({ contractId, reviewedAt }) => {
+  const [timeLeftMs, setTimeLeftMs] = useState<number>(() => {
+    const storageKey = `ensemble_review_deadline_${contractId}`;
+    let deadline = 0;
+    if (reviewedAt) {
+      deadline = new Date(reviewedAt).getTime() + 24 * 60 * 60 * 1000;
+    } else {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        deadline = parseInt(stored, 10);
+      }
+      if (!deadline || isNaN(deadline)) {
+        deadline = Date.now() + 24 * 60 * 60 * 1000;
+        localStorage.setItem(storageKey, String(deadline));
+      }
+    }
+    return Math.max(0, deadline - Date.now());
+  });
+
+  useEffect(() => {
+    const update = () => {
+      const storageKey = `ensemble_review_deadline_${contractId}`;
+      let deadline = 0;
+      if (reviewedAt) {
+        deadline = new Date(reviewedAt).getTime() + 24 * 60 * 60 * 1000;
+      } else {
+        const stored = localStorage.getItem(storageKey);
+        deadline = stored ? parseInt(stored, 10) : Date.now() + 24 * 60 * 60 * 1000;
+      }
+      setTimeLeftMs(Math.max(0, deadline - Date.now()));
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [contractId, reviewedAt]);
+
+  const formatCountdown = (ms: number) => {
+    if (ms <= 0) return 'Grace period expired';
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/5 dark:bg-white/10 border border-zinc-200 dark:border-zinc-800 text-xs font-mono font-bold text-zinc-900 dark:text-white shrink-0">
+      <Clock className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+      <span>{formatCountdown(timeLeftMs)}</span>
+    </div>
+  );
+};
 
 export const TeamProjectWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -210,10 +274,27 @@ export const TeamProjectWorkspace: React.FC = () => {
     isOpen: boolean;
     contractId: string;
     targetName: string;
+    targetHandle?: string;
+    targetAvatar?: string;
+    targetRole?: 'client' | 'freelancer';
+    counterpartyHasReviewed?: boolean;
+    completedAt?: string;
   }>({
     isOpen: false,
     contractId: '',
     targetName: '',
+  });
+
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
+  const [isReviewLaterDismissed, setIsReviewLaterDismissed] = useState(false);
+  const [thankYouConfig, setThankYouConfig] = useState<{
+    isOpen: boolean;
+    counterpartyName: string;
+    isMutualComplete?: boolean;
+  }>({
+    isOpen: false,
+    counterpartyName: '',
+    isMutualComplete: false,
   });
 
   const handleTabChange = (tab: TabType) => {
@@ -241,7 +322,17 @@ export const TeamProjectWorkspace: React.FC = () => {
       setEditDescription(pData?.project_description || '');
 
       setTaskboardTasks(tasksRes.data?.data || []);
-      setContracts(contractsRes.data?.data || []);
+      const cList = contractsRes.data?.data || [];
+      setContracts(cList);
+
+      const unreviewed = cList.find((c: any) =>
+        (c.contract_status === 'Done' ||
+          (c.milestones?.length > 0 && c.milestones.every((m: any) => m.status === 'completed'))) &&
+        !c.user_has_reviewed
+      );
+      if (unreviewed && id && !sessionStorage.getItem(`review_dismissed_${id}`) && !rateModalConfig.isOpen) {
+        setIsCompletionModalOpen(true);
+      }
       setHistory(historyRes.data?.data || []);
       setMembers(membersRes.data?.data || []);
       setMilestones(milestonesRes.data?.data || []);
@@ -256,6 +347,57 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   useEffect(() => {
     loadProjectData();
+  }, [loadProjectData]);
+
+  // Real-time synchronization for milestone submits, approvals, and revisions
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleRealtimeRefresh = () => {
+      loadProjectData(true);
+    };
+
+    const handleProjectCompleted = (data: any) => {
+      loadProjectData(true);
+      if (!data?.team_id || data?.team_id === id) {
+        setIsCompletionModalOpen(true);
+      }
+    };
+
+    socket.on('dashboardTaskUpdated', handleRealtimeRefresh);
+    socket.on('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
+    socket.on('milestoneStatusUpdated', handleRealtimeRefresh);
+    socket.on('milestone_status_updated', handleRealtimeRefresh);
+    socket.on('projectCompleted', handleProjectCompleted);
+    socket.on('contractFullyCompleted', handleRealtimeRefresh);
+    socket.on('contractReviewUpdated', handleRealtimeRefresh);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadProjectData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadProjectData(true);
+      }
+    }, 8000);
+
+    return () => {
+      socket.off('dashboardTaskUpdated', handleRealtimeRefresh);
+      socket.off('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
+      socket.off('milestoneStatusUpdated', handleRealtimeRefresh);
+      socket.off('milestone_status_updated', handleRealtimeRefresh);
+      socket.off('projectCompleted', handleProjectCompleted);
+      socket.off('contractFullyCompleted', handleRealtimeRefresh);
+      socket.off('contractReviewUpdated', handleRealtimeRefresh);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(pollInterval);
+    };
   }, [loadProjectData]);
 
   const handleEditProject = async (e: React.FormEvent) => {
@@ -419,11 +561,11 @@ export const TeamProjectWorkspace: React.FC = () => {
             </p>
             <div className="flex items-center justify-center gap-3 pt-2">
               <button
-                onClick={() => navigate('/teams')}
+                onClick={() => navigate('/workspaces')}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition shadow-xs cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Return to Teams
+                Return to Workspaces
               </button>
               <button
                 onClick={() => navigate('/dashboard/tasks')}
@@ -442,26 +584,43 @@ export const TeamProjectWorkspace: React.FC = () => {
   const isClient = Boolean(project.is_client);
   const isArchived = Boolean(project.is_archived);
 
+  const pendingReviewContract = contracts.find(
+    (c: any) =>
+      (c.contract_status === 'Done' ||
+        (c.milestones?.length > 0 && c.milestones.every((m: any) => m.status === 'completed'))) &&
+      !c.user_has_reviewed
+  );
+
+  const awaitingCounterpartyContract = contracts.find(
+    (c: any) =>
+      (c.contract_status === 'Done' ||
+        (c.milestones?.length > 0 && c.milestones.every((m: any) => m.status === 'completed'))) &&
+      c.user_has_reviewed &&
+      !c.counterparty_has_reviewed
+  );
+
+  const isLockedOrArchived = isArchived || Boolean(pendingReviewContract) || Boolean(awaitingCounterpartyContract);
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
       <UserHeader />
 
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-36 space-y-6">
-        {/* Navigation & Breadcrumbs: Return to Teams + Go to Deliveries */}
+        {/* Navigation & Breadcrumbs: Return to Workspaces + Go to Deliveries */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
-            onClick={() => navigate('/teams')}
+            onClick={() => navigate('/workspaces')}
             className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Return to Teams</span>
+            <span>Return to Workspaces</span>
           </button>
 
           <div className="flex items-center gap-2.5">
             {isArchived && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-900 border border-purple-300 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-800">
                 <Lock className="w-3.5 h-3.5" />
-                Archived (Contract Finished)
+                Archived (Read Only) • Auto-deletes in 30 days
               </span>
             )}
 
@@ -474,6 +633,121 @@ export const TeamProjectWorkspace: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Persistent Action Required Review Gate (Approach B) */}
+        {pendingReviewContract && (
+          <div className="bg-zinc-100 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    Action Required: Rate &amp; Review
+                  </h4>
+                  {pendingReviewContract.counterparty_has_reviewed ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                      Counterparty Has Reviewed
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                      Mutual Blind Review
+                    </span>
+                  )}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                    Double-Blind Active
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  {pendingReviewContract.counterparty_has_reviewed ? (
+                    <>
+                      <span className="font-semibold text-zinc-900 dark:text-white">
+                        @{isClient ? pendingReviewContract.freelancer_name : pendingReviewContract.client_name}
+                      </span>{' '}
+                      has already submitted their review! Complete your review before the window expires to unseal mutual ratings and finalize project closeout.
+                    </>
+                  ) : (
+                    <>
+                      All milestones are complete! Please submit your review for{' '}
+                      <span className="font-semibold text-zinc-900 dark:text-white">
+                        @{isClient ? pendingReviewContract.freelancer_name : pendingReviewContract.client_name}
+                      </span>{' '}
+                      to finalize project closeout. Feedback remains hidden until both parties have reviewed.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 self-stretch sm:self-auto justify-end">
+              <ReviewCountdownBadge
+                contractId={pendingReviewContract.contract_id}
+                reviewedAt={pendingReviewContract.counterparty_reviewed_at}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setRateModalConfig({
+                    isOpen: true,
+                    contractId: pendingReviewContract.contract_id,
+                    targetName: isClient ? pendingReviewContract.freelancer_name : pendingReviewContract.client_name,
+                    targetHandle: isClient ? pendingReviewContract.freelancer_handle : pendingReviewContract.client_handle,
+                    targetAvatar: isClient ? pendingReviewContract.freelancer_avatar_path : pendingReviewContract.client_avatar_path,
+                    targetRole: isClient ? 'freelancer' : 'client',
+                    counterpartyHasReviewed: Boolean(pendingReviewContract.counterparty_has_reviewed),
+                    completedAt: pendingReviewContract.counterparty_reviewed_at,
+                  });
+                }}
+                className="px-4 py-2.5 text-xs font-bold text-white bg-zinc-900 dark:bg-white dark:text-zinc-900 rounded-xl hover:opacity-90 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Star className="w-3.5 h-3.5 fill-current" />
+                <span>Rate &amp; Review Now</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Awaiting Counterparty Review Banner with 24h Countdown */}
+        {awaitingCounterpartyContract && (
+          <div className="bg-zinc-100 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    Your Review Submitted
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                    Completed by You
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                    Double-Blind Active
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  Waiting for{' '}
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    @{isClient ? awaitingCounterpartyContract.freelancer_name : awaitingCounterpartyContract.client_name}
+                  </span>{' '}
+                  to submit their review. Reviews and ratings remain confidential and sealed until both parties submit or the timer closes.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-200 dark:border-zinc-800">
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 dark:text-zinc-400">Window Closes In</p>
+              </div>
+              <ReviewCountdownBadge
+                contractId={awaitingCounterpartyContract.contract_id}
+                reviewedAt={awaitingCounterpartyContract.user_reviewed_at}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Project Header Banner Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden transition-all duration-300">
@@ -616,7 +890,7 @@ export const TeamProjectWorkspace: React.FC = () => {
                 }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isArchived ? 'bg-purple-500' : 'bg-emerald-500'}`} />
-                {isArchived ? 'Archived Workspace' : 'Active Workspace'}
+                {isArchived ? 'Archived (Read Only) • Auto-deletes in 30 days' : 'Active Workspace'}
               </span>
 
               {/* Category tag: Gray */}
@@ -664,19 +938,12 @@ export const TeamProjectWorkspace: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation Tabs (2-Row Layout) */}
+          {/* Navigation Tabs (Single Clean Unified Row) */}
           <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-            {/* Row 1: Production Core */}
-            <div className="flex items-center border-b border-zinc-200/70 dark:border-zinc-800/70 overflow-x-auto px-6">
+            <div className="flex items-center overflow-x-auto scrollbar-none px-4 sm:px-6">
               {[
                 { id: 'overview' as TabType, label: 'Overview', icon: FileText },
                 { id: 'taskboard' as TabType, label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
-                {
-                  id: 'project' as TabType,
-                  label: 'Project',
-                  icon: Film,
-                  badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
-                },
                 {
                   id: 'submissions' as TabType,
                   label: 'Submissions',
@@ -685,45 +952,16 @@ export const TeamProjectWorkspace: React.FC = () => {
                     (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
                   ).length,
                 },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => handleTabChange(tab.id)}
-                    className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-                      isActive
-                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
-                        : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                    {tab.badge !== undefined && tab.badge > 0 && (
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                          isActive
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-                        }`}
-                      >
-                        {tab.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Row 2: Management & Collaboration */}
-            <div className="flex items-center overflow-x-auto px-6">
-              {[
-                { id: 'info' as TabType, label: 'Info', icon: Info },
+                { id: 'chat' as TabType, label: 'Chat', icon: MessageCircle },
+                {
+                  id: 'project' as TabType,
+                  label: 'Video Projects',
+                  icon: Film,
+                  badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
+                },
                 { id: 'contract' as TabType, label: 'Contract & Members', icon: Briefcase, badge: members.length },
                 { id: 'history' as TabType, label: 'History', icon: Clock, badge: history.length },
-                { id: 'chat' as TabType, label: 'Chat', icon: MessageCircle },
+                { id: 'info' as TabType, label: 'Project Info', icon: Info },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -732,17 +970,17 @@ export const TeamProjectWorkspace: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => handleTabChange(tab.id)}
-                    className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+                    className={`flex items-center gap-2 py-3 px-3.5 sm:px-4 text-xs font-semibold border-b-2 transition-all shrink-0 cursor-pointer ${
                       isActive
-                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
+                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-zinc-900'
                         : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="whitespace-nowrap">{tab.label}</span>
                     {tab.badge !== undefined && tab.badge > 0 && (
                       <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
                           isActive
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
                             : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
@@ -767,6 +1005,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               contracts={contracts}
               members={members}
               milestones={milestones}
+              isClient={isClient}
               onSelectTab={handleTabChange}
               onOpenRateModal={(contractId, targetName) => {
                 setRateModalConfig({
@@ -782,6 +1021,7 @@ export const TeamProjectWorkspace: React.FC = () => {
             <ProjectTaskboardTab
               teamId={project.team_id}
               tasks={taskboardTasks}
+              videoProjects={linkedProjects}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
               members={members}
@@ -789,6 +1029,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               milestones={milestones}
               onTasksUpdated={(silent?: boolean) => loadProjectData(silent)}
               projectTitle={project.project_title || project.job_title}
+              isReadOnly={isLockedOrArchived}
             />
           )}
 
@@ -808,6 +1049,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               milestones={milestones}
               contracts={contracts}
               tasks={taskboardTasks}
+              videoProjects={linkedProjects}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
               onUpdated={(silent?: boolean) => loadProjectData(silent)}
@@ -951,6 +1193,37 @@ export const TeamProjectWorkspace: React.FC = () => {
         onSubmit={handleReportTeam}
       />
 
+      {/* CELEBRATION MODAL (ALL MILESTONES COMPLETED) */}
+      <ProjectCompletionModal
+        isOpen={isCompletionModalOpen && !rateModalConfig.isOpen}
+        onClose={() => {
+          setIsCompletionModalOpen(false);
+          setIsReviewLaterDismissed(true);
+          if (id) sessionStorage.setItem(`review_dismissed_${id}`, 'true');
+        }}
+        onRateNow={() => {
+          setIsCompletionModalOpen(false);
+          setIsReviewLaterDismissed(true);
+          if (id) sessionStorage.setItem(`review_dismissed_${id}`, 'true');
+          if (pendingReviewContract) {
+            setRateModalConfig({
+              isOpen: true,
+              contractId: pendingReviewContract.contract_id,
+              targetName: isClient ? pendingReviewContract.freelancer_name : pendingReviewContract.client_name,
+              targetHandle: isClient ? pendingReviewContract.freelancer_handle : pendingReviewContract.client_handle,
+              targetAvatar: isClient ? pendingReviewContract.freelancer_avatar_path : pendingReviewContract.client_avatar_path,
+              targetRole: isClient ? 'freelancer' : 'client',
+              counterpartyHasReviewed: Boolean(pendingReviewContract.counterparty_has_reviewed),
+              completedAt: pendingReviewContract.counterparty_reviewed_at,
+            });
+          }
+        }}
+        projectTitle={project.project_title || 'Contract Workspace'}
+        totalMilestones={milestones.length || pendingReviewContract?.milestones?.length || 0}
+        counterpartyName={isClient ? (pendingReviewContract?.freelancer_name || 'Contributor') : (pendingReviewContract?.client_name || 'Client')}
+        isClient={isClient}
+      />
+
       {/* RATE & REVIEW MODAL */}
       {rateModalConfig.isOpen && (
         <RateReviewModal
@@ -958,14 +1231,32 @@ export const TeamProjectWorkspace: React.FC = () => {
           onClose={() => setRateModalConfig({ isOpen: false, contractId: '', targetName: '' })}
           contractId={rateModalConfig.contractId}
           reviewTargetName={rateModalConfig.targetName}
+          reviewTargetHandle={rateModalConfig.targetHandle}
+          reviewTargetAvatar={rateModalConfig.targetAvatar}
+          reviewTargetRole={rateModalConfig.targetRole}
+          completedAt={rateModalConfig.completedAt}
+          counterpartyHasReviewed={rateModalConfig.counterpartyHasReviewed}
           isFreelancerRole={!isClient}
           onSuccess={() => {
-            showSuccessToast('Rating and feedback submitted successfully!');
+            const targetName = rateModalConfig.targetName;
             setRateModalConfig({ isOpen: false, contractId: '', targetName: '' });
+            setThankYouConfig({
+              isOpen: true,
+              counterpartyName: targetName || 'User',
+              isMutualComplete: Boolean(pendingReviewContract?.counterparty_has_reviewed),
+            });
             loadProjectData();
           }}
         />
       )}
+
+      {/* THANK YOU MODAL (AFTER REVIEW SUBMITTED) */}
+      <ReviewThankYouModal
+        isOpen={thankYouConfig.isOpen}
+        onClose={() => setThankYouConfig({ isOpen: false, counterpartyName: '', isMutualComplete: false })}
+        counterpartyName={thankYouConfig.counterpartyName}
+        isMutualComplete={thankYouConfig.isMutualComplete}
+      />
     </div>
   );
 };

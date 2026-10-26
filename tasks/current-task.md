@@ -1,21 +1,41 @@
-# Completed implementation: Project-scoped market asset licenses
+# Active Task: Project Completion Celebration, Double-Blind Reviews & Workspace Archival Retention
 
-## Objective
-Replace user_market_assets with market_asset_licenses, preserving existing purchases and financial history. Each license can be assigned permanently to one project. No editor UI changes.
+## Implementation Objective
 
-## Acceptance criteria
-- Append a reversible migration; migrate existing entitlements to unassigned licenses and link historical purchase transactions where available.
-- Update all runtime queries, purchase writes, reviews, download checks, and support purchase selectors.
-- Purchase creates an unassigned license atomically with wallet transfers; retries reuse an available license. Assigned uses do not prevent another purchase.
-- Backend assignment requires the buyer and an editable project membership; prevent reassignment and duplicate active licensing of the same asset/project.
-- Expose license listing and assignment without adding editor UI. Project access uses project membership, not the original buyer identity.
-- Verify migration up/down and purchase/access behavior against a rollback-only local database transaction; run relevant checks.
+1. **Real-Time Project Completion & Confetti Modal**
+   - Emit Socket.IO event `projectCompleted` upon final milestone approval to `team_{teamId}` and participants.
+   - Pop `ProjectCompletionModal` with celebratory confetti on both Client and Freelancer screens in real-time.
+   - Modal contains "Rate & Review Now" (opens existing `RateReviewModal`) and "Later" buttons.
 
-## Implementation and verification
-- Added and applied only `1825200000000_market-asset-licenses` to the local development database. Confirmed the old table is removed and the license table exists. Other pending migrations were not applied.
-- Migration up/down tested with active, refunded, and soft-deleted fixtures and historical transaction linkage. Rollback refuses lossy conversion after project assignments/multiple purchases.
-- `node scripts/test_market_asset_licenses.js` passed before and after migration; all fixtures, wallet writes, and notifications rolled back. Covers fees, free claims, repeat purchases, assignment permissions/immutability, duplicate project grants, collaborator access after buyer departure, review counts, and refund selection.
-- `node --test scripts/test_asset_market_actions.js`: 7 passed, including new assignment validation and history pagination checks.
-- Frontend `npm run build` passed (existing chunk-size/dynamic-import/plugin-timing warnings). Focused lint comparison found no new findings. Backend syntax checks and `git diff --check` passed.
-- Main-site purchase copy now describes one project license and supports another purchase after assignment. No editor UI changes were made for this task; editor checkout and clean-export integration remain unwired.
-- No commit. Existing unrelated worktree changes preserved.
+2. **Double-Blind Review Protection & Post-Rating Waiting State**
+   - Require ratings from both parties before the contract transitions to `Completed`.
+   - Mask counterparty's star rating and written feedback until both parties have submitted.
+   - When one party has submitted their review, show a dedicated waiting banner indicating review completed, counterparty pending, with a live 24-hour countdown timer.
+
+3. **Approach B: Workspace Lock & Persistent Gate**
+   - If user dismisses the completion modal with "Later", affix a persistent Action Required banner to the workspace.
+   - Restrict edits to read-only until the rating is submitted.
+
+4. **Active to Archived Workspace Transition**
+   - Set `is_archived = true` and `archived_at = NOW()` once the project closeout is finalized.
+   - Display clean `Archived (Read Only)` badge in the workspace header.
+
+5. **30-Day Auto-Deletion Retention Worker**
+   - Background job to purge ephemeral tasks and temporary timeline scratchpads after 30 days.
+   - Permanently retain contracts, financial ledgers, escrow records, and ratings.
+
+## Acceptance Criteria
+
+- [x] Real-time `projectCompleted` Socket.IO broadcast on final milestone approval.
+- [x] Confetti modal launches simultaneously on client and freelancer screens.
+- [x] Direct seamless hookup to existing `RateReviewModal`.
+- [x] Double-blind review masking (reviews revealed only when both submitted).
+- [x] Persistent gate banner if review is postponed.
+- [x] Workspace transitions to `Archived` upon completion.
+- [x] Workspace card thumbnail upper-left overlay badge with sleek dark glass styling and live 24h countdown timer.
+- [x] Workspace card status badges updated to: `Active`, `Rate & Review`, `Archived`.
+- [x] Workspaces tabs structured as: `All Workspaces | Active | Rate & Review | Archived | Workspace Info`.
+- [x] Dedicated `WorkspaceInfoTab` with clean monochromatic tables documenting lifecycles, double-blind review protocols, retention policies, and roles.
+- [x] Standardized "Action Required: Rate & Review" persistent banner to neutral zinc card styling matching "Your Review Submitted".
+- [x] 30-day retention cleanup job implementation (`WorkspaceRetentionJob.js` registered in `BackgroundJob.js`).
+- [x] Clean build verification (`npm --prefix frontend run build`).

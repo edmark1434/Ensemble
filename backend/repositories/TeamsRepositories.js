@@ -89,7 +89,53 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     COALESCE(t.is_archived, FALSE) AS is_archived,
     a.display_name,a.handle,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
-    count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status
+    count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status,
+    (
+      SELECT json_build_object(
+        'contract_id', c.contract_id,
+        'needs_review', (
+          (c.status = 'Done' OR NOT EXISTS (
+            SELECT 1 FROM contract_milestones cm WHERE cm.contract_id = c.contract_id AND cm.status != 'completed'
+          ))
+          AND c.status NOT IN ('Completed', 'Cancelled')
+          AND NOT EXISTS (
+            SELECT 1 FROM ratings r
+             WHERE r.contract_id = c.contract_id
+               AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN p.freelancer_account_id ELSE j.client_account_id END)
+          )
+        ),
+        'user_has_reviewed', EXISTS (
+          SELECT 1 FROM ratings r
+           WHERE r.contract_id = c.contract_id
+             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN p.freelancer_account_id ELSE j.client_account_id END)
+        ),
+        'counterparty_has_reviewed', EXISTS (
+          SELECT 1 FROM ratings r
+           WHERE r.contract_id = c.contract_id
+             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN j.client_account_id ELSE p.freelancer_account_id END)
+        ),
+        'counterparty_reviewed_at', (
+          SELECT r.created_at FROM ratings r
+           WHERE r.contract_id = c.contract_id
+             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN j.client_account_id ELSE p.freelancer_account_id END)
+           LIMIT 1
+        ),
+        'user_reviewed_at', (
+          SELECT r.created_at FROM ratings r
+           WHERE r.contract_id = c.contract_id
+             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN p.freelancer_account_id ELSE j.client_account_id END)
+           LIMIT 1
+        )
+      )
+      FROM team_contract_workspaces tcw
+      JOIN contracts c ON c.contract_id = tcw.contract_id
+      JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      JOIN proposals p ON p.proposal_id = jc.proposal_id
+      JOIN jobs j ON j.job_id = p.job_id
+      WHERE tcw.team_id = t.team_id
+        AND (j.client_account_id = $1 OR p.freelancer_account_id = $1)
+      LIMIT 1
+    ) AS review_status
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id=t.account_id
     LEFT JOIN team_members am ON am.team_id=t.team_id LEFT JOIN users u ON u.account_id=$1 LEFT JOIN team_members mine ON mine.team_id=t.team_id AND mine.user_id=u.user_id

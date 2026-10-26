@@ -24,6 +24,7 @@ const {
 } = require("../repositories/NotificationRepositories");
 const {getIo} = require('../lib/WebSocket');
 const { reconcileCashoutsServices } = require('../services/CashoutServices');
+const { purgeExpiredArchivedWorkspaces } = require('../jobs/WorkspaceRetentionJob');
 const { cleanupExpiredOnboardingAvatars } = require('../services/OnboardingServices');
 const { reconcileDiditVerificationSessionsServices } = require('../services/AccountVerificationServices');
 const { reconcileOverdueTeamTasksServices } = require('../services/TeamTaskServices');
@@ -443,6 +444,15 @@ function startPaymentReconciliationJob() {
             await purgeExpiredAuditLogsServices();
         } catch (err) {
             console.error("Audit log cleanup failed:", err.message);
+        }
+    });
+
+    // Daily purge of ephemeral tasks from workspaces archived over 30 days ago
+    cron.schedule("0 3 * * *", async () => {
+        try {
+            await purgeExpiredArchivedWorkspaces();
+        } catch (err) {
+            console.error("Workspace 30-day retention cleanup failed:", err.message);
         }
     });
 

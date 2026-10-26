@@ -62,12 +62,16 @@ let marketplaceTopInitial: NavItem[] = [
     { label: "Asset Library", icon: Library, to: "/assets" },
 ];
 
-let activityRecordsInitial: NavItem[] = [
-    { label: "Deliveries", icon: LayoutDashboard, to: "/dashboard" },
+let workflowInitial: NavItem[] = [
+    { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+    { label: "Workspace", icon: Briefcase, to: "/workspaces" },
+    { label: "Chat Inbox", icon: MessageSquare, to: "/inbox" },
+];
+
+let recordsInitial: NavItem[] = [
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: ScrollText, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
-    { label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];
 
 const getSidenavTourId = (path: string) => {
@@ -82,6 +86,7 @@ const getSidenavTourId = (path: string) => {
     if (path === "/gigs") return "sidenav-gigs-services";
     if (path === "/gigs/orders") return "sidenav-gigs-orders";
     if (path === "/dashboard") return "sidenav-deliveries";
+    if (path === "/workspaces") return "sidenav-workspaces";
     if (path === "/terms-of-services") return "sidenav-tos";
     if (path === "/contracts") return "sidenav-contracts";
     if (path === "/transactions") return "sidenav-transactions";
@@ -136,7 +141,8 @@ const UserNav: React.FC<UserNavProps> = () => {
     const marketplaceTopState = marketplaceTopInitial;
     const jobsState = hidePersonalNav ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
     const gigsState = hidePersonalNav ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
-    const activityState = hidePersonalNav ? [] : activityRecordsInitial;
+    const workflowState = hidePersonalNav ? [] : workflowInitial;
+    const recordsState = hidePersonalNav ? [] : recordsInitial;
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();
@@ -153,6 +159,37 @@ const UserNav: React.FC<UserNavProps> = () => {
        }`;
 
     // Helper to determine active state for Jobs sub-navigation
+    const isWorkflowItemActive = (to: string) => {
+        if (to === "/dashboard") {
+            return location.pathname.startsWith("/dashboard");
+        }
+        if (to === "/workspaces") {
+            return (
+                location.pathname.startsWith("/workspaces") ||
+                location.pathname.startsWith("/team-project") ||
+                (location.pathname === "/teams" && location.search.includes("tab=projects"))
+            );
+        }
+        if (to === "/inbox") {
+            return location.pathname.startsWith("/inbox");
+        }
+        return location.pathname === to;
+    };
+
+    const isPrimaryItemActive = (to: string, defaultIsActive: boolean) => {
+        if (to === "/teams") {
+            if (
+                location.pathname.startsWith("/workspaces") ||
+                location.pathname.startsWith("/team-project") ||
+                (location.pathname === "/teams" && location.search.includes("tab=projects"))
+            ) {
+                return false;
+            }
+            return location.pathname.startsWith("/teams");
+        }
+        return defaultIsActive;
+    };
+
     const isJobItemActive = (to: string) => {
         if (to === "/jobs") {
             return (
@@ -476,19 +513,89 @@ const UserNav: React.FC<UserNavProps> = () => {
                       )}
                    </div>
 
+
                    {/* Section Separator Line */}
                    {isCollapsed && <div className="my-4 border-t border-gray-200 dark:border-white/10 mx-2" />}
 
-                   {/* 3. Activity & Records Section */}
-                   {activityState.length > 0 && (
+                   {/* 3. Workflow Section */}
+                   {workflowState.length > 0 && (
                      <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
                         {!isCollapsed && (
                            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
-                              Activity & Records
+                              Workflow
                            </p>
                         )}
                         <ul className="space-y-1">
-                           {activityState.map(({ label, icon: Icon, to }) => (
+                           {workflowState.map(({ label, icon: Icon, to }) => {
+                              const isActive = isWorkflowItemActive(to);
+                              return (
+                                <li key={label} className="w-full">
+                                   {!isCollapsed ? (
+                                      <NavLink to={to} data-tour={getSidenavTourId(to)}>
+                                         <div
+                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
+                                               isActive ? "text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                                            }`}
+                                         >
+                                            {isActive && (
+                                               <motion.div
+                                                  layoutId="activeNavBackground"
+                                                  className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
+                                                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                               />
+                                            )}
+                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                            <span className="relative z-10 text-sm">{label}</span>
+                                         </div>
+                                      </NavLink>
+                                   ) : (
+                                      /* Collapsed Floating Display for Workflow Items */
+                                      <div className="group w-full flex justify-center hover:z-50">
+                                         <NavLink to={to} data-tour={getSidenavTourId(to)}>
+                                            <div
+                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
+                                                  isActive ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                                               }`}
+                                            >
+                                               {isActive && (
+                                                  <motion.div
+                                                     layoutId="activeNavBackgroundCollapsed"
+                                                     className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
+                                                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                                  />
+                                               )}
+                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                            </div>
+                                         </NavLink>
+
+                                         {/* Floating Title Display */}
+                                         <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
+                                            <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                               <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
+                                            </div>
+                                         </div>
+                                      </div>
+                                   )}
+                                </li>
+                              );
+                           })}
+                        </ul>
+                     </div>
+                   )}
+
+                   {/* Section Separator Line */}
+                   {isCollapsed && <div className="my-4 border-t border-gray-200 dark:border-white/10 mx-2" />}
+
+                   {/* 4. Records Section */}
+                   {recordsState.length > 0 && (
+                     <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
+                        {!isCollapsed && (
+                           <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
+                              Records
+                           </p>
+                        )}
+                        <ul className="space-y-1">
+                           {recordsState.map(({ label, icon: Icon, to }) => (
                             <li key={label} className="w-full">
                                {!isCollapsed ? (
                                   <NavLink to={to} end={to === "/contracts"} data-tour={getSidenavTourId(to)}>
@@ -507,11 +614,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            )}
                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                            <span className="relative z-10 text-sm">{label}</span>
-                                           {to === "/inbox" && inboxUnread > 0 && (
-                                              <span className="relative z-10 ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
-                                                 {formatUnreadBadge(inboxUnread)}
-                                              </span>
-                                           )}
+                                           
                                         </div>
                                      )}
                                   </NavLink>
@@ -533,11 +636,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  />
                                               )}
                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
-                                              {to === "/inbox" && inboxUnread > 0 && (
-                                                 <span className="absolute -top-1.5 -right-1.5 z-20 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
-                                                    {formatUnreadBadge(inboxUnread)}
-                                                 </span>
-                                              )}
+                                              
                                            </div>
                                         )}
                                      </NavLink>

@@ -62,6 +62,7 @@ interface ProjectOverviewTabProps {
   milestones?: MilestoneData[];
   onSelectTab?: (tab: string) => void;
   onOpenRateModal?: (contractId: string, targetName: string) => void;
+  isClient?: boolean;
 }
 
 /**
@@ -192,7 +193,9 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
   milestones = [],
   onSelectTab,
   onOpenRateModal,
+  isClient: propIsClient,
 }) => {
+  const isClient = propIsClient !== undefined ? propIsClient : (project?.user_role === 'Client' || Boolean(project?.is_client));
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawSubTab = searchParams.get('subtab') as OverviewSubTab;
@@ -273,10 +276,15 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
     .reduce((acc, m) => acc + Number(m.budget_credits || 0), 0);
   const escrowRemaining = Math.max(0, totalCredits - releasedCredits);
 
-  // Pending for rating calculation
-  const pendingForRatingCount = activeMilestonesList.filter(
-    (m) => m.is_completed && !m.has_rated
-  ).length;
+  // Pending for rating calculation: count of contracts needing review from the user
+  const pendingForRatingCount = (contracts || []).filter((c: any) => {
+    if (c.user_has_reviewed || c.contract_status === 'Completed') return false;
+    const allMilestonesDone =
+      c.milestones &&
+      c.milestones.length > 0 &&
+      c.milestones.every((m: any) => m.status === 'completed' || m.status === 'approved');
+    return c.contract_status === 'Done' || allMilestonesDone;
+  }).length;
 
   return (
     <div className="space-y-6">
@@ -512,16 +520,38 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
         </div>
 
         {/* Pending for Rating */}
-        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+        <div
+          onClick={() => {
+            if (pendingForRatingCount > 0 && onOpenRateModal) {
+              const pendingContract = (contracts || []).find(
+                (c: any) =>
+                  !c.user_has_reviewed &&
+                  c.contract_status !== 'Completed' &&
+                  (c.contract_status === 'Done' ||
+                    (c.milestones?.length > 0 &&
+                      c.milestones.every((m: any) => m.status === 'completed' || m.status === 'approved')))
+              );
+              if (pendingContract) {
+                onOpenRateModal(
+                  pendingContract.contract_id,
+                  isClient ? pendingContract.freelancer_name : pendingContract.client_name
+                );
+              }
+            }
+          }}
+          className={`bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs ${
+            pendingForRatingCount > 0 ? 'cursor-pointer hover:border-amber-400 dark:hover:border-amber-500/50 transition' : ''
+          }`}
+        >
           <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider truncate">For Rating</span>
-            <Star className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+            <Star className={`w-3.5 h-3.5 ${pendingForRatingCount > 0 ? 'text-amber-500 fill-amber-500' : 'text-zinc-400 dark:text-zinc-500'}`} />
           </div>
           <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {pendingForRatingCount}
           </div>
           <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium truncate block">
-            Awaiting feedback
+            {pendingForRatingCount > 0 ? 'Awaiting feedback' : 'All rated'}
           </span>
         </div>
 

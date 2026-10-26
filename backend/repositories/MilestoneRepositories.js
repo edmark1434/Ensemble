@@ -42,7 +42,8 @@ async function getActiveMilestonesNowOverdue() {
             c.contract_type,
             COALESCE(jc_info.client_account_id,  gc_info.client_account_id)  AS client_account_id,
             COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
-            COALESCE(jc_info.title, gc_info.title, 'Your Contract') AS contract_title
+            COALESCE(jc_info.title, gc_info.title, 'Your Contract') AS contract_title,
+            (SELECT COUNT(*) FROM contract_milestones WHERE contract_id = cm.contract_id) AS total_milestones
         FROM contract_milestones cm
         JOIN contracts c ON cm.contract_id = c.contract_id
         LEFT JOIN (
@@ -347,7 +348,8 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
             WHERE contract_id = $1 AND status NOT IN ('completed', 'cancelled', 'abandoned')
         `, [contractId]);
 
-        if (parseInt(pendingCount.rows[0].cnt, 10) === 0) {
+        const contractDone = parseInt(pendingCount.rows[0].cnt, 10) === 0;
+        if (contractDone) {
             await client.query(`
                 UPDATE contracts SET status = 'Done' WHERE contract_id = $1
             `, [contractId]);
@@ -372,6 +374,7 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
             transactionId: txRes.rows[0].credit_transaction_id,
             newBalance: Number(creditRes.rows[0].balance_credits),
             nextMilestone: nextRes.rows[0] || null,
+            contractDone,
         };
     } catch (err) {
         await client.query('ROLLBACK');
@@ -902,7 +905,8 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
             WHERE contract_id = $1 AND status NOT IN ('completed', 'cancelled', 'abandoned')
         `, [contractId]);
 
-        if (parseInt(pendingCount.rows[0].cnt, 10) === 0) {
+        const contractDone = parseInt(pendingCount.rows[0].cnt, 10) === 0;
+        if (contractDone) {
             await client.query(`UPDATE contracts SET status = 'Done' WHERE contract_id = $1`, [contractId]);
             await client.query(`
                 UPDATE gig_requests
@@ -925,6 +929,7 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
             transactionId: txRes.rows[0].credit_transaction_id,
             newBalance: Number(creditRes.rows[0].balance_credits),
             nextMilestone: nextRes.rows[0] || null,
+            contractDone,
         };
     } catch (err) {
         await client.query('ROLLBACK');

@@ -1511,9 +1511,9 @@ async function autoExpireJobsRepositories() {
                 }
 
                 await client.query(`
-                    INSERT INTO notifications (recipient_account_id, actor_account_id, type, title, message, reference_table, reference_id)
-                    VALUES ($1, $1, 'system', 'Job Posting Expired', $2, 'jobs', $3)
-                `, [job.client_account_id, `Your job "${job.title}" has expired with no applicants. Your 50-credit posting fee has been fully refunded to your wallet.`, jobId]);
+                    INSERT INTO notifications (message, is_read, reference_table, reference_prefix, reference_path, reference_id, account_id)
+                    VALUES ($1, false, 'jobs', 'JOB_EXPIRED', '/job-market', $2, $3)
+                `, [`Your job "${job.title}" has expired with no applicants. Your 50-credit posting fee has been fully refunded to your wallet.`, jobId, job.client_account_id]);
 
             } else {
                 for (const prop of proposalsRes.rows) {
@@ -1553,9 +1553,9 @@ async function autoExpireJobsRepositories() {
                     `, [prop.proposal_id]);
 
                     await client.query(`
-                        INSERT INTO notifications (recipient_account_id, actor_account_id, type, title, message, reference_table, reference_id)
-                        VALUES ($1, $1, 'system', 'Proposal Fee Refunded', $2, 'jobs', $3)
-                    `, [prop.freelancer_account_id, `The application window for "${job.title}" has closed without a hire. Your proposal submission fee of ${refundAmount} credits has been refunded.`, jobId]);
+                        INSERT INTO notifications (message, is_read, reference_table, reference_prefix, reference_path, reference_id, account_id)
+                        VALUES ($1, false, 'jobs', 'PROPOSAL_FEE_REFUNDED', '/job-market', $2, $3)
+                    `, [`The application window for "${job.title}" has closed without a hire. Your proposal submission fee of ${refundAmount} credits has been refunded.`, jobId, prop.freelancer_account_id]);
                 }
             }
 

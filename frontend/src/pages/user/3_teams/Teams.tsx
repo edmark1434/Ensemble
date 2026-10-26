@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Briefcase, CheckCircle2, Crown, Grid3x3, List, Plus, Search, UserPlus, Users } from "lucide-react";
+import { ArrowUpRight, Briefcase, CheckCircle2, Clock, Crown, Grid3x3, List, Plus, Search, Star, UserPlus, Users } from "lucide-react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import { uploadFileToIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
@@ -36,7 +37,64 @@ interface Team {
   current_user_role?: string;
   current_user_status?: string;
   is_business_verified?: boolean;
+  review_status?: {
+    contract_id: string;
+    needs_review: boolean;
+    user_has_reviewed: boolean;
+    counterparty_has_reviewed: boolean;
+    counterparty_reviewed_at?: string | null;
+    user_reviewed_at?: string | null;
+  } | null;
 }
+
+const CardReviewTimer: React.FC<{ contractId: string; reviewedAt?: string | null }> = ({ contractId, reviewedAt }) => {
+  const [timeLeftMs, setTimeLeftMs] = useState<number>(() => {
+    const storageKey = `ensemble_review_deadline_${contractId}`;
+    let deadline = 0;
+    if (reviewedAt) {
+      deadline = new Date(reviewedAt).getTime() + 24 * 60 * 60 * 1000;
+    } else {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        deadline = parseInt(stored, 10);
+      }
+      if (!deadline || isNaN(deadline)) {
+        deadline = Date.now() + 24 * 60 * 60 * 1000;
+        localStorage.setItem(storageKey, String(deadline));
+      }
+    }
+    return Math.max(0, deadline - Date.now());
+  });
+
+  useEffect(() => {
+    const update = () => {
+      const storageKey = `ensemble_review_deadline_${contractId}`;
+      let deadline = 0;
+      if (reviewedAt) {
+        deadline = new Date(reviewedAt).getTime() + 24 * 60 * 60 * 1000;
+      } else {
+        const stored = localStorage.getItem(storageKey);
+        deadline = stored ? parseInt(stored, 10) : Date.now() + 24 * 60 * 60 * 1000;
+      }
+      setTimeLeftMs(Math.max(0, deadline - Date.now()));
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [contractId, reviewedAt]);
+
+  const formatCountdown = (ms: number) => {
+    if (ms <= 0) return "00:00:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  return <span className="font-mono">{formatCountdown(timeLeftMs)}</span>;
+};
 
 const TeamCardSkeleton = () => (
   <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs animate-pulse">
@@ -52,12 +110,30 @@ const TeamCardSkeleton = () => (
   </div>
 );
 
-export default function Teams() {
+interface TeamsProps {
+  defaultTab?: "general" | "projects";
+}
+
+export default function Teams({ defaultTab }: TeamsProps = {}) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "projects">("general");
+  const initialTab: "general" | "projects" =
+    defaultTab || (tabParam === "projects" || tabParam === "workspaces" ? "projects" : "general");
+  const [activeTab, setActiveTab] = useState<"general" | "projects">(initialTab);
+
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    } else if (tabParam === "projects" || tabParam === "workspaces") {
+      setActiveTab("projects");
+    } else if (tabParam === "general") {
+      setActiveTab("general");
+    }
+  }, [defaultTab, tabParam]);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sortMethod, setSortMethod] = useState<"default" | "az" | "members">("default");
@@ -141,6 +217,23 @@ export default function Teams() {
     void loadEligibility();
   }, [loadTeams, loadEligibility]);
 
+  useEffect(() => {
+    if (!socket.connected) socket.connect();
+    const handleUpdate = () => {
+      loadTeams(false);
+    };
+    socket.on("teamTaskWorkspaceUpdated", handleUpdate);
+    socket.on("contractReviewUpdated", handleUpdate);
+    socket.on("contractFullyCompleted", handleUpdate);
+    socket.on("projectCompleted", handleUpdate);
+    return () => {
+      socket.off("teamTaskWorkspaceUpdated", handleUpdate);
+      socket.off("contractReviewUpdated", handleUpdate);
+      socket.off("contractFullyCompleted", handleUpdate);
+      socket.off("projectCompleted", handleUpdate);
+    };
+  }, [loadTeams]);
+
   const createTeam = async ({ photo, ...teamValues }: TeamFormValues & { photo: File }) => {
     if (!photo.type.startsWith("image/")) {
       showErrorToast("Choose a valid image file");
@@ -217,15 +310,10 @@ export default function Teams() {
     }
   };
 
-  // Split teams by type
-  const projectTeams = teams.filter((t) => t.team_type === "contractual");
+  // General agency & collective teams only (contractual workspaces are in /workspaces)
   const generalTeams = teams.filter((t) => t.team_type !== "contractual");
 
-  // Displayed teams based on active tab
-  let displayedTeams = activeTab === "general" ? generalTeams : projectTeams;
-
-  // Sorting
-  displayedTeams = [...displayedTeams].sort((a, b) => {
+  let displayedTeams = [...generalTeams].sort((a, b) => {
     if (sortMethod === "az") {
       return (a.display_name || "").localeCompare(b.display_name || "");
     }
@@ -237,16 +325,10 @@ export default function Teams() {
 
   const tabs = [
     {
-      id: "general",
+      id: "general" as const,
       label: "General Teams",
       icon: <Users className="h-4 w-4" />,
       count: generalTeams.length,
-    },
-    {
-      id: "projects",
-      label: "Project Workspaces",
-      icon: <Briefcase className="h-4 w-4" />,
-      count: projectTeams.length,
     },
   ];
 
@@ -264,6 +346,31 @@ export default function Teams() {
         <div>
           {/* Card Thumbnail Banner (Zero black gradient overlay) */}
           <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-gray-100 dark:bg-zinc-800">
+            {/* Review Status & Timer Overlay Badge - Upper Left (Sleek, less-colorful, high contrast) */}
+            {isProject && !team.is_archived && team.review_status?.needs_review && (
+              <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/85 dark:bg-black/85 text-white text-[10px] font-medium shadow-md border border-white/20 backdrop-blur-md">
+                <Star className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
+                <span className="font-semibold text-zinc-100">Rate &amp; Review</span>
+                <span className="text-zinc-500">•</span>
+                <CardReviewTimer
+                  contractId={team.review_status.contract_id}
+                  reviewedAt={team.review_status.counterparty_reviewed_at}
+                />
+              </div>
+            )}
+
+            {isProject && !team.is_archived && !team.review_status?.needs_review && team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed && (
+              <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/85 dark:bg-black/85 text-white text-[10px] font-medium shadow-md border border-white/20 backdrop-blur-md">
+                <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-zinc-100">Awaiting Peer</span>
+                <span className="text-zinc-500">•</span>
+                <CardReviewTimer
+                  contractId={team.review_status.contract_id}
+                  reviewedAt={team.review_status.user_reviewed_at}
+                />
+              </div>
+            )}
+
             {team.avatar_path ? (
               <img
                 src={getImageUrl(team.avatar_path)}
@@ -294,21 +401,22 @@ export default function Teams() {
             <div className="flex flex-wrap items-center gap-1.5">
               {isProject ? (
                 <>
-                  {/* Active / Archived Status (Green / Purple) */}
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                      team.is_archived
-                        ? "bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
-                        : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        team.is_archived ? "bg-purple-500" : "bg-emerald-500"
-                      }`}
-                    />
-                    {team.is_archived ? "Archived" : "Active Workspace"}
-                  </span>
+                  {team.is_archived ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-purple-500" />
+                      Archived
+                    </span>
+                  ) : (team.review_status?.needs_review || (team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed)) ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
+                      Rate &amp; Review
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                      Active
+                    </span>
+                  )}
 
                   {/* Category Tag (Gray) */}
                   {team.category && (
@@ -394,6 +502,26 @@ export default function Teams() {
         className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-3.5 transition-all duration-200 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-xs cursor-pointer group"
       >
         <div className="relative h-18 w-28 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-zinc-800">
+          {/* Review Status & Timer Overlay Badge - Upper Left */}
+          {isProject && !team.is_archived && team.review_status?.needs_review && (
+            <div className="absolute top-1 left-1 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-900/85 dark:bg-black/85 text-white text-[9px] font-medium shadow-xs border border-white/20 backdrop-blur-md">
+              <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400 shrink-0" />
+              <CardReviewTimer
+                contractId={team.review_status.contract_id}
+                reviewedAt={team.review_status.counterparty_reviewed_at}
+              />
+            </div>
+          )}
+          {isProject && !team.is_archived && !team.review_status?.needs_review && team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed && (
+            <div className="absolute top-1 left-1 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-900/85 dark:bg-black/85 text-white text-[9px] font-medium shadow-xs border border-white/20 backdrop-blur-md">
+              <Clock className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+              <CardReviewTimer
+                contractId={team.review_status.contract_id}
+                reviewedAt={team.review_status.user_reviewed_at}
+              />
+            </div>
+          )}
+
           {team.avatar_path ? (
             <img
               src={getImageUrl(team.avatar_path)}
@@ -424,20 +552,22 @@ export default function Teams() {
           <div className="flex flex-wrap items-center gap-1.5">
             {isProject ? (
               <>
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    team.is_archived
-                      ? "bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
-                      : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      team.is_archived ? "bg-purple-500" : "bg-emerald-500"
-                    }`}
-                  />
-                  {team.is_archived ? "Archived" : "Active Workspace"}
-                </span>
+                {team.is_archived ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-purple-500" />
+                    Archived
+                  </span>
+                ) : (team.review_status?.needs_review || (team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed)) ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
+                    Rate &amp; Review
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                    Active
+                  </span>
+                )}
 
                 {team.category && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
@@ -539,7 +669,7 @@ export default function Teams() {
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
             <input
               type="text"
-              placeholder="Search teams or projects by title or keyword..."
+              placeholder="Search teams by title or keyword..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 shadow-xs"
@@ -556,7 +686,7 @@ export default function Teams() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as "projects" | "general")}
+                  onClick={() => setActiveTab("general")}
                   className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 cursor-pointer ${
                     isActive
                       ? "text-blue-600 dark:text-blue-400"

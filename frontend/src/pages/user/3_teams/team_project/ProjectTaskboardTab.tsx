@@ -82,6 +82,7 @@ interface ProjectTaskboardTabProps {
   milestones?: any[];
   onTasksUpdated?: (silent?: boolean) => void;
   projectTitle?: string;
+  isReadOnly?: boolean;
 }
 
 type DisplayMode = 'board' | 'list' | 'table' | 'gantt';
@@ -199,13 +200,35 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   milestones = [],
   onTasksUpdated,
   projectTitle,
+  isReadOnly = false,
 }) => {
   // Local optimistic state for zero-latency seamless taskboard updates
-  const [localTasks, setLocalTasks] = useState<TaskItem[]>(tasks);
+  const [localTasks, setLocalTasks] = useState<TaskItem[]>(() =>
+    (tasks || []).map((t) => {
+      const ms = (milestones || []).find((m: any) =>
+        (t.job_milestone_id && (String(m.job_milestone_id) === String(t.job_milestone_id) || String(m.contract_milestone_id) === String(t.job_milestone_id))) ||
+        (t.contract_milestone_id && (String(m.contract_milestone_id) === String(t.contract_milestone_id) || String(m.job_milestone_id) === String(t.contract_milestone_id))) ||
+        (t.milestone_title && m.milestone_title && t.milestone_title.trim().toLowerCase() === m.milestone_title.trim().toLowerCase())
+      );
+      const isMsDone = ms ? ['completed', 'approved', 'done'].includes(String(ms.status || ms.milestone_status || '').toLowerCase()) || ms.is_claimed : false;
+      const isTaskMsDone = ['completed', 'approved', 'done'].includes(String(t.milestone_status || '').toLowerCase());
+      if (t.status !== 'completed' && (isMsDone || isTaskMsDone)) {
+        return { ...t, status: 'completed' };
+      }
+      return t;
+    })
+  );
 
   useEffect(() => {
-    setLocalTasks(tasks);
-  }, [tasks]);
+    setLocalTasks(
+      (tasks || []).map((t) => {
+        if (t.status !== 'completed' && isTaskMilestoneCompleted(t)) {
+          return { ...t, status: 'completed' };
+        }
+        return t;
+      })
+    );
+  }, [tasks, milestones]);
 
   // Check if current user is a subcontractor with scoped milestone permissions
   const currentMember = useMemo(() => {
@@ -393,6 +416,56 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setSelectedTaskId((prev) => (prev === task.task_id ? null : task.task_id));
   };
 
+  // Helper to locate milestone attached to a task
+  const getTaskMilestone = (task: any) => {
+    if (!milestones || milestones.length === 0) return null;
+    return milestones.find((m: any) =>
+      (task?.job_milestone_id && (String(m.job_milestone_id) === String(task.job_milestone_id) || String(m.contract_milestone_id) === String(task.job_milestone_id))) ||
+      (task?.contract_milestone_id && (String(m.contract_milestone_id) === String(task.contract_milestone_id) || String(m.job_milestone_id) === String(task.contract_milestone_id))) ||
+      (task?.milestone_title && m.milestone_title && task.milestone_title.trim().toLowerCase() === m.milestone_title.trim().toLowerCase())
+    );
+  };
+
+  // Helper to determine if a task is actually locked waiting for earlier milestones
+  const isTaskActuallyLocked = (task: any): boolean => {
+    if (!task) return false;
+    const ms = getTaskMilestone(task);
+    if (ms) {
+      const msStatus = String(ms.status || '').toLowerCase();
+      if (['active', 'in_progress', 'completed', 'submitted_for_review', 'revision_requested', 'review'].includes(msStatus)) {
+        return false;
+      }
+      if (ms.order_index === 0 || ms.index === 0) {
+        return false;
+      }
+    }
+    const taskMsStatus = String(task.milestone_status || '').toLowerCase();
+    if (['active', 'in_progress', 'completed', 'submitted_for_review', 'revision_requested', 'review'].includes(taskMsStatus)) {
+      return false;
+    }
+    if (task.milestone_order === 0) {
+      return false;
+    }
+    return Boolean(task.is_locked);
+  };
+
+  // Helper to determine if a task's milestone is finished/completed
+  const isTaskMilestoneCompleted = (task: any): boolean => {
+    if (!task) return false;
+    const ms = getTaskMilestone(task);
+    if (ms) {
+      const msStatus = String(ms.status || ms.milestone_status || '').toLowerCase();
+      if (['completed', 'approved', 'done'].includes(msStatus) || ms.is_claimed) {
+        return true;
+      }
+    }
+    const taskMsStatus = String(task.milestone_status || '').toLowerCase();
+    if (['completed', 'approved', 'done'].includes(taskMsStatus)) {
+      return true;
+    }
+    return false;
+  };
+
   const handleDropOnColumn = (targetColId: 'todo' | 'in_progress' | 'review' | 'completed') => {
     if (!draggingTaskId) return;
     const task = localTasks.find((t) => t.task_id === draggingTaskId);
@@ -400,7 +473,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setDragOverColumnId(null);
     if (!task) return;
 
-    if (task.is_locked && !isClient) {
+    if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones to finish.');
       return;
     }
@@ -411,16 +484,6 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     if (normalizeStatus(task.status) === targetColId) return;
 
     handleUpdateStatus(task, targetColId);
-  };
-
-  // Helper to locate milestone attached to a task
-  const getTaskMilestone = (task: any) => {
-    if (!milestones || milestones.length === 0) return null;
-    return milestones.find((m: any) =>
-      (task?.job_milestone_id && (String(m.job_milestone_id) === String(task.job_milestone_id) || String(m.contract_milestone_id) === String(task.job_milestone_id))) ||
-      (task?.contract_milestone_id && (String(m.contract_milestone_id) === String(task.contract_milestone_id) || String(m.job_milestone_id) === String(task.contract_milestone_id))) ||
-      (task?.milestone_title && m.milestone_title && task.milestone_title.trim().toLowerCase() === m.milestone_title.trim().toLowerCase())
-    );
   };
 
   // Helper to safely format 1-indexed milestone order (M1, M2, etc.)
@@ -656,20 +719,48 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  // The only person who can change status of their tasks is the one assigned to it
+  const isTeamMember = Boolean(currentMember);
+  const isContractor = !isClient && !isSubcontractor;
+
+  // The person who can change status/drag tasks is the assignee, contractor, or any team member if unassigned
   const isTaskAssignee = (task: TaskItem) => {
-    if (!task.assignee_account_id || !currentUserAccountId) return false;
-    const isMe = String(task.assignee_account_id).trim() === String(currentUserAccountId).trim();
-    if (!isMe) return false;
+    if (!currentUserAccountId) return false;
+
     // Subcontractors are strictly scoped to tasks under their assigned milestone
-    if (isSubcontractor && subcontractorMilestoneId && task.job_milestone_id) {
-      return String(task.job_milestone_id) === String(subcontractorMilestoneId);
+    if (isSubcontractor) {
+      if (subcontractorMilestoneId && task.job_milestone_id && String(task.job_milestone_id) !== String(subcontractorMilestoneId)) {
+        return false;
+      }
+      if (task.assignee_account_id && String(task.assignee_account_id).trim() !== String(currentUserAccountId).trim()) {
+        return false;
+      }
+      return true;
     }
-    return true;
+
+    // Direct assignee
+    if (task.assignee_account_id && String(task.assignee_account_id).trim() === String(currentUserAccountId).trim()) {
+      return true;
+    }
+
+    // Unassigned task: active team contributors or contractor can take and move it
+    if (!task.assignee_account_id && (isTeamMember || isContractor || !isClient)) {
+      return true;
+    }
+
+    // Primary contractor / lead can manage tasks
+    if (isContractor) {
+      return true;
+    }
+
+    return false;
   };
 
   const handleUpdateStatus = async (task: TaskItem, newStatus: TaskItem['status']) => {
-    if (task.is_locked && !isClient) {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
+    if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones to finish.');
       return;
     }
@@ -689,7 +780,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         return;
       }
     }
-    if (!isTaskAssignee(task)) {
+    if (!isTaskAssignee(task) && !isClient) {
       showErrorToast('Only the assigned team member can change the status of this task.');
       return;
     }
@@ -718,7 +809,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
   // Assignees can set priority for their tasks themselves
   const handleUpdatePriority = async (task: TaskItem, newPriority: TaskItem['priority']) => {
-    if (!isTaskAssignee(task)) {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
+    if (!isTaskAssignee(task) && !isClient) {
       showErrorToast('Only the assigned team member can change the priority.');
       return;
     }
@@ -747,7 +842,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
   // Assignees can set due date for their tasks themselves, constrained by milestone timeline
   const handleUpdateDueDate = async (task: TaskItem, newDueDate: string) => {
-    if (!isTaskAssignee(task)) {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
+    if (!isTaskAssignee(task) && !isClient) {
       showErrorToast('Only the assigned team member can set the due date.');
       return;
     }
@@ -786,7 +885,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   const handleToggleChecklistItem = async (task: TaskItem, itemIndex: number) => {
-    if (task.is_locked && !isClient) {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
+    if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones.');
       return;
     }
@@ -823,6 +926,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
     e.preventDefault();
     if (isClient) {
       showErrorToast('Clients cannot add tasks to the team workspace.');
@@ -941,6 +1048,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     const checklist = Array.isArray(task.checklist) ? task.checklist : [];
     const completedCount = checklist.filter((item) => item.completed).length;
 
+    const isLocked = isTaskActuallyLocked(task);
+
     return (
       <div className="flex flex-col h-full space-y-4">
         {/* Top bar: Code + Status + Close */}
@@ -953,7 +1062,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               {statusCfg.icon}
               <span>{statusCfg.label}</span>
             </span>
-            {task.is_locked && (
+            {isLocked && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
                 <Lock className="w-3 h-3" />
                 <span>Locked</span>
@@ -1133,7 +1242,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               { id: 'completed', label: 'Done' },
             ].map((s) => {
               const isActive = normStatus === s.id;
-              const canMove = !task.is_locked && (isOwner || isClient);
+              const canMove = !isLocked && (isOwner || isClient);
 
               return (
                 <button
@@ -1153,7 +1262,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             })}
           </div>
 
-          {task.is_locked && (
+          {isLocked && (
             <p className="mt-1.5 text-[11px] text-amber-500 dark:text-amber-400 flex items-center gap-1">
               <Lock className="w-3 h-3 shrink-0" />
               <span>Locked waiting for earlier milestone completion.</span>
@@ -1193,7 +1302,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   <input
                     type="checkbox"
                     checked={item.completed}
-                    disabled={task.is_locked || (!isOwner && !isClient)}
+                    disabled={isLocked || (!isOwner && !isClient)}
                     onChange={() => handleToggleChecklistItem(task, idx)}
                     className="mt-0.5 rounded border-zinc-300 text-blue-600 focus:ring-0"
                   />
@@ -1754,7 +1863,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1">
-                        {!isClient && (
+                        {!isClient && !isReadOnly && (
                           <button
                             type="button"
                             onClick={() => openAddTaskModal(col.id as any)}
@@ -1782,7 +1891,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         const isOwner = isTaskAssignee(task);
                         const checklist = Array.isArray(task.checklist) ? task.checklist : [];
                         const completedCount = checklist.filter((item) => item.completed).length;
-                        const canDrag = !task.is_locked && (isOwner || isClient);
+                        const isLocked = isTaskActuallyLocked(task);
+                        const canDrag = !isReadOnly && !isLocked && (isOwner || isClient);
 
                         // Dot color by column status (Screenshot 1)
                         const dotColor =
@@ -1818,7 +1928,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 : isSelected
                                 ? 'ring-2 ring-zinc-900 dark:ring-white border-transparent shadow-md'
                                 : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xs'
-                            } ${task.is_locked ? 'opacity-80' : ''}`}
+                            } ${isLocked ? 'opacity-80' : ''}`}
                           >
                             {/* Top Row: Dot + Task Code + Locked Badge + Drag Grip */}
                             <div className="flex items-center justify-between gap-2 mb-2">
@@ -1827,7 +1937,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 <span className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 truncate">
                                   {taskCode}
                                 </span>
-                                {task.is_locked && (
+                                {isLocked && (
                                   <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 font-bold ml-1" title="Locked waiting for earlier milestone">
                                     <Lock className="w-2.5 h-2.5 shrink-0" />
                                   </span>
@@ -1917,7 +2027,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </div>
 
                     {/* + Add Task at Bottom of Column */}
-                    {!isClient && (
+                    {!isClient && !isReadOnly && (
                       <button
                         type="button"
                         onClick={() => openAddTaskModal(col.id as any)}
@@ -1984,7 +2094,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </span>
                   </div>
 
-                  {!isClient && (
+                  {!isClient && !isReadOnly && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -2192,7 +2302,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     <div className="relative">
                                       <button
                                         type="button"
-                                        disabled={task.is_locked && !isClient}
+                                        disabled={isTaskActuallyLocked(task) && !isClient}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
@@ -2261,7 +2371,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </div>
 
                     {/* Bottom + Add Task Link */}
-                    {!isClient && (
+                    {!isClient && !isReadOnly && (
                       <div className="p-3 border-t border-zinc-100 dark:border-zinc-800/80">
                         <button
                           type="button"
@@ -2371,7 +2481,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               <div className="relative">
                                 <button
                                   type="button"
-                                  disabled={task.is_locked && !isClient}
+                                  disabled={isTaskActuallyLocked(task) && !isClient}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
@@ -2678,8 +2788,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   </div>
                 ) : (
                   milestones.map((m: any, mIdx: number) => {
-                    const statusLower = String(m.milestone_status || '').toLowerCase();
-                    const isApproved = statusLower === 'completed' || statusLower === 'approved';
+                    const statusLower = String(m.milestone_status || m.status || '').toLowerCase();
+                    const isApproved = statusLower === 'completed' || statusLower === 'approved' || Boolean(m.is_claimed);
                     const isReview = statusLower === 'submitted_for_review';
                     const isInProgress = statusLower === 'in_progress' || statusLower === 'active' || m.is_current;
 
@@ -2822,9 +2932,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 ) : (
                   filteredTasks.map((task, idx) => {
                     const normStatus = normalizeStatus(task.status);
-                    const isDone = normStatus === 'completed';
-                    const isReview = normStatus === 'review';
-                    const isInProg = normStatus === 'in_progress';
+                    const isDone = normStatus === 'completed' || isTaskMilestoneCompleted(task);
+                    const isReview = !isDone && normStatus === 'review';
+                    const isInProg = !isDone && normStatus === 'in_progress';
                     const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
 
                     const taskMilestone = getTaskMilestone(task);

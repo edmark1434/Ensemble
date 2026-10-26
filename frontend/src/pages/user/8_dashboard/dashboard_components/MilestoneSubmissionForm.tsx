@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
+import {
+  SubmissionProgressModal,
+  formatBytes,
+  type SubmissionProgressModalState,
+  type ProgressFileItem,
+} from '@/components/ui/SubmissionProgressModal';
 import { Clock, Send } from 'lucide-react';
 import { showErrorToast } from '@/components/utility/toast';
 
@@ -21,6 +27,7 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [markAsDone, setMarkAsDone] = useState(false);
+    const [uploadModalState, setUploadModalState] = useState<SubmissionProgressModalState | null>(null);
     const { mediaList, removeMedia, clearMedia, openFilePicker, handleFileChange, fileInputRef } =
         useInboxUploadMedia(5);
 
@@ -29,14 +36,96 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
         const trimmedMessage = message.trim();
         if (!trimmedMessage && mediaList.length === 0) return;
 
-        setIsSubmitting(true);
-        try {
-            const uploadPromises = mediaList.map(async (media) => {
-                const { key } = await uploadFileWithIntent(media.file, 'documents');
-                return key;
-            });
+        const initialFiles: ProgressFileItem[] = mediaList.map((media) => ({
+            name: media.file.name,
+            size: media.file.size,
+            progress: 0,
+            status: 'pending',
+        }));
 
-            const uploadedUrls = await Promise.all(uploadPromises);
+        const totalBytes = initialFiles.reduce((acc, f) => acc + f.size, 0);
+
+        setIsSubmitting(true);
+        setUploadModalState({
+            isOpen: true,
+            title: markAsDone ? 'Submitting Deliverable for Review' : 'Sending Progress Update',
+            statusText: initialFiles.length > 0 ? 'Preparing files for upload...' : 'Connecting to submission server...',
+            progress: initialFiles.length > 0 ? 0 : 25,
+            totalBytes,
+            transferredBytes: 0,
+            files: initialFiles,
+            stage: initialFiles.length > 0 ? 'uploading' : 'submitting',
+        });
+
+        try {
+            let uploadedUrls: string[] = [];
+
+            if (mediaList.length > 0) {
+                const loadedBytesPerFile = new Array(mediaList.length).fill(0);
+
+                const uploadPromises = mediaList.map(async (media, idx) => {
+                    setUploadModalState((prev) => {
+                        if (!prev) return prev;
+                        const newFiles = [...prev.files];
+                        if (newFiles[idx]) newFiles[idx] = { ...newFiles[idx], status: 'uploading' };
+                        return { ...prev, files: newFiles };
+                    });
+
+                    const { key } = await uploadFileWithIntent(media.file, 'documents', (loaded) => {
+                        loadedBytesPerFile[idx] = loaded;
+                        const currentTotalTransferred = loadedBytesPerFile.reduce((a, b) => a + b, 0);
+                        const filePct = Math.min(100, Math.round((loaded / Math.max(1, media.file.size)) * 100));
+                        const overallPct = totalBytes > 0
+                            ? Math.min(85, Math.round((currentTotalTransferred / totalBytes) * 85))
+                            : 50;
+
+                        setUploadModalState((prev) => {
+                            if (!prev) return prev;
+                            const newFiles = [...prev.files];
+                            if (newFiles[idx]) {
+                                newFiles[idx] = {
+                                    ...newFiles[idx],
+                                    progress: filePct,
+                                    status: filePct >= 100 ? 'completed' : 'uploading',
+                                };
+                            }
+                            return {
+                                ...prev,
+                                statusText: `Uploading ${media.file.name} (${formatBytes(currentTotalTransferred)} of ${formatBytes(totalBytes)})...`,
+                                transferredBytes: currentTotalTransferred,
+                                progress: overallPct,
+                                files: newFiles,
+                                stage: 'uploading',
+                            };
+                        });
+                    });
+
+                    setUploadModalState((prev) => {
+                        if (!prev) return prev;
+                        const newFiles = [...prev.files];
+                        if (newFiles[idx]) newFiles[idx] = { ...newFiles[idx], progress: 100, status: 'completed' };
+                        return { ...prev, files: newFiles };
+                    });
+
+                    return key;
+                });
+
+                uploadedUrls = await Promise.all(uploadPromises);
+
+                setUploadModalState((prev) => prev ? {
+                    ...prev,
+                    progress: 88,
+                    statusText: 'Verifying files & finalizing storage...',
+                    stage: 'verifying',
+                } : null);
+            } else {
+                setUploadModalState((prev) => prev ? {
+                    ...prev,
+                    progress: 60,
+                    statusText: 'Packaging deliverable notes...',
+                    stage: 'submitting',
+                } : null);
+            }
 
             const payload = {
                 message: trimmedMessage,
@@ -44,18 +133,47 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
                 status: markAsDone ? 'submitted_for_review' : 'progress',
             };
 
+            setUploadModalState((prev) => prev ? {
+                ...prev,
+                progress: 94,
+                statusText: markAsDone
+                    ? 'Submitting deliverable to client review queue...'
+                    : 'Registering progress update...',
+                stage: 'submitting',
+            } : null);
+
             const response = await api.post(
                 `/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/submit`,
                 payload
             );
 
+            setUploadModalState((prev) => prev ? {
+                ...prev,
+                progress: 100,
+                statusText: markAsDone
+                    ? 'Deliverable successfully submitted!'
+                    : 'Milestone update sent!',
+                stage: 'completed',
+            } : null);
+
             setMessage('');
             clearMedia();
             setMarkAsDone(false);
             onSuccess(response.data.task);
-        } catch (error) {
+
+            setTimeout(() => {
+                setUploadModalState(null);
+            }, 650);
+        } catch (error: any) {
             console.error('Failed to submit milestone update', error);
-            showErrorToast('Failed to submit update. Please try again.');
+            const errMsg = error?.response?.data?.message || 'Failed to submit update. Please try again.';
+            showErrorToast(errMsg);
+            setUploadModalState((prev) => prev ? {
+                ...prev,
+                stage: 'error',
+                statusText: 'Submission failed',
+                errorMessage: errMsg,
+            } : null);
         } finally {
             setIsSubmitting(false);
         }
@@ -136,6 +254,16 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
                         : 'Send Update'}
                 </button>
             </div>
+
+            {/* Submission Upload & Progress Modal */}
+            <SubmissionProgressModal
+                state={uploadModalState}
+                onClose={() => setUploadModalState(null)}
+                onRetry={() => {
+                    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                    handleSubmit(fakeEvent);
+                }}
+            />
         </form>
     );
 };

@@ -1,4 +1,5 @@
 const DashboardRepositories = require('../repositories/DashboardRepositories');
+const TeamProjectRepositories = require('../repositories/TeamProjectRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
 
@@ -133,19 +134,32 @@ async function notifyAndBroadcast({ task, actorId, recipientId, submission, mile
             ].filter(Boolean)
         );
 
-        let broadcaster = io;
-        for (const room of targetRooms) {
-            broadcaster = broadcaster.to(room);
+        const teamId = task.team_project_id || task.user_role?.team_id || null;
+        if (teamId) {
+            targetRooms.add(String(teamId));
+            targetRooms.add(`team_${teamId}`);
         }
-        broadcaster.emit('dashboardTaskUpdated', event);
+        targetRooms.add(`contract_${task.contract_id}`);
 
-        // Also notify team contract workspaces if a team is involved
-        if (task.user_role?.team_id) {
-            io.emit('teamTaskWorkspaceUpdated', {
-                team_id: String(task.user_role.team_id),
-                contract_id: String(task.contract_id),
-            });
+        for (const room of targetRooms) {
+            io.to(room).emit('dashboardTaskUpdated', event);
         }
+
+        // Global workspace and milestone broadcast
+        io.emit('teamTaskWorkspaceUpdated', {
+            team_id: teamId ? String(teamId) : null,
+            contract_id: String(task.contract_id),
+            action,
+            task,
+            submission,
+        });
+
+        io.emit('milestoneStatusUpdated', {
+            contract_id: String(task.contract_id),
+            team_id: teamId ? String(teamId) : null,
+            action,
+            submission,
+        });
     }
 }
 
@@ -243,6 +257,40 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         milestone: result.milestone,
         action: input.status,
     });
+
+    if (result.contractCompletion) {
+        const ioComp = safeIo();
+        if (ioComp) {
+            (async () => {
+                let teamId = null;
+                let projectTitle = updatedTask.job_title || 'Project';
+                try {
+                    const teamCtx = await TeamProjectRepositories.getTeamContractContext(updatedTask.contract_id);
+                    if (teamCtx) {
+                        teamId = teamCtx.team_id;
+                        projectTitle = teamCtx.project_title || projectTitle;
+                    }
+                } catch (_err) {}
+
+                const completionPayload = {
+                    contract_id: String(updatedTask.contract_id),
+                    team_id: teamId ? String(teamId) : null,
+                    client_account_id: String(updatedTask.client_account_id),
+                    freelancer_account_id: String(updatedTask.freelancer_account_id),
+                    project_title: projectTitle,
+                    total_milestones: (updatedTask.milestones || []).length,
+                };
+
+                ioComp.emit('projectCompleted', completionPayload);
+                ioComp.to([
+                    `contract_${updatedTask.contract_id}`,
+                    String(updatedTask.client_account_id),
+                    String(updatedTask.freelancer_account_id),
+                    ...(teamId ? [`team_${teamId}`] : [])
+                ]).emit('projectCompleted', completionPayload);
+            })().catch(console.error);
+        }
+    }
 
     const activeRelease = result.milestoneRelease || (result.contractCompletion?.milestoneRelease || null);
     if (activeRelease) {
@@ -348,6 +396,18 @@ async function buyRevisionServices({ accountId, contractId, milestoneId, payload
                 transaction_id: purchase.transactionId,
                 emitted_at: new Date().toISOString(),
             });
+
+            io.emit('teamTaskWorkspaceUpdated', {
+                team_id: task.team_project_id ? String(task.team_project_id) : null,
+                contract_id: String(normalizedContractId),
+                action: 'revision_purchased',
+            });
+
+            io.emit('milestoneStatusUpdated', {
+                contract_id: String(normalizedContractId),
+                team_id: task.team_project_id ? String(task.team_project_id) : null,
+                action: 'revision_purchased',
+            });
         }
     }
 
@@ -407,6 +467,28 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
             contract_completed: reviewResult.contractCompleted,
             emitted_at: new Date().toISOString(),
         });
+
+        io.emit('teamTaskWorkspaceUpdated', {
+            contract_id: normalizedContractId,
+            action: 'contract_reviewed',
+            actor_account_id: actorId,
+        });
+        io.emit('contractReviewUpdated', {
+            contract_id: normalizedContractId,
+            actor_account_id: actorId,
+            contract_completed: reviewResult.contractCompleted,
+        });
+
+        if (reviewResult.contractCompleted) {
+            io.emit('contractFullyCompleted', {
+                contract_id: normalizedContractId,
+                team_id: reviewResult.archivedTeamId ? String(reviewResult.archivedTeamId) : null,
+            });
+            io.emit('teamTaskWorkspaceUpdated', {
+                contract_id: normalizedContractId,
+                action: 'contract_completed',
+            });
+        }
 
         try {
             const reviewerName = reviewResult.isClient ? task.client_name : task.freelancer_name;
