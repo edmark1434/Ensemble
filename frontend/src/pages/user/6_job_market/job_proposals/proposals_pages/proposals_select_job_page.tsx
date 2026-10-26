@@ -11,6 +11,7 @@ import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { stripMarkdown } from "@/lib/markdownPaste";
 import { getImageUrl } from "@/lib/utils";
 import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
+import { ApplicationWindowTimer } from "@/pages/user/6_job_market/job_components/job_utilities/ApplicationWindowTimer";
 
 const getTimeAgo = (date: Date): string => {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -101,7 +102,11 @@ export const ProposalsSelectJobPage: React.FC = () => {
             positionsNeeded: j.no_of_hires || 1,
             postedAt: new Date(j.created_at).toLocaleString(),
             timeAgo: getTimeAgo(new Date(j.created_at)),
-            thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id)
+            thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
+            applicationDeadline: j.application_deadline,
+            isUrgent: Boolean(j.is_urgent),
+            postingFeeCredits: j.posting_fee_credits || 50,
+            freeExtensionCount: j.free_extension_count || 0
           }));
         setMyJobPosts(userJobs);
       } catch (err) {
@@ -216,6 +221,9 @@ export const ProposalsSelectJobPage: React.FC = () => {
                     <span className="px-2 py-0.5 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300">
                       {job.difficulty}
                     </span>
+                    {job.applicationDeadline && (
+                      <ApplicationWindowTimer deadline={job.applicationDeadline} status={job.status} variant="badge" />
+                    )}
                   </div>
                   <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                     {job.title}
@@ -292,6 +300,9 @@ export const ProposalsSelectJobPage: React.FC = () => {
                     <span className="px-2.5 py-1 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300">
                       {job.difficulty}
                     </span>
+                    {job.applicationDeadline && (
+                      <ApplicationWindowTimer deadline={job.applicationDeadline} status={job.status} variant="badge" />
+                    )}
                   </div>
 
                   <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1 leading-snug">

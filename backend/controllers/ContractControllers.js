@@ -22,6 +22,10 @@ async function sendJobOfferController(req, res) {
             return res.status(400).json({ success: false, message: 'Proposal ID and rate are required' });
         }
 
+        if (startsAt && new Date(startsAt).getTime() < Date.now() - 60000) {
+            return res.status(400).json({ success: false, message: 'Contract start date cannot be in the past' });
+        }
+
         const result = await ContractRepositories.sendJobOffer(actorIds, proposalId, rateCredits, startsAt, milestones);
         const clientId = result.client_account_id;
 

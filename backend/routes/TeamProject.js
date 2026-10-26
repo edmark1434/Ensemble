@@ -27,4 +27,10 @@ router.delete('/:id/subcontracts/proposals/:proposalId', controller.withdrawSubc
 router.post('/:id/report', controller.reportProject);
 router.post('/:id/chat', controller.getChat);
 
+router.get('/:id/video-projects', controller.getVideoProjects);
+router.get('/:id/video-projects/available', controller.getAvailableVideoProjects);
+router.post('/:id/video-projects/create', controller.createVideoProject);
+router.post('/:id/video-projects/link', controller.linkVideoProject);
+router.delete('/:id/video-projects/:projectId', controller.unlinkVideoProject);
+
 module.exports = router;

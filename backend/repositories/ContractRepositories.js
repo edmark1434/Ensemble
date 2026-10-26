@@ -11,7 +11,7 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
         // 1. Verify proposal exists and belongs to a job owned by this client
         const proposalRes = await client.query(`
             SELECT p.freelancer_account_id, COALESCE(p.revision_price_credits, 0) AS revision_price_credits, 
-                   j.job_id, j.title, j.client_account_id, j.hiring_type, j.no_of_hires
+                   j.job_id, j.title, j.client_account_id, j.hiring_type, j.no_of_hires, j.status AS job_status
             FROM proposals p
             JOIN jobs j ON p.job_id = j.job_id
             WHERE p.proposal_id = $1 AND j.client_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL
@@ -21,7 +21,18 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
             throw new Error("Proposal not found or unauthorized");
         }
 
-        const { freelancer_account_id, revision_price_credits, job_id, title, client_account_id: clientId, hiring_type, no_of_hires } = proposalRes.rows[0];
+        const { freelancer_account_id, revision_price_credits, job_id, title, client_account_id: clientId, hiring_type, no_of_hires, job_status } = proposalRes.rows[0];
+
+        if (job_status === 'Closed') {
+            throw new Error("Cannot extend offer: this job posting is closed.");
+        }
+
+        const currentHiredCheck = await client.query(`
+            SELECT COUNT(*) as hired_count FROM proposals WHERE job_id = $1 AND status = 'Hired' AND deleted_at IS NULL
+        `, [job_id]);
+        if (parseInt(currentHiredCheck.rows[0].hired_count, 10) >= (parseInt(no_of_hires, 10) || 1)) {
+            throw new Error("Cannot extend offer: all positions for this job have already been filled.");
+        }
 
         // 2. Check client's wallet balance
         const walletRes = await client.query(`
@@ -111,10 +122,12 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
             }
         }
 
-        // 7. Update Proposal Status
+        // 7. Update Proposal Status and preserve original rate credits
         await client.query(`
             UPDATE proposals
-            SET status = 'Approved', rate_credits = $2
+            SET status = 'Approved',
+                original_rate_credits = COALESCE(original_rate_credits, rate_credits),
+                rate_credits = $2
             WHERE proposal_id = $1
         `, [proposalId, rateCredits]);
 
@@ -170,6 +183,43 @@ async function acceptJobOffer(freelancerIds, contractId) {
         const transferAmount = Number(contractRes.rows[0].rate_credits);
         if (!Number.isSafeInteger(transferAmount) || transferAmount <= 0) {
             throw new Error("Contract has an invalid rate");
+        }
+
+        // Verify if position quota is already filled by another candidate
+        const currentHiredRes = await client.query(`
+            SELECT COUNT(*) as hired_count
+            FROM proposals
+            WHERE job_id = $1 AND status = 'Hired' AND deleted_at IS NULL
+        `, [job_id]);
+        const currentHiredCount = parseInt(currentHiredRes.rows[0].hired_count, 10);
+        const maxHires = parseInt(no_of_hires, 10) || 1;
+
+        if (currentHiredCount >= maxHires) {
+            // Position already filled: auto-cancel this pending contract and refund client escrow hold
+            await client.query(`UPDATE contracts SET status = 'Rejected' WHERE contract_id = $1`, [contractId]);
+            await client.query(`UPDATE proposals SET status = 'Closed' WHERE proposal_id = $1`, [proposal_id]);
+
+            const refundEscrowRes = await client.query(`
+                SELECT w.wallet_id FROM account_wallets aw JOIN wallets w ON aw.wallet_id = w.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'escrow wallets' FOR UPDATE OF w
+            `, [client_account_id]);
+            const refundPersonalRes = await client.query(`
+                SELECT w.wallet_id FROM account_wallets aw JOIN wallets w ON aw.wallet_id = w.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'account wallets' FOR UPDATE OF w
+            `, [client_account_id]);
+
+            if (refundEscrowRes.rows.length > 0 && refundPersonalRes.rows.length > 0) {
+                await client.query(`UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2`, [transferAmount, refundEscrowRes.rows[0].wallet_id]);
+                await client.query(`UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2`, [transferAmount, refundPersonalRes.rows[0].wallet_id]);
+                await client.query(`
+                    INSERT INTO credit_transactions (
+                        type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                    ) VALUES ('Escrow Refund', $1, 'completed', $2, $3, 'contracts', $4)
+                `, [transferAmount, refundEscrowRes.rows[0].wallet_id, refundPersonalRes.rows[0].wallet_id, contractId]);
+            }
+
+            await client.query('COMMIT');
+            throw new Error("This position has already been filled by another candidate.");
         }
 
         const escrowWalletsRes = await client.query(`
@@ -341,11 +391,11 @@ async function acceptJobOffer(freelancerIds, contractId) {
                 WHERE job_id = $1
             `, [job_id]);
 
-            // Archive remaining pending proposals
+            // Archive remaining pending and shortlisted proposals
             const pendingProposalsRes = await client.query(`
                 UPDATE proposals
                 SET status = 'Archived'
-                WHERE job_id = $1 AND status IN ('Pending', 'Approved') AND deleted_at IS NULL
+                WHERE job_id = $1 AND status IN ('Pending', 'Shortlisted', 'Approved') AND deleted_at IS NULL
                 RETURNING freelancer_account_id
             `, [job_id]);
 
@@ -389,12 +439,14 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
 
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
-            SELECT c.contract_id, p.proposal_id, p.freelancer_account_id, j.title, j.client_account_id
+            SELECT c.contract_id, c.rate_credits, p.proposal_id, p.freelancer_account_id, p.proposed_by_account_id, j.title, j.client_account_id
             FROM contracts c
             JOIN job_contracts jc ON c.contract_id = jc.contract_id
             JOIN proposals p ON jc.proposal_id = p.proposal_id
             JOIN jobs j ON p.job_id = j.job_id
-            WHERE c.contract_id = $1 AND p.freelancer_account_id = ANY($2::uuid[]) AND c.status = 'Pending Signature'
+            WHERE c.contract_id = $1 
+              AND (p.freelancer_account_id = ANY($2::uuid[]) OR p.proposed_by_account_id = ANY($2::uuid[]))
+              AND c.status = 'Pending Signature'
             FOR UPDATE OF c
         `, [contractId, freelancerIds]);
 
@@ -407,27 +459,27 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
         // 2. Update Contract Status
         await client.query(`
             UPDATE contracts
-            SET status = 'Rejected'
-            WHERE contract_id = $1
-        `, [contractId]);
+            SET status = 'Rejected', reject_reason = $1, rejected_at = NOW()
+            WHERE contract_id = $2
+        `, [reason || 'Applicant declined the contract offer.', contractId]);
 
-        // 3. Update Proposal Status
+        // 3. Update Proposal Status (return to Shortlisted so client can re-negotiate / re-offer)
         await client.query(`
             UPDATE proposals
-            SET status = 'Pending', reject_reason = $1
+            SET status = 'Shortlisted', reject_reason = $1
             WHERE proposal_id = $2
-        `, [reason || 'Applicant rejected the contract offer.', proposal_id]);
+        `, [reason || 'Applicant declined the contract offer.', proposal_id]);
 
         // 3b. Refund Client Escrow Hold back to Personal Wallet
         const transferAmount = Number(rate_credits);
         if (transferAmount > 0) {
             const escrowWalletRes = await client.query(`
                 SELECT w.wallet_id FROM account_wallets aw JOIN wallets w ON aw.wallet_id = w.wallet_id
-                WHERE aw.account_id = $1 AND w.type = 'escrow wallets' FOR UPDATE OF w
+                WHERE aw.account_id = $1 AND w.type IN ('escrow wallets', 'escrow_wallets') FOR UPDATE OF w
             `, [client_account_id]);
             const personalWalletRes = await client.query(`
                 SELECT w.wallet_id FROM account_wallets aw JOIN wallets w ON aw.wallet_id = w.wallet_id
-                WHERE aw.account_id = $1 AND w.type = 'account_wallets' FOR UPDATE OF w
+                WHERE aw.account_id = $1 AND w.type IN ('account wallets', 'account_wallets') FOR UPDATE OF w
             `, [client_account_id]);
 
             if (escrowWalletRes.rows[0] && personalWalletRes.rows[0]) {

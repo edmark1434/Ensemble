@@ -535,37 +535,6 @@ async function recordMilestoneAction({
             throw error;
         }
 
-        // Enforce that all milestone tasks must be completed before submitting deliverable for client review
-        if (submissionStatus === 'submitted_for_review') {
-            const incompleteTasksRes = await client.query(
-                `SELECT DISTINCT twt.task_id, twt.title, twt.status
-                 FROM team_workspace_tasks twt
-                 JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
-                 LEFT JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
-                 LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
-                 LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = $2
-                 LEFT JOIN jobs j ON j.job_id = p.job_id
-                 LEFT JOIN job_milestones jm ON jm.job_id = j.job_id AND (jm.order_index = cm.index OR jm.order_index = (cm.index + 1))
-                 WHERE tcw.contract_id = $1
-                   AND twt.deleted_at IS NULL
-                   AND (
-                     twt.contract_milestone_id = $2
-                     OR twt.job_milestone_id = p.job_milestone_id
-                     OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
-                     OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
-                   )
-                   AND twt.status NOT IN ('completed', 'in_review')`,
-                [contractId, milestoneId]
-            );
-
-            if (incompleteTasksRes.rows.length > 0) {
-                const titles = incompleteTasksRes.rows.map(r => `"${r.title}"`).join(', ');
-                const error = new Error(`Cannot submit deliverable for review: All milestone tasks must be completed first. Incomplete task(s): ${titles}`);
-                error.statusCode = 400;
-                throw error;
-            }
-        }
-
         const submissionResult = await client.query(
             `INSERT INTO milestone_submits (
                 contract_milestone_id, index, message, attachments, status
@@ -1086,7 +1055,7 @@ async function buyRevision({
                         SELECT COUNT(*)::integer
                         FROM milestone_submits ms
                         WHERE ms.contract_milestone_id = cm.contract_milestone_id
-                          AND ms.status = 'revision_request'
+                          AND LOWER(ms.status) IN ('revision_request', 'revision_requested')
                     ) AS used_revisions
              FROM contract_milestones cm
              WHERE cm.contract_milestone_id = $1

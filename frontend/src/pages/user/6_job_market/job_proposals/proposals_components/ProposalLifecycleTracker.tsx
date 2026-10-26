@@ -29,11 +29,11 @@ export const LIFECYCLE_STAGES = [
   {
     step: "03",
     key: "Accepted",
-    badgeLabel: "ACCEPTED",
+    badgeLabel: "OFFER SENT",
     badgeColor: "border-emerald-400/70 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
     activeRing: "ring-2 ring-emerald-500/40 border-emerald-500/60 dark:border-emerald-400/60",
-    title: "Acceptance & Offer",
-    description: "Client selects the winning applicant. Proposed milestones and pricing are finalized into an agreement.",
+    title: "Extend Formal Offer",
+    description: "Client extends a formal contract offer with escrow locked upfront. Awaiting candidate signature and acceptance.",
   },
   {
     step: "04",
@@ -61,6 +61,8 @@ export const ProposalLifecycleTracker: React.FC<ProposalLifecycleTrackerProps> =
 }) => {
   const isRejected = (currentStatus || "").toLowerCase() === "rejected";
   const isWithdrawn = (currentStatus || "").toLowerCase() === "withdrawn";
+  const isArchived = ["archived", "closed"].includes((currentStatus || "").toLowerCase());
+  const isInactive = isRejected || isWithdrawn || isArchived;
   const activeStage = getStageIndex(currentStatus);
 
   return (
@@ -69,9 +71,9 @@ export const ProposalLifecycleTracker: React.FC<ProposalLifecycleTrackerProps> =
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {LIFECYCLE_STAGES.map((stage, idx) => {
           const stepNumber = idx + 1;
-          const isCurrent = !isRejected && !isWithdrawn && activeStage === stepNumber;
-          const isPast = !isRejected && !isWithdrawn && activeStage > stepNumber;
-          const isFuture = !isRejected && !isWithdrawn && activeStage < stepNumber;
+          const isCurrent = !isInactive && activeStage === stepNumber;
+          const isPast = !isInactive && activeStage > stepNumber;
+          const isFuture = !isInactive && activeStage < stepNumber;
 
           return (
             <div

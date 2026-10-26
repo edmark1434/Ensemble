@@ -6,6 +6,7 @@ import {
   Plus,
   Minus,
   ChevronDown,
+  Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header.tsx";
@@ -130,6 +131,7 @@ const CreditShop: React.FC = () => {
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>(DEFAULT_CREDIT_PACKS);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentBalance, setCurrentBalance] = useState<number>(0);
+  const [escrowBalance, setEscrowBalance] = useState<number>(0);
 
   // Track user's current subscription
   const [userSubscription, setUserSubscription] = useState<SubscriptionData | null>(null);
@@ -176,12 +178,15 @@ const CreditShop: React.FC = () => {
   useEffect(() => {
     const fetchMemberships = async () => {
       try {
-        const [planResponse, userSubscriptionResponse, getWalletResponse, packsResponse] = await Promise.all([
+        const [planResponse, userSubscriptionResponse, getWalletResponse, getEscrowWalletResponse, packsResponse] = await Promise.all([
           api.get("api/subscription/plans"),
           api.get("api/subscription"),
           api.get("/api/accounts/wallet", {
             params: { type: "account_wallets" },
           }),
+          api.get("/api/accounts/wallet", {
+            params: { type: "escrow_wallets" },
+          }).catch(() => null),
           api.get("api/payment/credit-packages").catch(() => null),
         ]);
 
@@ -190,7 +195,8 @@ const CreditShop: React.FC = () => {
         }
 
         console.log("Fetch wallet response:", getWalletResponse.data);
-        setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || 0);
+        setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || getWalletResponse.data?.data?.balance_credits || 0);
+        setEscrowBalance(getEscrowWalletResponse?.data?.wallet?.balance_credits || getEscrowWalletResponse?.data?.data?.balance_credits || 0);
 
         const plansData: Membership[] = planResponse.data.plans || [];
         console.log("Fetched memberships:", plansData);
@@ -532,24 +538,40 @@ const CreditShop: React.FC = () => {
           </p>
         </div>
 
-        {/* Current Balance Card */}
-        <div data-tour="credits-balance-card" className="flex items-center justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl backdrop-blur-xl">
-          <div className="flex items-center gap-4">
-            <WalletIcon className="h-12 w-12" />
-            <div>
-              <p className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                Current Balance
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
-                <p className="text-2xl font-black text-gray-900 dark:text-white leading-none tracking-tight">
-                  {currentBalance.toLocaleString()}{" "}
-                  <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
+        {/* Current & Escrow Balance Card */}
+        <div data-tour="credits-balance-card" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl backdrop-blur-xl">
+          <div className="flex items-start sm:items-center gap-4">
+            <WalletIcon className="h-12 w-12 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="space-y-2">
+              <div>
+                <p className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+                  Current Balance
                 </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
+                  <p className="text-2xl font-black text-gray-900 dark:text-white leading-none tracking-tight">
+                    {currentBalance.toLocaleString()}{" "}
+                    <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Escrowed Wallet Balance */}
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
+                <span className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+                  Escrowed Wallet Balance:
+                </span>
+                <span className="inline-flex items-center gap-1 font-bold text-xs text-amber-600 dark:text-amber-400">
+                  <Lock className="h-3 w-3 shrink-0" />
+                  <span>{escrowBalance.toLocaleString()} Credits</span>
+                </span>
+                <span className="text-[10px] text-gray-400 dark:text-zinc-500 hidden sm:inline">
+                  (Locked in platform escrow)
+                </span>
               </div>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-2 text-xs text-gray-600 dark:text-zinc-400 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5 px-3 py-1.5 rounded-xl">
+          <div className="hidden sm:flex items-center gap-2 text-xs text-gray-600 dark:text-zinc-400 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5 px-3 py-1.5 rounded-xl self-start sm:self-center">
             <Shield className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             <span>Encrypted checkout via Xendit</span>
           </div>

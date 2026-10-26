@@ -37,4 +37,9 @@ module.exports = {
   deleteProject: wrap((req, accountId) => TeamProjectServices.deleteProject(req.params.id, accountId)),
   reportProject: wrap((req, accountId) => TeamProjectServices.reportProject(req.params.id, accountId, req.body), 201),
   getChat: wrap((req, accountId) => TeamProjectServices.getProjectChat(req.params.id, accountId)),
+  getVideoProjects: wrap((req, accountId) => TeamProjectServices.getVideoProjects(req.params.id, accountId)),
+  getAvailableVideoProjects: wrap((req, accountId) => TeamProjectServices.getAvailableVideoProjects(req.params.id, accountId)),
+  createVideoProject: wrap((req, accountId) => TeamProjectServices.createVideoProject(req.params.id, accountId, req.body), 201),
+  linkVideoProject: wrap((req, accountId) => TeamProjectServices.linkVideoProject(req.params.id, accountId, req.body)),
+  unlinkVideoProject: wrap((req, accountId) => TeamProjectServices.unlinkVideoProject(req.params.id, req.params.projectId, accountId)),
 };

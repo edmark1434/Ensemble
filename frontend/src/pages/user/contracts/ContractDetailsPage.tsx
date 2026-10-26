@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -49,6 +49,7 @@ import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DetailedContract, MilestoneItem, MilestoneStatus, ContractStatus, CancellationRequest } from "./contracts";
+import { ActiveMilestoneTimerCard } from "./ActiveMilestoneTimerCard";
 
 export interface ContractTeamMember {
   account_id: string;
@@ -794,6 +795,7 @@ export const ContractDetailsPage: React.FC = () => {
           revisions: parseInt(m.revisions, 10) || 0,
           deadline: formatMilestoneDeadline(m),
           deadline_at: m.deadline_at,
+          started_at: m.started_at,
           credits: m.credits || Math.floor((parseFloat(foundRaw.rate_credits) || 0) / (arr.length || 1)),
           status: uiStatus,
           rawStatus,
@@ -1651,7 +1653,7 @@ export const ContractDetailsPage: React.FC = () => {
                 <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm space-y-5">
                   <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-4">
                     <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-blue-500" />
+                      <FileText className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
                       <h2 className="text-base font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                         I. Scope of Work & Deliverables
                       </h2>
@@ -1764,7 +1766,7 @@ export const ContractDetailsPage: React.FC = () => {
                 <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm space-y-5">
                   <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-4">
                     <div className="flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-blue-500" />
+                      <Clock className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
                       <h2 className="text-base font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                         II. Locked Milestones & Timeline
                       </h2>
@@ -1864,7 +1866,7 @@ export const ContractDetailsPage: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-white/10 pb-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <Users className="w-5 h-5 text-indigo-500" />
+                        <Users className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
                         <h2 className="text-base font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                           III. Project Team &amp; Subcontracts
                         </h2>
@@ -2165,6 +2167,16 @@ export const ContractDetailsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {/* ACTIVE MILESTONE TIMER COUNTDOWN */}
+                <ActiveMilestoneTimerCard
+                  milestones={contract.milestones}
+                  contractStatus={contract.status}
+                  contractDateStarted={contract.dateStarted}
+                  contractDueDate={contract.dueDate}
+                  isClient={isClient}
+                  isFreelancer={isFreelancer}
+                />
 
                 {/* WORKFLOW & OPERATIONAL TERMS CARD */}
                 <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-sm space-y-4">

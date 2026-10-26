@@ -199,6 +199,33 @@ async function withdrawSubcontractProposal(teamId, proposalId, viewerAccountId) 
   return await TeamProjectRepositories.withdrawSubcontractProposal(teamId, proposalId, viewerAccountId);
 }
 
+async function getVideoProjects(teamId, viewerAccountId) {
+  const project = await getProjectDetails(teamId, viewerAccountId);
+  const projects = await TeamProjectRepositories.getWorkspaceProjects(project.team_id);
+  return projects.map(withAvatar);
+}
+
+async function getAvailableVideoProjects(teamId, viewerAccountId) {
+  const project = await getProjectDetails(teamId, viewerAccountId);
+  const projects = await TeamProjectRepositories.getAvailableProjectsForLinking(project.team_id, viewerAccountId);
+  return projects.map(withAvatar);
+}
+
+async function createVideoProject(teamId, viewerAccountId, data) {
+  const project = await getProjectDetails(teamId, viewerAccountId);
+  return await TeamProjectRepositories.createWorkspaceProject(project.team_id, viewerAccountId, data);
+}
+
+async function linkVideoProject(teamId, viewerAccountId, data) {
+  const project = await getProjectDetails(teamId, viewerAccountId);
+  return await TeamProjectRepositories.linkWorkspaceProject(project.team_id, viewerAccountId, data.projectId);
+}
+
+async function unlinkVideoProject(teamId, projectId, viewerAccountId) {
+  const project = await getProjectDetails(teamId, viewerAccountId);
+  return await TeamProjectRepositories.unlinkWorkspaceProject(project.team_id, viewerAccountId, projectId);
+}
+
 module.exports = {
   getProjectDetails,
   getProjectTaskboard,
@@ -217,4 +244,9 @@ module.exports = {
   deleteProject,
   reportProject,
   getProjectChat,
+  getVideoProjects,
+  getAvailableVideoProjects,
+  createVideoProject,
+  linkVideoProject,
+  unlinkVideoProject,
 };

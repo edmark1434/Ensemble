@@ -25,6 +25,9 @@ import {
   X,
   UserMinus,
   Sparkles,
+  FileText,
+  Layers,
+  Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
@@ -39,6 +42,8 @@ import { continueIfAccountVerified } from "@/lib/accountVerification";
 import toast from "react-hot-toast";
 import { getImageUrl } from "@/lib/utils";
 import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
+import { SlideCommit } from "@/components/ui/SlideCommit";
+import { ApplicationWindowTimer } from "@/pages/user/6_job_market/job_components/job_utilities/ApplicationWindowTimer";
 
 type ProposalSubTab = "all" | "pending" | "shortlisted" | "offersAndHired" | "inactive";
 
@@ -75,7 +80,7 @@ const SUB_TAB_META: Record<
     description: "Candidates you have extended contract offers to and active hired contracts.",
     tags: [
       {
-        label: "ACCEPTED",
+        label: "OFFER SENT",
         className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
       },
       {
@@ -85,10 +90,10 @@ const SUB_TAB_META: Record<
     ],
   },
   inactive: {
-    description: "Candidate proposals you have declined, or applicants who withdrew their submission.",
+    description: "Candidate proposals you have rejected, or applicants who withdrew their submission.",
     tags: [
       {
-        label: "DECLINED",
+        label: "REJECTED",
         className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
       },
       {
@@ -140,10 +145,11 @@ export const ProposalsIncomingPage: React.FC = () => {
   const [offerTargetProposal, setOfferTargetProposal] = useState<any | null>(null);
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToEscrow, setAgreedToEscrow] = useState(false);
   const [contractStartsAt, setContractStartsAt] = useState("");
   const [customMilestones, setCustomMilestones] = useState<any[]>([]);
   const [isCustomizingMilestones, setIsCustomizingMilestones] = useState(false);
-  const [customBidAmount, setCustomBidAmount] = useState<number>(0);
+  const [customBidAmount, setCustomBidAmount] = useState<number | "">("");
   const [isSendingOffer, setIsSendingOffer] = useState(false);
 
   const [showLifecycleGuide, setShowLifecycleGuide] = useState<boolean>(() => {
@@ -247,8 +253,13 @@ export const ProposalsIncomingPage: React.FC = () => {
             timeAgo: found.created_at ? getTimeAgo(new Date(found.created_at)) : null,
             hiring_type: found.hiring_type || "single",
             budget_credits: found.budget_credits,
+            postingFeeCredits: found.posting_fee_credits || 50,
+            applicantsCount: found.applicants_count || 0,
             milestones: Array.isArray(found.milestones) ? found.milestones : [],
             thumbnail: getImageUrl(found.thumbnail_path) || getDefaultJobBannerForJob(found.job_id),
+            applicationDeadline: found.application_deadline,
+            isUrgent: Boolean(found.is_urgent),
+            freeExtensionCount: found.free_extension_count || 0,
           });
         }
       } catch (err) {
@@ -260,20 +271,37 @@ export const ProposalsIncomingPage: React.FC = () => {
     loadData();
   }, [jobPostId]);
 
-  const handleToggleJobStatus = async () => {
-    if (!targetJob?.id || isUpdatingJob) return;
-    const newStatus = targetJob.status?.toLowerCase() === "closed" ? "Open" : "Closed";
+  const [isExpireModalOpen, setIsExpireModalOpen] = useState(false);
+  const [isExpiring, setIsExpiring] = useState(false);
+
+  const handleExecuteExpireNow = async () => {
+    if (!targetJob?.id || isExpiring) return;
+    setIsExpiring(true);
     try {
-      setIsUpdatingJob(true);
-      if (updateJob) {
-        await updateJob(targetJob.id, { status: newStatus });
+      const res = await api.post(`/api/jobs/${targetJob.id}/expire-now`);
+      if (res.data?.success) {
+        const refund = targetJob.postingFeeCredits || 50;
+        toast.success(res.data.message || `Job closed and ${refund} credits refunded to your wallet.`);
+        setTargetJob((prev: any) => ({ ...prev, status: "Closed" }));
+        setIsExpireModalOpen(false);
+
+        // Sync user wallet balance in global state
+        const curUser = useGlobalState.getState().user;
+        if (curUser) {
+          const currentBal = Number(curUser.wallet?.balance_credits || 0);
+          useGlobalState.getState().setUser({
+            ...curUser,
+            wallet: {
+              ...(curUser.wallet || {}),
+              balance_credits: currentBal + Number(refund),
+            },
+          });
+        }
       }
-      setTargetJob((prev: any) => ({ ...prev, status: newStatus }));
-      toast.success(`Job post marked as ${newStatus}`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to update job status");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to expire job");
     } finally {
-      setIsUpdatingJob(false);
+      setIsExpiring(false);
     }
   };
 
@@ -342,6 +370,7 @@ export const ProposalsIncomingPage: React.FC = () => {
     setCustomMilestones(initialMilestones);
     setIsCustomizingMilestones(false);
     setAgreedToTerms(false);
+    setAgreedToEscrow(false);
     setContractStartsAt("");
     setIsAcceptConfirmOpen(true);
   };
@@ -350,7 +379,23 @@ export const ProposalsIncomingPage: React.FC = () => {
     if (!offerTargetProposal) return;
     const personalAccountId = user?.account_id;
     const usesPersonalWallet = String(offerTargetProposal.clientAccountId) === String(personalAccountId);
-    const effectiveBid = isCustomizingMilestones && customBidAmount > 0 ? customBidAmount : offerTargetProposal.bidAmount;
+    const candidateBid = offerTargetProposal.bidAmount || 0;
+    const numCustomBid = typeof customBidAmount === "number" ? customBidAmount : parseInt(String(customBidAmount), 10);
+    const hasValidCustom = !isNaN(numCustomBid) && numCustomBid > 0;
+    const effectiveBid = isCustomizingMilestones && hasValidCustom ? numCustomBid : candidateBid;
+
+    if (effectiveBid <= 0) {
+      toast.error("Please enter a valid offer amount (greater than 0 Credits).");
+      return;
+    }
+
+    if (contractStartsAt) {
+      const selectedTime = new Date(contractStartsAt).getTime();
+      if (selectedTime < Date.now() - 60000) {
+        toast.error("Contract start date cannot be in the past.");
+        return;
+      }
+    }
 
     if (usesPersonalWallet && walletBalance < effectiveBid) {
       toast.error("Insufficient wallet balance to extend contract offer. Please top up your wallet credits.");
@@ -363,13 +408,13 @@ export const ProposalsIncomingPage: React.FC = () => {
         offerTargetProposal.id,
         effectiveBid,
         contractStartsAt ? new Date(contractStartsAt).toISOString() : undefined,
-        isCustomizingMilestones ? customMilestones : undefined
+        undefined
       );
 
       setProposals((prev) =>
         prev.map((p) =>
           p.id === offerTargetProposal.id
-            ? { ...p, status: "Accepted", acceptedAt: new Date().toISOString() }
+            ? { ...p, status: "Accepted", bidAmount: effectiveBid, acceptedAt: new Date().toISOString() }
             : p
         )
       );
@@ -495,7 +540,8 @@ export const ProposalsIncomingPage: React.FC = () => {
     { key: "inactive", label: "Inactive", count: counts.inactive },
   ] as const;
 
-  const isClosed = targetJob?.status?.toLowerCase() === "closed";
+  const isClosed = targetJob?.status?.toLowerCase() === "closed" || targetJob?.status?.toLowerCase() === "expired";
+  const hasZeroProposals = proposals.length === 0 && (targetJob?.applicantsCount || 0) === 0;
 
   return (
     <div className="space-y-4 text-left w-full">
@@ -580,30 +626,19 @@ export const ProposalsIncomingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Toggle Status (Close / Reopen) */}
-            <button
-              type="button"
-              disabled={isUpdatingJob}
-              onClick={handleToggleJobStatus}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                isClosed
-                  ? "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
-                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-gray-700 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400"
-              }`}
-              title={isClosed ? "Reopen job to receive proposals" : "Close job to stop receiving proposals"}
-            >
-              {isClosed ? (
-                <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Reopen Post</span>
-                </>
-              ) : (
-                <>
-                  <Power className="h-3.5 w-3.5 text-rose-500" />
-                  <span>Close Post</span>
-                </>
-              )}
-            </button>
+            {/* Force Close & Expire Post (ONLY visible if job is Open and has 0 proposals) */}
+            {!isClosed && hasZeroProposals && (
+              <button
+                type="button"
+                disabled={isExpiring}
+                onClick={() => setIsExpireModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-gray-700 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                title="Force close job post and refund posting fee"
+              >
+                <Power className="h-3.5 w-3.5 text-rose-500" />
+                <span>Close Post</span>
+              </button>
+            )}
 
             {/* View Public Listing */}
             <button
@@ -628,6 +663,29 @@ export const ProposalsIncomingPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Application Window Status Bar */}
+        {targetJob?.applicationDeadline && (
+          <ApplicationWindowTimer
+            deadline={targetJob.applicationDeadline}
+            status={targetJob.status}
+            variant="bar"
+            actionButton={
+              !isClosed && hasZeroProposals && (
+                <button
+                  type="button"
+                  disabled={isExpiring}
+                  onClick={() => setIsExpireModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-500/20 transition cursor-pointer"
+                  title="Force close job post and refund posting fee"
+                >
+                  <Power className="h-3.5 w-3.5 text-rose-500" />
+                  <span>Force Close & Expire (Refund {targetJob?.postingFeeCredits || 50} Cr)</span>
+                </button>
+              )
+            }
+          />
+        )}
       </div>
 
       {/* Milestone Sub-Tabs for Multi-Hire Jobs (if any) */}
@@ -900,13 +958,26 @@ export const ProposalsIncomingPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-gray-700 dark:text-zinc-300">
                 {filtered.map((p) => {
-                  const isShortlisted = p.status === "Shortlisted";
+                  const statusLower = (p.status || "").toLowerCase();
+                  const isHired = statusLower === "hired";
+                  const isShortlisted = statusLower === "shortlisted";
+                  const isInactive = ["rejected", "archived", "withdrawn", "closed"].includes(statusLower);
+                  const hasHired = proposals.some((item) => (item.status || "").toLowerCase() === "hired");
+                  const isJobFilledOrClosed = hasHired || isClosed;
+                  const isSubduedRow = (!isHired && isJobFilledOrClosed) || isInactive;
+                  const canShortlist = !isJobFilledOrClosed && !isInactive && statusLower !== "accepted" && statusLower !== "approved" && !isHired;
                   const ansCount = Array.isArray(p.screening_answers) ? p.screening_answers.length : 0;
                   const attachCount = Array.isArray(p.attachments) ? p.attachments.length : 0;
                   return (
                     <tr
                       key={p.id}
-                      className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                      className={`transition-colors ${
+                        isHired
+                          ? "bg-purple-500/5 dark:bg-purple-950/20 font-medium"
+                          : isSubduedRow
+                          ? "opacity-60 hover:opacity-95 bg-gray-50/40 dark:bg-dark-surface/40"
+                          : "hover:bg-gray-50/50 dark:hover:bg-white/[0.02]"
+                      }`}
                     >
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5">
@@ -991,18 +1062,20 @@ export const ProposalsIncomingPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenShortlistConfirm(p)}
-                            title={isShortlisted ? "Remove from Shortlist" : "Add to Shortlist"}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
-                              isShortlisted
-                                ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600/30 shadow-sm shadow-amber-500/25"
-                                : "bg-amber-50/80 dark:bg-amber-500/10 border-amber-300/80 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:border-amber-400 shadow-2xs"
-                            }`}
-                          >
-                            <Star className={`w-3.5 h-3.5 ${isShortlisted ? "fill-white text-white" : "text-amber-600 dark:text-amber-400"}`} />
-                          </button>
+                          {canShortlist && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShortlistConfirm(p)}
+                              title={isShortlisted ? "Remove from Shortlist" : "Add to Shortlist"}
+                              className={`p-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
+                                isShortlisted
+                                  ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600/30 shadow-sm shadow-amber-500/25"
+                                  : "bg-amber-50/80 dark:bg-amber-500/10 border-amber-300/80 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:border-amber-400 shadow-2xs"
+                              }`}
+                            >
+                              <Star className={`w-3.5 h-3.5 ${isShortlisted ? "fill-white text-white" : "text-amber-600 dark:text-amber-400"}`} />
+                            </button>
+                          )}
                           {(isShortlisted || p.status === "Accepted" || p.status === "Hired") && (
                             <button
                               type="button"
@@ -1058,6 +1131,8 @@ export const ProposalsIncomingPage: React.FC = () => {
           proposals={filtered}
           viewType={viewType}
           showFilters={false}
+          isJobClosed={isClosed}
+          hasHiredCandidate={proposals.some((p) => (p.status || "").toLowerCase() === "hired")}
           onUpdateStatus={handleUpdateStatus}
           onShortlistCandidate={handleOpenShortlistConfirm}
           onHireCandidate={handleOpenHireModal}
@@ -1195,222 +1270,424 @@ export const ProposalsIncomingPage: React.FC = () => {
 
       {/* 2. Extend Formal Contract Offer Modal */}
       <AnimatePresence>
-        {isAcceptConfirmOpen && offerTargetProposal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-2xl space-y-4 text-left my-6"
-            >
-              <div className="flex items-start justify-between border-b border-gray-100 dark:border-white/10 pb-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                      Extend Formal Contract Offer
-                    </h3>
+{isAcceptConfirmOpen && offerTargetProposal && (() => {
+          const isTargetTeam =
+            offerTargetProposal.freelancerType === "Team" ||
+            Boolean(offerTargetProposal.freelancerTeamId) ||
+            Boolean(offerTargetProposal.actingTeamId);
+          const candidateBid = offerTargetProposal.bidAmount || 0;
+          const isCountering = isCustomizingMilestones;
+          const numCustomBid = typeof customBidAmount === "number" ? customBidAmount : parseInt(String(customBidAmount), 10);
+          const hasValidCustom = !isNaN(numCustomBid) && numCustomBid > 0;
+          const effectiveBid = isCountering && hasValidCustom ? numCustomBid : candidateBid;
+          const hasSufficient = walletBalance >= effectiveBid;
+          const remainingBalance = walletBalance - effectiveBid;
+          const isCounterActive = isCountering && hasValidCustom && effectiveBid !== candidateBid;
+          const delta = effectiveBid - candidateBid;
+          const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+
+          return (
+            <div className="fixed inset-0 z-[300000] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => !isSendingOffer && (setIsAcceptConfirmOpen(false), setOfferTargetProposal(null))}
+                className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs cursor-pointer"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="relative z-10 w-full max-w-3xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-5 sm:p-6 shadow-2xl space-y-5 text-left my-6"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between pb-3.5 border-b border-gray-100 dark:border-white/10">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200/80 dark:border-white/10 text-gray-700 dark:text-zinc-200">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+                        Extend Formal Contract Offer
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 pl-8">
+                      Form a binding milestone contract for{" "}
+                      <span className="font-semibold text-gray-900 dark:text-zinc-200">
+                        {offerTargetProposal.partyName}
+                      </span>
+                      {isTargetTeam && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          Creative Team
+                        </span>
+                      )}
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">
-                    Form a binding escrow milestone contract extended to{" "}
-                    <strong className="text-gray-700 dark:text-zinc-300">
-                      {offerTargetProposal.partyName}
-                    </strong>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcceptConfirmOpen(false);
-                    setOfferTargetProposal(null);
-                  }}
-                  className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Escrow Balance & Bid Strip */}
-              <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 dark:text-zinc-400">Agreed Contract Escrow:</span>
-                  <span className="font-extrabold text-gray-900 dark:text-white flex items-center gap-1">
-                    <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
-                    {(isCustomizingMilestones && customBidAmount > 0
-                      ? customBidAmount
-                      : offerTargetProposal.bidAmount
-                    ).toLocaleString()}{" "}
-                    Credits
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-white/5 text-[11px]">
-                  <span className="text-gray-500 dark:text-zinc-400">Your Wallet Balance:</span>
-                  <span
-                    className={`font-bold ${
-                      walletBalance >=
-                      (isCustomizingMilestones && customBidAmount > 0
-                        ? customBidAmount
-                        : offerTargetProposal.bidAmount)
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-red-500"
-                    }`}
+                  <button
+                    type="button"
+                    disabled={isSendingOffer}
+                    onClick={() => {
+                      setIsAcceptConfirmOpen(false);
+                      setOfferTargetProposal(null);
+                    }}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
                   >
-                    {walletBalance.toLocaleString()} Credits
-                  </span>
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-              </div>
 
-              {/* Start Date */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-700 dark:text-zinc-300 block">
-                  Contract Start Date (Optional)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="datetime-local"
-                    value={contractStartsAt}
-                    onChange={(e) => setContractStartsAt(e.target.value)}
-                    className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
-                  />
+                {/* Two-Column Grid: Left (Financials, Scope & Counter) / Right (Escrow Notice & Agreements) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                  {/* LEFT COLUMN: Financials, Scope & Milestones, Adjust Offer Amount */}
+                  <div className="space-y-3.5">
+                    {/* Financial Breakdown Card */}
+                    <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                              Contract Escrow
+                            </span>
+                            {isCounterActive && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                Counter
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 font-bold text-sm text-gray-900 dark:text-white">
+                            <CreditIcon className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                            <span>{effectiveBid.toLocaleString()}</span>
+                            <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                            Available Balance
+                          </span>
+                          <div className="flex items-center gap-1.5 font-bold text-sm text-gray-900 dark:text-white">
+                            <CreditIcon className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                            <span>{walletBalance.toLocaleString()}</span>
+                            <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2.5 border-t border-gray-200/60 dark:border-white/5 flex items-center justify-between text-[11px]">
+                        <span className="text-gray-500 dark:text-zinc-400">
+                          {hasSufficient ? "Remaining after acceptance:" : "Deposit shortfall:"}
+                        </span>
+                        <span className={`font-semibold ${hasSufficient ? "text-gray-700 dark:text-zinc-300" : "text-rose-600 dark:text-rose-400"}`}>
+                          {hasSufficient
+                            ? `${remainingBalance.toLocaleString()} Credits`
+                            : `${Math.abs(remainingBalance).toLocaleString()} Credits needed`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Scope & Milestones (Deliverables preserved intact from candidate/team) */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+                          <span className="text-xs font-semibold text-gray-800 dark:text-zinc-200">
+                            Scope &amp; Milestones
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                          Preserved intact ({offerTargetProposal.milestones?.length || 1} {(offerTargetProposal.milestones?.length || 1) === 1 ? "phase" : "phases"})
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                        {(offerTargetProposal.milestones && offerTargetProposal.milestones.length > 0
+                          ? offerTargetProposal.milestones
+                          : [{ name: "Project Completion & Deliverables", hours: 0, revisions: 0 }]
+                        ).map((m: any, idx: number) => (
+                          <div
+                            key={m.id || idx}
+                            className="px-3 py-2 rounded-lg border border-gray-200/70 dark:border-white/5 bg-gray-50/60 dark:bg-white/[0.02] flex items-center justify-between text-xs"
+                          >
+                            <span className="font-medium text-gray-800 dark:text-zinc-200 truncate pr-2">
+                              {m.name || `Phase ${idx + 1}`}
+                            </span>
+                            <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400 shrink-0">
+                              {Boolean(m.hours) && <span>{m.hours} hrs</span>}
+                              {Boolean(m.hours && m.revisions !== undefined) && <span>•</span>}
+                              {m.revisions !== undefined && (
+                                <span>{m.revisions} {m.revisions === 1 ? "rev" : "revs"}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Adjust Offer Amount (Credits-Only Counter) */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Tag className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+                          <span className="text-xs font-semibold text-gray-800 dark:text-zinc-200">
+                            Adjust Offer Amount (Counter-Offer)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isCountering) {
+                              setIsCustomizingMilestones(false);
+                              setCustomBidAmount(candidateBid);
+                            } else {
+                              setIsCustomizingMilestones(true);
+                              if (!customBidAmount) setCustomBidAmount(candidateBid);
+                            }
+                          }}
+                          className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          {isCountering ? `Reset to Proposed (${candidateBid.toLocaleString()} Cr)` : "Counter Proposed Rate"}
+                        </button>
+                      </div>
+
+                      {isCountering ? (
+                        <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10 space-y-2.5">
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <label className="text-gray-600 dark:text-zinc-400 font-medium">
+                              Counter Offer Amount (Credits):
+                            </label>
+                            <div className="relative flex items-center">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder={candidateBid ? candidateBid.toLocaleString() : "0"}
+                                value={customBidAmount === "" ? "" : customBidAmount}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, "");
+                                  if (val === "") {
+                                    setCustomBidAmount("");
+                                  } else {
+                                    const parsed = parseInt(val, 10);
+                                    setCustomBidAmount(isNaN(parsed) ? "" : parsed);
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (customBidAmount === "" || Number(customBidAmount) <= 0) {
+                                    setCustomBidAmount(candidateBid || 10);
+                                  }
+                                }}
+                                className="w-36 text-right rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800 pr-7 pl-2.5 py-1.5 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              />
+                              <span className="absolute right-2.5 text-[11px] font-semibold text-gray-400 dark:text-zinc-500 pointer-events-none">
+                                Cr
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-gray-200/60 dark:border-white/5">
+                            <span className="text-gray-500 dark:text-zinc-400">
+                              {isTargetTeam ? "Team proposed:" : "Candidate proposed:"}{" "}
+                              <strong className="text-gray-700 dark:text-zinc-300">{candidateBid.toLocaleString()} Credits</strong>
+                            </span>
+                            {isCounterActive ? (
+                              <span className={`font-semibold ${delta < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                                {delta < 0
+                                  ? `-${Math.abs(delta).toLocaleString()} Cr (${Math.round((Math.abs(delta) / (candidateBid || 1)) * 100)}% discount)`
+                                  : `+${delta.toLocaleString()} Cr (+${Math.round((delta / (candidateBid || 1)) * 100)}% bonus)`}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 dark:text-zinc-500 italic">Matches proposed rate</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="px-3 py-2.5 rounded-xl border border-gray-200/80 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+                          <span>
+                            {isTargetTeam ? "Team proposed:" : "Candidate proposed:"}{" "}
+                            <strong className="text-gray-800 dark:text-zinc-200">{candidateBid.toLocaleString()} Credits</strong>
+                          </span>
+                          <span className="text-[11px] text-gray-400 dark:text-zinc-500">Uncountered</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT COLUMN: Only Firm Commitment & Escrow Hold Checkboxes */}
+                  <div className="space-y-3.5">
+                    {/* Upfront Escrow Commitment Notice */}
+                    <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] flex items-start gap-3">
+                      <Lock className="w-4 h-4 text-gray-700 dark:text-zinc-300 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 text-xs">
+                        <p className="font-bold text-gray-900 dark:text-white">
+                          {isCounterActive ? "Counter-Offer & Upfront Escrow Lock" : "Firm Commitment & Upfront Escrow Lock"}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed">
+                          {isCounterActive
+                            ? `Extending this counter-offer locks your adjusted rate of ${effectiveBid.toLocaleString()} Credits into escrow immediately. ${isTargetTeam ? "The team leader" : "The candidate"} will be invited to review and sign your countered terms.`
+                            : `Extending this offer is final and immediately locks ${effectiveBid.toLocaleString()} Credits from your wallet into platform escrow. Ensure scope, milestones, and rate are mutually aligned before sending.`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Dual Agreement Checkboxes */}
+                    <div className="space-y-2.5">
+                      <label className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/60 cursor-pointer text-xs text-gray-600 dark:text-zinc-300 transition hover:bg-gray-50/80 dark:hover:bg-white/[0.02]">
+                        <input
+                          type="checkbox"
+                          checked={agreedToEscrow}
+                          onChange={(e) => setAgreedToEscrow(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-white/20 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="leading-relaxed">
+                          <strong className="font-semibold text-gray-900 dark:text-white block mb-0.5">
+                            Acknowledge Upfront Escrow Hold
+                          </strong>
+                          I understand that {effectiveBid.toLocaleString()} Credits will be debited from my wallet and locked into platform escrow immediately upon sending this offer.
+                        </span>
+                      </label>
+
+                      <label className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/60 cursor-pointer text-xs text-gray-600 dark:text-zinc-300 transition hover:bg-gray-50/80 dark:hover:bg-white/[0.02]">
+                        <input
+                          type="checkbox"
+                          checked={agreedToTerms}
+                          onChange={(e) => setAgreedToTerms(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-white/20 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="leading-relaxed">
+                          <strong className="font-semibold text-gray-900 dark:text-white block mb-0.5">
+                            {isCounterActive
+                              ? isTargetTeam
+                                ? "Agree to Team's Scope & Milestones at Countered Rate"
+                                : "Agree to Scope & Milestones at Countered Rate"
+                              : isTargetTeam
+                                ? "I Agree to the Team's Proposed Proposal"
+                                : "I Agree to the Freelancer's Proposed Terms"}
+                          </strong>
+                          {isCounterActive
+                            ? isTargetTeam
+                              ? `I accept the team's deliverable phases, revisions, and schedule, with my counter-offer of ${effectiveBid.toLocaleString()} Credits applied.`
+                              : `I accept the candidate's deliverable phases, revisions, and schedule, with my counter-offer of ${effectiveBid.toLocaleString()} Credits applied.`
+                            : isTargetTeam
+                              ? `I agree to the team's proposed milestone deliverables, revision limits, and rate of ${effectiveBid.toLocaleString()} Credits.`
+                              : `I agree to the candidate's proposed milestone deliverables, revision limits, and rate of ${effectiveBid.toLocaleString()} Credits.`}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Controls */}
+                <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-white/10">
                   <button
                     type="button"
                     onClick={() => {
-                      const now = new Date();
-                      const localDateTime = new Date(
-                        now.getTime() - now.getTimezoneOffset() * 60000
-                      )
-                        .toISOString()
-                        .slice(0, 16);
-                      setContractStartsAt(localDateTime);
+                      setIsAcceptConfirmOpen(false);
+                      setOfferTargetProposal(null);
                     }}
-                    className="text-[11px] bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-bold px-3 py-2.5 rounded-xl hover:bg-gray-200 dark:hover:bg-white/20 transition cursor-pointer"
+                    disabled={isSendingOffer}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer disabled:opacity-50 text-center"
                   >
-                    Set to Now
+                    Cancel
                   </button>
+                  <SlideCommit
+                    label={`Swipe to Pay ${effectiveBid.toLocaleString()} Credits`}
+                    doneLabel={`Paid ${effectiveBid.toLocaleString()} Credits`}
+                    errorLabel="Offer Failed"
+                    onConfirm={handleConfirmSendOffer}
+                    disabled={isSendingOffer || !agreedToEscrow || !agreedToTerms || !hasSufficient || (isCountering && (!hasValidCustom || numCustomBid <= 0))}
+                    width={280}
+                    height={46}
+                    trackColor={isDark ? "#27272a" : "#e4e4e7"}
+                    handleColor="#2563eb"
+                    textColor={isDark ? "#f4f4f5" : "#18181b"}
+                    successColor="#10b981"
+                  />
                 </div>
-              </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
 
-              {/* Milestone Customization */}
-              <div className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-gray-800 dark:text-zinc-200 flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-                    Negotiated Scope & Milestones
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomizingMilestones(!isCustomizingMilestones)}
-                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                  >
-                    {isCustomizingMilestones ? "Reset to Proposed" : "Customize Milestones"}
-                  </button>
-                </div>
-
-                {isCustomizingMilestones ? (
-                  <div className="space-y-2.5 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-600 dark:text-zinc-400 font-medium">
-                        Agreed Offer Amount (Credits):
-                      </span>
-                      <input
-                        type="number"
-                        min={10}
-                        value={customBidAmount || ""}
-                        onChange={(e) =>
-                          setCustomBidAmount(Math.max(10, parseInt(e.target.value) || 10))
-                        }
-                        className="w-28 text-right rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-2.5 py-1 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                      {customMilestones.map((m, idx) => (
-                        <div
-                          key={m.id || idx}
-                          className="p-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 space-y-1.5 text-xs"
-                        >
-                          <input
-                            type="text"
-                            value={m.name}
-                            onChange={(e) => {
-                              const updated = [...customMilestones];
-                              updated[idx].name = e.target.value;
-                              setCustomMilestones(updated);
-                            }}
-                            className="w-full rounded border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 px-2 py-1 text-[11px] font-semibold text-gray-900 dark:text-white"
-                          />
-                          <div className="flex items-center gap-3 text-[10px] text-gray-500">
-                            <span>Hours:</span>
-                            <input
-                              type="number"
-                              min={1}
-                              value={m.hours}
-                              onChange={(e) => {
-                                const updated = [...customMilestones];
-                                updated[idx].hours = Math.max(1, parseInt(e.target.value) || 1);
-                                setCustomMilestones(updated);
-                              }}
-                              className="w-14 rounded border border-gray-200 dark:border-white/10 px-1 py-0.5"
-                            />
-                            <span>Revisions:</span>
-                            <input
-                              type="number"
-                              min={0}
-                              value={m.revisions}
-                              onChange={(e) => {
-                                const updated = [...customMilestones];
-                                updated[idx].revisions = Math.max(0, parseInt(e.target.value) || 0);
-                                setCustomMilestones(updated);
-                              }}
-                              className="w-14 rounded border border-gray-200 dark:border-white/10 px-1 py-0.5"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-gray-500 dark:text-zinc-400">
-                    Using candidate&apos;s proposed {offerTargetProposal.milestones?.length || 1}{" "}
-                    milestone phase
-                    {(offerTargetProposal.milestones?.length || 1) !== 1 ? "s" : ""}.
+        {/* Expire & Refund Confirmation Modal */}
+      <AnimatePresence>
+        {isExpireModalOpen && (
+          <div className="fixed inset-0 z-[300000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isExpiring && setIsExpireModalOpen(false)}
+              className="absolute inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-xs cursor-pointer"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 8 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-5 shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between pb-3 border-b border-gray-100 dark:border-white/10 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+                    Force Close Job Post
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                    Expire intake window immediately and refund posting fee
                   </p>
-                )}
-              </div>
-
-              {/* Agreement Checkbox */}
-              <label className="flex items-start gap-2.5 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] cursor-pointer text-xs text-gray-600 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={agreedToTerms}
-                  onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                />
-                <span className="leading-relaxed">
-                  I agree to extend this formal offer and acknowledge that platform escrow will hold
-                  the contract amount upon candidate acceptance.
-                </span>
-              </label>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-white/10">
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAcceptConfirmOpen(false);
-                    setOfferTargetProposal(null);
-                  }}
-                  disabled={isSendingOffer}
-                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+                  disabled={isExpiring}
+                  onClick={() => setIsExpireModalOpen(false)}
+                  className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body Description */}
+              <div className="space-y-3 mb-5">
+                <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                  {`Are you sure you want to force close and expire this job post immediately? Since 0 proposals have been submitted, the intake window will be terminated immediately and your full posting fee (${targetJob?.postingFeeCredits || 50} Credits) will be refunded to your wallet.`}
+                </p>
+
+                <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] flex items-center justify-between text-xs font-semibold">
+                  <span className="text-gray-500 dark:text-zinc-400">
+                    Refund to Wallet:
+                  </span>
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">
+                    {`${targetJob?.postingFeeCredits || 50} Credits`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Controls */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={isExpiring}
+                  onClick={() => setIsExpireModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmSendOffer}
-                  disabled={isSendingOffer || !agreedToTerms}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-sm disabled:opacity-50 cursor-pointer"
+                  disabled={isExpiring}
+                  onClick={handleExecuteExpireNow}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {isSendingOffer ? "Extending Offer..." : "Send Contract Offer"}
+                  {isExpiring ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Closing...</span>
+                    </>
+                  ) : (
+                    <span>Force Close &amp; Refund</span>
+                  )}
                 </button>
               </div>
             </motion.div>

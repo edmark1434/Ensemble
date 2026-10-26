@@ -706,11 +706,11 @@ async function createProposalRepositories(proposalData) {
         // 1. Insert Proposal
         const query = `
             INSERT INTO proposals (
-                job_id, freelancer_account_id, letter, rate_credits, 
+                job_id, freelancer_account_id, letter, rate_credits, original_rate_credits,
                 revision_price_credits, terms_id, status, job_milestone_id, screening_answers,
                 proposed_by_account_id, included_member_account_ids, submission_fee_credits
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                $1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11, $12
             ) RETURNING proposal_id;
         `;
         const values = [
@@ -1130,6 +1130,26 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                     WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
                 ) as freelancer_rating,
                 (SELECT jc.contract_id FROM job_contracts jc JOIN contracts ct ON jc.contract_id = ct.contract_id WHERE jc.proposal_id = p.proposal_id ORDER BY ct.created_at DESC LIMIT 1) as contract_id,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'contract_id', ct.contract_id,
+                                'rate_credits', ct.rate_credits,
+                                'created_at', ct.created_at,
+                                'starts_at', ct.starts_at,
+                                'rejected_at', COALESCE(ct.rejected_at, ct.created_at),
+                                'status', ct.status,
+                                'reject_reason', COALESCE(ct.reject_reason, p.reject_reason, 'Applicant declined the contract offer.')
+                            ) ORDER BY COALESCE(ct.rejected_at, ct.created_at) DESC
+                        ),
+                        '[]'::json
+                    )
+                    FROM job_contracts jc
+                    JOIN contracts ct ON jc.contract_id = ct.contract_id
+                    WHERE jc.proposal_id = p.proposal_id
+                      AND ct.status = 'Rejected'
+                ) as decline_history,
                 (
                     SELECT u_lead.account_id
                     FROM teams ft_lead

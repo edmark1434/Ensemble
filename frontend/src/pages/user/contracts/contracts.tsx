@@ -60,6 +60,7 @@ export interface MilestoneItem {
   revisions: number;
   deadline: string;
   deadline_at?: string;
+  started_at?: string;
   credits: number;
   status: MilestoneStatus;
   rawStatus?: string;

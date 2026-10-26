@@ -90,7 +90,7 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
 
               <div className="relative z-10 flex items-center gap-2">
                 {getStatusIcon(st.label, isActive)}
-                <span>{st.label}</span>
+                <span>{st.label === "Accepted" ? "Offer Sent" : st.label}</span>
               </div>
 
               <span

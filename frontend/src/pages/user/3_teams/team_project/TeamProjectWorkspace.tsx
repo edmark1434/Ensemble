@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -11,7 +11,9 @@ import {
   Edit3,
   FileText,
   FileCheck,
+  Film,
   Flag,
+  Info,
   Kanban,
   Layers,
   Lock,
@@ -29,14 +31,16 @@ import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { ProjectOverviewTab } from './ProjectOverviewTab';
 import { ProjectTaskboardTab } from './ProjectTaskboardTab';
+import { ProjectVideoTab } from './ProjectVideoTab';
 import { ProjectSubmissionsTab } from './ProjectSubmissionsTab';
+import { ProjectInfoTab } from './ProjectInfoTab';
 import { ProjectContractAndMembersTab } from './ProjectContractAndMembersTab';
 import { ProjectHistoryTab } from './ProjectHistoryTab';
 import { ProjectChatTab } from './ProjectChatTab';
 import ReportTeamModal from '../team_modals/ReportTeamModal';
 import { RateReviewModal } from '@/pages/user/8_dashboard/dashboard_components/RateReviewModal';
 
-type TabType = 'overview' | 'taskboard' | 'submissions' | 'contract' | 'history' | 'chat';
+type TabType = 'overview' | 'taskboard' | 'project' | 'submissions' | 'info' | 'contract' | 'history' | 'chat';
 
 export const TeamProjectWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,10 +51,14 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   const rawTab = searchParams.get('tab');
   const initialTab: TabType =
-    rawTab === 'members' || rawTab === 'contract'
+    rawTab === 'info'
+      ? 'info'
+      : rawTab === 'members' || rawTab === 'contract'
       ? 'contract'
       : rawTab === 'submissions' || rawTab === 'submission'
       ? 'submissions'
+      : rawTab === 'project' || rawTab === 'video'
+      ? 'project'
       : ((rawTab as TabType) || 'overview');
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
@@ -72,7 +80,100 @@ export const TeamProjectWorkspace: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [milestones, setMilestones] = useState<any[]>([]);
+  const [linkedProjects, setLinkedProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [now, setNow] = useState<number>(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const milestone1Timeline = useMemo(() => {
+    if (!milestones || milestones.length === 0) return null;
+    const m1 = milestones.find((m: any) => Number(m.order_index) === 0) || milestones[0];
+    if (!m1) return null;
+
+    const status = String(m1.milestone_status || '').toLowerCase();
+    const isClaimed = status === 'claimed' || status === 'approved' || status === 'completed';
+
+    let targetDate: Date | null = null;
+    if (m1.deadline_at) {
+      const d = new Date(m1.deadline_at);
+      if (!isNaN(d.getTime())) targetDate = d;
+    }
+    if (!targetDate && m1.duration_hours) {
+      const startRef = m1.started_at || m1.contract_starts_at || project?.created_at;
+      if (startRef) {
+        const d = new Date(startRef);
+        if (!isNaN(d.getTime())) {
+          targetDate = new Date(d.getTime() + Number(m1.duration_hours) * 3600000);
+        }
+      }
+    }
+    if (!targetDate && m1.contract_overall_deadline) {
+      const d = new Date(m1.contract_overall_deadline);
+      if (!isNaN(d.getTime())) targetDate = d;
+    }
+
+    const startRef = m1.started_at || m1.contract_starts_at || project?.created_at;
+    let range: string | null = null;
+    if (targetDate) {
+      const endStr = targetDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (startRef) {
+        const s = new Date(startRef);
+        if (!isNaN(s.getTime())) {
+          const startStr = s.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          range = `${startStr} – ${endStr}`;
+        }
+      }
+      if (!range) range = `Due ${endStr}`;
+    }
+
+    if (isClaimed) {
+      return {
+        range,
+        countdown: 'Completed',
+        isClaimed: true,
+        isExpired: false,
+      };
+    }
+
+    if (!targetDate) {
+      return {
+        range: null,
+        countdown: m1.duration_hours ? `${m1.duration_hours}h duration` : 'In Progress',
+        isClaimed: false,
+        isExpired: false,
+      };
+    }
+
+    const diff = targetDate.getTime() - now;
+    if (diff <= 0) {
+      return {
+        range,
+        countdown: '00:00:00 (Overdue)',
+        isClaimed: false,
+        isExpired: true,
+      };
+    }
+
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+
+    const countdown = days > 0
+      ? `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+      : `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+
+    return {
+      range,
+      countdown,
+      isClaimed: false,
+      isExpired: false,
+    };
+  }, [milestones, project, now]);
 
   // Collapsible banner state
   const [isBannerCollapsed, setIsBannerCollapsed] = useState<boolean>(() => {
@@ -124,13 +225,14 @@ export const TeamProjectWorkspace: React.FC = () => {
     if (!id) return;
     try {
       if (!silent) setIsLoading(true);
-      const [projRes, tasksRes, contractsRes, historyRes, membersRes, milestonesRes] = await Promise.all([
+      const [projRes, tasksRes, contractsRes, historyRes, membersRes, milestonesRes, videoProjectsRes] = await Promise.all([
         api.get(`/api/team-projects/${id}`),
         api.get(`/api/team-projects/${id}/taskboard`),
         api.get(`/api/team-projects/${id}/contracts`),
         api.get(`/api/team-projects/${id}/history`),
         api.get(`/api/team-projects/${id}/members`),
         api.get(`/api/team-projects/${id}/milestones`),
+        api.get(`/api/team-projects/${id}/video-projects`).catch(() => ({ data: { data: [] } })),
       ]);
 
       const pData = projRes.data?.data;
@@ -143,6 +245,7 @@ export const TeamProjectWorkspace: React.FC = () => {
       setHistory(historyRes.data?.data || []);
       setMembers(membersRes.data?.data || []);
       setMilestones(milestonesRes.data?.data || []);
+      setLinkedProjects(videoProjectsRes.data?.data || []);
     } catch (err: any) {
       console.error('Error loading team project workspace:', err);
       showErrorToast(err?.response?.data?.message || 'Failed to load project workspace');
@@ -205,7 +308,7 @@ export const TeamProjectWorkspace: React.FC = () => {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
         <UserHeader />
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-36 space-y-6">
           {/* Navigation Skeleton */}
           <div className="flex items-center justify-between">
             <div className="w-32 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-lg animate-pulse" />
@@ -343,7 +446,7 @@ export const TeamProjectWorkspace: React.FC = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
       <UserHeader />
 
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-36 space-y-6">
         {/* Navigation & Breadcrumbs: Return to Teams + Go to Deliveries */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
@@ -527,6 +630,27 @@ export const TeamProjectWorkspace: React.FC = () => {
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                 {isClient ? 'Client (Project Owner)' : `Contributor (${project.user_role || 'Freelancer'})`}
               </span>
+
+              {/* Milestone 1 Timeline & Countdown Pill */}
+              {milestone1Timeline && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 font-mono">
+                  <Clock className="w-3 h-3 text-zinc-500 shrink-0" />
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 font-sans">
+                    Milestone 1:
+                  </span>
+                  {milestone1Timeline.range && (
+                    <span className="text-zinc-600 dark:text-zinc-400 font-sans">
+                      {milestone1Timeline.range}
+                    </span>
+                  )}
+                  {milestone1Timeline.range && (
+                    <span className="text-zinc-400 dark:text-zinc-600 font-sans">•</span>
+                  )}
+                  <span className={`font-bold ${milestone1Timeline.isClaimed ? 'text-emerald-600 dark:text-emerald-400' : milestone1Timeline.isExpired ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-900 dark:text-white'}`}>
+                    {milestone1Timeline.countdown}
+                  </span>
+                </span>
+              )}
             </div>
 
             {/* Read-only Archived Banner */}
@@ -540,52 +664,97 @@ export const TeamProjectWorkspace: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation Tabs (6 Dedicated Tabs) */}
-          <div className="flex items-center border-t border-zinc-200 dark:border-zinc-800 overflow-x-auto bg-zinc-50/50 dark:bg-zinc-900/30 px-6">
-            {[
-              { id: 'overview', label: 'Overview', icon: FileText },
-              { id: 'taskboard', label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
-              {
-                id: 'submissions',
-                label: 'Submissions',
-                icon: FileCheck,
-                badge: milestones.filter(
-                  (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
-                ).length,
-              },
-              { id: 'contract', label: 'Contract & Members', icon: Briefcase, badge: members.length },
-              { id: 'history', label: 'History', icon: Clock, badge: history.length },
-              { id: 'chat', label: 'Chat', icon: MessageCircle },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+          {/* Navigation Tabs (2-Row Layout) */}
+          <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+            {/* Row 1: Production Core */}
+            <div className="flex items-center border-b border-zinc-200/70 dark:border-zinc-800/70 overflow-x-auto px-6">
+              {[
+                { id: 'overview' as TabType, label: 'Overview', icon: FileText },
+                { id: 'taskboard' as TabType, label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
+                {
+                  id: 'project' as TabType,
+                  label: 'Project',
+                  icon: Film,
+                  badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
+                },
+                {
+                  id: 'submissions' as TabType,
+                  label: 'Submissions',
+                  icon: FileCheck,
+                  badge: milestones.filter(
+                    (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
+                  ).length,
+                },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
 
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id as TabType)}
-                  className={`flex items-center gap-2 py-3.5 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-                    isActive
-                      ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
-                      : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                  {tab.badge !== undefined && tab.badge > 0 && (
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        isActive
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                          : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-                      }`}
-                    >
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabChange(tab.id)}
+                    className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
+                        : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                    {tab.badge !== undefined && tab.badge > 0 && (
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                          isActive
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Row 2: Management & Collaboration */}
+            <div className="flex items-center overflow-x-auto px-6">
+              {[
+                { id: 'info' as TabType, label: 'Info', icon: Info },
+                { id: 'contract' as TabType, label: 'Contract & Members', icon: Briefcase, badge: members.length },
+                { id: 'history' as TabType, label: 'History', icon: Clock, badge: history.length },
+                { id: 'chat' as TabType, label: 'Chat', icon: MessageCircle },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabChange(tab.id)}
+                    className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
+                        : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                    {tab.badge !== undefined && tab.badge > 0 && (
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                          isActive
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -623,6 +792,16 @@ export const TeamProjectWorkspace: React.FC = () => {
             />
           )}
 
+          {activeTab === 'project' && (
+            <ProjectVideoTab
+              teamId={project.team_id}
+              isClient={isClient}
+              currentUserAccountId={currentUserAccountId}
+              workspaceTitle={project.project_title || project.job_title}
+              onRefreshWorkspace={() => loadProjectData(true)}
+            />
+          )}
+
           {activeTab === 'submissions' && (
             <ProjectSubmissionsTab
               teamId={project.team_id}
@@ -632,6 +811,16 @@ export const TeamProjectWorkspace: React.FC = () => {
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
               onUpdated={(silent?: boolean) => loadProjectData(silent)}
+              onNavigateTab={handleTabChange}
+            />
+          )}
+
+          {activeTab === 'info' && (
+            <ProjectInfoTab
+              project={project}
+              contracts={contracts}
+              members={members}
+              milestones={milestones}
             />
           )}
 

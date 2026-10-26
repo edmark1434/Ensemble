@@ -248,8 +248,9 @@ async function seedSampleJobs(userAccountIds) {
       `INSERT INTO jobs (
         client_account_id, title, description, category, payment_type, experience_level,
         no_of_hires, rate_credits_min, rate_credits_max, timeline_min, timeline_max,
-        status, rough_deadline, rough_no_of_revisions, posted_as, hiring_type, screening_questions
-      ) VALUES ($1, $2, $3, $4, 'fixed', $5, $6, $7, $8, $9, $10, 'Open', NOW() + interval '21 days', 0, 'self', $11, $12)
+        status, rough_deadline, rough_no_of_revisions, posted_as, hiring_type, screening_questions,
+        application_deadline, is_urgent, posting_fee_credits, free_extension_count
+      ) VALUES ($1, $2, $3, $4, 'fixed', $5, $6, $7, $8, $9, $10, 'Open', NOW() + interval '21 days', 0, 'self', $11, $12, NOW() + interval '3 days', false, 50, 0)
       RETURNING job_id`,
       [
         clientAccountId,
