@@ -243,6 +243,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const [newTaskMilestone, setNewTaskMilestone] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
+  // Selected Milestone for Progress Bar View (defaults to current active milestone)
+  const [selectedProgressMilestoneId, setSelectedProgressMilestoneId] = useState<string | null>(null);
+  const [isMilestoneProgressCollapsed, setIsMilestoneProgressCollapsed] = useState(false);
+
   // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
   const [activePriorityMenuTaskId, setActivePriorityMenuTaskId] = useState<string | null>(null);
@@ -410,23 +414,40 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   // Helper to locate milestone attached to a task
-  const getTaskMilestone = (task: TaskItem) => {
+  const getTaskMilestone = (task: any) => {
     if (!milestones || milestones.length === 0) return null;
     return milestones.find((m: any) =>
-      (task.job_milestone_id && String(m.job_milestone_id) === String(task.job_milestone_id)) ||
-      (task.milestone_title && m.milestone_title && task.milestone_title.trim().toLowerCase() === m.milestone_title.trim().toLowerCase())
+      (task?.job_milestone_id && (String(m.job_milestone_id) === String(task.job_milestone_id) || String(m.contract_milestone_id) === String(task.job_milestone_id))) ||
+      (task?.contract_milestone_id && (String(m.contract_milestone_id) === String(task.contract_milestone_id) || String(m.job_milestone_id) === String(task.contract_milestone_id))) ||
+      (task?.milestone_title && m.milestone_title && task.milestone_title.trim().toLowerCase() === m.milestone_title.trim().toLowerCase())
     );
   };
 
+  // Helper to safely format 1-indexed milestone order (M1, M2, etc.)
+  const getMilestoneOrder = (taskOrMilestone: any, fallbackIdx: number = 0): number => {
+    if (!taskOrMilestone) return fallbackIdx + 1;
+    if (taskOrMilestone.order_index !== undefined && taskOrMilestone.order_index !== null) {
+      return Number(taskOrMilestone.order_index) + 1;
+    }
+    const ms = getTaskMilestone(taskOrMilestone);
+    if (ms && ms.order_index !== undefined && ms.order_index !== null) {
+      return Number(ms.order_index) + 1;
+    }
+    if (taskOrMilestone.milestone_order !== undefined && taskOrMilestone.milestone_order !== null) {
+      return Number(taskOrMilestone.milestone_order) + 1;
+    }
+    return fallbackIdx + 1;
+  };
+
   // Extract min and max timeline bounds strictly for THIS individual milestone
-  const getMilestoneTimelineBounds = (task: TaskItem) => {
+  const getMilestoneTimelineBounds = (task: any) => {
     const milestone = getTaskMilestone(task);
     let minDate = '';
     let maxDate = '';
 
     if (milestone) {
       const sortedMilestones = [...(milestones || [])].sort(
-        (a: any, b: any) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0)
+        (a: any, b: any) => (Number(a.order_index ?? 0)) - (Number(b.order_index ?? 0))
       );
 
       // Base project/contract start timestamp
@@ -444,7 +465,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
       for (const m of sortedMilestones) {
         const mHours = Number(m.duration_hours || 72);
-        if (String(m.job_milestone_id) === String(milestone.job_milestone_id)) {
+        if (
+          (milestone.job_milestone_id && String(m.job_milestone_id) === String(milestone.job_milestone_id)) ||
+          (milestone.contract_milestone_id && String(m.contract_milestone_id) === String(milestone.contract_milestone_id)) ||
+          (m.milestone_title && milestone.milestone_title && m.milestone_title.trim().toLowerCase() === milestone.milestone_title.trim().toLowerCase())
+        ) {
           targetMilestoneHours = mHours;
           break;
         }
@@ -458,17 +483,25 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       const computedStartIso = new Date(milestoneStartTime).toISOString().substring(0, 10);
       const computedDeadlineIso = new Date(milestoneEndTime).toISOString().substring(0, 10);
 
-      // minDate: milestone start date
-      minDate = milestone.started_at
-        ? new Date(milestone.started_at).toISOString().substring(0, 10)
-        : computedStartIso;
+      // minDate: milestone start date. For milestones beyond index 0, start cannot precede prior milestones
+      if (cumulativeOffsetHours > 0) {
+        minDate = computedStartIso;
+      } else {
+        minDate = milestone.started_at
+          ? new Date(milestone.started_at).toISOString().substring(0, 10)
+          : computedStartIso;
+      }
 
       // maxDate: milestone deadline (never exceed this milestone's own timeline into subsequent milestones)
       if (milestone.deadline_at) {
         const explicitIso = new Date(milestone.deadline_at).toISOString().substring(0, 10);
-        maxDate = explicitIso <= computedDeadlineIso ? explicitIso : computedDeadlineIso;
+        maxDate = explicitIso >= minDate && explicitIso <= computedDeadlineIso ? explicitIso : computedDeadlineIso;
       } else {
         maxDate = computedDeadlineIso;
+      }
+
+      if (minDate && maxDate && maxDate < minDate) {
+        maxDate = minDate;
       }
     }
 
@@ -478,6 +511,142 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       maxDate: maxDate || undefined,
     };
   };
+
+  // Memoized mapping of milestone to horizontal columns (Cols 1 through 8) on Gantt chart
+  const milestoneColMap = useMemo(() => {
+    const map = new Map<string, { startCol: number; colSpan: number; endCol: number; displayOrder: number }>();
+    if (!milestones || milestones.length === 0) return map;
+
+    const sorted = [...milestones].sort(
+      (a: any, b: any) => (Number(a.order_index ?? 0)) - (Number(b.order_index ?? 0))
+    );
+
+    const totalMilestones = sorted.length;
+    const totalHours = sorted.reduce((acc, m) => acc + Math.max(1, Number(m.duration_hours || 72)), 0);
+
+    let currentStart = 1;
+    sorted.forEach((m: any, idx: number) => {
+      const displayOrder = Number(m.order_index !== undefined && m.order_index !== null ? m.order_index : idx) + 1;
+      let span: number;
+      let end: number;
+
+      if (idx === totalMilestones - 1) {
+        span = Math.max(1, 8 - currentStart + 1);
+        end = 8;
+      } else {
+        const hours = Math.max(1, Number(m.duration_hours || 72));
+        const remainingCols = 8 - currentStart + 1;
+        const remainingMilestones = totalMilestones - idx;
+        const idealSpan = Math.round((hours / totalHours) * 8);
+        const maxAllowed = remainingCols - (remainingMilestones - 1);
+        span = Math.max(1, Math.min(idealSpan, maxAllowed));
+        end = currentStart + span - 1;
+      }
+
+      const range = {
+        startCol: currentStart,
+        colSpan: span,
+        endCol: end,
+        displayOrder,
+      };
+
+      if (m.job_milestone_id) map.set(String(m.job_milestone_id), range);
+      if (m.contract_milestone_id) map.set(String(m.contract_milestone_id), range);
+      if (m.milestone_title) map.set(m.milestone_title.trim().toLowerCase(), range);
+      map.set(`idx_${idx}`, range);
+
+      currentStart += span;
+    });
+
+    return map;
+  }, [milestones]);
+
+  // Determine current active milestone
+  const activeMilestone = useMemo(() => {
+    if (!milestones || milestones.length === 0) return null;
+    const sorted = [...milestones].sort(
+      (a: any, b: any) => (Number(a.order_index ?? 0)) - (Number(b.order_index ?? 0))
+    );
+    // Find active / in_progress or current milestone
+    const inProg = sorted.find((m: any) =>
+      m.is_current || ['in_progress', 'active'].includes(String(m.milestone_status || '').toLowerCase())
+    );
+    if (inProg) return inProg;
+    // Or first non-completed
+    const notCompleted = sorted.find((m: any) =>
+      !['completed', 'approved'].includes(String(m.milestone_status || '').toLowerCase())
+    );
+    if (notCompleted) return notCompleted;
+    return sorted[0];
+  }, [milestones]);
+
+  const currentMilestone = useMemo(() => {
+    if (!milestones || milestones.length === 0) return null;
+    if (selectedProgressMilestoneId) {
+      const found = milestones.find((m: any) =>
+        String(m.job_milestone_id) === String(selectedProgressMilestoneId) ||
+        String(m.contract_milestone_id) === String(selectedProgressMilestoneId)
+      );
+      if (found) return found;
+    }
+    return activeMilestone;
+  }, [milestones, selectedProgressMilestoneId, activeMilestone]);
+
+  const currentMilestoneStats = useMemo(() => {
+    if (!currentMilestone) return null;
+
+    const mId = currentMilestone.job_milestone_id
+      ? String(currentMilestone.job_milestone_id)
+      : (currentMilestone.contract_milestone_id ? String(currentMilestone.contract_milestone_id) : null);
+    const mTitle = currentMilestone.milestone_title ? currentMilestone.milestone_title.trim().toLowerCase() : null;
+
+    // Filter tasks belonging to this milestone
+    const mTasks = localTasks.filter((t) => {
+      if (mId && (String(t.job_milestone_id) === mId || String(t.contract_milestone_id) === mId)) {
+        return true;
+      }
+      if (mTitle && t.milestone_title && t.milestone_title.trim().toLowerCase() === mTitle) {
+        return true;
+      }
+      return false;
+    });
+
+    const total = mTasks.length;
+    const done = mTasks.filter((t) => normalizeStatus(t.status) === 'completed').length;
+    const review = mTasks.filter((t) => normalizeStatus(t.status) === 'review').length;
+    const inProg = mTasks.filter((t) => normalizeStatus(t.status) === 'in_progress').length;
+    const todo = mTasks.filter((t) => normalizeStatus(t.status) === 'todo').length;
+
+    const statusLower = String(currentMilestone.milestone_status || '').toLowerCase();
+    const isApproved = statusLower === 'completed' || statusLower === 'approved';
+
+    let percent = 0;
+    if (total > 0) {
+      percent = Math.round((done / total) * 100);
+    } else if (isApproved) {
+      percent = 100;
+    }
+
+    const donePercent = total > 0 ? (done / total) * 100 : (isApproved ? 100 : 0);
+    const reviewPercent = total > 0 ? (review / total) * 100 : 0;
+    const inProgPercent = total > 0 ? (inProg / total) * 100 : 0;
+
+    const mOrder = getMilestoneOrder(currentMilestone);
+
+    return {
+      milestone: currentMilestone,
+      mOrder,
+      total,
+      done,
+      review,
+      inProg,
+      todo,
+      percent,
+      donePercent,
+      reviewPercent,
+      inProgPercent,
+    };
+  }, [currentMilestone, localTasks]);
 
   const toggleExpand = (taskId: string) => {
     setExpandedTasks((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
@@ -584,13 +753,13 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     }
 
     if (newDueDate) {
-      const { milestone, minDate, maxDate } = getMilestoneTimelineBounds(task);
+      const { minDate, maxDate } = getMilestoneTimelineBounds(task);
       if (maxDate && newDueDate > maxDate) {
-        showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(milestone.deadline_at).toLocaleDateString()})`);
+        showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
       if (minDate && newDueDate < minDate) {
-        showErrorToast(`Task due date cannot precede the milestone start date (${new Date(milestone.started_at).toLocaleDateString()})`);
+        showErrorToast(`Task due date cannot precede the milestone start date (${new Date(minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
     }
@@ -664,6 +833,18 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       return;
     }
 
+    if (newTaskDueDate) {
+      const bounds = getMilestoneTimelineBounds({ job_milestone_id: newTaskMilestone } as any);
+      if (bounds.minDate && newTaskDueDate < bounds.minDate) {
+        showErrorToast(`Task due date cannot precede the milestone start date (${new Date(bounds.minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (bounds.maxDate && newTaskDueDate > bounds.maxDate) {
+        showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(bounds.maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       await api.post(`/api/team-projects/${teamId}/tasks`, {
@@ -700,22 +881,29 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setNewTaskTitle('');
     setNewTaskDesc('');
     setNewTaskPriority('normal');
-    setNewTaskDueDate('');
 
-    // Default to the current contributor's or subcontractor's assigned milestone
+    // Default to the current contributor's or subcontractor's assigned milestone, or active milestone
+    let defaultMId = '';
     if (isSubcontractor && subcontractorMilestoneId) {
-      setNewTaskMilestone(String(subcontractorMilestoneId));
+      defaultMId = String(subcontractorMilestoneId);
     } else {
       const myMilestone = milestones?.find(
         (m: any) => String(m.assignee_account_id) === String(currentUserAccountId)
       );
       if (myMilestone) {
-        setNewTaskMilestone(String(myMilestone.job_milestone_id));
+        defaultMId = String(myMilestone.job_milestone_id || myMilestone.contract_milestone_id || '');
       } else if (milestones && milestones.length > 0) {
-        setNewTaskMilestone(String(milestones[0].job_milestone_id));
-      } else {
-        setNewTaskMilestone('');
+        const activeM = milestones.find((m: any) => m.is_current || ['in_progress', 'active'].includes(String(m.milestone_status).toLowerCase())) || milestones[0];
+        defaultMId = String(activeM.job_milestone_id || activeM.contract_milestone_id || '');
       }
+    }
+
+    setNewTaskMilestone(defaultMId);
+    const bounds = getMilestoneTimelineBounds({ job_milestone_id: defaultMId } as any);
+    if (bounds.maxDate) {
+      setNewTaskDueDate(bounds.maxDate);
+    } else {
+      setNewTaskDueDate('');
     }
 
     setNewTaskAssignee(currentUserAccountId || '');
@@ -876,7 +1064,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             <span className="text-zinc-500 dark:text-zinc-400 font-medium">Milestone</span>
             <div className="flex items-center gap-1.5 text-right">
               <span className="font-semibold text-zinc-900 dark:text-white truncate max-w-[180px]" title={task.milestone_title}>
-                {task.milestone_title || `Milestone ${task.milestone_order || 1}`}
+                {task.milestone_title || `Milestone ${getMilestoneOrder(task)}`}
               </span>
               <span className="text-zinc-400" title="Milestone scope is fixed by contract and cannot be moved">
                 <Lock className="w-3 h-3 text-zinc-400 shrink-0" />
@@ -888,25 +1076,32 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
             <span className="text-zinc-500 dark:text-zinc-400 font-medium">Due Date</span>
             {isOwner ? (
-              <div className="relative flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500">
-                <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                <span>
-                  {task.due_at
-                    ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-                    : 'Set date'}
-                </span>
-                <input
-                  type="date"
-                  value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                  onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                  onClick={(e) => {
-                    try {
-                      (e.target as any).showPicker?.();
-                    } catch {}
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                />
-              </div>
+              (() => {
+                const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+                return (
+                  <div className="relative flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500">
+                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                    <span>
+                      {task.due_at
+                        ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                        : 'Set date'}
+                    </span>
+                    <input
+                      type="date"
+                      min={minDate}
+                      max={maxDate}
+                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
+                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch {}
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+                );
+              })()
             ) : (
               <span className="font-semibold text-zinc-900 dark:text-white">
                 {task.due_at
@@ -1029,7 +1224,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-zinc-600 dark:text-zinc-400 pl-7">
-              Task created under milestone <span className="text-zinc-800 dark:text-zinc-200 font-medium">"{task.milestone_title || `Milestone ${task.milestone_order || 1}`}"</span>.
+              Task created under milestone <span className="text-zinc-800 dark:text-zinc-200 font-medium">"{task.milestone_title || `Milestone ${getMilestoneOrder(task)}`}"</span>.
             </p>
           </div>
         </div>
@@ -1038,7 +1233,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-48 sm:pb-64">
       {/* Scoped Subcontractor Access Banner */}
       {isSubcontractor && (
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 shadow-2xs">
@@ -1153,6 +1348,239 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'}
         </span>
       </div>
+
+      {/* ======================================================== */}
+      {/* 1.5 CURRENT MILESTONE PROGRESS BAR BANNER (Collapsible)   */}
+      {/* ======================================================== */}
+      {displayMode !== 'gantt' && currentMilestoneStats && (
+        <div className="bg-white dark:bg-[#121214] rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden transition-all">
+          {/* Header Row: Clickable to toggle collapse/expand */}
+          <div
+            onClick={() => setIsMilestoneProgressCollapsed((prev) => !prev)}
+            className="p-3 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 cursor-pointer select-none hover:bg-zinc-50/50 dark:hover:bg-zinc-900/40 transition"
+          >
+            {/* Left: Collapse chevron, Badge, Title, Status & Mini-bar when collapsed */}
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMilestoneProgressCollapsed((prev) => !prev);
+                }}
+                className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer shrink-0"
+                title={isMilestoneProgressCollapsed ? 'Expand milestone progress' : 'Collapse milestone progress'}
+              >
+                {isMilestoneProgressCollapsed ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Milestone Indicator Badge */}
+              <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900/60 shrink-0">
+                M{currentMilestoneStats.mOrder}
+              </span>
+
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white truncate">
+                  {currentMilestoneStats.milestone.milestone_title || `Milestone ${currentMilestoneStats.mOrder}`}
+                </h4>
+
+                {/* Status Pill */}
+                {(() => {
+                  const status = String(currentMilestoneStats.milestone.milestone_status || '').toLowerCase();
+                  if (status === 'completed' || status === 'approved') {
+                    return (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        <span>COMPLETED</span>
+                      </span>
+                    );
+                  }
+                  if (status === 'submitted_for_review') {
+                    return (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>ON REVIEW</span>
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-pulse" />
+                      <span>CURRENT MILESTONE</span>
+                    </span>
+                  );
+                })()}
+
+                {/* Inline Mini Progress Bar when Collapsed */}
+                {isMilestoneProgressCollapsed && (
+                  <div className="hidden md:flex items-center gap-2 ml-1 shrink-0">
+                    <div className="w-24 bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden flex">
+                      <div
+                        style={{ width: `${currentMilestoneStats.donePercent}%` }}
+                        className="bg-emerald-500 h-full transition-all duration-300"
+                      />
+                      <div
+                        style={{ width: `${currentMilestoneStats.reviewPercent}%` }}
+                        className="bg-amber-500 h-full transition-all duration-300"
+                      />
+                      <div
+                        style={{ width: `${currentMilestoneStats.inProgPercent}%` }}
+                        className="bg-blue-500 h-full transition-all duration-300"
+                      />
+                    </div>
+                    <span className="text-[11px] font-mono font-bold text-zinc-700 dark:text-zinc-300">
+                      {currentMilestoneStats.percent}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Milestone Switcher, Task Progress Ratio, and Collapse Toggle */}
+            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+              {milestones && milestones.length > 1 && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200/80 dark:border-zinc-700"
+                >
+                  {milestones.map((m: any, mIdx: number) => {
+                    const mId = String(m.job_milestone_id || m.contract_milestone_id || mIdx);
+                    const isSelected = String(currentMilestoneStats.milestone.job_milestone_id || currentMilestoneStats.milestone.contract_milestone_id || '') === mId;
+                    const order = getMilestoneOrder(m, mIdx);
+                    return (
+                      <button
+                        key={mId}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProgressMilestoneId(mId);
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-2xs'
+                            : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                        }`}
+                      >
+                        M{order}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="text-right">
+                <div className="flex items-baseline justify-end gap-1">
+                  <span className="text-xs font-bold text-zinc-900 dark:text-white">
+                    {currentMilestoneStats.done} of {currentMilestoneStats.total}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 font-medium hidden sm:inline">tasks done</span>
+                  <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 ml-1">
+                    {currentMilestoneStats.percent}%
+                  </span>
+                </div>
+              </div>
+
+              <span className="text-[10px] font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 ml-0.5">
+                {isMilestoneProgressCollapsed ? 'Expand' : 'Collapse'}
+              </span>
+            </div>
+          </div>
+
+          {/* Collapsible Expanded Body */}
+          <AnimatePresence initial={false}>
+            {!isMilestoneProgressCollapsed && (
+              <motion.div
+                key="milestone-progress-details"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.18, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="px-3.5 pb-3.5 sm:px-4 sm:pb-4 pt-1 space-y-3 border-t border-zinc-100 dark:border-zinc-800/80">
+                  {/* Context Metadata Row */}
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 flex-wrap gap-2 pt-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {currentMilestoneStats.milestone.deadline_at && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-zinc-400" />
+                          <span>
+                            Deadline: {new Date(currentMilestoneStats.milestone.deadline_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </span>
+                      )}
+                      {Number(currentMilestoneStats.milestone.budget_credits || 0) > 0 && (
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                          {Number(currentMilestoneStats.milestone.budget_credits).toLocaleString()} Credits in Escrow
+                        </span>
+                      )}
+                      {currentMilestoneStats.milestone.assignee_name && (
+                        <span className="inline-flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
+                          <span>• Assigned:</span>
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                            {currentMilestoneStats.milestone.assignee_name}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">
+                      Milestone Progress
+                    </span>
+                  </div>
+
+                  {/* Multi-Segment Horizontal Progress Bar */}
+                  <div className="w-full bg-zinc-100 dark:bg-zinc-800/90 h-2.5 rounded-full overflow-hidden flex relative">
+                    {/* Done Segment */}
+                    <div
+                      style={{ width: `${currentMilestoneStats.donePercent}%` }}
+                      className="bg-emerald-500 h-full transition-all duration-300"
+                      title={`${currentMilestoneStats.done} Completed`}
+                    />
+                    {/* In Review Segment */}
+                    <div
+                      style={{ width: `${currentMilestoneStats.reviewPercent}%` }}
+                      className="bg-amber-500 h-full transition-all duration-300"
+                      title={`${currentMilestoneStats.review} In Review`}
+                    />
+                    {/* In Progress Segment */}
+                    <div
+                      style={{ width: `${currentMilestoneStats.inProgPercent}%` }}
+                      className="bg-blue-500 h-full transition-all duration-300"
+                      title={`${currentMilestoneStats.inProg} In Progress`}
+                    />
+                  </div>
+
+                  {/* Bottom Breakdown Badges */}
+                  <div className="flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-0.5">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span>{currentMilestoneStats.done} Done</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        <span>{currentMilestoneStats.review} On Review</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span>{currentMilestoneStats.inProg} In Progress</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-zinc-500">
+                        <span className="w-2 h-2 rounded-full border border-dashed border-zinc-400" />
+                        <span>{currentMilestoneStats.todo} To Do</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* 2. SUBHEADER TOOLBAR (Matching Reference Pics)           */}
@@ -1437,7 +1865,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 max-w-[100px] truncate"
                                     title={task.milestone_title}
                                   >
-                                    M{task.milestone_order || 1}
+                                    M{getMilestoneOrder(task)}
                                   </span>
                                 ) : null}
 
@@ -2256,8 +2684,17 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     const isInProgress = statusLower === 'in_progress' || statusLower === 'active' || m.is_current;
 
                     const progressPercent = isApproved ? 100 : isReview ? 90 : isInProgress ? 50 : 0;
-                    const startCol = Math.min((mIdx * 2) + 1, 6);
-                    const colSpan = Math.min(3, 9 - startCol);
+                    
+                    const mId = String(m.job_milestone_id || m.contract_milestone_id || mIdx);
+                    const mColRange = milestoneColMap.get(mId) || milestoneColMap.get(`idx_${mIdx}`) || {
+                      startCol: 1,
+                      colSpan: 4,
+                      endCol: 4,
+                      displayOrder: mIdx + 1,
+                    };
+                    const startCol = mColRange.startCol;
+                    const colSpan = mColRange.colSpan;
+                    const mOrder = mColRange.displayOrder;
 
                     return (
                       <div
@@ -2270,7 +2707,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           <div className="col-span-6 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
-                                M{m.order_index || mIdx + 1}
+                                M{mOrder}
                               </span>
                               <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
                                 {m.milestone_title}
@@ -2328,7 +2765,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             }`}
                           >
                             <span className="truncate">
-                              M{m.order_index || mIdx + 1}: {m.milestone_title}
+                              M{mOrder}: {m.milestone_title}
                             </span>
                             <span className="text-[9px] opacity-90 shrink-0 ml-1.5 font-mono">
                               {progressPercent}%
@@ -2390,9 +2827,74 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     const isInProg = normStatus === 'in_progress';
                     const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
 
-                    // Calculate timeline start and span
-                    const startCol = (idx % 4) + 1;
-                    const colSpan = isDone ? 2 : isReview ? 5 : isInProg ? 4 : 3;
+                    const taskMilestone = getTaskMilestone(task);
+                    const mId = task.job_milestone_id
+                      ? String(task.job_milestone_id)
+                      : (taskMilestone?.job_milestone_id ? String(taskMilestone.job_milestone_id) : null);
+
+                    const mRange = (mId && milestoneColMap.get(mId)) ||
+                      (taskMilestone?.contract_milestone_id && milestoneColMap.get(String(taskMilestone.contract_milestone_id))) ||
+                      (task.milestone_title && milestoneColMap.get(task.milestone_title.trim().toLowerCase())) ||
+                      milestoneColMap.get('idx_0') ||
+                      { startCol: 1, colSpan: 4, endCol: 4, displayOrder: 1 };
+
+                    const displayMOrder = getMilestoneOrder(task, mRange.displayOrder - 1);
+
+                    // Strictly scope tasks within this milestone's timeline
+                    const tasksInThisMilestone = filteredTasks.filter((t) => {
+                      if (task.job_milestone_id && t.job_milestone_id) {
+                        return String(t.job_milestone_id) === String(task.job_milestone_id);
+                      }
+                      if (task.milestone_title && t.milestone_title) {
+                        return t.milestone_title.trim().toLowerCase() === task.milestone_title.trim().toLowerCase();
+                      }
+                      return true;
+                    });
+                    const taskIndexInMilestone = Math.max(0, tasksInThisMilestone.findIndex((t) => t.task_id === task.task_id));
+
+                    let taskStartCol = mRange.startCol;
+                    let taskColSpan = 1;
+
+                    const bounds = getMilestoneTimelineBounds(task);
+                    if (bounds.minDate && bounds.maxDate && task.due_at) {
+                      const minTime = new Date(bounds.minDate).getTime();
+                      const maxTime = new Date(bounds.maxDate).getTime();
+                      const dueTime = new Date(task.due_at).getTime();
+
+                      if (maxTime > minTime) {
+                        const fraction = Math.max(0, Math.min(1, (dueTime - minTime) / (maxTime - minTime)));
+                        const colSlot = Math.min(
+                          mRange.endCol,
+                          mRange.startCol + Math.floor(fraction * mRange.colSpan)
+                        );
+                        const desiredSpan = isDone ? 1 : mRange.colSpan >= 3 ? 2 : 1;
+                        taskColSpan = Math.min(desiredSpan, colSlot - mRange.startCol + 1);
+                        taskStartCol = Math.max(mRange.startCol, colSlot - taskColSpan + 1);
+                      } else {
+                        taskStartCol = mRange.startCol;
+                        taskColSpan = Math.max(1, Math.min(2, mRange.colSpan));
+                      }
+                    } else {
+                      if (mRange.colSpan === 1) {
+                        taskStartCol = mRange.startCol;
+                        taskColSpan = 1;
+                      } else if (mRange.colSpan === 2) {
+                        const offset = taskIndexInMilestone % 2;
+                        taskStartCol = mRange.startCol + offset;
+                        taskColSpan = 1;
+                      } else {
+                        const slotCount = Math.max(1, mRange.colSpan - 1);
+                        const offset = taskIndexInMilestone % slotCount;
+                        taskStartCol = mRange.startCol + offset;
+                        const maxAllowed = mRange.endCol - taskStartCol + 1;
+                        const desiredSpan = isDone ? 1 : isReview ? Math.min(2, maxAllowed) : Math.min(2, maxAllowed);
+                        taskColSpan = Math.max(1, Math.min(desiredSpan, maxAllowed));
+                      }
+                    }
+
+                    // Enforce clamp: task can NEVER spill out of this milestone's timeline
+                    taskStartCol = Math.max(mRange.startCol, Math.min(taskStartCol, mRange.endCol));
+                    taskColSpan = Math.max(1, Math.min(taskColSpan, mRange.endCol - taskStartCol + 1));
 
                     return (
                       <div
@@ -2416,11 +2918,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate block">
                                 {task.title}
                               </span>
-                              {task.milestone_title && (
-                                <span className="text-[10px] text-blue-500 truncate block">
-                                  M{task.milestone_order || 1}: {task.milestone_title}
-                                </span>
-                              )}
+                              <span className="text-[10px] text-blue-500 truncate block">
+                                M{displayMOrder}: {task.milestone_title || taskMilestone?.milestone_title || `Milestone ${displayMOrder}`}
+                              </span>
                             </div>
                           </div>
 
@@ -2454,8 +2954,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         <div className="col-span-7 grid grid-cols-8 gap-1 h-7 bg-zinc-100/60 dark:bg-zinc-900/50 rounded-lg p-1 relative items-center">
                           <div
                             style={{
-                              gridColumnStart: startCol,
-                              gridColumnEnd: `span ${colSpan}`,
+                              gridColumnStart: taskStartCol,
+                              gridColumnEnd: `span ${taskColSpan}`,
                             }}
                             className={`h-full rounded-md text-[10px] font-bold text-white px-2 flex items-center justify-between shadow-2xs ${
                               isDone
@@ -2601,16 +3101,28 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 <select
                   value={newTaskMilestone}
                   onChange={(e) => {
-                    setNewTaskMilestone(e.target.value);
+                    const selectedMId = e.target.value;
+                    setNewTaskMilestone(selectedMId);
+                    const bounds = getMilestoneTimelineBounds({ job_milestone_id: selectedMId } as any);
+                    if (bounds.minDate && bounds.maxDate) {
+                      if (!newTaskDueDate || newTaskDueDate < bounds.minDate || newTaskDueDate > bounds.maxDate) {
+                        setNewTaskDueDate(bounds.maxDate);
+                      }
+                    } else if (bounds.maxDate) {
+                      if (!newTaskDueDate || newTaskDueDate > bounds.maxDate) {
+                        setNewTaskDueDate(bounds.maxDate);
+                      }
+                    }
                   }}
                   className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
                 >
                   <option value="">No Milestone Linked</option>
                   {milestones?.map((m: any, idx: number) => {
                     const isMyM = String(m.assignee_account_id) === String(currentUserAccountId);
+                    const mOrder = getMilestoneOrder(m, idx);
                     return (
-                      <option key={m.job_milestone_id || idx} value={m.job_milestone_id}>
-                        M{m.order_index || idx + 1}: {m.milestone_title} {isMyM ? '★ (Your Assigned Milestone)' : ''}
+                      <option key={m.job_milestone_id || m.contract_milestone_id || idx} value={m.job_milestone_id || m.contract_milestone_id}>
+                        M{mOrder}: {m.milestone_title} {isMyM ? '★ (Your Assigned Milestone)' : ''}
                       </option>
                     );
                   })}
@@ -2622,20 +3134,38 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   const bounds = getMilestoneTimelineBounds({ job_milestone_id: newTaskMilestone } as any);
                   const minD = bounds.minDate;
                   const maxD = bounds.maxDate;
+                  const targetM = getTaskMilestone({ job_milestone_id: newTaskMilestone } as any);
+                  const mOrder = targetM ? getMilestoneOrder(targetM) : null;
                   return (
-                    <>
-                      <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
-                        Due Date {maxD ? `(Milestone deadline: ${new Date(maxD).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}
-                      </label>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase">
+                          Due Date *
+                        </label>
+                        {mOrder && (
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md">
+                            Restricted to M{mOrder} Timeline
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="date"
+                        required
                         min={minD}
                         max={maxD}
                         value={newTaskDueDate}
                         onChange={(e) => setNewTaskDueDate(e.target.value)}
                         className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
                       />
-                    </>
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 pt-0.5">
+                        <span>
+                          Start: {minD ? new Date(minD + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Project Start'}
+                        </span>
+                        <span className="font-semibold text-zinc-600 dark:text-zinc-300">
+                          Deadline: {maxD ? new Date(maxD + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'None'}
+                        </span>
+                      </div>
+                    </div>
                   );
                 })()}
               </div>
