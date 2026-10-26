@@ -99,6 +99,13 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
         convoRes.data?.data?.messages ||
         [];
       setMessages(Array.isArray(rawMessages) ? rawMessages : []);
+
+      // Check for incoming prefill message from deliverable/milestone feedback
+      const prefill = sessionStorage.getItem('team_chat_prefill');
+      if (prefill) {
+        setInputMessage(prefill);
+        sessionStorage.removeItem('team_chat_prefill');
+      }
     } catch (err: any) {
       console.error('Failed to init team chat:', err);
       const msg = err?.response?.data?.message || err?.message || 'Failed to load team chat';
