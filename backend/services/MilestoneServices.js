@@ -471,6 +471,25 @@ async function approveMilestoneService(milestoneId, callerAccountId) {
         milestoneId: milestone.contract_milestone_id,
     });
 
+    const ioApprove = getIo();
+    if (ioApprove) {
+        ioApprove.to([`contract_${milestone.contract_id}`, String(milestone.client_account_id), String(milestone.freelancer_account_id)]).emit('milestone_status_updated', {
+            contract_id: milestone.contract_id,
+            milestone_id: milestone.contract_milestone_id,
+            action: 'approval',
+        });
+        ioApprove.emit('teamTaskWorkspaceUpdated', {
+            contract_id: String(milestone.contract_id),
+            milestone_id: String(milestone.contract_milestone_id),
+            action: 'approval',
+        });
+        ioApprove.emit('milestoneStatusUpdated', {
+            contract_id: String(milestone.contract_id),
+            milestone_id: String(milestone.contract_milestone_id),
+            action: 'approval',
+        });
+    }
+
     return result;
 }
 
@@ -497,6 +516,25 @@ async function requestRevisionService(milestoneId, callerAccountId, revisionNote
         contractId:  milestone.contract_id,
         milestoneId: milestone.contract_milestone_id,
     });
+
+    const ioRev = getIo();
+    if (ioRev) {
+        ioRev.to([`contract_${milestone.contract_id}`, String(milestone.client_account_id), String(milestone.freelancer_account_id)]).emit('milestone_status_updated', {
+            contract_id: milestone.contract_id,
+            milestone_id: milestone.contract_milestone_id,
+            action: 'revision_requested',
+        });
+        ioRev.emit('teamTaskWorkspaceUpdated', {
+            contract_id: String(milestone.contract_id),
+            milestone_id: String(milestone.contract_milestone_id),
+            action: 'revision_requested',
+        });
+        ioRev.emit('milestoneStatusUpdated', {
+            contract_id: String(milestone.contract_id),
+            milestone_id: String(milestone.contract_milestone_id),
+            action: 'revision_requested',
+        });
+    }
 
     return result;
 }

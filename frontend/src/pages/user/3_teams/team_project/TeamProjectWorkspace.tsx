@@ -27,6 +27,7 @@ import {
 import api from '@/lib/axios';
 import UserHeader from '@/components/nav/user_header';
 import useGlobalState from '@/lib/global_state';
+import socket from '@/lib/socket';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { ProjectOverviewTab } from './ProjectOverviewTab';
@@ -256,6 +257,44 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   useEffect(() => {
     loadProjectData();
+  }, [loadProjectData]);
+
+  // Real-time synchronization for milestone submits, approvals, and revisions
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleRealtimeRefresh = () => {
+      loadProjectData(true);
+    };
+
+    socket.on('dashboardTaskUpdated', handleRealtimeRefresh);
+    socket.on('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
+    socket.on('milestoneStatusUpdated', handleRealtimeRefresh);
+    socket.on('milestone_status_updated', handleRealtimeRefresh);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadProjectData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadProjectData(true);
+      }
+    }, 8000);
+
+    return () => {
+      socket.off('dashboardTaskUpdated', handleRealtimeRefresh);
+      socket.off('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
+      socket.off('milestoneStatusUpdated', handleRealtimeRefresh);
+      socket.off('milestone_status_updated', handleRealtimeRefresh);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(pollInterval);
+    };
   }, [loadProjectData]);
 
   const handleEditProject = async (e: React.FormEvent) => {
@@ -746,6 +785,7 @@ export const TeamProjectWorkspace: React.FC = () => {
             <ProjectTaskboardTab
               teamId={project.team_id}
               tasks={taskboardTasks}
+              videoProjects={linkedProjects}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
               members={members}
@@ -772,6 +812,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               milestones={milestones}
               contracts={contracts}
               tasks={taskboardTasks}
+              videoProjects={linkedProjects}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
               onUpdated={(silent?: boolean) => loadProjectData(silent)}
