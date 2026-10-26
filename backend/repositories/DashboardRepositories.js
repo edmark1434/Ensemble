@@ -478,8 +478,22 @@ async function unlockNextMilestone(contractId, currentMilestoneId) {
             ORDER BY index ASC 
             LIMIT 1
         )
+        RETURNING contract_milestone_id, index
     `;
-    await pool.query(query, [contractId]);
+    const res = await pool.query(query, [contractId]);
+    if (res.rows.length > 0) {
+        const nextIndex = res.rows[0].index;
+        await pool.query(`
+            UPDATE team_workspace_tasks twt
+               SET is_locked = FALSE, updated_at = NOW()
+              FROM contract_milestones cm
+              JOIN team_contract_workspaces tcw ON tcw.contract_id = cm.contract_id
+             WHERE twt.workspace_id = tcw.workspace_id
+               AND twt.contract_milestone_id = cm.contract_milestone_id
+               AND cm.contract_id = $1
+               AND cm.index <= $2
+        `, [contractId, nextIndex]);
+    }
 }
 
 async function recordMilestoneAction({
@@ -642,10 +656,32 @@ async function recordMilestoneAction({
                  WHERE contract_milestone_id = $1`,
                 [milestoneId, milestoneStatus]
             );
+
+            if (milestoneStatus === 'completed') {
+                await client.query(`
+                    UPDATE team_workspace_tasks twt
+                       SET status = 'completed',
+                           completed_at = COALESCE(completed_at, NOW()),
+                           is_locked = FALSE,
+                           updated_at = NOW()
+                      FROM team_contract_workspaces tcw
+                     WHERE twt.workspace_id = tcw.workspace_id
+                       AND tcw.contract_id = $1
+                       AND (
+                         twt.contract_milestone_id = $2
+                         OR twt.task_id IN (
+                           SELECT t2.task_id
+                           FROM team_workspace_tasks t2
+                           LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = t2.contract_milestone_id
+                           WHERE cm.contract_milestone_id = $2
+                         )
+                       )
+                `, [contractId, milestoneId]);
+            }
         }
 
         if (unlockNext) {
-            await client.query(
+            const nextMilestoneRes = await client.query(
                 `UPDATE contract_milestones
                  SET status = 'active',
                      started_at = COALESCE(started_at, NOW()),
@@ -656,9 +692,24 @@ async function recordMilestoneAction({
                     WHERE contract_id = $1 AND LOWER(status) IN ('locked', 'pending')
                     ORDER BY index ASC
                     LIMIT 1
-                 )`,
+                 )
+                 RETURNING contract_milestone_id, index`,
                 [contractId]
             );
+
+            if (nextMilestoneRes.rows.length > 0) {
+                const nextIndex = nextMilestoneRes.rows[0].index;
+                await client.query(`
+                    UPDATE team_workspace_tasks twt
+                       SET is_locked = FALSE, updated_at = NOW()
+                      FROM contract_milestones cm
+                      JOIN team_contract_workspaces tcw ON tcw.contract_id = cm.contract_id
+                     WHERE twt.workspace_id = tcw.workspace_id
+                       AND twt.contract_milestone_id = cm.contract_milestone_id
+                       AND cm.contract_id = $1
+                       AND cm.index <= $2
+                `, [contractId, nextIndex]);
+            }
         }
 
         let milestoneRelease = null;

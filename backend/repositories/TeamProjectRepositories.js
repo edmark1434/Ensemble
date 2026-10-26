@@ -360,20 +360,71 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
  * Fetch taskboard cards for the project.
  */
 async function getProjectTaskboard(teamId, viewerAccountId) {
+  try {
+    // 1. Self-heal: ensure any tasks whose milestone is active or completed are marked unlocked
+    await pool.query(`
+      UPDATE team_workspace_tasks
+         SET is_locked = FALSE, updated_at = NOW()
+       WHERE workspace_id IN (
+         SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1
+       )
+         AND is_locked = TRUE
+         AND (
+           contract_milestone_id IN (
+             SELECT contract_milestone_id FROM contract_milestones
+              WHERE LOWER(status) IN ('active', 'in_progress', 'completed', 'submitted_for_review', 'revision_requested', 'review')
+                 OR index <= 0
+           )
+           OR job_milestone_id IN (
+             SELECT job_milestone_id FROM job_milestones WHERE order_index <= 0
+           )
+           OR (contract_milestone_id IS NULL AND job_milestone_id IS NULL)
+         )
+    `, [teamId]);
+
+    // 2. Self-heal: ensure tasks under completed milestones are marked completed
+    await pool.query(`
+      UPDATE team_workspace_tasks
+         SET status = 'completed',
+             completed_at = COALESCE(completed_at, NOW()),
+             is_locked = FALSE,
+             updated_at = NOW()
+       WHERE workspace_id IN (
+         SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1
+       )
+         AND status != 'completed'
+         AND contract_milestone_id IN (
+           SELECT contract_milestone_id FROM contract_milestones WHERE LOWER(status) = 'completed'
+         )
+    `, [teamId]);
+  } catch (err) {
+    console.error('Error in getProjectTaskboard self-healing sync:', err);
+  }
+
   const query = `
     SELECT twt.task_id, twt.workspace_id,
            COALESCE(twt.job_milestone_id, twt.contract_milestone_id) as job_milestone_id,
            twt.contract_milestone_id,
            twt.title, twt.description,
-           CASE WHEN twt.status = 'in_review' THEN 'review' ELSE twt.status END as status,
+           CASE
+             WHEN LOWER(COALESCE(cm.status, '')) = 'completed' THEN 'completed'
+             WHEN twt.status = 'in_review' THEN 'review'
+             ELSE twt.status
+           END as status,
            twt.priority,
-           twt.is_locked, twt.sort_order, twt.checklist, twt.starts_at, twt.due_at,
+           CASE
+             WHEN LOWER(COALESCE(cm.status, '')) IN ('active', 'in_progress', 'completed', 'submitted_for_review', 'revision_requested', 'review') THEN FALSE
+             WHEN COALESCE(cm.index, jm.order_index, 0) <= 0 THEN FALSE
+             ELSE twt.is_locked
+           END as is_locked,
+           twt.sort_order, twt.checklist, twt.starts_at, twt.due_at,
            twt.completed_at, twt.created_at,
            twt.created_by_account_id,
            CASE WHEN twt.created_by_account_id = j.client_account_id THEN true ELSE false END as is_contract_task,
            COALESCE(jm.title, cm.name) as milestone_title,
            COALESCE(jm.order_index, cm.index) as milestone_order,
            COALESCE(jm.budget_credits, cm.credits) as milestone_budget,
+           COALESCE(cm.status, 'pending') as milestone_status,
            assignee_acc.account_id as assignee_account_id,
            assignee_acc.display_name as assignee_name,
            assignee_acc.handle as assignee_handle,
@@ -403,11 +454,15 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id, j.client_account_id,
            twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id,
-           twt.job_milestone_id, twt.contract_milestone_id
+           twt.job_milestone_id, twt.contract_milestone_id,
+           COALESCE(cm.status, 'pending') as milestone_status,
+           COALESCE(cm.index, jm.order_index) as milestone_order
       FROM team_workspace_tasks twt
       JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
       JOIN teams t ON t.team_id = tcw.team_id
       JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = twt.contract_milestone_id
+      LEFT JOIN job_milestones jm ON jm.job_milestone_id = twt.job_milestone_id
       LEFT JOIN team_workspace_task_assignees twta ON twta.task_id = twt.task_id
      WHERE tcw.team_id = $1 AND twt.task_id = $2 AND twt.deleted_at IS NULL
   `, [teamId, taskId]);
@@ -416,11 +471,50 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Task not found in this team project.');
   }
 
-  const { client_account_id, assignee_account_id, is_locked, created_by_account_id, job_milestone_id, contract_milestone_id } = permRes.rows[0];
+  const {
+    client_account_id,
+    assignee_account_id,
+    is_locked,
+    created_by_account_id,
+    job_milestone_id,
+    contract_milestone_id,
+    milestone_status,
+    milestone_order
+  } = permRes.rows[0];
+
   const effectiveMilestoneId = contract_milestone_id || job_milestone_id;
   const isAssignee = String(viewerAccountId) === String(assignee_account_id);
   const isClient = String(viewerAccountId) === String(client_account_id);
   const isContractTask = String(created_by_account_id) === String(client_account_id);
+
+  // Determine if milestone is active, completed, or starting milestone (never locked)
+  const msStatus = String(milestone_status || '').toLowerCase();
+  const isMilestoneUnlocked =
+    ['active', 'in_progress', 'completed', 'submitted_for_review', 'revision_requested', 'review'].includes(msStatus) ||
+    Number(milestone_order ?? 0) <= 0;
+
+  const effectiveIsLocked = isMilestoneUnlocked ? false : Boolean(is_locked);
+  if (is_locked && isMilestoneUnlocked) {
+    await pool.query('UPDATE team_workspace_tasks SET is_locked = FALSE WHERE task_id = $1', [taskId]);
+  }
+
+  // Check if viewer is contractor / lead freelancer in this workspace
+  const leadRes = await pool.query(`
+    SELECT 1 FROM team_contract_workspaces tcw
+      JOIN contracts c ON c.contract_id = tcw.contract_id
+     WHERE tcw.team_id = $1 AND c.freelancer_account_id = $2
+     LIMIT 1
+  `, [teamId, viewerAccountId]);
+  const isContractor = leadRes.rows.length > 0;
+
+  // Check if viewer is an active team member
+  const memberRes = await pool.query(`
+    SELECT tm.role FROM team_members tm
+      JOIN users u ON u.user_id = tm.user_id
+     WHERE tm.team_id = $1 AND u.account_id = $2 AND tm.status = 'Active'
+     LIMIT 1
+  `, [teamId, viewerAccountId]);
+  const isTeamMember = memberRes.rows.length > 0;
 
   // Check if viewer is a subcontractor in this workspace
   const subRes = await pool.query(`
@@ -449,21 +543,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     if (isContractTask && (title !== undefined && title !== null)) {
       throw new Error('Contract-defined milestone tasks cannot be renamed.');
     }
-  } else if (!isAssignee && !isClient) {
-    // Check if viewer is the primary freelancer for this milestone's contract
-    const leadRes = await pool.query(`
-      SELECT 1 FROM team_contract_workspaces tcw
-        JOIN contracts c ON c.contract_id = tcw.contract_id
-        JOIN job_contracts jc ON jc.contract_id = c.contract_id
-        JOIN proposals p ON p.proposal_id = jc.proposal_id
-       WHERE tcw.team_id = $1 AND c.freelancer_account_id = $2
-         AND (p.job_milestone_id = $3 OR $3 IS NULL)
-       LIMIT 1
-    `, [teamId, viewerAccountId, job_milestone_id]);
-
-    if (leadRes.rows.length === 0) {
-      throw new Error('You do not have permission to modify this task.');
-    }
+  } else if (!isAssignee && !isClient && !isContractor && !isTeamMember) {
+    throw new Error('You do not have permission to modify this task.');
   }
 
   // Contract task title/description cannot be modified by contributors
@@ -471,12 +552,14 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Contract-defined milestone tasks cannot be edited.');
   }
 
-  // Only the person assigned to the task, the primary contractor, or client can change its status
-  if (status !== undefined && status !== null && !isAssignee && !isClient && !isSubcontractor) {
-    throw new Error('Only the assigned team member can change the status of this task.');
+  // Only the person assigned to the task, the primary contractor, team member (if unassigned), or client can change its status
+  if (status !== undefined && status !== null && !isAssignee && !isClient && !isSubcontractor && !isContractor) {
+    if (assignee_account_id || !isTeamMember) {
+      throw new Error('Only the assigned team member can change the status of this task.');
+    }
   }
 
-  if (is_locked && !isClient) {
+  if (effectiveIsLocked && !isClient) {
     throw new Error('This task is locked waiting for previous milestones to be completed.');
   }
 
@@ -647,6 +730,35 @@ async function unlockSequentialMilestones(dbClient, contractId, completedMilesto
 
   const currentOrder = order_index !== null ? Number(order_index) : (completedMilestoneIndex || 0);
   const nextOrder = currentOrder + 1;
+
+  // Mark tasks for the completed milestone as completed
+  await dbClient.query(`
+    UPDATE team_workspace_tasks twt
+       SET status = 'completed',
+           completed_at = COALESCE(completed_at, NOW()),
+           is_locked = FALSE,
+           updated_at = NOW()
+      FROM contract_milestones cm
+     WHERE twt.workspace_id = $1
+       AND twt.contract_milestone_id = cm.contract_milestone_id
+       AND cm.contract_id = $2
+       AND cm.index <= $3
+  `, [workspace_id, contractId, currentOrder]);
+
+  if (job_id) {
+    await dbClient.query(`
+      UPDATE team_workspace_tasks twt
+         SET status = 'completed',
+             completed_at = COALESCE(completed_at, NOW()),
+             is_locked = FALSE,
+             updated_at = NOW()
+        FROM job_milestones jm
+       WHERE twt.workspace_id = $1
+         AND twt.job_milestone_id = jm.job_milestone_id
+         AND jm.job_id = $2
+         AND jm.order_index <= $3
+    `, [workspace_id, job_id, currentOrder]);
+  }
 
   // Unlock tasks for the next milestone in this workspace
   // 1. Contract milestones
