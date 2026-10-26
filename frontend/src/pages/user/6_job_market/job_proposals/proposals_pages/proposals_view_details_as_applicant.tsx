@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  Lock,
   Briefcase,
   Star,
   FileText,
@@ -36,6 +37,8 @@ import {
   FolderOpen,
   Tag,
   Crown,
+  Coins,
+  History,
 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
@@ -50,6 +53,7 @@ import type { ProposalItemData } from "../proposals_components/proposals_list";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import ProposalLifecycleTracker from "../proposals_components/ProposalLifecycleTracker";
+import { DeclineHistoryModal } from "../proposals_components/DeclineHistoryModal";
 import { Profile_Portfolio, type PortfolioItem } from "@/pages/user/7_profile/Displays/Body/Profile_Portfolio";
 import { Profile_Gallery } from "@/pages/user/7_profile/Displays/Body/Profile_Gallery";
 import { resolveBannerPreset, bannerPresetUrl } from "@/lib/profileBanners";
@@ -95,9 +99,11 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   // Decision Modal States
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(!!contractId);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPlatformTerms, setAgreedToPlatformTerms] = useState(false);
+  const [agreedToOffer, setAgreedToOffer] = useState(false);
   const [isRejectOfferModalOpen, setIsRejectOfferModalOpen] = useState(false);
   const [offerRejectReason, setOfferRejectReason] = useState("");
+  const [isDeclineHistoryOpen, setIsDeclineHistoryOpen] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -162,7 +168,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   useEffect(() => {
     if (contractId) {
       setIsAcceptConfirmOpen(true);
-      setAgreedToTerms(false);
+      setAgreedToPlatformTerms(false);
+      setAgreedToOffer(false);
     } else {
       setIsAcceptConfirmOpen(false);
     }
@@ -222,6 +229,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             jobBanner: getImageUrl(p.job_thumbnail_path) || "",
             rating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
             bidAmount: parseFloat(p.rate_credits) || 0,
+            originalBidAmount: parseFloat(p.original_rate_credits || p.rate_credits) || 0,
             additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
             coverLetter: p.letter || "",
             tosContent: p.terms_content || "Standard terms apply to this proposal.",
@@ -261,6 +269,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             screeningAnswers: Array.isArray(p.screening_answers) ? p.screening_answers : [],
             attachments: Array.isArray(p.attachments) ? p.attachments : [],
             milestones: initialMilestones,
+            declineHistory: Array.isArray(p.decline_history) ? p.decline_history : [],
           });
 
           // Fetch team info if proposing as a team
@@ -411,7 +420,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
         prev
           ? {
               ...prev,
-              status: "Rejected",
+              status: "Shortlisted",
+              contractId: undefined,
               rejectionReason: offerRejectReason,
               updatedAt: new Date().toLocaleDateString("en-US", {
                 month: "short",
@@ -423,6 +433,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       );
       toast.success("Job offer declined.");
       setIsRejectOfferModalOpen(false);
+      setIsAcceptConfirmOpen(false);
     } catch (error: any) {
       console.error("Failed to reject offer:", error);
       showErrorToast(error.response?.data?.message || "Failed to decline offer.");
@@ -461,15 +472,17 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   const handleViewProfile = (accountId?: string, teamId?: string) => {
     if (teamId) {
-      navigate(`/teams/${encodeURIComponent(teamId)}`);
+      window.open(`/teams/${encodeURIComponent(teamId)}`, "_blank", "noopener,noreferrer");
       return;
     }
-    if (accountId) navigate(`/profile/${encodeURIComponent(accountId)}`);
+    if (accountId) {
+      window.open(`/profile/${encodeURIComponent(accountId)}`, "_blank", "noopener,noreferrer");
+    }
   };
 
   const handleViewTargetJob = () => {
     if (!proposal) return;
-    navigate(`/jobs/postings/${proposal.jobId}`);
+    window.open(`/jobs/postings/${proposal.jobId}`, "_blank", "noopener,noreferrer");
   };
 
   // Helper to resolve phase color accent
@@ -600,6 +613,10 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   // Financial Calculations
   const totalBid = proposal.bidAmount || 0;
+  const originalBid = proposal.originalBidAmount || totalBid;
+  const isCountered = Boolean(proposal.originalBidAmount && proposal.originalBidAmount !== proposal.bidAmount);
+  const counterDelta = totalBid - originalBid;
+  const counterPercent = originalBid > 0 ? Math.round((Math.abs(counterDelta) / originalBid) * 100) : 0;
   const count = proposal.milestones.length || 1;
   const netEarnings = Math.floor(totalBid * 0.9);
   const platformFee = Math.ceil(totalBid * 0.1);
@@ -616,7 +633,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       case "Approved":
       case "Accepted":
         return {
-          label: "ACCEPTED",
+          label: "OFFER SENT",
           className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
         };
       case "Hired":
@@ -631,8 +648,18 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
         };
       case "Rejected":
         return {
-          label: "DECLINED",
+          label: "REJECTED",
           className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
+        };
+      case "Archived":
+        return {
+          label: "ARCHIVED",
+          className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
+        };
+      case "Closed":
+        return {
+          label: "CLOSED",
+          className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
         };
       case "Withdrawn":
         return {
@@ -706,24 +733,40 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </span>
           </div>
 
-          {/* Master Collapse / Expand Button */}
-          <button
-            type="button"
-            onClick={toggleAllSections}
-            className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300 text-xs font-semibold transition cursor-pointer select-none"
-          >
-            {areAllSectionsCollapsed ? (
-              <>
-                <Maximize2 className="h-3.5 w-3.5 text-zinc-500" />
-                <span>Expand All Sections</span>
-              </>
-            ) : (
-              <>
-                <Minimize2 className="h-3.5 w-3.5 text-zinc-500" />
-                <span>Collapse All Sections</span>
-              </>
+          {/* Master Collapse / Expand Button & Decline History */}
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {proposal.declineHistory && proposal.declineHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsDeclineHistoryOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs font-semibold shadow-2xs transition cursor-pointer select-none"
+              >
+                <History className="h-3.5 w-3.5 text-zinc-500" />
+                <span>View Decline History</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600">
+                  {proposal.declineHistory.length}
+                </span>
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              onClick={toggleAllSections}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300 text-xs font-semibold transition cursor-pointer select-none"
+            >
+              {areAllSectionsCollapsed ? (
+                <>
+                  <Maximize2 className="h-3.5 w-3.5 text-zinc-500" />
+                  <span>Expand All Sections</span>
+                </>
+              ) : (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5 text-zinc-500" />
+                  <span>Collapse All Sections</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* ================= 4-STAGE PROPOSAL LIFECYCLE PROGRESSION ================= */}
@@ -916,11 +959,28 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
-                    <span>Contract Workspace:</span>
-                    <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                      {isTeam ? "Shared Team Project" : "Solo Freelancer Workspace"}
-                    </span>
+                  <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+                    {/* Additional Work Rate Strip */}
+                    <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                          Additional Work Rate
+                        </span>
+                        <span className="font-bold text-zinc-900 dark:text-white">
+                          +{proposal.additionalWorkRate}% per additional pass
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300 px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                        +{overageRateBonus} Cr / extra pass
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span>Contract Workspace:</span>
+                      <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                        {isTeam ? "Shared Team Project" : "Solo Freelancer Workspace"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1027,20 +1087,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Additional Work Rate Strip */}
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
-                      Additional Work Rate
-                    </span>
-                    <span className="font-bold text-zinc-900 dark:text-white">
-                      +{proposal.additionalWorkRate}% per additional pass
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300 px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                    +{overageRateBonus} Cr / extra pass
-                  </span>
-                </div>
+
               </div>
             </div>
           </div>
@@ -1816,60 +1863,238 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       {/* Accept Job Offer Confirmation Modal */}
       {isAcceptConfirmOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-left">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="h-5 w-5" />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 rounded-2xl max-w-2xl md:max-w-3xl w-full p-6 shadow-2xl space-y-4 text-left font-['Plus_Jakarta_Sans']"
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+                    {isCountered ? "Review & Accept Counter-Offer" : "Accept Formal Contract Offer"}
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1">
+                    Formal engagement for {proposal.jobTitle}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-gray-900 dark:text-white">Accept Job Offer</h3>
-                <p className="text-xs text-gray-500 dark:text-zinc-400">Formal engagement for {proposal.jobTitle}</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 space-y-2 text-xs">
-              <div className="flex justify-between text-gray-700 dark:text-zinc-300">
-                <span>Total Escrow Deposit:</span>
-                <span className="font-bold text-amber-500">{totalBid.toLocaleString()} Credits</span>
-              </div>
-              <div className="flex justify-between text-gray-700 dark:text-zinc-300">
-                <span>Net Earnings (90%):</span>
-                <span className="font-bold text-emerald-500">{netEarnings.toLocaleString()} Credits</span>
-              </div>
-              <div className="flex justify-between text-gray-500 dark:text-zinc-400">
-                <span>Milestones:</span>
-                <span>{proposal.milestones.length} Phases</span>
-              </div>
-            </div>
-
-            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-600 dark:text-zinc-300 pt-1">
-              <input
-                type="checkbox"
-                checked={agreedToTerms}
-                onChange={(e) => setAgreedToTerms(e.target.checked)}
-                className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>I confirm that I accept the proposed scope, timeline, and terms of service for this project contract.</span>
-            </label>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setIsAcceptConfirmOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                onClick={() => {
+                  setIsAcceptConfirmOpen(false);
+                  setAgreedToPlatformTerms(false);
+                  setAgreedToOffer(false);
+                }}
+                disabled={isProcessing}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!agreedToTerms || isProcessing}
-                onClick={handleConfirmAccept}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer"
-              >
-                {isProcessing ? "Processing..." : "Confirm & Start Contract"}
+                <X className="h-4 w-4" />
               </button>
             </div>
-          </div>
+
+            {/* 2-Column Grid: Left (Financial Breakdown) & Right (Scope & Milestones) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* LEFT: Financial Terms & Net Payout */}
+              <div className="p-3.5 rounded-xl bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between text-xs pb-2 border-b border-zinc-200/80 dark:border-zinc-800">
+                  <span className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <Coins className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                    <span>Financial Breakdown</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-200/60 dark:bg-zinc-800 border border-zinc-300/60 dark:border-zinc-700 px-2 py-0.5 rounded-md">
+                    Escrow Secured
+                  </span>
+                </div>
+
+                {/* Offer Rate Card */}
+                <div className="p-3 rounded-lg bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block truncate">
+                      {isCountered ? "Client Counter-Offer" : "Agreed Contract Rate"}
+                    </span>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <span className="text-base font-black text-zinc-900 dark:text-white">
+                        {totalBid.toLocaleString()} Credits
+                      </span>
+                      {isCountered && (
+                        <span className="text-xs line-through text-zinc-400 dark:text-zinc-500 font-medium">
+                          {originalBid.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {isCountered ? (
+                    <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shrink-0">
+                      {counterDelta < 0 ? `-${counterPercent}% Counter` : `+${counterPercent}% Bonus`}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-1 rounded-md text-[10px] font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 shrink-0">
+                      Standard
+                    </span>
+                  )}
+                </div>
+
+                {/* Bottom Payout & Escrow Stats */}
+                <div className="space-y-1.5 pt-1 border-t border-zinc-200/80 dark:border-zinc-800 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                      Your Net Earnings (90%):
+                    </span>
+                    <span className="font-black text-zinc-900 dark:text-white">
+                      {netEarnings.toLocaleString()} Credits
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="h-3 w-3 text-zinc-400 dark:text-zinc-500" />
+                      <span>Platform Escrow Locked:</span>
+                    </span>
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                      100% ({totalBid.toLocaleString()} Cr)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 dark:text-zinc-500">
+                    <span>Platform Service Fee (10%):</span>
+                    <span>{platformFee.toLocaleString()} Credits</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Scope & Milestones Summary */}
+              <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between text-xs pb-2 border-b border-zinc-200/80 dark:border-zinc-800">
+                  <span className="font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                    <span>Contract Scope &amp; Milestones</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-200/60 dark:bg-zinc-800 border border-zinc-300/60 dark:border-zinc-700 px-2 py-0.5 rounded-md font-mono">
+                    {proposal.milestones.length} {proposal.milestones.length === 1 ? "Phase" : "Phases"} • ~{totalHours}h
+                  </span>
+                </div>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 flex-1">
+                  {proposal.milestones.map((m: any, idx: number) => {
+                    const mAmount = Math.floor(totalBid / count);
+                    return (
+                      <div
+                        key={m.id || idx}
+                        className="p-2.5 rounded-lg bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 flex items-center justify-between text-[11px] shadow-2xs"
+                      >
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate pr-2">
+                          {idx + 1}. {m.name || `Phase ${idx + 1}`}
+                        </span>
+                        <span className="font-mono text-zinc-600 dark:text-zinc-400 shrink-0 text-[10px] font-medium">
+                          {m.hours}h • {m.revisions} {m.revisions === 1 ? "rev" : "revs"} • {mAmount.toLocaleString()} Cr
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Dual Explicit Checkboxes */}
+            <div className="space-y-2 pt-1">
+              {/* Checkbox 1: Platform Terms of Ensemble */}
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer text-xs text-zinc-700 dark:text-zinc-300 transition shadow-2xs">
+                <input
+                  type="checkbox"
+                  checked={agreedToPlatformTerms}
+                  onChange={(e) => setAgreedToPlatformTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:ring-zinc-800 cursor-pointer shrink-0 accent-zinc-900 dark:accent-white"
+                />
+                <div className="space-y-0.5 leading-relaxed">
+                  <strong className="font-bold text-zinc-900 dark:text-white block">
+                    I Agree to the Platform Terms of Ensemble
+                  </strong>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    I agree to Ensemble's Platform Terms of Service, milestone escrow delivery rules, and dispute resolution policies.
+                  </p>
+                </div>
+              </label>
+
+              {/* Checkbox 2: Confirm & Accept Offer Itself */}
+              <label className="flex items-start gap-3 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer text-xs text-zinc-700 dark:text-zinc-300 transition shadow-2xs">
+                <input
+                  type="checkbox"
+                  checked={agreedToOffer}
+                  onChange={(e) => setAgreedToOffer(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:ring-zinc-800 cursor-pointer shrink-0 accent-zinc-900 dark:accent-white"
+                />
+                <div className="space-y-0.5 leading-relaxed">
+                  <strong className="font-bold text-zinc-900 dark:text-white block">
+                    {isCountered
+                      ? "I Confirm & Accept the Client's Counter-Offer"
+                      : "I Confirm and Accept this Contract Offer"}
+                  </strong>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {isCountered
+                      ? `I accept the deliverable phases, revision allowances, and the client's countered rate of ${totalBid.toLocaleString()} Credits.`
+                      : `I accept the proposed deliverable scope, turnaround timeline, and agreed rate of ${totalBid.toLocaleString()} Credits.`}
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Action Controls */}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAcceptConfirmOpen(false);
+                  setIsRejectOfferModalOpen(true);
+                }}
+                disabled={isProcessing}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-800 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <XCircle className="h-4 w-4" />
+                <span>Decline Offer</span>
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcceptConfirmOpen(false);
+                    setAgreedToPlatformTerms(false);
+                    setAgreedToOffer(false);
+                  }}
+                  disabled={isProcessing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!agreedToPlatformTerms || !agreedToOffer || isProcessing}
+                  onClick={handleConfirmAccept}
+                  className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 text-white disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Starting Contract...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Confirm &amp; Start Contract</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
         </div>
       )}
 
@@ -1936,6 +2161,17 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Decline History Modal */}
+      {proposal && (
+        <DeclineHistoryModal
+          isOpen={isDeclineHistoryOpen}
+          onClose={() => setIsDeclineHistoryOpen(false)}
+          history={proposal.declineHistory || []}
+          candidateName={proposal.freelancerName}
+          originalBidAmount={proposal.originalBidAmount || proposal.bidAmount}
+        />
       )}
     </div>
   );
