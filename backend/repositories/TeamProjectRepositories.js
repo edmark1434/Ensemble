@@ -291,6 +291,22 @@ async function ensureContractualTeamProject(dbClient, {
         job_milestone_id: targetMilestoneId,
       })
     ]);
+
+    // Ensure all workspace members have access to any linked video projects
+    try {
+      const linkedProjs = await dbClient.query(`
+        SELECT DISTINCT project_id FROM team_workspace_projects WHERE workspace_id = $1
+        UNION
+        SELECT project_id FROM team_contract_workspaces WHERE workspace_id = $1 AND project_id IS NOT NULL
+      `, [primaryWorkspaceId]);
+      for (const lp of linkedProjs.rows) {
+        if (lp.project_id) {
+          await ensureWorkspaceMembersHaveProjectAccess(teamId, lp.project_id);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not sync workspace project members:', e.message);
+    }
   }
 
   return { team_id: teamId, account_id: teamAccountId };
@@ -810,7 +826,113 @@ async function getProjectHistory(teamId) {
      LIMIT 100
   `;
   const res = await pool.query(query, [teamId]);
-  return res.rows;
+  let activities = res.rows || [];
+
+  // Fetch active team members to ensure all added members are visible in history
+  const membersRes = await pool.query(`
+    SELECT DISTINCT ON (a.account_id)
+           a.account_id, a.display_name, a.handle,
+           f.path as avatar_path,
+           tm.role as team_role,
+           COALESCE(jm.title, cs_jm.title, cs.role_title) as milestone_role,
+           tm.joined_at,
+           owner_acc.display_name as added_by_name
+      FROM teams t
+      JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
+      JOIN users u ON u.user_id = tm.user_id
+      JOIN accounts a ON a.account_id = u.account_id
+      LEFT JOIN files f ON f.file_id = a.avatar_file_id
+      LEFT JOIN proposals p ON p.freelancer_account_id = a.account_id AND p.job_id = t.job_id AND p.deleted_at IS NULL
+      LEFT JOIN job_milestones jm ON jm.job_milestone_id = p.job_milestone_id
+      LEFT JOIN contract_subcontractors cs ON cs.account_id = a.account_id
+           AND cs.contract_id IN (
+             SELECT tcw2.contract_id FROM team_contract_workspaces tcw2 WHERE tcw2.team_id = t.team_id
+           )
+      LEFT JOIN job_milestones cs_jm ON cs_jm.job_milestone_id = cs.assigned_milestone_id
+      LEFT JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN accounts owner_acc ON owner_acc.account_id = j.client_account_id
+     WHERE t.team_id = $1
+     ORDER BY a.account_id, tm.role = 'Owner' DESC
+  `, [teamId]);
+
+  const members = membersRes.rows || [];
+  const ownerMember = members.find(m => m.team_role === 'Owner') || null;
+
+  // Track members already represented in member addition events
+  const representedMemberIds = new Set();
+
+  // If there are existing contract_offer_extended activities, enrich them with target freelancer's details
+  for (const act of activities) {
+    if (act.action === 'contract_offer_extended' && act.metadata?.freelancer_account_id) {
+      const targetMember = members.find(m => String(m.account_id) === String(act.metadata.freelancer_account_id));
+      if (targetMember) {
+        representedMemberIds.add(String(targetMember.account_id));
+        // Show contributor as actor so all added users are directly listed in the history roster
+        const addedBy = act.actor_name;
+        act.actor_account_id = targetMember.account_id;
+        act.actor_name = targetMember.display_name;
+        act.actor_handle = targetMember.handle;
+        act.actor_avatar_path = targetMember.avatar_path;
+        act.action = 'contributor_added';
+        act.metadata = {
+          ...act.metadata,
+          role: targetMember.team_role || 'Contributor',
+          milestone_role: targetMember.milestone_role,
+          added_by: addedBy,
+          message: `Added to project team by ${addedBy || 'Project Owner'}${targetMember.milestone_role ? ` • Role: ${targetMember.milestone_role}` : ''}`
+        };
+      }
+    } else if (act.action === 'contributor_added') {
+      representedMemberIds.add(String(act.actor_account_id));
+    }
+  }
+
+  // Synthesize entry for Project Owner initializing the workspace if not yet present
+  const hasWorkspaceCreated = activities.some(act => act.action === 'workspace_created');
+  if (!hasWorkspaceCreated && ownerMember) {
+    activities.push({
+      activity_id: `ws-created-${ownerMember.account_id}`,
+      action: 'workspace_created',
+      actor_account_id: ownerMember.account_id,
+      actor_name: ownerMember.display_name,
+      actor_handle: ownerMember.handle,
+      actor_avatar_path: ownerMember.avatar_path,
+      task_title: null,
+      created_at: ownerMember.joined_at || new Date().toISOString(),
+      metadata: {
+        role: 'Project Owner',
+        message: 'Project workspace initialized and Owner joined team'
+      }
+    });
+  }
+
+  // Synthesize entries for any other active members not yet in history
+  for (const m of members) {
+    if (m.team_role !== 'Owner' && !representedMemberIds.has(String(m.account_id))) {
+      representedMemberIds.add(String(m.account_id));
+      activities.push({
+        activity_id: `member-added-${m.account_id}`,
+        action: 'contributor_added',
+        actor_account_id: m.account_id,
+        actor_name: m.display_name,
+        actor_handle: m.handle,
+        actor_avatar_path: m.avatar_path,
+        task_title: null,
+        created_at: m.joined_at || new Date().toISOString(),
+        metadata: {
+          role: m.team_role || 'Contributor',
+          milestone_role: m.milestone_role,
+          added_by: m.added_by_name || 'Project Owner',
+          message: `Added to project team${m.milestone_role ? ` • Role: ${m.milestone_role}` : ''}`
+        }
+      });
+    }
+  }
+
+  // Sort chronological descending
+  activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return activities;
 }
 
 /**
@@ -888,6 +1010,7 @@ async function getProjectMilestones(teamId, viewerAccountId) {
         c.starts_at as contract_starts_at,
         c.created_at as contract_created_at,
         c.deadline_at as contract_overall_deadline,
+        COALESCE(c.revision_price_credits, 35) as revision_price_credits,
         COALESCE(
           cm.deadline_at,
           cm.started_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
@@ -903,7 +1026,8 @@ async function getProjectMilestones(teamId, viewerAccountId) {
         (
           SELECT COUNT(*)::int
           FROM milestone_submits ms
-          WHERE ms.contract_milestone_id = cm.contract_milestone_id AND LOWER(ms.status) = 'revision_requested'
+          WHERE ms.contract_milestone_id = cm.contract_milestone_id 
+            AND LOWER(ms.status) IN ('revision_requested', 'revision_request')
         ) as revisions_used,
         (
           SELECT COALESCE(
@@ -972,6 +1096,7 @@ async function getProjectMilestones(teamId, viewerAccountId) {
         c.starts_at as contract_starts_at,
         c.created_at as contract_created_at,
         c.deadline_at as contract_overall_deadline,
+        COALESCE(c.revision_price_credits, 35) as revision_price_credits,
         COALESCE(cm.deadline_at, c.deadline_at) as deadline_at,
         cm.contract_milestone_id,
         COALESCE(cm.status, c.status, 'pending') as milestone_status,
@@ -981,7 +1106,8 @@ async function getProjectMilestones(teamId, viewerAccountId) {
         (
           SELECT COUNT(*)::int
           FROM milestone_submits ms
-          WHERE ms.contract_milestone_id = cm.contract_milestone_id AND LOWER(ms.status) = 'revision_requested'
+          WHERE ms.contract_milestone_id = cm.contract_milestone_id 
+            AND LOWER(ms.status) IN ('revision_requested', 'revision_request')
         ) as revisions_used,
         (
           SELECT COALESCE(
@@ -1541,6 +1667,311 @@ async function withdrawSubcontractProposal(teamId, proposalId, viewerAccountId) 
   return { success: true, proposal_id: proposalId, status: 'withdrawn' };
 }
 
+/**
+ * Ensure all active members of a team workspace have Editor (or Owner) access to a project.
+ */
+async function ensureWorkspaceMembersHaveProjectAccess(teamId, projectId) {
+  if (!teamId || !projectId) return;
+
+  const usersRes = await pool.query(`
+    SELECT DISTINCT u.user_id, a.account_id, tm.role as team_role
+      FROM teams t
+      JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
+      JOIN users u ON u.user_id = tm.user_id
+      JOIN accounts a ON a.account_id = u.account_id
+     WHERE t.team_id = $1
+  `, [teamId]);
+
+  const CURSOR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#6366f1'];
+
+  for (const row of usersRes.rows) {
+    const randomColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
+    const assignedRole = row.team_role === 'Owner' ? 'Owner' : 'Editor';
+    await pool.query(`
+      INSERT INTO project_members (project_id, user_id, role, cursor_color, joined_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (project_id, user_id)
+      DO UPDATE SET deleted_at = NULL, role = COALESCE(project_members.role, EXCLUDED.role)
+    `, [projectId, row.user_id, assignedRole, randomColor]);
+  }
+}
+
+/**
+ * Fetch video projects linked to this contract workspace.
+ */
+async function getWorkspaceProjects(teamId) {
+  // Sync any job existing_project_id
+  await pool.query(`
+    INSERT INTO team_workspace_projects (workspace_id, project_id, linked_by_account_id, created_at)
+    SELECT DISTINCT tcw.workspace_id, j.existing_project_id, tcw.created_by_account_id, NOW()
+      FROM team_contract_workspaces tcw
+      JOIN contracts c ON c.contract_id = tcw.contract_id
+      JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      JOIN proposals p ON p.proposal_id = jc.proposal_id
+      JOIN jobs j ON j.job_id = p.job_id
+     WHERE tcw.team_id = $1 AND j.existing_project_id IS NOT NULL
+    ON CONFLICT (workspace_id, project_id) DO NOTHING
+  `, [teamId]);
+
+  const query = `
+    SELECT DISTINCT ON (p.project_id)
+           p.project_id as id,
+           p.project_id,
+           p.name,
+           p.status,
+           p.width,
+           p.height,
+           p.duration_seconds,
+           p.created_at,
+           p.updated_at,
+           p.updated_at as "lastUpdated",
+           (SELECT COALESCE(sum(f.size_bytes), 0)
+              FROM media_assets ma 
+              JOIN files f ON f.file_id = ma.original_file_id 
+             WHERE ma.project_id = p.project_id AND ma.deleted_at IS NULL AND f.deleted_at IS NULL) as size_bytes,
+           tf.path as thumbnail_path,
+           twp.created_at as linked_at,
+           link_acc.display_name as linked_by_name,
+           link_acc.handle as linked_by_handle,
+           (
+             SELECT json_agg(json_build_object(
+               'account_id', a.account_id,
+               'display_name', a.display_name,
+               'handle', a.handle,
+               'avatar_path', f.path,
+               'role', pm.role
+             ))
+             FROM project_members pm
+             JOIN users u ON u.user_id = pm.user_id
+             JOIN accounts a ON a.account_id = u.account_id
+             LEFT JOIN files f ON f.file_id = a.avatar_file_id
+             WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL
+           ) as collaborators
+      FROM team_contract_workspaces tcw
+      LEFT JOIN team_workspace_projects twp ON twp.workspace_id = tcw.workspace_id
+      LEFT JOIN contracts c ON c.contract_id = tcw.contract_id
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals prop ON prop.proposal_id = jc.proposal_id
+      LEFT JOIN jobs j ON j.job_id = prop.job_id
+      JOIN projects p ON (
+        p.project_id = twp.project_id 
+        OR p.project_id = tcw.project_id 
+        OR (j.existing_project_id IS NOT NULL AND p.project_id = j.existing_project_id)
+      ) AND p.deleted_at IS NULL
+      LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id
+      LEFT JOIN accounts link_acc ON link_acc.account_id = twp.linked_by_account_id
+     WHERE tcw.team_id = $1
+     ORDER BY p.project_id, p.updated_at DESC
+  `;
+
+  const res = await pool.query(query, [teamId]);
+  const projects = res.rows || [];
+
+  for (const proj of projects) {
+    await ensureWorkspaceMembersHaveProjectAccess(teamId, proj.id);
+  }
+
+  return projects.map((p) => ({
+    ...p,
+    thumbnailUrl: p.thumbnail_path && process.env.CLOUDFRONT_URL
+      ? `${process.env.CLOUDFRONT_URL}/${p.thumbnail_path}`
+      : null,
+  }));
+}
+
+/**
+ * Create a new video project and link it to this workspace.
+ */
+async function createWorkspaceProject(teamId, viewerAccountId, data = {}) {
+  const wsRes = await pool.query(`
+    SELECT tcw.workspace_id, tcw.contract_id, j.title as job_title
+      FROM team_contract_workspaces tcw
+      LEFT JOIN contracts c ON c.contract_id = tcw.contract_id
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN jobs j ON j.job_id = p.job_id
+     WHERE tcw.team_id = $1
+     LIMIT 1
+  `, [teamId]);
+
+  if (wsRes.rows.length === 0) {
+    const error = new Error('Team workspace not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const workspaceId = wsRes.rows[0].workspace_id;
+  const projectName = (data.name || wsRes.rows[0].job_title || 'Contract Video Project').trim().slice(0, 50);
+  const width = parseInt(data.width, 10) || 1920;
+  const height = parseInt(data.height, 10) || 1080;
+
+  const projRes = await pool.query(`
+    INSERT INTO projects (name, status, width, height, duration_seconds)
+    VALUES ($1, 'active', $2, $3, 0)
+    RETURNING project_id as id, project_id, name, status, width, height, duration_seconds, created_at, updated_at
+  `, [projectName, width, height]);
+
+  const newProject = projRes.rows[0];
+
+  await pool.query(`
+    INSERT INTO team_workspace_projects (workspace_id, project_id, linked_by_account_id)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (workspace_id, project_id) DO NOTHING
+  `, [workspaceId, newProject.id, viewerAccountId]);
+
+  await pool.query(`
+    UPDATE team_contract_workspaces
+       SET project_id = $1, updated_at = NOW()
+     WHERE workspace_id = $2
+  `, [newProject.id, workspaceId]);
+
+  await ensureWorkspaceMembersHaveProjectAccess(teamId, newProject.id);
+
+  await pool.query(`
+    INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+    VALUES ($1, $2, 'video_project_created', $3)
+  `, [
+    workspaceId,
+    viewerAccountId,
+    JSON.stringify({ project_id: newProject.id, project_name: projectName })
+  ]);
+
+  return newProject;
+}
+
+/**
+ * Link an existing video project to this workspace.
+ */
+async function linkWorkspaceProject(teamId, viewerAccountId, projectId) {
+  if (!projectId) {
+    const error = new Error('Project ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const wsRes = await pool.query(`
+    SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1
+  `, [teamId]);
+
+  if (wsRes.rows.length === 0) {
+    const error = new Error('Team workspace not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const workspaceId = wsRes.rows[0].workspace_id;
+
+  const projCheck = await pool.query(`
+    SELECT project_id, name FROM projects WHERE project_id = $1 AND deleted_at IS NULL
+  `, [projectId]);
+
+  if (projCheck.rows.length === 0) {
+    const error = new Error('Project not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await pool.query(`
+    INSERT INTO team_workspace_projects (workspace_id, project_id, linked_by_account_id)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (workspace_id, project_id) DO NOTHING
+  `, [workspaceId, projectId, viewerAccountId]);
+
+  await pool.query(`
+    UPDATE team_contract_workspaces
+       SET project_id = $1, updated_at = NOW()
+     WHERE workspace_id = $2
+  `, [projectId, workspaceId]);
+
+  await ensureWorkspaceMembersHaveProjectAccess(teamId, projectId);
+
+  await pool.query(`
+    INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+    VALUES ($1, $2, 'video_project_linked', $3)
+  `, [
+    workspaceId,
+    viewerAccountId,
+    JSON.stringify({ project_id: projectId, project_name: projCheck.rows[0].name })
+  ]);
+
+  return { success: true, project_id: projectId };
+}
+
+/**
+ * Unlink a video project from this workspace.
+ */
+async function unlinkWorkspaceProject(teamId, viewerAccountId, projectId) {
+  const wsRes = await pool.query(`
+    SELECT workspace_id, project_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1
+  `, [teamId]);
+
+  if (wsRes.rows.length === 0) {
+    const error = new Error('Team workspace not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const workspaceId = wsRes.rows[0].workspace_id;
+
+  await pool.query(`
+    DELETE FROM team_workspace_projects
+     WHERE workspace_id = $1 AND project_id = $2
+  `, [workspaceId, projectId]);
+
+  if (wsRes.rows[0].project_id === projectId) {
+    await pool.query(`
+      UPDATE team_contract_workspaces
+         SET project_id = NULL, updated_at = NOW()
+       WHERE workspace_id = $1
+    `, [workspaceId]);
+  }
+
+  await pool.query(`
+    INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+    VALUES ($1, $2, 'video_project_unlinked', $3)
+  `, [
+    workspaceId,
+    viewerAccountId,
+    JSON.stringify({ project_id: projectId })
+  ]);
+
+  return { success: true };
+}
+
+/**
+ * Fetch available user video projects that can be linked to this workspace.
+ */
+async function getAvailableProjectsForLinking(teamId, viewerAccountId) {
+  const userRes = await pool.query(`
+    SELECT user_id FROM users WHERE account_id = $1 LIMIT 1
+  `, [viewerAccountId]);
+
+  if (userRes.rows.length === 0) return [];
+  const userId = userRes.rows[0].user_id;
+
+  const query = `
+    SELECT p.project_id as id, p.name, p.status, p.width, p.height, p.duration_seconds,
+           p.updated_at as "lastUpdated", pm.role, tf.path as "thumbnailPath"
+      FROM projects p
+      JOIN project_members pm ON p.project_id = pm.project_id
+      LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id AND tf.deleted_at IS NULL
+     WHERE pm.user_id = $1
+       AND p.deleted_at IS NULL
+       AND pm.deleted_at IS NULL
+       AND p.project_id NOT IN (
+         SELECT COALESCE(twp.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
+           FROM team_workspace_projects twp
+           JOIN team_contract_workspaces tcw ON tcw.workspace_id = twp.workspace_id
+          WHERE tcw.team_id = $2
+       )
+     ORDER BY p.updated_at DESC
+     LIMIT 50
+  `;
+
+  const res = await pool.query(query, [userId, teamId]);
+  return res.rows || [];
+}
+
 module.exports = {
   ensureContractualTeamProject,
   getTeamProjectDetails,
@@ -1560,6 +1991,12 @@ module.exports = {
   decideSubcontractProposal,
   withdrawSubcontractProposal,
   ensureContractualMember,
+  ensureWorkspaceMembersHaveProjectAccess,
+  getWorkspaceProjects,
+  createWorkspaceProject,
+  linkWorkspaceProject,
+  unlinkWorkspaceProject,
+  getAvailableProjectsForLinking,
 };
 
 
