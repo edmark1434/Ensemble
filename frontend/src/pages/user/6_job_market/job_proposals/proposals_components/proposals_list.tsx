@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -115,6 +115,8 @@ export interface ProposalsListProps {
   loading?: boolean;
   viewType?: ViewType;
   showFilters?: boolean;
+  isJobClosed?: boolean;
+  hasHiredCandidate?: boolean;
   onUpdateStatus?: (id: string, newStatus: ProposalStatus, reason?: string) => void | Promise<void>;
   onHireCandidate?: (proposal: ProposalItemData) => void;
   onShortlistCandidate?: (proposal: ProposalItemData) => void;
@@ -190,22 +192,23 @@ const ProposalLifecycleStepper: React.FC<ProposalLifecycleStepperProps> = ({ sta
   }
 
   const isHired = s === "hired";
-  const isAccepted = isHired || s === "accepted" || s === "approved";
-  const isShortlisted = isAccepted || s === "shortlisted";
+  const isOfferSent = isHired || s === "accepted" || s === "approved";
+  const isShortlisted = isOfferSent || s === "shortlisted";
+  const isPending = !["rejected", "withdrawn", "archived"].includes(s);
 
   return (
     <div className="flex items-center text-[10px] sm:text-[11px] gap-1 sm:gap-1.5 whitespace-nowrap overflow-x-auto no-scrollbar">
       {/* 01 PENDING */}
       <span
         className={`flex items-center gap-1 font-semibold shrink-0 ${
-          s === "pending" || !s
+          isPending
             ? "text-amber-600 dark:text-amber-400"
             : "text-gray-400 dark:text-zinc-500"
         }`}
       >
         <span
           className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-            s === "pending" || !s ? "bg-amber-500" : "bg-gray-400"
+            isPending ? "bg-amber-500" : "bg-gray-400"
           }`}
         />
         01 PENDING
@@ -237,24 +240,24 @@ const ProposalLifecycleStepper: React.FC<ProposalLifecycleStepperProps> = ({ sta
       {/* Divider 2-3 */}
       <div
         className={`h-0.5 w-2.5 sm:w-3.5 rounded-full shrink-0 ${
-          isAccepted ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"
+          isOfferSent ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"
         }`}
       />
 
-      {/* 03 ACCEPTED */}
+      {/* 03 OFFER SENT */}
       <span
         className={`flex items-center gap-1 font-semibold shrink-0 ${
-          isAccepted
+          isOfferSent
             ? "text-emerald-600 dark:text-emerald-400"
             : "text-gray-400 dark:text-zinc-500"
         }`}
       >
         <CheckCircle2
           className={`w-2.5 h-2.5 shrink-0 ${
-            isAccepted ? "text-emerald-500" : ""
+            isOfferSent ? "text-emerald-500" : ""
           }`}
         />
-        03 ACCEPTED
+        03 OFFER SENT
       </span>
 
       {/* Divider 3-4 */}
@@ -288,6 +291,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
   loading = false,
   viewType = "list",
   showFilters = true,
+  isJobClosed = false,
+  hasHiredCandidate = false,
   onUpdateStatus,
   onHireCandidate,
   onShortlistCandidate,
@@ -296,6 +301,17 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
   const location = useLocation();
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
+
+  // Map of which job IDs already have a hired candidate
+  const jobHiredMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const p of proposals) {
+      if ((p.status || "").toLowerCase() === "hired") {
+        map[p.jobId] = true;
+      }
+    }
+    return map;
+  }, [proposals]);
 
   const toggleMilestones = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -343,7 +359,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
       case "Approved":
       case "approved":
         return {
-          label: "ACCEPTED",
+          label: "OFFER SENT",
           className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
         };
       case "Shortlisted":
@@ -353,11 +369,20 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
         };
       case "Rejected":
         return {
-          label: "DECLINED",
+          label: "REJECTED",
           className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
         };
-      case "Withdrawn":
       case "Archived":
+        return {
+          label: "ARCHIVED",
+          className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
+        };
+      case "Closed":
+        return {
+          label: "CLOSED",
+          className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
+        };
+      case "Withdrawn":
         return {
           label: "WITHDRAWN",
           className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
@@ -394,8 +419,23 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
           const totalHours = (item.milestones || []).reduce((acc, m) => acc + (m.hours || 0), 0);
           const totalDays = Math.ceil(totalHours / 8) || 1;
 
-          const isHired = item.status === "Hired" || item.status === "Accepted";
-          const isShortlisted = item.status === "Shortlisted";
+          const statusLower = (item.status || "").toLowerCase();
+          const isHired = statusLower === "hired";
+          const isOfferSent = statusLower === "accepted" || statusLower === "approved";
+          const isHiredOrOffer = isHired || isOfferSent;
+          const isShortlisted = statusLower === "shortlisted";
+          const isInactive = ["rejected", "archived", "withdrawn", "closed"].includes(statusLower);
+
+          // Determine if job has a hired candidate or is closed
+          const jobHasHired = hasHiredCandidate || Boolean(jobHiredMap[item.jobId]);
+          const jobIsClosed = Boolean(isJobClosed) || (item.jobStatus || "").toLowerCase() === "closed";
+          const isJobFilledOrClosed = jobHasHired || jobIsClosed;
+
+          // Actions (Shortlist, Hire) are hidden if job is filled/closed or proposal is inactive
+          const hideActions = isJobFilledOrClosed || isInactive;
+
+          // Subdue non-hired cards when job is filled or proposal is inactive
+          const isSubdued = (!isHired && isJobFilledOrClosed) || isInactive;
           const isTeam =
             item.freelancerType === "Team" ||
             Boolean(item.freelancerTeamId || item.actingTeamId);
@@ -418,7 +458,13 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     { state: { returnTo: location.pathname + location.search } }
                   )
                 }
-                className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-5"
+                className={`group rounded-2xl border p-5 backdrop-blur-sm cursor-pointer transition-all duration-200 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-5 ${
+                  isHired
+                    ? "border-purple-500/40 dark:border-purple-500/30 ring-1 ring-purple-500/25 bg-white dark:bg-dark-surface shadow-sm hover:border-purple-500/60 hover:shadow-md"
+                    : isSubdued
+                    ? "border-gray-200/60 dark:border-white/5 bg-gray-50/70 dark:bg-dark-surface/40 opacity-60 hover:opacity-95 hover:border-gray-300 dark:hover:border-white/10"
+                    : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm hover:border-blue-500/30 hover:shadow-md"
+                }`}
               >
                 {/* Left Column: Proposer (Solo/Team & Rating) + Target listing + Pitch */}
                 <div className="space-y-3 min-w-0 flex-1">
@@ -609,7 +655,11 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between gap-4 shrink-0 lg:pl-6 lg:border-l border-gray-100 dark:border-white/5 min-w-[260px]">
                   <div className="text-left sm:text-right lg:text-right space-y-1 w-full">
                     <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider block">
-                      {item.target_milestone_title ? "Fixed Budget" : "Proposed Bid"}
+                      {item.target_milestone_title
+                        ? "Fixed Budget"
+                        : ["Accepted", "Approved", "Hired"].includes(item.status)
+                        ? "Contract Escrow"
+                        : "Proposed Bid"}
                     </span>
                     <div className="flex items-center sm:justify-end gap-1.5 text-amber-500 dark:text-amber-400">
                       <CreditIcon className="h-4 w-4 shrink-0" />
@@ -691,8 +741,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Chat button (Only shown if applicant is shortlisted, accepted, or hired) */}
-                    {(isShortlisted || isHired) && (
+                    {/* Chat button (Only shown if applicant is shortlisted, offer sent, or hired) */}
+                    {(isShortlisted || isHiredOrOffer) && (
                       <button
                         type="button"
                         disabled={loadingChatId === item.id}
@@ -725,7 +775,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     )}
 
                     {/* Shortlist */}
-                    {item.type === "incoming" && !isHired && (
+                    {item.type === "incoming" && !isHiredOrOffer && !hideActions && (
                       <button
                         type="button"
                         title={isShortlisted ? "Remove from Shortlist" : "Save to Shortlist"}
@@ -759,11 +809,16 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     {/* Primary Action Button */}
                     {item.type === "incoming" &&
                       (isHired ? (
-                        <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                        <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center gap-1.5">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Hired</span>
                         </span>
-                      ) : (
+                      ) : isOfferSent ? (
+                        <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Offer Sent</span>
+                        </span>
+                      ) : hideActions ? null : (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -838,7 +893,13 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   { state: { returnTo: location.pathname + location.search } }
                 )
               }
-              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col justify-between gap-4"
+              className={`group rounded-2xl border p-5 backdrop-blur-sm cursor-pointer transition-all duration-200 text-left flex flex-col justify-between gap-4 ${
+                isHired
+                  ? "border-purple-500/40 dark:border-purple-500/30 ring-1 ring-purple-500/25 bg-white dark:bg-dark-surface shadow-sm hover:border-purple-500/60 hover:shadow-md"
+                  : isSubdued
+                  ? "border-gray-200/60 dark:border-white/5 bg-gray-50/70 dark:bg-dark-surface/40 opacity-60 hover:opacity-95 hover:border-gray-300 dark:hover:border-white/10"
+                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm hover:border-blue-500/30 hover:shadow-md"
+              }`}
             >
               <div className="space-y-3.5">
                 {/* 1. Header Row: Proposer (Solo/Team & Rating) + Target listing + Status tag */}
@@ -1010,7 +1071,11 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   <div className="flex items-baseline justify-between gap-2">
                     <div>
                       <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider block">
-                        {item.target_milestone_title ? "Fixed Budget" : "Proposed Bid"}
+                        {item.target_milestone_title
+                          ? "Fixed Budget"
+                          : ["Accepted", "Approved", "Hired"].includes(item.status)
+                          ? "Contract Escrow"
+                          : "Proposed Bid"}
                       </span>
                       <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400 mt-0.5">
                         <CreditIcon className="h-4 w-4 shrink-0" />
@@ -1138,8 +1203,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   </span>
 
                   <div className="flex items-center gap-1.5">
-                    {/* Chat button (Only shown if applicant is shortlisted, accepted, or hired) */}
-                    {(isShortlisted || isHired) && (
+                    {/* Chat button (Only shown if applicant is shortlisted, offer sent, or hired) */}
+                    {(isShortlisted || isHiredOrOffer) && (
                       <button
                         type="button"
                         disabled={loadingChatId === item.id}
@@ -1172,7 +1237,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     )}
 
                     {/* Shortlist button */}
-                    {item.type === "incoming" && !isHired && (
+                    {item.type === "incoming" && !isHiredOrOffer && !hideActions && (
                       <button
                         type="button"
                         title={isShortlisted ? "Remove from Shortlist" : "Save to Shortlist"}
@@ -1225,11 +1290,16 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 {/* Primary Action Button */}
                 {item.type === "incoming" &&
                   (isHired ? (
-                    <div className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5">
+                    <div className="w-full py-2 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1.5">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Candidate Hired</span>
                     </div>
-                  ) : (
+                  ) : isOfferSent ? (
+                    <div className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Offer Sent</span>
+                    </div>
+                  ) : hideActions ? null : (
                     <button
                       type="button"
                       onClick={(e) => {

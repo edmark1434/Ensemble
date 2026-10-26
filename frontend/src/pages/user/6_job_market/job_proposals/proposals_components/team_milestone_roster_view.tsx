@@ -264,7 +264,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                     <span>&bull;</span>
                     <span className="text-amber-500 font-bold">{shortlistedCount} Shortlisted</span>
                     <span>&bull;</span>
-                    <span className="text-green-600 dark:text-green-400 font-bold">{acceptedCount} Accepted</span>
+                    <span className="text-green-600 dark:text-green-400 font-bold">{acceptedCount} Offers &amp; Hired</span>
                   </div>
                 </div>
               </div>
@@ -474,7 +474,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                       }`}
                     >
                       <CheckCircle2 className="h-3 w-3 text-green-600" />
-                      <span>Accepted ({acceptedCount})</span>
+                      <span>Offers &amp; Hired ({acceptedCount})</span>
                     </button>
                   </div>
                 </div>
