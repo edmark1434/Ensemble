@@ -758,14 +758,16 @@ async function replaceAndSeed25Jobs() {
           timeline_min, timeline_max, posted_as, status, rough_deadline,
           rough_no_of_revisions, portfolio_use_allowed, portfolio_use_duration_seconds,
           is_existing_project, initiator_role, require_nda, hiring_type,
-          screening_questions, created_at, updated_at
+          screening_questions, application_deadline, is_urgent, posting_fee_credits,
+          free_extension_count, created_at, updated_at
         ) VALUES (
           $1, $2, $3, $4, 'fixed',
           $5, $6, $7, $8,
           $9, $10, $11, 'Open', $12,
           2, $13, $14,
           false, 'Client', $15, $16,
-          $17, NOW() - ($18 || ' days')::interval, NOW() - ($18 || ' days')::interval
+          $17, NOW() + interval '3 days', false, 50,
+          0, NOW() - ($18 || ' days')::interval, NOW() - ($18 || ' days')::interval
         ) RETURNING job_id`,
         [
           clientAccount.account_id,
