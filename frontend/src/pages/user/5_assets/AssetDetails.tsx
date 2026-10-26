@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, AudioLines, Image, Clapperboard, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, LayoutTemplate, User, AlertTriangle, Clock } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, AudioLines, Image, Clapperboard, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, PanelsRightBottom, User } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -12,7 +12,9 @@ import useGlobalState from "@/lib/global_state";
 import AssetEditorModal from "./AssetEditorModal";
 import AssetThumbnailCarousel from "./AssetThumbnailCarousel";
 
+import { MediaFallback } from "./AssetMedia";
 import AssetOriginalModal from "./AssetOriginalModal";
+import AssetReportButton from "./AssetReportButton";
 import AssetPurchaseModal from "./AssetPurchaseModal";
 import { mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
@@ -35,9 +37,16 @@ function getTypeIcon(type: string) {
     case "video": return <Clapperboard className="h-3 w-3" />;
     case "image": return <Image className="h-3 w-3" />;
     case "audio": return <AudioLines className="h-3 w-3" />;
-    case "template": return <LayoutTemplate className="h-3 w-3" />;
+    case "template": return <PanelsRightBottom className="h-3 w-3" />;
     default: return null;
   }
+}
+
+function packageMediaLabels(files: AssetMediaFile[], withCounts: boolean) {
+  return (["image", "video", "audio"] as const).flatMap((type) => {
+    const count = files.filter((file) => file.type === type).length;
+    return count ? [`${withCounts ? `${count} ` : ""}${type}${count === 1 ? "" : "s"}`] : [];
+  }).join(withCounts ? " · " : " / ");
 }
 
 function DetailSkeleton() {
@@ -443,7 +452,8 @@ export default function AssetDetails() {
                     <span className="relative overflow-hidden flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10 uppercase tracking-wider">
                       <span className="relative z-10 flex items-center gap-1.5">
                         {getTypeIcon(asset.type)}
-                        {asset.type}
+                        {asset.media_asset_count > 1 && <span title="Bundle: all included assets for one price" aria-label="Asset bundle"><PackageOpen className="h-3.5 w-3.5" /></span>}
+                        {asset.type}{asset.media_asset_count > 1 ? " Bundle" : ""}
                       </span>
                       <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                     </span>
@@ -458,27 +468,6 @@ export default function AssetDetails() {
                       </span>
                     </span>
                     {asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Owned</span>}
-                    {asset.is_owner && (
-                      <>
-                        {asset.status === "published" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300">
-                            <CheckCircle2 className="h-3 w-3" /> Published
-                          </span>
-                        ) : asset.review_status === "pending" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-sky-600 dark:text-sky-300">
-                            <Clock className="h-3 w-3" /> Under Review
-                          </span>
-                        ) : asset.review_status === "rejected" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-rose-600 dark:text-rose-300">
-                            <AlertTriangle className="h-3 w-3" /> Rejected
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-600 dark:text-amber-300">
-                            Draft
-                          </span>
-                        )}
-                      </>
-                    )}
                   </div>
                   <div className="mt-4 flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 text-xl font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-6 w-6" /> {asset.price_credits.toLocaleString()} credits</span>
@@ -486,43 +475,6 @@ export default function AssetDetails() {
                   <h1 className="mt-3 break-words text-2xl font-bold md:text-3xl">{asset.name}</h1>
                 </div>
               </div>
-
-              {asset.is_owner && asset.review_status === "rejected" && (
-                <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-300">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 shrink-0 text-rose-400 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-rose-200">Listing Submission Rejected</h3>
-                      <p className="mt-1 text-xs text-rose-300/90 leading-relaxed">
-                        {asset.rejection_reason || "This submission was rejected by the moderation team."}
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditing(true)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500 shadow-sm"
-                        >
-                          <Pencil className="h-3.5 w-3.5" /> Edit Asset to Fix & Resubmit
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {asset.is_owner && asset.review_status === "pending" && (
-                <div className="mt-4 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4 text-sky-300">
-                  <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 shrink-0 text-sky-400 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-sky-200">Under Moderator Review</h3>
-                      <p className="mt-1 text-xs text-sky-300/90 leading-relaxed">
-                        This asset is queued for review by moderators. Once approved, it will automatically become published to the marketplace.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-gray-700 dark:text-zinc-300 flex-1">{asset.description}</p>
 
@@ -538,6 +490,7 @@ export default function AssetDetails() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => void updateEngagement("like")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_liked}><Heart className={`h-4 w-4 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.like_count}</button>
                   <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
+                  {!asset.is_owner && <AssetReportButton asset={asset} isGuest={isGuestView} onGuest={() => setIsGuestLoginOpen(true)} />}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {asset.can_download ? (
@@ -599,18 +552,19 @@ export default function AssetDetails() {
             {asset.media_asset_count > 0 && (asset.type !== "template" || asset.can_download) && (
               <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
                   <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                    <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.media_asset_count} protected original {asset.media_asset_count === 1 ? "file" : "files"}</p></div>
-                    <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Low-quality previews · originals require ownership</span>
+                    <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{packageMediaLabels(asset.media_assets, true)}</p></div>
+                    <span className="max-w-lg text-xs leading-5 text-gray-500 dark:text-zinc-400">Previews are watermarked. Purchase the {asset.media_asset_count > 1 ? "bundle" : "asset"} to use and download full {packageMediaLabels(asset.media_assets, false)}.</span>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {asset.media_assets.map((mediaAsset) => (
                       <MediaAssetPreview
                         key={`${mediaAsset.media_asset_id}:${asset.can_download}`}
                         mediaAsset={mediaAsset}
-                        canAccessOriginal={Boolean(asset.can_download)}
+                        canAccessOriginal={Boolean(asset.can_download && (asset.is_owner || asset.is_purchased))}
+                        audioThumbnail={asset.thumbnail_path}
                         downloading={downloadingFileId === mediaAsset.media_asset_id}
                         downloadDisabled={Boolean(downloadingFileId)}
-                        onOpen={() => asset.can_download ? setSelectedOriginalFile(mediaAsset) : requestPurchase()}
+                        onOpen={() => setSelectedOriginalFile(mediaAsset)}
                         onDownload={() => void downloadOriginal(mediaAsset)}
                       />
                     ))}
@@ -620,10 +574,10 @@ export default function AssetDetails() {
 
             </div>
 
-            <dl className="mt-6 grid gap-3 border-t border-gray-200 pt-5 text-sm sm:grid-cols-2 lg:grid-cols-4 dark:border-white/10">
+            <dl className="mt-6 flex flex-wrap gap-3 border-t border-gray-200 pt-5 text-sm dark:border-white/10">
               <Metadata icon={Calendar} label="Published" value={formatDate(asset.created_at)} />
-              <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />
-              <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />
+              {asset.media_asset_count <= 1 && asset.type !== "audio" && <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />}
+              {asset.media_asset_count <= 1 && asset.type !== "image" && <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />}
               <Metadata icon={MessageSquare} label="Package size" value={readableSize(asset.media_assets.reduce((total, file) => total + Number(file.size_bytes || 0), 0))} />
             </dl>
         </section>
@@ -779,16 +733,12 @@ export default function AssetDetails() {
 }
 
 function Metadata({ icon: Icon, label, value }: { icon: typeof Calendar; label: string; value: string }) {
-  return <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-white/[0.025]"><Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-zinc-500" /><div className="min-w-0"><dt className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">{label}</dt><dd className="mt-0.5 truncate font-medium text-gray-800 dark:text-zinc-200">{value}</dd></div></div>;
-}
-
-function MediaFileIcon({ mimeType }: { mimeType: string }) {
-  const Icon = mimeType.startsWith("image/") ? Image : mimeType.startsWith("video/") ? Clapperboard : AudioLines;
-  return <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300"><Icon className="h-7 w-7" /></span>;
+  return <div className="flex min-w-0 flex-1 basis-full items-center gap-3 rounded-xl bg-gray-50 p-3 sm:basis-48 dark:bg-white/[0.025]"><Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-zinc-500" /><div className="min-w-0"><dt className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">{label}</dt><dd className="mt-0.5 truncate font-medium text-gray-800 dark:text-zinc-200">{value}</dd></div></div>;
 }
 
 function MediaAssetPreview({
   mediaAsset,
+  audioThumbnail,
   canAccessOriginal,
   downloading,
   downloadDisabled,
@@ -796,6 +746,7 @@ function MediaAssetPreview({
   onDownload,
 }: {
   mediaAsset: AssetMediaFile;
+  audioThumbnail: string | null;
   canAccessOriginal: boolean;
   downloading: boolean;
   downloadDisabled: boolean;
@@ -803,7 +754,7 @@ function MediaAssetPreview({
   onDownload: () => void;
 }) {
   const [failed, setFailed] = useState(false);
-  const previewUrl = mediaUrl(mediaAsset.thumbnail_path || mediaAsset.proxy_path);
+  const previewUrl = mediaUrl(mediaAsset.type === "audio" ? audioThumbnail : mediaAsset.proxy_path);
   const format = mediaAsset.mime_type.split("/")[1] || "file";
   return (
     <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-dark-base">
@@ -811,24 +762,22 @@ function MediaAssetPreview({
         type="button"
         onClick={onOpen}
         className="relative block aspect-video w-full cursor-pointer overflow-hidden bg-gray-100 text-left dark:bg-black/30"
-        aria-label={canAccessOriginal ? `View original ${mediaAsset.name}` : `View low-quality preview of ${mediaAsset.name}`}
+        aria-label={canAccessOriginal ? `View original ${mediaAsset.name}` : `View watermarked preview of ${mediaAsset.name}`}
       >
-        {previewUrl && !failed ? (
+        {previewUrl && !failed && mediaAsset.type === "video" ? (
+          <video src={previewUrl} muted playsInline preload="metadata" onError={() => setFailed(true)} className="pointer-events-none h-full w-full object-contain" aria-label={`Watermarked preview of ${mediaAsset.name}`} />
+        ) : previewUrl && !failed ? (
           <img
             src={previewUrl}
             alt={`Preview of ${mediaAsset.name}`}
             draggable={false}
             onContextMenu={(event) => event.preventDefault()}
             onError={() => setFailed(true)}
-            className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+            className="h-full w-full object-contain transition duration-200 group-hover:scale-[1.02]"
           />
         ) : (
-          <span className="absolute inset-0 flex items-center justify-center"><MediaFileIcon mimeType={mediaAsset.mime_type} /></span>
+          <MediaFallback icon={mediaAsset.type === "audio" ? AudioLines : mediaAsset.type === "video" ? Clapperboard : Image} className="h-full w-full" />
         )}
-        {!canAccessOriginal && <>
-          <span className="absolute inset-0 bg-black/5" aria-hidden="true" />
-          <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/65 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white" aria-hidden="true">Ensemble</span>
-        </>}
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"><Eye className="h-7 w-7 text-white" /></span>
       </button>
       <div className="flex items-center justify-between gap-2 p-3">

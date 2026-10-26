@@ -1288,7 +1288,25 @@ export function CommentsPanel() {
                 <p className="text-sm text-muted-foreground">Loading…</p>
               )}
               {data && data.threads.length === 0 && (
-                <p className="text-sm text-muted-foreground">No comments yet.</p>
+                <div
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-3 text-center",
+                    composing ? "py-6" : "min-h-[40vh]",
+                  )}
+                >
+                  <p className="text-sm text-muted-foreground">No comments yet.</p>
+                  {data.canComment && !composing && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => setComposing(true)}
+                    >
+                      <Plus size={16} />
+                      Add comment
+                    </Button>
+                  )}
+                </div>
               )}
               {data && data.threads.length > 0 && visible.length === 0 && (
                 <p className="text-sm text-muted-foreground">No comments match this filter.</p>

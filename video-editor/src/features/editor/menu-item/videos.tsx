@@ -1,3 +1,5 @@
+import { MediaSearchBar } from "@/components/media-search-bar";
+import { MarketCollection, MarketCollectionRows, type MarketCollectionView } from "./market-collection";
 import Draggable from "@/components/shared/draggable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { dispatch } from "@designcombo/events";
@@ -6,9 +8,8 @@ import { generateId } from "@designcombo/timeline";
 import { IImage, IVideo } from "@designcombo/types";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, PlusIcon } from "lucide-react";
+import { Loader2, PlusIcon } from "lucide-react";
 import { usePexelsVideos } from "@/hooks/use-pexels-videos";
 import { ImageLoading } from "@/components/ui/image-loading";
 import { getCurrentTime } from "@/features/editor/utils/time";
@@ -16,6 +17,8 @@ import useStore from "../store/use-store";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { millisecondsToHHMMSS } from "../utils/format";
 import { useMarketAssets } from "@/hooks/use-market-assets";
+import { MarketAssetActions } from "@/components/market-asset-actions";
+import { MarketPreview } from "@/components/market-asset-browser";
 import { MarketPriceBadge } from "@/components/market-price-badge";
 import { getWidestBundleShowcase, isMarketAssetBundle, MarketAssetCard, MarketAssetDetails, type MarketAssetBundle, useWidestBundleShowcaseDimensions } from "@/components/market-asset-browser";
 import { addMarketAssetToTimeline } from "@/features/editor/utils/add-market-asset-to-timeline";
@@ -52,6 +55,7 @@ const GAP = 8;
 export const Videos = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCollection, setSelectedCollection] = useState<MarketCollectionView | null>(null);
   const [selectedMarketAsset, setSelectedMarketAsset] = useState<MarketAssetBundle | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,12 +139,6 @@ export const Videos = () => {
     await Promise.all([market, searchVideos(q)]);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSearch();
-    }
-  };
-
   const handleLoadMore = () => {
     // Exhaust market assets first, then continue into stock
     if (marketHasMore) {
@@ -188,41 +186,9 @@ export const Videos = () => {
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden">
-    <div className={`flex h-full w-full flex-col min-h-0 overflow-hidden ${selectedMarketAsset ? "hidden" : ""}`}>
-      <div className="flex items-center gap-2 p-4">
-        <div className="relative flex-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="absolute left-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
-            onClick={handleSearch}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Search className="h-3 w-3" />
-            )}
-          </Button>
-          <Input
-            placeholder="Search videos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleKeyPress}
-            className="pl-10"
-          />
-        </div>
-        {searchQuery && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleClearSearch}
-            disabled={isLoading}
-          >
-            Clear
-          </Button>
-        )}
-      </div>
+    <div className={`flex h-full w-full flex-col min-h-0 overflow-hidden ${selectedMarketAsset || selectedCollection ? "hidden" : ""}`}>
+      <MediaSearchBar value={searchQuery} placeholder="Search videos..." loading={isLoading}
+        onChange={setSearchQuery} onSearch={() => { void handleSearch(); }} onClear={handleClearSearch} />
 
       {pexelsError && (
         <div className="px-4">
@@ -233,6 +199,7 @@ export const Videos = () => {
       )}
 
       <ScrollArea className="flex-1 px-4 h-full">
+        <MarketCollectionRows type="video" onOpen={setSelectedCollection} />
         <div ref={containerRef} className="flex flex-col gap-2">
           {rows.map((row, rowIndex) => (
             <div key={rowIndex} className="flex gap-2" style={{ height: row.height }}>
@@ -246,6 +213,7 @@ export const Videos = () => {
                     <MarketAssetCard bundle={video} onOpen={setSelectedMarketAsset} />
                   ) : (
                     <VideoItem
+                      marketListing={"marketAssetId" in video ? video as MarketAssetBundle : undefined}
                       video={((Array.isArray((video as any).assets) && (video as any).assets.length === 1)
                         ? (video as any).assets[0] : video) as Partial<IVideo>}
                       shouldDisplayPreview={!isDraggingOverTimeline}
@@ -280,6 +248,7 @@ export const Videos = () => {
         )}
       </ScrollArea>
     </div>
+    {selectedCollection && <MarketCollection key={selectedCollection} view={selectedCollection} type="video" onBack={() => setSelectedCollection(null)} />}
     {selectedMarketAsset && (
       <MarketAssetDetails
         bundle={selectedMarketAsset}
@@ -294,10 +263,12 @@ export const Videos = () => {
 const VideoItem = ({
   handleAddVideo,
   video,
+  marketListing,
   shouldDisplayPreview
 }: {
   handleAddVideo: (payload: Partial<IVideo>) => void;
   video: Partial<IVideo>;
+  marketListing?: MarketAssetBundle;
   shouldDisplayPreview: boolean;
 }) => {
   const normalizedVideo = useMemo(
@@ -323,6 +294,10 @@ const VideoItem = ({
     [video.preview]
   );
 
+  if (marketListing && (marketListing.assets[0]?.proxyStatus !== "ready" || !marketListing.assets[0]?.details?.src)) {
+    return <MarketAssetCard bundle={marketListing} onOpen={() => {}} />;
+  }
+
   return (
     <Draggable
       data={normalizedVideo}
@@ -341,12 +316,8 @@ const VideoItem = ({
         }
         className="relative flex w-full h-full items-center justify-center overflow-hidden group cursor-pointer rounded-md"
       >
-        <img
-          draggable={false}
-          src={video.preview}
-          className="w-full h-full rounded-md object-cover"
-          alt="Video preview"
-        />
+        <MarketPreview src={video.preview} type="video" />
+        {marketListing && <div className="absolute right-1 top-1 z-10"><MarketAssetActions bundle={marketListing} menuOnly /></div>}
         {/* Play button overlay */}
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">

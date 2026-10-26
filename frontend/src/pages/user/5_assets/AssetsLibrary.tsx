@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, PanelsRightBottom, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -21,9 +21,8 @@ import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 type FilterType = "all" | AssetType;
-type AssetView = "discover" | "mine" | "purchased" | "saved";
+type AssetView = "discover" | "mine" | "purchased" | "saved" | "liked";
 type MineStatus = "all" | "uploaded" | "in_review" | "rejected" | "draft";
-type SavedStatus = "saved" | "liked";
 
 const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
   { id: "all", label: "All" },
@@ -33,12 +32,12 @@ const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
   { id: "draft", label: "Drafts" },
 ];
 
-const FILTERS: { value: FilterType; label: string; icon: typeof Image }[] = [
-  { value: "all", label: "All", icon: Image },
+const FILTERS: { value: FilterType; label: string; icon?: typeof Image }[] = [
+  { value: "all", label: "All" },
   { value: "image", label: "Images", icon: Image },
   { value: "video", label: "Videos", icon: Clapperboard },
   { value: "audio", label: "Audio", icon: AudioLines },
-  { value: "template", label: "Templates", icon: LayoutTemplate },
+  { value: "template", label: "Templates", icon: PanelsRightBottom },
 ];
 
 function requestError(error: unknown) {
@@ -85,6 +84,7 @@ export default function AssetsLibrary() {
     if (path.includes('/owned')) return 'mine';
     if (path.includes('/purchased')) return 'purchased';
     if (path.includes('/saved')) return 'saved';
+    if (path.includes('/liked')) return 'liked';
     return 'discover';
   };
   const view: AssetView = getTabFromPath();
@@ -96,7 +96,6 @@ export default function AssetsLibrary() {
     else navigate(`/assets/${tab}`);
   };
   const [mineStatus, setMineStatus] = useState<MineStatus>("all");
-  const [savedStatus, setSavedStatus] = useState<SavedStatus>("saved");
   const [search, setSearch] = useState(location.state?.searchQuery || "");
   const [debouncedSearch, setDebouncedSearch] = useState(location.state?.searchQuery || "");
   const [loading, setLoading] = useState(true);
@@ -133,7 +132,7 @@ export default function AssetsLibrary() {
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const availableViews: AssetView[] = isGuestView
     ? ["discover"]
-    : ["discover", "mine", "purchased", "saved"];
+    : ["discover", "mine", "purchased", "liked", "saved"];
 
   useEffect(() => {
     if (isGuestView && view !== "discover") {
@@ -172,7 +171,7 @@ export default function AssetsLibrary() {
           pageSize: 12,
           search: debouncedSearch,
           type: filter,
-          view: view === "saved" ? savedStatus : view,
+          view,
           status: statusParam,
         },
         signal,
@@ -185,7 +184,7 @@ export default function AssetsLibrary() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [debouncedSearch, filter, mineStatus, savedStatus, page, view]);
+  }, [debouncedSearch, filter, mineStatus, page, view]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -343,7 +342,7 @@ export default function AssetsLibrary() {
       const response = enabled
         ? await api.delete<{ is_liked?: boolean; like_count?: number; is_saved?: boolean; save_count?: number }>(`/api/assets/${asset.market_asset_id}/${kind}`)
         : await api.put<{ is_liked?: boolean; like_count?: number; is_saved?: boolean; save_count?: number }>(`/api/assets/${asset.market_asset_id}/${kind}`);
-      if ((kind === "save" && view === "saved" && savedStatus === "saved" && !response.data.is_saved) || (kind === "like" && view === "saved" && savedStatus === "liked" && !response.data.is_liked)) {
+      if ((kind === "save" && view === "saved" && !response.data.is_saved) || (kind === "like" && view === "liked" && !response.data.is_liked)) {
         setAssets((current) => current.filter((item) => item.market_asset_id !== asset.market_asset_id));
         setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1) }));
       } else {
@@ -399,7 +398,7 @@ export default function AssetsLibrary() {
 
           {/* Tabs & View Toggle */}
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10">
-            <div className="flex gap-1 relative flex-1">
+            <div className="relative flex min-w-0 flex-1 flex-wrap gap-1">
             {availableViews.map((tab) => {
               const isActive = view === tab;
               return (
@@ -461,30 +460,8 @@ export default function AssetsLibrary() {
                 </div>
               )}
 
-              {/* Saved sub-status */}
-              {view === "saved" && (
-                <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="Saved asset filter">
-                  {(["saved", "liked"] as SavedStatus[]).map((statusTab) => (
-                    <button
-                      key={statusTab}
-                      type="button"
-                      role="tab"
-                      aria-selected={savedStatus === statusTab}
-                      onClick={() => { setPage(1); setSavedStatus(statusTab); }}
-                      className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
-                        savedStatus === statusTab
-                          ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
-                          : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
-                      }`}
-                    >
-                      {statusTab}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {/* Filters */}
-              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Media types">
+              <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-white/15 dark:bg-white/5" role="tablist" aria-label="Media types">
                 {FILTERS.map(({ value, label, icon: Icon }) => (
                   <button
                     key={value}
@@ -492,13 +469,13 @@ export default function AssetsLibrary() {
                     role="tab"
                     aria-selected={filter === value}
                     onClick={() => { setPage(1); setFilter(value); }}
-                    className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                       filter === value
-                        ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
+                        ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
+                        : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5" /> {label}
+                    {Icon && <Icon className="h-3.5 w-3.5" />} {label}
                   </button>
                 ))}
               </div>
@@ -507,7 +484,7 @@ export default function AssetsLibrary() {
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "saved" ? (savedStatus === "liked" ? "Your liked assets" : "Your saved assets") : "Community assets"}</p>
+            <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "liked" ? "Your liked assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
             {view === "mine" && eligibility && (
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-500/10 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20">
@@ -555,9 +532,11 @@ export default function AssetsLibrary() {
                           : "You don't have any draft assets.")
                 : view === "purchased"
                   ? "You haven't purchased any assets yet."
-                  : view === "saved"
-                    ? (savedStatus === "liked" ? "You haven't liked any assets yet." : "You haven't saved any assets yet.")
-                    : "No assets found."}
+                  : view === "liked"
+                    ? "You haven't liked any assets yet."
+                    : view === "saved"
+                      ? "You haven't saved any assets yet."
+                      : "No assets found."}
             </h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
               {search
@@ -574,9 +553,11 @@ export default function AssetsLibrary() {
                             : "Assets saved as drafts will appear here.")
                   : view === "purchased"
                     ? "Assets you purchase will appear here."
-                    : view === "saved"
-                      ? (savedStatus === "liked" ? "Like assets to find them here later." : "Save assets to find them here later.")
-                      : "Uploaded media will appear here."}
+                    : view === "liked"
+                      ? "Like assets to find them here later."
+                      : view === "saved"
+                        ? "Save assets to find them here later."
+                        : "Uploaded media will appear here."}
             </p>
             {view === "mine" && <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{checkingPostEligibility ? "Checking..." : "Upload your first asset"}</button>}
           </div>

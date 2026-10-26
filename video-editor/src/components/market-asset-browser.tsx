@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Image, Clapperboard, AudioLines, PackageOpen, Pause, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Image, Clapperboard, AudioLines, PackageOpen, Pause, Play } from "lucide-react";
+import { MarketBrowserHeader } from "./market-browser-header";
+import { MarketAssetActions } from "./market-asset-actions";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MarketPriceBadge } from "@/components/market-price-badge";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
@@ -41,6 +43,10 @@ export interface MarketAssetShowcaseImage extends MarketAssetContent {
 export interface MarketAssetBundle {
   id: string;
   marketAssetId: string;
+  is_liked?: boolean;
+  is_saved?: boolean;
+  like_count?: number;
+  is_owner?: boolean;
   name: string;
   description: string;
   type: MarketAssetType;
@@ -123,11 +129,18 @@ function AssetTypeIcon({ type, className = "size-5" }: { type: MarketAssetType; 
   return <AudioLines className={className} />;
 }
 
-export function MarketAssetCard({
-  bundle,
-  onOpen,
-  layout = "grid"
-}: {
+export function MarketPreview({ src, type, className = "size-full object-cover" }: { src?: string; type: MarketAssetType; className?: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  return src && failedSrc !== src
+    ? <img src={src} alt="" draggable={false} onError={() => setFailedSrc(src)} className={className} />
+    : <span className="flex size-full items-center justify-center bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><AssetTypeIcon type={type} className="size-8" /></span>;
+}
+
+export function BundleIndicator() {
+  return <Tooltip><TooltipTrigger asChild><span tabIndex={0} className="flex size-7 items-center justify-center rounded-full bg-secondary/90 text-secondary-foreground" aria-label="Bundle: all included assets for one price"><PackageOpen className="size-4" /></span></TooltipTrigger><TooltipContent>Asset bundle: all included assets for one price</TooltipContent></Tooltip>;
+}
+
+export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
   bundle: MarketAssetBundle;
   onOpen: (bundle: MarketAssetBundle) => void;
   layout?: "grid" | "list";
@@ -136,149 +149,149 @@ export function MarketAssetCard({
   const [activeShowcaseIndex, setActiveShowcaseIndex] = useState(0);
   const slides = bundle.showcases.length > 0
     ? bundle.showcases.map((showcase) => showcase.preview || showcase.details.src)
-    : bundle.preview
-      ? [bundle.preview]
-      : [];
-
+    : bundle.preview ? [bundle.preview] : [];
+  const isBundle = bundle.assets.length > 1;
+  const unavailable = !isBundle && (bundle.assets[0]?.proxyStatus !== "ready" || !bundle.assets[0]?.details?.src);
   useEffect(() => {
     if (!isHovering || slides.length < 2) return;
-    const interval = window.setInterval(() => {
-      setActiveShowcaseIndex((index) => (index + 1) % slides.length);
-    }, 1100);
+    const interval = window.setInterval(() => setActiveShowcaseIndex((index) => (index + 1) % slides.length), 1100);
     return () => window.clearInterval(interval);
   }, [isHovering, slides.length]);
+  const reset = () => { setIsHovering(false); setActiveShowcaseIndex(0); };
 
-  const handleBlur = () => {
-    setIsHovering(false);
-    setActiveShowcaseIndex(0);
-  };
-
-  if (layout === "list") {
-    return (
-      <button
-        type="button"
-        onClick={() => onOpen(bundle)}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={handleBlur}
-        onFocus={() => setIsHovering(true)}
-        onBlur={handleBlur}
-        className="group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-zinc-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        aria-label={`Open ${bundle.name} bundle`}
-      >
-        <span className="relative size-12 shrink-0 overflow-hidden rounded-md bg-zinc-800 text-muted-foreground">
-          {slides[activeShowcaseIndex] ? (
-            <img src={slides[activeShowcaseIndex]} alt="" className="size-full object-cover" />
-          ) : (
-            <span className="flex size-full items-center justify-center"><AssetTypeIcon type={bundle.type} /></span>
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-200">{bundle.name}</span>
-          <span className="block text-xs text-muted-foreground">{bundle.assets.length} {bundle.assets.length === 1 ? "asset" : "assets"}</span>
-        </span>
-        <MarketPriceBadge credits={bundle.price_credits} className="shrink-0" />
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(bundle)}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={handleBlur}
-      onFocus={() => setIsHovering(true)}
-      onBlur={handleBlur}
-      className="group relative size-full overflow-hidden rounded-md bg-zinc-800 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      aria-label={`Open ${bundle.name} bundle`}
-    >
-      {slides[activeShowcaseIndex] ? (
-        <span className="absolute inset-0 overflow-hidden">
-          <img src={slides[activeShowcaseIndex]} alt="" aria-hidden="true" className="absolute inset-0 size-full scale-110 object-cover opacity-75 blur-xl" />
-          <img src={slides[activeShowcaseIndex]} alt="" className="relative size-full object-contain transition-transform duration-300 group-hover:scale-[1.03]" />
-        </span>
-      ) : (
-        <span className="flex size-full items-center justify-center text-muted-foreground"><AssetTypeIcon type={bundle.type} className="size-10" /></span>
-      )}
-      <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
-      <MarketPriceBadge credits={bundle.price_credits} className="absolute left-2 top-2" />
-      {bundle.type !== "audio" && <span className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-secondary/90 text-secondary-foreground" aria-label="Bundle"><PackageOpen className="size-4" /></span>}
-      <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-black/50 p-2.5 text-white opacity-0 transition-opacity group-hover:opacity-100">
-        <span className="min-w-0">
-          <span className="block truncate text-xs font-semibold">{bundle.name}</span>
-          <span className="block text-[10px] text-white/75">{bundle.assets.length} {bundle.assets.length === 1 ? "asset" : "assets"}</span>
-        </span>
-      </span>
+  if (layout === "list") return <div className="group flex w-full items-center gap-2 rounded-lg bg-secondary/40 px-2 py-2 hover:bg-secondary/70">
+    <button type="button" onClick={() => onOpen(bundle)} className="flex min-w-0 flex-1 items-center gap-3 rounded text-left focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Open ${bundle.name}`}>
+      <span className="relative size-10 shrink-0 overflow-hidden rounded-md bg-zinc-800"><MarketPreview src={slides[0]} type={bundle.type} /></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{bundle.name}</span><span className="block text-xs text-muted-foreground">{bundle.assets.length} {bundle.assets.length === 1 ? "asset" : "assets"} · {bundle.metadata.author}</span></span>
     </button>
-  );
+    <MarketPriceBadge credits={bundle.price_credits} className="shrink-0" />
+    {isBundle && <BundleIndicator />}
+    <MarketAssetActions bundle={bundle} menuOnly />
+  </div>;
+
+  return <div className="group relative size-full overflow-hidden rounded-md bg-zinc-800" onMouseEnter={() => setIsHovering(true)} onMouseLeave={reset} onFocus={() => setIsHovering(true)} onBlur={reset}>
+    <button type="button" disabled={unavailable} onClick={() => onOpen(bundle)} className="size-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed" aria-label={isBundle ? `Open ${bundle.name} bundle` : unavailable ? `${bundle.name}: preview unavailable` : `Add ${bundle.name} to the timeline`}>
+      <MarketPreview src={slides[activeShowcaseIndex]} type={bundle.type} className="size-full object-contain transition-transform duration-300 group-hover:scale-[1.03]" />
+      <MarketPriceBadge credits={bundle.price_credits} className="absolute left-2 top-2" />
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/50 p-2.5 text-xs font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">{bundle.name}</span>
+    </button>
+    <div className="absolute right-1 top-1 flex gap-1">{isBundle && <BundleIndicator />}<MarketAssetActions bundle={bundle} menuOnly /></div>
+  </div>;
 }
 
-export function MarketAssetDetails({
-  bundle,
-  onBack,
-  onAddAsset
-}: {
+// Browse listings without expanding bundle contents until the bundle is opened.
+export function MarketAssetListings({ listings, type, onOpenBundle, onSelectAsset }: {
+  listings: MarketAssetBundle[];
+  type: MarketAssetType;
+  onOpenBundle: (bundle: MarketAssetBundle) => void;
+  onSelectAsset: (asset: MarketAssetContent) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const bundles = useMemo(() => listings.filter(isMarketAssetBundle), [listings]);
+  const dimensions = useWidestBundleShowcaseDimensions(bundles);
+  const displayListings = useMemo(() => listings.map((listing) => {
+    const widest = getWidestBundleShowcase(listing);
+    const size = widest?.details ?? dimensions[listing.marketAssetId];
+    return size?.width && size.height
+      ? { ...listing, details: { ...listing.details, width: size.width, height: size.height } }
+      : listing;
+  }), [listings, dimensions]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => setContainerWidth(entries[0].contentRect.width));
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [type]);
+
+  const rows = useMasonryRows(displayListings, containerWidth, {
+    gap: 8, targetRowHeight: 140, minRowHeight: 120, maxRowHeight: 999999,
+  });
+  const openListing = (listing: MarketAssetBundle) => {
+    if (listing.assets.length > 1) {
+      setPlayingId(null);
+      onOpenBundle(listing);
+    } else if (listing.assets[0]) onSelectAsset(listing.assets[0]);
+  };
+
+  if (type === "audio") return <div className="flex flex-col gap-2">
+    {listings.map((listing) => {
+      if (listing.assets.length > 1) return <MarketAssetCard key={listing.marketAssetId} bundle={listing} layout="list" onOpen={openListing} />;
+      const asset = listing.assets[0];
+      return asset ? <div key={listing.marketAssetId} className="flex items-center gap-1">
+        <div className="min-w-0 flex-1"><MarketAudioRow item={asset} onSelect={onSelectAsset} isPlaying={playingId === asset.id} setPlayingId={setPlayingId} /></div>
+        <MarketAssetActions bundle={listing} menuOnly />
+      </div> : null;
+    })}
+  </div>;
+
+  return <div ref={containerRef} className="flex flex-col gap-2">
+    {rows.map((row, index) => <div key={index} className="flex gap-2" style={{ height: row.height }}>
+      {row.items.map(({ item, width }) => <div key={item.marketAssetId} className="h-full" style={{ width }}>
+        <MarketAssetCard bundle={item} onOpen={openListing} />
+      </div>)}
+    </div>)}
+  </div>;
+}
+
+export function MarketAssetDetails({ bundle, onBack, onAddAsset }: {
   bundle: MarketAssetBundle;
   onBack: () => void;
   onAddAsset: (asset: MarketAssetContent) => void;
 }) {
-  const assetCounts = bundle.assets.reduce<Record<MarketAssetType, number>>(
-    (counts, asset) => {
-      counts[asset.type] += 1;
-      return counts;
-    },
-    { image: 0, video: 0, audio: 0 }
-  );
+  const assetCounts = bundle.assets.reduce<Record<MarketAssetType, number>>((counts, asset) => {
+    counts[asset.type] += 1;
+    return counts;
+  }, { image: 0, video: 0, audio: 0 });
   const assetCountLabel = (Object.entries(assetCounts) as [MarketAssetType, number][])
     .filter(([, count]) => count > 0)
     .map(([type, count]) => `${count} ${type}${count === 1 ? "" : "s"}`)
     .join(" · ");
+  const isBundle = bundle.assets.length > 1;
 
-  return (
-    <div className="h-full min-h-0 w-full overflow-hidden">
-      <ScrollArea className="h-full px-4">
-        <div className="py-4">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="group mb-3 -ml-1 size-6 p-0 text-muted-foreground hover:bg-transparent dark:hover:bg-transparent"
-            onClick={onBack}
-            aria-label="Back to market assets"
-          >
-            <ArrowLeft className="size-4 transition-colors group-hover:text-white group-focus-visible:text-white" />
-          </Button>
-          <h2 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-200">{bundle.name}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Bundle{assetCountLabel ? ` · ${assetCountLabel}` : ""}</p>
-          <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{bundle.description || "No description provided."}</p>
-          <div className="mt-2 flex items-center text-xs text-muted-foreground">
-            {bundle.price_credits > 0 ? <MarketPriceBadge credits={bundle.price_credits} /> : <span className="font-semibold text-zinc-900 dark:text-zinc-200">Free</span>}
-          </div>
+  return <div className="h-full min-h-0 w-full overflow-hidden">
+    <ScrollArea className="h-full">
+      <MarketBrowserHeader title={bundle.name} onBack={onBack} backLabel="Back to market assets"
+        actions={<MarketAssetActions bundle={bundle} />}
+        subtitle={<>
+          {isBundle && <PackageOpen className="size-3.5 shrink-0" aria-hidden="true" />}
+          <span>{isBundle ? "Bundle" : "Asset"}{assetCountLabel ? ` · ${assetCountLabel}` : ""}</span>
+        </>}>
+        <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{bundle.description || "No description provided."}</p>
+        <div className="mt-2 flex items-center text-xs text-muted-foreground">
+          {bundle.price_credits > 0 ? <MarketPriceBadge credits={bundle.price_credits} /> : <span className="font-semibold text-zinc-900 dark:text-zinc-200">Free</span>}
         </div>
-
-        <section className="pb-4">
-          {bundle.assets.length > 0 ? (
-            bundle.type === "audio"
-              ? <MarketAudioList items={bundle.assets} onSelect={onAddAsset} />
-              : <MarketAssetMasonry items={bundle.assets} onSelect={onAddAsset} />
-          ) : (
-            <p className="text-xs text-muted-foreground">No asset files.</p>
-          )}
-        </section>
-      </ScrollArea>
-    </div>
-  );
+      </MarketBrowserHeader>
+      <section className="px-4 pb-4">
+        {bundle.assets.length > 0
+          ? <MarketAssetContents items={bundle.assets} type={bundle.type} onSelect={onAddAsset} />
+          : <p className="text-xs text-muted-foreground">No asset files.</p>}
+      </section>
+    </ScrollArea>
+  </div>;
 }
 
-function MarketAudioList({ items, onSelect }: {
+interface MarketAssetContentsProps {
   items: MarketAssetContent[];
   onSelect: (asset: MarketAssetContent) => void;
-}) {
+  renderActions?: (asset: MarketAssetContent) => ReactNode;
+}
+
+export function MarketAssetContents({ type, ...props }: MarketAssetContentsProps & { type: MarketAssetType }) {
+  return type === "audio" ? <MarketAudioList {...props} /> : <MarketAssetMasonry {...props} />;
+}
+
+function MarketAudioList({ items, onSelect, renderActions }: MarketAssetContentsProps) {
   const [playingId, setPlayingId] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-1">
-      {items.map((item) => <MarketAudioRow key={item.id} item={item} onSelect={onSelect}
-        isPlaying={playingId === item.id} setPlayingId={setPlayingId} />)}
+      {items.map((item) => <div key={item.id} className="flex items-center gap-1">
+        <div className="min-w-0 flex-1"><MarketAudioRow item={item} onSelect={onSelect}
+          isPlaying={playingId === item.id} setPlayingId={setPlayingId} /></div>
+        {renderActions?.(item)}
+      </div>)}
     </div>
   );
 }
@@ -315,13 +328,7 @@ function MarketAudioRow({ item, onSelect, isPlaying, setPlayingId }: {
   );
 }
 
-function MarketAssetMasonry({
-  items,
-  onSelect
-}: {
-  items: MarketAssetContent[];
-  onSelect: (asset: MarketAssetContent) => void;
-}) {
+function MarketAssetMasonry({ items, onSelect, renderActions }: MarketAssetContentsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -344,24 +351,21 @@ function MarketAssetMasonry({
       {rows.map((row, rowIndex) => (
         <div key={rowIndex} className="flex gap-2" style={{ height: row.height }}>
           {row.items.map(({ item, width }) => (
+            <div key={item.id} className="group relative h-full overflow-hidden rounded-md bg-zinc-800" style={{ width }}>
             <button
-              key={item.id}
               type="button"
               onClick={() => onSelect(item)}
               disabled={item.proxyStatus !== "ready" || !item.details?.src}
               aria-label={item.proxyStatus === "ready" ? `Add ${item.name} to the timeline` : `${item.name}: preview unavailable`}
-              className="group relative h-full cursor-pointer overflow-hidden rounded-md bg-zinc-800 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ width }}
+              className="relative size-full cursor-pointer overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {item.preview ? (
-                <img src={item.preview} alt="" className="size-full object-cover" />
-              ) : (
-                <span className="flex size-full items-center justify-center text-muted-foreground"><AssetTypeIcon type={item.type} className="size-8" /></span>
-              )}
+              <MarketPreview src={item.preview} type={item.type} />
               <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
               {item.proxyStatus !== "ready" && <span className="absolute inset-x-0 top-0 bg-black/70 px-2 py-1 text-[10px] text-white">Preview unavailable</span>}
               <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">{item.name}</span>
             </button>
+            {renderActions && <div className="absolute right-1 top-1">{renderActions(item)}</div>}
+            </div>
           ))}
         </div>
       ))}

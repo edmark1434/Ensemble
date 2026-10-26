@@ -115,6 +115,9 @@ async function buildReportSubject(row) {
       if (targetType === 'member' || targetType === 'team') {
         pushLink(links, 'Open team project', teamPathId ? `/team-project/${teamPathId}` : null);
       }
+    } else if (targetType === 'asset' || referenceTable === 'market_assets') {
+      headline = 'Reported market asset';
+      pushLink(links, 'Open market asset', targetId ? `/assets/${targetId}` : null);
     } else if (targetType === 'job' || referenceTable === 'jobs') {
       const job = await lookupJob(targetId);
       headline = job?.title || 'Job';

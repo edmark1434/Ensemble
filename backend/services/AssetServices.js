@@ -749,6 +749,37 @@ async function setAssetSaveServices(assetId, accountId, saved) {
   return setAssetSaveRepository(assetId, accountId, Boolean(saved));
 }
 
+async function performEditorAssetActionServices(assetId, accountId, payload) {
+  const { action, enabled } = payload || {};
+  if (action === 'report') return { report: await reportAssetServices(assetId, accountId, payload) };
+  if (!['like', 'save'].includes(action) || typeof enabled !== 'boolean') {
+    throw new AssetError('Choose a valid asset action.');
+  }
+  const service = action === 'like' ? setAssetLikeServices : setAssetSaveServices;
+  return service(assetId, accountId, enabled);
+}
+
+async function reportAssetServices(assetId, accountId, payload) {
+  const asset = await getAssetServices(assetId, accountId);
+  if (asset.is_owner) throw new AssetError('You cannot report your own asset.', 403);
+  const type = cleanText(payload?.type, 'Report reason', 100);
+  const description = cleanText(payload?.description, 'Report details', 2000);
+  if (description.length < 20) throw new AssetError('Report details must contain at least 20 characters.');
+  const { randomUUID } = require('crypto');
+  const { createReport } = require('../repositories/ModeratorSharedRepositories');
+  return createReport({
+    reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
+    reporterAccountId: accountId,
+    targetAccountId: asset.owner_account_id,
+    targetType: 'asset',
+    targetId: assetId,
+    referenceTable: 'market_assets',
+    referencePrefix: 'asset',
+    type,
+    description: `${asset.name}\n${description}`,
+  });
+}
+
 async function listAssetReviewsServices(assetId, accountId) {
   requireUuid(assetId);
   await getAssetServices(assetId, accountId);
@@ -795,6 +826,8 @@ async function deleteAssetReviewServices(assetId, reviewId, accountId) {
 
 module.exports = {
   AssetError,
+  reportAssetServices,
+  performEditorAssetActionServices,
   getAssetPostingEligibilityServices,
   listAssetsServices,
   getAssetServices,

@@ -1,4 +1,4 @@
-import { AlertCircle, AudioLines, Clapperboard, Image, LayoutTemplate, Loader2, X } from "lucide-react";
+import { AlertCircle, AudioLines, Clapperboard, Image, PanelsRightBottom, Loader2, X } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import type { PendingAssetUpload } from "./assetUploadStore";
 import type { AssetRecord } from "./assetTypes";
@@ -7,7 +7,7 @@ export default function PendingAssetCard({ upload, asset, onDismiss }: {
   upload: PendingAssetUpload; asset?: AssetRecord; onDismiss: () => void;
 }) {
   const failed = upload.stage === "failed" || asset?.processing_status === "failed";
-  const Icon = { image: Image, video: Clapperboard, audio: AudioLines, template: LayoutTemplate }[upload.type];
+  const Icon = { image: Image, video: Clapperboard, audio: AudioLines, template: PanelsRightBottom }[upload.type];
   const label = failed ? "Upload failed" : asset ? "Preparing preview…"
     : upload.stage === "saving" ? "Finishing upload…"
       : upload.stage === "preparing" ? "Preparing upload…" : `Uploading ${upload.progress}%`;

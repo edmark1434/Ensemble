@@ -1,4 +1,5 @@
 import { Image, Clapperboard, AudioLines } from "lucide-react";
+import { useState } from "react";
 import type { AssetRecord } from "./assetTypes";
 import { mediaUrl } from "./assetTypes";
 
@@ -9,10 +10,14 @@ interface AssetMediaProps {
 }
 
 export default function AssetMedia({ asset, compact = false, thumbnailOnly = false }: AssetMediaProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = mediaUrl(compact || thumbnailOnly
     ? asset.thumbnail_path || asset.proxy_path
     : asset.proxy_path || asset.thumbnail_path);
   const common = compact ? "h-48 w-full" : "max-h-[68vh] min-h-64 w-full";
+  if (src && failedSrc === src) {
+    return <MediaFallback icon={asset.type === "video" ? Clapperboard : asset.type === "audio" ? AudioLines : Image} className={common} />;
+  }
 
   if (asset.processing_status === "processing" || asset.processing_status === "failed") {
     return <MediaFallback
@@ -23,13 +28,13 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
   }
 
   if ((compact || thumbnailOnly) && asset.type === "audio" && !asset.thumbnail_path) {
-    return <MediaFallback icon={AudioLines} label="Audio asset" className={common} />;
+    return <MediaFallback icon={AudioLines} className={common} />;
   }
 
   if ((compact || thumbnailOnly) && src) {
     return (
       <div className={`relative ${common} select-none overflow-hidden bg-gray-100 dark:bg-black/30`} onContextMenu={(event) => event.preventDefault()}>
-        <img src={src} alt={`${asset.name} thumbnail`} loading={compact ? "lazy" : "eager"} draggable={false} className="h-full w-full pointer-events-none object-contain" />
+        <img src={src} alt={`${asset.name} thumbnail`} onError={() => setFailedSrc(src)} loading={compact ? "lazy" : "eager"} draggable={false} className="h-full w-full pointer-events-none object-contain" />
         <div className="absolute inset-0" aria-hidden="true" />
       </div>
     );
@@ -43,6 +48,7 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
       >
         <img
           src={src}
+          onError={() => setFailedSrc(src)}
           alt={asset.name}
           loading={compact ? "lazy" : "eager"}
           draggable={false}
@@ -87,26 +93,26 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
       </span>
       {!compact && src ? (
         <audio src={src} controls preload="metadata" className="w-full max-w-xl" aria-label={`${asset.name} audio`} />
-      ) : (
-        <p className="text-sm font-medium text-gray-500 dark:text-zinc-400">{compact ? "Audio asset" : "Audio preview unavailable"}</p>
-      )}
+      ) : !compact ? (
+        <p className="text-sm font-medium text-gray-500 dark:text-zinc-400">Audio preview unavailable</p>
+      ) : null}
     </div>
   );
 }
 
-function MediaFallback({
+export function MediaFallback({
   icon: Icon,
   label,
   className,
 }: {
   icon: typeof Image;
-  label: string;
+  label?: string;
   className: string;
 }) {
   return (
     <div className={`${className} flex flex-col items-center justify-center gap-3 bg-gray-100 text-gray-500 dark:bg-[#111522] dark:text-zinc-500`}>
       <Icon className="h-10 w-10" aria-hidden="true" />
-      <span className="text-sm">{label}</span>
+      {label && <span className="text-sm">{label}</span>}
     </div>
   );
 }
