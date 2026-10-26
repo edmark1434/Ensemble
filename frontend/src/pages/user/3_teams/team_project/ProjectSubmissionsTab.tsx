@@ -3,16 +3,21 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Download,
   ExternalLink,
   FileCheck,
   FileText,
+  Film,
   Flag,
   HelpCircle,
   History,
+  Info,
+  MessageCircle,
   MessageSquare,
+  Paperclip,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -21,11 +26,17 @@ import {
   Sparkles,
   Upload,
   User,
+  X,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import useGlobalState from '@/lib/global_state';
+import {
+  chatAttachmentUrl,
+  useInboxUploadMedia,
+} from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
+import { uploadFileWithIntent } from '@/lib/uploadFile';
 import type { TaskItem } from './ProjectTaskboardTab';
 
 interface SubmissionItem {
@@ -55,6 +66,7 @@ interface MilestoneData {
   assignee_avatar_path?: string;
   no_of_revisions_max?: number;
   revisions_used?: number;
+  revision_price_credits?: number;
   submissions?: SubmissionItem[];
   is_current?: boolean;
   is_upcoming?: boolean;
@@ -69,6 +81,7 @@ interface ProjectSubmissionsTabProps {
   currentUserAccountId: string;
   isClient: boolean;
   onUpdated: (silent?: boolean) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
@@ -79,11 +92,12 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
   currentUserAccountId,
   isClient,
   onUpdated,
+  onNavigateTab,
 }) => {
   const { user } = useGlobalState();
   const myAccountId = currentUserAccountId || user?.account_id || user?.id || '';
 
-  const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(() => {
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(() => {
     // Default to the first current or under-review milestone, or the first one
     const active = milestones.find(
       (m) =>
@@ -95,23 +109,129 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     return active?.job_milestone_id || milestones[0]?.job_milestone_id || null;
   });
 
+  const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(false);
+
+  // Switch selected milestone and reset transient input states
+  const handleSelectMilestone = (id: string) => {
+    setSelectedMilestoneId(id);
+    setIsDetailsCollapsed(false);
+    setReviewAction(null);
+    setReviewNote('');
+    setSubmissionMessage('');
+    setSubmissionLink('');
+    clearMedia();
+  };
+
+  const toggleExpand = () => {
+    setIsDetailsCollapsed((prev) => !prev);
+  };
+
+  // Submission History Modal Popup State
+  const [historyModalMilestoneId, setHistoryModalMilestoneId] = useState<string | null>(null);
+
+  // Expanded Media / Document Preview Popup Modal State
+  const [expandedMedia, setExpandedMedia] = useState<{
+    url: string;
+    type: 'image' | 'video' | 'pdf' | 'doc';
+    name?: string;
+  } | null>(null);
+
   // Contributor Submit Form State
   const [submissionMessage, setSubmissionMessage] = useState('');
   const [submissionLink, setSubmissionLink] = useState('');
   const [isReadyForReview, setIsReadyForReview] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Client Review Form State
-  const [reviewAction, setReviewAction] = useState<'approval' | 'revision_request' | 'client_message' | null>(null);
+  // Deliverable Media / File Uploads
+  const {
+    mediaList,
+    removeMedia,
+    clearMedia,
+    openFilePicker,
+    handleFileChange,
+    fileInputRef,
+  } = useInboxUploadMedia(5);
+
+  // Client Review Form State ('approval' | 'revision_request')
+  const [reviewAction, setReviewAction] = useState<'approval' | 'revision_request' | null>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  const toggleExpand = (id: string) => {
-    setExpandedMilestoneId((prev) => (prev === id ? null : id));
-    setReviewAction(null);
-    setReviewNote('');
-    setSubmissionMessage('');
-    setSubmissionLink('');
+  // Helper to render attachment links & file chips (opens preview popup for media/pdf)
+  const renderAttachmentChip = (att: string, aIdx: number) => {
+    const isHttp = /^https?:\/\//i.test(att);
+    const resolvedUrl = chatAttachmentUrl(att);
+    const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att);
+    const isVideo = /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(att);
+    const isPdf = /\.pdf(\?.*)?$/i.test(att);
+    const isDoc = /\.(docx?|xlsx?|pptx?|zip|txt)(\?.*)?$/i.test(att);
+
+    let displayName = att;
+    if (!isHttp) {
+      const rawName = att.split('/').pop() || `Attachment #${aIdx + 1}`;
+      displayName = rawName.replace(/^\d+[-_]/, '');
+    }
+
+    const mediaType = isImage ? 'image' : isVideo ? 'video' : isPdf ? 'pdf' : isDoc ? 'doc' : null;
+
+    if (mediaType) {
+      return (
+        <button
+          key={aIdx}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setExpandedMedia({
+              url: resolvedUrl,
+              type: mediaType,
+              name: displayName,
+            });
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 transition shadow-2xs group cursor-pointer"
+        >
+          {isImage ? (
+            <FileText className="w-3.5 h-3.5 text-blue-500" />
+          ) : isVideo ? (
+            <Film className="w-3.5 h-3.5 text-purple-500" />
+          ) : isPdf ? (
+            <FileText className="w-3.5 h-3.5 text-rose-500" />
+          ) : (
+            <FileText className="w-3.5 h-3.5 text-zinc-500" />
+          )}
+          <span className="truncate max-w-[220px]">{displayName}</span>
+          <span className="text-[10px] text-zinc-400 font-normal">Preview</span>
+        </button>
+      );
+    }
+
+    return (
+      <a
+        key={aIdx}
+        href={resolvedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 transition shadow-2xs group"
+      >
+        <ExternalLink className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+        <span className="truncate max-w-[220px]">{displayName}</span>
+        <ExternalLink className="w-3 h-3 text-zinc-400 shrink-0" />
+      </a>
+    );
+  };
+
+  // Switch to Team Workspace Channel chat with milestone context indicator
+  const handleSendFeedbackInChat = (m: MilestoneData, mIdx: number) => {
+    const prefill = `💬 Regarding M${mIdx + 1} Deliverable (${m.milestone_title}): `;
+    sessionStorage.setItem('team_chat_prefill', prefill);
+    if (onNavigateTab) {
+      onNavigateTab('chat');
+    } else {
+      const searchParams = new URLSearchParams(window.location.search);
+      searchParams.set('tab', 'chat');
+      window.history.pushState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
   };
 
   // Check if current user is the assignee of the milestone
@@ -130,38 +250,30 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     const messageText = submissionMessage.trim();
     const linkText = submissionLink.trim();
 
-    if (!messageText && !linkText) {
-      showErrorToast('Please enter deliverable notes or attach a link to your work.');
+    if (!messageText && !linkText && mediaList.length === 0) {
+      showErrorToast('Please enter deliverable notes, attach files, or provide a link to your work.');
       return;
-    }
-
-    const fullMessage = linkText
-      ? `${messageText ? `${messageText}\n\n` : ''}Deliverable Link: ${linkText}`
-      : messageText;
-
-    const attachments = linkText ? [linkText] : [];
-
-    // Milestone Task Completion Gate: cannot submit for review unless all tasks for this milestone are done
-    if (isReadyForReview) {
-      const milestoneTasks = (tasks || []).filter(
-        (t) => t.job_milestone_id && String(t.job_milestone_id) === String(m.job_milestone_id)
-      );
-      const incompleteTasks = milestoneTasks.filter(
-        (t) => t.status !== 'completed' && t.status !== 'review'
-      );
-      if (incompleteTasks.length > 0) {
-        showErrorToast(
-          `Cannot submit deliverable for review: All milestone tasks must be completed first (${incompleteTasks.length} task(s) still open).`
-        );
-        return;
-      }
     }
 
     setIsSubmitting(true);
     try {
+      // 1. Upload attached media files (images, video, pdf, docs)
+      const uploadPromises = mediaList.map(async (media) => {
+        const { key } = await uploadFileWithIntent(media.file, 'documents');
+        return key;
+      });
+
+      const uploadedKeys = await Promise.all(uploadPromises);
+
+      // 2. Assemble all attachments
+      const allAttachments = [...uploadedKeys];
+      if (linkText) {
+        allAttachments.push(linkText);
+      }
+
       await api.post(`/api/dashboard/tasks/${m.contract_id}/milestones/${m.contract_milestone_id}/submit`, {
-        message: fullMessage,
-        attachments,
+        message: messageText || (allAttachments.length > 0 ? 'Deliverable files submitted.' : ''),
+        attachments: allAttachments,
         status: isReadyForReview ? 'submitted_for_review' : 'progress',
       });
 
@@ -172,6 +284,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
       );
       setSubmissionMessage('');
       setSubmissionLink('');
+      clearMedia();
       onUpdated();
     } catch (err: any) {
       showErrorToast(err?.response?.data?.message || 'Failed to submit deliverable');
@@ -180,8 +293,13 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     }
   };
 
-  // Client reviews deliverable (approval, revision_request, client_message)
-  const handleClientReview = async (m: MilestoneData, action: 'approval' | 'revision_request' | 'client_message') => {
+  // Client reviews deliverable (approval, revision_request with optional additional work rate)
+  const handleClientReview = async (
+    m: MilestoneData,
+    action: 'approval' | 'revision_request',
+    isPaid?: boolean,
+    priceCredits?: number
+  ) => {
     if (!m.contract_id || !m.contract_milestone_id) {
       showErrorToast('Milestone contract reference not found.');
       return;
@@ -194,8 +312,16 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
     setIsSubmittingReview(true);
     try {
+      if (action === 'revision_request' && isPaid) {
+        // First purchase the additional revision to hold agreed additional work rate in escrow
+        const idempotencyKey = crypto.randomUUID();
+        await api.post(`/api/dashboard/tasks/${m.contract_id}/milestones/${m.contract_milestone_id}/buy-revision`, {
+          idempotency_key: idempotencyKey,
+        });
+      }
+
       const payload: any = {
-        message: reviewNote.trim() || (action === 'approval' ? 'Deliverable approved!' : 'Client review note'),
+        message: reviewNote.trim() || 'Deliverable approved!',
         attachments: [],
         status: action,
       };
@@ -204,10 +330,10 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
       if (action === 'approval') {
         showSuccessToast('Deliverable approved! Escrow payment released to contributor.');
-      } else if (action === 'revision_request') {
-        showSuccessToast('Revision requested. Contributor has been notified.');
+      } else if (isPaid) {
+        showSuccessToast(`Additional revision requested! Escrow holds +${priceCredits || 35} credits for the contributor.`);
       } else {
-        showSuccessToast('Message sent to contributor.');
+        showSuccessToast('Revision requested. Contributor has been notified.');
       }
 
       setReviewAction(null);
@@ -230,74 +356,204 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
   ).length;
   const totalEscrowCredits = milestones.reduce((sum, m) => sum + (Number(m.budget_credits) || 0), 0);
+  const selectedMilestone =
+    milestones.find((m) => m.job_milestone_id === selectedMilestoneId) || milestones[0] || null;
+  const selectedMilestoneIndex = selectedMilestone
+    ? milestones.findIndex((m) => m.job_milestone_id === selectedMilestone.job_milestone_id)
+    : 0;
+  const historyModalMilestone =
+    milestones.find((m) => m.job_milestone_id === historyModalMilestoneId) || null;
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Station Intro */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800/80">
-          <div className="space-y-1">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* LEFT: Deliverables & Submissions Review Station */}
+      <div className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-6 space-y-4">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs space-y-4">
+          <div className="space-y-2 pb-4 border-b border-zinc-100 dark:border-zinc-800/80">
             <div className="flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <FileCheck className="w-5 h-5 text-zinc-900 dark:text-white shrink-0" />
               <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
                 Deliverables & Submissions Review Station
               </h3>
             </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
               Where contributors submit completed milestone deliverables and the client inspects work, requests revisions, or approves payment release.
             </p>
+            <div className="pt-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>100% Escrow Secured</span>
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>100% Escrow Secured</span>
-            </span>
+          {/* 3 Metric Summary Boxes Stacked */}
+          <div className="space-y-3">
+            <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                  Milestones Approved
+                </span>
+                <span className="text-lg font-bold text-zinc-900 dark:text-white">
+                  {completedCount} / {totalCount}
+                </span>
+              </div>
+              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                  Pending Client Review
+                </span>
+                <span className="text-lg font-bold text-zinc-900 dark:text-white">
+                  {underReviewCount} {underReviewCount === 1 ? 'Milestone' : 'Milestones'}
+                </span>
+              </div>
+              <Clock className={`w-6 h-6 ${underReviewCount > 0 ? 'text-amber-500 animate-pulse' : 'text-zinc-400 dark:text-zinc-500'}`} />
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                  Total Deliverables Escrow
+                </span>
+                <span className="text-lg font-bold text-zinc-900 dark:text-white">
+                  {totalEscrowCredits.toLocaleString()} Credits
+                </span>
+              </div>
+              <Sparkles className="w-6 h-6 text-zinc-500 dark:text-zinc-400" />
+            </div>
+
+            {/* Milestone Switcher Navigation on Left */}
+            {milestones.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Switch Milestone ({milestones.length})
+                  </span>
+                  <span className="text-[10px] text-zinc-400">
+                    Select to view
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {milestones.map((mItem, mIdx) => {
+                    const isSelected = mItem.job_milestone_id === (selectedMilestone?.job_milestone_id);
+                    const statusLower = String(mItem.milestone_status || '').toLowerCase();
+                    const isApp = statusLower === 'completed' || statusLower === 'approved';
+                    const isRev = statusLower === 'submitted_for_review';
+                    const isReq = statusLower === 'revision_requested' || statusLower === 'revisions_requested';
+
+                    return (
+                      <button
+                        key={mItem.job_milestone_id || mIdx}
+                        type="button"
+                        onClick={() => handleSelectMilestone(mItem.job_milestone_id)}
+                        className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                          isSelected
+                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
+                            : 'bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-6 h-6 rounded-md font-mono font-bold text-[11px] flex items-center justify-center shrink-0 border ${
+                              isSelected
+                                ? 'bg-zinc-800 text-white border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-300'
+                                : 'bg-white text-zinc-800 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700'
+                            }`}
+                          >
+                            M{mIdx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className={`text-xs font-bold truncate ${isSelected ? 'text-white dark:text-zinc-950' : 'text-zinc-900 dark:text-white'}`}>
+                              {mItem.milestone_title || `Milestone ${mIdx + 1}`}
+                            </p>
+                            <p className={`text-[10px] truncate ${isSelected ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                              {isApp
+                                ? 'Approved'
+                                : isRev
+                                ? 'Awaiting Review'
+                                : isReq
+                                ? 'Revision Requested'
+                                : mItem.is_current
+                                ? 'In Progress'
+                                : 'Upcoming'}
+                              {' • '}
+                              {Number(mItem.budget_credits || mItem.milestone_credits || 0).toLocaleString()} cr
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {isApp ? (
+                            <CheckCircle2 className={`w-4 h-4 ${isSelected ? 'text-emerald-400 dark:text-emerald-600' : 'text-emerald-600 dark:text-emerald-400'}`} />
+                          ) : isRev ? (
+                            <Clock className={`w-4 h-4 ${isSelected ? 'text-amber-300 dark:text-amber-600' : 'text-amber-500'}`} />
+                          ) : (
+                            <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-400'}`} />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Submission & Audit History Button on Left */}
+            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = selectedMilestone?.job_milestone_id || milestones[0]?.job_milestone_id || null;
+                  setHistoryModalMilestoneId(targetId);
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-100/70 hover:bg-zinc-200/70 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white transition cursor-pointer shadow-2xs group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 group-hover:scale-105 transition">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-xs font-bold block text-zinc-900 dark:text-white">
+                      Submission History
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      Open deliverable & audit records
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-0.5 transition shrink-0" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* 3 Metric Summary Boxes */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
-                Milestones Approved
-              </span>
-              <span className="text-lg font-bold text-zinc-900 dark:text-white">
-                {completedCount} / {totalCount}
-              </span>
-            </div>
-            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
-                Pending Client Review
-              </span>
-              <span className="text-lg font-bold text-zinc-900 dark:text-white">
-                {underReviewCount} {underReviewCount === 1 ? 'Milestone' : 'Milestones'}
+        {/* Active Milestone Scope & Requirements on Left */}
+        {selectedMilestone?.milestone_description && (
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-5 shadow-xs space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800/80">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                  M{selectedMilestoneIndex + 1} Scope & Requirements
+                </h4>
+              </div>
+              <span className="text-[10px] font-semibold text-zinc-400">
+                Brief
               </span>
             </div>
-            <Clock className={`w-6 h-6 ${underReviewCount > 0 ? 'text-amber-500 animate-pulse' : 'text-zinc-400 dark:text-zinc-500'}`} />
+            <p className="text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed font-normal">
+              {selectedMilestone.milestone_description}
+            </p>
           </div>
-
-          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
-                Total Deliverables Escrow
-              </span>
-              <span className="text-lg font-bold text-zinc-900 dark:text-white">
-                {totalEscrowCredits.toLocaleString()} Credits
-              </span>
-            </div>
-            <Sparkles className="w-6 h-6 text-blue-500" />
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Milestones Deliverable List */}
-      <div className="space-y-4">
+      {/* RIGHT: Collapsible Milestones Deliverables List */}
+      <div className="lg:col-span-8 xl:col-span-8 space-y-4">
         {milestones.length === 0 ? (
           <div className="p-12 text-center bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <FileText className="w-10 h-10 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
@@ -306,9 +562,11 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
               This team project workspace does not have any milestone deliverables configured yet.
             </p>
           </div>
-        ) : (
-          milestones.map((m, idx) => {
-            const isExpanded = expandedMilestoneId === m.job_milestone_id;
+        ) : selectedMilestone ? (
+          (() => {
+            const m = selectedMilestone;
+            const idx = selectedMilestoneIndex;
+            const isExpanded = !isDetailsCollapsed;
             const statusLower = String(m.milestone_status || '').toLowerCase();
             const isApproved = statusLower === 'completed' || statusLower === 'approved';
             const isUnderReview = statusLower === 'submitted_for_review';
@@ -319,33 +577,97 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
             const canSubmit = !isClient && (isAssignee || !m.assignee_account_id) && !isApproved;
             const canReview = isClient && isUnderReview;
 
-            const maxRevisions = m.no_of_revisions_max !== undefined ? m.no_of_revisions_max : 2;
-            const usedRevisions = m.revisions_used || 0;
-            const remainingRevisions = Math.max(0, maxRevisions - usedRevisions);
-
             const submissionsList = Array.isArray(m.submissions) ? m.submissions : [];
             const latestSubmission = submissionsList[0];
 
+            const recordedRevisionsCount = submissionsList.filter(
+              (s) => s.status === 'revision_request' || s.status === 'revision_requested'
+            ).length;
+            const maxRevisions = m.no_of_revisions_max !== undefined ? m.no_of_revisions_max : 2;
+            const usedRevisions = Math.max(Number(m.revisions_used || 0), recordedRevisionsCount);
+            const remainingRevisions = Math.max(0, maxRevisions - usedRevisions);
+            const contractForMilestone = contracts.find((c) => c.contract_id === m.contract_id);
+            const additionalRate = Number(m.revision_price_credits || contractForMilestone?.revision_price_credits || 35);
+
+            const isRejectedOrRevisionRequested =
+              !isApproved &&
+              (isRevisionRequested ||
+                latestSubmission?.status === 'revision_request' ||
+                latestSubmission?.status === 'revision_requested');
+
+            const latestRevisionEntry = submissionsList.find(
+              (s) => s.status === 'revision_request' || s.status === 'revision_requested'
+            );
+
             return (
-              <div
-                key={m.job_milestone_id || idx}
-                className={`bg-white dark:bg-zinc-900 rounded-xl border transition-all duration-200 shadow-xs overflow-hidden ${
-                  isUnderReview
-                    ? 'border-amber-300 dark:border-amber-600/60 ring-1 ring-amber-400/20'
-                    : isExpanded
-                    ? 'border-blue-400 dark:border-blue-500/60 shadow-md'
-                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-                }`}
-              >
-                {/* Milestone Accordion Header */}
+              <div className="space-y-4">
+                {/* Top Quick-Switcher Bar when there are multiple milestones */}
+                {milestones.length > 1 && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs">
+                    <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pr-2">
+                      {milestones.map((mItem, mIdx) => {
+                        const isSelected = mItem.job_milestone_id === m.job_milestone_id;
+                        return (
+                          <button
+                            key={mItem.job_milestone_id || mIdx}
+                            type="button"
+                            onClick={() => handleSelectMilestone(mItem.job_milestone_id)}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-2xs'
+                                : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-300'
+                            }`}
+                          >
+                            <span className="font-mono font-bold text-[11px]">M{mIdx + 1}</span>
+                            <span className="truncate max-w-[140px] sm:max-w-[200px]">{mItem.milestone_title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={idx <= 0}
+                        onClick={() => handleSelectMilestone(milestones[idx - 1].job_milestone_id)}
+                        className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                        title="Previous Milestone"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx >= milestones.length - 1}
+                        onClick={() => handleSelectMilestone(milestones[idx + 1].job_milestone_id)}
+                        className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                        title="Next Milestone"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Milestone Card */}
                 <div
-                  onClick={() => toggleExpand(m.job_milestone_id)}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition"
+                  key={m.job_milestone_id || idx}
+                  className={`bg-white dark:bg-zinc-900 rounded-xl border transition-all duration-200 shadow-xs overflow-hidden ${
+                    isUnderReview
+                      ? 'border-amber-300 dark:border-amber-600/60 ring-1 ring-amber-400/20'
+                      : isExpanded
+                      ? 'border-zinc-300 dark:border-zinc-700 shadow-sm'
+                      : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                  }`}
                 >
+                  {/* Milestone Accordion Header */}
+                  <div
+                    onClick={toggleExpand}
+                    className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition"
+                  >
                   <div className="flex items-start gap-3.5 min-w-0">
                     {/* Index Badge */}
-                    <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 flex items-center justify-center font-mono font-bold text-xs shrink-0 mt-0.5">
-                      {idx + 1}
+                    <div className="px-2.5 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 flex items-center justify-center font-mono font-bold text-xs shrink-0 mt-0.5 border border-zinc-200 dark:border-zinc-700">
+                      M{idx + 1}
                     </div>
 
                     <div className="min-w-0 space-y-1">
@@ -409,6 +731,18 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                         <span>
                           Revisions: {remainingRevisions} / {maxRevisions} remaining
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHistoryModalMilestoneId(m.job_milestone_id);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition cursor-pointer"
+                        >
+                          <History className="w-3 h-3 text-zinc-500" />
+                          <span>History ({submissionsList.length})</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -433,15 +767,36 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                 {/* Expanded Details Body */}
                 {isExpanded && (
                   <div className="p-5 border-t border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/20 space-y-6">
-                    {/* Milestone Project Brief / Description */}
-                    {m.milestone_description && (
-                      <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-xs leading-relaxed space-y-1">
-                        <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-500 dark:text-zinc-400 block">
-                          Milestone Scope & Requirements
-                        </span>
-                        <p className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
-                          {m.milestone_description}
-                        </p>
+                    {/* Rejected / Revision Requested One-Line Clickable Indicator */}
+                    {isRejectedOrRevisionRequested && (
+                      <div
+                        onClick={() => setHistoryModalMilestoneId(m.job_milestone_id)}
+                        className="p-3 sm:px-4 rounded-xl border border-rose-300 dark:border-rose-900/70 bg-rose-50/70 dark:bg-rose-950/30 hover:bg-rose-100/70 dark:hover:bg-rose-950/50 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition cursor-pointer shadow-2xs group"
+                        title="Click to view full revision feedback in submission history"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-900/60 dark:text-rose-200 dark:border-rose-800 shrink-0 flex items-center gap-1">
+                            <RotateCcw className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                            <span>Revision Requested</span>
+                          </span>
+
+                          <span className="text-zinc-800 dark:text-zinc-200 truncate font-medium">
+                            {latestRevisionEntry?.message ? (
+                              <>
+                                <span className="text-zinc-500 dark:text-zinc-400 font-normal">Feedback: </span>
+                                &ldquo;{latestRevisionEntry.message}&rdquo;
+                              </>
+                            ) : (
+                              <span>Client requested revisions before approving this milestone.</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300 shrink-0 group-hover:underline">
+                          <History className="w-3.5 h-3.5" />
+                          <span>View in Submission History</span>
+                          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
+                        </div>
                       </div>
                     )}
 
@@ -449,28 +804,88 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                     {/* 1. CLIENT REVIEW ACTION PANEL (WHEN SUBMITTED FOR REVIEW) */}
                     {/* ========================================================= */}
                     {isClient && isUnderReview && (
-                      <div className="p-5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 shadow-sm space-y-4">
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                            <Clock className="w-5 h-5 animate-pulse" />
-                          </div>
-                          <div className="space-y-0.5">
-                            <h5 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                              Client Action Required: Deliverable Submitted for Review
+                      <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border-2 border-zinc-300 dark:border-zinc-700 shadow-xs space-y-4">
+                        {/* Header Banner */}
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
+                            <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                              Deliverable Review & Approval
                             </h5>
-                            <p className="text-xs text-amber-800 dark:text-amber-300">
-                              The contributor has submitted work for this deliverable. Please inspect the submission below and choose to approve and release escrow, or request revisions.
-                            </p>
                           </div>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                            Awaiting Your Review
+                          </span>
                         </div>
 
-                        {/* Review Buttons */}
+                        {/* Submitted Deliverable Details to Inspect */}
+                        {latestSubmission ? (
+                          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                Latest Submitted Deliverable
+                              </span>
+                              {latestSubmission.submitted_at && (
+                                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                  {new Date(latestSubmission.submitted_at).toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            {latestSubmission.message && (
+                              <p className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed font-normal">
+                                {latestSubmission.message}
+                              </p>
+                            )}
+                            {Array.isArray(latestSubmission.attachments) && latestSubmission.attachments.length > 0 && (
+                              <div className="space-y-2 pt-1">
+                                {/* Thumbnail previews for image attachments */}
+                                {latestSubmission.attachments.filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att)).length > 0 && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {latestSubmission.attachments
+                                      .filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att))
+                                      .map((att, imgIdx) => (
+                                        <button
+                                          key={imgIdx}
+                                          type="button"
+                                          onClick={() =>
+                                            setExpandedMedia({
+                                              url: chatAttachmentUrl(att),
+                                              type: 'image',
+                                              name: att.split('/').pop()?.replace(/^\d+[-_]/, '') || 'Image Preview',
+                                            })
+                                          }
+                                          className="relative group rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 transition shadow-2xs cursor-pointer"
+                                        >
+                                          <img
+                                            src={chatAttachmentUrl(att)}
+                                            alt="Deliverable image preview"
+                                            className="h-16 w-auto max-w-[140px] object-cover rounded-xl group-hover:scale-105 transition"
+                                          />
+                                        </button>
+                                      ))}
+                                  </div>
+                                )}
+
+                                {/* Attachment chips */}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {latestSubmission.attachments.map((att, aIdx) => renderAttachmentChip(att, aIdx))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            The contributor has marked this milestone as submitted for your review.
+                          </p>
+                        )}
+
+                        {/* Action Buttons or Active Form */}
                         {reviewAction === null ? (
-                          <div className="flex flex-wrap items-center gap-3 pt-2">
+                          <div className="flex flex-wrap items-center gap-2.5 pt-1">
                             <button
                               type="button"
                               onClick={() => setReviewAction('approval')}
-                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:scale-98 transition shadow-xs cursor-pointer"
+                              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:scale-98 transition shadow-xs cursor-pointer"
                             >
                               <CheckCircle2 className="w-4 h-4" />
                               <span>Approve & Release Payment ({Number(m.budget_credits || 0).toLocaleString()} Credits)</span>
@@ -479,32 +894,35 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                             <button
                               type="button"
                               onClick={() => setReviewAction('revision_request')}
-                              disabled={remainingRevisions <= 0}
-                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/50 hover:bg-amber-200 border border-amber-300 dark:border-amber-700 active:scale-98 transition shadow-2xs cursor-pointer disabled:opacity-50"
+                              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-800 dark:text-zinc-200 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 active:scale-98 transition shadow-2xs cursor-pointer"
                             >
-                              <RotateCcw className="w-4 h-4" />
-                              <span>Request Revisions ({remainingRevisions} left)</span>
+                              <RotateCcw className="w-4 h-4 text-zinc-500" />
+                              {remainingRevisions > 0 ? (
+                                <span>Request Revisions ({remainingRevisions} left)</span>
+                              ) : (
+                                <span>Request Additional Revision (+{additionalRate} Credits)</span>
+                              )}
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => setReviewAction('client_message')}
-                              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-100 border border-zinc-200 dark:border-zinc-700 transition shadow-2xs cursor-pointer"
+                              onClick={() => handleSendFeedbackInChat(m, idx)}
+                              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 transition shadow-2xs cursor-pointer"
+                              title="Discuss this deliverable directly in the Team Workspace Channel chat"
                             >
-                              <MessageSquare className="w-4 h-4" />
-                              <span>Send Feedback Message</span>
+                              <MessageCircle className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                              <span>Discuss in Team Chat</span>
                             </button>
                           </div>
                         ) : (
-                          /* Detailed Action Confirmation / Input Form */
-                          <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-800/60 space-y-3">
+                          <div className="p-4 rounded-xl bg-zinc-50/60 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 space-y-3">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold text-zinc-900 dark:text-white">
                                 {reviewAction === 'approval'
                                   ? 'Confirm Deliverable Approval & Escrow Release'
-                                  : reviewAction === 'revision_request'
-                                  ? 'Detail Changes Required for Revision'
-                                  : 'Send Feedback Message'}
+                                  : remainingRevisions <= 0
+                                  ? 'Request Additional Revision (Paid Work Rate)'
+                                  : 'Detail Changes Required for Revision'}
                               </span>
                               <button
                                 type="button"
@@ -512,42 +930,58 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                   setReviewAction(null);
                                   setReviewNote('');
                                 }}
-                                className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
                               >
                                 Cancel
                               </button>
                             </div>
 
                             {reviewAction === 'approval' ? (
-                              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                                 Are you sure you want to approve this milestone? Approving will mark this deliverable as completed and automatically release{' '}
                                 <strong className="text-zinc-900 dark:text-white">{Number(m.budget_credits || 0).toLocaleString()} credits</strong> from escrow directly to the contributor.
                               </p>
                             ) : (
-                              <textarea
-                                value={reviewNote}
-                                onChange={(e) => setReviewNote(e.target.value)}
-                                rows={3}
-                                placeholder={
-                                  reviewAction === 'revision_request'
-                                    ? 'Specify clearly what revisions or changes are needed before this deliverable can be approved...'
-                                    : 'Write your message to the contributor...'
-                                }
-                                className="w-full text-xs p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500 resize-none"
-                              />
+                              <div className="space-y-2.5">
+                                {remainingRevisions <= 0 && (
+                                  <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-xs space-y-1">
+                                    <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200">
+                                      <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                      <span>Additional Work Rate Applies</span>
+                                      <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-mono">
+                                        +{additionalRate} Credits
+                                      </span>
+                                    </div>
+                                    <p className="text-amber-800/90 dark:text-amber-300/80 text-[11px] leading-relaxed font-normal">
+                                      You have used all {maxRevisions} included revisions. Requesting this revision will charge the agreed additional work rate of <strong className="text-amber-950 dark:text-white">{additionalRate} credits</strong> from your wallet into escrow for the contributor.
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="space-y-1.5">
+                                  <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase">
+                                    Revision Notes & Specific Changes Needed *
+                                  </label>
+                                  <textarea
+                                    value={reviewNote}
+                                    onChange={(e) => setReviewNote(e.target.value)}
+                                    rows={4}
+                                    placeholder="Specify clearly what revisions or changes are needed before this deliverable can be approved..."
+                                    className="w-full text-xs p-3.5 rounded-xl bg-white dark:bg-zinc-950 border-2 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 dark:focus:border-white transition resize-y min-h-[90px] shadow-2xs font-normal"
+                                  />
+                                </div>
+                              </div>
                             )}
 
                             <div className="flex items-center gap-2 pt-1">
                               <button
                                 type="button"
                                 disabled={isSubmittingReview || (reviewAction === 'revision_request' && !reviewNote.trim())}
-                                onClick={() => handleClientReview(m, reviewAction)}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition cursor-pointer disabled:opacity-50 ${
+                                onClick={() => handleClientReview(m, reviewAction, remainingRevisions <= 0, additionalRate)}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 shadow-xs ${
                                   reviewAction === 'approval'
-                                    ? 'bg-emerald-600 hover:bg-emerald-500'
-                                    : reviewAction === 'revision_request'
-                                    ? 'bg-amber-600 hover:bg-amber-500'
-                                    : 'bg-blue-600 hover:bg-blue-500'
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                    : 'bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100'
                                 }`}
                               >
                                 {isSubmittingReview ? (
@@ -557,10 +991,10 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                   </span>
                                 ) : reviewAction === 'approval' ? (
                                   'Yes, Release Escrow & Approve'
-                                ) : reviewAction === 'revision_request' ? (
-                                  'Send Revision Request'
+                                ) : remainingRevisions <= 0 ? (
+                                  `Pay ${additionalRate} Credits & Request Revision`
                                 ) : (
-                                  'Send Message'
+                                  'Send Revision Request'
                                 )}
                               </button>
 
@@ -570,7 +1004,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                   setReviewAction(null);
                                   setReviewNote('');
                                 }}
-                                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
                               >
                                 Cancel
                               </button>
@@ -584,51 +1018,133 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                     {/* 2. CONTRIBUTOR SUBMISSION FORM (WHEN READY TO SUBMIT)     */}
                     {/* ========================================================= */}
                     {canSubmit && (
-                      <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-900/60 shadow-xs space-y-4">
-                        <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                      <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border-2 border-zinc-300 dark:border-zinc-700 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
                           <div className="flex items-center gap-2">
-                            <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <Send className="w-4 h-4 text-zinc-900 dark:text-white" />
                             <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
-                              {isUnderReview ? 'Submit Additional Update / Work Link' : 'Submit Deliverable for Client Review'}
+                              {isUnderReview ? 'Submit Additional Deliverable Update' : 'Submit Deliverable for Client Review'}
                             </h5>
                           </div>
-                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700">
                             Escrow: {Number(m.budget_credits || 0).toLocaleString()} Credits
                           </span>
                         </div>
 
-                        {isRevisionRequested && (
-                          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-xs text-rose-900 dark:text-rose-200">
-                            <strong>Client Revision Requested:</strong> Please address the requested revisions below and re-submit your updated deliverable when ready.
-                          </div>
-                        )}
-
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           <div>
-                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
-                              Submission Notes & Summary *
-                            </label>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <span>Deliverable Notes & Summary</span>
+                                <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700">Required</span>
+                              </label>
+                              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">Plain text or instructions</span>
+                            </div>
                             <textarea
                               value={submissionMessage}
                               onChange={(e) => setSubmissionMessage(e.target.value)}
-                              placeholder="Describe what was accomplished, deliverables completed, release notes, or instructions for the client..."
-                              rows={3}
-                              className="w-full text-xs p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
+                              placeholder="Type deliverable details here: describe what was built, changes made, release notes, or instructions for client verification..."
+                              rows={4}
+                              className="w-full text-xs p-3.5 rounded-xl bg-white dark:bg-zinc-950 border-2 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 dark:focus:border-white transition resize-y min-h-[100px] shadow-2xs font-normal"
                             />
                           </div>
 
+                          {/* Deliverable File Uploads (Images, Videos, PDF, Docs) */}
                           <div>
-                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
-                              Deliverable Link or Repository URL (Optional)
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <ExternalLink className="w-4 h-4 text-zinc-400 ml-2 absolute pointer-events-none" />
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <span>Attach Deliverable Files</span>
+                                <span className="text-[10px] font-medium text-zinc-400">Optional • Max 5 files</span>
+                              </label>
+                              {mediaList.length > 0 && (
+                                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                                  {mediaList.length} of 5 attached
+                                </span>
+                              )}
+                            </div>
+
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              multiple
+                              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                              className="hidden"
+                              onChange={handleFileChange}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={openFilePicker}
+                              disabled={isSubmitting || mediaList.length >= 5}
+                              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-950/40 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/60 text-zinc-700 dark:text-zinc-300 text-xs font-medium transition cursor-pointer disabled:opacity-50"
+                            >
+                              <Paperclip className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                              <span>Click to browse and attach images, videos, or PDFs</span>
+                            </button>
+
+                            {/* Previews of attached media before submission */}
+                            {mediaList.length > 0 && (
+                              <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {mediaList.map((media) => (
+                                  <div
+                                    key={media.id}
+                                    className="flex items-center gap-2.5 p-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 shadow-2xs"
+                                  >
+                                    {media.type === 'image' || media.type === 'gif' ? (
+                                      <img
+                                        src={media.previewUrl}
+                                        alt={media.file.name}
+                                        className="w-10 h-10 rounded-lg object-cover border border-zinc-200 dark:border-zinc-800 shrink-0"
+                                      />
+                                    ) : media.type === 'video' ? (
+                                      <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 text-zinc-600 dark:text-zinc-300">
+                                        <Film className="w-5 h-5" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 text-zinc-600 dark:text-zinc-300">
+                                        <FileText className="w-5 h-5" />
+                                      </div>
+                                    )}
+
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                                        {media.file.name}
+                                      </p>
+                                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                                        {(media.file.size / (1024 * 1024)).toFixed(2)} MB
+                                      </p>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => removeMedia(media.id)}
+                                      className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition cursor-pointer"
+                                      title="Remove file"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Deliverable External URL / Link */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <span>External Link / Live Demo / Prototype</span>
+                                <span className="text-[10px] font-medium text-zinc-400">Optional</span>
+                              </label>
+                            </div>
+                            <div className="relative flex items-center">
+                              <ExternalLink className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
                               <input
                                 type="url"
                                 value={submissionLink}
                                 onChange={(e) => setSubmissionLink(e.target.value)}
-                                placeholder="https://github.com/... or https://figma.com/... or Google Drive link"
-                                className="w-full text-xs pl-8 pr-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                placeholder="https://... (e.g. Figma prototype, live demo, Google Drive, or repository link)"
+                                className="w-full text-xs pl-10 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border-2 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 dark:focus:border-white transition shadow-2xs"
                               />
                             </div>
                           </div>
@@ -645,39 +1161,26 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                             return (
                               <>
                                 {isReadyForReview && hasIncompleteTasks && (
-                                  <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-2">
-                                    <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
-                                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                                      <span>Milestone Tasks Must Be Completed Before Client Review</span>
-                                    </div>
-                                    <p className="text-[11px] leading-relaxed">
-                                      You cannot submit this milestone deliverable for client review until all tasks assigned to this milestone are marked as completed.
-                                    </p>
-                                    <div className="pt-0.5">
-                                      <span className="font-semibold text-[11px] text-amber-900 dark:text-amber-200">
-                                        Remaining tasks to complete ({incompleteTasks.length}):
-                                      </span>
-                                      <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] opacity-95">
-                                        {incompleteTasks.map((task) => (
-                                          <li key={task.task_id} className="truncate">
-                                            <span className="font-semibold text-zinc-900 dark:text-white">{task.title}</span>
-                                            <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase">
-                                              [{task.status === 'in_progress' ? 'IN PROGRESS' : 'TO DO'}]
-                                            </span>
-                                          </li>
-                                        ))}
-                                      </ul>
+                                  <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 flex items-start gap-2.5">
+                                    <Info className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />
+                                    <div className="space-y-0.5">
+                                      <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                                        Taskboard Note: {incompleteTasks.length} task(s) still open
+                                      </p>
+                                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                                        Internal tasks do not block your submission. You can submit your deliverable for client review whenever ready.
+                                      </p>
                                     </div>
                                   </div>
                                 )}
 
-                                <div className="flex items-center justify-between pt-2">
-                                  <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer select-none">
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                                  <label className="flex items-center gap-2.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 cursor-pointer select-none">
                                     <input
                                       type="checkbox"
                                       checked={isReadyForReview}
                                       onChange={(e) => setIsReadyForReview(e.target.checked)}
-                                      className="rounded border-zinc-300 text-blue-600 focus:ring-0"
+                                      className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-0 cursor-pointer accent-zinc-900 dark:accent-white"
                                     />
                                     <span>Mark deliverable as Ready for Client Review</span>
                                   </label>
@@ -686,21 +1189,15 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                     type="button"
                                     disabled={
                                       isSubmitting ||
-                                      (!submissionMessage.trim() && !submissionLink.trim()) ||
-                                      (isReadyForReview && hasIncompleteTasks)
+                                      (!submissionMessage.trim() && !submissionLink.trim() && mediaList.length === 0)
                                     }
                                     onClick={() => handleDeliverableSubmit(m)}
-                                    title={
-                                      isReadyForReview && hasIncompleteTasks
-                                        ? 'All tasks for this milestone must be completed before submitting for client review'
-                                        : undefined
-                                    }
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-98 transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100 active:scale-98 transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                                   >
                                     {isSubmitting ? (
                                       <span className="flex items-center gap-1.5">
                                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                        Submitting...
+                                        {mediaList.length > 0 ? 'Uploading files & submitting...' : 'Submitting...'}
                                       </span>
                                     ) : (
                                       <>
@@ -718,110 +1215,346 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                     )}
 
                     {/* ========================================================= */}
-                    {/* 3. SUBMISSION TIMELINE & AUDIT HISTORY                    */}
+                    {/* 3. SUBMISSION TIMELINE TRIGGER BAR                        */}
                     {/* ========================================================= */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h6 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                          <History className="w-3.5 h-3.5 text-zinc-400" />
-                          <span>Submission & Review History ({submissionsList.length})</span>
-                        </h6>
-                      </div>
-
-                      {submissionsList.length === 0 ? (
-                        <div className="p-4 text-center rounded-xl bg-white dark:bg-zinc-900 border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 text-xs">
-                          No submissions recorded yet for this deliverable.
-                        </div>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {submissionsList.map((sub, sIdx) => {
-                            const isApproval = sub.status === 'approval' || sub.status === 'approved';
-                            const isRevision = sub.status === 'revision_request' || sub.status === 'revision_requested';
-                            const isReviewReady = sub.status === 'submitted_for_review';
-
-                            return (
-                              <div
-                                key={sub.id || sIdx}
-                                className={`p-4 rounded-xl border text-xs space-y-2 transition-all ${
-                                  isApproval
-                                    ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
-                                    : isRevision
-                                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
-                                    : isReviewReady
-                                    ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60'
-                                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                        isApproval
-                                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
-                                          : isRevision
-                                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300'
-                                          : isReviewReady
-                                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
-                                          : 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300'
-                                      }`}
-                                    >
-                                      {isApproval
-                                        ? 'Client Approval'
-                                        : isRevision
-                                        ? 'Revision Request'
-                                        : isReviewReady
-                                        ? 'Deliverable Submitted'
-                                        : 'Update'}
-                                    </span>
-
-                                    {sub.submitted_at && (
-                                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                                        {new Date(sub.submitted_at).toLocaleString()}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {sub.message && (
-                                  <p className="text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
-                                    {sub.message}
-                                  </p>
-                                )}
-
-                                {Array.isArray(sub.attachments) && sub.attachments.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                                    {sub.attachments.map((att, aIdx) => {
-                                      const isUrl = att.startsWith('http://') || att.startsWith('https://');
-                                      return (
-                                        <a
-                                          key={aIdx}
-                                          href={att}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:underline"
-                                        >
-                                          <ExternalLink className="w-3 h-3" />
-                                          <span className="truncate max-w-[200px]">
-                                            {isUrl ? att : `Attachment #${aIdx + 1}`}
-                                          </span>
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                    <div className="pt-2 flex items-center justify-between border-t border-zinc-200/80 dark:border-zinc-800">
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {submissionsList.length} recorded submission{submissionsList.length === 1 ? '' : 's'} & client reviews
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryModalMilestoneId(m.job_milestone_id)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-800 dark:text-zinc-200 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 transition cursor-pointer shadow-2xs"
+                      >
+                        <History className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>View Submission History</span>
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
-            );
-          })
-        )}
-      </div>
+
+              {/* Next / Previous Milestone navigation footer */}
+              {milestones.length > 1 && (
+                <div className="flex items-center justify-between pt-1">
+                  {idx > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectMilestone(milestones[idx - 1].job_milestone_id)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition shadow-2xs cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>Previous: M{idx} ({milestones[idx - 1].milestone_title})</span>
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+
+                  {idx < milestones.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectMilestone(milestones[idx + 1].job_milestone_id)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition shadow-2xs cursor-pointer ml-auto"
+                    >
+                      <span>Next: M{idx + 2} ({milestones[idx + 1].milestone_title})</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()
+      ) : null}
+    </div>
+
+      {/* ========================================================= */}
+      {/* SUBMISSION HISTORY MODAL POPUP                            */}
+      {/* ========================================================= */}
+      {historyModalMilestone && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+          onClick={() => setHistoryModalMilestoneId(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in-50 zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/70 dark:bg-zinc-950/70">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-zinc-200/70 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    Deliverable & Submission History
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {historyModalMilestone.milestone_title || `Milestone ${historyModalMilestone.milestone_number || 1}`} • {(historyModalMilestone.submissions || []).length} event{(historyModalMilestone.submissions || []).length === 1 ? '' : 's'} recorded
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setHistoryModalMilestoneId(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* If there are multiple milestones, quick switch tabs */}
+            {milestones.length > 1 && (
+              <div className="px-5 py-2.5 bg-zinc-100/60 dark:bg-zinc-950/40 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center gap-2 overflow-x-auto">
+                <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 shrink-0">Milestones:</span>
+                {milestones.map((mItem, idx) => (
+                  <button
+                    key={mItem.job_milestone_id}
+                    type="button"
+                    onClick={() => setHistoryModalMilestoneId(mItem.job_milestone_id)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                      mItem.job_milestone_id === historyModalMilestone.job_milestone_id
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-2xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    M{idx + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Modal Body: Scrollable History List */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
+              {(!historyModalMilestone.submissions || historyModalMilestone.submissions.length === 0) ? (
+                <div className="p-8 text-center rounded-xl bg-zinc-50 dark:bg-zinc-950/50 border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 text-xs">
+                  No submissions or review records logged for this milestone yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {historyModalMilestone.submissions.map((sub, sIdx) => {
+                    const isApproval = sub.status === 'approval' || sub.status === 'approved';
+                    const isRevision = sub.status === 'revision_request' || sub.status === 'revision_requested';
+                    const isReviewReady = sub.status === 'submitted_for_review';
+
+                    return (
+                      <div
+                        key={sub.id || sIdx}
+                        className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs space-y-2.5 shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                                isApproval
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                                  : isRevision
+                                  ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+                                  : isReviewReady
+                                  ? 'bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700'
+                                  : 'bg-zinc-100 text-zinc-800 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                              }`}
+                            >
+                              {isApproval
+                                ? 'Client Approval'
+                                : isRevision
+                                ? 'Revision Request'
+                                : isReviewReady
+                                ? 'Deliverable Submitted'
+                                : 'Update'}
+                            </span>
+
+                            {sub.submitted_at && (
+                              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                {new Date(sub.submitted_at).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {sub.message && (
+                          <p className="text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed font-normal">
+                            {sub.message}
+                          </p>
+                        )}
+
+                        {Array.isArray(sub.attachments) && sub.attachments.length > 0 && (
+                          <div className="space-y-2 pt-1">
+                            {/* Thumbnail previews for image attachments */}
+                            {sub.attachments.filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att)).length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {sub.attachments
+                                  .filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att))
+                                  .map((att, imgIdx) => (
+                                    <button
+                                      key={imgIdx}
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedMedia({
+                                          url: chatAttachmentUrl(att),
+                                          type: 'image',
+                                          name: att.split('/').pop()?.replace(/^\d+[-_]/, '') || 'Image Preview',
+                                        })
+                                      }
+                                      className="relative group rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 transition shadow-2xs cursor-pointer"
+                                    >
+                                      <img
+                                        src={chatAttachmentUrl(att)}
+                                        alt="Deliverable image preview"
+                                        className="h-16 w-auto max-w-[140px] object-cover rounded-lg group-hover:scale-105 transition"
+                                      />
+                                    </button>
+                                  ))}
+                              </div>
+                            )}
+
+                            {/* Attachment chips */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {sub.attachments.map((att, aIdx) => renderAttachmentChip(att, aIdx))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 sm:p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setHistoryModalMilestoneId(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/70 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition cursor-pointer"
+              >
+                Close History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MEDIA PREVIEW POPUP MODAL (Lightbox / Player / PDF viewer) */}
+      {/* ========================================================= */}
+      {expandedMedia && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setExpandedMedia(null)}
+        >
+          <div
+            className="w-full max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in-50 zoom-in-95 duration-150 text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-3.5 px-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/80">
+              <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                {expandedMedia.type === 'image' ? (
+                  <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+                ) : expandedMedia.type === 'video' ? (
+                  <Film className="w-4 h-4 text-zinc-400 shrink-0" />
+                ) : (
+                  <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+                )}
+                <span className="text-xs font-semibold text-zinc-200 truncate">
+                  {expandedMedia.name || 'Deliverable Preview'}
+                </span>
+                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
+                  {expandedMedia.type}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={expandedMedia.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition"
+                  title="Open in new window / original link"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Open Original</span>
+                </a>
+                <a
+                  href={expandedMedia.url}
+                  download
+                  className="p-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 transition"
+                  title="Download"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setExpandedMedia(null)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+                  title="Close preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Body */}
+            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-zinc-950/90 min-h-[300px]">
+              {expandedMedia.type === 'image' && (
+                <img
+                  src={expandedMedia.url}
+                  alt={expandedMedia.name || 'Preview'}
+                  className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-lg"
+                />
+              )}
+
+              {expandedMedia.type === 'video' && (
+                <video
+                  src={expandedMedia.url}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-[75vh] rounded-lg shadow-lg bg-black"
+                >
+                  Your browser does not support the video tag.
+                </video>
+              )}
+
+              {expandedMedia.type === 'pdf' && (
+                <iframe
+                  src={expandedMedia.url}
+                  title={expandedMedia.name || 'PDF Preview'}
+                  className="w-full h-[75vh] bg-white rounded-lg border-0 shadow-lg"
+                />
+              )}
+
+              {expandedMedia.type === 'doc' && (
+                <div className="p-8 text-center space-y-4 max-w-md bg-zinc-900 border border-zinc-800 rounded-xl">
+                  <FileText className="w-12 h-12 text-zinc-400 mx-auto" />
+                  <div>
+                    <h4 className="text-sm font-bold text-white mb-1">
+                      {expandedMedia.name || 'Document File'}
+                    </h4>
+                    <p className="text-xs text-zinc-400">
+                      This document cannot be previewed directly in the browser modal. You can download or open it in a new window.
+                    </p>
+                  </div>
+                  <div className="pt-2 flex justify-center gap-3">
+                    <a
+                      href={expandedMedia.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-white text-zinc-900 hover:bg-zinc-100 transition"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Open Document</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
