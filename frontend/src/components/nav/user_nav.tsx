@@ -63,15 +63,15 @@ let marketplaceTopInitial: NavItem[] = [
 ];
 
 let workflowInitial: NavItem[] = [
-    { label: "Dashboard (Deliveries)", icon: LayoutDashboard, to: "/dashboard" },
+    { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
     { label: "Workspace", icon: Briefcase, to: "/workspaces" },
+    { label: "Chat Inbox", icon: MessageSquare, to: "/inbox" },
 ];
 
-let activityRecordsInitial: NavItem[] = [
+let recordsInitial: NavItem[] = [
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: ScrollText, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
-    { label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];
 
 const getSidenavTourId = (path: string) => {
@@ -142,7 +142,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     const jobsState = hidePersonalNav ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
     const gigsState = hidePersonalNav ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
     const workflowState = hidePersonalNav ? [] : workflowInitial;
-    const activityState = hidePersonalNav ? [] : activityRecordsInitial;
+    const recordsState = hidePersonalNav ? [] : recordsInitial;
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();
@@ -169,6 +169,9 @@ const UserNav: React.FC<UserNavProps> = () => {
                 location.pathname.startsWith("/team-project") ||
                 (location.pathname === "/teams" && location.search.includes("tab=projects"))
             );
+        }
+        if (to === "/inbox") {
+            return location.pathname.startsWith("/inbox");
         }
         return location.pathname === to;
     };
@@ -583,16 +586,16 @@ const UserNav: React.FC<UserNavProps> = () => {
                    {/* Section Separator Line */}
                    {isCollapsed && <div className="my-4 border-t border-gray-200 dark:border-white/10 mx-2" />}
 
-                   {/* 4. Activity & Records Section */}
-                   {activityState.length > 0 && (
+                   {/* 4. Records Section */}
+                   {recordsState.length > 0 && (
                      <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
                         {!isCollapsed && (
                            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
-                              Activity & Records
+                              Records
                            </p>
                         )}
                         <ul className="space-y-1">
-                           {activityState.map(({ label, icon: Icon, to }) => (
+                           {recordsState.map(({ label, icon: Icon, to }) => (
                             <li key={label} className="w-full">
                                {!isCollapsed ? (
                                   <NavLink to={to} end={to === "/contracts"} data-tour={getSidenavTourId(to)}>
@@ -611,11 +614,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            )}
                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                            <span className="relative z-10 text-sm">{label}</span>
-                                           {to === "/inbox" && inboxUnread > 0 && (
-                                              <span className="relative z-10 ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
-                                                 {formatUnreadBadge(inboxUnread)}
-                                              </span>
-                                           )}
+                                           
                                         </div>
                                      )}
                                   </NavLink>
@@ -637,11 +636,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  />
                                               )}
                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
-                                              {to === "/inbox" && inboxUnread > 0 && (
-                                                 <span className="absolute -top-1.5 -right-1.5 z-20 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
-                                                    {formatUnreadBadge(inboxUnread)}
-                                                 </span>
-                                              )}
+                                              
                                            </div>
                                         )}
                                      </NavLink>

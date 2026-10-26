@@ -10,28 +10,28 @@ export const DeliveryFlowGuide: React.FC = () => {
             num: '01',
             title: 'Agreement & Escrow',
             status: 'Waiting',
-            badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30',
+            badgeClass: 'bg-sky-100 text-sky-950 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
             desc: 'Terms are confirmed and full payment is deposited into escrow before work begins.',
         },
         {
             num: '02',
             title: 'Milestone Execution & Payout',
-            status: 'Ongoing',
-            badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30',
+            status: 'Active',
+            badgeClass: 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800',
             desc: 'Freelancer submits deliverables. Payouts are released per milestone upon client approval.',
         },
         {
             num: '03',
             title: 'All Milestones Approved',
             status: 'Done',
-            badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30',
+            badgeClass: 'bg-purple-100 text-purple-950 border-purple-300 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-800',
             desc: 'All milestone deliverables accepted and paid out. Contract reaches Done and opens the 24h review window.',
         },
         {
             num: '04',
             title: 'Mutual Ratings & Archive',
-            status: 'Completed',
-            badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30',
+            status: 'Closed',
+            badgeClass: 'bg-zinc-200 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700',
             desc: 'Both parties exchange ratings. Once submitted or window closes, contract is safely archived.',
         },
     ];
@@ -39,23 +39,33 @@ export const DeliveryFlowGuide: React.FC = () => {
     const contractStatuses = [
         { 
             name: 'Waiting', 
-            badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30',
+            badgeClass: 'bg-sky-100 text-sky-950 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
             desc: 'Contract drafted; awaiting mutual signature or escrow funding.' 
         },
         { 
-            name: 'Ongoing', 
-            badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30',
+            name: 'Active', 
+            badgeClass: 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800',
             desc: 'Work in progress; milestones are completed, reviewed, and paid out sequentially.' 
         },
         { 
             name: 'Done', 
-            badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30',
+            badgeClass: 'bg-purple-100 text-purple-950 border-purple-300 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-800',
             desc: 'All milestones approved and paid; awaiting ratings in the "To Rate" tab (24h window).' 
         },
         { 
-            name: 'Completed', 
-            badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30',
+            name: 'Closed', 
+            badgeClass: 'bg-zinc-200 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700',
             desc: 'Reviews exchanged or window closed; all milestone payouts fulfilled and contract archived.' 
+        },
+        { 
+            name: 'Cancelled', 
+            badgeClass: 'bg-rose-100 text-rose-950 border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800',
+            desc: 'Contract terminated before completion; unreleased escrow funds refunded.' 
+        },
+        { 
+            name: 'Dispute Filed', 
+            badgeClass: 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+            desc: 'Mediation requested; escrow funds held safely pending staff resolution.' 
         },
     ];
 
