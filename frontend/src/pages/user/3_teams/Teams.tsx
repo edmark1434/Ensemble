@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Briefcase, CheckCircle2, Crown, Grid3x3, List, Plus, Search, UserPlus, Users } from "lucide-react";
+import { ArrowUpRight, Briefcase, CheckCircle2, Clock, Crown, Grid3x3, List, Plus, Search, Star, UserPlus, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import { uploadFileToIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
@@ -36,7 +37,64 @@ interface Team {
   current_user_role?: string;
   current_user_status?: string;
   is_business_verified?: boolean;
+  review_status?: {
+    contract_id: string;
+    needs_review: boolean;
+    user_has_reviewed: boolean;
+    counterparty_has_reviewed: boolean;
+    counterparty_reviewed_at?: string | null;
+    user_reviewed_at?: string | null;
+  } | null;
 }
+
+const CardReviewTimer: React.FC<{ contractId: string; reviewedAt?: string | null }> = ({ contractId, reviewedAt }) => {
+  const [timeLeftMs, setTimeLeftMs] = useState<number>(() => {
+    const storageKey = `ensemble_review_deadline_${contractId}`;
+    let deadline = 0;
+    if (reviewedAt) {
+      deadline = new Date(reviewedAt).getTime() + 24 * 60 * 60 * 1000;
+    } else {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        deadline = parseInt(stored, 10);
+      }
+      if (!deadline || isNaN(deadline)) {
+        deadline = Date.now() + 24 * 60 * 60 * 1000;
+        localStorage.setItem(storageKey, String(deadline));
+      }
+    }
+    return Math.max(0, deadline - Date.now());
+  });
+
+  useEffect(() => {
+    const update = () => {
+      const storageKey = `ensemble_review_deadline_${contractId}`;
+      let deadline = 0;
+      if (reviewedAt) {
+        deadline = new Date(reviewedAt).getTime() + 24 * 60 * 60 * 1000;
+      } else {
+        const stored = localStorage.getItem(storageKey);
+        deadline = stored ? parseInt(stored, 10) : Date.now() + 24 * 60 * 60 * 1000;
+      }
+      setTimeLeftMs(Math.max(0, deadline - Date.now()));
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [contractId, reviewedAt]);
+
+  const formatCountdown = (ms: number) => {
+    if (ms <= 0) return "00:00:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  return <span className="font-mono">{formatCountdown(timeLeftMs)}</span>;
+};
 
 const TeamCardSkeleton = () => (
   <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs animate-pulse">
@@ -159,6 +217,23 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
     void loadEligibility();
   }, [loadTeams, loadEligibility]);
 
+  useEffect(() => {
+    if (!socket.connected) socket.connect();
+    const handleUpdate = () => {
+      loadTeams(false);
+    };
+    socket.on("teamTaskWorkspaceUpdated", handleUpdate);
+    socket.on("contractReviewUpdated", handleUpdate);
+    socket.on("contractFullyCompleted", handleUpdate);
+    socket.on("projectCompleted", handleUpdate);
+    return () => {
+      socket.off("teamTaskWorkspaceUpdated", handleUpdate);
+      socket.off("contractReviewUpdated", handleUpdate);
+      socket.off("contractFullyCompleted", handleUpdate);
+      socket.off("projectCompleted", handleUpdate);
+    };
+  }, [loadTeams]);
+
   const createTeam = async ({ photo, ...teamValues }: TeamFormValues & { photo: File }) => {
     if (!photo.type.startsWith("image/")) {
       showErrorToast("Choose a valid image file");
@@ -271,6 +346,31 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
         <div>
           {/* Card Thumbnail Banner (Zero black gradient overlay) */}
           <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-gray-100 dark:bg-zinc-800">
+            {/* Review Status & Timer Overlay Badge - Upper Left (Sleek, less-colorful, high contrast) */}
+            {isProject && !team.is_archived && team.review_status?.needs_review && (
+              <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/85 dark:bg-black/85 text-white text-[10px] font-medium shadow-md border border-white/20 backdrop-blur-md">
+                <Star className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
+                <span className="font-semibold text-zinc-100">Rate &amp; Review</span>
+                <span className="text-zinc-500">•</span>
+                <CardReviewTimer
+                  contractId={team.review_status.contract_id}
+                  reviewedAt={team.review_status.counterparty_reviewed_at}
+                />
+              </div>
+            )}
+
+            {isProject && !team.is_archived && !team.review_status?.needs_review && team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed && (
+              <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/85 dark:bg-black/85 text-white text-[10px] font-medium shadow-md border border-white/20 backdrop-blur-md">
+                <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-zinc-100">Awaiting Peer</span>
+                <span className="text-zinc-500">•</span>
+                <CardReviewTimer
+                  contractId={team.review_status.contract_id}
+                  reviewedAt={team.review_status.user_reviewed_at}
+                />
+              </div>
+            )}
+
             {team.avatar_path ? (
               <img
                 src={getImageUrl(team.avatar_path)}
@@ -301,21 +401,22 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
             <div className="flex flex-wrap items-center gap-1.5">
               {isProject ? (
                 <>
-                  {/* Active / Archived Status (Green / Purple) */}
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                      team.is_archived
-                        ? "bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
-                        : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        team.is_archived ? "bg-purple-500" : "bg-emerald-500"
-                      }`}
-                    />
-                    {team.is_archived ? "Archived" : "Active Workspace"}
-                  </span>
+                  {team.is_archived ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-purple-500" />
+                      Archived
+                    </span>
+                  ) : (team.review_status?.needs_review || (team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed)) ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
+                      Rate &amp; Review
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                      Active
+                    </span>
+                  )}
 
                   {/* Category Tag (Gray) */}
                   {team.category && (
@@ -401,6 +502,26 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
         className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-3.5 transition-all duration-200 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-xs cursor-pointer group"
       >
         <div className="relative h-18 w-28 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-zinc-800">
+          {/* Review Status & Timer Overlay Badge - Upper Left */}
+          {isProject && !team.is_archived && team.review_status?.needs_review && (
+            <div className="absolute top-1 left-1 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-900/85 dark:bg-black/85 text-white text-[9px] font-medium shadow-xs border border-white/20 backdrop-blur-md">
+              <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400 shrink-0" />
+              <CardReviewTimer
+                contractId={team.review_status.contract_id}
+                reviewedAt={team.review_status.counterparty_reviewed_at}
+              />
+            </div>
+          )}
+          {isProject && !team.is_archived && !team.review_status?.needs_review && team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed && (
+            <div className="absolute top-1 left-1 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-900/85 dark:bg-black/85 text-white text-[9px] font-medium shadow-xs border border-white/20 backdrop-blur-md">
+              <Clock className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+              <CardReviewTimer
+                contractId={team.review_status.contract_id}
+                reviewedAt={team.review_status.user_reviewed_at}
+              />
+            </div>
+          )}
+
           {team.avatar_path ? (
             <img
               src={getImageUrl(team.avatar_path)}
@@ -431,20 +552,22 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
           <div className="flex flex-wrap items-center gap-1.5">
             {isProject ? (
               <>
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    team.is_archived
-                      ? "bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
-                      : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      team.is_archived ? "bg-purple-500" : "bg-emerald-500"
-                    }`}
-                  />
-                  {team.is_archived ? "Archived" : "Active Workspace"}
-                </span>
+                {team.is_archived ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-purple-500" />
+                    Archived
+                  </span>
+                ) : (team.review_status?.needs_review || (team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed)) ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
+                    Rate &amp; Review
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                    Active
+                  </span>
+                )}
 
                 {team.category && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">

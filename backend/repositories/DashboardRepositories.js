@@ -1028,6 +1028,7 @@ async function submitContractReview(contractId, accountId, stars, feedback) {
         );
 
         let contractCompleted = false;
+        let archivedTeamId = null;
         if (allRatings.rows.length >= 2) {
             await client.query(
                 `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1`,
@@ -1038,11 +1039,38 @@ async function submitContractReview(contractId, accountId, stars, feedback) {
                  WHERE gig_request_id IN (SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1)`,
                 [contractId]
             );
+
+            // Also check and archive associated team workspace(s)
+            const teamRes = await client.query(`
+                SELECT tcw.team_id
+                  FROM team_contract_workspaces tcw
+                 WHERE tcw.contract_id = $1
+            `, [contractId]);
+
+            for (const row of teamRes.rows) {
+                const uncompletedRes = await client.query(`
+                    SELECT COUNT(*) as cnt
+                      FROM team_contract_workspaces tcw
+                      JOIN contracts c ON c.contract_id = tcw.contract_id
+                     WHERE tcw.team_id = $1
+                       AND c.status NOT IN ('Completed', 'Cancelled')
+                `, [row.team_id]);
+
+                if (parseInt(uncompletedRes.rows[0].cnt, 10) === 0) {
+                    await client.query(`
+                        UPDATE teams
+                           SET is_archived = TRUE, archived_at = NOW()
+                         WHERE team_id = $1 AND is_archived = FALSE
+                    `, [row.team_id]);
+                    archivedTeamId = row.team_id;
+                }
+            }
+
             contractCompleted = true;
         }
 
         await client.query('COMMIT');
-        return { rating, contractCompleted, targetAccountId, isClient, isFreelancer };
+        return { rating, contractCompleted, archivedTeamId, targetAccountId, isClient, isFreelancer };
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;

@@ -38,6 +38,7 @@ const {
 
 const { createNotification } = require('../repositories/NotificationRepositories');
 const { getIo } = require('../lib/WebSocket');
+const { getTeamContractContext } = require('../repositories/TeamProjectRepositories');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -488,6 +489,35 @@ async function approveMilestoneService(milestoneId, callerAccountId) {
             milestone_id: String(milestone.contract_milestone_id),
             action: 'approval',
         });
+
+        if (result.contractDone) {
+            let teamId = null;
+            let projectTitle = milestone.contract_title || milestone.milestone_name || 'Project';
+            try {
+                const teamCtx = await getTeamContractContext(milestone.contract_id);
+                if (teamCtx) {
+                    teamId = teamCtx.team_id;
+                    projectTitle = teamCtx.project_title || projectTitle;
+                }
+            } catch (_tErr) {}
+
+            const completionPayload = {
+                contract_id: String(milestone.contract_id),
+                team_id: teamId ? String(teamId) : null,
+                client_account_id: String(milestone.client_account_id),
+                freelancer_account_id: String(milestone.freelancer_account_id),
+                project_title: projectTitle,
+                total_milestones: Number(milestone.total_milestones) || 1,
+            };
+
+            ioApprove.emit('projectCompleted', completionPayload);
+            ioApprove.to([
+                `contract_${milestone.contract_id}`,
+                String(milestone.client_account_id),
+                String(milestone.freelancer_account_id),
+                ...(teamId ? [`team_${teamId}`] : [])
+            ]).emit('projectCompleted', completionPayload);
+        }
     }
 
     return result;

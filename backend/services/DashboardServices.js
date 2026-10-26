@@ -1,4 +1,5 @@
 const DashboardRepositories = require('../repositories/DashboardRepositories');
+const TeamProjectRepositories = require('../repositories/TeamProjectRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
 
@@ -257,6 +258,40 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         action: input.status,
     });
 
+    if (result.contractCompletion) {
+        const ioComp = safeIo();
+        if (ioComp) {
+            (async () => {
+                let teamId = null;
+                let projectTitle = updatedTask.job_title || 'Project';
+                try {
+                    const teamCtx = await TeamProjectRepositories.getTeamContractContext(updatedTask.contract_id);
+                    if (teamCtx) {
+                        teamId = teamCtx.team_id;
+                        projectTitle = teamCtx.project_title || projectTitle;
+                    }
+                } catch (_err) {}
+
+                const completionPayload = {
+                    contract_id: String(updatedTask.contract_id),
+                    team_id: teamId ? String(teamId) : null,
+                    client_account_id: String(updatedTask.client_account_id),
+                    freelancer_account_id: String(updatedTask.freelancer_account_id),
+                    project_title: projectTitle,
+                    total_milestones: (updatedTask.milestones || []).length,
+                };
+
+                ioComp.emit('projectCompleted', completionPayload);
+                ioComp.to([
+                    `contract_${updatedTask.contract_id}`,
+                    String(updatedTask.client_account_id),
+                    String(updatedTask.freelancer_account_id),
+                    ...(teamId ? [`team_${teamId}`] : [])
+                ]).emit('projectCompleted', completionPayload);
+            })().catch(console.error);
+        }
+    }
+
     const activeRelease = result.milestoneRelease || (result.contractCompletion?.milestoneRelease || null);
     if (activeRelease) {
         const io = safeIo();
@@ -432,6 +467,28 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
             contract_completed: reviewResult.contractCompleted,
             emitted_at: new Date().toISOString(),
         });
+
+        io.emit('teamTaskWorkspaceUpdated', {
+            contract_id: normalizedContractId,
+            action: 'contract_reviewed',
+            actor_account_id: actorId,
+        });
+        io.emit('contractReviewUpdated', {
+            contract_id: normalizedContractId,
+            actor_account_id: actorId,
+            contract_completed: reviewResult.contractCompleted,
+        });
+
+        if (reviewResult.contractCompleted) {
+            io.emit('contractFullyCompleted', {
+                contract_id: normalizedContractId,
+                team_id: reviewResult.archivedTeamId ? String(reviewResult.archivedTeamId) : null,
+            });
+            io.emit('teamTaskWorkspaceUpdated', {
+                contract_id: normalizedContractId,
+                action: 'contract_completed',
+            });
+        }
 
         try {
             const reviewerName = reviewResult.isClient ? task.client_name : task.freelancer_name;

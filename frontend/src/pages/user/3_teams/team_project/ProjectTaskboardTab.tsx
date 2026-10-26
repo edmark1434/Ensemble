@@ -82,6 +82,7 @@ interface ProjectTaskboardTabProps {
   milestones?: any[];
   onTasksUpdated?: (silent?: boolean) => void;
   projectTitle?: string;
+  isReadOnly?: boolean;
 }
 
 type DisplayMode = 'board' | 'list' | 'table' | 'gantt';
@@ -199,6 +200,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   milestones = [],
   onTasksUpdated,
   projectTitle,
+  isReadOnly = false,
 }) => {
   // Local optimistic state for zero-latency seamless taskboard updates
   const [localTasks, setLocalTasks] = useState<TaskItem[]>(() =>
@@ -754,6 +756,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   const handleUpdateStatus = async (task: TaskItem, newStatus: TaskItem['status']) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
     if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones to finish.');
       return;
@@ -803,6 +809,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
   // Assignees can set priority for their tasks themselves
   const handleUpdatePriority = async (task: TaskItem, newPriority: TaskItem['priority']) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
     if (!isTaskAssignee(task) && !isClient) {
       showErrorToast('Only the assigned team member can change the priority.');
       return;
@@ -832,6 +842,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
   // Assignees can set due date for their tasks themselves, constrained by milestone timeline
   const handleUpdateDueDate = async (task: TaskItem, newDueDate: string) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
     if (!isTaskAssignee(task) && !isClient) {
       showErrorToast('Only the assigned team member can set the due date.');
       return;
@@ -871,6 +885,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   const handleToggleChecklistItem = async (task: TaskItem, itemIndex: number) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
     if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones.');
       return;
@@ -908,6 +926,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
     e.preventDefault();
     if (isClient) {
       showErrorToast('Clients cannot add tasks to the team workspace.');
@@ -1841,7 +1863,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1">
-                        {!isClient && (
+                        {!isClient && !isReadOnly && (
                           <button
                             type="button"
                             onClick={() => openAddTaskModal(col.id as any)}
@@ -1870,7 +1892,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         const checklist = Array.isArray(task.checklist) ? task.checklist : [];
                         const completedCount = checklist.filter((item) => item.completed).length;
                         const isLocked = isTaskActuallyLocked(task);
-                        const canDrag = !isLocked && (isOwner || isClient);
+                        const canDrag = !isReadOnly && !isLocked && (isOwner || isClient);
 
                         // Dot color by column status (Screenshot 1)
                         const dotColor =
@@ -2005,7 +2027,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </div>
 
                     {/* + Add Task at Bottom of Column */}
-                    {!isClient && (
+                    {!isClient && !isReadOnly && (
                       <button
                         type="button"
                         onClick={() => openAddTaskModal(col.id as any)}
@@ -2072,7 +2094,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </span>
                   </div>
 
-                  {!isClient && (
+                  {!isClient && !isReadOnly && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -2349,7 +2371,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </div>
 
                     {/* Bottom + Add Task Link */}
-                    {!isClient && (
+                    {!isClient && !isReadOnly && (
                       <div className="p-3 border-t border-zinc-100 dark:border-zinc-800/80">
                         <button
                           type="button"
