@@ -45,7 +45,7 @@ const SUB_TAB_META: Record<
     description: "Proposals with formal contract offers extended or active hired contracts.",
     tags: [
       {
-        label: "ACCEPTED",
+        label: "OFFER SENT",
         className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
       },
       {
@@ -55,10 +55,10 @@ const SUB_TAB_META: Record<
     ],
   },
   inactive: {
-    description: "Proposals that were declined by the client, withdrawn, or archived.",
+    description: "Proposals that were rejected by the client, withdrawn, or archived.",
     tags: [
       {
-        label: "DECLINED",
+        label: "REJECTED",
         className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
       },
       {
