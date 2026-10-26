@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -37,6 +38,13 @@ import {
   useInboxUploadMedia,
 } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
+import socket from '@/lib/socket';
+import {
+  SubmissionProgressModal,
+  formatBytes,
+  type SubmissionProgressModalState,
+  type ProgressFileItem,
+} from '@/components/ui/SubmissionProgressModal';
 import type { TaskItem } from './ProjectTaskboardTab';
 
 interface SubmissionItem {
@@ -78,6 +86,7 @@ interface ProjectSubmissionsTabProps {
   milestones: MilestoneData[];
   contracts: any[];
   tasks?: TaskItem[];
+  videoProjects?: any[];
   currentUserAccountId: string;
   isClient: boolean;
   onUpdated: (silent?: boolean) => void;
@@ -89,6 +98,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
   milestones,
   contracts,
   tasks,
+  videoProjects,
   currentUserAccountId,
   isClient,
   onUpdated,
@@ -109,6 +119,43 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     return active?.job_milestone_id || milestones[0]?.job_milestone_id || null;
   });
 
+  // Auto-resolve initial selected milestone if initially unselected
+  useEffect(() => {
+    if (!selectedMilestoneId && milestones.length > 0) {
+      const active = milestones.find(
+        (m) =>
+          m.milestone_status === 'submitted_for_review' ||
+          m.milestone_status === 'in_progress' ||
+          m.milestone_status === 'active' ||
+          m.is_current
+      );
+      setSelectedMilestoneId(active?.job_milestone_id || milestones[0]?.job_milestone_id || null);
+    }
+  }, [milestones, selectedMilestoneId]);
+
+  // Real-time synchronization for milestone submissions and revisions
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleRealtimeRefresh = () => {
+      onUpdated(true);
+    };
+
+    socket.on('dashboardTaskUpdated', handleRealtimeRefresh);
+    socket.on('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
+    socket.on('milestoneStatusUpdated', handleRealtimeRefresh);
+    socket.on('milestone_status_updated', handleRealtimeRefresh);
+
+    return () => {
+      socket.off('dashboardTaskUpdated', handleRealtimeRefresh);
+      socket.off('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
+      socket.off('milestoneStatusUpdated', handleRealtimeRefresh);
+      socket.off('milestone_status_updated', handleRealtimeRefresh);
+    };
+  }, [onUpdated]);
+
   const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(false);
 
   // Switch selected milestone and reset transient input states
@@ -119,6 +166,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     setReviewNote('');
     setSubmissionMessage('');
     setSubmissionLink('');
+    setSelectedVideoProjectId('');
     clearMedia();
   };
 
@@ -137,10 +185,48 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
   } | null>(null);
 
   // Contributor Submit Form State
+  const EDITOR_URL = (import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const [workspaceVideoProjects, setWorkspaceVideoProjects] = useState<any[]>(videoProjects || []);
+  const [selectedVideoProjectId, setSelectedVideoProjectId] = useState<string>('');
+  const [deliverableType, setDeliverableType] = useState<'video_project' | 'external_link'>('video_project');
+
+  useEffect(() => {
+    if (videoProjects && videoProjects.length > 0) {
+      setWorkspaceVideoProjects(videoProjects);
+    } else if (teamId) {
+      api.get(`/api/team-projects/${teamId}/video-projects`)
+        .then((res) => setWorkspaceVideoProjects(res.data?.data || []))
+        .catch(() => {});
+    }
+  }, [videoProjects, teamId]);
+
+  useEffect(() => {
+    if (workspaceVideoProjects.length === 0) {
+      setDeliverableType('external_link');
+    } else if (!selectedVideoProjectId) {
+      setDeliverableType('video_project');
+    }
+  }, [workspaceVideoProjects.length]);
+
+  const handleOpenVideoProject = async (projectId: string) => {
+    try {
+      const { data } = await api.get('/api/editor/handoff-token');
+      const handoffToken = data?.handoffToken;
+      const targetUrl = handoffToken
+        ? `${EDITOR_URL}/editor/${projectId}?token=${encodeURIComponent(handoffToken)}`
+        : `${EDITOR_URL}/editor/${projectId}`;
+      window.open(targetUrl, '_blank');
+    } catch (err) {
+      console.error('Failed to get editor handoff token:', err);
+      window.open(`${EDITOR_URL}/editor/${projectId}`, '_blank');
+    }
+  };
+
   const [submissionMessage, setSubmissionMessage] = useState('');
   const [submissionLink, setSubmissionLink] = useState('');
   const [isReadyForReview, setIsReadyForReview] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadModalState, setUploadModalState] = useState<SubmissionProgressModalState | null>(null);
 
   // Deliverable Media / File Uploads
   const {
@@ -159,6 +245,33 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
   // Helper to render attachment links & file chips (opens preview popup for media/pdf)
   const renderAttachmentChip = (att: string, aIdx: number) => {
+    if (att.startsWith('video_project:')) {
+      const parts = att.split(':');
+      const vProjectId = parts[1];
+      const vProjectName = decodeURIComponent(parts.slice(2).join(':')) || 'Workspace Video Project';
+
+      return (
+        <button
+          key={aIdx}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleOpenVideoProject(vProjectId);
+          }}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-950 dark:text-purple-200 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-800/40 transition shadow-2xs group cursor-pointer"
+          title="Open video project directly in collaborative editor"
+        >
+          <Film className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+          <span className="truncate max-w-[220px] font-bold">{vProjectName}</span>
+          <span className="text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 rounded">
+            Editor
+          </span>
+          <ExternalLink className="w-3 h-3 text-purple-400 shrink-0" />
+        </button>
+      );
+    }
+
     const isHttp = /^https?:\/\//i.test(att);
     const resolvedUrl = chatAttachmentUrl(att);
     const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att);
@@ -250,32 +363,158 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     const messageText = submissionMessage.trim();
     const linkText = submissionLink.trim();
 
-    if (!messageText && !linkText && mediaList.length === 0) {
-      showErrorToast('Please enter deliverable notes, attach files, or provide a link to your work.');
+    if (!messageText && !linkText && !selectedVideoProjectId && mediaList.length === 0) {
+      showErrorToast('Please enter deliverable notes, select a video project, attach files, or provide a link to your work.');
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      // 1. Upload attached media files (images, video, pdf, docs)
-      const uploadPromises = mediaList.map(async (media) => {
-        const { key } = await uploadFileWithIntent(media.file, 'documents');
-        return key;
-      });
+    const initialFiles: ProgressFileItem[] = mediaList.map((media) => ({
+      name: media.file.name,
+      size: media.file.size,
+      progress: 0,
+      status: 'pending',
+    }));
 
-      const uploadedKeys = await Promise.all(uploadPromises);
+    const totalBytes = initialFiles.reduce((acc, f) => acc + f.size, 0);
+
+    setIsSubmitting(true);
+    setUploadModalState({
+      isOpen: true,
+      title: isReadyForReview ? 'Submitting Deliverable for Review' : 'Sending Progress Update',
+      statusText: initialFiles.length > 0 ? 'Preparing files for upload...' : 'Connecting to submission server...',
+      progress: initialFiles.length > 0 ? 0 : 25,
+      totalBytes,
+      transferredBytes: 0,
+      files: initialFiles,
+      stage: initialFiles.length > 0 ? 'uploading' : 'submitting',
+    });
+
+    try {
+      let uploadedKeys: string[] = [];
+
+      if (mediaList.length > 0) {
+        const loadedBytesPerFile = new Array(mediaList.length).fill(0);
+
+        const uploadPromises = mediaList.map(async (media, idx) => {
+          setUploadModalState((prev) => {
+            if (!prev) return prev;
+            const newFiles = [...prev.files];
+            if (newFiles[idx]) {
+              newFiles[idx] = { ...newFiles[idx], status: 'uploading' };
+            }
+            return { ...prev, files: newFiles };
+          });
+
+          const { key } = await uploadFileWithIntent(media.file, 'documents', (loaded) => {
+            loadedBytesPerFile[idx] = loaded;
+            const currentTotalTransferred = loadedBytesPerFile.reduce((a, b) => a + b, 0);
+            const filePct = Math.min(100, Math.round((loaded / Math.max(1, media.file.size)) * 100));
+            // 0% - 85% allocated to byte uploads
+            const overallPct = totalBytes > 0
+              ? Math.min(85, Math.round((currentTotalTransferred / totalBytes) * 85))
+              : 50;
+
+            setUploadModalState((prev) => {
+              if (!prev) return prev;
+              const newFiles = [...prev.files];
+              if (newFiles[idx]) {
+                newFiles[idx] = {
+                  ...newFiles[idx],
+                  progress: filePct,
+                  status: filePct >= 100 ? 'completed' : 'uploading',
+                };
+              }
+              return {
+                ...prev,
+                statusText: `Uploading ${media.file.name} (${formatBytes(currentTotalTransferred)} of ${formatBytes(totalBytes)})...`,
+                transferredBytes: currentTotalTransferred,
+                progress: overallPct,
+                files: newFiles,
+                stage: 'uploading',
+              };
+            });
+          });
+
+          setUploadModalState((prev) => {
+            if (!prev) return prev;
+            const newFiles = [...prev.files];
+            if (newFiles[idx]) {
+              newFiles[idx] = { ...newFiles[idx], progress: 100, status: 'completed' };
+            }
+            return { ...prev, files: newFiles };
+          });
+
+          return key;
+        });
+
+        uploadedKeys = await Promise.all(uploadPromises);
+
+        setUploadModalState((prev) =>
+          prev
+            ? {
+                ...prev,
+                progress: 88,
+                statusText: 'Verifying files & finalizing storage...',
+                stage: 'verifying',
+              }
+            : null
+        );
+      } else {
+        setUploadModalState((prev) =>
+          prev
+            ? {
+                ...prev,
+                progress: 60,
+                statusText: 'Packaging deliverable notes & link...',
+                stage: 'submitting',
+              }
+            : null
+        );
+      }
 
       // 2. Assemble all attachments
       const allAttachments = [...uploadedKeys];
-      if (linkText) {
+      if (deliverableType === 'video_project' && selectedVideoProjectId) {
+        const vp = workspaceVideoProjects.find(
+          (p) => String(p.project_id || p.id) === String(selectedVideoProjectId)
+        );
+        const pName = vp?.name || 'Workspace Video Project';
+        allAttachments.push(`video_project:${selectedVideoProjectId}:${encodeURIComponent(pName)}`);
+      } else if (linkText) {
         allAttachments.push(linkText);
       }
+
+      setUploadModalState((prev) =>
+        prev
+          ? {
+              ...prev,
+              progress: 94,
+              statusText: isReadyForReview
+                ? 'Submitting deliverable to client review queue...'
+                : 'Registering progress update...',
+              stage: 'submitting',
+            }
+          : null
+      );
 
       await api.post(`/api/dashboard/tasks/${m.contract_id}/milestones/${m.contract_milestone_id}/submit`, {
         message: messageText || (allAttachments.length > 0 ? 'Deliverable files submitted.' : ''),
         attachments: allAttachments,
         status: isReadyForReview ? 'submitted_for_review' : 'progress',
       });
+
+      setUploadModalState((prev) =>
+        prev
+          ? {
+              ...prev,
+              progress: 100,
+              statusText: isReadyForReview
+                ? 'Deliverable successfully submitted for review!'
+                : 'Milestone progress update sent!',
+              stage: 'completed',
+            }
+          : null
+      );
 
       showSuccessToast(
         isReadyForReview
@@ -284,10 +523,27 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
       );
       setSubmissionMessage('');
       setSubmissionLink('');
+      setSelectedVideoProjectId('');
       clearMedia();
       onUpdated();
+
+      // Brief pause to display completion state
+      setTimeout(() => {
+        setUploadModalState(null);
+      }, 650);
     } catch (err: any) {
-      showErrorToast(err?.response?.data?.message || 'Failed to submit deliverable');
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to submit deliverable';
+      showErrorToast(errMsg);
+      setUploadModalState((prev) =>
+        prev
+          ? {
+              ...prev,
+              stage: 'error',
+              statusText: 'Submission failed',
+              errorMessage: errMsg,
+            }
+          : null
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1129,24 +1385,170 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                             )}
                           </div>
 
-                          {/* Deliverable External URL / Link */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1.5">
+                          {/* Deliverable Video Project / External Link Selector */}
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                               <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                                <span>External Link / Live Demo / Prototype</span>
+                                <span>Deliverable Work / Prototype</span>
                                 <span className="text-[10px] font-medium text-zinc-400">Optional</span>
                               </label>
+
+                              {/* Toggle between Workspace Video Project and External Link */}
+                              <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-[11px] font-semibold select-none">
+                                <button
+                                  type="button"
+                                  onClick={() => setDeliverableType('video_project')}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md transition cursor-pointer ${
+                                    deliverableType === 'video_project'
+                                      ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-2xs font-bold'
+                                      : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <Film className="w-3.5 h-3.5 text-purple-500" />
+                                  <span>Workspace Video Project</span>
+                                  {workspaceVideoProjects.length > 0 && (
+                                    <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[9px] bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300 font-bold">
+                                      {workspaceVideoProjects.length}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeliverableType('external_link')}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md transition cursor-pointer ${
+                                    deliverableType === 'external_link'
+                                      ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-2xs font-bold'
+                                      : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+                                  <span>External Link</span>
+                                </button>
+                              </div>
                             </div>
-                            <div className="relative flex items-center">
-                              <ExternalLink className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
-                              <input
-                                type="url"
-                                value={submissionLink}
-                                onChange={(e) => setSubmissionLink(e.target.value)}
-                                placeholder="https://... (e.g. Figma prototype, live demo, Google Drive, or repository link)"
-                                className="w-full text-xs pl-10 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border-2 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 dark:focus:border-white transition shadow-2xs"
-                              />
-                            </div>
+
+                            {deliverableType === 'video_project' ? (
+                              <div className="space-y-2">
+                                {workspaceVideoProjects.length === 0 ? (
+                                  <div className="p-3.5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2.5 text-xs text-zinc-600 dark:text-zinc-400">
+                                      <Film className="w-4 h-4 text-purple-500 shrink-0" />
+                                      <span>No video projects linked to this workspace yet.</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => onNavigateTab && onNavigateTab('project')}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:bg-zinc-800 transition shrink-0 cursor-pointer"
+                                    >
+                                      <span>Open Video Projects Tab</span>
+                                      <ChevronRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    {workspaceVideoProjects.map((vp) => {
+                                      const pId = String(vp.project_id || vp.id);
+                                      const isSelected = selectedVideoProjectId === pId;
+
+                                      return (
+                                        <div
+                                          key={pId}
+                                          onClick={() => setSelectedVideoProjectId(isSelected ? '' : pId)}
+                                          className={`relative p-3 rounded-xl border-2 transition cursor-pointer flex items-start gap-3 select-none ${
+                                            isSelected
+                                              ? 'border-purple-600 dark:border-purple-500 bg-purple-50/60 dark:bg-purple-950/20 shadow-2xs'
+                                              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-zinc-300 dark:hover:border-zinc-700'
+                                          }`}
+                                        >
+                                          {/* Thumbnail / Icon */}
+                                          <div className="w-12 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden flex items-center justify-center shrink-0">
+                                            {vp.thumbnailUrl || vp.thumbnail_path ? (
+                                              <img
+                                                src={vp.thumbnailUrl || vp.thumbnail_path}
+                                                alt={vp.name}
+                                                className="w-full h-full object-cover"
+                                              />
+                                            ) : (
+                                              <Film className="w-5 h-5 text-purple-500" />
+                                            )}
+                                          </div>
+
+                                          {/* Info */}
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-1">
+                                              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                                                {vp.name}
+                                              </p>
+                                              <div
+                                                className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition ${
+                                                  isSelected
+                                                    ? 'bg-purple-600 border-purple-600 text-white'
+                                                    : 'border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800'
+                                                }`}
+                                              >
+                                                {isSelected && <Check className="w-2.5 h-2.5" />}
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-400 font-mono">
+                                              {vp.width && vp.height && (
+                                                <span>{vp.width}x{vp.height}</span>
+                                              )}
+                                              {vp.duration_seconds > 0 && (
+                                                <span>• {Math.floor(vp.duration_seconds)}s</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {selectedVideoProjectId && (
+                                  <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-purple-700 dark:text-purple-300">
+                                    <span className="flex items-center gap-1.5 font-semibold">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
+                                      Video project attached to deliverable submission
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenVideoProject(selectedVideoProjectId);
+                                        }}
+                                        className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <span>Preview in Editor</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </button>
+                                      <span>•</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedVideoProjectId('');
+                                        }}
+                                        className="text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                                      >
+                                        Deselect
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="relative flex items-center">
+                                <ExternalLink className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
+                                <input
+                                  type="url"
+                                  value={submissionLink}
+                                  onChange={(e) => setSubmissionLink(e.target.value)}
+                                  placeholder="https://... (e.g. Figma prototype, live demo, Google Drive, or repository link)"
+                                  className="w-full text-xs pl-10 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border-2 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-900 dark:focus:border-white transition shadow-2xs"
+                                />
+                              </div>
+                            )}
                           </div>
 
                           {(() => {
@@ -1189,7 +1591,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                     type="button"
                                     disabled={
                                       isSubmitting ||
-                                      (!submissionMessage.trim() && !submissionLink.trim() && mediaList.length === 0)
+                                      (!submissionMessage.trim() && !submissionLink.trim() && !selectedVideoProjectId && mediaList.length === 0)
                                     }
                                     onClick={() => handleDeliverableSubmit(m)}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100 active:scale-98 transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
@@ -1555,6 +1957,12 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
           </div>
         </div>
       )}
+      {/* Submission Upload & Progress Modal */}
+      <SubmissionProgressModal
+        state={uploadModalState}
+        onClose={() => setUploadModalState(null)}
+        onRetry={selectedMilestone ? () => handleDeliverableSubmit(selectedMilestone) : undefined}
+      />
     </div>
   );
 };
