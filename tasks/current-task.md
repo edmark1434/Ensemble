@@ -68,7 +68,7 @@
 - [x] Market video proxies only overlay the watermark on the finalized original and have identical dimensions.
 - [x] Preserved aspect ratio and portrait orientation; use server-probed metadata and handle failures without publishing incomplete files.
 - [x] No editor sizing changes, image-original resolution caps, or premium behavior.
-- [x] Focused processing checks and editor type check; browser checking is left to the user.
+- [x] Focused processing checks and editor type check; browser checks are left to the user.
 
 ## Verification
 
@@ -78,7 +78,6 @@
 - Editor video normalization: 8 tests passed, including landscape/portrait/square/ultrawide, unchanged smaller sources, rotation, non-square pixels, and invalid input rejection.
 - Editor `npm run typecheck`, changed backend JavaScript syntax checks, and focused `git diff --check` passed.
 - No browser checks, full builds, live S3/database uploads, or existing-asset conversions performed. New-upload browser verification remains with the user.
-- Editor runtime requires FFmpeg on PATH (available locally) or `FFMPEG_PATH`; documented in `docs/architecture.md`.
 
 ### Previous Asset Creation Findings
 
