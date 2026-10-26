@@ -664,19 +664,12 @@ export const TeamProjectWorkspace: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation Tabs (2-Row Layout) */}
+          {/* Navigation Tabs (Single Clean Unified Row) */}
           <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-            {/* Row 1: Production Core */}
-            <div className="flex items-center border-b border-zinc-200/70 dark:border-zinc-800/70 overflow-x-auto px-6">
+            <div className="flex items-center overflow-x-auto scrollbar-none px-4 sm:px-6">
               {[
                 { id: 'overview' as TabType, label: 'Overview', icon: FileText },
                 { id: 'taskboard' as TabType, label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
-                {
-                  id: 'project' as TabType,
-                  label: 'Project',
-                  icon: Film,
-                  badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
-                },
                 {
                   id: 'submissions' as TabType,
                   label: 'Submissions',
@@ -685,45 +678,16 @@ export const TeamProjectWorkspace: React.FC = () => {
                     (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
                   ).length,
                 },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => handleTabChange(tab.id)}
-                    className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-                      isActive
-                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
-                        : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                    {tab.badge !== undefined && tab.badge > 0 && (
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                          isActive
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-                        }`}
-                      >
-                        {tab.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Row 2: Management & Collaboration */}
-            <div className="flex items-center overflow-x-auto px-6">
-              {[
-                { id: 'info' as TabType, label: 'Info', icon: Info },
+                { id: 'chat' as TabType, label: 'Chat', icon: MessageCircle },
+                {
+                  id: 'project' as TabType,
+                  label: 'Video Projects',
+                  icon: Film,
+                  badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
+                },
                 { id: 'contract' as TabType, label: 'Contract & Members', icon: Briefcase, badge: members.length },
                 { id: 'history' as TabType, label: 'History', icon: Clock, badge: history.length },
-                { id: 'chat' as TabType, label: 'Chat', icon: MessageCircle },
+                { id: 'info' as TabType, label: 'Project Info', icon: Info },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -732,17 +696,17 @@ export const TeamProjectWorkspace: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => handleTabChange(tab.id)}
-                    className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+                    className={`flex items-center gap-2 py-3 px-3.5 sm:px-4 text-xs font-semibold border-b-2 transition-all shrink-0 cursor-pointer ${
                       isActive
-                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
+                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-zinc-900'
                         : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="whitespace-nowrap">{tab.label}</span>
                     {tab.badge !== undefined && tab.badge > 0 && (
                       <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
                           isActive
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
                             : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
