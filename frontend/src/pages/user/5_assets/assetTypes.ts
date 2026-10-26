@@ -60,6 +60,7 @@ export interface AssetRecord {
   creator_rating_count: number;
   is_owner: boolean;
   is_purchased: boolean;
+  available_license_count: number;
   can_download?: boolean;
   can_review: boolean;
   is_liked: boolean;
@@ -87,7 +88,19 @@ export interface AssetReview {
   is_owner: boolean;
 }
 
+export interface AssetLicense {
+  market_asset_license_id: string;
+  market_asset_id: string;
+  project_id: string | null;
+  credit_transaction_id: string | null;
+  price_credits: number;
+  status: "active" | "refunded";
+  purchased_at: string;
+  assigned_at: string | null;
+}
+
 export interface AssetPurchaseResponse {
+  license: AssetLicense;
   asset: AssetRecord;
   transaction: {
     credit_transaction_id: string;

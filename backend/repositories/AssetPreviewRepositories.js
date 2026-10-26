@@ -17,7 +17,7 @@ async function findOwnedUploadedFilesRepository(accountId, fileIds) {
 }
 
 // Image content media assets whose thumbnail/proxy are not yet the generated
-// 200p thumbnail + high-quality Full HD Ensemble-watermarked proxy.
+// Generated thumbnail + high-quality Full HD Ensemble-watermarked proxy.
 async function listAssetDerivativeBackfillCandidatesRepository(limit = 1000) {
   const { rows } = await pool.query(
     `SELECT m.media_asset_id, m.proxy_file_id, m.thumbnail_file_id,

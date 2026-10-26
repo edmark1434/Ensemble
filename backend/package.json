@@ -18,6 +18,7 @@
     "migration:create": "node-pg-migrate create",
     "rag:ingest": "node scripts/IngestDocumentation.js",
     "assets:backfill-derivatives": "node scripts/BackfillAssetDerivatives.js",
+    "assets:backfill-thumbnails": "node scripts/BackfillMediaThumbnails.js",
     "media:worker": "node scripts/MediaWorker.js",
     "db:create": "node lib/CreateDb.js",
     "rollback:all": "node-pg-migrate down 100"

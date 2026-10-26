@@ -10,6 +10,8 @@ const {
   getAssetDownloadServices,
   getAssetOriginalPreviewServices,
   purchaseAssetServices,
+  listAssetLicensesServices,
+  assignAssetLicenseServices,
   listCommentsServices,
   createCommentServices,
   updateCommentServices,
@@ -83,7 +85,8 @@ async function getAssetDownloadController(req, res) {
       ...(await getAssetDownloadServices(
         req.params.assetId,
         req.user.account_id,
-        req.params.mediaAssetId || null
+        req.params.mediaAssetId || null,
+        req.query.projectId ?? null
       )),
     });
   } catch (error) { return handleAssetError(res, error); }
@@ -97,7 +100,8 @@ async function getAssetOriginalPreviewController(req, res) {
       ...(await getAssetOriginalPreviewServices(
         req.params.assetId,
         req.user.account_id,
-        req.params.mediaAssetId || null
+        req.params.mediaAssetId || null,
+        req.query.projectId ?? null
       )),
     });
   } catch (error) { return handleAssetError(res, error); }
@@ -109,6 +113,21 @@ async function purchaseAssetController(req, res) {
       success: true,
       ...(await purchaseAssetServices(req.params.assetId, req.user.account_id)),
     });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function listAssetLicensesController(req, res) {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ success: true, ...await listAssetLicensesServices(req.params.assetId, req.user.account_id, req.query) });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function assignAssetLicenseController(req, res) {
+  try {
+    return res.json({ success: true, license: await assignAssetLicenseServices(
+      req.params.assetId, req.params.licenseId, req.user.account_id, req.body
+    ) });
   } catch (error) { return handleAssetError(res, error); }
 }
 
@@ -267,6 +286,8 @@ async function editorAssetActionController(req, res) {
 }
 
 module.exports = {
+  listAssetLicensesController,
+  assignAssetLicenseController,
   reportAssetController,
   editorAssetActionController,
   getAssetPostingEligibilityController,

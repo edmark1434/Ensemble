@@ -18,8 +18,7 @@ const {
 } = require('../repositories/AssetPreviewRepositories');
 
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
-const THUMBNAIL_HEIGHT = 200;
-const THUMBNAIL_MAX_WIDTH = 800;
+const THUMBNAIL_SIZE = 320;
 const THUMBNAIL_QUALITY = 70;
 const PROXY_SHORT_SIDE = 1080;
 const PROXY_LONG_SIDE = 1920;
@@ -91,8 +90,8 @@ async function createImageThumbnail(sourceBuffer) {
   return sharp(sourceBuffer, INPUT_OPTIONS)
     .rotate()
     .resize({
-      width: THUMBNAIL_MAX_WIDTH,
-      height: THUMBNAIL_HEIGHT,
+      width: THUMBNAIL_SIZE,
+      height: THUMBNAIL_SIZE,
       fit: 'inside',
       withoutEnlargement: true,
     })
@@ -148,8 +147,7 @@ async function deleteKeys(keys) {
   }), { abortSignal: AbortSignal.timeout(15_000) }).catch(() => undefined)));
 }
 
-// file: { file_id, name, path, size_bytes } of a protected original image
-async function generateImageDerivatives(file) {
+async function readImageOriginal(file) {
   const declaredSize = Number(file.size_bytes);
   if (!Number.isSafeInteger(declaredSize) || declaredSize < 1 || declaredSize > MAX_SOURCE_BYTES) {
     throw derivativeError('ASSET_IMAGE_UNPROCESSABLE', 'The original image exceeds the processing limit');
@@ -162,6 +160,17 @@ async function generateImageDerivatives(file) {
   if (buffer.length < 1 || buffer.length > MAX_SOURCE_BYTES) {
     throw derivativeError('ASSET_IMAGE_UNPROCESSABLE', 'The original image size is invalid');
   }
+  return buffer;
+}
+
+async function generateShowcaseThumbnail(file) {
+  const bytes = await createImageThumbnail(await readImageOriginal(file));
+  return { thumbnail: await putDerivative('assets/thumbnails/320', safeBaseName(file.name), 'thumbnail-320px', bytes) };
+}
+
+// file: { file_id, name, path, size_bytes } of a protected original image
+async function generateImageDerivatives(file) {
+  const buffer = await readImageOriginal(file);
 
   let thumbnailBytes;
   let proxyBytes;
@@ -185,7 +194,7 @@ async function generateImageDerivatives(file) {
   const uploaded = [];
   try {
     const results = await Promise.allSettled([
-      putDerivative('assets/thumbnails', baseName, 'thumbnail-200p', thumbnailBytes),
+      putDerivative('assets/thumbnails/320', baseName, 'thumbnail-320px', thumbnailBytes),
       putDerivative('assets/proxies/v2', baseName, 'proxy-ensemble-1080p', proxyBytes),
     ]);
     for (const result of results) {
@@ -279,6 +288,7 @@ module.exports = {
   createImageThumbnail,
   createWatermarkedProxy,
   generateImageDerivatives,
+  generateShowcaseThumbnail,
   prepareImageDerivatives,
   discardImageDerivatives,
   backfillAssetDerivativesServices,

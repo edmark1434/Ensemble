@@ -12,6 +12,8 @@ const {
   getAssetDownloadController,
   getAssetOriginalPreviewController,
   purchaseAssetController,
+  listAssetLicensesController,
+  assignAssetLicenseController,
   listCommentsController,
   createCommentController,
   updateCommentController,
@@ -44,6 +46,8 @@ router.use(checkSession, requireAuth);
 router.post('/', createAssetController);
 router.post('/:assetId/report', reportAssetController);
 router.post('/:assetId/purchase', purchaseAssetController);
+router.get('/:assetId/licenses', listAssetLicensesController);
+router.post('/:assetId/licenses/:licenseId/assign', assignAssetLicenseController);
 router.put('/:assetId/like', likeAssetController);
 router.delete('/:assetId/like', unlikeAssetController);
 router.put('/:assetId/save', saveAssetController);

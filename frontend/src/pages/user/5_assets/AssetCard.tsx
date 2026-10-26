@@ -71,7 +71,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
         <div className="absolute left-2 bottom-2 flex flex-wrap items-center gap-1.5 z-10">
           {asset.is_purchased && !asset.is_owner && (
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-600 text-[10px] font-semibold uppercase text-white shadow-sm border border-emerald-500">
-              <CheckCircle2 className="h-3 w-3" /> Owned
+              <CheckCircle2 className="h-3 w-3" /> Licensed
             </span>
           )}
           {view === "mine" && asset.is_owner && (

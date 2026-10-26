@@ -372,10 +372,10 @@ export default function AssetDetails() {
     setAsset(result.asset);
     setPurchaseOpen(false);
     showSuccessToast(result.alreadyPurchased
-      ? "You already own this asset."
+      ? "You already have an unassigned license for this asset."
       : result.asset.price_credits === 0
-        ? "Asset added to your purchased library."
-        : "Asset purchased successfully.");
+        ? "Asset license added to your purchased library."
+        : "Asset license purchased successfully.");
   };
 
   const requestPurchase = () => {
@@ -467,7 +467,7 @@ export default function AssetDetails() {
                         {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "N/A"}
                       </span>
                     </span>
-                    {asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Owned</span>}
+                    {asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Licensed</span>}
                   </div>
                   <div className="mt-4 flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 text-xl font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-6 w-6" /> {asset.price_credits.toLocaleString()} credits</span>
@@ -497,9 +497,10 @@ export default function AssetDetails() {
                     <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
                       <PackageOpen className="h-4 w-4" /> View contents
                     </button>
-                  ) : (
+                  ) : null}
+                  {!asset.is_owner && asset.available_license_count === 0 && asset.status === "published" && (
                     <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                      <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
+                      <ShoppingCart className="h-4 w-4" /> {asset.is_purchased ? "Get another license" : asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
                     </button>
                   )}
                   {asset.is_owner && <><button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button><button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button></>}

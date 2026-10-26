@@ -122,11 +122,7 @@ async function createVideoProxy({ inputPath, workDir, createWatermarkSvg, create
     throw new Error('Video proxy dimensions do not match the original');
   }
 
-  const framePath = path.join(workDir, 'frame.jpg');
-  // Very short clips may have no frame after the midpoint (audio can outlast video).
-  const seek = info.duration < 2 ? 0 : 1;
-  await run(ffmpegBinary(), ['-y', '-v', 'error', '-ss', String(seek), '-i', inputPath, '-frames:v', '1', '-q:v', '2', framePath]);
-  const thumbnail = await createImageThumbnail(await fs.promises.readFile(framePath));
+  const thumbnail = await createVideoThumbnail({ inputPath, workDir, createImageThumbnail, duration: info.duration });
 
   return {
     width: info.width,
@@ -135,6 +131,24 @@ async function createVideoProxy({ inputPath, workDir, createWatermarkSvg, create
     proxyPath,
     thumbnail,
   };
+}
+
+async function createVideoThumbnail({ inputPath, workDir, createImageThumbnail, duration }) {
+  const framePath = path.join(workDir, 'frame.jpg');
+  // Very short clips may have no frame after the midpoint (audio can outlast video).
+  const seek = (duration ?? (await probe(inputPath)).duration) < 2 ? 0 : 1;
+  await run(ffmpegBinary(), ['-y', '-v', 'error', '-ss', String(seek), '-i', inputPath, '-frames:v', '1', '-q:v', '2', framePath]);
+  return createImageThumbnail(await fs.promises.readFile(framePath));
+}
+
+// A separate, untagged menu preview; shorter sources keep their original length.
+async function createAudioThumbnail({ inputPath, workDir }) {
+  const thumbnailPath = path.join(workDir, 'preview-30s.mp3');
+  await run(ffmpegBinary(), [
+    '-y', '-v', 'error', '-i', inputPath, '-map', '0:a:0', '-t', '30',
+    '-vn', '-map_metadata', '-1', '-c:a', 'libmp3lame', '-b:a', '128k', thumbnailPath,
+  ]);
+  return thumbnailPath;
 }
 
 // Upload completion already enforces the original's resolution policy.
@@ -179,7 +193,8 @@ async function processAudio({ inputPath, workDir, tagPath }) {
   }
   args.push('-c:a', 'libmp3lame', '-b:a', '96k', proxyPath);
   await run(ffmpegBinary(), args);
-  return { proxyPath, durationSeconds: Math.max(1, Math.round(info.duration)), tagCount: delays.length };
+  const thumbnailPath = await createAudioThumbnail({ inputPath, workDir });
+  return { proxyPath, thumbnailPath, durationSeconds: Math.max(1, Math.round(info.duration)), tagCount: delays.length };
 }
 
 module.exports = {
@@ -187,6 +202,8 @@ module.exports = {
   cappedDimensions,
   normalizeVideoOriginal,
   createVideoProxy,
+  createVideoThumbnail,
+  createAudioThumbnail,
   processVideo,
   processAudio,
   makeWorkDir,

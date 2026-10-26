@@ -87,6 +87,7 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
           </div>
           <h3 className="mt-4 truncate font-bold text-gray-900 dark:text-white">{asset.name}</h3>
           <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">by {asset.creator_name}</p>
+          <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-zinc-400">One license covers this {asset.media_asset_count > 1 ? "bundle" : "asset"} in one project, including future edits by its collaborators. It stays unassigned until you assign it to a project.</p>
 
           <dl className="mt-5 space-y-3 rounded-xl border border-gray-200 p-4 text-sm dark:border-white/10">
             <div className="flex items-center justify-between gap-4">

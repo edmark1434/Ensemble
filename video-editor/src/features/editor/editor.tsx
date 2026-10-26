@@ -371,6 +371,7 @@ const Panels = ({
 
   const { activeSceneBlockId } = useStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
+  const rightPanelRef = useRef<ImperativePanelHandle>(null);
   const controlsPanelRef = useRef<HTMLDivElement>(null);
 
   // Forces Timeline to unmount/remount on scene switch so its store `timeline`
@@ -380,9 +381,11 @@ const Panels = ({
 
   useEffect(() => {
     if (showMenuItem) {
-      menuPanelRef.current?.expand();
+      menuPanelRef.current?.resize(35);
+      rightPanelRef.current?.resize(30);
     } else {
       menuPanelRef.current?.collapse();
+      rightPanelRef.current?.resize(25);
     }
   }, [showMenuItem]);
 
@@ -429,7 +432,7 @@ const Panels = ({
               ref={menuPanelRef}
               collapsible
               collapsedSize={0}
-              defaultSize={showMenuItem ? 30 : 0}
+              defaultSize={showMenuItem ? 35 : 0}
               minSize={30}
               maxSize={40}
               className={showMenuItem ? "" : "hidden"}
@@ -439,8 +442,8 @@ const Panels = ({
             <ResizableHandle className={cn("bg-border/90", !showMenuItem && "hidden")} />
 
             <ResizablePanel
-              defaultSize={showMenuItem ? 45 : 75}
-              minSize={showMenuItem ? 40 : 55}
+              defaultSize={showMenuItem ? 40 : 75}
+              minSize={showMenuItem ? 35 : 55}
               maxSize={showMenuItem ? 45 : 75}
               className="relative bg-card min-w-0"
             >
@@ -450,6 +453,7 @@ const Panels = ({
 
             <ResizableHandle className="bg-border/90" />
             <ResizablePanel
+              ref={rightPanelRef}
               defaultSize={25}
               minSize={25}
               maxSize={showMenuItem ? 35 : 45}

@@ -39,3 +39,10 @@
 - Use Socket.IO for timely notification/presence/status updates, not as the sole source of truth.
 - Event names and payload shapes must remain stable and scoped to authorized rooms/users.
 - Always expose a normal HTTP read endpoint so refresh or reconnect restores current state.
+
+## Marketplace license endpoints
+
+- `POST /api/assets/:assetId/purchase` returns `license` alongside the existing purchase response. `alreadyPurchased` means an active unassigned license was reused without another charge. Asset responses include `available_license_count`; `is_purchased` still means the viewer has at least one active purchased license.
+- `GET /api/assets/:assetId/licenses?page=1` returns the authenticated buyer's license history, 50 records per page with `hasMore`.
+- `POST /api/assets/:assetId/licenses/:licenseId/assign` accepts `{ "projectId": "uuid" }`. Only the buyer can assign their active license, and they must be an Owner, Manager, or Editor of a non-deleted, non-frozen project. Repeating the same assignment succeeds; changing projects or consuming another license for an already-licensed project returns 409.
+- Original preview/download routes accept optional `projectId` query context for shared project access. Without that context, existing creator/buyer library access remains available. This is not a render authorization endpoint; editor checkout and clean-export integration are not wired yet.

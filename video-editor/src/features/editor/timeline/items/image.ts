@@ -23,6 +23,7 @@ class Image extends Resizable {
   public hasSrc = true;
   declare hidden: boolean;
   public name: string = "Image";
+  private thumbnailSrc: string | undefined;
 
   public isLoading = true;
   private loaderPath: Path2D | null = null;
@@ -37,6 +38,7 @@ class Image extends Resizable {
     super(props);
     this.id = props.id;
     this.src = props.src;
+    this.thumbnailSrc = props.metadata?.market ? props.metadata.previewUrl || "" : undefined;
     this.display = props.display;
     this.tScale = props.tScale;
     this.hidden = props.hidden ?? false;
@@ -137,7 +139,13 @@ class Image extends Resizable {
   }
 
   public loadImage() {
-    util.loadImage(this.src).then((img) => {
+    const src = this.thumbnailSrc ?? this.src;
+    if (!src) {
+      this.isLoading = false;
+      this.stopLoadingAnimation();
+      return;
+    }
+    util.loadImage(src).then((img) => {
       const imgHeight = img.height;
       const rectHeight = this.height;
       const scaleY = rectHeight / imgHeight;
@@ -147,6 +155,10 @@ class Image extends Resizable {
         patternTransform: [scaleY, 0, 0, scaleY, 0, 0]
       });
       this.set("fill", pattern);
+      this.isLoading = false;
+      this.stopLoadingAnimation();
+      this.canvas?.requestRenderAll();
+    }).catch(() => {
       this.isLoading = false;
       this.stopLoadingAnimation();
       this.canvas?.requestRenderAll();

@@ -146,6 +146,10 @@ async function createThumbnailMediaAssets(client, { marketAssetId, name, ownerUs
        VALUES ($1, $2, $3)`,
       [marketAssetId, media.media_asset_id, position]
     );
+    await client.query(
+      `INSERT INTO media_asset_jobs (media_asset_id, market_asset_id, kind)
+       VALUES ($1, $2, 'image')`, [media.media_asset_id, marketAssetId]
+    );
   }
 }
 
@@ -399,6 +403,7 @@ const ASSET_SELECT = `
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
+         purchase_access.available_license_count,
          ((owner.account_id = $1) OR purchase_access.is_purchased) AS can_download,
          (purchase_access.is_purchased AND owner.account_id <> $1) AS can_review,
          EXISTS (
@@ -422,8 +427,8 @@ const ASSET_SELECT = `
             AND reviews.deleted_at IS NULL
             AND EXISTS (
               SELECT 1
-              FROM user_market_assets review_ownership
-              JOIN users reviewing_user ON reviewing_user.user_id = review_ownership.user_id
+              FROM market_asset_licenses review_ownership
+              JOIN users reviewing_user ON reviewing_user.user_id = review_ownership.buyer_user_id
               WHERE review_ownership.market_asset_id = reviews.market_asset_id
                 AND reviewing_user.account_id = reviews.account_id
                 AND review_ownership.status = 'active'
@@ -435,8 +440,8 @@ const ASSET_SELECT = `
             AND reviews.deleted_at IS NULL
             AND EXISTS (
               SELECT 1
-              FROM user_market_assets review_ownership
-              JOIN users reviewing_user ON reviewing_user.user_id = review_ownership.user_id
+              FROM market_asset_licenses review_ownership
+              JOIN users reviewing_user ON reviewing_user.user_id = review_ownership.buyer_user_id
               WHERE review_ownership.market_asset_id = reviews.market_asset_id
                 AND reviewing_user.account_id = reviews.account_id
                 AND review_ownership.status = 'active'
@@ -450,17 +455,23 @@ const ASSET_SELECT = `
              AND mat.deleted_at IS NULL AND t.deleted_at IS NULL
          ), ARRAY[]::varchar[]) AS tags,
          (SELECT COUNT(*)::int FROM asset_reviews ar
-          JOIN user_market_assets uma ON uma.market_asset_id = ar.market_asset_id
-          JOIN users u ON u.user_id = uma.user_id
-          WHERE u.account_id = owner.account_id AND ar.deleted_at IS NULL AND uma.status = 'active' AND uma.deleted_at IS NULL) AS creator_rating_count,
+          WHERE ar.deleted_at IS NULL AND EXISTS (
+            SELECT 1 FROM market_asset_licenses license
+            JOIN users u ON u.user_id = license.buyer_user_id
+            WHERE license.market_asset_id = ar.market_asset_id
+              AND u.account_id = owner.account_id
+              AND license.status = 'active' AND license.deleted_at IS NULL)) AS creator_rating_count,
          COALESCE((SELECT ROUND(AVG(ar.rating)::numeric, 1) FROM asset_reviews ar
-          JOIN user_market_assets uma ON uma.market_asset_id = ar.market_asset_id
-          JOIN users u ON u.user_id = uma.user_id
-          WHERE u.account_id = owner.account_id AND ar.deleted_at IS NULL AND uma.status = 'active' AND uma.deleted_at IS NULL), 0) AS creator_average_rating,
+          WHERE ar.deleted_at IS NULL AND EXISTS (
+            SELECT 1 FROM market_asset_licenses license
+            JOIN users u ON u.user_id = license.buyer_user_id
+            WHERE license.market_asset_id = ar.market_asset_id
+              AND u.account_id = owner.account_id
+              AND license.status = 'active' AND license.deleted_at IS NULL)), 0) AS creator_average_rating,
          (SELECT COUNT(*)::int FROM asset_comments ac
           WHERE ac.market_asset_id = ma.market_asset_id AND ac.deleted_at IS NULL) AS comment_count,
          (SELECT COUNT(*)::int
-          FROM user_market_assets uma
+          FROM market_asset_licenses uma
           WHERE uma.market_asset_id = ma.market_asset_id
             AND uma.status = 'active'
             AND uma.deleted_at IS NULL) AS purchase_count
@@ -526,6 +537,7 @@ const ASSET_SELECT = `
                AND item_proxy.deleted_at IS NULL
              LEFT JOIN files item_thumbnail ON item_thumbnail.file_id = item.thumbnail_file_id
                AND item_thumbnail.deleted_at IS NULL
+               AND item_thumbnail.mime_type LIKE 'image/%'
              LEFT JOIN media_asset_jobs item_job ON item_job.media_asset_id = item.media_asset_id
              WHERE item_link.market_asset_id = ma.market_asset_id
                AND item.deleted_at IS NULL
@@ -573,6 +585,7 @@ const ASSET_SELECT = `
       JOIN files original ON original.file_id = m.original_file_id
       LEFT JOIN files proxy ON proxy.file_id = m.proxy_file_id AND proxy.deleted_at IS NULL
       LEFT JOIN files poster ON poster.file_id = m.thumbnail_file_id AND poster.deleted_at IS NULL
+        AND poster.mime_type LIKE 'image/%'
       WHERE content_link.market_asset_id = ma.market_asset_id
         AND m.deleted_at IS NULL
         AND original.deleted_at IS NULL
@@ -586,13 +599,18 @@ const ASSET_SELECT = `
   LEFT JOIN LATERAL (
     SELECT EXISTS (
       SELECT 1
-      FROM user_market_assets owned_asset
-      JOIN users purchasing_user ON purchasing_user.user_id = owned_asset.user_id
+      FROM market_asset_licenses owned_asset
+      JOIN users purchasing_user ON purchasing_user.user_id = owned_asset.buyer_user_id
       WHERE owned_asset.market_asset_id = ma.market_asset_id
         AND purchasing_user.account_id = $1
         AND owned_asset.status = 'active'
         AND owned_asset.deleted_at IS NULL
-    ) AS is_purchased
+    ) AS is_purchased,
+    (SELECT COUNT(*)::int FROM market_asset_licenses available
+     JOIN users buyer ON buyer.user_id = available.buyer_user_id
+     WHERE available.market_asset_id = ma.market_asset_id AND buyer.account_id = $1
+       AND available.project_id IS NULL AND available.status = 'active'
+       AND available.deleted_at IS NULL) AS available_license_count
   ) purchase_access ON TRUE
   LEFT JOIN LATERAL (
     SELECT ml.status, ml.rejection_reason
@@ -854,17 +872,26 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
   }
 }
 
-async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = null) {
+async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = null, projectId = null) {
   const { rows } = await pool.query(
     `SELECT media.media_asset_id, link.position,
             original.path, original.name, original.mime_type, original.size_bytes,
             (owner.account_id = $2) AS is_owner,
             EXISTS (
               SELECT 1
-              FROM user_market_assets owned_asset
-              JOIN users purchasing_user ON purchasing_user.user_id = owned_asset.user_id
+              FROM market_asset_licenses owned_asset
+              JOIN users purchasing_user ON purchasing_user.user_id = owned_asset.buyer_user_id
               WHERE owned_asset.market_asset_id = ma.market_asset_id
-                AND purchasing_user.account_id = $2
+                AND ($4::uuid IS NULL AND purchasing_user.account_id = $2
+                  OR $4::uuid IS NOT NULL AND owned_asset.project_id = $4
+                    AND EXISTS (
+                      SELECT 1 FROM project_members member
+                      JOIN users collaborator ON collaborator.user_id = member.user_id
+                      JOIN projects project ON project.project_id = member.project_id
+                      WHERE member.project_id = $4 AND collaborator.account_id = $2
+                        AND member.deleted_at IS NULL AND project.deleted_at IS NULL
+                        AND member.role IN ('Owner', 'Manager', 'Editor')
+                    ))
                 AND owned_asset.status = 'active'
                 AND owned_asset.deleted_at IS NULL
             ) AS is_purchased
@@ -880,7 +907,7 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
        AND ($3::uuid IS NULL OR media.media_asset_id = $3)
      ORDER BY link.position, media.media_asset_id
      LIMIT 1`,
-    [assetId, accountId, mediaAssetId]
+    [assetId, accountId, mediaAssetId, projectId]
   );
   return rows[0] || null;
 }
@@ -956,10 +983,11 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     const creatorNetCredits = priceCredits - transactionFeeCredits;
 
     const existingPurchase = await client.query(
-      `SELECT owned_asset.user_id
-       FROM user_market_assets owned_asset
-       WHERE owned_asset.user_id = $1
+      `SELECT owned_asset.*
+       FROM market_asset_licenses owned_asset
+       WHERE owned_asset.buyer_user_id = $1
          AND owned_asset.market_asset_id = $2
+         AND owned_asset.project_id IS NULL
          AND owned_asset.status = 'active'
          AND owned_asset.deleted_at IS NULL
        FOR UPDATE`,
@@ -1004,7 +1032,8 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       await client.query('COMMIT');
       return {
         alreadyPurchased: true,
-        transactionId: null,
+        license: existingPurchase.rows[0],
+        transactionId: existingPurchase.rows[0].credit_transaction_id,
         buyerAccountId,
         creatorAccountId: asset.owner_account_id,
         buyerBalanceCredits: Number(buyerWallet.balance_credits),
@@ -1070,16 +1099,12 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
         feeTransaction?.credit_transaction_id || null, assetId]
     );
     const transaction = transactionResult.rows[0];
-    await client.query(
-      `INSERT INTO user_market_assets
-         (user_id, market_asset_id, price, status, created_at, deleted_at)
-       VALUES ($1, $2, $3, 'active', CURRENT_TIMESTAMP, NULL)
-       ON CONFLICT (user_id, market_asset_id)
-       DO UPDATE SET price = EXCLUDED.price,
-                     status = 'active',
-                     created_at = CURRENT_TIMESTAMP,
-                     deleted_at = NULL`,
-      [asset.buyer_user_id, assetId, priceCredits]
+    const licenseResult = await client.query(
+      `INSERT INTO market_asset_licenses
+         (buyer_user_id, market_asset_id, price_credits, credit_transaction_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [asset.buyer_user_id, assetId, priceCredits, transaction.credit_transaction_id]
     );
     const purchaseLabel = priceCredits === 0 ? 'claimed' : 'purchased';
     const buyerMessage = priceCredits === 0
@@ -1103,6 +1128,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     await client.query('COMMIT');
     return {
       alreadyPurchased: false,
+      license: licenseResult.rows[0],
       transaction,
       transactionId: transaction.credit_transaction_id,
       buyerAccountId,
@@ -1121,10 +1147,87 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
   }
 }
 
+// Licenses belong to the buyer until assigned, then grant use to that project.
+async function listAssetLicensesRepository(assetId, accountId, limit, offset) {
+  const { rows } = await pool.query(
+    `SELECT license.market_asset_license_id, license.market_asset_id, license.project_id,
+            license.credit_transaction_id, license.price_credits, license.status,
+            license.purchased_at, license.assigned_at
+     FROM market_asset_licenses license
+     JOIN users buyer ON buyer.user_id = license.buyer_user_id
+     WHERE license.market_asset_id = $1 AND buyer.account_id = $2
+       AND license.deleted_at IS NULL
+     ORDER BY license.purchased_at DESC, license.market_asset_license_id DESC
+     LIMIT $3 OFFSET $4`,
+    [assetId, accountId, limit, offset]
+  );
+  return rows;
+}
+
+async function assignAssetLicenseRepository(assetId, licenseId, accountId, projectId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Same order as purchase: buyer/asset, then project/asset. Different buyers
+    // assigning to the same project must not consume two paid uses.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [accountId, assetId]);
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [projectId, assetId]);
+    const { rows: [membership] } = await client.query(
+      `SELECT member.role, project.status
+       FROM project_members member
+       JOIN users buyer ON buyer.user_id = member.user_id
+       JOIN projects project ON project.project_id = member.project_id
+       WHERE member.project_id = $1 AND buyer.account_id = $2
+         AND member.deleted_at IS NULL AND project.deleted_at IS NULL
+       FOR SHARE OF member, project`,
+      [projectId, accountId]
+    );
+    if (!membership || !['Owner', 'Manager', 'Editor'].includes(membership.role)) {
+      throw repoError('ASSET_LICENSE_PROJECT_FORBIDDEN');
+    }
+    if (String(membership.status).toLowerCase() === 'frozen') throw repoError('ASSET_LICENSE_PROJECT_FROZEN');
+    const { rows: [license] } = await client.query(
+      `SELECT license.* FROM market_asset_licenses license
+       JOIN users buyer ON buyer.user_id = license.buyer_user_id
+       WHERE license.market_asset_license_id = $1 AND license.market_asset_id = $2
+         AND buyer.account_id = $3 AND license.deleted_at IS NULL
+       FOR UPDATE OF license`,
+      [licenseId, assetId, accountId]
+    );
+    if (!license) throw repoError('ASSET_LICENSE_NOT_FOUND');
+    if (license.status !== 'active') throw repoError('ASSET_LICENSE_INACTIVE');
+    if (license.project_id && String(license.project_id) !== projectId) {
+      throw repoError('ASSET_LICENSE_ALREADY_ASSIGNED');
+    }
+    if (license.project_id) {
+      await client.query('COMMIT');
+      return license;
+    }
+    const existing = await client.query(
+      `SELECT 1 FROM market_asset_licenses WHERE project_id = $1 AND market_asset_id = $2
+         AND status = 'active' AND deleted_at IS NULL`,
+      [projectId, assetId]
+    );
+    if (existing.rowCount) throw repoError('ASSET_PROJECT_ALREADY_LICENSED');
+    const { rows: [assigned] } = await client.query(
+      `UPDATE market_asset_licenses SET project_id = $2, assigned_at = CURRENT_TIMESTAMP
+       WHERE market_asset_license_id = $1 RETURNING *`,
+      [licenseId, projectId]
+    );
+    await client.query('COMMIT');
+    return assigned;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function replaceAssetContent(client, assetId, accountId, ownedAsset, content, derivatives, name) {
   if (ownedAsset.type !== content.type) throw repoError('ASSET_TYPE_IMMUTABLE');
   const purchases = await client.query(
-    `SELECT 1 FROM user_market_assets
+    `SELECT 1 FROM market_asset_licenses
      WHERE market_asset_id = $1 AND status = 'active' AND deleted_at IS NULL
      LIMIT 1`,
     [assetId]
@@ -1298,16 +1401,17 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
     await setMarketYdoc(client, assetId, content.ydocSnapshotId);
   }
 
-  // Audio has no poster or image proxy; video can use the selected showcase as a temporary poster.
+  // A pending video can use the selected showcase as a temporary poster.
+  // Audio thumbnails are playable preview files and must survive listing edits.
   await client.query(
     `UPDATE media_assets m
-     SET thumbnail_file_id = CASE WHEN m.type = 'audio' THEN NULL ELSE $2::uuid END
+     SET thumbnail_file_id = $2::uuid
      FROM market_media_assets link
      LEFT JOIN media_asset_jobs job ON job.media_asset_id = link.media_asset_id
      WHERE link.market_asset_id = $1::uuid
        AND link.media_asset_id = m.media_asset_id
        AND m.deleted_at IS NULL
-       AND (m.type = 'audio' OR job.status IN ('pending', 'running', 'failed'))`,
+       AND m.type = 'video' AND job.status IN ('pending', 'running', 'failed')`,
     [assetId, coverFileId]
   );
 }
@@ -1458,7 +1562,7 @@ async function deleteAssetRepository(assetId, accountId) {
     }
     const purchases = await client.query(
       `SELECT 1
-       FROM user_market_assets owned_asset
+       FROM market_asset_licenses owned_asset
        WHERE owned_asset.market_asset_id = $1
          AND owned_asset.status = 'active'
          AND owned_asset.deleted_at IS NULL
@@ -1707,8 +1811,8 @@ async function listAssetReviewsRepository(assetId, accountId) {
        AND author.deleted_at IS NULL
        AND EXISTS (
          SELECT 1
-         FROM user_market_assets ownership
-         JOIN users buyer ON buyer.user_id = ownership.user_id
+         FROM market_asset_licenses ownership
+         JOIN users buyer ON buyer.user_id = ownership.buyer_user_id
          WHERE ownership.market_asset_id = review.market_asset_id
            AND buyer.account_id = review.account_id
            AND ownership.status = 'active'
@@ -1728,8 +1832,8 @@ async function createAssetReviewRepository(assetId, accountId, rating, reviewTex
        SELECT $1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
        WHERE EXISTS (
          SELECT 1
-         FROM user_market_assets ownership
-         JOIN users buyer ON buyer.user_id = ownership.user_id
+         FROM market_asset_licenses ownership
+         JOIN users buyer ON buyer.user_id = ownership.buyer_user_id
          WHERE ownership.market_asset_id = $1
            AND buyer.account_id = $2
            AND ownership.status = 'active'
@@ -1769,8 +1873,8 @@ async function updateAssetReviewRepository(assetId, reviewId, accountId, rating,
          AND review.deleted_at IS NULL
          AND EXISTS (
            SELECT 1
-           FROM user_market_assets ownership
-           JOIN users buyer ON buyer.user_id = ownership.user_id
+           FROM market_asset_licenses ownership
+           JOIN users buyer ON buyer.user_id = ownership.buyer_user_id
            WHERE ownership.market_asset_id = review.market_asset_id
              AND buyer.account_id = review.account_id
              AND ownership.status = 'active'
@@ -1804,28 +1908,33 @@ async function deleteAssetReviewRepository(assetId, reviewId, accountId) {
   return result.rowCount === 1;
 }
 
-async function validateAssetRefundEligibility(marketAssetId, buyerAccountId) {
+async function validateAssetRefundEligibility(marketAssetId, buyerAccountId, licenseId = null) {
   const { getMarketplaceRefundWindowDays } = require('../lib/PlatformFeeSettings');
   const refundWindowDays = await getMarketplaceRefundWindowDays();
   const purchaseRes = await pool.query(
-    `SELECT uma.user_market_asset_id, uma.created_at, uma.status, ma.price_credits
-     FROM user_market_assets uma
-     JOIN users u ON u.user_id = uma.user_id
+    `SELECT uma.market_asset_license_id, uma.credit_transaction_id,
+            uma.purchased_at, uma.status, uma.price_credits, uma.project_id
+     FROM market_asset_licenses uma
+     JOIN users u ON u.user_id = uma.buyer_user_id
      JOIN market_assets ma ON ma.market_asset_id = uma.market_asset_id
      WHERE uma.market_asset_id = $1 AND u.account_id = $2
        AND uma.deleted_at IS NULL
-     ORDER BY uma.created_at DESC
-     LIMIT 1`,
-    [marketAssetId, buyerAccountId]
+       AND ($3::uuid IS NULL OR uma.market_asset_license_id = $3)
+     ORDER BY uma.purchased_at DESC, uma.market_asset_license_id DESC
+     LIMIT 2`,
+    [marketAssetId, buyerAccountId, licenseId]
   );
   if (!purchaseRes.rows.length) {
     return { allowed: false, reason: 'No active purchase found for this asset.' };
+  }
+  if (purchaseRes.rows.length > 1) {
+    return { allowed: false, reason: 'Select the specific license purchase to refund.' };
   }
   const purchase = purchaseRes.rows[0];
   if (purchase.status === 'refunded') {
     return { allowed: false, reason: 'This purchase has already been refunded.' };
   }
-  const purchaseDate = new Date(purchase.created_at);
+  const purchaseDate = new Date(purchase.purchased_at);
   const now = new Date();
   const ageInDays = (now - purchaseDate) / (1000 * 60 * 60 * 24);
   if (ageInDays > refundWindowDays) {
@@ -1845,6 +1954,8 @@ async function validateAssetRefundEligibility(marketAssetId, buyerAccountId) {
 }
 
 module.exports = {
+  listAssetLicensesRepository,
+  assignAssetLicenseRepository,
   getAssetPostingEligibilityRepository,
   listAssetsRepository,
   getAssetRepository,

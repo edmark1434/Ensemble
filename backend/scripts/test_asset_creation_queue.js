@@ -89,6 +89,43 @@ async function main() {
       assert.equal(media.original_file_id, id);
       console.log(`PASS: ${type} failure stays draft; completion publishes generated proxy`);
     }
+
+    const bundleFiles = [];
+    for (let index = 0; index < 3; index += 1) {
+      const id = crypto.randomUUID();
+      const originalPath = `${index === 2 ? 'assets' : 'asset-originals'}/regression/${id}.png`;
+      await query('INSERT INTO files (file_id,name,path,mime_type,size_bytes) VALUES ($1,$2,$3,$4,$5)',
+        [id, 'Bundle thumbnail regression.png', originalPath, 'image/png', image.length]);
+      await query(`INSERT INTO upload_intents
+        (account_id,original_name,staging_key,final_key,expected_mime_type,max_size_bytes,expires_at,status,consumed_at,file_id)
+        VALUES ($1,$2,$3,$4,'image/png',1048576,NOW()+interval '5 minutes','consumed',NOW(),$5)`,
+      [owner.account_id, 'Bundle thumbnail regression.png', `_uploads/regression/${id}`, originalPath, id]);
+      bundleFiles.push({ id, originalPath });
+    }
+    const bundleId = await createAssetRepository(owner.account_id, {
+      name: 'Bundle thumbnail regression', description: 'Rolled back after verification',
+      priceCredits: 0, status: 'draft', type: 'image', tags: [],
+      originalFileIds: bundleFiles.slice(0, 2).map((file) => file.id), thumbnailFileIds: [bundleFiles[2].id],
+      showcaseOriginalFileIds: [], showcaseOrder: [`upload:${bundleFiles[2].id}`],
+      maxUploadFileBytes: 1048576, maxShowcaseTotalBytes: 1048576,
+    });
+    const { rows: [showcaseJob] } = await query(`SELECT job.* FROM media_asset_jobs job
+      JOIN market_asset_thumbnails link ON link.media_asset_id = job.media_asset_id
+      WHERE job.market_asset_id = $1`, [bundleId]);
+    assert.ok(showcaseJob, 'new bundle covers are queued for a 320px thumbnail');
+    await query("UPDATE media_asset_jobs SET status='running',attempts=1 WHERE media_asset_job_id=$1", [showcaseJob.media_asset_job_id]);
+    const beforeShowcase = stored.size;
+    assert.equal(await runMediaJob({ ...showcaseJob, attempts: 1, is_content: false,
+      original_file_id: bundleFiles[2].id, original_name: 'cover.png', original_path: bundleFiles[2].originalPath,
+      original_size_bytes: image.length }), 'done');
+    assert.equal(stored.size, beforeShowcase + 1, 'only one small thumbnail uploaded');
+    const { rows: [showcase] } = await query(`SELECT m.original_file_id, m.proxy_file_id, m.thumbnail_file_id, f.path
+      FROM media_assets m JOIN files f ON f.file_id = m.thumbnail_file_id WHERE m.media_asset_id=$1`, [showcaseJob.media_asset_id]);
+    assert.equal(showcase.original_file_id, bundleFiles[2].id);
+    assert.equal(showcase.proxy_file_id, bundleFiles[2].id);
+    assert.notEqual(showcase.thumbnail_file_id, bundleFiles[2].id);
+    assert.ok(showcase.path.startsWith('assets/thumbnails/320/'));
+    console.log('PASS: new bundle covers get a thumbnail without replacing their full preview');
   } finally {
     pool.connect = realConnect;
     pool.query = realQuery;

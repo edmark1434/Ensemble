@@ -16,7 +16,8 @@ export function addMarketAssetToTimeline(asset: MarketAssetContent) {
   const time = getCurrentTime();
   const metadata = {
     ...asset.metadata,
-    name: asset.name
+    name: asset.name,
+    ...(asset.type !== "audio" ? { previewUrl: asset.preview ?? "" } : {})
   };
 
   if (asset.type === "image") {

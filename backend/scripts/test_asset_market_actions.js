@@ -15,6 +15,12 @@ function fixture() {
     reports: [], actions: [], signed: [],
   };
   const repositories = {
+    listAssetLicensesRepository: async (...args) => { state.actions.push(['licenses', ...args]); return []; },
+    assignAssetLicenseRepository: async (...args) => {
+      state.actions.push(['assign', ...args]);
+      if (state.assignmentError) throw Object.assign(new Error(state.assignmentError), { code: state.assignmentError });
+      return { market_asset_license_id: args[1], project_id: args[3] };
+    },
     getAssetRepository: async () => state.asset,
     getAssetDownloadRepository: async () => state.file,
     setAssetLikeRepository: async (...args) => { state.actions.push(['like', ...args]); return { is_liked: args[2] }; },
@@ -108,4 +114,35 @@ test('editor bridge requires the configured internal secret', () => {
     assert.equal(accepted, provided === 'unit-test-secret');
     assert.equal(response.statusCode, accepted ? 200 : 401);
   }
+});
+
+
+test('license assignment validates IDs and maps authorization/conflict errors', async () => {
+  const f = fixture();
+  const licenseId = crypto.randomUUID();
+  const projectId = crypto.randomUUID();
+  for (const project of [null, '', 'bad', [projectId], { projectId }]) {
+    await assert.rejects(f.services.assignAssetLicenseServices(f.assetId, licenseId, f.accountId, { projectId: project }), { statusCode: 400 });
+  }
+  assert.equal(f.state.actions.length, 0);
+  const result = await f.services.assignAssetLicenseServices(f.assetId, licenseId, f.accountId, { projectId: projectId.toUpperCase() });
+  assert.equal(result.project_id, projectId);
+  for (const [code, statusCode] of [['ASSET_LICENSE_PROJECT_FORBIDDEN', 403], ['ASSET_LICENSE_ALREADY_ASSIGNED', 409], ['ASSET_LICENSE_NOT_FOUND', 404]]) {
+    f.state.assignmentError = code;
+    await assert.rejects(f.services.assignAssetLicenseServices(f.assetId, licenseId, f.accountId, { projectId }), { code, statusCode });
+  }
+});
+
+test('license history is paginated and original access rejects malformed project context', async () => {
+  const f = fixture();
+  await assert.rejects(f.services.listAssetLicensesServices(f.assetId, f.accountId, { page: -1 }), { statusCode: 400 });
+  await assert.rejects(f.services.listAssetLicensesServices(f.assetId, f.accountId, { page: 1.5 }), { statusCode: 400 });
+  const result = await f.services.listAssetLicensesServices(f.assetId, f.accountId, { page: '2' });
+  assert.equal(result.page, 2);
+  assert.equal(result.hasMore, false);
+  assert.deepEqual(f.state.actions[0], ['licenses', f.assetId, f.accountId, 51, 50]);
+  for (const method of ['getAssetDownloadServices', 'getAssetOriginalPreviewServices']) {
+    await assert.rejects(f.services[method](f.assetId, f.accountId, null, ['bad']), { statusCode: 400 });
+  }
+  assert.equal(f.state.signed.length, 0);
 });

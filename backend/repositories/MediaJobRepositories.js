@@ -36,7 +36,8 @@ async function claimMediaAssetJobRepository() {
   const { rows: [media] } = await pool.query(
     `SELECT m.deleted_at, original.file_id AS original_file_id, original.name AS original_name,
             original.path AS original_path, original.mime_type AS original_mime_type,
-            original.size_bytes AS original_size_bytes
+            original.size_bytes AS original_size_bytes,
+            EXISTS (SELECT 1 FROM market_media_assets link WHERE link.media_asset_id = m.media_asset_id) AS is_content
      FROM media_assets m
      JOIN files original ON original.file_id = m.original_file_id
      WHERE m.media_asset_id = $1`,
@@ -86,12 +87,12 @@ async function completeMediaAssetJobRepository(job, outputs) {
       [file.name, file.path, file.mimeType, file.sizeBytes]
     )).rows[0].file_id;
 
-    const proxyFileId = await insertFile(outputs.proxy);
+    const proxyFileId = outputs.proxy ? await insertFile(outputs.proxy) : null;
     const thumbnailFileId = outputs.thumbnail ? await insertFile(outputs.thumbnail) : null;
     const originalFileId = outputs.cappedOriginal ? await insertFile(outputs.cappedOriginal) : null;
     await client.query(
       `UPDATE media_assets
-       SET proxy_file_id = $2,
+       SET proxy_file_id = COALESCE($2::uuid, proxy_file_id),
            thumbnail_file_id = COALESCE($3::uuid, thumbnail_file_id),
            original_file_id = COALESCE($4::uuid, original_file_id),
            width = COALESCE($5::integer, width),

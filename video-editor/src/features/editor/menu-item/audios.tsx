@@ -1,12 +1,13 @@
+import { AudioPreviewButton } from "@/components/audio-preview-button";
 import { MediaSearchBar } from "@/components/media-search-bar";
 import { MarketCollection, MarketCollectionRows, type MarketCollectionView } from "./market-collection";
 import Draggable from "@/components/shared/draggable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { dispatch } from "@designcombo/events";
-import { ADD_AUDIO, ADD_ITEMS } from "@designcombo/state";
+import { ADD_AUDIO } from "@designcombo/state";
 import { IAudio } from "@designcombo/types";
-import { AudioLines, Loader2, Pause, Play } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AudioLines, Loader2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { generateId } from "@designcombo/timeline";
 import { Button } from "@/components/ui/button";
 import { debounce } from "lodash";
@@ -183,7 +184,7 @@ export const Audios = () => {
                 metadata: { ...audio?.metadata, author: entry.metadata.author, price_credits: entry.price_credits } } as Partial<IAudio>;
               return <AudioItem key={entry.marketAssetId} item={item} onAdd={handleAddAudio}
                 playingId={playingId} setPlayingId={setPlayingId} marketBundle={bundle ?? undefined}
-                marketListing={entry} onOpenBundle={setSelectedMarketAsset} />;
+                marketListing={entry} onOpenBundle={(bundle) => { setPlayingId(null); setSelectedMarketAsset(bundle); }} />;
             })}
             {uniqueResults.map((audio, index) => (
               <AudioItem
@@ -247,47 +248,14 @@ const AudioItem = ({
   marketListing?: MarketAssetBundle;
   onOpenBundle?: (bundle: MarketAssetBundle) => void;
 }) => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [duration, setDuration] = useState<string>("--:--");
   const isPlaying = playingId === item.id;
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
 
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    if (!audioEl) return;
-
-    if (isPlaying) {
-      audioEl.play().catch((err) => {
-        // Expected when a quick pause() (switching tracks, unmount) interrupts
-        // an in-flight play() request — see https://goo.gl/LdLk22. Anything
-        // else is a real playback failure worth knowing about.
-        if (err.name !== "AbortError") {
-          console.error("Failed to play audio preview", err);
-        }
-      });
-    } else {
-      audioEl.pause();
-      audioEl.currentTime = 0;
-    }
-  }, [isPlaying]);
-
-  const togglePlay = () => {
-    if (marketBundle) { onOpenBundle?.(marketBundle); return; }
-    if (isPlaying) {
-      setPlayingId(null);
-    } else {
-      setPlayingId(item.id!);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      const seconds = Math.round(audioRef.current.duration);
-      const min = Math.floor(seconds / 60);
-      const sec = seconds % 60;
-      setDuration(`${min}:${sec.toString().padStart(2, "0")}`);
-    }
-  };
+  const previewSrc = marketListing ? marketListing.assets[0]?.audioPreview : item.details?.src;
+  const fullDuration = marketListing?.assets[0]?.details?.duration
+    ?? (item.details as (IAudio["details"] & { duration?: number }) | undefined)?.duration;
+  const formatDuration = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
   if (marketListing && !marketBundle && (marketListing.assets[0]?.proxyStatus !== "ready" || !marketListing.assets[0]?.details?.src)) {
     return <MarketAssetCard bundle={marketListing} layout="list" onOpen={(listing) => onOpenBundle?.(listing)} />;
@@ -295,28 +263,15 @@ const AudioItem = ({
 
   const row = (
       <div
-        className={`group relative flex items-center gap-3 cursor-pointer px-3 py-2 rounded transition-colors ${marketBundle ? "bg-secondary/70 hover:bg-secondary" : "hover:bg-zinc-800/50"}`}>
-        <audio
-          ref={audioRef}
-          src={item.details?.src}
-          onEnded={() => setPlayingId(null)}
-          onLoadedMetadata={handleLoadedMetadata}
-          className="hidden"
-        />
-
-        <Button
-          size="icon"
-          variant={marketBundle ? "secondary" : "ghost"}
-          className={`h-8 w-8 rounded-full shrink-0 ${marketBundle ? "" : "bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10"}`}
-          onClick={togglePlay}
-          aria-label={marketBundle ? `Open ${marketBundle.name} bundle` : isPlaying ? "Pause preview" : "Play preview"}
-        >
-          {marketBundle ? <BundleIndicator /> : isPlaying ? (
-            <Pause className="size-4 fill-current" />
-          ) : (
-            <Play className="size-4 fill-current ml-0.5" />
-          )}
-        </Button>
+        className="group relative flex items-center gap-3 cursor-pointer px-3 py-2 rounded transition-colors hover:bg-zinc-800/50">
+        {marketBundle ? <Button type="button" size="icon" variant="ghost"
+          className="size-8 shrink-0 rounded-full" onClick={() => onOpenBundle?.(marketBundle)}
+          aria-label={`Open ${marketBundle.name} bundle`}>
+          <BundleIndicator />
+        </Button> : <AudioPreviewButton src={previewSrc} name={item.name || "audio preview"}
+          isPlaying={isPlaying} onToggle={() => setPlayingId(isPlaying ? null : item.id!)}
+          onStop={() => setPlayingId(null)}
+          onDuration={(seconds) => { if (Number.isFinite(seconds)) setDuration(formatDuration(seconds)); }} />}
 
         <div
           onClick={() => marketBundle ? onOpenBundle?.(marketBundle) : onAdd(item)}
@@ -327,7 +282,7 @@ const AudioItem = ({
           </span>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <span className="min-w-0 truncate">
-              {item.metadata?.author && `${item.metadata.author} · `}{marketBundle ? `${marketBundle.assets.length} audios` : duration}
+              {item.metadata?.author && `${item.metadata.author} · `}{marketBundle ? `${marketBundle.assets.length} audios` : fullDuration ? formatDuration(fullDuration) : duration}
             </span>
             {Number((item.metadata as any)?.price_credits) > 0 && (
               <>
@@ -341,26 +296,19 @@ const AudioItem = ({
           </span>
         </div>
 
-        {marketListing && <MarketAssetActions bundle={marketListing} menuOnly />}
-        {isPlaying && (
-          <div className="flex items-end gap-[2px] h-4 shrink-0">
-            {[...Array(5)].map((_, i) => (
-              <span
-                key={i}
-                className="w-[3px] bg-primary rounded-full"
-                style={{
-                  height: "100%",
-                  animationName: "wave-bar",
-                  animationDelay: `${i * 0.15}s`,
-                  animationDuration: "0.8s",
-                  animationIterationCount: "infinite",
-                  animationTimingFunction: "ease-in-out",
-                  display: "inline-block",
-                }}
-              />
+        {isPlaying && !marketBundle && (
+          <div className="flex size-7 shrink-0 items-center justify-center gap-[2px]" role="status" aria-label="Audio playing">
+            {[...Array(5)].map((_, index) => (
+              <span key={index} className="w-[3px] rounded-full bg-primary"
+                style={{ height: "100%", animationName: "wave-bar", animationDelay: `${index * 0.15}s`,
+                  animationDuration: "0.8s", animationIterationCount: "infinite",
+                  animationTimingFunction: "ease-in-out", display: "inline-block" }} />
             ))}
           </div>
         )}
+
+        {marketListing && <MarketAssetActions bundle={marketListing} menuOnly />}
+
       </div>
   );
   if (marketBundle) return row;

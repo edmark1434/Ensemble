@@ -36,3 +36,12 @@
 - Select explicit columns for stable API contracts.
 - Paginate growing histories with deterministic ordering and a tie-breaker.
 - Treat schema errors as migration/version mismatches before adding query workarounds.
+
+## Marketplace licenses
+
+- `market_asset_licenses` replaces `user_market_assets`. Each row records one asset/bundle use: buyer, asset, paid price, purchase transaction, purchase date, status, and optional project/assignment date.
+- Purchases create an unassigned license in the same transaction as wallet transfers. An existing active unassigned license is reused; after assignment, another purchase creates a separate license. Refunded/deleted purchases remain in history.
+- At most one active unassigned license exists per buyer/asset, and at most one active license exists per project/asset. Database constraints and transaction locks enforce this. A project assignment and purchase identity cannot be changed afterward.
+- Library purchase/download/review checks use the buyer's active licenses. A download/preview request with `projectId` instead checks an active license for that project plus current Owner/Manager/Editor membership. The license survives the buyer leaving the project.
+- `credit_transactions` continues referencing `market_assets` for existing financial-history consumers; each new license links its exact purchase through `credit_transaction_id`. Legacy rows without a matching historical transaction keep that field null.
+- Migration `1825200000000_market-asset-licenses` preserves old rows as unassigned licenses. Its down migration refuses to discard project assignments or multiple purchases that the old composite key cannot represent.

@@ -139,7 +139,6 @@ export async function GET(request: NextRequest) {
           .onRef("thumb.file_id", "=", "m.thumbnail_file_id")
           .onRef("thumb.file_id", "!=", "m.original_file_id")
           .on("thumb.deleted_at", "is", null)
-          .on("thumb.mime_type", "like", "image/%")
           .on("thumb.path", "not like", "asset-originals/%"))
         .innerJoin("users as u", "u.user_id", "m.owner_user_id")
         .where("mma.market_asset_id", "in", marketAssetIds)
@@ -159,6 +158,7 @@ export async function GET(request: NextRequest) {
           "proxy.path as proxy_path",
           "proxy.mime_type as proxy_mime_type",
           "thumb.path as thumbnail_path",
+          "thumb.mime_type as thumbnail_mime_type",
           "u.account_id as owner_account_id",
           "u.first_name",
           "u.last_name"
@@ -169,6 +169,7 @@ export async function GET(request: NextRequest) {
         .selectFrom("market_asset_thumbnails as mat")
         .innerJoin("media_assets as m", "m.media_asset_id", "mat.media_asset_id")
         .innerJoin("files as thumb", "thumb.file_id", "m.thumbnail_file_id")
+        .whereRef("thumb.file_id", "!=", "m.original_file_id")
         .where("mat.market_asset_id", "in", marketAssetIds)
         .where("m.deleted_at", "is", null)
         .where("thumb.deleted_at", "is", null)
@@ -228,16 +229,18 @@ export async function GET(request: NextRequest) {
           row.proxy_path, row.proxy_mime_type
         );
         const proxyUrl = ready ? buildPublicUrl(row.proxy_path!) : "";
+        const thumbnailUrl = row.thumbnail_path && row.thumbnail_mime_type?.startsWith("image/")
+          ? buildPublicUrl(row.thumbnail_path) : undefined;
+        const audioPreview = row.type === "audio" && row.thumbnail_mime_type?.startsWith("audio/")
+          && row.thumbnail_path?.startsWith("assets/thumbnails/audio-30s/")
+          ? buildPublicUrl(row.thumbnail_path) : undefined;
         return {
           id: `market_${listing.market_asset_id}_${row.media_asset_id}`,
           name: row.content_name || listing.market_name,
           type: row.type as MarketType,
           proxyStatus: ready ? "ready" : "unavailable",
-          preview: row.thumbnail_path
-            ? buildPublicUrl(row.thumbnail_path)
-            : row.type === "image"
-              ? proxyUrl || undefined
-              : undefined,
+          preview: thumbnailUrl,
+          audioPreview,
           details: {
             src: proxyUrl,
             width: row.width ?? undefined,
@@ -249,6 +252,7 @@ export async function GET(request: NextRequest) {
             market_asset_id: listing.market_asset_id,
             media_asset_id: row.media_asset_id,
             price_credits: listing.price_credits,
+            previewUrl: row.type !== "audio" ? thumbnailUrl : undefined,
             author
           }
         };

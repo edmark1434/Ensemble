@@ -14,7 +14,7 @@ const {
   removeWorkDir,
   randomName,
 } = require('../lib/MediaProcessing');
-const { createWatermarkSvg, createImageThumbnail, generateImageDerivatives } = require('./AssetPreviewServices');
+const { createWatermarkSvg, createImageThumbnail, generateImageDerivatives, generateShowcaseThumbnail } = require('./AssetPreviewServices');
 const {
   claimMediaAssetJobRepository,
   failMediaAssetJobRepository,
@@ -74,17 +74,18 @@ async function runMediaJob(job) {
     let outputs;
 
     if (job.kind === 'image') {
-      outputs = await generateImageDerivatives({
+      const generate = job.is_content === false ? generateShowcaseThumbnail : generateImageDerivatives;
+      outputs = await generate({
         file_id: job.original_file_id, name: job.original_name,
         path: job.original_path, size_bytes: job.original_size_bytes,
       });
-      uploaded.push(outputs.thumbnail.path, outputs.proxy.path);
+      uploaded.push(outputs.thumbnail.path, outputs.proxy?.path);
     } else if (job.kind === 'video') {
       const result = await processVideo({ inputPath, workDir, createWatermarkSvg, createImageThumbnail });
       const proxyKey = `assets/proxies/${randomName()}.mp4`;
       const proxySize = await uploadFile(result.proxyPath, proxyKey, 'video/mp4', { publicCache: true });
       uploaded.push(proxyKey);
-      const thumbnailKey = `assets/thumbnails/${randomName()}.webp`;
+      const thumbnailKey = `assets/thumbnails/320/${randomName()}.webp`;
       await s3.send(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: thumbnailKey,
@@ -98,7 +99,7 @@ async function runMediaJob(job) {
         height: result.height,
         durationSeconds: result.durationSeconds,
         proxy: { name: `${base}-proxy-ensemble.mp4`, path: proxyKey, mimeType: 'video/mp4', sizeBytes: proxySize },
-        thumbnail: { name: `${base}-thumbnail-200p.webp`, path: thumbnailKey, mimeType: 'image/webp', sizeBytes: result.thumbnail.length },
+        thumbnail: { name: `${base}-thumbnail-320px.webp`, path: thumbnailKey, mimeType: 'image/webp', sizeBytes: result.thumbnail.length },
       };
       if (result.cappedOriginalPath) {
         // stays under the protected prefix: it is still the downloadable original
@@ -116,9 +117,13 @@ async function runMediaJob(job) {
       const proxyKey = `assets/proxies/${randomName()}.mp3`;
       const proxySize = await uploadFile(result.proxyPath, proxyKey, 'audio/mpeg', { publicCache: true });
       uploaded.push(proxyKey);
+      const thumbnailKey = `assets/thumbnails/audio-30s/${randomName()}.mp3`;
+      const thumbnailSize = await uploadFile(result.thumbnailPath, thumbnailKey, 'audio/mpeg', { publicCache: true });
+      uploaded.push(thumbnailKey);
       outputs = {
         durationSeconds: result.durationSeconds,
         proxy: { name: `${base}-ensemble-tag.mp3`, path: proxyKey, mimeType: 'audio/mpeg', sizeBytes: proxySize },
+        thumbnail: { name: `${base}-preview-30s.mp3`, path: thumbnailKey, mimeType: 'audio/mpeg', sizeBytes: thumbnailSize },
       };
     }
 

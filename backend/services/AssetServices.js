@@ -7,6 +7,8 @@ const {
   deleteAssetRepository,
   getAssetDownloadRepository,
   purchaseAssetRepository,
+  listAssetLicensesRepository,
+  assignAssetLicenseRepository,
   listCommentsRepository,
   createCommentRepository,
   updateCommentRepository,
@@ -61,7 +63,7 @@ class AssetError extends Error {
 }
 
 function requireUuid(value, label = 'Asset ID') {
-  if (!UUID_PATTERN.test(String(value || ''))) {
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
     throw new AssetError(`${label} is invalid.`, 400, 'INVALID_ID');
   }
   return value;
@@ -520,10 +522,11 @@ async function createAssetServices(accountId, payload) {
   }
 }
 
-async function getAssetDownloadServices(assetId, accountId, mediaAssetId = null) {
+async function getAssetDownloadServices(assetId, accountId, mediaAssetId = null, projectId = null) {
   requireUuid(assetId);
   if (mediaAssetId) requireUuid(mediaAssetId, 'Media asset ID');
-  const download = await getAssetDownloadRepository(assetId, accountId, mediaAssetId);
+  if (projectId !== null) requireUuid(projectId, 'Project ID');
+  const download = await getAssetDownloadRepository(assetId, accountId, mediaAssetId, projectId);
   if (!download) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (!download.is_owner && !download.is_purchased) {
     throw new AssetError('Purchase this asset before downloading the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
@@ -534,10 +537,11 @@ async function getAssetDownloadServices(assetId, accountId, mediaAssetId = null)
   };
 }
 
-async function getAssetOriginalPreviewServices(assetId, accountId, mediaAssetId = null) {
+async function getAssetOriginalPreviewServices(assetId, accountId, mediaAssetId = null, projectId = null) {
   requireUuid(assetId);
   if (mediaAssetId) requireUuid(mediaAssetId, 'Media asset ID');
-  const preview = await getAssetDownloadRepository(assetId, accountId, mediaAssetId);
+  if (projectId !== null) requireUuid(projectId, 'Project ID');
+  const preview = await getAssetDownloadRepository(assetId, accountId, mediaAssetId, projectId);
   if (!preview) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (!preview.is_owner && !preview.is_purchased) {
     throw new AssetError('Purchase this asset before viewing the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
@@ -572,7 +576,7 @@ function emitPurchaseEvents(result) {
 }
 
 async function purchaseAssetServices(assetId, accountId) {
-  requireUuid(assetId);
+  assetId = requireUuid(assetId).toLowerCase();
   try {
     const feePercent = await getMarketplaceTransactionFeePercent();
     const result = await purchaseAssetRepository(assetId, accountId, feePercent);
@@ -582,6 +586,7 @@ async function purchaseAssetServices(assetId, accountId) {
       asset,
       transaction: result.transaction || null,
       alreadyPurchased: result.alreadyPurchased,
+      license: result.license,
       balanceCredits: result.buyerBalanceCredits,
     };
   } catch (error) {
@@ -609,6 +614,36 @@ async function purchaseAssetServices(assetId, accountId) {
     if (error.code === 'ASSET_PRICE_INVALID') {
       throw new AssetError('This asset has an invalid price.', 409, error.code);
     }
+    throw error;
+  }
+}
+
+async function listAssetLicensesServices(assetId, accountId, query = {}) {
+  requireUuid(assetId);
+  const page = Number(query.page ?? 1);
+  if (!Number.isSafeInteger(page) || page < 1 || page > 1000000) {
+    throw new AssetError('Invalid license page.', 400, 'ASSET_LICENSE_PAGE_INVALID');
+  }
+  const licenses = await listAssetLicensesRepository(assetId, accountId, 51, (page - 1) * 50);
+  return { licenses: licenses.slice(0, 50), page, hasMore: licenses.length > 50 };
+}
+
+async function assignAssetLicenseServices(assetId, licenseId, accountId, payload = {}) {
+  assetId = requireUuid(assetId).toLowerCase();
+  requireUuid(licenseId, 'License ID');
+  requireUuid(payload?.projectId, 'Project ID');
+  try {
+    return await assignAssetLicenseRepository(assetId, licenseId, accountId, payload.projectId.toLowerCase());
+  } catch (error) {
+    const errors = {
+      ASSET_LICENSE_NOT_FOUND: [404, 'License not found.'],
+      ASSET_LICENSE_INACTIVE: [409, 'This license is no longer active.'],
+      ASSET_LICENSE_ALREADY_ASSIGNED: [409, 'This license is already assigned to another project.'],
+      ASSET_PROJECT_ALREADY_LICENSED: [409, 'This project already has a license for this asset.'],
+      ASSET_LICENSE_PROJECT_FORBIDDEN: [403, 'You must be an owner, manager, or editor of this project to assign your license.'],
+      ASSET_LICENSE_PROJECT_FROZEN: [409, 'This project is frozen.'],
+    };
+    if (errors[error.code]) throw new AssetError(errors[error.code][1], errors[error.code][0], error.code);
     throw error;
   }
 }
@@ -825,6 +860,8 @@ async function deleteAssetReviewServices(assetId, reviewId, accountId) {
 }
 
 module.exports = {
+  listAssetLicensesServices,
+  assignAssetLicenseServices,
   AssetError,
   reportAssetServices,
   performEditorAssetActionServices,

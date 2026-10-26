@@ -23,6 +23,9 @@ test('video processing burns in a watermark and leaves an in-cap original untouc
     assert.equal(result.cappedOriginalPath, null);
     assert.deepEqual(await fs.readFile(inputPath), original);
     assert.equal((await probe(result.proxyPath)).width, 640);
+    const thumbnailInfo = await sharp(result.thumbnail).metadata();
+    assert.deepEqual([thumbnailInfo.width, thumbnailInfo.height], [320, 180]);
+    assert.ok((await sharp(result.thumbnail).stats()).channels[0].max < 5, 'thumbnail uses the unwatermarked source');
     const frame = path.join(workDir, 'proxy-frame.png');
     await execute(binary, ['-y', '-v', 'error', '-i', result.proxyPath, '-frames:v', '1', frame], { windowsHide: true });
     const stats = await sharp(frame).stats();

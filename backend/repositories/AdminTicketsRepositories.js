@@ -4500,11 +4500,12 @@ async function getTicketPickers(accountId) {
     safeTicketRows(
       `
       SELECT ma.market_asset_id AS id, ma.name AS label
-      FROM user_market_assets uma
-      JOIN users u ON u.user_id = uma.user_id
+      FROM market_asset_licenses uma
+      JOIN users u ON u.user_id = uma.buyer_user_id
       JOIN market_assets ma ON ma.market_asset_id = uma.market_asset_id
       WHERE u.account_id = $1 AND uma.deleted_at IS NULL
-      ORDER BY uma.created_at DESC
+      GROUP BY ma.market_asset_id, ma.name
+      ORDER BY MAX(uma.purchased_at) DESC, ma.market_asset_id DESC
       LIMIT 50
       `,
       [accountId]

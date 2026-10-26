@@ -58,7 +58,7 @@ class Video extends Trimmable {
   declare duration: number;
   public prevDuration: number;
   public itemType = "video";
-  public metadata?: Partial<IMetadata>;
+  public metadata?: Partial<IMetadata> & { market?: boolean };
   declare src: string;
 
   public aspectRatio = 1;
@@ -179,6 +179,8 @@ class Video extends Trimmable {
   }
 
   public async prepareAssets() {
+    // Market timeline tiles use their small still; playback uses src separately.
+    if (this.metadata?.market) return;
     const file = await getFileFromUrl(this.src);
     const stream = file.stream();
 
@@ -244,8 +246,7 @@ class Video extends Trimmable {
       const img = new Image();
       img.crossOrigin = "anonymous";
 
-      const isDataUri = fallbackThumbnail.startsWith("data:");
-      img.src = isDataUri ? fallbackThumbnail : `${fallbackThumbnail}?t=${Date.now()}`;
+      img.src = fallbackThumbnail;
 
       img.onload = () => {
         const canvas = document.createElement("canvas");

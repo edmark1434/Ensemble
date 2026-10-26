@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Image, Clapperboard, AudioLines, PackageOpen, Pause, Play } from "lucide-react";
+import { Image, Clapperboard, AudioLines, PackageOpen } from "lucide-react";
+import { AudioPreviewButton } from "./audio-preview-button";
 import { MarketBrowserHeader } from "./market-browser-header";
 import { MarketAssetActions } from "./market-asset-actions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
@@ -14,6 +15,7 @@ export interface MarketAssetContent {
   name: string;
   type: MarketAssetType;
   preview?: string;
+  audioPreview?: string;
   proxyStatus?: "ready" | "unavailable";
   details?: {
     src: string;
@@ -27,6 +29,7 @@ export interface MarketAssetContent {
     market_asset_id?: string;
     media_asset_id?: string;
     price_credits?: number;
+    previewUrl?: string;
   };
 }
 
@@ -159,7 +162,7 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
   }, [isHovering, slides.length]);
   const reset = () => { setIsHovering(false); setActiveShowcaseIndex(0); };
 
-  if (layout === "list") return <div className="group flex w-full items-center gap-2 rounded-lg bg-secondary/40 px-2 py-2 hover:bg-secondary/70">
+  if (layout === "list") return <div className="group flex w-full items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-800/50">
     <button type="button" onClick={() => onOpen(bundle)} className="flex min-w-0 flex-1 items-center gap-3 rounded text-left focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Open ${bundle.name}`}>
       <span className="relative size-10 shrink-0 overflow-hidden rounded-md bg-zinc-800"><MarketPreview src={slides[0]} type={bundle.type} /></span>
       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{bundle.name}</span><span className="block text-xs text-muted-foreground">{bundle.assets.length} {bundle.assets.length === 1 ? "asset" : "assets"} · {bundle.metadata.author}</span></span>
@@ -302,28 +305,17 @@ function MarketAudioRow({ item, onSelect, isPlaying, setPlayingId }: {
   isPlaying: boolean;
   setPlayingId: (id: string | null) => void;
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) audio.play().catch(() => setPlayingId(null));
-    else { audio.pause(); audio.currentTime = 0; }
-  }, [isPlaying, setPlayingId]);
   const playable = item.proxyStatus === "ready" && !!item.details?.src;
   return (
     <div className="group flex w-full items-center gap-3 rounded px-3 py-2 transition-colors hover:bg-zinc-800/50">
-      <audio ref={audioRef} src={item.details?.src} onEnded={() => setPlayingId(null)} className="hidden" />
-      <button type="button" onClick={() => setPlayingId(isPlaying ? null : item.id)} disabled={!playable}
-        aria-label={isPlaying ? `Pause ${item.name}` : `Play ${item.name}`}
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-zinc-700 hover:bg-black/15 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">
-        {isPlaying ? <Pause className="size-4 fill-current" /> : <Play className="ml-0.5 size-4 fill-current" />}
-      </button>
+      <AudioPreviewButton src={item.audioPreview} name={item.name} isPlaying={isPlaying}
+        onToggle={() => setPlayingId(isPlaying ? null : item.id)} onStop={() => setPlayingId(null)} />
       <button type="button" onClick={() => onSelect(item)} disabled={!playable}
         className="flex min-w-0 flex-1 flex-col text-left disabled:cursor-not-allowed">
         <span className="mb-0.5 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-300">{item.name}</span>
         <span className="truncate text-xs text-muted-foreground">{item.metadata?.author ? `${item.metadata.author} · ` : ""}{item.details?.duration ? `${Math.floor(item.details.duration / 60)}:${String(Math.floor(item.details.duration % 60)).padStart(2, "0")}` : "Audio"}</span>
       </button>
-      {!playable && <span className="shrink-0 text-[10px] text-muted-foreground">Preview unavailable</span>}
+      {!item.audioPreview && <span className="shrink-0 text-[10px] text-muted-foreground">Preview unavailable</span>}
     </div>
   );
 }
