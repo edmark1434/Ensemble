@@ -40,6 +40,12 @@
 - Event names and payload shapes must remain stable and scoped to authorized rooms/users.
 - Always expose a normal HTTP read endpoint so refresh or reconnect restores current state.
 
+## Badge requirement library
+
+- `GET /api/admin/badge-requirement-types` lists evaluable metrics (jobs, gigs, assets, profile, reviews, followers). Used when creating a named rule.
+- `GET /api/admin/badge-requirement-defs` lists named rules. `POST` creates a custom rule `{ name, description, metric, operator, threshold }`. `PATCH /api/admin/badge-requirement-defs/:defId` updates it. `DELETE` soft-deletes a custom rule that is not attached to a badge. Product (`is_system`) rules can be renamed but not deleted or have their metric/threshold changed.
+- Catalog `POST/PATCH /api/admin/badges` attaches rules with `{ requirements: [{ requirementDefId }] }`. Empty list means honorary. Evaluation still pending-grants when every attached rule is met.
+
 ## Marketplace license endpoints
 
 - `POST /api/assets/:assetId/purchase` returns `license` alongside the existing purchase response. `alreadyPurchased` means an active unassigned license was reused without another charge. Asset responses include `available_license_count`; `is_purchased` still means the viewer has at least one active purchased license.

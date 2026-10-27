@@ -58,7 +58,10 @@ async function createJobServices(jobData) {
         }
         jobData.no_of_hires = totalSlots;
     }
-    return await JobRepositories.createJobRepositories(jobData);
+    const created = await JobRepositories.createJobRepositories(jobData);
+    const { scheduleBadgeEvaluation } = require('./BadgeServices');
+    scheduleBadgeEvaluation(jobData.client_account_id);
+    return created;
 }
 
 async function getAllJobsServices(filters, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
@@ -96,7 +99,10 @@ async function createProposalServices(proposalData) {
         error.statusCode = 400;
         throw error;
     }
-    return await JobRepositories.createProposalRepositories(proposalData);
+    const created = await JobRepositories.createProposalRepositories(proposalData);
+    const { scheduleBadgeEvaluation } = require('./BadgeServices');
+    scheduleBadgeEvaluation(proposalData.freelancer_account_id);
+    return created;
 }
 
 async function withdrawProposalServices(proposalId, accountIds) {

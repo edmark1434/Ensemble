@@ -480,6 +480,8 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
         });
 
         if (reviewResult.contractCompleted) {
+            const { scheduleBadgeEvaluation } = require('./BadgeServices');
+            scheduleBadgeEvaluation([task.client_account_id, task.freelancer_account_id]);
             io.emit('contractFullyCompleted', {
                 contract_id: normalizedContractId,
                 team_id: reviewResult.archivedTeamId ? String(reviewResult.archivedTeamId) : null,

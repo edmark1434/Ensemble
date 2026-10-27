@@ -4,13 +4,17 @@ import api from '@/lib/axios';
 import { badgesRegistry } from '@/pages/user/7_profile/Utilities/BadgesRegistry';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import {
-  TRIGGER_OPTIONS,
   emptyBadgeForm,
   errorMessage,
   formFromBadge,
+  formatRequirement,
+  operatorLabel,
+  summarizeRequirements,
   type BadgeCategory,
   type BadgeFormState,
   type CatalogBadge,
+  type RequirementDef,
+  type RequirementType,
 } from './badgeAdminTypes';
 
 const fieldClass =
@@ -18,35 +22,31 @@ const fieldClass =
 
 const NEW_CATEGORY = '__new__';
 
-function triggerLabel(code: string) {
-  return TRIGGER_OPTIONS.find((option) => option.value === code)?.label || code;
-}
-
 function iconFor(registryId: string) {
   return badgesRegistry.find((badge) => String(badge.id) === registryId)?.icon;
 }
 
 function payloadFromForm(form: BadgeFormState) {
-  const triggerEventCode =
-    form.triggerEventCode === 'custom' ? form.customTrigger.trim() : form.triggerEventCode;
   const creatingCategory = form.categoryId === NEW_CATEGORY;
   return {
     registryId: form.registryId.trim().toLowerCase(),
     name: form.name.trim(),
     description: form.description.trim(),
     isSecret: form.isSecret,
-    triggerEventCode,
-    conditionType: form.conditionType,
-    conditionValue: form.conditionType === 'boolean' ? 1 : Number(form.conditionValue),
     categoryId: creatingCategory ? undefined : form.categoryId,
     categoryName: creatingCategory ? form.categoryName.trim() : undefined,
     categoryDescription: creatingCategory ? form.categoryDescription.trim() : undefined,
+    requirements: form.requirements.map((requirement) => ({
+      requirementDefId: requirement.requirement_def_id,
+    })),
   };
 }
 
 export default function BadgeCatalogTab() {
   const [badges, setBadges] = useState<CatalogBadge[]>([]);
   const [categories, setCategories] = useState<BadgeCategory[]>([]);
+  const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
+  const [requirementDefs, setRequirementDefs] = useState<RequirementDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<'create' | CatalogBadge | null>(null);
@@ -55,12 +55,16 @@ export default function BadgeCatalogTab() {
   const [formError, setFormError] = useState('');
 
   const load = async () => {
-    const [badgeRes, categoryRes] = await Promise.all([
+    const [badgeRes, categoryRes, requirementRes, defRes] = await Promise.all([
       api.get('/api/admin/badges'),
       api.get('/api/admin/badge-categories'),
+      api.get('/api/admin/badge-requirement-types'),
+      api.get('/api/admin/badge-requirement-defs'),
     ]);
     setBadges(badgeRes.data?.data || []);
     setCategories(categoryRes.data?.data || []);
+    setRequirementTypes(requirementRes.data?.data || []);
+    setRequirementDefs(defRes.data?.data || []);
   };
 
   useEffect(() => {
@@ -73,12 +77,37 @@ export default function BadgeCatalogTab() {
     const term = search.trim().toLowerCase();
     if (!term) return badges;
     return badges.filter((badge) =>
-      [badge.name, badge.registry_id, badge.category_name, badge.trigger_event_code]
+      [badge.name, badge.registry_id, badge.category_name, summarizeRequirements(badge, requirementTypes)]
         .join(' ')
         .toLowerCase()
         .includes(term)
     );
-  }, [badges, search]);
+  }, [badges, search, requirementTypes]);
+
+  const usedDefIds = useMemo(
+    () => new Set(form.requirements.map((requirement) => requirement.requirement_def_id)),
+    [form.requirements]
+  );
+  const usedMetrics = useMemo(
+    () => new Set(form.requirements.map((requirement) => requirement.metric || requirement.code)),
+    [form.requirements]
+  );
+
+  const availableDefs = requirementDefs.filter(
+    (def) => !usedDefIds.has(def.requirement_def_id) && !usedMetrics.has(def.metric)
+  );
+
+  const groupedDefs = useMemo(() => {
+    const groups = new Map<string, RequirementDef[]>();
+    for (const def of requirementDefs) {
+      const type = requirementTypes.find((item) => item.code === def.metric);
+      const group = type?.group || 'Other';
+      const list = groups.get(group) || [];
+      list.push(def);
+      groups.set(group, list);
+    }
+    return [...groups.entries()];
+  }, [requirementDefs, requirementTypes]);
 
   const openCreate = () => {
     setForm({
@@ -101,10 +130,49 @@ export default function BadgeCatalogTab() {
     setFormError('');
   };
 
+  const requirementFromDef = (def: RequirementDef) => ({
+    requirement_def_id: def.requirement_def_id,
+    code: def.metric,
+    metric: def.metric,
+    name: def.name,
+    slug: def.slug,
+    operator: def.operator,
+    threshold: Number(def.threshold || 1),
+    kind: def.kind,
+    description: def.description,
+  });
+
+  const addRequirement = () => {
+    const next = availableDefs[0];
+    if (!next) return;
+    setForm((current) => ({
+      ...current,
+      requirements: [...current.requirements, requirementFromDef(next)],
+    }));
+  };
+
+  const updateRequirement = (index: number, defId: string) => {
+    const def = requirementDefs.find((item) => item.requirement_def_id === defId);
+    if (!def) return;
+    setForm((current) => ({
+      ...current,
+      requirements: current.requirements.map((requirement, i) =>
+        i === index ? requirementFromDef(def) : requirement
+      ),
+    }));
+  };
+
+  const removeRequirement = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      requirements: current.requirements.filter((_, i) => i !== index),
+    }));
+  };
+
   const save = async () => {
     const payload = payloadFromForm(form);
-    if (!payload.registryId || !payload.name || !payload.description || !payload.triggerEventCode) {
-      setFormError('Name, registry ID, description, and trigger are required.');
+    if (!payload.registryId || !payload.name || !payload.description) {
+      setFormError('Name, registry ID, and description are required.');
       return;
     }
     if (form.categoryId === NEW_CATEGORY && !payload.categoryName) {
@@ -162,7 +230,7 @@ export default function BadgeCatalogTab() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, ID, or category"
+            placeholder="Search name, ID, or requirement"
             className={`${fieldClass} pl-9`}
           />
         </div>
@@ -183,7 +251,7 @@ export default function BadgeCatalogTab() {
               <tr>
                 <th className="px-4 py-3 font-medium">Badge</th>
                 <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Trigger</th>
+                <th className="px-4 py-3 font-medium">Requirements</th>
                 <th className="px-4 py-3 font-medium">Holders</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
@@ -213,9 +281,8 @@ export default function BadgeCatalogTab() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-zinc-300">{badge.category_name}</td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {triggerLabel(badge.trigger_event_code)}
-                      {badge.condition_type === 'count' ? ` · ${badge.condition_value}` : ''}
+                    <td className="max-w-xs px-4 py-3 text-zinc-400">
+                      {summarizeRequirements(badge, requirementTypes)}
                     </td>
                     <td className="px-4 py-3 text-zinc-400">
                       {badge.claimed_count} claimed · {badge.pending_count} pending
@@ -256,16 +323,14 @@ export default function BadgeCatalogTab() {
 
       {editor && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0c0d12] p-5 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#0c0d12] p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-white">
                   {editor === 'create' ? 'New badge' : `Edit ${editor.name}`}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {editor !== 'create' && editor.is_system
-                    ? 'Product badges can be renamed, but their registry ID stays fixed so auto-award still works.'
-                    : 'Honorary badges are granted from the Grant tab. Product ranks still evaluate on job, gig, and asset close.'}
+                  Leave requirements empty for an honorary badge. Attach named rules from the Requirements tab; every attached rule must be true before the pending grant is sent.
                 </p>
               </div>
               <button type="button" onClick={closeEditor} className="rounded-lg p-1.5 text-zinc-500 hover:text-white" aria-label="Close">
@@ -341,65 +406,83 @@ export default function BadgeCatalogTab() {
                   </label>
                 </>
               )}
-              <label>
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Trigger</span>
-                <select
-                  value={form.triggerEventCode}
-                  onChange={(event) => setForm((current) => ({ ...current, triggerEventCode: event.target.value }))}
-                  className={fieldClass}
-                >
-                  {TRIGGER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {form.triggerEventCode === 'custom' && (
-                <label>
-                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Custom trigger</span>
-                  <input
-                    value={form.customTrigger}
-                    onChange={(event) => setForm((current) => ({ ...current, customTrigger: event.target.value }))}
-                    placeholder="staff_honorary"
-                    className={fieldClass}
-                    maxLength={50}
-                  />
-                </label>
-              )}
-              <label>
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Condition</span>
-                <select
-                  value={form.conditionType}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      conditionType: event.target.value === 'count' ? 'count' : 'boolean',
-                      conditionValue: event.target.value === 'count' ? current.conditionValue || '1' : '1',
-                    }))
-                  }
-                  className={fieldClass}
-                >
-                  <option value="boolean">Already complete</option>
-                  <option value="count">Reach a count</option>
-                </select>
-              </label>
-              {form.conditionType === 'count' && (
-                <label>
-                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Count</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.conditionValue}
-                    onChange={(event) => setForm((current) => ({ ...current, conditionValue: event.target.value }))}
-                    className={fieldClass}
-                  />
-                </label>
-              )}
+
+              <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Requirements</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">All of these must be true. Create named rules on the Requirements tab, then attach them here.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addRequirement}
+                    disabled={!availableDefs.length}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white disabled:opacity-40"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add
+                  </button>
+                </div>
+
+                {form.requirements.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-zinc-500">
+                    No requirements. This stays honorary until you grant it from the Grant tab.
+                  </p>
+                )}
+
+                {form.requirements.map((requirement, index) => {
+                  const selected = requirementDefs.find((def) => def.requirement_def_id === requirement.requirement_def_id)
+                    || requirement;
+                  const type = requirementTypes.find((item) => item.code === selected.metric);
+                  return (
+                    <div key={`${requirement.requirement_def_id}-${index}`} className="grid gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto]">
+                      <select
+                        value={requirement.requirement_def_id}
+                        onChange={(event) => updateRequirement(index, event.target.value)}
+                        className={fieldClass}
+                      >
+                        {!requirementDefs.some((def) => def.requirement_def_id === requirement.requirement_def_id) && (
+                          <option value={requirement.requirement_def_id}>
+                            {formatRequirement(requirement, requirementTypes)}
+                          </option>
+                        )}
+                        {groupedDefs.map(([group, defs]) => (
+                          <optgroup key={group} label={group}>
+                            {defs
+                              .filter((def) =>
+                                def.requirement_def_id === requirement.requirement_def_id
+                                || (!usedDefIds.has(def.requirement_def_id) && !usedMetrics.has(def.metric))
+                              )
+                              .map((def) => (
+                                <option key={def.requirement_def_id} value={def.requirement_def_id}>
+                                  {formatRequirement(def, requirementTypes)}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeRequirement(index)}
+                        className="rounded-lg p-2 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"
+                        aria-label="Remove requirement"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      <p className="sm:col-span-2 text-[11px] text-zinc-500">
+                        {type?.kind === 'boolean'
+                          ? (selected.description || type.description)
+                          : `${type?.label || selected.metric} ${operatorLabel(selected.operator)} ${selected.threshold}${selected.description ? ` · ${selected.description}` : ''}`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
               <button
                 type="button"
                 onClick={() => setForm((current) => ({ ...current, isSecret: !current.isSecret }))}
-                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 text-left"
+                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 text-left sm:col-span-2"
               >
                 <span>
                   <span className="block text-sm text-white">Secret badge</span>

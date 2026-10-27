@@ -510,6 +510,10 @@ async function createAssetServices(accountId, payload) {
     if (reviewInfo.queued) {
       return { ...asset, reviewQueued: true, reviewMessage: reviewInfo.message };
     }
+    if (String(asset?.status).toLowerCase() === 'published') {
+      const { scheduleBadgeEvaluation } = require('./BadgeServices');
+      scheduleBadgeEvaluation(accountId);
+    }
     return asset;
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
@@ -671,6 +675,10 @@ async function updateAssetServices(assetId, accountId, payload) {
     const asset = await getAssetServices(assetId, accountId);
     if (publish.queued) {
       return { ...asset, reviewQueued: true, reviewMessage: publish.message };
+    }
+    if (String(asset?.status).toLowerCase() === 'published') {
+      const { scheduleBadgeEvaluation } = require('./BadgeServices');
+      scheduleBadgeEvaluation(accountId);
     }
     return asset;
   } catch (error) {
