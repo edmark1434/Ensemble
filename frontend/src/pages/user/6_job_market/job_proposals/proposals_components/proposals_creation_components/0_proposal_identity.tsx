@@ -573,7 +573,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
             <div>
               {/* Overlapping Avatar */}
               <div className="relative z-10 -mt-7 mb-3 flex items-end justify-between">
-                <div className="h-14 w-14 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm shrink-0">
+                <div className="h-14 w-14 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm shrink-0">
                   <img
                     src={userAvatarUrl}
                     alt={userName}
@@ -632,7 +632,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
               <div>
                 {/* Overlapping Avatar Skeleton */}
                 <div className="relative z-10 -mt-7 mb-3">
-                  <div className="h-14 w-14 rounded-2xl bg-zinc-200 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm animate-pulse" />
+                  <div className="h-14 w-14 rounded-full bg-zinc-200 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm animate-pulse" />
                 </div>
 
                 {/* Name & Tag Skeletons */}
@@ -673,17 +673,21 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
                 : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900/40 cursor-pointer"
             }`}
           >
-            {/* Team Banner Strip */}
-            <div className="relative h-20 sm:h-24 w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-              <img
-                src={teamBannerUrl}
-                alt="Team Banner"
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = defaultTeamBannerUrl;
-                }}
-              />
+            {/* Team Banner Strip: Real team banner if team exists; empty gray if no team */}
+            <div className="relative h-20 sm:h-24 w-full overflow-hidden bg-zinc-200 dark:bg-zinc-800">
+              {userTeams.length > 0 && selectedTeamData ? (
+                <img
+                  src={teamBannerUrl}
+                  alt="Team Banner"
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = defaultTeamBannerUrl;
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-zinc-200 dark:bg-zinc-800/80" />
+              )}
               {/* Top-Right Selection Radio */}
               <div className="absolute top-3 right-3 z-10">
                 <div
@@ -705,7 +709,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
               <div>
                 {/* Proposer Avatar */}
                 <div className="relative z-10 -mt-7 mb-3 flex items-end justify-between">
-                  <div className="h-14 w-14 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm shrink-0">
+                  <div className="h-14 w-14 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm shrink-0">
                     <img
                       src={userAvatarUrl}
                       alt={userName}

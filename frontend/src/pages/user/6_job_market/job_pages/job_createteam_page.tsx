@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,7 +30,9 @@ const JobCreateTeamPostPage: React.FC = () => {
   const [isInitializingStudio, setIsInitializingStudio] = useState(true);
 
   useEffect(() => {
+    if (isSubmittedRef.current) return;
     const timer = setTimeout(() => {
+      if (isSubmittedRef.current) return;
       setIsInitializingStudio(false);
     }, 850);
     return () => clearTimeout(timer);
@@ -156,6 +158,7 @@ const JobCreateTeamPostPage: React.FC = () => {
 
   // --- LOCALSTORAGE AUTO-SAVE DRAFT ---
   const [isDraftRestored, setIsDraftRestored] = useState(false);
+  const isSubmittedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -284,17 +287,15 @@ const JobCreateTeamPostPage: React.FC = () => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const hasUnsavedChanges = Boolean(
-    title ||
-      description ||
-      category ||
-      difficulty ||
+    title.trim() ||
+      description.trim() ||
+      category.trim() ||
+      difficulty.trim() ||
       previewUrl ||
       skills.length > 0 ||
-      minBudget ||
-      maxBudget ||
-      minTimeline ||
-      maxTimeline ||
-      deadline ||
+      minBudget.trim() ||
+      maxBudget.trim() ||
+      deadline.trim() ||
       milestones.length > 0
   );
 
