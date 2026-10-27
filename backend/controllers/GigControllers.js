@@ -73,6 +73,11 @@ async function createGigController(req, res) {
         };
 
         const gigId = await createGigRepository(gigData);
+        try {
+            require('../services/BadgeServices').scheduleBadgeEvaluation(freelancer_account_id);
+        } catch (badgeErr) {
+            console.error('Badge evaluation after gig create failed:', badgeErr.message);
+        }
         res.status(201).json({ success: true, message: 'Gig created successfully', gigId });
     } catch (error) {
         console.error("Error in createGigController:", error);

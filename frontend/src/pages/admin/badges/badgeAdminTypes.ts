@@ -14,6 +14,44 @@ export type CatalogBadge = {
   is_system: boolean;
   created_at: string;
   updated_at: string;
+  requirements: BadgeRequirement[];
+};
+
+export type RequirementOperator = 'gte' | 'eq' | 'lte';
+
+export type BadgeRequirement = {
+  requirement_def_id: string;
+  code: string;
+  metric: string;
+  name: string;
+  slug?: string;
+  operator: RequirementOperator | string;
+  threshold: number;
+  kind: 'boolean' | 'count' | string;
+  description?: string;
+};
+
+export type RequirementType = {
+  code: string;
+  label: string;
+  group: string;
+  kind: 'boolean' | 'count';
+  description: string;
+};
+
+export type RequirementDef = {
+  requirement_def_id: string;
+  slug: string;
+  name: string;
+  description: string;
+  metric: string;
+  operator: RequirementOperator | string;
+  threshold: number;
+  is_system: boolean;
+  kind: 'boolean' | 'count' | string;
+  attached_count: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type BadgeCategory = {
@@ -30,21 +68,13 @@ export type BadgeFormState = {
   categoryName: string;
   categoryDescription: string;
   isSecret: boolean;
-  triggerEventCode: string;
-  customTrigger: string;
-  conditionType: 'boolean' | 'count';
-  conditionValue: string;
+  requirements: BadgeRequirement[];
 };
 
-export const TRIGGER_OPTIONS: { value: string; label: string }[] = [
-  { value: 'admin_grant', label: 'Honorary / admin grant' },
-  { value: 'alpha_access', label: 'Signup during alpha' },
-  { value: 'beta_access', label: 'Beta flag' },
-  { value: 'profile_complete', label: 'Profile checklist 100%' },
-  { value: 'gig_completed', label: 'Successful freelancer close' },
-  { value: 'contract_funded', label: 'Successful client close' },
-  { value: 'asset_published', label: 'Marketplace asset published' },
-  { value: 'custom', label: 'Custom trigger' },
+export const OPERATORS: { id: RequirementOperator; label: string }[] = [
+  { id: 'gte', label: 'at least' },
+  { id: 'eq', label: 'exactly' },
+  { id: 'lte', label: 'at most' },
 ];
 
 export const emptyBadgeForm = (): BadgeFormState => ({
@@ -55,30 +85,49 @@ export const emptyBadgeForm = (): BadgeFormState => ({
   categoryName: '',
   categoryDescription: '',
   isSecret: false,
-  triggerEventCode: 'admin_grant',
-  customTrigger: '',
-  conditionType: 'boolean',
-  conditionValue: '1',
+  requirements: [],
 });
 
-export const formFromBadge = (badge: CatalogBadge): BadgeFormState => {
-  const known = TRIGGER_OPTIONS.some((option) => option.value === badge.trigger_event_code);
-  return {
-    registryId: badge.registry_id,
-    name: badge.name,
-    description: badge.description,
-    categoryId: badge.badge_category_id,
-    categoryName: '',
-    categoryDescription: '',
-    isSecret: Boolean(badge.is_secret),
-    triggerEventCode: known ? badge.trigger_event_code : 'custom',
-    customTrigger: known ? '' : badge.trigger_event_code,
-    conditionType: badge.condition_type === 'count' ? 'count' : 'boolean',
-    conditionValue: String(badge.condition_value ?? 1),
-  };
-};
+export const formFromBadge = (badge: CatalogBadge): BadgeFormState => ({
+  registryId: badge.registry_id,
+  name: badge.name,
+  description: badge.description,
+  categoryId: badge.badge_category_id,
+  categoryName: '',
+  categoryDescription: '',
+  isSecret: Boolean(badge.is_secret),
+  requirements: (badge.requirements || []).map((requirement) => ({
+    requirement_def_id: requirement.requirement_def_id,
+    code: requirement.metric || requirement.code,
+    metric: requirement.metric || requirement.code,
+    name: requirement.name || requirement.code,
+    slug: requirement.slug,
+    operator: requirement.operator || 'gte',
+    threshold: Number(requirement.threshold || 1),
+    kind: requirement.kind || 'count',
+    description: requirement.description,
+  })),
+});
 
 export const errorMessage = (err: unknown, fallback: string) => {
   const response = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
   return response || fallback;
 };
+
+export function operatorLabel(operator: string) {
+  return OPERATORS.find((item) => item.id === operator)?.label || operator;
+}
+
+export function formatRequirement(requirement: Pick<RequirementDef, 'name' | 'metric' | 'operator' | 'threshold' | 'kind'>, types: RequirementType[]) {
+  if (requirement.name) return requirement.name;
+  const type = types.find((item) => item.code === requirement.metric);
+  const label = type?.label || requirement.metric;
+  if ((requirement.kind || type?.kind) === 'boolean') return label;
+  return `${label} ${operatorLabel(requirement.operator)} ${requirement.threshold}`;
+}
+
+export function summarizeRequirements(badge: CatalogBadge, types: RequirementType[]) {
+  const requirements = badge.requirements || [];
+  if (!requirements.length) return 'Honorary — grant only';
+  return requirements.map((requirement) => formatRequirement(requirement, types)).join(' + ');
+}

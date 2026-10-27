@@ -37,6 +37,12 @@
 - Paginate growing histories with deterministic ordering and a tie-breaker.
 - Treat schema errors as migration/version mismatches before adding query workarounds.
 
+## Badge requirements
+
+- `badge_requirement_defs` is the named library: slug, name, metric, operator (`gte` / `eq` / `lte`), threshold, and `is_system`.
+- `badge_requirements` attaches library rows to a badge (`requirement_def_id`). A badge may have several AND requirements or none (honorary).
+- Migration `1825400000000_badge-requirement-defs` seeds the live product catalog (alpha, beta, profile, freelance/client/creator ranks) and extra reusable starters. Do not edit `1825300000000_badge-requirements`.
+
 ## Marketplace licenses
 
 - `market_asset_licenses` replaces `user_market_assets`. Each row records one asset/bundle use: buyer, asset, paid price, purchase transaction, purchase date, status, and optional project/assignment date.

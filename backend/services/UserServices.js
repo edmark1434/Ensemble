@@ -296,7 +296,9 @@ async function registerUser(signupPayload = {}, options = {}) {
     
     // Automatically grant the Alpha Tester badge to all new accounts
     try {
-        await require('./BadgeServices').grantBadgeService({ registryId: 'acc-alpha', accountIds: [account.account_id] });
+        const { grantBadgeService, scheduleBadgeEvaluation } = require('./BadgeServices');
+        await grantBadgeService({ registryId: 'acc-alpha', accountIds: [account.account_id] });
+        scheduleBadgeEvaluation(account.account_id, { event: 'signup' });
     } catch (e) {
         console.error("Failed to grant Alpha badge to new user", e);
     }

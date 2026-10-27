@@ -162,10 +162,16 @@ No badge grants in v1. Team work still grants the **acting user’s** freelance/
 
 | Desk | Route | Can do |
 |---|---|---|
-| Admin | `/admin/badges` | catalog CRUD, grant (including honorary / beta), revoke for fraud or mistake |
+| Admin | `/admin/badges` | catalog CRUD, named requirement library, grant (including honorary / beta), revoke for fraud or mistake |
 | Other desks | — | no grant, no revoke |
 
 Product catalog IDs (`acc-alpha`, ranks, `setup-profile`) can be renamed but not deleted or re-id'd. Honorary badges can be created, edited, and soft-deleted. Soft-delete hides the definition; grants stay until staff revoke them. `/admin/badge-grant` redirects to the Grant tab.
+
+Requirements are a named library (`badge_requirement_defs`), not inline numbers on the badge. Staff create a rule (metric + at least / exactly / at most + threshold), then attach one or more rules to a badge. All attached rules must be true (AND) before the pending grant is sent. Empty attachments means honorary.
+
+The 15 product badges ship with library rows already attached: alpha signup, beta flag, profile checklist, freelancer/client/creator ranks at 1 / 10 / 50 / 100. Extra starter rules exist for jobs posted, proposals, gigs listed, followers, reviews, portfolio, and skills. Staff can add more (for example “25 followers”) and attach them to any badge.
+
+Forums, chat, editor, identity verification, and paid plans are not requirement sources. Product library rows can be renamed but not deleted or have their metric/threshold changed.
 
 Restrictions views do not need a badge editor. Show claimed badges on the user record so staff can spot a mistaken grant.
 
@@ -216,7 +222,7 @@ appeal restore does not re-grant anything; pins come back when standing allows p
 Build order (badge slice):
 
 1. Keep pending-until-claim. Fix registry IDs. Alpha/Beta banners already require the claimed badge.
-2. Auto-award 1/10/50/100 on job/gig close and on publish.
+2. Auto-award 1/10/50/100 on job/gig close and on publish. `evaluateAccountBadges` pending-grants any catalog row whose requirements are all met.
 3. Hide pins on public profile while Frozen / Banned / Locked.
 
 Do not describe this as live in `backend/data/` until it ships.

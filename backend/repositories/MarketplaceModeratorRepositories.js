@@ -215,6 +215,11 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
          WHERE market_asset_id = $1 AND deleted_at IS NULL`,
         [row.market_asset_id]
       );
+      try {
+        require('../services/BadgeServices').scheduleBadgeEvaluation(row.submitted_by_account_id);
+      } catch (badgeErr) {
+        console.error('Badge evaluation after listing approve failed:', badgeErr.message);
+      }
     } else if (status === 'rejected' || status === 'delisted') {
       await pool.query(
         `UPDATE market_assets

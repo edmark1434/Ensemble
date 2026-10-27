@@ -1023,6 +1023,11 @@ async function updatePendingCase(caseId, body, session) {
            WHERE market_asset_id = $1 AND deleted_at IS NULL`,
           [marketAssetId]
         );
+        try {
+          require('../services/BadgeServices').scheduleBadgeEvaluation(listingRow.submitted_by_account_id);
+        } catch (badgeErr) {
+          console.error('Badge evaluation after listing approve failed:', badgeErr.message);
+        }
       } else if (status === 'rejected' || status === 'delisted') {
         await pool.query(
           `UPDATE market_assets SET status = 'draft', updated_at = NOW()
