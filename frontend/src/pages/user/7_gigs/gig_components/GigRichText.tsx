@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Star, Clock, Users, Bookmark, Share2,
-  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart, TrendingUp
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart, TrendingUp, PackagePlus, Play
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -17,6 +17,18 @@ import { GigsOtherServices } from "./gigs_other_services";
 import useGlobalState from "@/lib/global_state";
 import { formatDistanceToNow } from "date-fns";
 
+
+function isVideoMedia(url?: string | null): boolean {
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".m4v") ||
+    clean.endsWith(".ogg")
+  );
+}
 interface GigRichTextProps {
   gig?: Gig | null;
   isLoading?: boolean;
@@ -799,34 +811,55 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                   </div>
                 </section>
 
-                {/* 3. SUPPORTING IMAGES */}
+                {/* 3. SUPPORTING MEDIA & SAMPLES */}
                 {gig.gallery && gig.gallery.length > 0 && (
                   <section>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
-                        Supporting Images ({gig.gallery.length})
+                        Work Samples & Media ({gig.gallery.length})
                       </h3>
                       <span className="text-[10px] text-gray-400 dark:text-zinc-500 hidden sm:inline">
-                        Click to expand
+                        Click to play / expand
                       </span>
                     </div>
                     <div className="flex gap-3 overflow-x-auto thin-gallery-scrollbar pb-3 snap-x">
-                      {gig.gallery.map((img, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => setActiveLightboxImg(img)}
-                          className="group relative h-28 sm:h-36 min-w-[40%] sm:min-w-[30%] shrink-0 rounded-2xl overflow-hidden snap-center bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
-                        >
-                          <img
-                            src={img}
-                            alt={`Gallery ${idx}`}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
-                            <ZoomIn className="h-5 w-5" />
+                      {gig.gallery.map((img, idx) => {
+                        const isVideo = isVideoMedia(img);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setActiveLightboxImg(img)}
+                            className="group relative h-28 sm:h-36 min-w-[40%] sm:min-w-[30%] shrink-0 rounded-2xl overflow-hidden snap-center bg-zinc-950 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
+                          >
+                            {isVideo ? (
+                              <div className="relative w-full h-full bg-zinc-950 flex items-center justify-center">
+                                <video
+                                  src={img}
+                                  preload="metadata"
+                                  playsInline
+                                  muted
+                                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none"
+                                />
+                                <div className="absolute top-2 left-2 z-10 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 border border-white/10 shadow-sm">
+                                  <Play className="h-2.5 w-2.5 fill-white text-white" /> Video
+                                </div>
+                                <div className="w-9 h-9 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center text-white border border-white/20 shadow-lg group-hover:scale-110 transition-transform">
+                                  <Play className="h-4 w-4 fill-white text-white ml-0.5" />
+                                </div>
+                              </div>
+                            ) : (
+                              <img
+                                src={img}
+                                alt={`Work sample ${idx + 1}`}
+                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none"
+                              />
+                            )}
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
+                              {isVideo ? <Play className="h-6 w-6 fill-white" /> : <ZoomIn className="h-5 w-5" />}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </section>
                 )}
@@ -909,6 +942,41 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                         </p>
                       )}
                     </section>
+
+                    {/* Service Add-ons & Extras */}
+                    {gig.addOns && gig.addOns.length > 0 && (
+                      <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-4 shadow-sm space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                            <PackagePlus className="h-3.5 w-3.5 text-blue-500" />
+                            Service Add-ons ({gig.addOns.length})
+                          </h4>
+                        </div>
+                        <div className="space-y-1.5">
+                          {gig.addOns.map((addon, aIdx) => (
+                            <div
+                              key={addon.id || aIdx}
+                              className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] shadow-2xs"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <span className="text-xs font-semibold text-gray-900 dark:text-white block truncate">
+                                  {addon.title}
+                                </span>
+                                {addon.deliveryDays ? (
+                                  <span className="text-[10px] text-gray-400 dark:text-zinc-500 block">
+                                    +{addon.deliveryDays} Day{addon.deliveryDays > 1 ? "s" : ""} Delivery
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="flex items-center gap-1 text-xs font-bold text-amber-500 dark:text-amber-400 shrink-0">
+                                <CreditIcon className="h-3.5 w-3.5" />
+                                <span>+{addon.price?.toLocaleString()} Cr</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
 
                     {renderMilestones()}
                     {renderTermsOfService()}
@@ -1088,6 +1156,41 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                   )}
                 </section>
 
+                {/* Service Add-ons & Extras */}
+                {gig.addOns && gig.addOns.length > 0 && (
+                  <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                        <PackagePlus className="h-4 w-4 text-blue-500" />
+                        Service Add-ons & Extras ({gig.addOns.length})
+                      </h4>
+                    </div>
+                    <div className="space-y-2">
+                      {gig.addOns.map((addon, aIdx) => (
+                        <div
+                          key={addon.id || aIdx}
+                          className="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] shadow-2xs hover:border-blue-400 dark:hover:border-blue-500/50 transition-colors"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white block truncate">
+                              {addon.title}
+                            </span>
+                            {addon.deliveryDays ? (
+                              <span className="text-[11px] text-gray-500 dark:text-zinc-400 block mt-0.5">
+                                +{addon.deliveryDays} Day{addon.deliveryDays > 1 ? "s" : ""} Delivery
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1 text-xs sm:text-sm font-bold text-amber-500 dark:text-amber-400 shrink-0">
+                            <CreditIcon className="h-4 w-4" />
+                            <span>+{addon.price?.toLocaleString()} Cr</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 {/* Collapsible Project Milestones */}
                 {renderMilestones()}
 
@@ -1189,7 +1292,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 </>
               )}
 
-              {/* Image Presentation */}
+              {/* Image / Video Presentation */}
               <motion.div
                 key={activeLightboxImg}
                 initial={{ opacity: 0, scale: 0.92 }}
@@ -1198,11 +1301,21 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 className="relative max-w-5xl max-h-[85vh] w-full flex items-center justify-center z-10 pointer-events-none"
               >
-                <img
-                  src={activeLightboxImg}
-                  alt="Enlarged gallery preview"
-                  className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10 pointer-events-auto"
-                />
+                {isVideoMedia(activeLightboxImg) ? (
+                  <video
+                    src={activeLightboxImg}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10 pointer-events-auto bg-black"
+                  />
+                ) : (
+                  <img
+                    src={activeLightboxImg}
+                    alt="Enlarged gallery preview"
+                    className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+                  />
+                )}
               </motion.div>
             </div>
           )}
