@@ -893,6 +893,17 @@ export const TeamProjectWorkspace: React.FC = () => {
                 {isArchived ? 'Archived (Read Only) • Auto-deletes in 30 days' : 'Active Workspace'}
               </span>
 
+              {/* Workspace Type: Job Workspace vs Gig Workspace */}
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                  project.gig_id || project.workspace_type === 'Gig'
+                    ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800'
+                    : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800'
+                }`}
+              >
+                {project.gig_id || project.workspace_type === 'Gig' ? 'Gig Workspace' : 'Job Workspace'}
+              </span>
+
               {/* Category tag: Gray */}
               {project.job_category && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
