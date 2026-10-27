@@ -47,8 +47,11 @@ interface Notification {
   taskType?: string;
   reviewerName?: string;
   reviewerAvatar?: string;
-  reviewFeedback?: string;
-  reviewStars?: number;
+  reviewFeedback?: string | null;
+  reviewStars?: number | null;
+  actor_account_id?: string;
+  is_sealed?: boolean;
+  contractCompleted?: boolean;
 }
 
 interface CreatorSearchApiAccount {
@@ -472,6 +475,18 @@ useEffect(() => {
       }
     }
 
+    // Suppress toasts for actions triggered by the current user themselves
+    if (notification.actor_account_id && userInfo?.account_id && String(notification.actor_account_id) === String(userInfo.account_id)) {
+      setNotifications((prev) => {
+        const exists = prev.some(
+          (item) => item.notification_id && item.notification_id === notification.notification_id
+        );
+        if (exists) return prev;
+        return [notification, ...prev];
+      });
+      return;
+    }
+
     // Display visual toast alert (executed purely OUTSIDE setState to avoid StrictMode double-execution)
     if (notification.message) {
       const toastOptions = notifKey ? { id: `notif-${notifKey}` } : {};
@@ -572,27 +587,43 @@ useEffect(() => {
           </div>
         ), { ...toastOptions, duration: 6000 });
       } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
+        const isSealed = Boolean(notification.is_sealed || !notification.reviewStars || !notification.contractCompleted);
         const stars = notification.reviewStars || 5;
         const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
         
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+          <div 
+            onClick={() => {
+              toast.dismiss(t.id);
+              if (notification.reference_path) navigate(notification.reference_path);
+            }}
+            className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.01]`}
+          >
             <div className="absolute top-2 left-3">
-              <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
-                NEW REVIEW
+              <span className={`text-[9px] font-bold tracking-wider uppercase ${isSealed ? 'text-amber-600 dark:text-amber-400' : 'text-blue-500 dark:text-blue-400'}`}>
+                {isSealed ? 'REVIEW RECEIVED' : 'NEW REVIEW'}
               </span>
             </div>
             <div className="flex-1 w-0 flex items-center justify-between">
               <div className="flex-shrink-0 pl-1 mr-2">
-                <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
+                {isSealed ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+                    <span className="text-sm">🔒</span>
+                    <span className="text-[10px] uppercase tracking-wider font-bold">Sealed</span>
+                  </div>
+                ) : (
+                  <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
+                )}
               </div>
               <div className="flex flex-1 items-start justify-end text-right">
                 <div className="mr-3 flex-1">
                   <p className="text-sm font-bold text-gray-900 dark:text-white">
                     {notification.reviewerName || "User"}
                   </p>
-                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
-                    "{notification.reviewFeedback || notification.message}"
+                  <p className="mt-1 text-xs sm:text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
+                    {isSealed
+                      ? "Submitted a review. Ratings and feedback remain sealed until both reviews are submitted."
+                      : `"${notification.reviewFeedback || notification.message}"`}
                   </p>
                 </div>
                 <div className="flex-shrink-0 pt-0.5">

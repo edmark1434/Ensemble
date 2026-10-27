@@ -493,8 +493,12 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
         try {
             const reviewerName = reviewResult.isClient ? task.client_name : task.freelancer_name;
             const reviewerAvatar = reviewResult.isClient ? task.client_avatar : task.freelancer_avatar;
+            const isMutualCompleted = Boolean(reviewResult.contractCompleted);
+
             const notif = await createNotificationServices({
-                message: `${reviewerName || 'A user'} left you a ${numRating}-star review for "${task.job_title || 'contract'}".`,
+                message: isMutualCompleted
+                    ? `${reviewerName || 'A user'} left you a ${numRating}-star review for "${task.job_title || 'contract'}". Mutual feedback is now unsealed!`
+                    : `${reviewerName || 'A user'} submitted a review for "${task.job_title || 'contract'}". Submit your review to unseal mutual feedback.`,
                 is_read: false,
                 reference_table: 'ratings',
                 reference_prefix: 'CONTRACT_REVIEW',
@@ -504,8 +508,19 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
             });
             notif.reviewerName = reviewerName;
             notif.reviewerAvatar = reviewerAvatar;
-            notif.reviewFeedback = trimmedFeedback;
-            notif.reviewStars = numRating;
+            notif.actor_account_id = actorId;
+            notif.is_sealed = !isMutualCompleted;
+            notif.contractCompleted = isMutualCompleted;
+            notif.contract_id = normalizedContractId;
+
+            if (isMutualCompleted) {
+                notif.reviewFeedback = trimmedFeedback;
+                notif.reviewStars = numRating;
+            } else {
+                notif.reviewFeedback = null;
+                notif.reviewStars = null;
+            }
+
             io.to(targetAccId).emit('notification', notif);
         } catch (notifErr) {
             console.error('Unable to create review notification:', notifErr.message);
