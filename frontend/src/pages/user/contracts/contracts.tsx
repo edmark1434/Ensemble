@@ -90,6 +90,8 @@ export interface DetailedContract {
   status: ContractStatus;
   isArchived: boolean;
   jobId?: string;
+  teamId?: string;
+  orderId?: string;
 
   // Dates
   dateCreated: string;
