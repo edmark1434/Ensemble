@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers, Maximize2 } from "lucide-react";
+import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers, Maximize2, PackagePlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import type { Gig } from "../gig_datasets";
@@ -367,6 +367,41 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                         </div>
                       </motion.div>
                     </AnimatePresence>
+                  </div>
+                </div>
+              )}
+
+              {/* Service Add-ons & Extras */}
+              {selectedGig.addOns && selectedGig.addOns.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <PackagePlus className="h-3.5 w-3.5 text-blue-500" />
+                      Service Add-ons & Extras ({selectedGig.addOns.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedGig.addOns.map((addon, aIdx) => (
+                      <div
+                        key={addon.id || aIdx}
+                        className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-2xs hover:border-blue-400 dark:hover:border-blue-500/50 transition-colors"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <span className="text-xs font-semibold text-gray-900 dark:text-white block truncate">
+                            {addon.title}
+                          </span>
+                          {addon.deliveryDays ? (
+                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 block">
+                              +{addon.deliveryDays} Day{addon.deliveryDays > 1 ? "s" : ""} Delivery
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs font-bold text-amber-500 dark:text-amber-400 shrink-0">
+                          <CreditIcon className="h-3.5 w-3.5" />
+                          <span>+{addon.price?.toLocaleString()} Cr</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

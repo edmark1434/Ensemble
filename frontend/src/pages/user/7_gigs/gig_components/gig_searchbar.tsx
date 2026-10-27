@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
@@ -13,26 +13,49 @@ interface GigSearchBarProps {
 const GigSearchBar: React.FC<GigSearchBarProps> = ({ searchQuery, setSearchQuery }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
-  const isVerified = useGlobalState((state) => state.isVerified);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
 
-  const handlePostClick = () => {
+  const handlePostClick = async () => {
+    if (isCheckingAccess) return;
     if (isGuestMode) {
       setIsModalOpen(true);
     } else {
-      continueIfAccountVerified(() => navigate("/gigs/create"), false, "Account Verification is required to access Gig Creation. Please verify your identity to proceed.");
+      setIsCheckingAccess(true);
+      try {
+        await continueIfAccountVerified(
+          () => navigate("/gigs/create"),
+          false,
+          "Account Verification is required to access Gig Creation. Please verify your identity to proceed."
+        );
+      } finally {
+        setIsCheckingAccess(false);
+      }
     }
   };
 
   return (
     <>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
-        <button data-tour="gigs-create-button"
+        <button
+          data-tour="gigs-create-button"
           onClick={handlePostClick}
-          
-          className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105"
+          disabled={isCheckingAccess}
+          className={`shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition-all duration-200 shadow-sm hover:shadow-md select-none ${
+            isCheckingAccess ? "opacity-80 cursor-wait" : "hover:scale-105 active:scale-95 cursor-pointer"
+          }`}
         >
-          <Plus className="h-4 w-4" /> <span>Post a Service</span>
+          {isCheckingAccess ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Opening...</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Post a Service</span>
+            </>
+          )}
         </button>
         <div data-tour="gigs-search-bar" className="relative flex-1">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
