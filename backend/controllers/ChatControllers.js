@@ -2,9 +2,12 @@ const { answerDocumentationQuestion, RagError } = require('../services/RagServic
 const { EmbeddingError } = require('../services/EmbeddingServices');
 const {
   ClaudeSupportError,
+  generateGigDraft,
+  generateGigTiersDraft,
   generateJobPostDraft,
   generateProposalPitchDraft,
   generateProposalMilestonesDraft,
+  generateOrderBriefDraft,
   generateJobSkillsDraft,
   generateProfileIntroductionDraft,
 } = require('../services/ClaudeSupportServices');
@@ -22,6 +25,20 @@ async function createDocumentationChatResponse(req, res) {
   }
 }
 
+
+async function generateGigDraftResponse(req, res) {
+  try {
+    const draft = await generateGigDraft(req.body?.prompt, Boolean(req.body?.isTeam));
+    return res.status(200).json({ success: true, data: draft });
+  } catch (error) {
+    if (error instanceof ClaudeSupportError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Joed AI gig draft generation failed:', error);
+    return res.status(500).json({ success: false, message: 'Joed AI could not generate the service details right now. Please try again.' });
+  }
+}
+
 async function generateJobDraftResponse(req, res) {
   try {
     const draft = await generateJobPostDraft(req.body?.prompt);
@@ -35,6 +52,19 @@ async function generateJobDraftResponse(req, res) {
   }
 }
 
+async function generateOrderBriefResponse(req, res) {
+  try {
+    const draft = await generateOrderBriefDraft(req.body);
+    return res.status(200).json({ success: true, data: draft });
+  } catch (error) {
+    if (error instanceof ClaudeSupportError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Joed AI order brief generation failed:', error);
+    return res.status(500).json({ success: false, message: 'Joed AI could not generate the project brief right now. Please try again.' });
+  }
+}
+
 async function generateProposalPitchResponse(req, res) {
   try {
     const draft = await generateProposalPitchDraft(req.body);
@@ -45,6 +75,20 @@ async function generateProposalPitchResponse(req, res) {
     }
     console.error('Joed AI proposal pitch generation failed:', error);
     return res.status(500).json({ success: false, message: 'Joed AI could not generate the cover pitch right now. Please try again.' });
+  }
+}
+
+
+async function generateGigTiersResponse(req, res) {
+  try {
+    const draft = await generateGigTiersDraft(req.body);
+    return res.status(200).json({ success: true, data: draft });
+  } catch (error) {
+    if (error instanceof ClaudeSupportError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Joed AI gig tiers generation failed:', error);
+    return res.status(500).json({ success: false, message: 'Joed AI could not generate tiers right now. Please try again.' });
   }
 }
 
@@ -89,10 +133,13 @@ async function generateProfileIntroductionResponse(req, res) {
 }
 
 module.exports = {
+  generateGigTiersResponse,
   createDocumentationChatResponse,
+  generateGigDraftResponse,
   generateJobDraftResponse,
   generateProposalPitchResponse,
   generateProposalMilestonesResponse,
+  generateOrderBriefResponse,
   generateJobSkillsResponse,
   generateProfileIntroductionResponse,
 };
