@@ -162,8 +162,10 @@ No badge grants in v1. Team work still grants the **acting user’s** freelance/
 
 | Desk | Route | Can do |
 |---|---|---|
-| Admin | `/admin/badge-grant` | grant (including honorary / beta), revoke for fraud or mistake |
+| Admin | `/admin/badges` | catalog CRUD, grant (including honorary / beta), revoke for fraud or mistake |
 | Other desks | — | no grant, no revoke |
+
+Product catalog IDs (`acc-alpha`, ranks, `setup-profile`) can be renamed but not deleted or re-id'd. Honorary badges can be created, edited, and soft-deleted. Soft-delete hides the definition; grants stay until staff revoke them. `/admin/badge-grant` redirects to the Grant tab.
 
 Restrictions views do not need a badge editor. Show claimed badges on the user record so staff can spot a mistaken grant.
 

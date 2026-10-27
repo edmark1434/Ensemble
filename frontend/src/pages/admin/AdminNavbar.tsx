@@ -30,7 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Analytics', icon: BarChart3, to: '/admin/analytics' },
   { label: 'Tickets', icon: Ticket, to: '/admin/ticket-management' },
   { label: 'Platform Feedback', icon: MessageSquare, to: '/admin/feedbacks' },
-  { label: 'Badge Grant', icon: Award, to: '/admin/badge-grant' },
+  { label: 'Badges', icon: Award, to: '/admin/badges' },
   { label: 'Settings', icon: Settings2, to: '/admin/system-settings' },
   { label: 'Platform view', icon: Eye, to: '/admin/platform-view' },
 ];
