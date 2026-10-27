@@ -54,7 +54,7 @@ async function createGigController(req, res) {
 
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
-            additionalWorkRate, tiers, milestones, questionnaires, skills,
+            additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
             thumbnailFileId, galleryFileIds
         } = req.body;
 
@@ -67,8 +67,10 @@ async function createGigController(req, res) {
         }
 
         const gigData = {
+            payer_account_id: personalAccountId,
+            acting_team_id: actor.teamId || null,
             freelancer_account_id, title, description, category, slots, termsOfService,
-            firstDraftDelivery, additionalWorkRate, tiers, milestones, questionnaires,
+            firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
             skills, thumbnailFileId, galleryFileIds
         };
 
