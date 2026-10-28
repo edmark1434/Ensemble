@@ -178,7 +178,7 @@ const NotificationsPage: React.FC = () => {
   const hasUnread = notifications.some(n => !n.is_read);
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid shape="square" squareSize={48} direction="diagonal" speed={0.4} borderColor="rgba(150,150,150,0.15)" hoverFillColor="rgba(59,130,246,0.15)" hoverTrailAmount={3} />
       </div>
@@ -190,29 +190,39 @@ const NotificationsPage: React.FC = () => {
           {/* Page header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  <Bell className="w-6 h-6" />
+              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  <Bell className="w-5 h-5" />
                 </div>
-                Your Notifications
+                <span>Your Notifications</span>
               </h1>
-              <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1.5">Stay updated with your latest alerts, messages, and job updates.</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 mt-1">
+                Stay updated with your latest alerts, messages, and project activities.
+              </p>
             </div>
             {hasUnread && (
-              <button onClick={handleMarkAllRead} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 rounded-xl hover:bg-gray-50 dark:hover:bg-white/10 transition text-sm font-semibold shadow-sm">
-                <CheckCheck className="w-4 h-4" /> Mark all as read
+              <button
+                onClick={handleMarkAllRead}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition text-xs font-semibold shadow-xs cursor-pointer active:scale-95"
+              >
+                <CheckCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Mark all as read</span>
               </button>
             )}
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1.5 p-1.5 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl mb-5 shadow-sm">
+          <div className="flex gap-1.5 p-1.5 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl mb-5 shadow-xs">
             {TABS.map(tab => {
               const active = activeTab === tab.key;
               return (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`relative flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                    active ? "bg-blue-500 text-white shadow-md shadow-blue-500/25" : "text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`relative flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    active
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                   }`}
                 >
                   {tab.icon}
@@ -220,7 +230,9 @@ const NotificationsPage: React.FC = () => {
                   {tabCounts[tab.key] > 0 && (
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none ${
                       active ? "bg-white/25 text-white" : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                    }`}>{tabCounts[tab.key]}</span>
+                    }`}>
+                      {tabCounts[tab.key]}
+                    </span>
                   )}
                 </button>
               );
@@ -228,100 +240,157 @@ const NotificationsPage: React.FC = () => {
           </div>
 
           {/* Notification list */}
-          <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden min-h-[400px]">
+          <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl shadow-xs overflow-hidden min-h-[400px]">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-zinc-500">
                 <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4" />
-                <p className="text-sm font-medium">Loading notifications...</p>
+                <p className="text-xs font-medium">Loading notifications...</p>
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-80 text-center px-4">
-                <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center mb-4 border border-gray-200 dark:border-white/10">
-                  <InboxIcon className="w-8 h-8 text-gray-400 dark:text-zinc-500" />
+                <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-white/5 flex items-center justify-center mb-3 border border-gray-200 dark:border-white/10">
+                  <InboxIcon className="w-7 h-7 text-gray-400 dark:text-zinc-500" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Nothing here yet</h3>
-                <p className="text-sm text-gray-500 dark:text-zinc-400 max-w-xs mx-auto">When relevant updates arrive they'll appear in this tab.</p>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Nothing here yet</h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-xs mx-auto">
+                  When relevant updates arrive they will appear in this tab.
+                </p>
               </div>
             ) : (
               <AnimatePresence mode="wait">
-                <motion.ul key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }} className="divide-y divide-gray-100 dark:divide-white/5">
+                <motion.ul
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="divide-y divide-gray-100 dark:divide-white/5"
+                >
                   {filtered.map((n, idx) => {
                     const def = getIconDef(n.reference_prefix);
                     const follower = n.reference_prefix === "follow" ? getFollower(n.message) : null;
                     const isFollower = n.reference_prefix === "follow";
+
                     if (n.reference_prefix === "TICKET_INVITE") {
                       return (
-                        <motion.li key={n.notification_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.035 }} className="flex items-center gap-4 px-5 py-4">
-                          <div className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>{def.icon}</div>
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">{getNotificationLabel(n.reference_prefix)}</span>
-                            <p className={`text-sm leading-snug ${!n.is_read ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-zinc-400"}`}>{n.message}</p>
+                        <motion.li
+                          key={n.notification_id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.03 }}
+                          className={`flex items-start gap-4 px-5 py-4 transition-colors ${
+                            !n.is_read ? "bg-gray-50/60 dark:bg-white/[0.02]" : "bg-transparent"
+                          }`}
+                        >
+                          <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-white/[0.06] border border-gray-200/80 dark:border-white/10 ${def.text}`}>
+                            {def.icon}
                           </div>
-                          <TicketInviteActions
-                            ticketId={n.reference_id}
-                            onDone={(result, chatId) => {
-                              setNotifications((prev) => prev.map((item) => item.notification_id === n.notification_id ? { ...item, is_read: true } : item));
-                              void api.patch(`/api/notifications/${n.notification_id}/read`).catch(() => undefined);
-                              if (result === "accepted" && chatId) navigate("/inbox/direct", { state: { conversationId: chatId } });
-                            }}
-                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                              {getNotificationLabel(n.reference_prefix)}
+                            </span>
+                            <p className={`text-xs sm:text-sm leading-snug mt-0.5 ${!n.is_read ? "text-gray-900 dark:text-white font-semibold" : "text-gray-700 dark:text-zinc-300"}`}>
+                              {n.message}
+                            </p>
+                          </div>
+                          <div className="shrink-0">
+                            <TicketInviteActions
+                              ticketId={n.reference_id}
+                              onDone={(result, chatId) => {
+                                setNotifications((prev) => prev.map((item) => item.notification_id === n.notification_id ? { ...item, is_read: true } : item));
+                                void api.patch(`/api/notifications/${n.notification_id}/read`).catch(() => undefined);
+                                if (result === "accepted" && chatId) navigate("/inbox/direct", { state: { conversationId: chatId } });
+                              }}
+                            />
+                          </div>
                         </motion.li>
                       );
                     }
+
                     if (n.reference_prefix === "BADGE_GRANTED") {
                       const grant = badgeGrants[n.reference_id];
                       const meta = grant ? badgeMetaById.get(grant.registry_id) : undefined;
                       return (
-                        <motion.li key={n.notification_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.035 }} className="flex items-center gap-4 px-5 py-4">
+                        <motion.li
+                          key={n.notification_id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.03 }}
+                          className={`flex items-start gap-4 px-5 py-4 transition-colors ${
+                            !n.is_read ? "bg-gray-50/60 dark:bg-white/[0.02]" : "bg-transparent"
+                          }`}
+                        >
                           <div className="relative shrink-0">
                             {meta?.icon ? (
-                              <img src={meta.icon} alt="" className="h-11 w-11 object-contain" />
+                              <img src={meta.icon} alt="" className="h-10 w-10 object-contain" />
                             ) : (
-                              <div className={`w-11 h-11 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>{def.icon}</div>
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-white/[0.06] border border-gray-200/80 dark:border-white/10 ${def.text}`}>
+                                {def.icon}
+                              </div>
                             )}
-                            {!n.is_read && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />}
+                            {!n.is_read && (
+                              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-500" />
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                               {getNotificationLabel(n.reference_prefix)}{grant ? ` · ${meta?.name || grant.name}` : ""}
                             </span>
-                            <p className={`text-sm leading-snug line-clamp-3 ${!n.is_read ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-zinc-400"}`}>{n.message}</p>
+                            <p className={`text-xs sm:text-sm leading-snug mt-0.5 line-clamp-2 ${!n.is_read ? "text-gray-900 dark:text-white font-semibold" : "text-gray-700 dark:text-zinc-300"}`}>
+                              {n.message}
+                            </p>
                           </div>
                           <div className="shrink-0 flex flex-col items-end gap-1.5">
-                            <span className="text-[11px] text-gray-400 dark:text-zinc-500 whitespace-nowrap">{fmt(n.created_at)}</span>
+                            <span className="text-[11px] text-gray-400 dark:text-zinc-500 whitespace-nowrap">
+                              {fmt(n.created_at)}
+                            </span>
                             {grant?.status === "pending" ? (
                               <button
                                 onClick={() => handleClaim(n)}
                                 disabled={claimingId === n.reference_id}
-                                className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-semibold hover:bg-blue-600 transition disabled:opacity-60"
+                                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
                               >
                                 {claimingId === n.reference_id ? "Claiming…" : "Claim"}
                               </button>
                             ) : grant?.status === "claimed" ? (
-                              <button onClick={() => navigate("/profile")} className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline">
+                              <button
+                                onClick={() => navigate("/profile")}
+                                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                              >
                                 Claimed · View on profile
                               </button>
                             ) : (
-                              <span className="text-xs text-gray-400 dark:text-zinc-500">No longer available</span>
+                              <span className="text-xs text-gray-400 dark:text-zinc-500">
+                                No longer available
+                              </span>
                             )}
                           </div>
                         </motion.li>
                       );
                     }
+
                     return (
-                      <motion.li key={n.notification_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.035 }} className="group relative">
-                        <button onClick={() => handleClick(n)} className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]">
-                          {/* Avatar (followers) or Icon */}
-                          <div className="relative shrink-0">
+                      <motion.li
+                        key={n.notification_id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        className="group relative"
+                      >
+                        <button
+                          onClick={() => handleClick(n)}
+                          className={`w-full flex items-start gap-4 px-5 py-4 text-left transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.03] ${
+                            !n.is_read ? "bg-gray-50/60 dark:bg-white/[0.02]" : "bg-transparent"
+                          }`}
+                        >
+                          {/* Avatar or Icon */}
+                          <div className="relative shrink-0 pt-0.5">
                             {isFollower ? (
-                              <AccountAvatar url={avatars[n.reference_id]} name={follower?.name} className="h-11 w-11" />
+                              <AccountAvatar url={avatars[n.reference_id]} name={follower?.name} className="h-10 w-10 rounded-full ring-1 ring-gray-200/80 dark:ring-white/10" />
                             ) : (
-                              <div className={`w-11 h-11 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-white/[0.06] border border-gray-200/80 dark:border-white/10 ${def.text}`}>
                                 {def.icon}
                               </div>
-                            )}
-                            {!n.is_read && (
-                              <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />
                             )}
                           </div>
 
@@ -329,29 +398,45 @@ const NotificationsPage: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             {isFollower && follower ? (
                               <>
-                                <p className="text-sm text-gray-900 dark:text-white truncate">
-                                  <span className="font-semibold">{follower.name}</span>
-                                  {follower.handle && <span className="ml-1.5 text-gray-500 dark:text-zinc-500">@{follower.handle}</span>}
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                                  New Follower
+                                </span>
+                                <p className="mt-0.5 text-xs sm:text-sm text-gray-900 dark:text-white truncate">
+                                  <span className="font-bold">{follower.name}</span>
+                                  {follower.handle && (
+                                    <span className="ml-1.5 text-gray-500 dark:text-zinc-400 font-normal">@{follower.handle}</span>
+                                  )}
                                 </p>
-                                <p className="text-sm text-gray-600 dark:text-zinc-400">started following you</p>
+                                <p className="text-xs text-gray-500 dark:text-zinc-400">started following you</p>
                               </>
                             ) : (
                               <>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                                   {getNotificationLabel(n.reference_prefix)}
                                 </span>
-                                <p className={`text-sm leading-snug line-clamp-2 ${!n.is_read ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-zinc-400"}`}>
+                                <p className={`mt-0.5 text-xs sm:text-sm leading-snug line-clamp-2 ${
+                                  !n.is_read
+                                    ? "text-gray-900 dark:text-zinc-100 font-semibold"
+                                    : "text-gray-600 dark:text-zinc-400"
+                                }`}>
                                   {n.message}
                                 </p>
                               </>
                             )}
                           </div>
 
-                          <div className="shrink-0 flex flex-col items-end gap-1.5">
-                            <span className="text-[11px] text-gray-400 dark:text-zinc-500 whitespace-nowrap">{fmt(n.created_at)}</span>
-                            {isFollower && (
-                              <span className="text-xs font-medium text-gray-500 dark:text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">View profile</span>
-                            )}
+                          {/* Timestamp and Unread Dot */}
+                          <div className="shrink-0 flex flex-col items-end gap-2 pt-0.5">
+                            <span className="text-[11px] font-medium text-gray-400 dark:text-zinc-500 whitespace-nowrap">
+                              {fmt(n.created_at)}
+                            </span>
+                            {!n.is_read ? (
+                              <span className="h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-500" />
+                            ) : isFollower ? (
+                              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                View
+                              </span>
+                            ) : null}
                           </div>
                         </button>
                       </motion.li>

@@ -45,13 +45,22 @@ export function fetchAccountAvatarUrl(accountId: string): Promise<string | null>
   let pending = cache.get(accountId);
   if (!pending) {
     pending = api
-      .get(`/api/accounts/profile/avatars/${accountId}`)
+      .get(`/api/accounts/profile/${accountId}`)
       .then(({ data }) => {
-        const payload = data?.data ?? data;
-        const avatar = Array.isArray(payload) ? payload[0] : payload;
-        return resolveAvatarUrl(avatar?.path || avatar?.avatar_preset_url || avatar?.avatar_url);
+        const profile = data?.data ?? data?.profile ?? data;
+        const rawPath = profile?.avatar_preset_url || profile?.avatar_url || profile?.path;
+        return resolveAvatarUrl(rawPath, profile?.name || profile?.username || profile?.display_name);
       })
-      .catch(() => null);
+      .catch(async () => {
+        try {
+          const { data } = await api.get(`/api/accounts/profile/avatars/${accountId}`);
+          const payload = data?.data ?? data;
+          const avatar = Array.isArray(payload) ? payload[0] : payload;
+          return resolveAvatarUrl(avatar?.path || avatar?.avatar_preset_url || avatar?.avatar_url);
+        } catch {
+          return null;
+        }
+      });
     cache.set(accountId, pending);
   }
   return pending;
