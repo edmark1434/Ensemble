@@ -168,11 +168,15 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     setSubmissionLink('');
     setSelectedVideoProjectId('');
     clearMedia();
+    setShowAdditionalSubmitFormMap((prev) => ({ ...prev, [id]: false }));
   };
 
   const toggleExpand = () => {
     setIsDetailsCollapsed((prev) => !prev);
   };
+
+  // Additional Deliverable Update Form Toggle State (mapped by milestone ID)
+  const [showAdditionalSubmitFormMap, setShowAdditionalSubmitFormMap] = useState<Record<string, boolean>>({});
 
   // Submission History Modal Popup State
   const [historyModalMilestoneId, setHistoryModalMilestoneId] = useState<string | null>(null);
@@ -525,6 +529,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
       setSubmissionLink('');
       setSelectedVideoProjectId('');
       clearMedia();
+      setShowAdditionalSubmitFormMap((prev) => ({ ...prev, [m.job_milestone_id]: false }));
       onUpdated();
 
       // Brief pause to display completion state
@@ -835,6 +840,11 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
             const submissionsList = Array.isArray(m.submissions) ? m.submissions : [];
             const latestSubmission = submissionsList[0];
+            const latestDeliverableSubmission = submissionsList.find(
+              (s) => s.status === 'submitted_for_review' || s.status === 'progress' || s.status === 'submitted'
+            ) || submissionsList[0];
+            const isAdditionalOpen = Boolean(showAdditionalSubmitFormMap[m.job_milestone_id]);
+            const shouldShowSubmitForm = canSubmit && (!isUnderReview || isAdditionalOpen || !latestDeliverableSubmission);
 
             const recordedRevisionsCount = submissionsList.filter(
               (s) => s.status === 'revision_request' || s.status === 'revision_requested'
@@ -1271,9 +1281,194 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                     )}
 
                     {/* ========================================================= */}
+                    {/* 1.1 CLIENT VIEW: APPROVED DELIVERABLE                     */}
+                    {/* ========================================================= */}
+                    {isClient && isApproved && latestDeliverableSubmission && (
+                      <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border-2 border-emerald-300 dark:border-emerald-800 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                              Approved Deliverable
+                            </h5>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Approved & Escrow Released
+                          </span>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                              Approved Deliverable Submission
+                            </span>
+                            {latestDeliverableSubmission.submitted_at && (
+                              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                {new Date(latestDeliverableSubmission.submitted_at).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          {latestDeliverableSubmission.message && (
+                            <p className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed font-normal">
+                              {latestDeliverableSubmission.message}
+                            </p>
+                          )}
+                          {Array.isArray(latestDeliverableSubmission.attachments) && latestDeliverableSubmission.attachments.length > 0 && (
+                            <div className="space-y-2 pt-1">
+                              {latestDeliverableSubmission.attachments.filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att)).length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {latestDeliverableSubmission.attachments
+                                    .filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att))
+                                    .map((att, imgIdx) => (
+                                      <button
+                                        key={imgIdx}
+                                        type="button"
+                                        onClick={() =>
+                                          setExpandedMedia({
+                                            url: chatAttachmentUrl(att),
+                                            type: 'image',
+                                            name: att.split('/').pop()?.replace(/^\d+[-_]/, '') || 'Image Preview',
+                                          })
+                                        }
+                                        className="relative group rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 transition shadow-2xs cursor-pointer"
+                                      >
+                                        <img
+                                          src={chatAttachmentUrl(att)}
+                                          alt="Deliverable image preview"
+                                          className="h-16 w-auto max-w-[140px] object-cover rounded-xl group-hover:scale-105 transition"
+                                        />
+                                      </button>
+                                    ))}
+                                </div>
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                {latestDeliverableSubmission.attachments.map((att, aIdx) => renderAttachmentChip(att, aIdx))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ========================================================= */}
+                    {/* 1.2 CONTRIBUTOR VIEW: SUBMITTED DELIVERABLE DISPLAY       */}
+                    {/* ========================================================= */}
+                    {!isClient && latestDeliverableSubmission && (
+                      <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border-2 border-zinc-300 dark:border-zinc-700 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
+                            <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                              {isUnderReview
+                                ? 'Submitted Deliverable'
+                                : isApproved
+                                ? 'Approved Deliverable'
+                                : 'Latest Submitted Deliverable'}
+                            </h5>
+                          </div>
+                          {isUnderReview ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                              Awaiting Client Review
+                            </span>
+                          ) : isApproved ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+                              Approved & Released
+                            </span>
+                          ) : isRejectedOrRevisionRequested ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800">
+                              Revision Requested
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-800 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700">
+                              Submitted
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Deliverable Details Box */}
+                        <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                              What You Submitted
+                            </span>
+                            {latestDeliverableSubmission.submitted_at && (
+                              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                {new Date(latestDeliverableSubmission.submitted_at).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+
+                          {latestDeliverableSubmission.message && (
+                            <p className="text-xs text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed font-normal">
+                              {latestDeliverableSubmission.message}
+                            </p>
+                          )}
+
+                          {Array.isArray(latestDeliverableSubmission.attachments) && latestDeliverableSubmission.attachments.length > 0 && (
+                            <div className="space-y-2 pt-1">
+                              {/* Thumbnail previews for image attachments */}
+                              {latestDeliverableSubmission.attachments.filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att)).length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {latestDeliverableSubmission.attachments
+                                    .filter((att) => /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(att))
+                                    .map((att, imgIdx) => (
+                                      <button
+                                        key={imgIdx}
+                                        type="button"
+                                        onClick={() =>
+                                          setExpandedMedia({
+                                            url: chatAttachmentUrl(att),
+                                            type: 'image',
+                                            name: att.split('/').pop()?.replace(/^\d+[-_]/, '') || 'Image Preview',
+                                          })
+                                        }
+                                        className="relative group rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 transition shadow-2xs cursor-pointer"
+                                      >
+                                        <img
+                                          src={chatAttachmentUrl(att)}
+                                          alt="Deliverable image preview"
+                                          className="h-16 w-auto max-w-[140px] object-cover rounded-xl group-hover:scale-105 transition"
+                                        />
+                                      </button>
+                                    ))}
+                                </div>
+                              )}
+
+                              {/* Attachment chips */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                {latestDeliverableSubmission.attachments.map((att, aIdx) => renderAttachmentChip(att, aIdx))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Row: Submit Another Update Toggle */}
+                        {canSubmit && isUnderReview && (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-zinc-200 dark:border-zinc-800">
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              Your deliverable is currently awaiting client review. Need to provide an additional file or update?
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowAdditionalSubmitFormMap((prev) => ({
+                                ...prev,
+                                [m.job_milestone_id]: !prev[m.job_milestone_id],
+                              }))}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-zinc-900 dark:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 transition cursor-pointer shadow-2xs shrink-0 self-start sm:self-auto active:scale-98"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>{isAdditionalOpen ? 'Hide Update Form' : 'Submit Another Update'}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ========================================================= */}
                     {/* 2. CONTRIBUTOR SUBMISSION FORM (WHEN READY TO SUBMIT)     */}
                     {/* ========================================================= */}
-                    {canSubmit && (
+                    {shouldShowSubmitForm && (
                       <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border-2 border-zinc-300 dark:border-zinc-700 shadow-xs space-y-4">
                         <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
                           <div className="flex items-center gap-2">
@@ -1282,9 +1477,23 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                               {isUnderReview ? 'Submit Additional Deliverable Update' : 'Submit Deliverable for Client Review'}
                             </h5>
                           </div>
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700">
-                            Escrow: {Number(m.budget_credits || 0).toLocaleString()} Credits
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {isUnderReview && isAdditionalOpen && (
+                              <button
+                                type="button"
+                                onClick={() => setShowAdditionalSubmitFormMap((prev) => ({
+                                  ...prev,
+                                  [m.job_milestone_id]: false,
+                                }))}
+                                className="px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700">
+                              Escrow: {Number(m.budget_credits || 0).toLocaleString()} Credits
+                            </span>
+                          </div>
                         </div>
 
                         <div className="space-y-4">
@@ -1586,6 +1795,19 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                     />
                                     <span>Mark deliverable as Ready for Client Review</span>
                                   </label>
+
+                                  {isUnderReview && isAdditionalOpen && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowAdditionalSubmitFormMap((prev) => ({
+                                        ...prev,
+                                        [m.job_milestone_id]: false,
+                                      }))}
+                                      className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
 
                                   <button
                                     type="button"

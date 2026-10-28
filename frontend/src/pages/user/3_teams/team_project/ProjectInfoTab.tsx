@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  Video,
 } from 'lucide-react';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { JobRichText } from '@/pages/user/6_job_market/job_components/JobRichText';
@@ -65,13 +66,28 @@ export const ProjectInfoTab: React.FC<ProjectInfoTabProps> = ({
       {/* Top Banner: Workspace Details & Escrow Status */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Active Contract Workspace
-              </span>
-            </div>
+          {(() => {
+            const isGigWorkspace = Boolean(project?.gig_id || project?.workspace_type === 'gig');
+            return (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Active Contract Workspace
+                  </span>
+                  <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                  {isGigWorkspace ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30">
+                      <Sparkles className="w-3 h-3 text-purple-500" />
+                      <span>Gig Workspace</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30">
+                      <Briefcase className="w-3 h-3 text-blue-500" />
+                      <span>Job Workspace</span>
+                    </span>
+                  )}
+                </div>
             <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
               {project?.project_title || project?.job_title || 'Contract Video Project'}
             </h2>
@@ -82,6 +98,8 @@ export const ProjectInfoTab: React.FC<ProjectInfoTabProps> = ({
               )}
             </p>
           </div>
+            );
+          })()}
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
@@ -271,6 +289,16 @@ export const ProjectInfoTab: React.FC<ProjectInfoTabProps> = ({
                 </div>
                 <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
                   Each milestone includes 2 revision rounds. If changes are needed, the client provides specific feedback notes, and contributors re-submit when edits are completed.
+                </p>
+              </div>
+              {/* Rule 5: Video Library Safety */}
+              <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/60 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-white">
+                  <Video className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <span>Video Projects Safety</span>
+                </div>
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  Linked video projects live permanently in your personal library. Even after workspace completion and archival, all cuts and assets remain 100% accessible to the owner.
                 </p>
               </div>
             </div>
