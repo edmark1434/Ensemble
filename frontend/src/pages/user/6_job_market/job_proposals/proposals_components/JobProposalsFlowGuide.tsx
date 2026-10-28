@@ -169,7 +169,7 @@ export const JobProposalsFlowGuide: React.FC = () => {
         },
         {
             q: 'Will I receive any penalty or strike if I decline or don’t accept a contract offer?',
-            a: 'Zero penalty. Freelancers and teams maintain full autonomy over their working agreements. If you decline an offer—whether due to schedule, scope, or rate disagreements—there is no deduction from your Performance Merit Score, no account warnings, and no strikes. The client’s escrow hold is simply refunded back to their wallet.',
+            a: 'Zero penalty. Freelancers and teams maintain full autonomy over their working agreements. If you decline an offer—whether due to schedule, scope, or rate disagreements—there is no account warning and no strike. The client’s escrow hold is simply refunded back to their wallet.',
         },
         {
             q: 'What happens if a client extends offers to multiple candidates at the same time?',

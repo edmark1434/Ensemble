@@ -48,8 +48,9 @@
 
 ## Warning library
 
-- `GET /api/admin/warning-catalog?desk=` lists live named warnings for a desk (admin/support see all). Same payload on `GET /api/moderator/warning-catalog` for restriction-desk staff. Each row includes locked `points`, `meritHit` (points × 2), and `durationDays`.
-- Admin CRUD: `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId`. Body `{ label, category, points, desks, note }`. Points must be 1–10. Delete is a soft-delete.
+- `GET /api/admin/warning-catalog?desk=` lists live named warnings for a desk (admin/support see all). Same payload on `GET /api/moderator/warning-catalog` for restriction-desk staff. Each row includes locked `points` and `durationDays`.
+- Admin CRUD: `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId`. Body `{ label, category, points, durationDays, desks, note }`. Points 1–10. Duration 1–365 days. Delete is a soft-delete. Staff-issued warnings copy points and duration; client-sent clocks are ignored.
+- Admin-only thresholds: `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId`. Body `{ minPoints, effect, label, suspendDays, note }`. Effects: `none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`. `suspendDays` is required for auto-suspend.
 
 ## Marketplace license endpoints
 

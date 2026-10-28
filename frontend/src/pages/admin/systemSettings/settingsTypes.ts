@@ -10,7 +10,6 @@ export type PlatformSettings = {
   tagline: string;
   maintenanceMode: boolean;
   registrationEnabled: boolean;
-  defaultUserMerit: number;
   supportEmail: string;
   maxUploadMb: number;
   sessionTimeoutMinutes: number;

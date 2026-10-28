@@ -1,12 +1,13 @@
-# Active Task: Admin-dynamic warning catalog
+# Active Task: Admin-owned warning duration and point thresholds
 
 ## Implementation Objective
 
-Admins can create, edit, and hide named warnings with locked points. Staff pick those rows when warning. Merit taken is always warning points × 2.
+Admin sets how long each named warning lasts when creating it. Staff cannot pick a duration at issue time. Admin also CRUD-creates warning-point thresholds that drive automatic product limits and auto-suspend.
 
 ## Acceptance Criteria
 
-- [x] `warning_defs` stores the catalog; seed from the original presets.
-- [x] Admin CRUD at `/admin/warnings` with live merit/duration preview.
-- [x] Staff pickers load the live catalog; points stay locked on issue.
-- [x] Merit conversion is points × 2 (1pt −2 / 3d … 5pt −10 / 14d … 10pt −20 / 90d).
+- [x] `warning_defs.duration_days` is set by admin (1–365). Issued warnings copy that clock.
+- [x] Staff warn payloads cannot shorten or lengthen duration.
+- [x] Admin-only CRUD for `warning_thresholds` (min points, effect, suspend days).
+- [x] Live band and auto-suspend follow those rows, with the current ladder as fallback/seed.
+- [ ] Apply migration `1826600000000_warning-duration-and-thresholds` when Postgres is reachable

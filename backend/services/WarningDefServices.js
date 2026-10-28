@@ -7,7 +7,7 @@ const {
   updateWarningDef,
   softDeleteWarningDef,
 } = require('../repositories/WarningDefRepositories');
-const { clampWarningPoints, warningDurationDays, warningHit } = require('../lib/Merit');
+const { clampWarningPoints, clampDurationDays, warningDurationDays } = require('../lib/WarningBands');
 const { WARNING_PRESETS } = require('../lib/WarningCatalog');
 
 const ALLOWED_DESKS = ['admin', 'support', 'forum', 'marketplace', 'jobs'];
@@ -45,14 +45,18 @@ function normalizeCategory(category) {
   return match || value.slice(0, 40);
 }
 
-function withMerit(row) {
+function withLadder(row) {
   if (!row) return null;
   const points = clampWarningPoints(row.points);
+  const durationDays = clampDurationDays(
+    row.durationDays ?? row.duration_days,
+    warningDurationDays(points)
+  );
   return {
     ...row,
     points,
-    meritHit: warningHit(points),
-    durationDays: warningDurationDays(points),
+    durationDays,
+    duration_days: durationDays,
   };
 }
 
@@ -68,11 +72,11 @@ async function listWarningCatalog(desk) {
   const filtered = key === 'admin' || key === 'support'
     ? rows
     : rows.filter((row) => Array.isArray(row.desks) && row.desks.includes(key));
-  return filtered.map(withMerit);
+  return filtered.map(withLadder);
 }
 
 async function listWarningDefsService() {
-  return (await listWarningDefs()).map(withMerit);
+  return (await listWarningDefs()).map(withLadder);
 }
 
 async function resolveIssuedWarning({ warningId, type } = {}) {
@@ -99,8 +103,10 @@ async function resolveIssuedWarning({ warningId, type } = {}) {
     type: preset.label,
     points,
     category: preset.category,
-    meritHit: warningHit(points),
-    durationDays: warningDurationDays(points),
+    durationDays: clampDurationDays(
+      preset.durationDays ?? preset.duration_days,
+      warningDurationDays(points)
+    ),
   };
 }
 
@@ -108,6 +114,10 @@ async function createWarningDefService(body) {
   const label = String(body?.label || '').trim();
   if (!label) throw serviceError('A warning name is required.');
   const points = clampWarningPoints(body?.points);
+  const durationDays = clampDurationDays(
+    body?.durationDays ?? body?.duration_days,
+    warningDurationDays(points)
+  );
   const category = normalizeCategory(body?.category);
   const desks = normalizeDesks(body?.desks);
   const note = String(body?.note || '').trim().slice(0, 500);
@@ -119,12 +129,13 @@ async function createWarningDefService(body) {
     label: label.slice(0, 120),
     category,
     points,
+    durationDays,
     desks,
     note,
     isSystem: false,
     sortOrder: Number.isFinite(Number(body?.sortOrder)) ? Number(body.sortOrder) : 1000,
   });
-  return withMerit(created);
+  return withLadder(created);
 }
 
 async function updateWarningDefService(warningDefId, body) {
@@ -134,12 +145,15 @@ async function updateWarningDefService(warningDefId, body) {
     label: body?.label != null ? String(body.label).trim().slice(0, 120) : undefined,
     category: body?.category != null ? normalizeCategory(body.category) : undefined,
     points: body?.points != null ? clampWarningPoints(body.points) : undefined,
+    durationDays: body?.durationDays != null || body?.duration_days != null
+      ? clampDurationDays(body?.durationDays ?? body?.duration_days)
+      : undefined,
     desks: body?.desks != null ? normalizeDesks(body.desks) : undefined,
     note: body?.note != null ? String(body.note).trim().slice(0, 500) : undefined,
     sortOrder: body?.sortOrder != null ? Number(body.sortOrder) : undefined,
   });
   if (!updated) throw serviceError('Warning not found.', 404);
-  return withMerit(updated);
+  return withLadder(updated);
 }
 
 async function deleteWarningDefService(warningDefId) {

@@ -1,6 +1,6 @@
 1. Resolve layout and navigation warnings across discovery, jobs, and gigs
 2. Enhance gallery and projects backend logic with tag associations
-3. Update skills and merit display sections and logic
+3. Update skills and ratings display sections and logic
 4. Enhance top section UI with dynamic location, joined date, star ratings, and button tooltips
 5. Implement job invitations backend logic, migrations, and modal UI
 6. Custom toast for follow event with avatar

@@ -37,7 +37,7 @@ interface UserProfile {
   verified: boolean;
   subscriptionType: "Free" | "Premium" | "Business";
   roles: { role_id: number | string; role_name: string }[];
-  meritScore: number | string;
+  starRating: number | string;
   ratingCount: number;
   followersCount: number;
   followingCount: number;
@@ -87,7 +87,7 @@ const mapAccount = (account: any, _cloudfront: string): UserProfile => {
     verified: !!account.verification_status,
     subscriptionType: account.subscriptiontype || "Free",
     roles: Array.isArray(account.roles) ? account.roles : [],
-    meritScore:
+    starRating:
       account.overall_rating !== null && parseFloat(account.overall_rating) > 0
         ? parseFloat(account.overall_rating).toFixed(1)
         : "No Rating",
@@ -459,8 +459,8 @@ export default function DiscoveryPage() {
     if (sortOption === "top_rated") {
       withBreakdown.sort(
         (a, b) =>
-          (parseFloat(String(b.profile.meritScore)) || 0) -
-            (parseFloat(String(a.profile.meritScore)) || 0) ||
+          (parseFloat(String(b.profile.starRating)) || 0) -
+            (parseFloat(String(a.profile.starRating)) || 0) ||
           b.breakdown.totalScore - a.breakdown.totalScore
       );
       return withBreakdown;
@@ -734,7 +734,7 @@ export default function DiscoveryPage() {
 
           {/* Metrics Row: Rating, Followers, Services/Assets */}
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-500 dark:text-zinc-400 mb-2.5 pb-2.5 border-b border-zinc-100 dark:border-white/5">
-            {profile.meritScore === "No Rating" ? (
+            {profile.starRating === "No Rating" ? (
               <span className="inline-flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
                 <Star className="h-3 w-3 text-zinc-400" />
                 <span>New talent</span>
@@ -743,7 +743,7 @@ export default function DiscoveryPage() {
               <span className="inline-flex items-center gap-1">
                 <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
                 <b className="text-zinc-900 dark:text-white">
-                  {profile.meritScore}
+                  {profile.starRating}
                 </b>
                 {profile.ratingCount > 0 && (
                   <span className="text-[10px] text-zinc-400">
@@ -1466,7 +1466,7 @@ export default function DiscoveryPage() {
                               role_name: userInfo.role || "Freelancer",
                             },
                           ],
-                      meritScore: userInfo.merit_score || "No Rating",
+                      starRating: userInfo.overall_rating || userInfo.avg_rating || "No Rating",
                       ratingCount: 0,
                       followersCount: 0,
                       followingCount: 0,
@@ -1620,7 +1620,7 @@ export default function DiscoveryPage() {
 
                           <div>
                             <div className="flex justify-between text-zinc-700 dark:text-zinc-300 font-medium mb-1.5">
-                              <span>3. Bayesian Merit & Verification</span>
+                              <span>3. Ratings & Verification</span>
                               <span className="font-mono text-zinc-500">
                                 {myBreakdown.reputationPts} / 15 pts
                               </span>
@@ -1735,10 +1735,10 @@ export default function DiscoveryPage() {
                         Your Rating
                       </div>
                       <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1 flex items-center gap-1">
-                        {myProfile.meritScore !== "No Rating" && (
+                        {myProfile.starRating !== "No Rating" && (
                           <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
                         )}
-                        {myProfile.meritScore}
+                        {myProfile.starRating}
                       </p>
                       <p className="text-[10px] text-zinc-400 mt-0.5">
                         completed jobs & gigs
@@ -1966,7 +1966,7 @@ export default function DiscoveryPage() {
                         {
                           num: "03",
                           weight: "15 pts",
-                          title: "Bayesian Merit & Trust",
+                          title: "Ratings & Trust",
                           detail: "Smoothed Rating + ID Verification",
                           purpose:
                             "Rewards 5-star talent while protecting brand-new creators from starting at zero.",

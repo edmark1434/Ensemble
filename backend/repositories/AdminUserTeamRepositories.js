@@ -55,7 +55,6 @@ function mapUserRow(row) {
     displayName: row.display_name,
     status: normalizeStatus(row.status),
     forumTimeout: Boolean(row.forum_timeout),
-    meritCredits: row.merit_score ?? 0,
     verificationStatus: mapVerificationLabel(row.verification_status),
     joinedAt: row.created_at,
     lastSeenAt: row.created_at,
@@ -363,7 +362,6 @@ async function fetchAllUsers() {
       a.handle,
       a.display_name,
       a.status,
-      a.merit_score,
       a.created_at,
       a.avatar_file_id,
       a.tagline,
@@ -694,7 +692,6 @@ async function fetchTeamsFromDatabase() {
       a.handle,
       a.display_name,
       a.status,
-      a.merit_score,
       a.created_at,
       a.avatar_file_id,
       a.tagline,
@@ -838,7 +835,6 @@ async function fetchTeamsFromDatabase() {
       handle: row.handle || null,
       tagline: row.tagline || null,
       description: row.description || null,
-      meritCredits: row.merit_score ?? 0,
       walletBalance: Number(row.balance_credits || 0),
       frozenBalance: Number(row.frozen_balance_credits || 0),
       leaderName: leader.name,
@@ -1190,11 +1186,6 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     } catch (notifyErr) {
       console.warn('Failed to broadcast timeout:', notifyErr.message);
     }
-    try {
-      require('../services/MeritServices').scheduleMeritRecompute(accountId);
-    } catch (err) {
-      console.warn('Merit recompute after timeout failed:', err.message);
-    }
     return { accountId, status: account.status, forumTimeout: true, restriction };
   }
 
@@ -1235,11 +1226,6 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       }
     } catch (notifyErr) {
       console.warn('Failed to broadcast timeout clear:', notifyErr.message);
-    }
-    try {
-      require('../services/MeritServices').scheduleMeritRecompute(accountId);
-    } catch (err) {
-      console.warn('Merit recompute after timeout clear failed:', err.message);
     }
     return { accountId, status: account.status, forumTimeout: false, restriction };
   }
@@ -1296,11 +1282,6 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     console.warn('Failed to broadcast account status change:', notifyErr.message);
   }
 
-  try {
-    require('../services/MeritServices').scheduleMeritRecompute(accountId, { force: key === 'ban' });
-  } catch (err) {
-    console.warn('Merit recompute after status change failed:', err.message);
-  }
 
   return { accountId, status, previousStatus: account.status, suspensionEndsAt };
 }
@@ -1572,7 +1553,7 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
     throw error;
   }
   const { warningExpiry } = require('../lib/AccountRestriction');
-  const expiry = warningExpiry({ days, expiresAt, endsAt, points: warnPoints });
+  const expiry = warningExpiry({ durationDays: issued.durationDays, points: warnPoints });
 
   const inserted = await pool.query(
     `
@@ -1624,9 +1605,10 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
   }
 
   try {
-    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+    const { refreshWarningBand } = require('../services/WarningBandServices');
+    await refreshWarningBand(accountId);
   } catch (err) {
-    console.warn('Merit recompute after warning failed:', err.message);
+    console.warn('Warning band refresh after warning failed:', err.message);
   }
 
   return {
@@ -1728,9 +1710,10 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
     }
 
     try {
-      require('../services/MeritServices').scheduleMeritRecompute(accountId);
+      const { refreshWarningBand } = require('../services/WarningBandServices');
+      await refreshWarningBand(accountId, 0);
     } catch (err) {
-      console.warn('Merit recompute after pardon failed:', err.message);
+      console.warn('Warning band refresh after pardon failed:', err.message);
     }
 
     return {
@@ -1786,9 +1769,10 @@ async function rescindWarning(accountId, violationId, staffId) {
   });
 
   try {
-    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+    const { refreshWarningBand } = require('../services/WarningBandServices');
+    await refreshWarningBand(accountId);
   } catch (err) {
-    console.warn('Merit recompute after rescind failed:', err.message);
+    console.warn('Warning band refresh after rescind failed:', err.message);
   }
 
   return {

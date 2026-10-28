@@ -432,7 +432,6 @@ export default function SystemSettingsPage() {
               <TextField label="Site name" value={platform.siteName} onChange={(v) => setPlatform({ ...platform, siteName: v })} />
               <TextField label="Tagline" value={platform.tagline} onChange={(v) => setPlatform({ ...platform, tagline: v })} />
               <TextField label="Support email" value={platform.supportEmail} onChange={(v) => setPlatform({ ...platform, supportEmail: v })} />
-              <NumberField label="Default user merit (Established 50–74)" value={platform.defaultUserMerit} onChange={(v) => setPlatform({ ...platform, defaultUserMerit: v })} min={50} max={74} />
               <NumberField label="Max upload (MB)" value={platform.maxUploadMb} onChange={(v) => setPlatform({ ...platform, maxUploadMb: v })} min={1} max={500} />
               <NumberField label="Session timeout (min)" value={platform.sessionTimeoutMinutes} onChange={(v) => setPlatform({ ...platform, sessionTimeoutMinutes: v })} min={5} max={480} />
             </div>

@@ -481,13 +481,13 @@ async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
     const { resolveMarketplacePublishStatus, getModerationSettings } = require('../lib/ModerationPolicy');
-    const { assertMeritAllows, meritWatchForcesListingReview } = require('./MeritServices');
+    const { assertWarningAllows, listingReviewForced } = require('./WarningBandServices');
     if (String(data.status).toLowerCase() === 'published') {
-      await assertMeritAllows(accountId, 'publish_asset');
+      await assertWarningAllows(accountId, 'publish_asset');
     }
     const settings = await getModerationSettings();
     const watchReview = String(data.status).toLowerCase() === 'published'
-      && await meritWatchForcesListingReview(accountId);
+      && await listingReviewForced(accountId);
     const reviewRequired = (settings.marketplaceListingReview || watchReview) && String(data.status).toLowerCase() === 'published';
 
     // When review is required, asset is created as draft while awaiting moderator approval
@@ -522,7 +522,7 @@ async function createAssetServices(accountId, payload) {
     }
     return asset;
   } catch (error) {
-    if (error.code === 'MERIT_RESTRICTED') {
+    if (error.code === 'WARNING_RESTRICTED') {
       throw new AssetError(error.message, 403, error.code);
     }
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
@@ -691,7 +691,7 @@ async function updateAssetServices(assetId, accountId, payload) {
     }
     return asset;
   } catch (error) {
-    if (error.code === 'MERIT_RESTRICTED') {
+    if (error.code === 'WARNING_RESTRICTED') {
       throw new AssetError(error.message, 403, error.code);
     }
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
@@ -738,7 +738,7 @@ async function listCommentsServices(assetId, accountId) {
 
 async function createCommentServices(assetId, accountId, payload) {
   await getAssetServices(assetId, accountId);
-  await require('./MeritServices').assertMeritAllows(accountId, 'asset_comment');
+  await require('./WarningBandServices').assertWarningAllows(accountId, 'asset_comment');
   const comment = cleanText(payload?.comment, 'Comment', 2000);
   return createCommentRepository(assetId, accountId, comment);
 }
@@ -766,7 +766,7 @@ async function createReplyServices(assetId, commentId, accountId, payload) {
   requireUuid(assetId);
   requireUuid(commentId, 'Comment ID');
   await getAssetServices(assetId, accountId);
-  await require('./MeritServices').assertMeritAllows(accountId, 'asset_comment');
+  await require('./WarningBandServices').assertWarningAllows(accountId, 'asset_comment');
   const reply = cleanText(payload?.reply, 'Reply', 2000);
   const created = await createReplyRepository(assetId, commentId, accountId, reply);
   if (!created) throw new AssetError('Comment not found.', 404, 'COMMENT_NOT_FOUND');

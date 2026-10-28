@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
-import { warningLadderSummary, WARNING_POINT_LADDER } from '@/lib/warningLadder';
+import {
+  warningLadderSummary,
+  WARNING_POINT_LADDER,
+  DURATION_OPTIONS,
+  clampDurationDays,
+  warningDurationDays,
+} from '@/lib/warningLadder';
+import AdminWarningThresholdsPanel from './AdminWarningThresholdsPanel';
 
 const fieldClass =
   'w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20';
@@ -30,7 +37,6 @@ type WarningDef = {
   desks: string[];
   note: string;
   is_system: boolean;
-  meritHit: number;
   durationDays: number;
 };
 
@@ -38,6 +44,7 @@ type DefForm = {
   label: string;
   category: string;
   points: number;
+  durationDays: number;
   desks: string[];
   note: string;
 };
@@ -46,6 +53,7 @@ const emptyForm = (): DefForm => ({
   label: '',
   category: 'Conduct',
   points: 5,
+  durationDays: 14,
   desks: ['admin', 'support'],
   note: '',
 });
@@ -63,6 +71,7 @@ export default function AdminWarningsPage() {
   const [form, setForm] = useState<DefForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [tab, setTab] = useState<'catalog' | 'thresholds'>('catalog');
 
   const load = async () => {
     const res = await api.get('/api/admin/warning-defs');
@@ -97,6 +106,7 @@ export default function AdminWarningsPage() {
       label: def.label,
       category: def.category,
       points: def.points,
+      durationDays: def.durationDays || warningDurationDays(def.points),
       desks: def.desks?.length ? def.desks : ['admin'],
       note: def.note || '',
     });
@@ -130,6 +140,7 @@ export default function AdminWarningsPage() {
       label: form.label.trim(),
       category: form.category,
       points: Number(form.points),
+      durationDays: clampDurationDays(form.durationDays, warningDurationDays(form.points)),
       desks: form.desks,
       note: form.note.trim(),
     };
@@ -178,25 +189,37 @@ export default function AdminWarningsPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Admin</p>
           <h1 className="text-xl font-bold text-white">Warnings</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Create named warnings and lock their points. Merit taken is always points × 2, and duration follows the 1–10 ladder.
+            Create named warnings with locked points and duration. Staff pick a row; they cannot change the clock.
+            Thresholds decide what happens when active points stack.
           </p>
         </div>
       </header>
 
       <div className="space-y-5 px-6 py-6 md:px-8 md:py-8">
-        <section className="overflow-x-auto rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Merit conversion</p>
-          <div className="flex min-w-max gap-2">
-            {WARNING_POINT_LADDER.map((row) => (
-              <div key={row.points} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-center">
-                <p className="text-[11px] font-semibold text-white">{row.points} pt</p>
-                <p className="text-[11px] text-rose-300">−{row.meritHit} merit</p>
-                <p className="text-[10px] text-zinc-500">{row.durationDays}d</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <div className="flex gap-2">
+          {([
+            { id: 'catalog', label: 'Warning library' },
+            { id: 'thresholds', label: 'Point thresholds' },
+          ] as const).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={`rounded-xl border px-4 py-2 text-sm font-medium ${
+                tab === item.id
+                  ? 'border-rose-400/40 bg-rose-500/10 text-white'
+                  : 'border-white/10 text-zinc-400 hover:text-white'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
+        {tab === 'thresholds' ? <AdminWarningThresholdsPanel /> : null}
+
+        {tab === 'catalog' ? (
+        <>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -224,7 +247,6 @@ export default function AdminWarningsPage() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Warning</th>
                   <th className="px-4 py-3 font-medium">Points</th>
-                  <th className="px-4 py-3 font-medium">Merit</th>
                   <th className="px-4 py-3 font-medium">Duration</th>
                   <th className="px-4 py-3 font-medium">Desks</th>
                   <th className="px-4 py-3 font-medium" />
@@ -248,7 +270,6 @@ export default function AdminWarningsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-zinc-300">{def.points} pt</td>
-                    <td className="px-4 py-3 text-rose-300">−{def.meritHit}</td>
                     <td className="px-4 py-3 text-zinc-400">{def.durationDays} days</td>
                     <td className="px-4 py-3 text-zinc-500">{(def.desks || []).join(', ')}</td>
                     <td className="px-4 py-3 text-right">
@@ -273,7 +294,7 @@ export default function AdminWarningsPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-500">
+                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
                       {search ? 'No warnings match that search.' : 'No warnings in the library yet.'}
                     </td>
                   </tr>
@@ -282,6 +303,8 @@ export default function AdminWarningsPage() {
             </table>
           </div>
         </section>
+        </>
+        ) : null}
       </div>
 
       {editor && (
@@ -293,7 +316,7 @@ export default function AdminWarningsPage() {
                   {editor === 'create' ? 'New warning' : `Edit ${editor.label}`}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Points lock the merit hit (×2) and how long the warning lasts. Staff pick this row; they cannot type a custom score.
+                  Points and duration are locked on this row. Staff pick it; they cannot type a custom score or clock.
                 </p>
               </div>
               <button type="button" onClick={closeEditor} className="rounded-lg p-1.5 text-zinc-500 hover:text-white" aria-label="Close">
@@ -333,13 +356,45 @@ export default function AdminWarningsPage() {
                   >
                     {WARNING_POINT_LADDER.map((row) => (
                       <option key={row.points} value={row.points}>
-                        {row.points} pt · −{row.meritHit} merit · {row.durationDays} days
+                        {row.points} pt
                       </option>
                     ))}
                   </select>
                 </label>
               </div>
-              <p className="text-xs text-zinc-400">{warningLadderSummary(form.points)}</p>
+              <label>
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  Lasts (days)
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={form.durationDays}
+                  onChange={(event) => setForm((current) => ({
+                    ...current,
+                    durationDays: clampDurationDays(Number(event.target.value), current.durationDays),
+                  }))}
+                  className={fieldClass}
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {DURATION_OPTIONS.map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, durationDays: days }))}
+                      className={`rounded-lg border px-2 py-1 text-[11px] ${
+                        form.durationDays === days
+                          ? 'border-rose-400/40 bg-rose-500/10 text-white'
+                          : 'border-white/10 text-zinc-400'
+                      }`}
+                    >
+                      {days}d
+                    </button>
+                  ))}
+                </div>
+              </label>
+              <p className="text-xs text-zinc-400">{warningLadderSummary(form.points, form.durationDays)}</p>
               <fieldset>
                 <legend className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Visible on desks</legend>
                 <div className="flex flex-wrap gap-2">

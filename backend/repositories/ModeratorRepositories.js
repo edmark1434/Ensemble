@@ -4,7 +4,7 @@ const {
   listRecentAccountActivity,
 } = require('./AccountActivityRepositories');
 
-const { warningDurationDays } = require('../lib/Merit');
+const { warningDurationDays } = require('../lib/WarningBands');
 
 /** Strike weight → days until expiry (1pt = 3 days, 5pt = 14 days, 10pt = 90 days). */
 function violationExpiryFromPoints(points, fromDate = new Date()) {
@@ -190,7 +190,7 @@ async function issueViolation(accountId, { warningId, type, reason, points, expi
     throw error;
   }
   const { warningExpiry } = require('../lib/AccountRestriction');
-  const expiry = warningExpiry({ days, expiresAt, endsAt, points: warnPoints });
+  const expiry = warningExpiry({ durationDays: issued.durationDays, points: warnPoints });
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
 
   const inserted = await pool.query(
@@ -251,9 +251,10 @@ async function issueViolation(accountId, { warningId, type, reason, points, expi
   }
 
   try {
-    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+    const { refreshWarningBand } = require('../services/WarningBandServices');
+    await refreshWarningBand(accountId);
   } catch (err) {
-    console.warn('Merit recompute after moderator warning failed:', err.message);
+    console.warn('Warning band refresh after moderator warning failed:', err.message);
   }
 
   return getViolationsAndRestrictions();

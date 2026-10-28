@@ -31,7 +31,6 @@ export type EconomyWallet = {
   email: string;
   username: string;
   accountType: string;
-  meritScore: number;
   totalCredits: number;
   totalAssets: number;
   totalRevenue: number;
@@ -100,7 +99,6 @@ export type EconomyOverview = {
     totalRevenue: number;
     frozenWallets: number;
     averageWalletBalance: number;
-    totalMeritPoints: number;
     activeWallets: number;
   };
   wallets: EconomyWallet[];

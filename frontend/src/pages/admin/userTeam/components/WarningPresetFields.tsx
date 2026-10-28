@@ -3,12 +3,13 @@ import api from '@/lib/axios';
 import { groupedWarnings, groupWarningRows, warningsForDesk, type WarningDesk, type WarningPreset } from '@/lib/warningCatalog';
 import { warningLadderSummary } from '@/lib/warningLadder';
 
-function mapCatalogRow(row: Partial<WarningPreset> & { slug?: string; meritHit?: number; durationDays?: number; note?: string }): WarningPreset {
+function mapCatalogRow(row: Partial<WarningPreset> & { slug?: string; durationDays?: number; note?: string }): WarningPreset {
   return {
     id: String(row.id || row.slug || ''),
     label: String(row.label || ''),
     category: String(row.category || 'Other'),
     points: Number(row.points || 1),
+    durationDays: Number(row.durationDays || 0) || undefined,
     desks: Array.isArray(row.desks) ? row.desks : ['admin'],
     note: row.note || '',
   };
@@ -81,7 +82,7 @@ export function WarningPresetFields({
             <optgroup key={group.category} label={group.category}>
               {group.items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.label} · {item.points} pt · −{item.points * 2} merit
+                  {item.label} · {item.points} pt{item.durationDays ? ` · ${item.durationDays}d` : ''}
                 </option>
               ))}
             </optgroup>
@@ -90,7 +91,7 @@ export function WarningPresetFields({
       </label>
       {preset ? (
         <p className="text-xs text-zinc-400">
-          {warningLadderSummary(preset.points)}
+          {warningLadderSummary(preset.points, preset.durationDays)}
           {preset.note ? ` ${preset.note}` : ''}
         </p>
       ) : null}

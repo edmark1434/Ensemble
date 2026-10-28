@@ -32,7 +32,6 @@ async function fetchPlatformMembers() {
       a.handle,
       a.display_name,
       a.status,
-      a.merit_score,
       a.avatar_file_id,
       a.tagline,
       a.created_at,
@@ -70,7 +69,6 @@ async function fetchPlatformMembers() {
       email: r.email_address,
       status: normalizeStatus(r.status),
       verification: deriveVerification(r),
-      merit: r.merit_score ?? 0,
       credits: Number(r.balance_credits || 0),
       hasAvatar: Boolean(r.avatar_file_id),
       hasTagline: Boolean(r.tagline),
@@ -355,21 +353,6 @@ async function fetchForumPlatformStats() {
   }
 }
 
-function buildMeritTiers(members) {
-  const tiers = [
-    { tier: 'Frozen', range: '0–19', min: 0, max: 19 },
-    { tier: 'Restricted', range: '20–34', min: 20, max: 34 },
-    { tier: 'Watch', range: '35–49', min: 35, max: 49 },
-    { tier: 'Established', range: '50–74', min: 50, max: 74 },
-    { tier: 'Trusted', range: '75–100', min: 75, max: 100 },
-  ];
-  return tiers.map((t) => ({
-    tier: t.tier,
-    range: t.range,
-    count: members.filter((m) => m.merit >= t.min && m.merit <= t.max).length,
-  }));
-}
-
 function buildPlatformAlerts(members, forum, pendingCount, suspendedCount, liveModules = {}) {
   const alerts = [];
   const unverified = members.filter((m) => m.verification === 'Unverified').length;
@@ -511,7 +494,6 @@ async function getAnalyticsOverview() {
     ? Math.round(((withAvatar + withTagline) / (totalMembers * 2)) * 100)
     : 0;
 
-  const totalMerit = members.reduce((s, m) => s + m.merit, 0);
   const memberCredits = members.reduce((s, m) => s + m.credits, 0);
   const totalCredits = Math.max(Number(creditTotals.rows[0]?.credits || 0), memberCredits);
 
@@ -592,7 +574,6 @@ async function getAnalyticsOverview() {
       forumGroups: forum.available ? forum.groups.total : null,
       forumDiscussions: forum.available ? forum.discussions.total : null,
       totalCreditsInCirculation: totalCredits,
-      avgMemberMerit: totalMembers ? Math.round((totalMerit / totalMembers) * 10) / 10 : 0,
       moderationTeamSize: staffRoles.reduce((s, r) => s + r.count, 0),
       pendingVerifications,
       openTickets: liveModules.openTickets,
@@ -619,7 +600,6 @@ async function getAnalyticsOverview() {
         joinedAt: m.joinedAt,
         status: m.status,
         verification: m.verification,
-        merit: m.merit,
       })),
       retentionEstimate: Math.min(95, 60 + Math.round(activeMembers / Math.max(totalMembers, 1) * 35)),
       avgSignupsPerWeek:
@@ -630,7 +610,6 @@ async function getAnalyticsOverview() {
     charts: {
       verificationMix: verificationChart,
       statusMix: statusChart,
-      meritTierBars: buildMeritTiers(members).map((t) => ({ label: t.tier, value: t.count })),
       creditBuckets,
       groupSizeDistribution,
       platformActivity,
@@ -642,7 +621,6 @@ async function getAnalyticsOverview() {
       username: m.username,
       status: m.status,
       verification: m.verification,
-      merit: m.merit,
       credits: m.credits,
       joinedAt: m.joinedAt,
       hasAvatar: m.hasAvatar,
@@ -661,15 +639,13 @@ async function getAnalyticsOverview() {
         unverified: members.filter((m) => m.verification === 'Unverified').length,
         pendingReview: members.filter((m) => m.verification === 'Pending review').length,
       },
-      meritTiers: buildMeritTiers(members),
       topMembers: [...members]
-        .sort((a, b) => b.merit - a.merit)
+        .sort((a, b) => b.credits - a.credits)
         .slice(0, 10)
         .map((m, i) => ({
           rank: i + 1,
           name: m.name,
           username: m.username,
-          merit: m.merit,
           credits: m.credits,
           status: m.status,
         })),
@@ -703,15 +679,12 @@ async function getAnalyticsOverview() {
           message: 'Forum community metrics unavailable right now.',
         },
     economy: {
-      totalMerit,
       totalCreditsInCirculation: totalCredits,
       avgCreditsPerMember: totalMembers ? Math.round(totalCredits / totalMembers) : 0,
-      avgMeritPerMember: totalMembers ? Math.round((totalMerit / totalMembers) * 10) / 10 : 0,
-      meritLeaders: [...members]
-        .sort((a, b) => b.merit - a.merit)
+      creditLeaders: [...members]
+        .sort((a, b) => b.credits - a.credits)
         .slice(0, 6)
-        .map((m) => ({ name: m.name, username: m.username, merit: m.merit, credits: m.credits })),
-      distribution: buildMeritTiers(members),
+        .map((m) => ({ name: m.name, username: m.username, credits: m.credits })),
       creditBuckets,
       creditTransactions: liveModules.creditTransactions,
       platformRevenue: platformEconomy.platformRevenue,

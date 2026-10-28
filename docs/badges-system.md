@@ -2,9 +2,9 @@
 
 This is the operating contract for milestones. One catalog, granted from real products: signup/alpha, profile setup, jobs, gigs, and the asset marketplace. Users claim from notifications, pin up to five on `/profile`, and staff revoke only for fraud or a mistaken grant.
 
-Badges never change merit. Merit never deletes badges.
+Badges never change warning points. Warning points never delete badges.
 
-Badges answer “what have they earned?” Merit answers “can we trust this account?” ([merit-system.md](merit-system.md)). Punishment answers “what is locked right now?” ([punishment-system.md](punishment-system.md)).
+Badges answer “what have they earned?” Stars answer “was the work good?” Warnings answer “did they break the rules?” ([warning-system.md](warning-system.md)). Punishment answers “what is locked right now?” ([punishment-system.md](punishment-system.md)).
 
 ---
 
@@ -41,9 +41,9 @@ eligible on a real product
  admin revoke only for fraud / mistake
 ```
 
-Merit bands and punishments never grant or delete badges. Frozen / Banned / Locked **hide** claimed badges on the public profile. They are not removed from the account.
+Warning bands and punishments never grant or delete badges. Frozen access / Banned / Locked **hide** claimed badges on the public profile. They are not removed from the account.
 
-Completing work that grants a badge still also raises merit when that close is a successful job or gig ([merit-system.md](merit-system.md)). Publishing an asset grants a creator badge and does **not** add merit completions.
+Publishing an asset grants a creator badge. Completing work grants freelance/client ranks. Neither changes warning points.
 
 ---
 
@@ -68,7 +68,7 @@ Subscriptions (Free / Premium / Business) never buy a badge.
 | Claimed | None until they claim |
 | Pins | None |
 
-Merit starts at 50 and standing starts Active — those are the other two systems.
+Warning points start at 0 and standing starts Active — those are the other two systems.
 
 ---
 
@@ -80,7 +80,7 @@ Keep pending-until-claim.
 2. **Pending grant.** Write the pending badge and notify (`/notifications` and the existing badge socket). Do not auto-claim.
 3. **Claim.** User claims from `/notifications`. Allowed unless Suspended / Ban / Lock (those standing locks block writes). Frozen may claim; public profile still hides badges until they leave Frozen.
 4. **Pin.** Owner curates up to **5** on `/profile`. Ranks stack; pinning is curation, not a new grant.
-5. **Revoke.** Admin only, and only for fraud or a mistaken grant. Merit tanks, Frozen, Ban, and Lock never delete rows.
+5. **Revoke.** Admin only, and only for fraud or a mistaken grant. Frozen access, Ban, and Lock never delete rows.
 
 Joed profile intro and identity verification do not grant badges.
 
@@ -99,7 +99,7 @@ Joed profile intro and identity verification do not grant badges.
 
 Ranks stack. Fresh at 1, then 10, 50, 100.
 
-Successful close means the contract or gig order actually completed, not cancelled, not expired-without-hire, not refunded-without-delivery. Same definition the merit engine uses.
+Successful close means the contract or gig order actually completed, not cancelled, not expired-without-hire, not refunded-without-delivery.
 
 No forum, chat, or editor badges in v1.
 
@@ -109,9 +109,9 @@ Do not run `SeedBadgesOneOff.js` (wrong registry IDs). Alpha/Beta banners alread
 
 ## 6. Visibility
 
-**Public** (`/profile/:id`, job/gig/asset author chips): up to 5 pinned badges. **Hidden** while Banned, Locked, or Frozen. Merit ring and standing chips are the other systems.
+**Public** (`/profile/:id`, job/gig/asset author chips): up to 5 pinned badges. **Hidden** while Banned, Locked, or Frozen access. Standing chips are the punishment system.
 
-**Owner:** sees pending grants, claimed badges, and pins even while Frozen. Record modal is standing/merit, not the badge shelf.
+**Owner:** sees pending grants, claimed badges, and pins even while Frozen access. Record modal is standing/warnings, not the badge shelf.
 
 **Never public:** pending-unclaimed badges, revoked rows, admin grant notes.
 
@@ -135,7 +135,7 @@ Do not run `SeedBadgesOneOff.js` (wrong registry IDs). Alpha/Beta banners alread
 
 - Successful job or gig close as freelancer → evaluate `acc-freelance-1..4`.
 - Successful funded close as client → evaluate `acc-client-1..4`.
-- Close already calls `recomputeAccountMerit` both parties; badge evaluate freelance/client tracks on the same close.
+- Badge evaluate freelance/client tracks on the same close.
 - Cancelled / expired-without-hire / refund-without-delivery: **no** badge progress.
 
 ### 7.3 Asset marketplace
@@ -143,7 +143,7 @@ Do not run `SeedBadgesOneOff.js` (wrong registry IDs). Alpha/Beta banners alread
 **Routes:** `/assets`, asset editor
 
 - Count **published** assets (after review if queued) toward `acc-asset-1..4`.
-- Publishing does not add merit completions. Watch-band review queue still counts once the listing is actually published, not while it sits pending.
+- Limited-band listing review still counts once the listing is actually published, not while it sits pending.
 
 ### 7.4 Forums, inbox, editor, teams
 
@@ -189,16 +189,16 @@ first job hired as client → pending Fresh Client
 first published asset → pending Fresh Creator
 ```
 
-Merit on that same path is independent ([merit-system.md](merit-system.md)): signup 50, identity +6, first close +5, and so on.
+Warning points on that same path are independent ([warning-system.md](warning-system.md)).
 
-### Frozen then they finish work
+### Frozen access then they finish work
 
 ```
-merit 12 Frozen, badges already claimed
+16+ active warning points (Frozen access), badges already claimed
 they deliver a live gig
   → Fresh/next freelancer rank may pending-grant
   → they may claim from notifications
-  → public profile still hides pins until merit is 20+
+  → public profile still hides pins until warning points drop below 16
 ```
 
 ### Dispute conviction

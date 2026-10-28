@@ -9,7 +9,7 @@ export interface DiscoveryProfileInput {
   rawSkills?: { name: string; proficiency: string; years: number }[];
   verified: boolean;
   subscriptionType: "Free" | "Premium" | "Business" | string;
-  meritScore: number | string;
+  starRating: number | string;
   ratingCount?: number;
   followersCount: number;
   totalJobs?: number;
@@ -108,7 +108,7 @@ export function computeSkillMatch(
  * 100-Point Weighted Random / Stratified Exploration Algorithm for Discovery Page:
  *   1. Profile Completeness (0–20 pts)
  *   2. Skill Relevance & Competency (0–25 pts)
- *   3. Bayesian Merit & Verification (0–15 pts)
+ *   3. Ratings & Verification (0–15 pts)
  *   4. Subscription Tier Boost (0–10 pts)
  *   5. Seeded Exploration Jitter (0–30 pts)
  */
@@ -158,9 +158,9 @@ export function computeDiscoveryScore(
     matchPts = Math.round((breadthRatio * 12 + expRatio * 6) * 10) / 10;
   }
 
-  // 3. Reputation / Bayesian Merit + Verification (0 - 15 pts)
+  // 3. Reputation / Ratings + Verification (0 - 15 pts)
   // Cold-start protection: unrated talent receives a 4.0★ Bayesian prior (8.8 pts base)
-  const numericRating = parseFloat(String(profile.meritScore));
+  const numericRating = parseFloat(String(profile.starRating));
   const hasRating = !Number.isNaN(numericRating) && numericRating > 0;
   const v = Math.max(hasRating ? 1 : 0, Number(profile.ratingCount) || 0);
   const R = hasRating ? numericRating : 0;

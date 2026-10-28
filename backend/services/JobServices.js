@@ -42,8 +42,8 @@ async function createJobServices(jobData) {
             }
         }
     }
-    const { assertMeritAllows } = require('./MeritServices');
-    await assertMeritAllows(
+    const { assertWarningAllows } = require('./WarningBandServices');
+    await assertWarningAllows(
       jobData.payer_account_id || jobData.client_account_id,
       jobData.is_urgent ? 'create_urgent_job' : 'create_job'
     );
@@ -83,9 +83,9 @@ async function getJobByIdServices(jobId, accountId = null, actorIds = [], affili
 
 async function updateJobServices(jobId, accountIds, jobData) {
     if (jobData.is_urgent) {
-        const { assertMeritAllows } = require('./MeritServices');
+        const { assertWarningAllows } = require('./WarningBandServices');
         const actorId = Array.isArray(accountIds) ? accountIds[0] : accountIds;
-        await assertMeritAllows(actorId, 'create_urgent_job');
+        await assertWarningAllows(actorId, 'create_urgent_job');
     }
     const updated = await JobRepositories.updateJobRepositories(jobId, accountIds, jobData);
     if (!updated) {
@@ -113,8 +113,8 @@ async function createProposalServices(proposalData) {
         error.statusCode = 400;
         throw error;
     }
-    const { assertMeritAllows } = require('./MeritServices');
-    await assertMeritAllows(
+    const { assertWarningAllows } = require('./WarningBandServices');
+    await assertWarningAllows(
       proposalData.proposed_by_account_id || proposalData.payer_account_id || proposalData.freelancer_account_id,
       'proposal'
     );

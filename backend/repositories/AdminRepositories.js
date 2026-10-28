@@ -29,7 +29,7 @@ async function getDashboardOverview() {
     staffResult,
     pendingVerifications,
     recentSignups,
-    meritLeaders,
+    creditLeaders,
     roleBreakdown,
     statusBreakdown,
     forumCounts,
@@ -57,8 +57,6 @@ async function getDashboardOverview() {
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'User') AS platform_user_accounts,
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'Staff') AS staff_accounts,
         (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) != 'active' OR status IS NULL) AS pending_review,
-        (SELECT COALESCE(SUM(merit_score), 0)::int FROM accounts WHERE type = 'User') AS total_user_merit,
-        (SELECT COALESCE(AVG(merit_score), 0)::numeric(10,1) FROM accounts WHERE type = 'User') AS avg_user_merit,
         (SELECT COUNT(*)::int
          FROM verifications v
          LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
@@ -74,7 +72,6 @@ async function getDashboardOverview() {
         a.handle,
         a.display_name,
         a.status,
-        a.merit_score,
         a.type,
         a.created_at,
         a.avatar_file_id,
@@ -93,7 +90,6 @@ async function getDashboardOverview() {
         a.handle,
         a.display_name,
         a.status,
-        a.merit_score,
         a.created_at
       FROM staff s
       INNER JOIN accounts a ON a.account_id = s.account_id
@@ -117,7 +113,6 @@ async function getDashboardOverview() {
           END,
           a.status
         ) AS status,
-        a.merit_score,
         a.created_at,
         a.type
       FROM accounts a
@@ -142,7 +137,6 @@ async function getDashboardOverview() {
         u.email_address,
         a.handle,
         a.status,
-        a.merit_score,
         a.created_at
       FROM users u
       INNER JOIN accounts a ON a.account_id = u.account_id
@@ -154,12 +148,11 @@ async function getDashboardOverview() {
         u.user_id,
         COALESCE(a.display_name, TRIM(u.first_name || ' ' || u.last_name)) AS full_name,
         a.handle,
-        a.merit_score,
         a.status,
         a.created_at
       FROM users u
       INNER JOIN accounts a ON a.account_id = u.account_id
-      ORDER BY a.merit_score DESC NULLS LAST
+      ORDER BY a.created_at DESC NULLS LAST
       LIMIT 12
     `),
     pool.query(`
@@ -192,7 +185,7 @@ async function getDashboardOverview() {
   const signups = recentSignups.rows.map(mapSignupItem);
 
   const recentActivity = buildPlatformActivity(signups, staff, verificationQueue);
-  const economyFeed = meritLeaders.rows.map(mapEconomyItem);
+  const economyFeed = creditLeaders.rows.map(mapEconomyItem);
   const alerts = buildPlatformAlerts(stats, verificationQueue, staff, forumCounts, ticketStats);
 
   return {
@@ -206,7 +199,6 @@ async function getDashboardOverview() {
       openTickets: Number(ticketStats.open_tickets),
       pendingApproval: Number(ticketStats.pending_listings || stats.pending_review),
       totalStaff: Number(stats.total_staff),
-      avgUserMerit: Number(stats.avg_user_merit),
       totalTeams: Number(ticketStats.total_teams || 0),
       forumGroups: forumCounts.available ? forumCounts.groups : null,
       forumDiscussions: forumCounts.available ? forumCounts.discussions : null,
@@ -255,7 +247,6 @@ function mapPlatformUser(row) {
     username: row.handle,
     displayName: row.display_name,
     status: normalizeStatus(row.status),
-    meritCredits: row.merit_score ?? 0,
     joinedAt: row.created_at,
     hasAvatar: Boolean(row.avatar_file_id),
     tagline: row.tagline || null,
@@ -275,7 +266,6 @@ function mapStaffMember(row) {
     role: row.role,
     roleLabel: formatRoleLabel(row.role),
     status: normalizeStatus(row.status),
-    meritCredits: row.merit_score ?? 0,
     joinedAt: row.created_at,
     isAdmin: row.role === 'Admin',
   };
@@ -289,7 +279,6 @@ function mapVerificationItem(row) {
     email: row.email_address || '—',
     username: row.handle || '—',
     status: row.status || 'Pending',
-    meritCredits: row.merit_score ?? 0,
     submittedAt: row.created_at,
     accountType: row.type,
   };
@@ -312,13 +301,7 @@ function mapEconomyItem(row, index) {
     rank: index + 1,
     name: row.full_name?.trim() || row.handle,
     username: row.handle,
-    meritChange: row.merit_score ?? 0,
-    label:
-      row.merit_score >= 80
-        ? 'High balance'
-        : row.merit_score >= 50
-          ? 'Active earner'
-          : 'Standard balance',
+    label: 'Member',
     timeAgo: formatRelativeTime(row.created_at),
     status: normalizeStatus(row.status),
   };

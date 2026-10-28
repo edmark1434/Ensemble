@@ -159,7 +159,7 @@ export const WorkspaceInfoTab: React.FC = () => {
     },
     {
       q: "How does the Double-Blind Review system protect me?",
-      a: "Neither party can see the other's star rating or written testimonial until BOTH have submitted, or until the 24-hour review timer expires. This eliminates retaliatory reviews and ensures genuine feedback that contributes to accurate platform Merit scores.",
+      a: "Neither party can see the other's star rating or written testimonial until BOTH have submitted, or until the 24-hour review timer expires. This eliminates retaliatory reviews and ensures genuine feedback.",
     },
     {
       q: "What happens if a revision is required?",
@@ -401,7 +401,7 @@ export const WorkspaceInfoTab: React.FC = () => {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
             <h2 className="text-sm font-bold text-gray-900 dark:text-white">
-              4. Double-Blind Review Protocols &amp; Merit Impact
+              4. Double-Blind Review Protocols
             </h2>
           </div>
           <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">
@@ -447,9 +447,9 @@ export const WorkspaceInfoTab: React.FC = () => {
                 </td>
               </tr>
               <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
-                <td className="py-3.5 px-5 font-bold text-gray-900 dark:text-white">Merit Standing Calculation</td>
+                <td className="py-3.5 px-5 font-bold text-gray-900 dark:text-white">Star rating averages</td>
                 <td className="py-3.5 px-5 leading-relaxed">
-                  Reviews feed into Bayesian-weighted rating averages and directly update user platform Merit score bands.
+                  Reviews feed into Bayesian-weighted star rating averages on the public profile.
                 </td>
                 <td className="py-3.5 px-5 text-gray-600 dark:text-zinc-400 leading-relaxed text-[11px]">
                   Unlocks creator perks, raises service rankings, and boosts hiring trustworthiness across the platform.

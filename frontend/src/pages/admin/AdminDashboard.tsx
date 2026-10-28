@@ -157,9 +157,9 @@ function OverviewTab({
       accent: 'text-orange-400',
     },
     {
-      label: 'Merit in circulation',
+      label: 'Credits in circulation',
       value: kpis.platformRevenueCredits.toLocaleString(),
-      sub: `Avg ${kpis.avgUserMerit} per member`,
+      sub: 'Platform wallet and member balances',
       icon: Coins,
       accent: 'text-emerald-400',
     },
@@ -268,7 +268,7 @@ function OverviewTab({
                   <th className="pb-2 pr-4 font-medium">Email</th>
                   <th className="pb-2 pr-4 font-medium">Username</th>
                   <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium text-right">Merit</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Credits</th>
                   <th className="pb-2 font-medium">Submitted</th>
                 </tr>
               </thead>
@@ -283,7 +283,7 @@ function OverviewTab({
                         {v.status}
                       </span>
                     </td>
-                    <td className="py-3 pr-4 text-right tabular-nums">{v.meritCredits}</td>
+                    <td className="py-3 pr-4 text-right tabular-nums">—</td>
                     <td className="py-3 text-xs text-zinc-500">{formatDateTime(v.submittedAt)}</td>
                   </tr>
                 ))}
@@ -348,9 +348,9 @@ function OverviewTab({
         <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-emerald-400" />
-            <h2 className="font-semibold text-white">Merit & credits leaderboard</h2>
+            <h2 className="font-semibold text-white">Credits leaderboard</h2>
           </div>
-          <p className="mt-1 text-xs text-zinc-600">Top members by merit balance — use for economy oversight.</p>
+          <p className="mt-1 text-xs text-zinc-600">Top members — use for economy oversight.</p>
           <ul className="mt-4 space-y-2">
             {data.economyFeed.map((e) => (
               <li
@@ -369,7 +369,7 @@ function OverviewTab({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold tabular-nums text-emerald-300">+{e.meritChange}</p>
+                  <p className="font-semibold tabular-nums text-emerald-300">{e.timeAgo}</p>
                   <p className="text-[10px] text-zinc-600">{e.timeAgo}</p>
                 </div>
               </li>

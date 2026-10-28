@@ -278,7 +278,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                                 <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
                                     {counterpartyHasReviewed
                                         ? "Submit yours to reveal mutual ratings and complete closeout"
-                                        : "Submit review before deadline to maintain Merit standing"}
+                                        : "Submit review before the deadline"}
                                 </div>
                             </div>
                         </div>

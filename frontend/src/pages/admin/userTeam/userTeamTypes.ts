@@ -15,7 +15,6 @@ export type PlatformTeam = {
   handle: string | null;
   tagline: string | null;
   description: string | null;
-  meritCredits: number;
   walletBalance: number;
   frozenBalance: number;
   leaderName: string;
@@ -257,7 +256,6 @@ export type PlatformUserAccount = {
   displayName: string | null;
   status: string;
   forumTimeout?: boolean;
-  meritCredits: number;
   verificationStatus: string;
   joinedAt: string | null;
   lastSeenAt: string | null;

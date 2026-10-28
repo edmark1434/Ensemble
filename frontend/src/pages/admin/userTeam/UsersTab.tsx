@@ -193,8 +193,6 @@ export default function UsersTab({
           return time(a.joinedAt) - time(b.joinedAt);
         case 'name':
           return a.name.localeCompare(b.name);
-        case 'merit':
-          return b.meritCredits - a.meritCredits;
         case 'lastSeen':
           return time(b.lastSeenAt) - time(a.lastSeenAt);
         case 'newest':
@@ -392,7 +390,6 @@ export default function UsersTab({
                 { value: 'newest', label: 'Newest first' },
                 { value: 'oldest', label: 'Oldest first' },
                 { value: 'name', label: 'Name A–Z' },
-                { value: 'merit', label: 'Highest merit' },
                 { value: 'lastSeen', label: 'Recently seen' },
               ],
             }}
@@ -436,7 +433,6 @@ export default function UsersTab({
                 <th className="px-4 py-3">Username</th>
                 <th className="px-4 py-3">Verification</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Merit</th>
                 <th className="px-4 py-3">Last seen</th>
                 <th className="px-4 py-3">Date created</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -470,7 +466,6 @@ export default function UsersTab({
                     <td className="px-4 py-3">@{user.username}</td>
                     <td className="px-4 py-3">{user.verificationStatus}</td>
                     <td className="px-4 py-3">{user.status}</td>
-                    <td className="px-4 py-3 tabular-nums text-emerald-300/90">{user.meritCredits}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.lastSeenAt)}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.joinedAt)}</td>
                     <td className="px-4 py-3 text-right">

@@ -196,12 +196,22 @@ const {
   patchAdminWarningDef,
   deleteAdminWarningDef,
 } = require('../controllers/WarningDefControllers');
+const {
+  getAdminWarningThresholds,
+  postAdminWarningThreshold,
+  patchAdminWarningThreshold,
+  deleteAdminWarningThreshold,
+} = require('../controllers/WarningThresholdControllers');
 
 router.get('/warning-catalog', [checkSession, requireUserTeamAccess], getWarningCatalog);
 router.get('/warning-defs', [checkSession, requireAdmin], getAdminWarningDefs);
 router.post('/warning-defs', [checkSession, requireAdmin], postAdminWarningDef);
 router.patch('/warning-defs/:warningDefId', [checkSession, requireAdmin], patchAdminWarningDef);
 router.delete('/warning-defs/:warningDefId', [checkSession, requireAdmin], deleteAdminWarningDef);
+router.get('/warning-thresholds', [checkSession, requireAdmin], getAdminWarningThresholds);
+router.post('/warning-thresholds', [checkSession, requireAdmin], postAdminWarningThreshold);
+router.patch('/warning-thresholds/:thresholdId', [checkSession, requireAdmin], patchAdminWarningThreshold);
+router.delete('/warning-thresholds/:thresholdId', [checkSession, requireAdmin], deleteAdminWarningThreshold);
 
 const { getAdminSurveyResponsesController } = require('../controllers/AdminSurveyControllers');
 

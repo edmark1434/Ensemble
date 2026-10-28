@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Check, Coins, Edit2, HelpCircle, Star, Trash2, Trophy, X, Briefcase } from "lucide-react";
-import { getRatingTierTag } from "./MeritSection_ProfileDisplay";
+import { getRatingTierTag } from "./RatingsSection_ProfileDisplay";
 
 const MAX_BUDGET_CREDITS = 100000000;
 

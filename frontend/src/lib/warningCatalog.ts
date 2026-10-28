@@ -1,3 +1,5 @@
+import { warningDurationDays } from './warningLadder';
+
 /** Fallback seed if the warning_defs API is unavailable. Live catalog is admin-editable. */
 
 export type WarningDesk = 'admin' | 'support' | 'forum' | 'marketplace' | 'jobs';
@@ -7,6 +9,7 @@ export type WarningPreset = {
   label: string;
   category: string;
   points: number;
+  durationDays?: number;
   desks: WarningDesk[];
   note?: string;
 };
@@ -71,8 +74,13 @@ export const WARNING_PRESETS: WarningPreset[] = [
 ];
 
 export function warningsForDesk(desk: WarningDesk = 'admin') {
-  if (desk === 'admin' || desk === 'support') return WARNING_PRESETS;
-  return WARNING_PRESETS.filter((row) => row.desks.includes(desk));
+  const rows = desk === 'admin' || desk === 'support'
+    ? WARNING_PRESETS
+    : WARNING_PRESETS.filter((row) => row.desks.includes(desk));
+  return rows.map((row) => ({
+    ...row,
+    durationDays: row.durationDays || warningDurationDays(row.points),
+  }));
 }
 
 export function getWarningById(id: string) {

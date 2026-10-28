@@ -40,7 +40,6 @@ function mapWalletRow(row) {
     email: row.email_address || '',
     username: row.handle,
     accountType: row.account_type_label || row.account_type || 'User',
-    meritScore: Number(row.merit_score || 0),
     totalCredits: balance,
     totalAssets: Number(row.asset_count || 0),
     totalRevenue: Number(row.asset_value || 0),
@@ -134,7 +133,6 @@ async function getWalletDetail(walletId) {
       a.account_id,
       a.handle,
       a.display_name,
-      a.merit_score,
       a.status AS account_status,
       a.type AS account_type,
       w.wallet_id,
@@ -226,7 +224,7 @@ async function loadEconomySettings() {
 }
 
 async function getEconomyOverview() {
-  const [userWalletsResult, staffWalletsResult, teamWalletsResult, txStats, meritStats, economySettings] =
+  const [userWalletsResult, staffWalletsResult, teamWalletsResult, txStats, _accountCount, economySettings] =
     await Promise.all([
       pool.query(`
         SELECT
@@ -237,7 +235,6 @@ async function getEconomyOverview() {
           u.email_address,
           a.handle,
           a.display_name,
-          a.merit_score,
           a.status AS account_status,
           a.type AS account_type,
           'User' AS account_type_label,
@@ -268,7 +265,6 @@ async function getEconomyOverview() {
           s.email_address,
           a.handle,
           a.display_name,
-          a.merit_score,
           a.status AS account_status,
           a.type AS account_type,
           'Staff' AS account_type_label,
@@ -291,7 +287,6 @@ async function getEconomyOverview() {
           t.account_id,
           a.handle,
           a.display_name,
-          a.merit_score,
           a.status AS account_status,
           a.type AS account_type,
           'Team' AS account_type_label,
@@ -349,10 +344,7 @@ async function getEconomyOverview() {
         FROM credit_transactions
       `),
       pool.query(`
-        SELECT
-          COALESCE(SUM(merit_score), 0)::int AS total_merit,
-          COALESCE(AVG(merit_score), 0)::numeric(10,1) AS avg_merit,
-          COUNT(*)::int AS account_count
+        SELECT COUNT(*)::int AS account_count
         FROM accounts
         WHERE deleted_at IS NULL
       `),
@@ -443,7 +435,6 @@ async function getEconomyOverview() {
       totalRevenue: Math.round(totalRevenue),
       frozenWallets,
       averageWalletBalance: allWallets.length ? Math.round(totalCredits / allWallets.length) : 0,
-      totalMeritPoints: Number(meritStats.rows[0].total_merit),
       activeWallets: allWallets.filter((w) => !w.frozen).length,
     },
     wallets: allWallets,

@@ -2,6 +2,8 @@ const { pool } = require('./Database');
 const { DEFAULT_SETTINGS } = require('./PlatformConfiguration');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
+const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
+const { autoSuspendDaysForPoints, AUTO_SUSPEND_POINTS, refreshLiveThresholds } = require('./WarningBands');
 
 const PROFANITY_PATTERN =
   /\b(fuck|shit|bitch|asshole|cunt|nigger|faggot|slut|whore)\b/i;
@@ -93,9 +95,9 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
-  const { assertMeritAllows, meritWatchForcesListingReview } = require('../services/MeritServices');
-  await assertMeritAllows(accountId, 'publish_asset');
-  const watchReview = await meritWatchForcesListingReview(accountId);
+  const { assertWarningAllows, listingReviewForced } = require('../services/WarningBandServices');
+  await assertWarningAllows(accountId, 'publish_asset');
+  const watchReview = await listingReviewForced(accountId);
 
   // If the asset is ALREADY published, updating its details preserves published status
   if (currentStatus === 'published') {
@@ -279,33 +281,20 @@ async function reconcileUnassignedDisputes() {
   return { assigned: assignedCount };
 }
 
-async function sumActiveWarningPoints(accountId) {
-  const result = await pool.query(
-    `
-    SELECT COALESCE(SUM(LEAST(GREATEST(COALESCE(points, 1), 1), 10)), 0)::int AS points
-    FROM violations
-    WHERE account_id = $1
-      AND deleted_at IS NULL
-      AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
-      AND expires_at IS NOT NULL
-      AND expires_at > NOW()
-    `,
-    [accountId]
-  );
-  return Number(result.rows[0]?.points || 0);
-}
-
 /**
  * After a warning is issued, suspend when active warning POINTS reach the
  * configured threshold (legacy stored values under 10 are treated as 20).
+ * 30+ points use a 14-day cooldown. Already-suspended accounts are not stacked.
  */
 async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   if (!accountId) return null;
   const settings = await getModerationSettings();
   const configured = Number(settings.maxWarningsBeforeSuspend);
-  const max = Number.isFinite(configured) && configured >= 10 ? configured : 20;
+  const max = Number.isFinite(configured) && configured >= 10 ? configured : AUTO_SUSPEND_POINTS;
   const activeCount = await sumActiveWarningPoints(accountId);
-  if (activeCount < max) {
+  await refreshLiveThresholds();
+  const days = autoSuspendDaysForPoints(activeCount);
+  if (!days) {
     return { suspended: false, activeCount, max };
   }
 
@@ -320,12 +309,12 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   }
 
   await pool.query(
-    `UPDATE accounts SET status = 'Suspended', suspension_ends_at = NOW() + INTERVAL '7 days' WHERE account_id = $1`,
-    [accountId]
+    `UPDATE accounts SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day') WHERE account_id = $1`,
+    [accountId, days]
   );
   await recordAccountActivity({
     accountId,
-    action: `Auto-suspended after ${activeCount} active warning point(s) (limit ${max})`,
+    action: `Auto-suspended ${days} day(s) after ${activeCount} active warning point(s) (limit ${max})`,
     eventCode: 'ACCOUNT_STATUS_CHANGED',
     referenceTable: 'accounts',
     referencePrefix: 'ACC',
@@ -337,6 +326,7 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
       action: 'auto_suspend',
       activeWarnings: activeCount,
       maxWarningsBeforeSuspend: max,
+      suspensionDays: days,
       source: 'moderation_policy',
     },
   });
@@ -348,7 +338,7 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     console.error('Failed to notify auto-suspended account:', notifyErr);
   }
 
-  return { suspended: true, activeCount, max, previousStatus };
+  return { suspended: true, activeCount, max, days, previousStatus };
 }
 
 const HIGH_PRIORITY_REPORT_TYPES = new Set([
