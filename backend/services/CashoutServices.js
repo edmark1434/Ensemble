@@ -264,6 +264,16 @@ async function createCashoutRecordsServices(data) {
         return { success: true, message: 'Cashout request already received.', data: existing, duplicate: true };
     }
 
+    const walletsForMerit = await getWalletsByUserId(data.user_id);
+    const walletAccountId = walletsForMerit?.[0]?.account_id;
+    if (walletAccountId) {
+        try {
+            await require('./MeritServices').assertMeritAllows(walletAccountId, 'cashout');
+        } catch (err) {
+            throw new CashoutError(err.message, err.statusCode || 403, err.code || 'MERIT_RESTRICTED');
+        }
+    }
+
     const config = await getCashoutConfig(validated.amountCredits);
     const centsPerCredit = config.php_cents_per_credit;
     const feeCents = await calculateCashoutFeePhpCents(validated.amountCredits, centsPerCredit);

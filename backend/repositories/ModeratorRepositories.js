@@ -245,6 +245,12 @@ async function issueViolation(accountId, { type, reason, points, expiresAt, dura
     console.warn('Failed to broadcast moderator warning notification:', notifyErr.message);
   }
 
+  try {
+    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+  } catch (err) {
+    console.warn('Merit recompute after moderator warning failed:', err.message);
+  }
+
   return getViolationsAndRestrictions();
 }
 

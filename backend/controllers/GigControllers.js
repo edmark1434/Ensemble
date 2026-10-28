@@ -75,6 +75,7 @@ async function createGigController(req, res) {
             skills, thumbnailFileId, galleryFileIds
         };
 
+        await require('../services/MeritServices').assertMeritAllows(personalAccountId, 'create_gig');
         const gigId = await createGigRepository(gigData);
         try {
             require('../services/BadgeServices').scheduleBadgeEvaluation(freelancer_account_id);

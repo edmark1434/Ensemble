@@ -94,9 +94,13 @@ Punishments and badges for these actors: [punishment-system.md](punishment-syste
 | Band | Established (50–74) |
 | Access | Full. New is not a crime. |
 
-Missing merit is treated as **50**, never 100. Team rows that currently store `0` must not render a ring.
+**50 is the join score.** Not 0 (that would Frozen a brand-new account) and not 100 (a first warning would not matter). Admin `defaultUserMerit` is clamped to 50–74 so new users always start Established.
+
+Missing merit is treated as **50**, never 100. Team rows store `0` and do not show a ring.
 
 Standing starts Active with no punishments — that is the [punishment system](punishment-system.md). Pending Alpha Tester is the [badge system](badges-system.md).
+
+Low merit does **not** issue a timeout, suspension, lock, or ban. Those are staff (or 3-warning auto-suspend) actions. Low merit only applies the automatic product limits in §8.
 
 ---
 
@@ -207,7 +211,7 @@ Existing open jobs / gigs / listings are **not** auto-deleted.
 
 ### 8.5 0–19 Frozen
 
-Trust is gone. Not a ban unless staff also bans.
+Trust is gone. **Frozen is a merit band, not a standing.** It is not a timeout, not a suspension, and not a ban. Staff can still suspend/timeout/ban on top. Ban is never automatic from this number.
 
 Everything in Restricted, plus:
 
@@ -559,4 +563,4 @@ Build order (merit slice):
 4. Backend guards for every band row in §10.
 5. Discovery modifier for 75+ and burial for Watch+.
 
-Do not describe this as live in `backend/data/` until it ships.
+`MeritServices.recomputeAccountMerit` is the score writer. Band guards live on job/gig/proposal/asset/forum/DM/team/cashout writes. Restricted extra cashout hold (+7 days) is specified; live cashout still pays immediately except Frozen, which is blocked.

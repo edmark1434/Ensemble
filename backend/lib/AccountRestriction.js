@@ -1,12 +1,15 @@
 const { pool } = require('./Database');
 const redisClient = require('./Redis');
 
+const { bandFor, clampMerit, BASE_MERIT, ACTION_MESSAGES } = require('./Merit');
+
 const BLOCKING_CODES = {
   banned: 'ACCOUNT_BANNED',
   suspended: 'ACCOUNT_SUSPENDED',
   locked: 'ACCOUNT_LOCKED',
   deleted: 'ACCOUNT_DELETED',
   forumTimeout: 'FORUM_TIMEOUT',
+  meritFrozen: 'MERIT_FROZEN',
 };
 
 const APPEAL_TICKET_TYPE = 'Appeal an account penalty';
@@ -144,7 +147,7 @@ async function listActiveViolations(accountId) {
 }
 
 async function liftExpiredSuspension(accountId) {
-  await pool.query(
+  const { rowCount } = await pool.query(
     `
     UPDATE accounts
     SET status = 'Active',
@@ -161,6 +164,7 @@ async function liftExpiredSuspension(accountId) {
     `,
     [accountId]
   );
+  return rowCount > 0;
 }
 
 function warningExpiry({ duration, days, expiresAt, endsAt, points } = {}) {
@@ -204,6 +208,9 @@ function emptyAccess() {
     reactivationAvailableAt: null,
     reactivationReady: true,
     forumTimeout: false,
+    meritFrozen: false,
+    meritScore: BASE_MERIT,
+    meritBand: 'established',
     suspensionEndsAt: null,
     forumTimeoutEndsAt: null,
     code: null,
@@ -223,13 +230,17 @@ async function getAccountAccess(accountId) {
   if (!accountId) return emptyAccess();
 
   try {
-    await liftExpiredSuspension(accountId);
+    const lifted = await liftExpiredSuspension(accountId);
+    if (lifted) {
+      const { scheduleMeritRecompute } = require('../services/MeritServices');
+      scheduleMeritRecompute(accountId);
+    }
   } catch (err) {
     console.warn('Could not lift an expired suspension:', err.message);
   }
 
   const account = await pool.query(
-    `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
+    `SELECT status, type, merit_score, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
     [accountId]
   );
   const row = account.rows[0];
@@ -261,6 +272,9 @@ async function getAccountAccess(accountId) {
 
   const normalized = normalizeAccountStatus(row.status);
   const member = String(row.type || '').toLowerCase() === 'user';
+  const meritScore = member ? clampMerit(row.merit_score) : BASE_MERIT;
+  const meritBand = bandFor(meritScore);
+  const meritFrozen = member && meritBand.id === 'frozen' && normalized === 'active';
   const deactivated = normalized === 'deactivated' && member;
   const reactivationAvailableAt = row.reactivation_available_at || null;
   const reactivationReady = !deactivated
@@ -280,7 +294,9 @@ async function getAccountAccess(accountId) {
           ? BLOCKING_CODES.suspended
           : forumTimeout
             ? BLOCKING_CODES.forumTimeout
-            : null;
+            : meritFrozen
+              ? BLOCKING_CODES.meritFrozen
+              : null;
 
   return {
     status: displayStatus(normalized),
@@ -293,6 +309,9 @@ async function getAccountAccess(accountId) {
     reactivationAvailableAt: deactivated ? reactivationAvailableAt : null,
     reactivationReady,
     forumTimeout,
+    meritFrozen,
+    meritScore,
+    meritBand: meritBand.id,
     suspensionEndsAt: row.suspension_ends_at || null,
     forumTimeoutEndsAt,
     code,
@@ -300,7 +319,9 @@ async function getAccountAccess(accountId) {
       ? blockMessage(normalized, { member, suspensionEndsAt: row.suspension_ends_at })
       : forumTimeout
         ? forumTimeoutMessage(forumTimeoutEndsAt)
-        : null,
+        : meritFrozen
+          ? ACTION_MESSAGES.forum_write
+          : null,
     violations,
   };
 }
@@ -669,17 +690,28 @@ function rejectSuspendedWrite(req, res) {
  * Reading the forums stays open.
  */
 function rejectForumTimeout(req, res) {
-  if (!req.accountAccess?.forumTimeout) return false;
   const method = String(req.method || 'GET').toUpperCase();
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
   if (!requestPath(req).startsWith('/api/forum')) return false;
-  res.status(403).json({
-    success: false,
-    code: BLOCKING_CODES.forumTimeout,
-    message: req.accountAccess.message || FORUM_TIMEOUT_MESSAGE,
-    restriction: req.accountAccess,
-  });
-  return true;
+  if (req.accountAccess?.forumTimeout) {
+    res.status(403).json({
+      success: false,
+      code: BLOCKING_CODES.forumTimeout,
+      message: req.accountAccess.message || FORUM_TIMEOUT_MESSAGE,
+      restriction: req.accountAccess,
+    });
+    return true;
+  }
+  if (req.accountAccess?.meritFrozen) {
+    res.status(403).json({
+      success: false,
+      code: BLOCKING_CODES.meritFrozen,
+      message: ACTION_MESSAGES.forum_write,
+      restriction: req.accountAccess,
+    });
+    return true;
+  }
+  return false;
 }
 
 module.exports = {

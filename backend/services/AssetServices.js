@@ -481,8 +481,14 @@ async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
     const { resolveMarketplacePublishStatus, getModerationSettings } = require('../lib/ModerationPolicy');
+    const { assertMeritAllows, meritWatchForcesListingReview } = require('./MeritServices');
+    if (String(data.status).toLowerCase() === 'published') {
+      await assertMeritAllows(accountId, 'publish_asset');
+    }
     const settings = await getModerationSettings();
-    const reviewRequired = settings.marketplaceListingReview && String(data.status).toLowerCase() === 'published';
+    const watchReview = String(data.status).toLowerCase() === 'published'
+      && await meritWatchForcesListingReview(accountId);
+    const reviewRequired = (settings.marketplaceListingReview || watchReview) && String(data.status).toLowerCase() === 'published';
 
     // When review is required, asset is created as draft while awaiting moderator approval
     const requestedStatus = data.status;
@@ -516,6 +522,9 @@ async function createAssetServices(accountId, payload) {
     }
     return asset;
   } catch (error) {
+    if (error.code === 'MERIT_RESTRICTED') {
+      throw new AssetError(error.message, 403, error.code);
+    }
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);
     }
@@ -682,6 +691,9 @@ async function updateAssetServices(assetId, accountId, payload) {
     }
     return asset;
   } catch (error) {
+    if (error.code === 'MERIT_RESTRICTED') {
+      throw new AssetError(error.message, 403, error.code);
+    }
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);
     }

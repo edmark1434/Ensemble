@@ -18,6 +18,7 @@ Enable Team Leaders to create video projects for their team, automatically shari
 - [x] In `backend/services/TeamsServices.js`:
   - Restrict `createVideoProject` and `deleteVideoProject` to active Team Leaders (`role === 'Owner'`).
   - Automatically call `ensureTeamMembersHaveProjectAccess` upon member activation/join/invitation acceptance.
+  - Assert merit permissions (`assertMeritAllows`) on team creation and team join.
 - [x] In `backend/controllers/TeamsControllers.js` & `backend/routes/Teams.js`:
   - `GET /api/teams/:teamId/video-projects`
   - `POST /api/teams/:teamId/video-projects`
