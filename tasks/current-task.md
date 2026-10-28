@@ -1,13 +1,11 @@
-# Active Task: Temporary warnings + balanced band limits
+# Active Task: Fix subscription plan pricing display
 
 ## Implementation Objective
 
-Staff/admin warnings are always temporary. Points 1–10 set both the merit hit (×2) and duration (3–90 days). 5 points is a minor 14-day Watch slap. Low merit automatically limits forums, marketplace, jobs/gigs, and new shared editor projects. Live work stays open.
+Correct hardcoded subscription plan prices on the landing pricing page and user settings subscription details page from raw centavos (₱59,900 / ₱350,000) to actual PHP amounts (₱599 / ₱3,500).
 
 ## Acceptance Criteria
 
-- [x] Warnings cannot be permanent. Duration follows the point ladder; staff may shorten, never lengthen past the cap.
-- [x] 1pt = −2 / 3 days; 5pt = −10 / 14 days; 10pt = −20 / 90 days.
-- [x] Watch = minor; Restricted = forum + listing + comment + new shared editor lock; Frozen = those plus proposals, new DMs, cashout.
-- [x] Expired warnings lapse on next session and recompute merit.
-- [x] Auto-suspend at 20+ active warning points (7 days), not at 3 tiny warnings.
+- [ ] `/landing/Pricing` shows ₱599/mo for Premium and ₱3,500/mo for Business.
+- [ ] User settings subscription details tab shows ₱599/mo for Premium and ₱3,500/mo for Business.
+- [ ] Frontend build succeeds with zero errors.
