@@ -1,13 +1,10 @@
-# Active Task: Chatbot sidebar layout and scrollbar improvements
+# Active Task: Apply new landing page Value Ecosystem feature images
 
 ## Implementation Objective
 
-Make the Joeds AI top header section non-scrollable and pinned at the top of the chatbot sidebar on `/landing/AskOurChatbot`. Make the Popular Questions and note sections underneath scrollable with a thin, seamless custom vertical scrollbar.
+Update the landing page Value Ecosystem accordion gallery (`section_Features.tsx`) to use the newly added `.png` images in `/gallery_images/new/`.
 
 ## Acceptance Criteria
 
-- [x] "Joeds AI by Ensemble" top bar remains fixed/non-scrollable at the top of the left sidebar.
-- [x] Popular questions and remaining sidebar elements scroll independently inside a scrollable container.
-- [x] Vertical scrollbar is styled to be thin, subtle, and seamless across themes and webkit browsers.
-- [x] Mobile responsive layout operates cleanly without layout breakage.
-- [x] Frontend build succeeds with zero errors.
+- [x] `ALL_FEATURES` in `frontend/src/pages/landing/section_Features.tsx` points to the new images under `/gallery_images/new/` (`captioning.png`, `collab.png`, `deadair.png`, `asset.png`, `videochat.png`, `track.png`).
+- [x] Frontend build (`cd frontend && npm run build`) succeeds.

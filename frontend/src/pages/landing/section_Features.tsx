@@ -22,42 +22,42 @@ const ALL_FEATURES = [
     id: "01",
     title: "A.I. Captioning",
     desc: "Type any word or phrase and our AI will pinpoint the clip. Instantly navigate to exactly where it was spoken in your video.",
-    img: "/features/m2.png",
+    img: "/gallery_images/new/captioning.png",
     icon: <Zap size={18} />
   },
   {
     id: "02",
     title: "Seamless Collaboration",
     desc: "Collaborate without friction through real-time team editing. No more wasting time on rendering or sending over large files.",
-    img: "/features/m1.png",
+    img: "/gallery_images/new/collab.png",
     icon: <Users size={18} />
   },
   {
     id: "03",
     title: "Auto Dead-Air Clean Up",
     desc: "Remove silence with a single click to streamline your edit. Keep your viewers engaged and get your content ready for export.",
-    img: "/features/m3.png",
+    img: "/gallery_images/new/deadair.png",
     icon: <Trash2 size={18} />
   },
   {
     id: "04",
     title: "Creative Marketplace",
     desc: "Buy or sell premium audio, templates, and assets to fuel any production. Browse our job board to hire top talent.",
-    img: "/features/m4.png",
+    img: "/gallery_images/new/asset.png",
     icon: <ShoppingBag size={18} />
   },
   {
     id: "05",
     title: "Integrated Chat & Call",
     desc: "Conduct interviews or team meetings with high-quality video. Streamline your hiring and feedback without leaving the app.",
-    img: "/features/m5.png",
+    img: "/gallery_images/new/videochat.png",
     icon: <Video size={18} />
   },
   {
     id: "06",
     title: "Progress Tracking",
     desc: "Monitor every milestone with an intuitive, live visual dashboard. Track task completion and ensure your content is ready.",
-    img: "/features/m6.png",
+    img: "/gallery_images/new/track.png",
     icon: <BarChart3 size={18} />
   },
 ];
