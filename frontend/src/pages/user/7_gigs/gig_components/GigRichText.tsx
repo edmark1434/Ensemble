@@ -402,6 +402,19 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                     <div className="pb-2 min-w-0 flex-1">
                       <h4 className="font-bold text-gray-900 dark:text-white text-xs mb-0.5">{m.name}</h4>
                       <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed">{m.description}</p>
+                      {Array.isArray(m.tasks) && m.tasks.length > 0 && (
+                        <div className="mt-2.5 space-y-1.5 pl-3 border-l-2 border-blue-500/30">
+                          {m.tasks.map((taskItem, tIdx) => {
+                            const taskTitle = typeof taskItem === "string" ? taskItem : (taskItem.title || taskItem.task || `Task ${tIdx + 1}`);
+                            return (
+                              <div key={tIdx} className="flex items-center gap-2 text-[11px] text-gray-700 dark:text-zinc-300">
+                                <CheckCircle2 className="h-3 w-3 text-blue-500 shrink-0" />
+                                <span>{taskTitle}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -680,16 +693,29 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
               {/* BADGES */}
               <div className="mt-4 flex flex-wrap items-center gap-2 mb-6">
-                <span className={`relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border ${
-                  gig.status?.toLowerCase() === "closed" 
-                    ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" 
-                    : "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
-                }`}>
-                  <span className="relative z-10">{gig.status || "Open"}</span>
-                  {(!gig.status || gig.status?.toLowerCase() !== "closed") && (
-                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
-                  )}
-                </span>
+                {(() => {
+                  const s = gig.status?.toLowerCase();
+                  if (s === "closed") {
+                    return (
+                      <span className="relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20">
+                        <span className="relative z-10">Closed</span>
+                      </span>
+                    );
+                  }
+                  if (s === "paused") {
+                    return (
+                      <span className="relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/20">
+                        <span className="relative z-10">Paused (Queue Full)</span>
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
+                      <span className="relative z-10">Open</span>
+                      <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                    </span>
+                  );
+                })()}
                 <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   {gig.category}
                 </span>
@@ -925,14 +951,28 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                                   "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
                                 );
                               }}
-                              disabled={isOwner}
+                              disabled={isOwner || (!gig.hasPendingOrder && (gig.status?.toLowerCase() === 'closed' || gig.status?.toLowerCase() === 'paused'))}
                               className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
                                 isOwner
                                   ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none'
+                                  : !gig.hasPendingOrder && gig.status?.toLowerCase() === 'closed'
+                                  ? 'bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed shadow-none'
+                                  : !gig.hasPendingOrder && gig.status?.toLowerCase() === 'paused'
+                                  ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 cursor-not-allowed shadow-none'
                                   : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
                               }`}
                             >
-                              {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                              {isOwner
+                                ? "You own this service"
+                                : isGuestMode
+                                ? "Login to Continue"
+                                : gig.hasPendingOrder
+                                ? "View My Order"
+                                : gig.status?.toLowerCase() === 'closed'
+                                ? "Service Currently Closed"
+                                : gig.status?.toLowerCase() === 'paused'
+                                ? `Queue Full (${gig.active_orders_count || gig.slots}/${gig.slots} Active)`
+                                : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                             </button>
                         </div>
                       </div>
@@ -1137,14 +1177,28 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                                 "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
                               );
                             }}
-                            disabled={isOwner}
+                            disabled={isOwner || (!gig.hasPendingOrder && (gig.status?.toLowerCase() === 'closed' || gig.status?.toLowerCase() === 'paused'))}
                             className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
                               isOwner
                                 ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none'
+                                : !gig.hasPendingOrder && gig.status?.toLowerCase() === 'closed'
+                                ? 'bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed shadow-none'
+                                : !gig.hasPendingOrder && gig.status?.toLowerCase() === 'paused'
+                                ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 cursor-not-allowed shadow-none'
                                 : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
                             }`}
                           >
-                            {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                            {isOwner
+                              ? "You own this service"
+                              : isGuestMode
+                              ? "Login to Continue"
+                              : gig.hasPendingOrder
+                              ? "View My Order"
+                              : gig.status?.toLowerCase() === 'closed'
+                              ? "Service Currently Closed"
+                              : gig.status?.toLowerCase() === 'paused'
+                              ? `Queue Full (${gig.active_orders_count || gig.slots}/${gig.slots} Active)`
+                              : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                         </button>
                       </motion.div>
                     </AnimatePresence>
@@ -1236,10 +1290,20 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                     "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
                   );
                 }}
-                disabled={isOwner}
+                disabled={isOwner || (!gig.hasPendingOrder && (gig.status?.toLowerCase() === 'closed' || gig.status?.toLowerCase() === 'paused'))}
                 className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
               >
-                {isOwner ? "You own this service" : isGuestMode ? "Login to Order" : gig.hasPendingOrder ? "View My Order" : "Order Now"}
+                {isOwner
+                  ? "You own this service"
+                  : isGuestMode
+                  ? "Login to Order"
+                  : gig.hasPendingOrder
+                  ? "View My Order"
+                  : gig.status?.toLowerCase() === 'closed'
+                  ? "Service Closed"
+                  : gig.status?.toLowerCase() === 'paused'
+                  ? `Queue Full (${gig.active_orders_count || gig.slots}/${gig.slots})`
+                  : "Order Now"}
             </button>
           </div>
         )}

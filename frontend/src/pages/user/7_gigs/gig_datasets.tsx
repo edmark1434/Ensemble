@@ -38,6 +38,7 @@ export interface Milestone {
   id?: string;
   name: string;
   description: string;
+  tasks?: (string | { title?: string; task?: string; description?: string })[];
 }
 
 export interface Gig {

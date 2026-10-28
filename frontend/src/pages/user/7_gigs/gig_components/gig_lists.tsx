@@ -167,7 +167,9 @@ export const GigList: React.FC<GigListProps> = ({
         <AnimatePresence mode="popLayout">
           {paginatedGigs.map((gig, index) => {
             const isActive = activeGigId === gig.id;
-            const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
+            const isClosed = gig.status?.toLowerCase() === "closed";
+            const isPaused = gig.status?.toLowerCase() === "paused";
+            const isOpen = !isClosed && !isPaused;
             const hasServiceRating = gig.ratingCount > 0;
             const rankInfo = computeGigRankingBreakdown(gig);
 
@@ -275,18 +277,28 @@ export const GigList: React.FC<GigListProps> = ({
 
                     {/* Category & Status Badges */}
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                      <span
-                        className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          isOpen
-                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
-                            : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
-                        }`}
-                      >
-                        <span className="relative z-10">{isOpen ? "Open" : "Closed"}</span>
-                        {isOpen && (
-                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
-                        )}
-                      </span>
+                      {(() => {
+                        if (isClosed) {
+                          return (
+                            <span className="relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
+                              Closed
+                            </span>
+                          );
+                        }
+                        if (isPaused) {
+                          return (
+                            <span className="relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">
+                              Queue Full
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
+                            <span className="relative z-10">Open</span>
+                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                          </span>
+                        );
+                      })()}
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
                         </span>
@@ -468,15 +480,27 @@ export const GigList: React.FC<GigListProps> = ({
                 <div className="flex-1 flex flex-col justify-between py-1">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                          isOpen
-                            ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                            : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
-                        }`}
-                      >
-                        {isOpen ? "Open" : "Closed"}
-                      </span>
+                      {(() => {
+                        if (isClosed) {
+                          return (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
+                              Closed
+                            </span>
+                          );
+                        }
+                        if (isPaused) {
+                          return (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">
+                              Queue Full
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+                            Open
+                          </span>
+                        );
+                      })()}
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
                       </span>
