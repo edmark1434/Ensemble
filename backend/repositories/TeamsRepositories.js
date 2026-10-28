@@ -82,16 +82,38 @@ async function getTeam(teamId, accountId) {
     LEFT JOIN team_members om ON om.team_id=t.team_id AND om.role='Owner' AND om.status='Active' LEFT JOIN users ou ON ou.user_id=om.user_id LEFT JOIN accounts o ON o.account_id=ou.account_id
     WHERE t.team_id=$1 AND t.deleted_at IS NULL`, [teamId, accountId])).rows[0] || null;
 }
-async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
+async function listTeams(accountId, q='', mine=false, limit=20, offset=0, category='') {
   return (await pool.query(`SELECT t.team_id,t.account_id,t.category,t.visibility,
     COALESCE(t.team_type, 'standard') AS team_type,
     t.job_id,
     t.gig_id,
+    t.location,
+    t.website,
+    t.join_policy,
     CASE WHEN t.gig_id IS NOT NULL THEN 'Gig' ELSE 'Job' END AS workspace_type,
     COALESCE(t.is_archived, FALSE) AS is_archived,
-    a.display_name,a.handle,a.description,f.path avatar_path, a.banner_preset,
+    a.display_name,a.handle,a.tagline,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
     count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status,
+    COALESCE((
+      SELECT ROUND(AVG(score)::numeric, 1)
+      FROM (
+        SELECT tr.rating::numeric AS score FROM team_reviews tr WHERE tr.team_id = t.team_id
+        UNION ALL
+        SELECT r.stars_out_of_five::numeric AS score FROM ratings r WHERE r.account_id = t.account_id
+      ) all_scores
+    ), 0) AS average_rating,
+    COALESCE((
+      SELECT COUNT(*)::int
+      FROM (
+        SELECT tr.team_review_id FROM team_reviews tr WHERE tr.team_id = t.team_id
+        UNION ALL
+        SELECT r.rating_id FROM ratings r WHERE r.account_id = t.account_id
+      ) all_reviews
+    ), 0) AS review_count,
+    COALESCE(o.display_name, o.handle, 'Team Owner') AS owner_name,
+    o.handle AS owner_handle,
+    ofile.path AS owner_avatar_path,
     (
       SELECT json_build_object(
         'contract_id', c.contract_id,
@@ -114,12 +136,12 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
         'counterparty_has_reviewed', EXISTS (
           SELECT 1 FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(j.client_account_id, gr.client_account_id) ELSE COALESCE(p.freelancer_account_id, g.freelancer_account_id) END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
         ),
         'counterparty_reviewed_at', (
           SELECT r.created_at FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(j.client_account_id, gr.client_account_id) ELSE COALESCE(p.freelancer_account_id, g.freelancer_account_id) END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
            LIMIT 1
         ),
         'user_reviewed_at', (
@@ -148,13 +170,18 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id=t.account_id
     LEFT JOIN team_members am ON am.team_id=t.team_id LEFT JOIN users u ON u.account_id=$1 LEFT JOIN team_members mine ON mine.team_id=t.team_id AND mine.user_id=u.user_id
+    LEFT JOIN team_members om ON om.team_id=t.team_id AND om.role='Owner' AND om.status='Active'
+    LEFT JOIN users ou ON ou.user_id=om.user_id
+    LEFT JOIN accounts o ON o.account_id=ou.account_id
+    LEFT JOIN files ofile ON ofile.file_id=o.avatar_file_id
     WHERE t.deleted_at IS NULL
-      AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%')
+      AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%' OR t.category ILIKE '%'||$2||'%')
+      AND ($6='' OR t.category ILIKE '%'||$6||'%')
       AND (
         ($3::boolean = TRUE AND mine.status IN ('Active', 'Pending'))
         OR ($3::boolean = FALSE AND t.visibility = 'Public')
       )
-    GROUP BY t.team_id,t.team_type,t.job_id,t.gig_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset])).rows;
+    GROUP BY t.team_id,t.team_type,t.job_id,t.gig_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status,o.display_name,o.handle,ofile.path ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset,category])).rows;
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
 async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }

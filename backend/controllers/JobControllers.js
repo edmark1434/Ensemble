@@ -25,6 +25,13 @@ async function createJobController(req, res) {
         const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
+        if (req.body?.acting_team_id || req.body?.team_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Teams cannot post jobs. Teams can only offer services.',
+            });
+        }
+
         const actor = await resolveMarketplaceActor(
             accountId,
             req.body?.acting_team_id || req.body?.team_id,

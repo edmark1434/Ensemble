@@ -4,11 +4,22 @@ const { createOrReuseDirectChatServices, createMessageServices } = require('./In
 const ROLES=['Owner','Representative','Admin','Manager','Member'], STATUSES=['Active','Invited','Pending','Left','Suspended','Removed'];
 class TeamError extends Error{constructor(message,statusCode=400,code=null){super(message);this.statusCode=statusCode;this.code=code;}}
 const clean=(v,n=500)=>String(v||'').trim().slice(0,n);
-const withAvatar=(row)=>{if(!row?.avatar_path||/^https?:\/\//i.test(row.avatar_path))return row;const base=String(process.env.CLOUDFRONT_URL||process.env.AWS_CLOUDFRONT_URL||'').replace(/\/$/,'');return{...row,avatar_path:base?`${base}/${String(row.avatar_path).replace(/^\/+/, '')}`:row.avatar_path};};
+const withAvatar=(row)=>{
+  if(!row) return row;
+  const base=String(process.env.CLOUDFRONT_URL||process.env.AWS_CLOUDFRONT_URL||'').replace(/\/$/,'');
+  let res = { ...row };
+  if(res.avatar_path && !/^https?:\/\//i.test(res.avatar_path) && base) {
+    res.avatar_path = `${base}/${String(res.avatar_path).replace(/^\/+/, '')}`;
+  }
+  if(res.owner_avatar_path && !/^https?:\/\//i.test(res.owner_avatar_path) && base) {
+    res.owner_avatar_path = `${base}/${String(res.owner_avatar_path).replace(/^\/+/, '')}`;
+  }
+  return res;
+};
 async function context(teamId,accountId){const team=await R.getTeam(teamId,accountId);if(!team)throw new TeamError('Team not found',404);const membership=await R.getMembership(teamId,accountId);return{team,membership};}
 function permissions(m){const active=m?.status==='Active',role=String(m?.role||'').toLowerCase();const isLeaderOrHigher=active&&['owner','representative','admin','team leader','leader','manager'].includes(role);return{can_update_team:active&&['owner','admin'].includes(role),can_delete_team:active&&role==='owner',can_manage_members:active&&['owner','admin'].includes(role),can_manage_requests:active&&['owner','admin'].includes(role),can_propose:active&&['owner','representative','admin'].includes(role),can_view_wallet:isLeaderOrHigher,can_add_funds:isLeaderOrHigher,can_chat:active};}
 async function create(accountId,userId,b){const eligibility=await R.getTeamCreationEligibility(accountId);if(!eligibility.allowed){throw new TeamError(eligibility.message||'Team creation limit reached for your subscription plan.',403,eligibility.code||'TEAM_CREATION_LIMIT_REACHED');}let name=clean(b.name,50),handle=clean(b.handle,50).replace(/^@/,'');if(!handle&&name){const slug=name.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);handle=`${slug||'team'}-${crypto.randomBytes(3).toString('hex')}`;}if(!name||!b.avatarUploadIntentId)throw new TeamError('Name and team photo are required');const uploaded=await finalizeUploadService(accountId,b.avatarUploadIntentId);return R.createTeam({name,handle,description:clean(b.description,2000),tagline:clean(b.tagline,50),visibility:['Public','Private'].includes(b.visibility)?b.visibility:'Private',joinPolicy:['Open','Approval'].includes(b.joinPolicy)?b.joinPolicy:'Approval',category:clean(b.category,80),website:clean(b.website,500),location:clean(b.location,150),avatarFileId:uploaded.fileId,joinCode:crypto.randomBytes(6).toString('hex').toUpperCase()},userId);}
-async function list(accountId,q){return (await R.listTeams(accountId,clean(q.search,100),q.mine==='true',Math.min(+q.limit||20,50),Math.max(+q.offset||0,0))).map(withAvatar);}
+async function list(accountId,q){const category=clean(q.category,80);return (await R.listTeams(accountId,clean(q.search,100),q.mine==='true',Math.min(+q.limit||20,50),Math.max(+q.offset||0,0),category)).map(withAvatar);}
 async function detail(id,accountId){const {team:rawTeam,membership}=await context(id,accountId),team=withAvatar(rawTeam);if(team.visibility==='Private'&&membership?.status!=='Active')throw new TeamError('Team not found',404);const p=permissions(membership);return{...team,join_code:p.can_manage_members?team.join_code:undefined,current_user_membership:membership?{role:membership.role,status:membership.status,permissions:p}:null};}
 async function update(id,accountId,b){const c=await context(id,accountId);if(!permissions(c.membership).can_update_team)throw new TeamError('Not allowed',403);return R.updateTeam(id,c.team.account_id,{name:b.name?clean(b.name,50):null,handle:b.handle?clean(b.handle,50).replace(/^@/,''):null,description:b.description===undefined?null:clean(b.description,2000),tagline:b.tagline===undefined?null:clean(b.tagline,50),visibility:b.visibility,joinPolicy:b.joinPolicy,category:b.category,website:b.website,location:b.location,avatarFileId:b.avatarFileId});}
 async function remove(id,a){const c=await context(id,a);if(!permissions(c.membership).can_delete_team)throw new TeamError('Only the owner can delete the team',403);return R.softDeleteTeam(id);}

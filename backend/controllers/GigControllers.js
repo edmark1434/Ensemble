@@ -141,19 +141,86 @@ async function submitGigOrderController(req, res) {
         const result = await submitGigOrderRepository(actor.accountId, req.params.id, req.body, affiliatedAccountIds);
         const { requestId, freelancerAccountId, gigTitle } = result;
 
-        // Notify the freelancer of the new order request
+        // Notify the freelancer or team leader and team members
         try {
-            const notif = await createNotificationServices({
-                account_id: freelancerAccountId,
-                message: `You have a new order request for your gig '${gigTitle}'.`,
-                reference_table: 'gig_requests',
-                reference_prefix: 'new_order',
-                reference_path: `/gigs/orders/incoming/${req.params.id}`,
-                reference_id: requestId
-            });
+            const teamCheck = await pool.query(`
+                SELECT t.team_id, t.account_id, a.display_name AS team_name
+                FROM teams t
+                JOIN accounts a ON a.account_id = t.account_id
+                WHERE t.account_id = $1 AND t.deleted_at IS NULL
+            `, [freelancerAccountId]);
+
             const io = getIo();
-            if (io && notif) {
-                io.to(String(freelancerAccountId)).emit('notification', notif);
+
+            if (teamCheck.rows.length > 0) {
+                const team = teamCheck.rows[0];
+                const membersRes = await pool.query(`
+                    SELECT u.account_id, tm.role, tm.status
+                    FROM team_members tm
+                    JOIN users u ON u.user_id = tm.user_id
+                    WHERE tm.team_id = $1 AND tm.status = 'Active'
+                `, [team.team_id]);
+
+                const ownerMember = membersRes.rows.find(m => m.role === 'Owner');
+                const otherMembers = membersRes.rows.filter(m => m.role !== 'Owner');
+
+                // 1. Team leader gets the order request to manage/accept
+                if (ownerMember) {
+                    const ownerNotif = await createNotificationServices({
+                        account_id: ownerMember.account_id,
+                        message: `New team order received: You have a new order for team service '${gigTitle}'.`,
+                        reference_table: 'gig_requests',
+                        reference_prefix: 'new_order',
+                        reference_path: `/gigs/orders/incoming/${req.params.id}`,
+                        reference_id: requestId
+                    });
+                    if (io && ownerNotif) {
+                        io.to(String(ownerMember.account_id)).emit('notification', ownerNotif);
+                    }
+                }
+
+                const teamNotif = await createNotificationServices({
+                    account_id: team.account_id,
+                    message: `New order request received for team service '${gigTitle}'.`,
+                    reference_table: 'gig_requests',
+                    reference_prefix: 'new_order',
+                    reference_path: `/gigs/orders/incoming/${req.params.id}`,
+                    reference_id: requestId
+                });
+                if (io && teamNotif) {
+                    io.to(String(team.account_id)).emit('notification', teamNotif);
+                }
+
+                // 2. Rest of the team gets notified about the order in teams
+                for (const member of otherMembers) {
+                    try {
+                        const memberNotif = await createNotificationServices({
+                            account_id: member.account_id,
+                            message: `New team order: An order was placed for team service '${gigTitle}'.`,
+                            reference_table: 'teams',
+                            reference_prefix: 'team_order',
+                            reference_path: `/teams/${team.team_id}?tab=services`,
+                            reference_id: requestId
+                        });
+                        if (io && memberNotif) {
+                            io.to(String(member.account_id)).emit('notification', memberNotif);
+                        }
+                    } catch (mErr) {
+                        console.error('Error notifying team member:', mErr);
+                    }
+                }
+            } else {
+                const notif = await createNotificationServices({
+                    account_id: freelancerAccountId,
+                    message: `You have a new order request for your gig '${gigTitle}'.`,
+                    reference_table: 'gig_requests',
+                    reference_prefix: 'new_order',
+                    reference_path: `/gigs/orders/incoming/${req.params.id}`,
+                    reference_id: requestId
+                });
+                if (io && notif) {
+                    io.to(String(freelancerAccountId)).emit('notification', notif);
+                }
             }
         } catch (notifErr) {
             console.error('Error sending new gig order notification:', notifErr);
