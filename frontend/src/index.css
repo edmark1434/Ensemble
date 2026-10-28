@@ -256,3 +256,11 @@ body {
 .animate-shine-gleam {
   animation: shineGleam 3s ease-in-out infinite;
 }
+
+/* Profile Walkthrough Spotlight */
+.tour-spotlight-active {
+  position: relative !important;
+  z-index: 85 !important;
+  pointer-events: auto !important;
+  transition: all 0.3s ease-in-out !important;
+}
