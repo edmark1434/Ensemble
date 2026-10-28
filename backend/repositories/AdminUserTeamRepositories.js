@@ -1561,8 +1561,8 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
   if (!staffId) throw new Error('Staff session required to issue a warning');
 
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
-  const { resolveIssuedWarning } = require('../lib/WarningCatalog');
-  const issued = resolveIssuedWarning({ warningId, type, points });
+  const { resolveIssuedWarning } = require('../services/WarningDefServices');
+  const issued = await resolveIssuedWarning({ warningId, type, points });
   const warnType = issued.type;
   const warnPoints = issued.points;
   const warnReason = String(reason || '').trim();

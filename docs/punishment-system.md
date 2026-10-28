@@ -106,7 +106,7 @@ Automod flag, link scan, listing held for review. No merit. Not on the public pr
 - Toast tells them merit dropped.
 - **20+** active warning points → auto-suspend 7 days. The suspend lock is standing only; it does **not** take extra merit.
 
-Staff pick a **predefined warning**. Points are locked to that row. Case notes are free text. Full list: [merit-system.md](merit-system.md) §6.1.
+Staff pick a **named warning** from `warning_defs`. Points are locked to that row. Admin can create or edit rows at `/admin/warnings`. Case notes are free text. Seeded list: [merit-system.md](merit-system.md) §6.1. Merit taken is **points × 2**.
 
 A first confirmed no-show is **No-show / ghosting after hire** (5 points, 14 days). Confirmed fake delivery is **Fake delivery or empty work** (8 points, 45 days). There is no extra no-show hit.
 

@@ -17,6 +17,15 @@ export function warningMeritHit(points: number) {
   return clampWarningPoints(points) * MERIT_PER_POINT;
 }
 
+export const WARNING_POINT_LADDER = Array.from({ length: MAX_WARNING_POINTS }, (_, index) => {
+  const points = index + 1;
+  return {
+    points,
+    meritHit: warningMeritHit(points),
+    durationDays: warningDurationDays(points),
+  };
+});
+
 export function warningLadderSummary(points: number) {
   const pts = clampWarningPoints(points);
   const days = warningDurationDays(pts);

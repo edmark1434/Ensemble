@@ -1,13 +1,12 @@
-# Active Task: Temporary warnings + balanced band limits
+# Active Task: Admin-dynamic warning catalog
 
 ## Implementation Objective
 
-Staff/admin warnings are always temporary. Points 1–10 set both the merit hit (×2) and duration (3–90 days). 5 points is a minor 14-day Watch slap. Low merit automatically limits forums, marketplace, jobs/gigs, and new shared editor projects. Live work stays open.
+Admins can create, edit, and hide named warnings with locked points. Staff pick those rows when warning. Merit taken is always warning points × 2.
 
 ## Acceptance Criteria
 
-- [x] Warnings cannot be permanent. Duration follows the point ladder; staff may shorten, never lengthen past the cap.
-- [x] 1pt = −2 / 3 days; 5pt = −10 / 14 days; 10pt = −20 / 90 days.
-- [x] Watch = minor; Restricted = forum + listing + comment + new shared editor lock; Frozen = those plus proposals, new DMs, cashout.
-- [x] Expired warnings lapse on next session and recompute merit.
-- [x] Auto-suspend at 20+ active warning points (7 days), not at 3 tiny warnings.
+- [x] `warning_defs` stores the catalog; seed from the original presets.
+- [x] Admin CRUD at `/admin/warnings` with live merit/duration preview.
+- [x] Staff pickers load the live catalog; points stay locked on issue.
+- [x] Merit conversion is points × 2 (1pt −2 / 3d … 5pt −10 / 14d … 10pt −20 / 90d).

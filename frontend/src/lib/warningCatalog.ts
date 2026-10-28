@@ -1,4 +1,4 @@
-/** Keep in sync with backend/lib/WarningCatalog.js */
+/** Fallback seed if the warning_defs API is unavailable. Live catalog is admin-editable. */
 
 export type WarningDesk = 'admin' | 'support' | 'forum' | 'marketplace' | 'jobs';
 
@@ -79,12 +79,16 @@ export function getWarningById(id: string) {
   return WARNING_PRESETS.find((row) => row.id === id) || null;
 }
 
-export function groupedWarnings(desk: WarningDesk = 'admin') {
+export function groupWarningRows(rows: WarningPreset[]) {
   const groups: { category: string; items: WarningPreset[] }[] = [];
-  for (const row of warningsForDesk(desk)) {
+  for (const row of rows) {
     const last = groups[groups.length - 1];
     if (!last || last.category !== row.category) groups.push({ category: row.category, items: [row] });
     else last.items.push(row);
   }
   return groups;
+}
+
+export function groupedWarnings(desk: WarningDesk = 'admin') {
+  return groupWarningRows(warningsForDesk(desk));
 }

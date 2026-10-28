@@ -1,5 +1,18 @@
-import { groupedWarnings, getWarningById, type WarningDesk } from '@/lib/warningCatalog';
+import { useEffect, useMemo, useState } from 'react';
+import api from '@/lib/axios';
+import { groupedWarnings, groupWarningRows, warningsForDesk, type WarningDesk, type WarningPreset } from '@/lib/warningCatalog';
 import { warningLadderSummary } from '@/lib/warningLadder';
+
+function mapCatalogRow(row: Partial<WarningPreset> & { slug?: string; meritHit?: number; durationDays?: number; note?: string }): WarningPreset {
+  return {
+    id: String(row.id || row.slug || ''),
+    label: String(row.label || ''),
+    category: String(row.category || 'Other'),
+    points: Number(row.points || 1),
+    desks: Array.isArray(row.desks) ? row.desks : ['admin'],
+    note: row.note || '',
+  };
+}
 
 export function WarningPresetFields({
   desk = 'admin',
@@ -16,8 +29,42 @@ export function WarningPresetFields({
   onReason: (reason: string) => void;
   fieldClass?: string;
 }) {
-  const groups = groupedWarnings(desk);
-  const preset = getWarningById(warningId);
+  const [rows, setRows] = useState<WarningPreset[]>(() => warningsForDesk(desk));
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await api.get('/api/admin/warning-catalog', { params: { desk } }).catch((err) => {
+          if (err?.response?.status === 403) {
+            return api.get('/api/moderator/warning-catalog', { params: { desk } });
+          }
+          throw err;
+        });
+        const next = (res.data?.data || []).map(mapCatalogRow).filter((row: WarningPreset) => row.id && row.label);
+        if (!cancelled) {
+          setRows(next);
+          setLive(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setRows(warningsForDesk(desk));
+          setLive(false);
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [desk]);
+
+  const groups = useMemo(
+    () => (live ? groupWarningRows(rows) : groupedWarnings(desk)),
+    [live, rows, desk],
+  );
+  const preset = rows.find((row) => row.id === warningId) || null;
 
   return (
     <div className="space-y-4">
@@ -34,7 +81,7 @@ export function WarningPresetFields({
             <optgroup key={group.category} label={group.category}>
               {group.items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.label} · {item.points} pt
+                  {item.label} · {item.points} pt · −{item.points * 2} merit
                 </option>
               ))}
             </optgroup>

@@ -189,6 +189,20 @@ router.post('/badges/:registryId/grants', [checkSession, requireAdmin], postAdmi
 router.delete('/badges/grants/:accountBadgeId', [checkSession, requireAdmin], deleteAdminBadgeGrant);
 router.patch('/badges/:badgeId', [checkSession, requireAdmin], patchAdminBadge);
 router.delete('/badges/:badgeId', [checkSession, requireAdmin], deleteAdminBadge);
+const {
+  getWarningCatalog,
+  getAdminWarningDefs,
+  postAdminWarningDef,
+  patchAdminWarningDef,
+  deleteAdminWarningDef,
+} = require('../controllers/WarningDefControllers');
+
+router.get('/warning-catalog', [checkSession, requireUserTeamAccess], getWarningCatalog);
+router.get('/warning-defs', [checkSession, requireAdmin], getAdminWarningDefs);
+router.post('/warning-defs', [checkSession, requireAdmin], postAdminWarningDef);
+router.patch('/warning-defs/:warningDefId', [checkSession, requireAdmin], patchAdminWarningDef);
+router.delete('/warning-defs/:warningDefId', [checkSession, requireAdmin], deleteAdminWarningDef);
+
 const { getAdminSurveyResponsesController } = require('../controllers/AdminSurveyControllers');
 
 router.get('/survey-responses', [checkSession, requireAdmin], getAdminSurveyResponsesController);

@@ -163,11 +163,15 @@ Email verification is not merit. Failed identity verification does not take meri
 | 9 | **−18** | 60 days | Restricted. |
 | 10 | **−20** | 90 days | Restricted. Stacked 10s can Frozen. |
 
-Staff do **not** type a custom point value. They pick a **predefined warning** below. That row locks the points and the duration. Case notes are free text. There is no permanent warning.
+Staff do **not** type a custom point value. They pick a named warning. That row locks the points and the duration. Case notes are free text. There is no permanent warning.
 
-### 6.1 Predefined warnings
+**Merit taken = warning points × 2.** A 5-point warning is −10 merit for 14 days. Hits stack while the warnings are still active.
 
-Scanned from live report reasons, desks, and products. Severe crime (CSAM, payment theft in progress) is **lock or ban**, not a warning — those 10-point rows exist so merit stays low if the account is later restored.
+Admin creates and edits those rows at `/admin/warnings` (`warning_defs`). Changing points on a row only affects **new** warnings. Already-issued rows keep the points they were issued with until they expire or are rescinded.
+
+### 6.1 Seeded warnings
+
+Scanned from live report reasons, desks, and products. This is the starting catalog; admin can add, retitle, change points, or hide rows without a deploy. Severe crime (CSAM, payment theft in progress) is **lock or ban**, not a warning — those 10-point rows exist so merit stays low if the account is later restored.
 
 | Warning | Points | Duration | Merit | Where |
 |---|---|---|---|---|
@@ -551,7 +555,7 @@ This is the contract. The engine already shipped the core. A few rows are still 
 ### Live now
 
 - Join score **50**, missing score displays **50**, `accounts.merit_score` default **50**, user rows at 0 backfilled to 50 (`1826100000000_merit-default-fifty.js`).
-- Staff pick a predefined warning from `backend/lib/WarningCatalog.js` (same list in `frontend/src/lib/warningCatalog.ts`). Points cannot be typed by hand.
+- Staff pick a named warning from `warning_defs` (admin CRUD at `/admin/warnings`). Seed/fallback list lives in `backend/lib/WarningCatalog.js`. Points cannot be typed by hand. Merit taken is **points × 2**.
 - Formula in `backend/lib/Merit.js`: 50 + completions + Bayesian reviews + identity + age − **active warning hits (points × 2)**.
 - Warnings are always temporary. Ladder 1–10 points sets duration (3–90 days). Missing expiries backfilled in `1826200000000_warning-temporary-ladder.js`. Lapsed warnings expire on the next session and recompute merit.
 - `MeritServices.recomputeAccountMerit` is the only writer. Banned / locked scores freeze unless `force` (used on ban).

@@ -179,8 +179,8 @@ async function searchRestrictionAccounts(query) {
 
 async function issueViolation(accountId, { warningId, type, reason, points, expiresAt, duration, days, endsAt }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
-  const { resolveIssuedWarning } = require('../lib/WarningCatalog');
-  const issued = resolveIssuedWarning({ warningId, type, points });
+  const { resolveIssuedWarning } = require('../services/WarningDefServices');
+  const issued = await resolveIssuedWarning({ warningId, type, points });
   const violationType = issued.type;
   const warnPoints = issued.points;
   const warnReason = String(reason || '').trim();
