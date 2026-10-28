@@ -13,8 +13,14 @@ function fixture() {
     asset: { market_asset_id: assetId, name: 'Test bundle', owner_account_id: ownerId, price_credits: 10, is_owner: false },
     file: { is_owner: false, is_purchased: false, path: 'asset-originals/test', name: 'file.png', mime_type: 'image/png' },
     reports: [], actions: [], signed: [],
+    purchaseContext: { role: 'Editor', project_status: 'active', balance_credits: 100, project_license_id: null, available_license_id: null },
   };
   const repositories = {
+    purchaseAssetRepository: async (...args) => {
+      state.actions.push(['purchase', ...args]);
+      return { license: { project_id: args[3].projectId }, alreadyPurchased: false, buyerBalanceCredits: 100 };
+    },
+    getEditorAssetPurchaseContextRepository: async () => state.purchaseContext,
     listAssetLicensesRepository: async (...args) => { state.actions.push(['licenses', ...args]); return []; },
     assignAssetLicenseRepository: async (...args) => {
       state.actions.push(['assign', ...args]);
@@ -33,6 +39,7 @@ function fixture() {
     './FileServices': {
       generateProtectedAssetDownloadUrl: async (...args) => { state.signed.push(args); return 'protected-download'; },
       generateProtectedAssetPreviewUrl: async (...args) => { state.signed.push(args); return 'protected-preview'; },
+      generateProtectedAssetRenderUrl: async (...args) => { state.signed.push(args); return 'protected-render'; },
     },
     '../lib/WebSocket': {},
     '../lib/AssetMarketplaceConstants': { DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT: 10, calculateAssetTransactionFee: () => 1 },
@@ -145,4 +152,88 @@ test('license history is paginated and original access rejects malformed project
     await assert.rejects(f.services[method](f.assetId, f.accountId, null, ['bad']), { statusCode: 400 });
   }
   assert.equal(f.state.signed.length, 0);
+});
+
+
+test('editor purchase details are scoped to editable project membership and report available licenses', async () => {
+  const f = fixture();
+  const projectId = crypto.randomUUID();
+  let quote = await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase-details', projectId });
+  assert.equal(quote.balanceCredits, 100);
+  assert.equal(quote.licensed, false);
+  assert.equal(quote.hasAvailableLicense, false);
+  f.state.purchaseContext.available_license_id = crypto.randomUUID();
+  quote = await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase-details', projectId });
+  assert.equal(quote.hasAvailableLicense, true);
+  f.state.purchaseContext.role = 'Viewer';
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase-details', projectId }), { statusCode: 403 });
+  f.state.purchaseContext.role = 'Editor';
+  f.state.purchaseContext.project_status = 'frozen';
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase-details', projectId }), { statusCode: 409 });
+});
+
+test('editor checkout validates confirmed price and charge, and protects original source requests', async () => {
+  const f = fixture();
+  const projectId = crypto.randomUUID();
+  for (const consent of [{}, { expectedPrice: 10 }, { expectedPrice: 10, expectedCharge: -1 }, { expectedPrice: '10', expectedCharge: 10 }]) {
+    await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase', projectId, ...consent }), { statusCode: 400 });
+  }
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'source', projectId, mediaAssetId: crypto.randomUUID() }), { statusCode: 403 });
+  assert.equal(f.state.signed.length, 0);
+});
+
+
+test('creator ownership never silently licenses a project or unlocks editor originals', async () => {
+  const f = fixture();
+  const projectId = crypto.randomUUID();
+  f.state.asset.is_owner = true;
+  f.state.file.is_owner = true;
+  const quote = await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase-details', projectId });
+  assert.equal(quote.licensed, false);
+  assert.equal(quote.asset.is_owner, true);
+  assert.equal(f.state.actions.length, 0, 'Reading a quote must not purchase or assign');
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'source', projectId, mediaAssetId: crypto.randomUUID() }), { statusCode: 403 });
+  assert.equal(f.state.signed.length, 0);
+  f.state.purchaseContext.project_license_id = crypto.randomUUID();
+  f.state.file.is_purchased = true;
+  assert.equal((await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'purchase-details', projectId })).licensed, true);
+  await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'source', projectId, mediaAssetId: crypto.randomUUID() });
+  assert.equal(f.state.signed.length, 1);
+});
+
+
+test('automatic free use always forces zero cost and a server-side free-only check', async () => {
+  const f = fixture();
+  const projectId = crypto.randomUUID();
+  const result = await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'use-free', projectId, expectedPrice: 500, expectedCharge: 500, freeOnly: false });
+  const call = f.state.actions[0];
+  assert.equal(call[0], 'purchase');
+  assert.equal(call[4].projectId, projectId);
+  assert.equal(call[4].freeOnly, true);
+  assert.equal(call[4].expectedPrice, 0);
+  assert.equal(call[4].expectedCharge, 0);
+  assert.equal(result.transaction, null);
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { action: 'use-free', projectId: 'invalid' }), { statusCode: 400 });
+});
+
+
+test('export sources use originals only for project licenses, and proxies for unpaid drafts', async () => {
+  const f = fixture();
+  const payload = { action: 'render-source', projectId: crypto.randomUUID(), mediaAssetId: crypto.randomUUID(), draft: false };
+  f.state.file.is_owner = true;
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, payload), { statusCode: 409, code: 'ASSET_PURCHASE_REQUIRED' });
+  assert.equal(f.state.signed.length, 0, 'Ownership alone never unlocks clean exports');
+  Object.assign(f.state.file, { original_file_id: 'original', proxy_file_id: 'proxy', proxy_path: 'assets/proxies/image/test.png', proxy_name: 'preview.png', proxy_mime_type: 'image/png', media_type: 'image' });
+  await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { ...payload, draft: true });
+  assert.equal(f.state.signed[0][0], f.state.file.proxy_path);
+  f.state.file.proxy_file_id = 'original';
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, { ...payload, draft: true }), { statusCode: 409 });
+  f.state.file.is_purchased = true;
+  await f.services.performEditorAssetActionServices(f.assetId, f.accountId, payload);
+  await f.services.performEditorAssetActionServices(f.assetId, f.accountId, { ...payload, draft: true });
+  assert.equal(f.state.signed[1][0], f.state.file.path);
+  assert.equal(f.state.signed[2][0], f.state.file.path, 'Licensed/free assets remain clean even in mixed drafts');
+  f.state.purchaseContext = null;
+  await assert.rejects(f.services.performEditorAssetActionServices(f.assetId, f.accountId, payload), { statusCode: 403 });
+  assert.equal(f.state.actions.length, 0, 'Export must not purchase or charge');
 });

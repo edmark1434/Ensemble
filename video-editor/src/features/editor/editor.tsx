@@ -1,4 +1,5 @@
 "use client";
+import { MarketAssetLicensing } from "./components/market-asset-licensing";
 import Timeline from "./timeline";
 import useStore from "./store/use-store";
 import Navbar from "./navbar";
@@ -193,6 +194,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
 
       <div className="flex-1 relative overflow-hidden">
         <CropModal />
+        <MarketAssetLicensing />
         {!isLargeScreen && trackItemIds.length === 0 ? (
           <div
             className="w-full h-full flex items-center justify-center text-center px-6 text-sm text-muted-foreground">

@@ -1,6 +1,7 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildPublicUrl } from "@/lib/s3";
+import { MARKET_UUID } from "@/lib/market-asset-backend";
 import { isGeneratedMarketProxy } from "@/lib/market-proxy";
 
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
@@ -25,10 +26,12 @@ export async function GET(request: NextRequest) {
   }
 
   const view = sp.get("view") || "discover";
-  if (!["discover", "liked", "saved"].includes(view)) return NextResponse.json({ error: "Invalid collection." }, { status: 400 });
+  if (!["discover", "liked", "saved", "licensed"].includes(view)) return NextResponse.json({ error: "Invalid collection." }, { status: 400 });
   const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
   const session = token ? await verifyEditorSession(token) : null;
   if (view !== "discover" && !session) return NextResponse.json({ error: "Sign in to view your collection." }, { status: 401 });
+  const projectId = sp.get("projectId");
+  if (view === "licensed" && (!projectId || !MARKET_UUID.test(projectId))) return NextResponse.json({ error: "A valid project is required." }, { status: 400 });
   const accountId = session?.account_id ?? "00000000-0000-0000-0000-000000000000";
 
   const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
@@ -39,9 +42,17 @@ export async function GET(request: NextRequest) {
   const search = sp.get("query")?.trim();
 
   try {
+    if (view === "licensed") {
+      const member = await db.selectFrom("project_members as pm")
+        .innerJoin("projects as p", "p.project_id", "pm.project_id")
+        .where("pm.project_id", "=", projectId!).where("pm.user_id", "=", session!.userId)
+        .where("pm.deleted_at", "is", null).where("p.deleted_at", "is", null)
+        .select("pm.role").executeTakeFirst();
+      if (!member) return NextResponse.json({ error: "Project access required." }, { status: 403 });
+    }
     let query = db
       .selectFrom("market_assets as ma")
-      .where("ma.status", "=", "published")
+      .$if(view !== "licensed", q => q.where("ma.status", "=", "published"))
       .where("ma.deleted_at", "is", null)
       .select([
         "ma.market_asset_id",
@@ -69,7 +80,13 @@ export async function GET(request: NextRequest) {
           .$if(Boolean(type), (q) => q.where("filter_media.type", "=", type!))
           .where("filter_media.deleted_at", "is", null)
       ));
-    if (view !== "discover") {
+    if (view === "licensed") {
+      query = query.where(eb => eb.exists(eb.selectFrom("market_asset_licenses as license")
+        .select("license.market_asset_license_id")
+        .whereRef("license.market_asset_id", "=", "ma.market_asset_id")
+        .where("license.project_id", "=", projectId!)
+        .where("license.status", "=", "active").where("license.deleted_at", "is", null)));
+    } else if (view !== "discover") {
       query = query.where((eb) => view === "liked"
         ? eb.exists(eb.selectFrom("asset_likes").select("market_asset_id")
           .whereRef("asset_likes.market_asset_id", "=", "ma.market_asset_id")

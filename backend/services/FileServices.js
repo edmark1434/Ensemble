@@ -411,7 +411,7 @@ async function finalizeUploadService(accountId, uploadIntentId) {
     }
 }
 
-async function generateProtectedAssetUrl(path, filename, contentType, disposition) {
+async function generateProtectedAssetUrl(path, filename, contentType, disposition, expiresIn = 60) {
     const key = String(path || '').trim();
     if (!key.startsWith('asset-originals/') && !key.startsWith('assets/')) {
         const error = new Error('Invalid protected asset path');
@@ -432,11 +432,16 @@ async function generateProtectedAssetUrl(path, filename, contentType, dispositio
         ResponseContentType: contentType || 'application/octet-stream',
         ResponseContentDisposition: `${disposition}; filename="${safeFilename}"`,
     });
-    return getSignedUrl(s3, command, { expiresIn: 60 });
+    return getSignedUrl(s3, command, { expiresIn });
 }
 
 async function generateProtectedAssetDownloadUrl(path, filename, contentType) {
     return generateProtectedAssetUrl(path, filename, contentType, 'attachment');
+}
+
+// Render jobs can wait in a queue before fetching their source files.
+async function generateProtectedAssetRenderUrl(path, filename, contentType) {
+    return generateProtectedAssetUrl(path, filename, contentType, 'inline', 86400);
 }
 
 async function generateProtectedAssetPreviewUrl(path, filename, contentType) {
@@ -451,5 +456,6 @@ module.exports = {
     finalizeUploadService,
     generateOnboardingAvatarUploadUrl,
     generateProtectedAssetDownloadUrl,
-    generateProtectedAssetPreviewUrl
+    generateProtectedAssetPreviewUrl,
+    generateProtectedAssetRenderUrl
 };

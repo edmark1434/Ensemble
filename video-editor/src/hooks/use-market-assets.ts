@@ -1,9 +1,9 @@
 import { useMarketEngagement } from "@/components/market-asset-actions";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export type MarketAssetType = "image" | "video" | "audio";
 
-export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover" | "liked" | "saved" = "discover") {
+export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover" | "liked" | "saved" | "licensed" = "discover", projectId?: string) {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -11,12 +11,22 @@ export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover
   const [hasMore, setHasMore] = useState(false);
   const pageRef = useRef(1);
   const requestIdRef = useRef(0);
+  const loadedScopeRef = useRef("");
+
+  useEffect(() => () => { requestIdRef.current++; }, [type, view, projectId]);
 
   const load = useCallback(
     async (query: string, page = 1, append = false) => {
       const requestId = ++requestIdRef.current;
       setLoading(true);
       setError("");
+      const scope = `${type}:${view}:${projectId || ""}`;
+      if (loadedScopeRef.current !== scope) {
+        loadedScopeRef.current = scope;
+        setItems([]); setTotalMediaCount(0); setHasMore(false);
+        pageRef.current = 1;
+      }
+      if (view === "licensed" && !projectId) { setLoading(false); setHasMore(false); return; }
       try {
         const params = new URLSearchParams({
           view,
@@ -24,6 +34,7 @@ export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover
           limit: "20"
         });
         if (type) params.set("type", type);
+        if (view === "licensed" && projectId) params.set("projectId", projectId);
         if (query.trim()) params.set("query", query.trim());
 
         const res = await fetch(`/api/market-assets?${params}`);
@@ -52,7 +63,7 @@ export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [type, view]
+    [type, view, projectId]
   );
 
   const loadMore = useCallback(
