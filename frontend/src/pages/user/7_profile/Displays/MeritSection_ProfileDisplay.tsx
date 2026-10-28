@@ -1,7 +1,50 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AccountRecordSection } from "./AccountStanding";
-import { Star, ShieldCheck, Trophy, Briefcase, Package, AlertCircle, X, ShieldAlert, User } from "lucide-react";
+import { Star, ShieldCheck, Trophy, Briefcase, Package, AlertCircle, X, ShieldAlert, User, Users } from "lucide-react";
+
+
+export interface RatingTierInfo {
+  label: string;
+  badgeClass: string;
+}
+
+export function getRatingTierTag(score: number, count: number = 1): RatingTierInfo {
+  if (count === 0 || score === 0) {
+    return {
+      label: "No Reviews",
+      badgeClass: "bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500 border border-gray-200 dark:border-white/10",
+    };
+  }
+  if (score < 2.0) {
+    return {
+      label: "Poor",
+      badgeClass: "text-rose-800 dark:text-rose-300 bg-rose-100/90 dark:bg-rose-500/15 border border-rose-300 dark:border-rose-500/30",
+    };
+  }
+  if (score < 3.0) {
+    return {
+      label: "Fair",
+      badgeClass: "text-orange-800 dark:text-orange-300 bg-orange-100/90 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/30",
+    };
+  }
+  if (score < 4.0) {
+    return {
+      label: "Good",
+      badgeClass: "text-amber-800 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30",
+    };
+  }
+  if (score < 4.8) {
+    return {
+      label: "Very Good",
+      badgeClass: "text-emerald-800 dark:text-emerald-300 bg-emerald-100/90 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/40",
+    };
+  }
+  return {
+    label: "Exceptional",
+    badgeClass: "text-indigo-950 dark:text-purple-200 bg-gradient-to-r from-blue-100 via-indigo-100 to-purple-100 dark:from-blue-500/20 dark:via-indigo-500/20 dark:to-purple-500/25 border border-indigo-400 dark:border-purple-400/50 font-bold",
+  };
+}
 
 export type PublicProfileDispute = {
   id: string;
@@ -31,7 +74,7 @@ interface MeritSectionProps {
   clientServiceCount?: number;
   clientJobRating?: number;
   clientJobCount?: number;
-  onNavigateToReviews?: (filter: "All" | "As Freelancer" | "As a Client" | "Asset Creation") => void;
+  onNavigateToReviews?: (filter: "All" | "As Freelancer" | "As a Client" | "As a Team" | "Asset Creation") => void;
   disputes?: PublicProfileDispute[];
   isOwner?: boolean;
 }
@@ -68,6 +111,8 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   clientRating = 4.9,
   freelancerRating = 4.7,
   assetRating = 5.0,
+  teamRating = 0.0,
+  teamReviewCount = 0,
   successfulJobsCount = 24,
   viewMode = "both",
   freelancerServiceRating = 4.8,
@@ -107,6 +152,22 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   };
 
   const meritColor = getMeritColor(safeScore);
+
+  // Dynamic Poor - Exceptional rating tiers for each category
+  const totalTier = getRatingTierTag(avgRating, totalReviews);
+  const freelancerTotalCount = freelancerServiceCount + freelancerJobCount;
+  const freelancerTier = getRatingTierTag(freelancerRating, freelancerTotalCount);
+  const freelancerServiceTier = getRatingTierTag(freelancerServiceRating, freelancerServiceCount);
+  const freelancerJobTier = getRatingTierTag(freelancerJobRating, freelancerJobCount);
+
+  const clientTotalCount = clientServiceCount + clientJobCount;
+  const clientTier = getRatingTierTag(clientRating, clientTotalCount);
+  const clientServiceTier = getRatingTierTag(clientServiceRating, clientServiceCount);
+  const clientJobTier = getRatingTierTag(clientJobRating, clientJobCount);
+
+  const teamTier = getRatingTierTag(teamRating, teamReviewCount);
+  const assetTier = getRatingTierTag(assetRating, 0);
+
 
   return (
     <div className="font-['Plus_Jakarta_Sans',sans-serif] space-y-2">
@@ -201,172 +262,383 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
         {/* ==================== RIGHT CARD: RATING BREAKDOWN TABLE ==================== */}
         {(viewMode === "both" || viewMode === "ratings") && (
-        <div className={`${viewMode === "both" ? "md:col-span-2" : ""} flex flex-col gap-4`}>
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 p-5 gap-4">
-            <div className="text-xs space-y-3.5 w-full">
-              
-              {/* Table Header */}
-              <div className="flex justify-end gap-4 sm:gap-6 mb-2 border-b border-gray-200 dark:border-white/5 pb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-                <div className="w-16 sm:w-20 text-center">Total Rating</div>
-                <div className="w-16 sm:w-20 text-center">Rating</div>
-                <div className="w-12 sm:w-16 text-right">Amount</div>
+        <div className={`${viewMode === "both" ? "md:col-span-2" : "w-full"} flex flex-col gap-4`}>
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xs transition-all duration-300 p-5 space-y-4">
+            
+            {/* Table Header Description */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-200 dark:border-white/10 gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                  Performance Ratings Breakdown
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  Verified star ratings and review counts across your freelance and client engagements.
+                </p>
               </div>
+              {totalReviews > 0 && (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 shrink-0 self-start sm:self-auto">
+                  <Star className="w-3.5 h-3.5 fill-current mr-1" />
+                  {avgRating.toFixed(1)} Avg ({totalReviews} {totalReviews === 1 ? 'Review' : 'Reviews'})
+                </span>
+              )}
+            </div>
 
-              {/* As a Freelancer Section */}
-              <div className="pt-0.5 space-y-2.5">
-                <div 
-                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
-                  onClick={() => onNavigateToReviews?.("As Freelancer")}
-                >
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-zinc-400" />
-                    <span className="font-bold text-gray-900 dark:text-zinc-100">As a Freelancer</span>
+            {/* Ratings Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-white/5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                    <th className="py-2.5 px-3">Role & Category</th>
+                    <th className="py-2.5 px-3">Engagement Type</th>
+                    <th className="py-2.5 px-3 text-center">Rating</th>
+                    <th className="py-2.5 px-3 text-center">Reviews</th>
+                    <th className="py-2.5 px-3 text-right">Performance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
+                  {/* ================= 1. FREELANCER SECTION ================= */}
+                  <tr 
+                    onClick={() => onNavigateToReviews?.("As Freelancer")}
+                    className={`bg-gray-50/70 dark:bg-white/[0.02] font-semibold text-gray-900 dark:text-zinc-100 transition-colors ${
+                      onNavigateToReviews ? "cursor-pointer hover:bg-gray-100 dark:hover:bg-white/[0.05]" : ""
+                    }`}
+                  >
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                        <span className="font-bold">As a Freelancer</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-gray-500 dark:text-zinc-400 font-normal">
+                      Overall Delivery
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-bold text-gray-900 dark:text-white">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {freelancerRating > 0 ? freelancerRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-medium text-gray-600 dark:text-zinc-400">
+                      ({freelancerServiceCount + freelancerJobCount})
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {freelancerServiceCount + freelancerJobCount === 0 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500">
+                          No Reviews
+                        </span>
+                      ) : freelancerRating >= 4.8 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          Exceptional
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          Great
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Sub-row: Freelancer Service Rating */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors text-gray-600 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 pl-8">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-300 dark:text-zinc-600 font-mono">└─</span>
+                        <span>Service Rating</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500 dark:text-zinc-500">
+                      Gig Services
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-700 dark:text-zinc-300">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {freelancerServiceRating > 0 ? freelancerServiceRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-500">
+                      ({freelancerServiceCount})
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                        {freelancerServiceCount > 0 ? `${freelancerServiceCount} verified` : "—"}
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* Sub-row: Freelancer Job Execution Rating */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors text-gray-600 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 pl-8">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-300 dark:text-zinc-600 font-mono">└─</span>
+                        <span>Job Execution Rating</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500 dark:text-zinc-500">
+                      Job Contracts
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-700 dark:text-zinc-300">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {freelancerJobRating > 0 ? freelancerJobRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-500">
+                      ({freelancerJobCount})
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                        {freelancerJobCount > 0 ? `${freelancerJobCount} verified` : "—"}
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* ================= 2. CLIENT SECTION ================= */}
+                  <tr 
+                    onClick={() => onNavigateToReviews?.("As a Client")}
+                    className={`bg-gray-50/70 dark:bg-white/[0.02] font-semibold text-gray-900 dark:text-zinc-100 transition-colors ${
+                      onNavigateToReviews ? "cursor-pointer hover:bg-gray-100 dark:hover:bg-white/[0.05]" : ""
+                    }`}
+                  >
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                        <span className="font-bold">As a Client</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-gray-500 dark:text-zinc-400 font-normal">
+                      Overall Collaboration
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-bold text-gray-900 dark:text-white">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {clientRating > 0 ? clientRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-medium text-gray-600 dark:text-zinc-400">
+                      ({clientServiceCount + clientJobCount})
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {clientServiceCount + clientJobCount === 0 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500">
+                          No Reviews
+                        </span>
+                      ) : clientRating >= 4.8 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          Exceptional
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          Great
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Sub-row: Client Service Feedback Rating */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors text-gray-600 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 pl-8">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-300 dark:text-zinc-600 font-mono">└─</span>
+                        <span>Service Feedback Rating</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500 dark:text-zinc-500">
+                      Gig Orders Placed
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-700 dark:text-zinc-300">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {clientServiceRating > 0 ? clientServiceRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-500">
+                      ({clientServiceCount})
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                        {clientServiceCount > 0 ? `${clientServiceCount} verified` : "—"}
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* Sub-row: Client Job Feedback Rating */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors text-gray-600 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 pl-8">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-300 dark:text-zinc-600 font-mono">└─</span>
+                        <span>Job Feedback Rating</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500 dark:text-zinc-500">
+                      Job Postings Hired
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-700 dark:text-zinc-300">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {clientJobRating > 0 ? clientJobRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-500">
+                      ({clientJobCount})
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                        {clientJobCount > 0 ? `${clientJobCount} verified` : "—"}
+                      </span>
+                    </td>
+                  </tr>
+
+                  
+                  {/* ================= 3. AS A TEAM SECTION ================= */}
+                  <tr 
+                    onClick={() => onNavigateToReviews?.("As a Team")}
+                    className={`bg-gray-50/70 dark:bg-white/[0.02] font-semibold text-gray-900 dark:text-zinc-100 transition-colors ${
+                      onNavigateToReviews ? "cursor-pointer hover:bg-gray-100 dark:hover:bg-white/[0.05]" : ""
+                    }`}
+                  >
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                        <span className="font-bold">As a Team</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-gray-500 dark:text-zinc-400 font-normal">
+                      Squad Collaboration
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-bold text-gray-900 dark:text-white">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {teamRating > 0 ? teamRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-medium text-gray-600 dark:text-zinc-400">
+                      ({teamReviewCount})
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${teamTier.badgeClass}`}>
+                        {teamTier.label}
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* Sub-row: Team Deliveries Rating */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors text-gray-600 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 pl-8">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-300 dark:text-zinc-600 font-mono">└─</span>
+                        <span>Team Deliveries Rating</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500 dark:text-zinc-500">
+                      Team Contracts & Squads
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-700 dark:text-zinc-300">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {teamRating > 0 ? teamRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-500">
+                      ({teamReviewCount})
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      {teamReviewCount > 0 ? (
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold border ${teamTier.badgeClass}`}>
+                          {teamTier.label}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-gray-400 dark:text-zinc-500">—</span>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* ================= 4. ASSET CREATOR SECTION ================= */}
+                  <tr 
+                    onClick={() => onNavigateToReviews?.("Asset Creation")}
+                    className={`bg-gray-50/70 dark:bg-white/[0.02] font-semibold text-gray-900 dark:text-zinc-100 transition-colors ${
+                      onNavigateToReviews ? "cursor-pointer hover:bg-gray-100 dark:hover:bg-white/[0.05]" : ""
+                    }`}
+                  >
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                        <span className="font-bold">As an Asset Creator</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-gray-500 dark:text-zinc-400 font-normal">
+                      Marketplace Products
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-bold text-gray-900 dark:text-white">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {assetRating > 0 ? assetRating.toFixed(1) : "0.0"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-medium text-gray-600 dark:text-zinc-400">
+                      (0)
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500">
+                        No Reviews
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* Sub-row: Uploaded Assets Rating */}
+                  <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors text-gray-600 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 pl-8">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-300 dark:text-zinc-600 font-mono">└─</span>
+                        <span>Uploaded Assets Rating</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500 dark:text-zinc-500">
+                      Digital Assets
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-700 dark:text-zinc-300">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        0.0
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-500">
+                      (0)
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                        —
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Overall Total Rating Banner */}
+            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+                  <Trophy className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Total Platform Rating
                   </div>
-                  <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                    <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-500">
-                      <Star className="h-3.5 w-3.5 fill-current" />
-                      <span className="font-bold text-gray-900 dark:text-white">{freelancerRating.toFixed(1)}</span>
-                    </div>
-                    <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                    <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-500 font-mono">({freelancerServiceCount + freelancerJobCount})</div>
+                  <div className="text-[11px] text-gray-500 dark:text-zinc-400">
+                    Calculated from {totalReviews} verified platform {totalReviews === 1 ? 'review' : 'reviews'} across all engagements.
                   </div>
                 </div>
-
-                {viewMode !== "merit" && (
-                  <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
-                    {/* Service Rating */}
-                    <div className="flex items-center justify-between pl-4">
-                      <span className="text-gray-600 dark:text-zinc-500">Service Rating</span>
-                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{freelancerServiceRating.toFixed(1)}</span>
-                        </div>
-                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({freelancerServiceCount})</div>
-                      </div>
-                    </div>
-
-                    {/* Job Execution Rating */}
-                    <div className="flex items-center justify-between pl-4">
-                      <span className="text-gray-600 dark:text-zinc-500">Job Execution Rating</span>
-                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{freelancerJobRating.toFixed(1)}</span>
-                        </div>
-                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({freelancerJobCount})</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
-
-              {/* As a Client Section */}
-              <div className="pt-2 space-y-2.5">
-                <div 
-                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
-                  onClick={() => onNavigateToReviews?.("As a Client")}
-                >
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-zinc-400" />
-                    <span className="font-bold text-gray-900 dark:text-zinc-100">As a Client</span>
-                  </div>
-                  <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                    <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-500">
-                      <Star className="h-3.5 w-3.5 fill-current" />
-                      <span className="font-bold text-gray-900 dark:text-white">{clientRating.toFixed(1)}</span>
-                    </div>
-                    <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                    <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-500 font-mono">({clientServiceCount + clientJobCount})</div>
-                  </div>
-                </div>
-
-                {viewMode !== "merit" && (
-                  <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
-                    {/* Service Feedback Rating */}
-                    <div className="flex items-center justify-between pl-4">
-                      <span className="text-gray-600 dark:text-zinc-500">Service Feedback Rating</span>
-                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{clientServiceRating.toFixed(1)}</span>
-                        </div>
-                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({clientServiceCount})</div>
-                      </div>
-                    </div>
-
-                    {/* Job Feedback Rating */}
-                    <div className="flex items-center justify-between pl-4">
-                      <span className="text-gray-600 dark:text-zinc-500">Job Feedback Rating</span>
-                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{clientJobRating.toFixed(1)}</span>
-                        </div>
-                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({clientJobCount})</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-dark-base px-3.5 py-1.5 rounded-xl border border-amber-200 dark:border-amber-900/50 shadow-2xs shrink-0 self-end sm:self-auto">
+                <Star className="h-5 w-5 fill-amber-500 text-amber-500" />
+                <span className="text-lg font-black text-gray-900 dark:text-white font-mono">
+                  {avgRating.toFixed(1)}
+                </span>
+                <span className="text-xs text-gray-400 dark:text-zinc-500 font-normal">/ 5.0</span>
               </div>
-
-              {/* As an Asset Creator Section */}
-              <div className="pt-2 space-y-2.5">
-                <div 
-                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
-                  onClick={() => onNavigateToReviews?.("Asset Creation")}
-                >
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-zinc-400" />
-                    <span className="font-bold text-gray-900 dark:text-zinc-100">As an Asset Creator</span>
-                  </div>
-                  <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                    <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-500">
-                      <Star className="h-3.5 w-3.5 fill-current" />
-                      <span className="font-bold text-gray-900 dark:text-white">{assetRating.toFixed(1)}</span>
-                    </div>
-                    <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                    <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-500 font-mono">(0)</div>
-                  </div>
-                </div>
-
-                {viewMode !== "merit" && (
-                  <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
-                    {/* Uploaded Assets Rating */}
-                    <div className="flex items-center justify-between pl-4">
-                      <span className="text-gray-600 dark:text-zinc-500">Uploaded Assets Rating</span>
-                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
-                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
-                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="font-semibold text-gray-700 dark:text-zinc-400">0.0</span>
-                        </div>
-                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">(0)</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
             </div>
-          </div>
 
-          <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/5 to-transparent border border-amber-500/30 rounded-xl p-3 flex items-center justify-between animate-fadeIn shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-            <div className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-amber-500" />
-              <span className="text-sm font-black text-gray-900 dark:text-white tracking-wide uppercase">Total Rating</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-lg font-black text-amber-500 tracking-tight">
-              <Star className="h-5 w-5 fill-current text-amber-500" />
-              <span>{avgRating.toFixed(1)}</span>
-            </div>
-          </div>
-
-        </div>
+          </div>        </div>
         )}
       </div>
 
