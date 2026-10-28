@@ -55,34 +55,15 @@ async function getMeritFacts(accountId) {
         LIMIT 1
       ) AS verified,
       (
-        SELECT COALESCE(BOOL_OR(TRUE), FALSE)
-        FROM restrictions r
-        WHERE r.account_id = a.account_id
-          AND (
-            LOWER(r.type) IN ('forum_timeout', 'timeout')
-            OR (LOWER(COALESCE(r.module, '')) = 'forum' AND LOWER(r.type) LIKE '%timeout%')
-          )
-          AND r.starts_at <= NOW()
-          AND (r.ends_at IS NULL OR r.ends_at > NOW())
-      ) AS timeout_active,
-      (
         SELECT COALESCE(SUM(
-          LEAST(GREATEST(COALESCE(vio.points, 1), 1), 3) * 8
+          LEAST(GREATEST(COALESCE(vio.points, 1), 1), 10) * 2
         ), 0)::int
         FROM violations vio
         WHERE vio.account_id = a.account_id
           AND vio.deleted_at IS NULL
           AND LOWER(COALESCE(vio.status, 'active')) IN ('active', 'open', 'pending')
           AND (vio.expires_at IS NULL OR vio.expires_at > NOW())
-      ) AS warning_hits,
-      (
-        SELECT CASE WHEN COUNT(*) > 0 THEN 15 ELSE 0 END
-        FROM disputes d
-        WHERE d.for_account_id = a.account_id
-          AND LOWER(COALESCE(d.sanction_type, '')) = 'ban'
-          AND d.resolved_at IS NOT NULL
-          AND d.resolved_at > NOW() - INTERVAL '12 months'
-      ) AS dispute_hits
+      ) AS warning_hits
     FROM accounts a
     WHERE a.account_id = $1
     `,

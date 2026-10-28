@@ -18,6 +18,7 @@ import type {
 } from '../userTeamTypes';
 import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVerificationConfig';
 import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule';
+import { WarningPresetFields } from './WarningPresetFields';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -1484,14 +1485,8 @@ export function WarnAccountModal({
   onClose: () => void;
   onChanged?: () => void;
 }) {
-  const [type, setType] = useState('Account warning');
+  const [warningId, setWarningId] = useState('harassment');
   const [reason, setReason] = useState('');
-  const [points, setPoints] = useState('1');
-  const [timing, setTiming] = useState<SanctionTiming>({
-    duration: 'temporary',
-    endsAt: null,
-    summary: '',
-  });
   const [saving, setSaving] = useState(false);
 
   return (
@@ -1509,17 +1504,14 @@ export function WarnAccountModal({
           </button>
           <button
             type="button"
-            disabled={saving || !reason.trim() || (timing.duration === 'temporary' && !timing.endsAt)}
+            disabled={saving || !reason.trim() || !warningId}
             onClick={async () => {
-              if (!reason.trim()) return;
+              if (!reason.trim() || !warningId) return;
               setSaving(true);
               try {
                 await warnAccount(accountId, {
-                  type,
+                  warningId,
                   reason,
-                  points: Number(points) || 1,
-                  duration: timing.duration,
-                  endsAt: timing.endsAt,
                 });
                 onChanged?.();
                 onClose();
@@ -1536,38 +1528,13 @@ export function WarnAccountModal({
         </div>
       }
     >
-      <div className="space-y-4">
-        <label className="block text-xs text-zinc-500">
-          Type
-          <input
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <label className="block text-xs text-zinc-500">
-          Reason
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            required
-            placeholder="Why this warning is being issued"
-            className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <label className="block text-xs text-zinc-500">
-          Points
-          <input
-            type="number"
-            min={1}
-            value={points}
-            onChange={(e) => setPoints(e.target.value)}
-            className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <SanctionScheduleFields defaultDuration="temporary" onChange={setTiming} />
-      </div>
+      <WarningPresetFields
+        desk="admin"
+        warningId={warningId}
+        reason={reason}
+        onWarningId={setWarningId}
+        onReason={setReason}
+      />
     </ModalShell>
   );
 }

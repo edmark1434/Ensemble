@@ -179,6 +179,13 @@ async function shareProjectInvitationService({ projectId, recipientUserId }, inv
     }
 
     const inviterAccountId = inviter?.account_id || null;
+    if (inviterAccountId) {
+        try {
+            await require('./MeritServices').assertMeritAllows(inviterAccountId, 'create_shared_project');
+        } catch (err) {
+            throw new InvitationServiceError(err.message || 'Not allowed to share this project', err.statusCode || 403);
+        }
+    }
     const inviterDisplayName = inviter?.display_name || (inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : 'A collaborator');
     const recipientName = recipient.display_name || `${recipient.first_name} ${recipient.last_name}`.trim();
 

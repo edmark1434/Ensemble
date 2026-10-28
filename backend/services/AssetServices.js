@@ -738,6 +738,7 @@ async function listCommentsServices(assetId, accountId) {
 
 async function createCommentServices(assetId, accountId, payload) {
   await getAssetServices(assetId, accountId);
+  await require('./MeritServices').assertMeritAllows(accountId, 'asset_comment');
   const comment = cleanText(payload?.comment, 'Comment', 2000);
   return createCommentRepository(assetId, accountId, comment);
 }
@@ -765,6 +766,7 @@ async function createReplyServices(assetId, commentId, accountId, payload) {
   requireUuid(assetId);
   requireUuid(commentId, 'Comment ID');
   await getAssetServices(assetId, accountId);
+  await require('./MeritServices').assertMeritAllows(accountId, 'asset_comment');
   const reply = cleanText(payload?.reply, 'Reply', 2000);
   const created = await createReplyRepository(assetId, commentId, accountId, reply);
   if (!created) throw new AssetError('Comment not found.', 404, 'COMMENT_NOT_FOUND');
