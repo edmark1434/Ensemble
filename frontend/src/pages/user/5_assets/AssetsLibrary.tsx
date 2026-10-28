@@ -438,28 +438,6 @@ export default function AssetsLibrary() {
             </div>
   
             <div className="flex flex-wrap items-center justify-end gap-4 pb-2">
-              {/* Mine sub-status */}
-              {view === "mine" && (
-                <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="My asset status">
-                  {MINE_STATUS_OPTIONS.map((statusTab) => (
-                    <button
-                      key={statusTab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={mineStatus === statusTab.id}
-                      onClick={() => { setPage(1); setMineStatus(statusTab.id); }}
-                      className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
-                        mineStatus === statusTab.id
-                          ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
-                          : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
-                      }`}
-                    >
-                      {statusTab.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {/* Filters */}
               <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-white/15 dark:bg-white/5" role="tablist" aria-label="Media types">
                 {FILTERS.map(({ value, label, icon: Icon }) => (
@@ -484,7 +462,7 @@ export default function AssetsLibrary() {
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "liked" ? "Your liked assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
+            <p className="text-sm font-semibold">{view === "mine" ? "Your uploaded assets" : view === "purchased" ? "Your purchased assets" : view === "liked" ? "Your liked assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
             {view === "mine" && eligibility && (
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-500/10 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20">
@@ -508,6 +486,28 @@ export default function AssetsLibrary() {
           </div>
           {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
         </div>
+
+        {/* My assets tab content */}
+        {view === "mine" && (
+          <div className="mt-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="My asset status">
+            {MINE_STATUS_OPTIONS.map((statusTab) => (
+              <button
+                key={statusTab.id}
+                type="button"
+                role="tab"
+                aria-selected={mineStatus === statusTab.id}
+                onClick={() => { setPage(1); setMineStatus(statusTab.id); }}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  mineStatus === statusTab.id
+                    ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
+                    : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+                }`}
+              >
+                {statusTab.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {loading && pendingUploads.length === 0 ? (
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <AssetSkeleton key={index} />)}</div>

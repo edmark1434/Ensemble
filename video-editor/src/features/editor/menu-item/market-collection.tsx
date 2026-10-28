@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bookmark, Heart, Loader2 } from "lucide-react";
+import { Bookmark, Heart, BadgeCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { debounce } from "lodash";
 import { MediaSearchBar } from "@/components/media-search-bar";
@@ -7,17 +7,33 @@ import { MarketBrowserHeader } from "@/components/market-browser-header";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MarketAssetDetails, MarketAssetListings, type MarketAssetBundle } from "@/components/market-asset-browser";
 import { useMarketAssets, type MarketAssetType } from "@/hooks/use-market-assets";
+import useStore from "../store/use-store";
+import { useMarketLicenses } from "../store/use-market-licenses";
 import { addMarketAssetToTimeline } from "../utils/add-market-asset-to-timeline";
 
-export type MarketCollectionView = "liked" | "saved";
+export type MarketCollectionView = "liked" | "saved" | "licensed";
 const mediaLabels = { image: "images", video: "videos", audio: "audios" };
 
-function useCollectionRefresh(refresh: () => void) {
+const collectionTitle = (view: MarketCollectionView, type: MarketAssetType) => view === "licensed"
+  ? `Licensed ${mediaLabels[type]} for this project`
+  : `${view === "liked" ? "Liked" : "Saved"} ${mediaLabels[type]}`;
+const collectionIcon = (view: MarketCollectionView) => view === "licensed" ? BadgeCheck : view === "liked" ? Heart : Bookmark;
+
+function useCollectionRefresh(refresh: () => void, view: MarketCollectionView, poll = false) {
+  const licenseKey = useMarketLicenses(state => view === "licensed" ? Object.values(state.assets).filter(asset => asset.licensed).map(asset => asset.assetId).sort().join(",") : "");
   useEffect(() => {
     refresh();
     window.addEventListener("market-engagement-updated", refresh);
-    return () => window.removeEventListener("market-engagement-updated", refresh);
-  }, [refresh]);
+    window.addEventListener("market-license-updated", refresh);
+    window.addEventListener("focus", refresh);
+    const interval = view === "licensed" && poll ? window.setInterval(refresh, 15_000) : undefined;
+    return () => {
+      window.removeEventListener("market-engagement-updated", refresh);
+      window.removeEventListener("market-license-updated", refresh);
+      window.removeEventListener("focus", refresh);
+      if (interval !== undefined) window.clearInterval(interval);
+    };
+  }, [refresh, view, licenseKey, poll]);
 }
 
 function CollectionRow({ type, view, onOpen }: {
@@ -25,19 +41,20 @@ function CollectionRow({ type, view, onOpen }: {
   view: MarketCollectionView;
   onOpen: (view: MarketCollectionView) => void;
 }) {
-  const { loading, error, totalMediaCount, load } = useMarketAssets<MarketAssetBundle>(type, view);
+  const projectId = useStore(state => state.projectId);
+  const { loading, error, totalMediaCount, load } = useMarketAssets<MarketAssetBundle>(type, view, view === "licensed" ? projectId : undefined);
   const refresh = useCallback(() => { void load(""); }, [load]);
-  useCollectionRefresh(refresh);
-  const Icon = view === "liked" ? Heart : Bookmark;
-  const title = `${view === "liked" ? "Liked" : "Saved"} ${mediaLabels[type]}`;
+  useCollectionRefresh(refresh, view, true);
+  const Icon = collectionIcon(view);
+  const title = collectionTitle(view, type);
 
   return (
     <button type="button" onClick={() => onOpen(view)}
-      className="group flex w-full items-center gap-3 rounded bg-secondary/70 px-3 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      title={title} className="group flex min-w-0 w-full items-center gap-2 rounded bg-secondary/70 px-3 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground"><Icon className="size-4" /></span>
       <span className="min-w-0 flex-1">
         <span className="mb-0.5 block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-300">{title}</span>
-        <span className="block text-xs text-muted-foreground">{loading ? "Loading…" : error ? "Collection unavailable" : totalMediaCount === 0 ? `No ${view} ${mediaLabels[type]} yet` : `${totalMediaCount} ${totalMediaCount === 1 ? type : mediaLabels[type]}`}</span>
+        <span className="block truncate text-xs text-muted-foreground">{loading ? "Loading…" : error ? "Collection unavailable" : totalMediaCount === 0 ? `No ${view} ${mediaLabels[type]} yet` : `${totalMediaCount} ${totalMediaCount === 1 ? type : mediaLabels[type]}`}</span>
       </span>
     </button>
   );
@@ -48,8 +65,11 @@ export function MarketCollectionRows({ type, onOpen }: {
   onOpen: (view: MarketCollectionView) => void;
 }) {
   return <div className="mb-3 flex flex-col gap-2" aria-label={`${mediaLabels[type]} collections`}>
-    <CollectionRow type={type} view="liked" onOpen={onOpen} />
-    <CollectionRow type={type} view="saved" onOpen={onOpen} />
+    <CollectionRow type={type} view="licensed" onOpen={onOpen} />
+    <div className="grid grid-cols-2 gap-2">
+      <CollectionRow type={type} view="saved" onOpen={onOpen} />
+      <CollectionRow type={type} view="liked" onOpen={onOpen} />
+    </div>
   </div>;
 }
 
@@ -61,9 +81,10 @@ export function MarketCollection({ view, type, onBack }: {
   const [selectedBundle, setSelectedBundle] = useState<MarketAssetBundle | null>(null);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
-  const { items, loading, error, hasMore, totalMediaCount, load, loadMore } = useMarketAssets<MarketAssetBundle>(type, view);
+  const projectId = useStore(state => state.projectId);
+  const { items, loading, error, hasMore, totalMediaCount, load, loadMore } = useMarketAssets<MarketAssetBundle>(type, view, view === "licensed" ? projectId : undefined);
   const refresh = useCallback(() => { void load(search); }, [load, search]);
-  useCollectionRefresh(refresh);
+  useCollectionRefresh(refresh, view);
   const debouncedSearch = useMemo(() => debounce((value: string) => setSearch(value.trim()), 500), []);
   useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
   const handleSearchChange = (value: string) => {
@@ -81,8 +102,8 @@ export function MarketCollection({ view, type, onBack }: {
     if (search === "") refresh();
     else setSearch("");
   };
-  const Icon = view === "liked" ? Heart : Bookmark;
-  const title = `${view === "liked" ? "Liked" : "Saved"} ${mediaLabels[type]}`;
+  const Icon = collectionIcon(view);
+  const title = collectionTitle(view, type);
 
   if (selectedBundle) return <MarketAssetDetails bundle={selectedBundle} onBack={() => setSelectedBundle(null)} onAddAsset={addMarketAssetToTimeline} />;
 

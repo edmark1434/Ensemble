@@ -1,3 +1,4 @@
+import { TimelineMarketPriceBadges } from "./market-price-badges";
 import { useEffect, useRef, useState } from "react";
 import Header from "./header";
 import Ruler from "./ruler";
@@ -1212,6 +1213,7 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
             className="absolute top-0 w-full"
           >
             <canvas id="designcombo-timeline-canvas" ref={canvasElRef} />
+            <TimelineMarketPriceBadges readOnly={readOnly} />
           </div>
         </div>
       </div>

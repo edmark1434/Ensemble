@@ -1,3 +1,4 @@
+import { MarketWatermarkBadge } from "./market-watermark-badge";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Selection, Moveable } from "@interactify/toolkit";
 import { getIdFromClassName } from "../utils/scene";
@@ -106,6 +107,7 @@ export function SceneInteractions({
   zoom,
   viewOnly
 }: SceneInteractionsProps) {
+  const [transforming, setTransforming] = useState(false);
   const [targets, setTargets] = useState<HTMLDivElement[]>([]);
   const [selection, setSelection] = useState<Selection>();
   const {
@@ -118,6 +120,13 @@ export function SceneInteractions({
     collabSchema,
   } = useStore();
   const moveableRef = useRef<Moveable>(null);
+  useEffect(() => {
+    const finish = () => setTransforming(false);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", finish);
+    return () => { window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); window.removeEventListener("blur", finish); };
+  }, []);
   const [selectionInfo, setSelectionInfo] =
     useState<SelectionInfo>(emptySelection);
 
@@ -423,6 +432,7 @@ export function SceneInteractions({
       .on("dragStart", (e) => {
         isDraggingRef.current = false;
         const target = e.inputEvent.target as HTMLDivElement;
+        if (target?.closest("[data-market-purchase]")) { e.stop(); return; }
         dragStartEnd = false;
 
         // Ask Moveable directly whether this element is currently a registered
@@ -790,6 +800,7 @@ export function SceneInteractions({
           />,
           portalTarget
         )}
+      {!viewOnly && <MarketWatermarkBadge container={portalTarget} transforming={transforming} />}
       {!viewOnly && (
         <Moveable
           ref={moveableRef}
@@ -809,6 +820,7 @@ export function SceneInteractions({
           isDisplaySnapDigit={false}
           isDisplayInnerSnapDigit={false}
 
+          onDragStart={() => setTransforming(true)}
           onDrag={({ target, top, left }) => {
             target.style.top = `${top}px`;
             target.style.left = `${left}px`;
@@ -818,6 +830,7 @@ export function SceneInteractions({
             }
           }}
           onDragEnd={({ target, isDrag }) => {
+            setTransforming(false);
             try {
               if (!isDrag) return;
               const targetId = getIdFromClassName(target.className) as string;
@@ -839,6 +852,7 @@ export function SceneInteractions({
             }
           }}
           onScaleStart={({ target }) => {
+            setTransforming(true);
             scaleStartRef.current = rawScaleRef.current;
             startPosRef.current = [parseFloat(target.style.left), parseFloat(target.style.top)];
           }}
@@ -899,6 +913,7 @@ export function SceneInteractions({
             }
           }}
           onScaleEnd={({ target }) => {
+            setTransforming(false);
             try {
               const targetId = getIdFromClassName(target.className) as string;
               const currentItem = useStore.getState().trackItemsMap[targetId];
@@ -928,6 +943,7 @@ export function SceneInteractions({
             }
           }}
           onRotateStart={({ target }) => {
+            setTransforming(true);
             const targetId = getIdFromClassName(target.className) as string;
             rotateStartRef.current = parseFloat(trackItemsMap[targetId]?.details?.rotate as unknown as string) || 0;
           }}
@@ -947,6 +963,7 @@ export function SceneInteractions({
             }
           }}
           onRotateEnd={({ target }) => {
+            setTransforming(false);
             try {
               const targetId = getIdFromClassName(target.className) as string;
               const currentItem = useStore.getState().trackItemsMap[targetId];
@@ -963,6 +980,7 @@ export function SceneInteractions({
               if (collabSchema) clearLiveTransform(collabSchema.awareness);
             }
           }}
+          onResizeStart={() => setTransforming(true)}
           onResize={({
             target,
             width: rawWidth,
@@ -1208,6 +1226,7 @@ export function SceneInteractions({
             }
           }}
           onResizeEnd={({ target }) => {
+            setTransforming(false);
             try {
               const targetId = getIdFromClassName(target.className) as string;
               if (trackItemsMap[targetId]?.details?.locked) return;

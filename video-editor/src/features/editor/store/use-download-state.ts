@@ -18,6 +18,8 @@ import {
 import useStore, { IBackground } from "@/features/editor/store/use-store";
 
 export interface RenderPayload extends IDesign {
+  projectId: string;
+  marketDraft: boolean;
   projectName: string;
   background: IBackground;
   type: ExportType;
@@ -214,7 +216,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         if (!response.ok) {
           const errorBody = await response.json().catch(() => null);
           console.error("Export request failed:", response.status, errorBody?.issues ?? errorBody);
-          throw new Error("Failed to submit export request.");
+          throw new Error(errorBody?.message || "Failed to submit export request.");
         }
 
         const jobInfo = await response.json();

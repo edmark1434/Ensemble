@@ -1,11 +1,12 @@
 import React, { useLayoutEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { useDraggable } from "@/hooks/use-draggable";
 import { cn } from "@/lib/utils";
 
 interface DraggablePanelProps {
   title: string;
   onClose: () => void;
+  onBack?: () => void;
   children: React.ReactNode;
   className?: string;
   /** If provided, the panel spawns `anchorGap`px to the left of this element
@@ -17,6 +18,7 @@ interface DraggablePanelProps {
 export function DraggablePanel({
   title,
   onClose,
+  onBack,
   children,
   className,
   anchorRef,
@@ -52,7 +54,10 @@ export function DraggablePanel({
         style={{ touchAction: "none" }}
         {...dragHandleProps}
       >
-        <p className="text-sm font-semibold">{title}</p>
+        <div className="flex items-center gap-2">
+          {onBack && <button type="button" aria-label="Back to export settings" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onBack(); }} className="flex size-4 items-center justify-center text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /></button>}
+          <p className="text-sm font-semibold">{title}</p>
+        </div>
         <X
           className="h-4 w-4 cursor-pointer text-muted-foreground"
           onPointerDown={(e) => {

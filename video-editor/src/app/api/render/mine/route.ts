@@ -1,12 +1,16 @@
 // app/api/render/mine/route.ts
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 
 const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL || "http://localhost:3001";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get("x-user-id");
+    const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
+    const session = token ? await verifyEditorSession(token) : null;
+    if (!session) return NextResponse.json({ message: "Sign in to continue." }, { status: 401 });
+    const userId = session.userId;
 
     let response: Response;
     try {

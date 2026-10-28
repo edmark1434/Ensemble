@@ -7,6 +7,7 @@ const {
   deleteAssetRepository,
   getAssetDownloadRepository,
   purchaseAssetRepository,
+  getEditorAssetPurchaseContextRepository,
   listAssetLicensesRepository,
   assignAssetLicenseRepository,
   listCommentsRepository,
@@ -26,6 +27,7 @@ const {
 const {
   generateProtectedAssetDownloadUrl,
   generateProtectedAssetPreviewUrl,
+  generateProtectedAssetRenderUrl,
 } = require('./FileServices');
 const { getIo } = require('../lib/WebSocket');
 const {
@@ -537,13 +539,13 @@ async function getAssetDownloadServices(assetId, accountId, mediaAssetId = null,
   };
 }
 
-async function getAssetOriginalPreviewServices(assetId, accountId, mediaAssetId = null, projectId = null) {
+async function getAssetOriginalPreviewServices(assetId, accountId, mediaAssetId = null, projectId = null, allowProjectViewers = false) {
   requireUuid(assetId);
   if (mediaAssetId) requireUuid(mediaAssetId, 'Media asset ID');
   if (projectId !== null) requireUuid(projectId, 'Project ID');
-  const preview = await getAssetDownloadRepository(assetId, accountId, mediaAssetId, projectId);
+  const preview = await getAssetDownloadRepository(assetId, accountId, mediaAssetId, projectId, allowProjectViewers);
   if (!preview) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
-  if (!preview.is_owner && !preview.is_purchased) {
+  if (!preview.is_purchased && (projectId !== null || !preview.is_owner)) {
     throw new AssetError('Purchase this asset before viewing the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
   }
   return {
@@ -554,7 +556,7 @@ async function getAssetOriginalPreviewServices(assetId, accountId, mediaAssetId 
 }
 
 function emitPurchaseEvents(result) {
-  if (result.alreadyPurchased) return;
+  if (result.alreadyPurchased || !result.transaction) return;
   try {
     const io = getIo();
     for (const notification of result.notifications) {
@@ -575,11 +577,12 @@ function emitPurchaseEvents(result) {
   }
 }
 
-async function purchaseAssetServices(assetId, accountId) {
+async function purchaseAssetServices(assetId, accountId, projectId = null, expectedPrice = null, expectedCharge = null, freeOnly = false) {
+  if (projectId !== null) requireUuid(projectId, 'Project ID');
   assetId = requireUuid(assetId).toLowerCase();
   try {
     const feePercent = await getMarketplaceTransactionFeePercent();
-    const result = await purchaseAssetRepository(assetId, accountId, feePercent);
+    const result = await purchaseAssetRepository(assetId, accountId, feePercent, { projectId, expectedPrice, expectedCharge, freeOnly });
     const asset = await getAssetServices(assetId, accountId);
     emitPurchaseEvents(result);
     return {
@@ -611,6 +614,10 @@ async function purchaseAssetServices(assetId, accountId) {
     if (error.code === 'ASSET_INSUFFICIENT_BALANCE') {
       throw new AssetError('Your wallet does not have enough credits for this purchase.', 409, error.code);
     }
+    if (error.code === 'ASSET_LICENSE_PROJECT_FORBIDDEN') throw new AssetError('You must be an owner, manager, or editor of this project to purchase a license.', 403, error.code);
+    if (error.code === 'ASSET_LICENSE_PROJECT_FROZEN') throw new AssetError('This project is frozen.', 409, error.code);
+    if (error.code === 'ASSET_LICENSE_COST_CHANGED') throw new AssetError('Your available license changed. Review the total before purchasing.', 409, error.code);
+    if (error.code === 'ASSET_PRICE_CHANGED') throw new AssetError('The asset price changed. Review the updated price before purchasing.', 409, error.code);
     if (error.code === 'ASSET_PRICE_INVALID') {
       throw new AssetError('This asset has an invalid price.', 409, error.code);
     }
@@ -784,9 +791,50 @@ async function setAssetSaveServices(assetId, accountId, saved) {
   return setAssetSaveRepository(assetId, accountId, Boolean(saved));
 }
 
+async function getEditorAssetRenderSource(assetId, accountId, payload) {
+  requireUuid(assetId);
+  requireUuid(payload.mediaAssetId, 'Media asset ID');
+  if (typeof payload.draft !== 'boolean') throw new AssetError('Choose an export mode.', 400);
+  const context = await getEditorAssetPurchaseContextRepository(assetId, accountId, payload.projectId);
+  if (!context) throw new AssetError('Project access required.', 403);
+  const file = await getAssetDownloadRepository(assetId, accountId, payload.mediaAssetId, payload.projectId, true);
+  if (!file) throw new AssetError('Asset file not found.', 404);
+  if (file.is_purchased) return { sourceUrl: await generateProtectedAssetRenderUrl(file.path, file.name, file.mime_type) };
+  if (!payload.draft) throw new AssetError('This export contains unlicensed assets. Pay for the assets or choose a watermarked draft.', 409, 'ASSET_PURCHASE_REQUIRED');
+  if (!file.proxy_file_id || file.proxy_file_id === file.original_file_id || !file.proxy_path?.startsWith('assets/proxies/') || !file.proxy_mime_type?.startsWith(`${file.media_type}/`)) {
+    throw new AssetError('A watermarked preview is not ready for this asset.', 409);
+  }
+  return { sourceUrl: await generateProtectedAssetRenderUrl(file.proxy_path, file.proxy_name, file.proxy_mime_type) };
+}
+
 async function performEditorAssetActionServices(assetId, accountId, payload) {
   const { action, enabled } = payload || {};
   if (action === 'report') return { report: await reportAssetServices(assetId, accountId, payload) };
+  if (['purchase-details', 'purchase', 'use-free', 'source', 'render-source'].includes(action)) {
+    requireUuid(payload.projectId, 'Project ID');
+    if (action === 'render-source') return getEditorAssetRenderSource(assetId, accountId, payload);
+    if (action === 'use-free') {
+      return purchaseAssetServices(assetId, accountId, payload.projectId.toLowerCase(), 0, 0, true);
+    }
+    if (action === 'purchase') {
+      if (!Number.isSafeInteger(payload.expectedPrice) || payload.expectedPrice < 0 || !Number.isSafeInteger(payload.expectedCharge) || payload.expectedCharge < 0) throw new AssetError('Review the asset price before purchasing.', 400);
+      return purchaseAssetServices(assetId, accountId, payload.projectId.toLowerCase(), payload.expectedPrice, payload.expectedCharge);
+    }
+    if (action === 'source') {
+      requireUuid(payload.mediaAssetId, 'Media asset ID');
+      return getAssetOriginalPreviewServices(assetId, accountId, payload.mediaAssetId, payload.projectId, true);
+    }
+    const asset = await getAssetServices(assetId, accountId);
+    const context = await getEditorAssetPurchaseContextRepository(assetId, accountId, payload.projectId);
+    if (!context || !['Owner', 'Manager', 'Editor'].includes(context.role)) throw new AssetError('You must be an owner, manager, or editor of this project to purchase a license.', 403);
+    if (String(context.project_status).toLowerCase() === 'frozen') throw new AssetError('This project is frozen.', 409);
+    return {
+      asset,
+      licensed: !!context.project_license_id,
+      hasAvailableLicense: !!context.available_license_id,
+      balanceCredits: context.balance_credits === null ? null : Number(context.balance_credits),
+    };
+  }
   if (!['like', 'save'].includes(action) || typeof enabled !== 'boolean') {
     throw new AssetError('Choose a valid asset action.');
   }

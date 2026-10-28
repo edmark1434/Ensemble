@@ -45,3 +45,5 @@
 - Library purchase/download/review checks use the buyer's active licenses. A download/preview request with `projectId` instead checks an active license for that project plus current Owner/Manager/Editor membership. The license survives the buyer leaving the project.
 - `credit_transactions` continues referencing `market_assets` for existing financial-history consumers; each new license links its exact purchase through `credit_transaction_id`. Legacy rows without a matching historical transaction keep that field null.
 - Migration `1825200000000_market-asset-licenses` preserves old rows as unassigned licenses. Its down migration refuses to discard project assignments or multiple purchases that the old composite key cannot represent.
+
+- Automatically using a currently free asset creates an assigned `market_asset_licenses` row with `price_credits = 0` and no `credit_transaction_id`; it does not consume an available unassigned library license. The saved project license survives listing price increases. No schema change is needed.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, AudioLines, Image, Clapperboard, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, PanelsRightBottom, User } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Edit3, Eye, AudioLines, Image, Clapperboard, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, PanelsRightBottom, User } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -92,7 +92,6 @@ export default function AssetDetails() {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [selectedOriginalFile, setSelectedOriginalFile] = useState<AssetMediaFile | null>(null);
-  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [engagementPending, setEngagementPending] = useState<"like" | "save" | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
@@ -354,20 +353,6 @@ export default function AssetDetails() {
     }
   };
 
-  const downloadOriginal = async (mediaAsset: AssetMediaFile) => {
-    if (!asset || downloadingFileId) return;
-    setDownloadingFileId(mediaAsset.media_asset_id);
-    try {
-      const response = await api.get<{ downloadUrl: string }>(`/api/assets/${asset.market_asset_id}/media/${mediaAsset.media_asset_id}/download`);
-      if (!response.data.downloadUrl) throw new Error("The download URL was not returned.");
-      window.location.assign(response.data.downloadUrl);
-    } catch (error) {
-      showErrorToast(errorMessage(error, "Unable to download the original asset.").message);
-    } finally {
-      setDownloadingFileId(null);
-    }
-  };
-
   const handlePurchased = (result: AssetPurchaseResponse) => {
     setAsset(result.asset);
     setPurchaseOpen(false);
@@ -493,14 +478,19 @@ export default function AssetDetails() {
                   {!asset.is_owner && <AssetReportButton asset={asset} isGuest={isGuestView} onGuest={() => setIsGuestLoginOpen(true)} />}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {asset.can_download ? (
+                  {asset.can_download && !asset.is_purchased ? (
                     <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
                       <PackageOpen className="h-4 w-4" /> View contents
                     </button>
                   ) : null}
-                  {!asset.is_owner && asset.available_license_count === 0 && asset.status === "published" && (
+                  {asset.is_purchased && (
+                    <button type="button" onClick={() => navigate("/projects")} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500">
+                      <CheckCircle2 className="h-4 w-4" /> Use in a project
+                    </button>
+                  )}
+                  {!asset.is_owner && !asset.is_purchased && asset.available_license_count === 0 && asset.status === "published" && (
                     <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                      <ShoppingCart className="h-4 w-4" /> {asset.is_purchased ? "Get another license" : asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
+                      <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
                     </button>
                   )}
                   {asset.is_owner && <><button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button><button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button></>}
@@ -563,10 +553,7 @@ export default function AssetDetails() {
                         mediaAsset={mediaAsset}
                         canAccessOriginal={Boolean(asset.can_download && (asset.is_owner || asset.is_purchased))}
                         audioThumbnail={asset.thumbnail_path}
-                        downloading={downloadingFileId === mediaAsset.media_asset_id}
-                        downloadDisabled={Boolean(downloadingFileId)}
                         onOpen={() => setSelectedOriginalFile(mediaAsset)}
-                        onDownload={() => void downloadOriginal(mediaAsset)}
                       />
                     ))}
                   </div>
@@ -741,18 +728,12 @@ function MediaAssetPreview({
   mediaAsset,
   audioThumbnail,
   canAccessOriginal,
-  downloading,
-  downloadDisabled,
   onOpen,
-  onDownload,
 }: {
   mediaAsset: AssetMediaFile;
   audioThumbnail: string | null;
   canAccessOriginal: boolean;
-  downloading: boolean;
-  downloadDisabled: boolean;
   onOpen: () => void;
-  onDownload: () => void;
 }) {
   const [failed, setFailed] = useState(false);
   const previewUrl = mediaUrl(mediaAsset.type === "audio" ? audioThumbnail : mediaAsset.proxy_path);
@@ -786,7 +767,6 @@ function MediaAssetPreview({
         {canAccessOriginal ? (
           <div className="flex shrink-0 gap-1">
             <button type="button" onClick={onOpen} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`View ${mediaAsset.name}`}><Eye className="h-4 w-4" /></button>
-            <button type="button" onClick={onDownload} disabled={downloadDisabled} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`Download ${mediaAsset.name}`}>{downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</button>
           </div>
         ) : <button type="button" onClick={onOpen} className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 transition hover:bg-blue-500/10 dark:text-blue-300">View preview</button>}
       </div>
