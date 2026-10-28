@@ -719,5 +719,140 @@ async function deleteTeamTask(teamId, taskId) {
   return Boolean(result.rows[0]);
 }
 
-module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility};
+
+async function listTeamVideoProjects(teamId) {
+  await ensureTeamMembersHaveProjectAccess(teamId);
+
+  const query = `
+    SELECT p.project_id as id,
+           p.project_id,
+           p.name,
+           p.status,
+           p.width,
+           p.height,
+           p.duration_seconds,
+           p.created_at,
+           p.updated_at,
+           p.updated_at as "lastUpdated",
+           (SELECT COALESCE(sum(f.size_bytes), 0)
+              FROM media_assets ma 
+              JOIN files f ON f.file_id = ma.original_file_id 
+             WHERE ma.project_id = p.project_id AND ma.deleted_at IS NULL AND f.deleted_at IS NULL) as size_bytes,
+           tf.path as thumbnail_path,
+           tvp.created_at as linked_at,
+           creator.display_name as created_by_name,
+           creator.handle as created_by_handle,
+           (
+             SELECT json_agg(json_build_object(
+               'account_id', a.account_id,
+               'display_name', a.display_name,
+               'handle', a.handle,
+               'avatar_path', f.path,
+               'role', pm.role
+             ))
+             FROM project_members pm
+             JOIN users u ON u.user_id = pm.user_id
+             JOIN accounts a ON a.account_id = u.account_id
+             LEFT JOIN files f ON f.file_id = a.avatar_file_id
+             WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL
+           ) as collaborators
+      FROM team_video_projects tvp
+      JOIN projects p ON p.project_id = tvp.project_id AND p.deleted_at IS NULL
+      LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id
+      LEFT JOIN accounts creator ON creator.account_id = tvp.created_by_account_id
+     WHERE tvp.team_id = $1
+     ORDER BY p.updated_at DESC
+  `;
+
+  const cfBase = String(process.env.CLOUDFRONT_URL || process.env.AWS_CLOUDFRONT_URL || '').replace(/\/$/, '');
+  const res = await pool.query(query, [teamId]);
+  return (res.rows || []).map((p) => {
+    const rawCollabs = Array.isArray(p.collaborators) ? p.collaborators : [];
+    const collaborators = rawCollabs.map((c) => ({
+      ...c,
+      avatar_url: c.avatar_path && cfBase
+        ? (/^https?:\/\//i.test(c.avatar_path) ? c.avatar_path : `${cfBase}/${c.avatar_path.replace(/^\/+/, '')}`)
+        : c.avatar_path || null,
+    }));
+    return {
+      ...p,
+      collaborators,
+      thumbnailUrl: p.thumbnail_path && cfBase
+        ? (/^https?:\/\//i.test(p.thumbnail_path) ? p.thumbnail_path : `${cfBase}/${p.thumbnail_path.replace(/^\/+/, '')}`)
+        : null,
+    };
+  });
+}
+
+async function createTeamVideoProject(teamId, creatorAccountId, creatorUserId, data) {
+  const name = (data.name || 'Team Video Project').trim().slice(0, 50);
+  const width = parseInt(data.width, 10) || 1920;
+  const height = parseInt(data.height, 10) || 1080;
+
+  const projRes = await pool.query(`
+    INSERT INTO projects (name, status, width, height, duration_seconds)
+    VALUES ($1, 'active', $2, $3, 0)
+    RETURNING project_id as id, project_id, name, status, width, height, duration_seconds, created_at, updated_at
+  `, [name, width, height]);
+
+  const newProject = projRes.rows[0];
+
+  await pool.query(`
+    INSERT INTO team_video_projects (team_id, project_id, created_by_account_id)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (team_id, project_id) DO NOTHING
+  `, [teamId, newProject.id, creatorAccountId]);
+
+  // Ensure all active team members receive access automatically (Leader as Owner, members as Editor)
+  await ensureTeamMembersHaveProjectAccess(teamId, newProject.id);
+
+  return newProject;
+}
+
+async function ensureTeamMembersHaveProjectAccess(teamId, specificProjectId = null) {
+  if (!teamId) return;
+
+  let projectIds = [];
+  if (specificProjectId) {
+    projectIds = [specificProjectId];
+  } else {
+    const pRes = await pool.query(`
+      SELECT project_id FROM team_video_projects WHERE team_id = $1
+    `, [teamId]);
+    projectIds = pRes.rows.map(r => r.project_id);
+  }
+
+  if (projectIds.length === 0) return;
+
+  const membersRes = await pool.query(`
+    SELECT DISTINCT u.user_id, tm.role as team_role
+      FROM team_members tm
+      JOIN users u ON u.user_id = tm.user_id
+     WHERE tm.team_id = $1 AND tm.status = 'Active'
+  `, [teamId]);
+
+  const CURSOR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#6366f1'];
+
+  for (const projId of projectIds) {
+    for (const member of membersRes.rows) {
+      const assignedRole = member.team_role === 'Owner' ? 'Owner' : 'Editor';
+      const randomColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
+      await pool.query(`
+        INSERT INTO project_members (project_id, user_id, role, cursor_color, joined_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (project_id, user_id)
+        DO UPDATE SET deleted_at = NULL, role = CASE WHEN EXCLUDED.role = 'Owner' THEN 'Owner' ELSE project_members.role END
+      `, [projId, member.user_id, assignedRole, randomColor]);
+    }
+  }
+}
+
+async function deleteTeamVideoProject(teamId, projectId) {
+  await pool.query(`
+    DELETE FROM team_video_projects WHERE team_id = $1 AND project_id = $2
+  `, [teamId, projectId]);
+  return { success: true };
+}
+
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
 

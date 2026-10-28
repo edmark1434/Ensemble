@@ -1,29 +1,33 @@
-# Active Task: Profile Reviews UI Updates (Author Tag, Colorful Stars Tier & Gray Reference Pills)
+# Current Task: Team Video Projects Creation & Collaboration
 
-## Implementation Objective
+## Objective
+Enable Team Leaders to create video projects for their team, automatically sharing collaborative editing access with every active member of the team.
+1. Strictly enforce that only the Team Leader (`Owner`) can create or delete video projects for the general team.
+2. When created, the Team Leader is assigned the project `Owner` role in `project_members`, and every active team member is automatically added as an `Editor` collaborator.
+3. Keep all active members synchronized so any newly joined or approved members automatically receive collaborative access to existing team video projects.
+4. Provide a video project creation modal with resolution presets (16:9 Landscape, 9:16 Vertical/Shorts, 1:1 Square, 4:5 Portrait) and auto-open newly created projects in the video editor via handoff tokens.
+5. Display team video project cards with preview thumbnails, aspect ratio, duration, last edited timestamps, and collaborator avatar stacks showing all active team members who share access.
 
-1. **Reviewer Author Header**:
-   - Updated [`Profile_Reviews.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/7_profile/Displays/Body/Profile_Reviews.tsx) and [`ProfileRepositories.js`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/backend/repositories/ProfileRepositories.js):
-   - Changed format to: `Rating By: <Name> [tag: Freelancer/Client/Team Leader]`.
-   - Tags:
-     - `Team Leader`: Purple tag (`bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800`)
-     - `Client`: Blue tag (`bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800`)
-     - `Freelancer`: Emerald tag (`bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800`)
-
-2. **Actual Stars & Colorful Rating Tier**:
-   - Replaced numeric score (`5.0`) with actual 5 visual stars (`[1, 2, 3, 4, 5]`).
-   - Filled stars dynamically styled by tier:
-     - 1 star: Poor (rose filled stars & badge)
-     - 2 stars: Fair (orange filled stars & badge)
-     - 3 stars: Good (amber filled stars & badge)
-     - 4 stars: Very Good (emerald filled stars & badge)
-     - 5 stars: Exceptional (indigo/purple gradient badge)
-
-3. **Neutral Gray Reference Pills**:
-   - Changed reference buttons (`Gig: <title>` and `Job: <title>`) from blue/emerald to neutral gray styling:
-     - `bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10`
-     - Icons styled in subtle slate/zinc gray.
-
-## Verification
-- Backend syntax checked with `node -c`: all files valid with 0 errors.
-- Frontend build: `npm --prefix frontend run build` completed with 0 errors in 9.73s.
+## Acceptance Criteria
+- [x] Database migration `1826300000000_create-team-video-projects.js` created and executed (`team_video_projects` table).
+- [x] In `backend/repositories/TeamsRepositories.js`:
+  - `createTeamVideoProject`: Creates project, links in `team_video_projects`, inserts leader as `Owner`, and automatically assigns all active members as `Editor` in `project_members`.
+  - `listTeamVideoProjects`: Lists team video projects with CloudFront thumbnail URLs and collaborator details (display name, avatar, role).
+  - `ensureTeamMembersHaveProjectAccess`: Ensures all active team members have collaborator access.
+  - `deleteTeamVideoProject`: Unlinks video project from the team.
+- [x] In `backend/services/TeamsServices.js`:
+  - Restrict `createVideoProject` and `deleteVideoProject` to active Team Leaders (`role === 'Owner'`).
+  - Automatically call `ensureTeamMembersHaveProjectAccess` upon member activation/join/invitation acceptance.
+- [x] In `backend/controllers/TeamsControllers.js` & `backend/routes/Teams.js`:
+  - `GET /api/teams/:teamId/video-projects`
+  - `POST /api/teams/:teamId/video-projects`
+  - `DELETE /api/teams/:teamId/video-projects/:projectId`
+- [x] In `frontend/src/pages/user/3_teams/SelectedTeam.tsx`:
+  - Pass `isOwner`, `teamLeaderName`, and `teamName` to `TeamVideoProjectsTab`.
+- [x] In `frontend/src/pages/user/3_teams/team_components/TeamVideoProjectsTab.tsx`:
+  - Replaced user-level `/api/projects` call with `/api/teams/:teamId/video-projects`.
+  - Added "+ New Video Project" modal with 4 resolution/aspect ratio presets (16:9, 9:16, 1:1, 4:5).
+  - Protected creation so only Team Leader can create; non-leaders see an explanatory "Managed by Team Leader" indicator.
+  - Automatically launches the created project in the video editor via handoff token.
+  - Rendered collaborator avatar stacks showing active members sharing access.
+- [x] Verification: `npm --prefix frontend run build` succeeded with 0 errors.

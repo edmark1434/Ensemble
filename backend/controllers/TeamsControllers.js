@@ -1,7 +1,7 @@
 const S=require('../services/TeamsServices');
 const wrap=(fn,created=false)=>async(req,res)=>{try{const data=await fn(req);res.status(created?201:200).json({success:true,data});}catch(e){console.error('Teams request failed:',e.message);res.status(e.statusCode||500).json({success:false,message:e.statusCode?e.message:'Team operation failed',code:e.code||undefined});}};
 const MarketplaceActorServices = require('../services/MarketplaceActorServices');
-const account=r=>r.session.account_id, user=r=>r.session.userId;
+const account=r=>r.session?.account_id||null, user=r=>r.session?.userId||null;
 module.exports={
   creationEligibility:wrap(r=>S.creationEligibility(account(r))),
   memberLimit:wrap(r=>S.teamMemberLimit(r.params.teamId)),
@@ -9,5 +9,8 @@ module.exports={
   tasks:wrap(r=>S.listTasks(r.params.teamId,account(r))),
   createTask:wrap(r=>S.createTask(r.params.teamId,account(r),r.body),true),
   updateTask:wrap(r=>S.updateTask(r.params.teamId,account(r),r.params.taskId,r.body)),
-  deleteTask:wrap(r=>S.deleteTask(r.params.teamId,account(r),r.params.taskId))
+  deleteTask:wrap(r=>S.deleteTask(r.params.teamId,account(r),r.params.taskId)),
+  videoProjects:wrap(r=>S.videoProjects(r.params.teamId,account(r))),
+  createVideoProject:wrap(r=>S.createVideoProject(r.params.teamId,account(r),user(r),r.body),true),
+  deleteVideoProject:wrap(r=>S.deleteVideoProject(r.params.teamId,account(r),r.params.projectId))
 };
