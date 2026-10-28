@@ -1,5 +1,6 @@
 const {
     getProfileReviewsByAccountId,
+    getProfileHistoryByAccountId,
     updateProfileAccountRepositories,
     updateTaglineAndDescriptionRepositories: updateTaglineAndDescription,
     getPersonalDetails,
@@ -427,11 +428,24 @@ async function getProfileReviewsByAccountIdService(accountId) {
     }
 }
 
+async function getProfileHistoryByAccountIdService(accountId, viewerAccountId = null) {
+    if (!accountId) {
+        throw new Error('Account ID is required');
+    }
+    try {
+        return await getProfileHistoryByAccountId(accountId, viewerAccountId);
+    } catch (err) {
+        console.error(`Error fetching history for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
     ProfileBudgetError,
     updateBudgetCreditsServices,
     updateBannerPresetServices,
     getProfileReviewsByAccountIdService,
+    getProfileHistoryByAccountIdService,
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,
     updateProfileUserServices,

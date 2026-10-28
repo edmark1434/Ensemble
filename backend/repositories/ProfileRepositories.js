@@ -292,6 +292,62 @@ async function getProfileByAccountId(accountId) {
                     JOIN contracts c ON r.contract_id = c.contract_id JOIN job_contracts jc ON c.contract_id = jc.contract_id JOIN proposals p ON jc.proposal_id = p.proposal_id JOIN jobs j ON p.job_id = j.job_id 
                     WHERE r.account_id = A.ACCOUNT_ID AND j.client_account_id = A.ACCOUNT_ID
                 ) AS client_job_count,
+                (
+                    SELECT COALESCE(AVG(score), 0)
+                    FROM (
+                        SELECT r.stars_out_of_five::numeric AS score
+                        FROM ratings r
+                        JOIN teams t ON r.account_id = t.account_id
+                        WHERE t.deleted_at IS NULL AND (
+                            t.account_id = A.ACCOUNT_ID 
+                            OR EXISTS (
+                                SELECT 1 FROM team_members tm 
+                                JOIN users u ON tm.user_id = u.user_id 
+                                WHERE tm.team_id = t.team_id AND u.account_id = A.ACCOUNT_ID AND tm.status = 'Active'
+                            )
+                        )
+                        UNION ALL
+                        SELECT tr.rating::numeric AS score
+                        FROM team_reviews tr
+                        JOIN teams t ON tr.team_id = t.team_id
+                        WHERE t.deleted_at IS NULL AND (
+                            t.account_id = A.ACCOUNT_ID 
+                            OR EXISTS (
+                                SELECT 1 FROM team_members tm 
+                                JOIN users u ON tm.user_id = u.user_id 
+                                WHERE tm.team_id = t.team_id AND u.account_id = A.ACCOUNT_ID AND tm.status = 'Active'
+                            )
+                        )
+                    ) team_scores
+                ) AS team_rating,
+                (
+                    SELECT COUNT(*)
+                    FROM (
+                        SELECT r.rating_id
+                        FROM ratings r
+                        JOIN teams t ON r.account_id = t.account_id
+                        WHERE t.deleted_at IS NULL AND (
+                            t.account_id = A.ACCOUNT_ID 
+                            OR EXISTS (
+                                SELECT 1 FROM team_members tm 
+                                JOIN users u ON tm.user_id = u.user_id 
+                                WHERE tm.team_id = t.team_id AND u.account_id = A.ACCOUNT_ID AND tm.status = 'Active'
+                            )
+                        )
+                        UNION ALL
+                        SELECT tr.team_review_id AS rating_id
+                        FROM team_reviews tr
+                        JOIN teams t ON tr.team_id = t.team_id
+                        WHERE t.deleted_at IS NULL AND (
+                            t.account_id = A.ACCOUNT_ID 
+                            OR EXISTS (
+                                SELECT 1 FROM team_members tm 
+                                JOIN users u ON tm.user_id = u.user_id 
+                                WHERE tm.team_id = t.team_id AND u.account_id = A.ACCOUNT_ID AND tm.status = 'Active'
+                            )
+                        )
+                    ) team_review_rows
+                ) AS team_review_count,
                 A.STATUS as status,
                 A.DEACTIVATED_AT as deactivated_at,
                 A.REACTIVATION_AVAILABLE_AT as reactivation_available_at
@@ -487,6 +543,29 @@ async function getProfileReviewsByAccountId(accountId) {
                     WHEN req.client_account_id = ANY($1::uuid[]) OR j.client_account_id = ANY($1::uuid[]) THEN 'client'
                     ELSE 'unknown'
                 END as role_type,
+                CASE 
+                    WHEN EXISTS (SELECT 1 FROM teams t WHERE t.account_id = COALESCE(g.freelancer_account_id, p.freelancer_account_id))
+                         OR EXISTS (SELECT 1 FROM team_contract_workspaces tcw WHERE tcw.contract_id = c.contract_id) THEN true
+                    ELSE false
+                END as is_team,
+                CASE 
+                    WHEN (req.client_account_id = ANY($1::uuid[]) OR j.client_account_id = ANY($1::uuid[])) THEN 
+                        CASE 
+                            WHEN EXISTS (SELECT 1 FROM teams t WHERE t.account_id = COALESCE(g.freelancer_account_id, p.freelancer_account_id)) THEN 'Team Leader'
+                            WHEN EXISTS (SELECT 1 FROM team_members tm JOIN teams t ON tm.team_id = t.team_id WHERE tm.user_id = u.user_id AND tm.role = 'Owner') THEN 'Team Leader'
+                            ELSE 'Freelancer'
+                        END
+                    ELSE 'Client'
+                END as reviewer_role,
+                CASE 
+                    WHEN gc.contract_id IS NOT NULL THEN 'gig'
+                    WHEN jc.contract_id IS NOT NULL THEN 'job'
+                    ELSE 'contract'
+                END as contract_type,
+                COALESCE(g.title, j.title, 'Project Contract') as project_title,
+                g.gig_id,
+                j.job_id,
+                tier.title as tier_name,
                 a.account_id as reviewer_account_id,
                 a.handle as reviewer_handle,
                 COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), a.display_name, a.handle, 'User') as reviewer_name,
@@ -520,10 +599,92 @@ async function getProfileReviewsByAccountId(accountId) {
     }
 }
 
+async function getProfileHistoryByAccountId(accountId, viewerAccountId = null) {
+    try {
+        const actorAccountIds = await getAffiliatedAccountIds(accountId);
+        const viewerActorAccountIds = viewerAccountId ? await getAffiliatedAccountIds(viewerAccountId) : [];
+        const queryText = `
+            SELECT 
+                c.contract_id,
+                c.status as contract_status,
+                c.rate_credits,
+                c.created_at,
+                c.starts_at,
+                c.deadline_at,
+                CASE 
+                    WHEN gc.contract_id IS NOT NULL THEN 'gig'
+                    WHEN jc.contract_id IS NOT NULL THEN 'job'
+                    ELSE 'contract'
+                END as contract_type,
+                COALESCE(g.title, j.title, 'Contract Project') as title,
+                COALESCE(g.description, j.description) as description,
+                COALESCE(g.gig_id::text, j.job_id::text) as source_id,
+                g.gig_id,
+                j.job_id,
+                gt.title as tier_name,
+                COALESCE(g.deleted_at IS NULL AND g.status ILIKE 'open', false) as is_gig_open,
+                CASE 
+                    WHEN g.freelancer_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[]) THEN 'freelancer'
+                    WHEN req.client_account_id = ANY($1::uuid[]) OR j.client_account_id = ANY($1::uuid[]) THEN 'client'
+                    ELSE 'collaborator'
+                END as account_role,
+                COALESCE(req.client_account_id, j.client_account_id) as client_account_id,
+                COALESCE(NULLIF(TRIM(COALESCE(client_u.first_name, '') || ' ' || COALESCE(client_u.last_name, '')), ''), client_acc.display_name, client_acc.handle, 'Client') as client_name,
+                client_acc.handle as client_handle,
+                client_f.path as client_avatar,
+                COALESCE(g.freelancer_account_id, p.freelancer_account_id) as freelancer_account_id,
+                COALESCE(NULLIF(TRIM(COALESCE(free_u.first_name, '') || ' ' || COALESCE(free_u.last_name, '')), ''), free_acc.display_name, free_acc.handle, 'Freelancer') as freelancer_name,
+                free_acc.handle as freelancer_handle,
+                free_f.path as freelancer_avatar,
+                (
+                    SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback)
+                    FROM ratings r
+                    WHERE r.contract_id = c.contract_id AND r.account_id = ANY($1::uuid[])
+                    LIMIT 1
+                ) as review_received
+            FROM contracts c
+            LEFT JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+            LEFT JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id
+            LEFT JOIN gig_tiers gt ON req.gig_tier_id = gt.gig_tier_id
+            LEFT JOIN gigs g ON gt.gig_id = g.gig_id
+            LEFT JOIN job_contracts jc ON c.contract_id = jc.contract_id
+            LEFT JOIN proposals p ON jc.proposal_id = p.proposal_id
+            LEFT JOIN jobs j ON p.job_id = j.job_id
+            LEFT JOIN accounts client_acc ON client_acc.account_id = COALESCE(req.client_account_id, j.client_account_id)
+            LEFT JOIN users client_u ON client_acc.account_id = client_u.account_id
+            LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
+            LEFT JOIN accounts free_acc ON free_acc.account_id = COALESCE(g.freelancer_account_id, p.freelancer_account_id)
+            LEFT JOIN users free_u ON free_acc.account_id = free_u.account_id
+            LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
+            WHERE (
+                g.freelancer_account_id = ANY($1::uuid[]) 
+                OR p.freelancer_account_id = ANY($1::uuid[])
+                OR req.client_account_id = ANY($1::uuid[])
+                OR j.client_account_id = ANY($1::uuid[])
+            )
+            ORDER BY c.created_at DESC
+        `;
+        const result = await pool.query(queryText, [actorAccountIds]);
+        return result.rows.map(row => {
+            const isViewerClient = viewerActorAccountIds.length > 0 && row.client_account_id && viewerActorAccountIds.includes(row.client_account_id);
+            const canReorder = Boolean(row.contract_type === 'gig' && row.is_gig_open && isViewerClient && row.gig_id);
+            return {
+                ...row,
+                is_viewer_client: isViewerClient,
+                can_reorder: canReorder,
+            };
+        });
+    } catch (err) {
+        console.error("Error fetching history for accountId", accountId, err);
+        throw err;
+    }
+}
+
 module.exports = {
     updateBudgetCreditsRepositories,
     updateBannerPresetRepositories,
     getProfileReviewsByAccountId,
+    getProfileHistoryByAccountId,
     updateProfileAccountRepositories,
     insertProfileSocialMediaRepositories,
     updateTaglineAndDescriptionRepositories,

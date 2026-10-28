@@ -34,6 +34,7 @@ const {
     getPublicDisputeDiscussionController,
     postPublicDisputeCommentController,
     getProfileReviewsController,
+    getProfileHistoryController,
     updateProfileSocialMediaController,
     updateProfileDetailsController,
     getProfileAvatarsByAccountIdController,
@@ -84,6 +85,7 @@ router.get('/disputes/:disputeId', [optionalSession, optionalAuth], getPublicDis
 router.post('/disputes/:disputeId/messages', [checkSession, requireAuth], postPublicDisputeCommentController);
 router.get('/profile/:accountId', [optionalSession, optionalAuth], getProfileByAccountIdController);
 router.get('/profile/:accountId/reviews', [optionalSession, optionalAuth], getProfileReviewsController);
+router.get('/profile/:accountId/history', [optionalSession, optionalAuth], getProfileHistoryController);
 router.get('/links/:accountId', [optionalSession, optionalAuth], getAccountLinkByAccountIdController);
 router.get('/profile/avatars/:accountId', [optionalSession, optionalAuth], getProfileAvatarsByAccountIdController);
 router.get('/check-user/:accountId', [optionalSession, optionalAuth], checkUserAccountIdController);
