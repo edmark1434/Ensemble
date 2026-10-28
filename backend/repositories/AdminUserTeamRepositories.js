@@ -1190,6 +1190,11 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     } catch (notifyErr) {
       console.warn('Failed to broadcast timeout:', notifyErr.message);
     }
+    try {
+      require('../services/MeritServices').scheduleMeritRecompute(accountId);
+    } catch (err) {
+      console.warn('Merit recompute after timeout failed:', err.message);
+    }
     return { accountId, status: account.status, forumTimeout: true, restriction };
   }
 
@@ -1230,6 +1235,11 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       }
     } catch (notifyErr) {
       console.warn('Failed to broadcast timeout clear:', notifyErr.message);
+    }
+    try {
+      require('../services/MeritServices').scheduleMeritRecompute(accountId);
+    } catch (err) {
+      console.warn('Merit recompute after timeout clear failed:', err.message);
     }
     return { accountId, status: account.status, forumTimeout: false, restriction };
   }
@@ -1284,6 +1294,12 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     });
   } catch (notifyErr) {
     console.warn('Failed to broadcast account status change:', notifyErr.message);
+  }
+
+  try {
+    require('../services/MeritServices').scheduleMeritRecompute(accountId, { force: key === 'ban' });
+  } catch (err) {
+    console.warn('Merit recompute after status change failed:', err.message);
   }
 
   return { accountId, status, previousStatus: account.status, suspensionEndsAt };
@@ -1604,6 +1620,12 @@ async function warnAccount(accountId, { type, reason, points, expiresAt, duratio
     console.warn('Failed to broadcast warning notification:', notifyErr.message);
   }
 
+  try {
+    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+  } catch (err) {
+    console.warn('Merit recompute after warning failed:', err.message);
+  }
+
   return {
     accountId,
     violationId: inserted.rows[0]?.violation_id || null,
@@ -1702,6 +1724,12 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       console.warn('Failed to broadcast pardon status change:', notifyErr.message);
     }
 
+    try {
+      require('../services/MeritServices').scheduleMeritRecompute(accountId);
+    } catch (err) {
+      console.warn('Merit recompute after pardon failed:', err.message);
+    }
+
     return {
       accountId,
       pardonId: pardonRes.rows[0].pardon_id,
@@ -1753,6 +1781,12 @@ async function rescindWarning(accountId, violationId, staffId) {
       status: 'rescinded',
     },
   });
+
+  try {
+    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+  } catch (err) {
+    console.warn('Merit recompute after rescind failed:', err.message);
+  }
 
   return {
     accountId,

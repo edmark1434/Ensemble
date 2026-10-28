@@ -276,7 +276,7 @@ async function registerUser(signupPayload = {}, options = {}) {
         handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
         type: type ?? 'User',
         status: accountStatus,
-        meritScore: Number.isFinite(defaultMerit) ? defaultMerit : 50,
+        meritScore: Number.isFinite(defaultMerit) ? Math.min(74, Math.max(50, Math.round(defaultMerit))) : 50,
     });
     //hash the password if provided, otherwise set to null for OAuth users
     const passwordHash = options.passwordHash || (password ? await bcrypt.hash(password, SALT_ROUNDS) : null);
@@ -299,6 +299,8 @@ async function registerUser(signupPayload = {}, options = {}) {
         const { grantBadgeService, scheduleBadgeEvaluation } = require('./BadgeServices');
         await grantBadgeService({ registryId: 'acc-alpha', accountIds: [account.account_id] });
         scheduleBadgeEvaluation(account.account_id, { event: 'signup' });
+        const { scheduleMeritRecompute } = require('./MeritServices');
+        scheduleMeritRecompute(account.account_id);
     } catch (e) {
         console.error("Failed to grant Alpha badge to new user", e);
     }

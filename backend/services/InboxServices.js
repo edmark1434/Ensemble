@@ -373,6 +373,7 @@ async function persistChatNotifications({
 
 async function createGroupServices(payload, accountId) {
     const ownerId = await requireAccount(accountId);
+    await require('./MeritServices').assertMeritAllows(ownerId, 'new_dm');
     const conversationName = String(payload.conversation_name || '').trim();
     if (!conversationName) {
         throw new ChatServiceError('conversation_name is required');
@@ -827,6 +828,7 @@ async function createOrReuseDirectChatServices(payload, accountId) {
 
     let inbox = await getInboxByTwoAccountIds(senderId, recipientId, 'direct');
     if (!inbox) {
+        await require('./MeritServices').assertMeritAllows(senderId, 'new_dm');
         const now = new Date();
         const result = await createInboxRepositories({
             conversation_name: '',

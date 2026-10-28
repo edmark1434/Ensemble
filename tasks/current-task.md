@@ -1,13 +1,13 @@
-# Active Task: Dynamic Badge Requirement Library
+# Active Task: Platform Merit Engine
 
 ## Implementation Objective
 
-Named, CRUD-able badge requirements that staff create and attach to badges. The 15 product badges are wired to scanned platform metrics (alpha, beta, profile, 1/10/50/100 ranks). Custom rules can be added later (followers, jobs posted, and so on).
+New users start at merit 50 (Established). The score recomputes from real work, reviews, verification, age, and punishment hits. Crossing a band throttles products automatically. Low merit never auto-suspends, times out, or bans.
 
 ## Acceptance Criteria
 
-- [x] `badge_requirement_defs` library with operators and thresholds.
-- [x] Existing product badges attach the matching named requirements.
-- [x] Admin Requirements tab can create / update / delete custom defs and attach them from Catalog.
-- [x] Evaluator uses the attached def (metric + operator + threshold).
-- [x] TypeScript check for the new admin surfaces.
+- [x] Join score is 50 (Established). Missing score displays 50, not 100.
+- [x] Bands: Trusted 75–100, Established 50–74, Watch 35–49, Restricted 20–34, Frozen 0–19.
+- [x] Frozen / Restricted / Watch are automatic product limits, not standing punishments.
+- [x] Recompute on close, review, verify, warn, timeout, suspend, ban, pardon, rescind.
+- [x] Backend guards on jobs, gigs, proposals, assets, forums, new DMs, teams, cashout.

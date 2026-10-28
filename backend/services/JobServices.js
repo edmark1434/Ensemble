@@ -39,6 +39,12 @@ async function createJobServices(jobData) {
             }
         }
     }
+    const { assertMeritAllows } = require('./MeritServices');
+    await assertMeritAllows(
+      jobData.payer_account_id || jobData.client_account_id,
+      jobData.is_urgent ? 'create_urgent_job' : 'create_job'
+    );
+
     if (jobData.hiring_type === 'team') {
         if (!Array.isArray(jobData.milestones) || jobData.milestones.length === 0) {
             throw new Error('At least one milestone is required for team job postings.');
@@ -73,6 +79,11 @@ async function getJobByIdServices(jobId, accountId = null, actorIds = [], affili
 }
 
 async function updateJobServices(jobId, accountIds, jobData) {
+    if (jobData.is_urgent) {
+        const { assertMeritAllows } = require('./MeritServices');
+        const actorId = Array.isArray(accountIds) ? accountIds[0] : accountIds;
+        await assertMeritAllows(actorId, 'create_urgent_job');
+    }
     const updated = await JobRepositories.updateJobRepositories(jobId, accountIds, jobData);
     if (!updated) {
         throw new Error('Job not found or you do not have permission to edit it.');
@@ -99,6 +110,11 @@ async function createProposalServices(proposalData) {
         error.statusCode = 400;
         throw error;
     }
+    const { assertMeritAllows } = require('./MeritServices');
+    await assertMeritAllows(
+      proposalData.proposed_by_account_id || proposalData.payer_account_id || proposalData.freelancer_account_id,
+      'proposal'
+    );
     const created = await JobRepositories.createProposalRepositories(proposalData);
     const { scheduleBadgeEvaluation } = require('./BadgeServices');
     scheduleBadgeEvaluation(proposalData.freelancer_account_id);

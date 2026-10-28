@@ -93,6 +93,10 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
+  const { assertMeritAllows, meritWatchForcesListingReview } = require('../services/MeritServices');
+  await assertMeritAllows(accountId, 'publish_asset');
+  const watchReview = await meritWatchForcesListingReview(accountId);
+
   // If the asset is ALREADY published, updating its details preserves published status
   if (currentStatus === 'published') {
     if (marketAssetId) {
@@ -119,7 +123,7 @@ async function resolveMarketplacePublishStatus({
   }
 
   const settings = await getModerationSettings();
-  if (!settings.marketplaceListingReview) {
+  if (!settings.marketplaceListingReview && !watchReview) {
     return { status: requestedStatus, queued: false };
   }
 

@@ -90,7 +90,16 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   if (loading) return <MeritSectionSkeleton viewMode={viewMode} />;
 
   // Evaluates to safe percentage bounded between 0 and 100
-  const safeScore = meritScore !== undefined && meritScore !== null ? Math.min(Math.max(meritScore, 0), 100) : 100;
+  const safeScore = meritScore !== undefined && meritScore !== null ? Math.min(Math.max(meritScore, 0), 100) : 50;
+  const meritBand = safeScore >= 75
+    ? 'Trusted'
+    : safeScore >= 50
+      ? 'Established'
+      : safeScore >= 35
+        ? 'Watch'
+        : safeScore >= 20
+          ? 'Restricted'
+          : 'Frozen';
 
   // Dynamic color: 100 = green, 50 = yellow-orange, 0 = red
   const getMeritColor = (score: number) => {
@@ -124,7 +133,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
                 Platform Merit
               </span>
               <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed font-normal">
-                Accumulated performance total of <strong className="font-bold text-gray-900 dark:text-white font-mono">{totalReviews}</strong> verified {totalReviews === 1 ? 'review' : 'reviews'}.
+                Reliability score. {meritBand} band. Star ratings stay separate.
               </p>
             </div>
 
