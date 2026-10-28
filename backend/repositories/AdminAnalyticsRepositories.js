@@ -357,11 +357,11 @@ async function fetchForumPlatformStats() {
 
 function buildMeritTiers(members) {
   const tiers = [
-    { tier: 'Newcomer', range: '0–25', min: 0, max: 25 },
-    { tier: 'Contributor', range: '26–50', min: 26, max: 50 },
-    { tier: 'Established', range: '51–75', min: 51, max: 75 },
-    { tier: 'Veteran', range: '76–100', min: 76, max: 100 },
-    { tier: 'Elite', range: '100+', min: 101, max: Infinity },
+    { tier: 'Frozen', range: '0–19', min: 0, max: 19 },
+    { tier: 'Restricted', range: '20–34', min: 20, max: 34 },
+    { tier: 'Watch', range: '35–49', min: 35, max: 49 },
+    { tier: 'Established', range: '50–74', min: 50, max: 74 },
+    { tier: 'Trusted', range: '75–100', min: 75, max: 100 },
   ];
   return tiers.map((t) => ({
     tier: t.tier,

@@ -252,7 +252,10 @@ async function followUserService(followerId, followedId) {
     if (!followerId || !followedId) throw new Error('Follower and followed IDs are required');
     if (followerId === followedId) throw new Error('Cannot follow yourself');
     try {
-        return await followUser(followerId, followedId);
+        const result = await followUser(followerId, followedId);
+        const { scheduleBadgeEvaluation } = require('./BadgeServices');
+        scheduleBadgeEvaluation(followedId);
+        return result;
     } catch (err) {
         console.error('Error in followUserService:', err);
         throw err;

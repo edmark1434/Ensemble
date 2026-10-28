@@ -93,6 +93,10 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
+  const { assertMeritAllows, meritWatchForcesListingReview } = require('../services/MeritServices');
+  await assertMeritAllows(accountId, 'publish_asset');
+  const watchReview = await meritWatchForcesListingReview(accountId);
+
   // If the asset is ALREADY published, updating its details preserves published status
   if (currentStatus === 'published') {
     if (marketAssetId) {
@@ -119,7 +123,7 @@ async function resolveMarketplacePublishStatus({
   }
 
   const settings = await getModerationSettings();
-  if (!settings.marketplaceListingReview) {
+  if (!settings.marketplaceListingReview && !watchReview) {
     return { status: requestedStatus, queued: false };
   }
 
@@ -275,30 +279,32 @@ async function reconcileUnassignedDisputes() {
   return { assigned: assignedCount };
 }
 
-async function countActiveWarnings(accountId) {
+async function sumActiveWarningPoints(accountId) {
   const result = await pool.query(
     `
-    SELECT COUNT(*)::int AS count
+    SELECT COALESCE(SUM(LEAST(GREATEST(COALESCE(points, 1), 1), 10)), 0)::int AS points
     FROM violations
     WHERE account_id = $1
       AND deleted_at IS NULL
       AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
-      AND (expires_at IS NULL OR expires_at > NOW())
+      AND expires_at IS NOT NULL
+      AND expires_at > NOW()
     `,
     [accountId]
   );
-  return Number(result.rows[0]?.count || 0);
+  return Number(result.rows[0]?.points || 0);
 }
 
 /**
- * After a warning/violation is issued, suspend the account when active
- * warning count reaches moderation.maxWarningsBeforeSuspend.
+ * After a warning is issued, suspend when active warning POINTS reach the
+ * configured threshold (legacy stored values under 10 are treated as 20).
  */
 async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   if (!accountId) return null;
   const settings = await getModerationSettings();
-  const max = Math.max(1, Number(settings.maxWarningsBeforeSuspend) || 3);
-  const activeCount = await countActiveWarnings(accountId);
+  const configured = Number(settings.maxWarningsBeforeSuspend);
+  const max = Number.isFinite(configured) && configured >= 10 ? configured : 20;
+  const activeCount = await sumActiveWarningPoints(accountId);
   if (activeCount < max) {
     return { suspended: false, activeCount, max };
   }
@@ -319,7 +325,7 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   );
   await recordAccountActivity({
     accountId,
-    action: `Auto-suspended after ${activeCount} active warning(s) (limit ${max})`,
+    action: `Auto-suspended after ${activeCount} active warning point(s) (limit ${max})`,
     eventCode: 'ACCOUNT_STATUS_CHANGED',
     referenceTable: 'accounts',
     referencePrefix: 'ACC',
@@ -515,7 +521,8 @@ module.exports = {
   sendMarketplaceListingNotification,
   applyDisputeAutomations,
   reconcileUnassignedDisputes,
-  countActiveWarnings,
+  countActiveWarnings: sumActiveWarningPoints,
+  sumActiveWarningPoints,
   maybeAutoSuspendAfterWarning,
   applyReportAutomations,
 };

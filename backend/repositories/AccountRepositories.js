@@ -28,7 +28,7 @@ async function createAccount({
     description = null,
     type = 'User',
     status = 'active',
-    meritScore = 0,
+    meritScore = 50,
     deletedAt = null,
 } = {}) {
     try {

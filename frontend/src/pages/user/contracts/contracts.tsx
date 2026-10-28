@@ -20,6 +20,7 @@ import {
   Calendar,
   ChevronRight,
   BookOpen,
+  Info,
   Clock,
   Layers,
   FileCheck2,
@@ -90,6 +91,8 @@ export interface DetailedContract {
   status: ContractStatus;
   isArchived: boolean;
   jobId?: string;
+  teamId?: string;
+  orderId?: string;
 
   // Dates
   dateCreated: string;
@@ -347,14 +350,16 @@ export const Contracts: React.FC = () => {
     };
   }, [fetchContracts]);
 
-  const activeContracts = contracts.filter((c) => !c.isArchived && c.status !== "Pending Signature");
-  const pendingContracts = contracts.filter((c) => c.status === "Pending Signature");
-  const archivedContracts = contracts.filter((c) => c.isArchived && c.status !== "Pending Signature");
+  const isPendingStatus = (status: string) => status === "Pending Signature" || status === "Waiting";
+
+  const activeContracts = contracts.filter((c) => !c.isArchived && !isPendingStatus(c.status));
+  const pendingContracts = contracts.filter((c) => !c.isArchived && isPendingStatus(c.status));
+  const archivedContracts = contracts.filter((c) => c.isArchived && !isPendingStatus(c.status));
 
   const filteredContracts = contracts.filter((c) => {
-    if (activeTab === "active") return !c.isArchived && c.status !== "Pending Signature";
-    if (activeTab === "pending") return c.status === "Pending Signature";
-    if (activeTab === "archived") return c.isArchived && c.status !== "Pending Signature";
+    if (activeTab === "active") return !c.isArchived && !isPendingStatus(c.status);
+    if (activeTab === "pending") return !c.isArchived && isPendingStatus(c.status);
+    if (activeTab === "archived") return c.isArchived && !isPendingStatus(c.status);
     return false;
   });
 
@@ -459,7 +464,7 @@ export const Contracts: React.FC = () => {
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> Pending
+                  <Clock className="h-4 w-4" /> Waitlist
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
                     pendingContracts.length > 0
                       ? 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/70 dark:text-blue-200 dark:border-blue-700'
@@ -523,7 +528,7 @@ export const Contracts: React.FC = () => {
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <BookOpen className="h-4 w-4" /> Terms & Guide
+                  <Info className="h-4 w-4" /> Info
                 </span>
 
                 {activeTab === "guide" && (
@@ -585,7 +590,7 @@ export const Contracts: React.FC = () => {
                     <div className="h-12 w-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto mb-3">
                       <Clock className="h-6 w-6" />
                     </div>
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Pending Contract Offers</h3>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Contracts on Waitlist</h3>
                     <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
                       Contracts sent to you for your decision (accept or reject) or offers you extended to freelancers will appear here.
                     </p>
@@ -600,7 +605,7 @@ export const Contracts: React.FC = () => {
                       const avatarUrl = constructAvatarUrl(otherPartyAvatar, otherPartyName);
 
                       const handleCardClick = () => {
-                        if (contract.proposalId) {
+                        if (contract.proposalId && contract.status === "Pending Signature") {
                           navigate(`/jobs/proposals/sent/${contract.proposalId}/offer/${contract.id}`);
                         } else {
                           navigate(`/contracts/${contract.id}`);
@@ -615,18 +620,29 @@ export const Contracts: React.FC = () => {
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ duration: 0.2 }}
                           onClick={handleCardClick}
-                          className="group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-amber-500/40 dark:border-amber-500/30 bg-white dark:bg-dark-surface/60 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-500 dark:hover:border-amber-500 transition-all duration-300"
+                          className={`group relative cursor-pointer overflow-hidden rounded-2xl border-2 bg-white dark:bg-dark-surface/60 shadow-sm hover:shadow-xl transition-all duration-300 ${
+                            contract.status === "Waiting"
+                              ? "border-sky-500/40 dark:border-sky-500/30 hover:border-sky-500 hover:shadow-sky-500/10"
+                              : "border-amber-500/40 dark:border-amber-500/30 hover:border-amber-500 hover:shadow-amber-500/10"
+                          }`}
                         >
-                          {/* Top amber accent line */}
-                          <div className="h-1.5 w-full bg-amber-500" />
+                          {/* Top accent line */}
+                          <div className={`h-1.5 w-full ${contract.status === "Waiting" ? "bg-sky-500" : "bg-amber-500"}`} />
 
                           <div className="p-6 space-y-4">
                             {/* Header pill & Escrow amount */}
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700 shadow-2xs">
-                                <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
-                                {isFreelancer ? "Action Required • Offer Received" : "Awaiting Freelancer Review"}
-                              </span>
+                              {contract.status === "Waiting" ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/70 dark:text-sky-200 dark:border-sky-700 shadow-2xs">
+                                  <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
+                                  WAITING
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700 shadow-2xs">
+                                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                                  {isFreelancer ? "Action Required • Offer Received" : "Awaiting Freelancer Review"}
+                                </span>
+                              )}
 
                               <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:border-emerald-800">
                                 <CreditIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
@@ -721,10 +737,20 @@ export const Contracts: React.FC = () => {
                             {/* Action CTA */}
                             <div className="pt-3 border-t border-zinc-200 dark:border-white/10 flex items-center justify-between gap-3">
                               <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
-                                {isFreelancer ? "Decision required to form contract" : "Awaiting signature"}
+                                {contract.status === "Waiting"
+                                  ? (isFreelancer ? "Waiting for escrow deposit" : "Escrow deposit needed to start")
+                                  : (isFreelancer ? "Decision required to form contract" : "Awaiting signature")}
                               </span>
-                              <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 group-hover:translate-x-0.5 transition-transform">
-                                <span>{isFreelancer ? "Review Offer & Decide" : "View Sent Offer"}</span>
+                              <div className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-white font-bold text-xs shadow-md group-hover:translate-x-0.5 transition-transform ${
+                                contract.status === "Waiting"
+                                  ? "bg-sky-600 hover:bg-sky-700 shadow-sky-500/20"
+                                  : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                              }`}>
+                                <span>
+                                  {contract.status === "Waiting"
+                                    ? (isFreelancer ? "View Contract" : "Fund Escrow to Start")
+                                    : (isFreelancer ? "Review Offer & Decide" : "View Sent Offer")}
+                                </span>
                                 <ArrowRight className="h-3.5 w-3.5" />
                               </div>
                             </div>

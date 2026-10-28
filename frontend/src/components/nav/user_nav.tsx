@@ -26,7 +26,7 @@ import {
     Compass
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, useNavigate, useLocation, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
@@ -103,11 +103,22 @@ interface UserNavProps {
 const UserNav: React.FC<UserNavProps> = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const user = useGlobalState((state) => state.user);
+    const isVerified = useGlobalState((state) => state.isVerified);
     const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
     const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
     const isGuestMode = useGlobalState((state) => state.isGuestMode);
-    const isStaffPreview = isStaffPlatformViewer(useGlobalState((state) => state.user));
+    const isStaffPreview = isStaffPlatformViewer(user);
     const hidePersonalNav = isGuestMode || isStaffPreview;
+
+    const isAccountVerified = Boolean(
+        isVerified ||
+        user?.is_verified ||
+        user?.isVerified ||
+        user?.verification_status === true ||
+        user?.verification_status === "Verified"
+    );
+    const showVerificationAd = !isAccountVerified && !hidePersonalNav;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
     const isTourActive = useTourStore((state) => state.isWalkthroughActive);
@@ -656,6 +667,23 @@ const UserNav: React.FC<UserNavProps> = () => {
                    )}
                 </nav>
              </LayoutGroup>
+
+             {/* Verification Banner Ad (only shown if account is unverified) */}
+             {showVerificationAd && (
+                <div className="border-t border-gray-200 dark:border-white/10 w-full overflow-hidden shrink-0">
+                   <Link
+                      to="/account-verification-status"
+                      className="group block w-full transition-opacity hover:opacity-90"
+                      title="Account Verification"
+                   >
+                      <img
+                         src={isCollapsed ? "/ad/verify_ad_s.png" : "/ad/verify_ad.png"}
+                         alt="Verify Ad"
+                         className="w-full h-auto block object-cover dark:invert select-none"
+                      />
+                   </Link>
+                </div>
+             )}
 
              {/* Collapse Button */}
              <div className="border-t border-gray-200 dark:border-white/10 p-3">

@@ -92,7 +92,7 @@ const MONTH_OPTIONS = [
 
 const STATUS_OPTIONS = ['all', 'Active', 'Suspended', 'Banned', 'Pending'];
 const VERIFICATION_OPTIONS = ['all', 'Fully verified', 'Partially verified', 'Unverified', 'Pending review'];
-const TIER_OPTIONS = ['all', 'Newcomer', 'Contributor', 'Established', 'Veteran', 'Elite'];
+const TIER_OPTIONS = ['all', 'Frozen', 'Restricted', 'Watch', 'Established', 'Trusted'];
 const PROFILE_OPTIONS: { value: ProfileFilter; label: string }[] = [
   { value: 'all', label: 'All profiles' },
   { value: 'complete', label: 'Complete (avatar + tagline)' },
@@ -382,11 +382,11 @@ export default function AnalyticsFilters({
 }
 
 export function meritToTier(merit: number): string {
-  if (merit <= 25) return 'Newcomer';
-  if (merit <= 50) return 'Contributor';
-  if (merit <= 75) return 'Established';
-  if (merit <= 100) return 'Veteran';
-  return 'Elite';
+  if (merit <= 19) return 'Frozen';
+  if (merit <= 34) return 'Restricted';
+  if (merit <= 49) return 'Watch';
+  if (merit <= 74) return 'Established';
+  return 'Trusted';
 }
 
 function matchesCreditBand(credits: number, band: CreditBand): boolean {

@@ -109,6 +109,9 @@ async function seedBadges(userAccountIds) {
     }
   }
 
+  const { seedRequirementLibraryAndAttach } = require('../repositories/BadgeRepositories');
+  await seedRequirementLibraryAndAttach();
+
   // Alpha Tester is delivered as a pending grant with a System notification, like real signups
   if (alphaBadge && userAccountIds.length) {
     const { createPendingBadgeGrants } = require('../repositories/BadgeRepositories');

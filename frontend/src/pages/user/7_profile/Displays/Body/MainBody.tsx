@@ -8,7 +8,7 @@ import { Profile_Services } from "./Profile_Services";
 import { Profile_JobPosts } from "./Profile_JobPosts";
 import { Profile_Assets } from "./Profile_Assets";
 import { Profile_History } from "./Profile_History";
-import { Profile_Reviews } from "./Profile_Reviews";
+import { Profile_Reviews, type ReviewFilter } from "./Profile_Reviews";
 import { Profile_Introduction } from "./Profile_Introduction";
 import { Profile_Gallery } from "./Profile_Gallery";
 import { MeritSection_ProfileDisplay } from "../MeritSection_ProfileDisplay";
@@ -64,7 +64,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   accountId,
 }) => {
   const [performanceTab, setPerformanceTab] = useState<"ratings" | "reviews" | "history">("ratings");
-  const [reviewFilter, setReviewFilter] = useState<"All" | "As Freelancer" | "As a Client" | "Asset Creation">("All");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("All");
 
   if (loading) return <DetailsListBodySkeleton />;
 
@@ -112,15 +112,17 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             className="flex-1 flex flex-col"
           >
             {activeTab === "introduction" && (
-              <Profile_Introduction
-                introduction={userDetails?.introduction}
-                isOwner={isOwner}
-                isLoading={loading}
-                onSave={onUpdateIntroduction}
-                accountId={accountId || ""}
-                onViewMoreGallery={() => onTabChange("gallery")}
-                userName={userDetails?.name || userDetails?.username || ""}
-              />
+              <div data-tour="profile-introduction" className="flex-1 flex flex-col">
+                <Profile_Introduction
+                  introduction={userDetails?.introduction}
+                  isOwner={isOwner}
+                  isLoading={loading}
+                  onSave={onUpdateIntroduction}
+                  accountId={accountId || ""}
+                  onViewMoreGallery={() => onTabChange("gallery")}
+                  userName={userDetails?.name || userDetails?.username || ""}
+                />
+              </div>
             )}
             {activeTab === "performance" && (
               <div className="flex flex-col h-full space-y-4">
@@ -158,6 +160,8 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                             freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating).toFixed(1)) : 0.0}
                             assetRating={userDetails?.asset_rating ? Number(parseFloat(userDetails.asset_rating).toFixed(1)) : 0.0}
                             successfulJobsCount={userDetails?.successful_jobs_count ? Number(userDetails.successful_jobs_count) : 0}
+                            teamRating={userDetails?.team_rating ? Number(parseFloat(userDetails.team_rating).toFixed(1)) : 0.0}
+                            teamReviewCount={userDetails?.team_review_count ? Number(userDetails.team_review_count) : 0}
                             freelancerServiceRating={userDetails?.freelancer_service_rating ? Number(parseFloat(userDetails.freelancer_service_rating).toFixed(1)) : 0.0}
                             freelancerServiceCount={userDetails?.freelancer_service_count ? Number(userDetails.freelancer_service_count) : 0}
                             freelancerJobRating={userDetails?.freelancer_job_rating ? Number(parseFloat(userDetails.freelancer_job_rating).toFixed(1)) : 0.0}
@@ -182,21 +186,23 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                   )}
                   {performanceTab === "history" && (
                     <div className="pt-2">
-                      <Profile_History isOwner={isOwner} />
+                      <Profile_History isOwner={isOwner} accountId={accountId} />
                     </div>
                   )}
                 </div>
               </div>
             )}
             {activeTab === "portfolio" && (
-              <Profile_Portfolio
-                portfolioItems={portfolioItems}
-                isOwner={isOwner}
-                isLoading={loading}
-                onUploadPDF={onUploadPDF}
-                onAddExternalLink={onAddExternalLink}
-                onDeleteItem={onDeletePortfolioItem}
-              />
+              <div data-tour="profile-portfolio" className="flex-1 flex flex-col">
+                <Profile_Portfolio
+                  portfolioItems={portfolioItems}
+                  isOwner={isOwner}
+                  isLoading={loading}
+                  onUploadPDF={onUploadPDF}
+                  onAddExternalLink={onAddExternalLink}
+                  onDeleteItem={onDeletePortfolioItem}
+                />
+              </div>
             )}
             {activeTab === "gallery" && (
               <Profile_Gallery accountId={accountId || ""} isOwner={isOwner} />

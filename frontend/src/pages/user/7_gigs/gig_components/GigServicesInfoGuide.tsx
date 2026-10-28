@@ -8,6 +8,11 @@ import {
   Plus,
   HelpCircle,
   SlidersHorizontal,
+  Clock,
+  Users,
+  ShieldCheck,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
@@ -126,8 +131,28 @@ export const GigServicesInfoGuide: React.FC = () => {
           Open
         </span>
       ),
-      condition: "Creator has open slots available and is ready for work.",
-      effect: "Clients can order packages directly without queuing delays.",
+      condition: "Active concurrent in-contract orders are below max capacity (active < slots) and provider has intake open.",
+      effect: "Service is actively accepting orders. Clients can place orders directly without queuing delays.",
+    },
+    {
+      name: "Paused (Queue Full)",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40">
+          Paused (Queue Full)
+        </span>
+      ),
+      condition: "Specialist has reached their maximum concurrent in-contract capacity (active_orders >= slots, e.g. 3/3 active contracts).",
+      effect: "Public intake automatically pauses to prevent burnout. Pending orders remain safe in line—reopens to Open automatically when an order completes.",
+    },
+    {
+      name: "Closed",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
+          Closed
+        </span>
+      ),
+      condition: "Specialist manually stopped or closed intake (vacations, restructuring offerings, or personal breaks).",
+      effect: "Public ordering is halted. Existing contracts and pending queue remain safe. Can be reopened manually anytime by the specialist.",
     },
   ];
 
@@ -306,6 +331,79 @@ export const GigServicesInfoGuide: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Section 4: Service Capacity, Order Queueing & Lifecycle Rules */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xs">
+        <div className="p-5 border-b border-gray-200 dark:border-white/10">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-500 dark:text-zinc-400" />
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+              Service Capacity, Queueing & Lifecycle Architecture
+            </h2>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+            How concurrent order capacity, pending waiting queues, automatic reopening, and buyer withdrawal rights work.
+          </p>
+        </div>
+
+        <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                <Users className="w-3.5 h-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                How Concurrent Slots are Counted
+              </h3>
+            </div>
+            <p className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed">
+              Order capacity (e.g. 3 concurrent slots) is occupied <strong>only by active in-contract projects</strong> (Waiting for Escrow, Active Execution, or Pending Delivery). Initial pending requests submitted by buyers do not occupy capacity slots until the specialist formally accepts them.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                <Clock className="w-3.5 h-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                Queue Full? Orders are Never Auto-Rejected
+              </h3>
+            </div>
+            <p className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed">
+              If a specialist reaches maximum capacity (e.g. 3/3 active contracts), remaining buyer orders remain safely in the specialist's <strong>Pending Review</strong> queue. They are <strong>never auto-rejected</strong>. This protects the specialist's future pipeline without overwhelming current workloads.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                <RefreshCw className="w-3.5 h-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                100% Automated Reopening
+              </h3>
+            </div>
+            <p className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed">
+              When an in-progress project is completed or delivered, available slots increase automatically. The service dynamically switches from <strong>Paused (Queue Full)</strong> back to <strong>Open</strong> immediately with zero manual toggling required.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400">
+                <XCircle className="w-3.5 h-3.5" />
+              </span>
+              <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                Buyer Protection & Free Withdrawal
+              </h3>
+            </div>
+            <p className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed">
+              Waiting buyers see a clear queue status indicator explaining that the specialist's active capacity is full. Buyers have complete freedom to either keep their position in line or cancel/withdraw their request anytime with zero penalties or charges.
+            </p>
+          </div>
         </div>
       </div>
 

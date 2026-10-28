@@ -19,6 +19,7 @@ interface EditTeamModalProps {
   teamHandle?: string;
   teamTagline?: string;
   teamDescription?: string;
+  teamCategory?: string;
   teamBanner?: string;
   teamVisibility?: "Public" | "Private";
   onSave?: (values: TeamFormValues) => void;
@@ -33,6 +34,7 @@ export interface TeamFormValues {
   handle?: string;
   tagline: string;
   description: string;
+  category?: string;
   visibility?: "Public" | "Private";
   photo?: File;
 }
@@ -42,7 +44,9 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   teamName,
   teamTagline,
   teamDescription,
+  teamCategory,
   teamBanner,
+  teamVisibility = "Public",
   onSave,
   mode = "edit",
   saving = false,
@@ -52,6 +56,8 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   const [name, setName] = useState(teamName || "");
   const [tagline, setTagline] = useState(teamTagline || "");
   const [description, setDescription] = useState(teamDescription || "");
+  const [category, setCategory] = useState(teamCategory || "Video Production");
+  const [visibility, setVisibility] = useState<"Public" | "Private">(teamVisibility || "Public");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState(teamBanner || "");
   const [photoError, setPhotoError] = useState("");
@@ -138,7 +144,8 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
         handle: "",
         tagline: tagline.trim(),
         description: description.trim(),
-        visibility: "Private",
+        category: category.trim() || "Video Production",
+        visibility: visibility || "Public",
         photo,
       });
     } else if (
@@ -152,7 +159,8 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
         handle: "",
         tagline: tagline.trim(),
         description: description.trim(),
-        visibility: "Private",
+        category: category.trim() || "Video Production",
+        visibility: visibility || "Public",
         photo: photo || undefined,
       });
     }
@@ -319,6 +327,69 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   placeholder="e.g. High-performance video production & post-processing"
                   className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/70 dark:bg-zinc-900/60 px-3.5 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15 transition shadow-xs"
                 />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Category / Focus
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/70 dark:bg-zinc-900/60 px-3 text-xs text-zinc-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15 transition shadow-xs cursor-pointer"
+                >
+                  <option value="Video Production">Video Production</option>
+                  <option value="Motion Graphics">Motion Graphics & VFX</option>
+                  <option value="YouTube & Social">YouTube & Social Media</option>
+                  <option value="Short Films">Short Films & Narrative</option>
+                  <option value="Commercials">Commercials & Brand Ads</option>
+                  <option value="Animation">Animation & 3D</option>
+                  <option value="Podcasts">Podcasts & Interviews</option>
+                  <option value="Gaming">Gaming & Montages</option>
+                  <option value="Events">Weddings & Live Events</option>
+                  <option value="Corporate">Corporate & Sizzle Reels</option>
+                </select>
+              </div>
+
+              {/* Visibility Choice */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Team Visibility
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("Public")}
+                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      visibility === "Public"
+                        ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-100 ring-1 ring-blue-500/20"
+                        : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-zinc-50/40 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    <span className="text-xs font-bold flex items-center gap-1.5">
+                      Public <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">Default</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-tight">
+                      Listed on Discovery and viewable by other creators & clients
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("Private")}
+                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                      visibility === "Private"
+                        ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-100 ring-1 ring-blue-500/20"
+                        : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-zinc-50/40 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    <span className="text-xs font-bold">Private</span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-tight">
+                      Hidden from Discovery, accessible only by direct invite link
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Description */}

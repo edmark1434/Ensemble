@@ -2,7 +2,7 @@
 
 This is the operating contract for standing locks. One ladder, wired into every Ensemble product: jobs, proposals, gigs, orders, contracts, dashboard, disputes, asset marketplace, discovery, forums, teams, projects/editor, inbox/calls, credits/wallets/cashout/subscriptions, profile/verification, tickets/reports, notifications, and all staff desks.
 
-If someone is punished, merit is taken. Access is locked immediately. Backend enforces every lock in this file. Frontend only displays it.
+If someone is **warned**, merit is taken. Timeout, suspend, lock, and ban lock access immediately and do not take merit unless a warning is issued on the same action. Backend enforces every lock in this file. Frontend only displays it.
 
 Punishment answers “what is locked right now?” Merit answers “can we trust this account?” ([merit-system.md](merit-system.md)). Badges answer “what have they earned?” ([badges-system.md](badges-system.md)).
 
@@ -36,7 +36,7 @@ event on any Ensemble product
  (warning / timeout / suspend / lock / ban)
         │
         ├──► access is locked immediately (standing)
-        └──► MERIT IS TAKEN immediately
+        └──► if it is a WARNING, MERIT IS TAKEN
              (see merit-system.md for the score formula)
                     │
                     ▼
@@ -48,11 +48,11 @@ event on any Ensemble product
          They do not take more merit.
 ```
 
-**Yes: punishment takes merit.** Warning, timeout, suspend, temp ban, lost dispute, confirmed no-show all subtract merit in the same action. A lock does not (investigation, not guilt). A notice does not.
+**Yes: warnings take merit.** Points 1–10, **×2** merit, always temporary (3 days at 1pt, 14 days at 5pt, 90 days at 10pt). Timeout, suspend, lock, ban, notice, and lost disputes do **not** subtract points. Prefer issuing a warning on the same action if staff want the score to move.
 
 **No death spiral.** Automatic merit bands never create a new warning, never auto-ban, and never subtract more merit.
 
-Staff may skip rungs for severe harm (threats, theft, impersonation, CSAM, payment fraud). Skipping takes the landed rung’s merit, not every skipped rung.
+Staff may skip rungs for severe harm (threats, theft, impersonation, CSAM, payment fraud). Skipping does not stack extra merit hits. Merit only moves if a warning is issued.
 
 ---
 
@@ -85,7 +85,7 @@ Merit starts at 50 — that is the [merit system](merit-system.md). Pending Alph
 
 ## 4. Ladder
 
-Punishment is the standing lock. It always also takes merit per the table in each rung, except lock and notice.
+Punishment is the standing lock. **Only the warning rung takes merit.** Timeout, suspend, lock, and ban lock access and leave the score alone.
 
 ### 4.1 Notice (not a punishment)
 
@@ -93,34 +93,34 @@ Automod flag, link scan, listing held for review. No merit. Not on the public pr
 
 ### 4.2 Warning
 
-`violations` row. Default 1 point, expires `points × 30` days.
+`violations` row. Staff pick **1–10 points**. Warnings are **always temporary**. Duration and merit follow the ladder in [merit-system.md](merit-system.md) §6. Staff cannot issue a permanent warning. They may shorten the clock, never lengthen it past the cap.
 
-| Points | Merit taken | Expires |
+| Points | Merit | Duration |
 |---|---|---|
-| 1 (default) | **−8** | 30 days or rescinded |
-| 2 | **−16** | 60 days or rescinded |
-| 3 | **−24** | 90 days or rescinded |
+| 1 | **−2** | 3 days |
+| 5 | **−10** | 14 days (minor) |
+| 10 | **−20** | 90 days |
 
 - Whole site still usable unless a merit band or another punishment says otherwise.
 - Private Record shows it.
 - Toast tells them merit dropped.
-- 3 active warnings → auto-suspend 7 days **and** the suspend merit hit.
+- **20+** active warning points → auto-suspend 7 days. The suspend lock is standing only; it does **not** take extra merit.
 
-Types (staff pick one; reason is free text): `conduct`, `spam`, `marketplace`, `work`, `identity`, `other`.
+Staff pick a **predefined warning**. Points are locked to that row. Case notes are free text. Full list: [merit-system.md](merit-system.md) §6.1.
 
-A staff-confirmed no-show / fake delivery is a `work` warning that takes **−10** for 90 days. Same event as a warning → **larger hit only**, not both. A 2-point work warning for a no-show takes **−16**, not **−16 and −10**.
+A first confirmed no-show is **No-show / ghosting after hire** (5 points, 14 days). Confirmed fake delivery is **Fake delivery or empty work** (8 points, 45 days). There is no extra no-show hit.
 
 ### 4.3 Forum timeout
 
-`restrictions.forum_timeout`. Can read `/forums`. Cannot POST/PATCH/DELETE `/api/forum*`. Other products stay open unless band/standing says otherwise. Public Timeout chip. Prefer issuing a warning on the same action.
+`restrictions.forum_timeout`. Can read `/forums`. Cannot POST/PATCH/DELETE `/api/forum*`. Other products stay open unless band/standing says otherwise. Public Timeout chip. Prefer issuing a warning on the same action if staff want merit taken.
 
-Merit: **−5 extra** on top of the warning, returned when the timeout ends.
+Merit: **0**. The warning on the same action is the only hit.
 
 ### 4.4 Suspension
 
 Read the whole platform. Writes blocked except logout, token refresh, mark notifications read. Cannot complete contract actions, chat-send, list, cash out, or ticket-create. Public Suspended chip. Auto-suspend is always 7 days. Manual 1–30 typical.
 
-Merit: **−15** while suspended, returned when it ends.
+Merit: **0**. Leftover warning hits still apply.
 
 After it ends, recompute. If leftover warning hits still leave them Restricted/Frozen, those product limits stay. The suspend lock itself is gone. Bands: [merit-system.md](merit-system.md).
 
@@ -132,14 +132,14 @@ Investigation / compromised account. Users: appeal-only (`/account/appeal`, tick
 
 Temp or permanent. Dispute conviction = permanent ban of `for_account_id`. Sign in only to appeal and view tickets/disputes. Listings/gigs/jobs stop being actionable; staff hide or close them. Badges hidden on public profile. Appeal accept → lift in **24 hours**, then recompute. Reopening a dispute does not unban.
 
-Merit: temporary ban **−25**, then freeze. Permanent ban: freeze (do not keep draining). Dispute at fault also applies **−15** for 12 months inside that frozen score.
+Merit: **0**. Score is frozen at the last value so it does not keep changing while they cannot work. After appeal lift, recompute from leftover warnings.
 
 ### 4.7 Pardon vs rescind vs appeal
 
 | Action | Who | Merit | Access |
 |---|---|---|---|
 | Rescind one warning | Staff who can warn | that hit returned | Unchanged, except remaining band/suspend |
-| Pardon | Admin / Support Moderator | all punishment hits cleared, recompute from work/reviews/verification | Active |
+| Pardon | Admin / Support Moderator | all warning hits cleared, recompute from work/reviews/verification | Active |
 | Appeal accepted | Support via “Appeal an account penalty” | recompute after 24h lift | ban/lock/suspend end in 24h |
 | Appeal denied | Support | unchanged | optional 12-month appeal block |
 
@@ -158,11 +158,11 @@ Specialist mods act from their report desks. Conviction bans go through the disp
 
 ## 5. Direct answers
 
-**If they are punished, is merit taken too?** Yes, except lock and notice.
+**If they are punished, is merit taken too?** Only if it is a **warning**. Timeout, suspend, lock, ban, notice, and disputes do not take merit.
 
-**If merit is too low, what happens?** Automatic product locks in [merit-system.md](merit-system.md). Not an auto-ban. Not an auto-suspend. Auto-suspend is **3 active warnings** only.
+**If merit is too low, what happens?** Automatic product locks in [merit-system.md](merit-system.md). Not an auto-ban. Auto-suspend is **20+ active warning points** (7-day cooldown), not a band.
 
-**Do punishments stack?** Yes, with: same event → larger hit only; three warnings stack then one suspend hit; for each feature take the stricter of standing vs band; ban/lock always wins.
+**Do punishments stack?** Standing locks stack (timeout + warnings, then auto-suspend at 3 warnings). Merit only stacks **warning points**. A timeout or suspend on the same action does not add extra merit. For each feature take the stricter of standing vs band; ban/lock always wins.
 
 **Can they buy their way out of a punishment?** No. Not with credits, not with Premium/Business.
 
@@ -285,8 +285,8 @@ Each subsection is: where it lives, how a punishment starts, what standing does,
 **Routes:** `/contracts/dispute-form`, `/contracts/disputes`, `/disputes/:id`
 
 - Opening a visible dispute: public **Under dispute** chip. **No merit change.**
-- Respondent found at fault: **−15** and whatever standing staff chose. Conviction path already permanent-bans `for_account_id`.
-- Filer found to be abusing disputes: `work` or `conduct` warning on the **filer**, not an automatic −15.
+- Respondent found at fault: standing as staff chose. Conviction path already permanent-bans `for_account_id`. **No automatic merit hit.** Staff may also issue a warning if they want points taken.
+- Filer found to be abusing disputes: `work` or `conduct` warning on the **filer** — that warning is the merit hit.
 - Suspended cannot file a new dispute (write block) — the other party or staff can still open from the staff desk if money is trapped.
 - Banned/locked: appeal and tickets only. Reopening a dispute does not unban.
 - Escrow release / refund stays a staff action. Punishment never moves credits by itself.
@@ -323,7 +323,7 @@ Listing fees: charge only when the listing is actually accepted into pending/pub
 **Punish:** Forum Moderator. Timeout is forum-only. Conduct/spam warnings still take global merit and can push bands that then lock jobs/gigs/assets.
 
 - Timeout: read OK, write `/api/forum*` NO (including forum reports).
-- Restricted: forums still writable unless they also have a timeout — timeout wins.
+- Restricted/Frozen merit bands also block forum writes. A staff timeout still wins if it is active.
 - Creating groups: Timeout/Suspend/Ban NO.
 
 **Staff:** `/moderator/forum` (discussion, reports, restrictions, disputes).
@@ -409,8 +409,8 @@ Forum post/report ──► Forum desk ──► warn / timeout / suspend / lock
 Asset listing/report ──► Marketplace desk ──► warn / suspend / lock / unpublish
 Job, gig, proposal, order, contract report ──► Jobs desk ──► warn / suspend / lock
 Ticket / appeal / identity / billing ──► Support ──► full ladder + pardon
-Dispute conviction ──► Support/Admin dispute decision ──► permanent ban + −15 fault
-3 active warnings (any source) ──► system ──► 7-day suspend + −15
+Dispute conviction ──► Support/Admin dispute decision ──► permanent ban (warn separately if merit should drop)
+20+ active warning points ──► system ──► 7-day suspend (no extra merit beyond the warnings)
 Merit 0–19 ──► system ──► Frozen locks + moderation alert (no ban)
 ```
 
@@ -435,21 +435,21 @@ Frozen is a merit band, not a punishment. It is on this map so staff do not conf
 ### Warning on forums that hits jobs
 
 ```
-Forum mod warns (conduct, 1pt) + timeout
-  → standing: Timeout (forums unwritable)
-  → merit 50 − 8 − 5 = 37 Watch
+Forum mod warns (conduct, 5pt)
+  → standing: Active (timeout optional)
+  → merit 50 − 10 = 40 Watch for 14 days
   → cannot post urgent jobs, listings go to review
-  → can still take gig orders and write proposals
-timeout ends → −5 returns → 45, still Watch until the warning’s 30 days end → 50
+  → can still take gig orders, write proposals, and post in forums
+warning ends → 50 Established again
 ```
 
 ### Jobs no-show
 
 ```
-Jobs mod issues work warning 2pt (same event as no-show → take −16, not −16 and −10)
+Jobs mod issues work warning 8pt for a no-show
   → standing still Active
-  → merit 50 − 16 = 34 Restricted
-  → cannot post jobs or create gigs, 3 proposals/day, cashout +7 days
+  → merit 50 − 16 = 34 Restricted for 45 days
+  → forums unwritable, cannot post jobs or create gigs, 3 proposals/day
   → live contract still deliverable
 ```
 
@@ -457,17 +457,15 @@ Jobs mod issues work warning 2pt (same event as no-show → take −16, not −1
 
 ```
 open dispute → Under dispute chip, merit unchanged
-convict → permanent ban, −15 inside frozen score, badges hidden, appeal only
+convict → permanent ban, score frozen (no extra −15), badges hidden, appeal only
 escrow handled by staff, not by the band engine
 ```
 
 ### Three warnings
 
 ```
-two active 1pt warnings
-third warning issued
-  → auto-suspend 7 days
-  → warning hits plus −15 suspend hit
+active warning points reach 20
+  → auto-suspend 7 days (standing cooldown, no extra merit)
   → after 7 days the suspend lock lifts
   → leftover warning hits may still leave them Restricted or Frozen
 ```
@@ -476,8 +474,8 @@ third warning issued
 
 ## 13. Anti-abuse and implementation
 
-- Staff cannot `UPDATE merit_score`. They punish or pardon. `MeritServices.recomputeAccountMerit(accountId)` is the only score writer.
-- Same event, two labels → one merit hit (the larger).
+- Staff cannot `UPDATE merit_score`. They warn, rescind, or pardon. `MeritServices.recomputeAccountMerit(accountId)` is the only score writer.
+- Only warnings subtract merit. Timeout, suspend, lock, ban, and disputes never add a second hit.
 - Expired suspend/ban/lock and expired warnings lift in a **background job**, not only on next page load.
 - Proposal and listing fees are not charged on a rejected action.
 - `CheckSession` already enforces ban/lock/suspend/timeout. Keep that as the standing gate. Band limits are additional guards in [merit-system.md](merit-system.md).

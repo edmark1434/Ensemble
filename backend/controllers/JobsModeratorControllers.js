@@ -242,12 +242,11 @@ async function getRestrictions(req, res) {
 
 async function postViolation(req, res) {
   try {
-    const { accountId, type, title, reason, points } = req.body;
-    const violationType = type || title;
-    if (!accountId || !violationType) {
-      return res.status(400).json({ success: false, message: 'accountId and type are required' });
+    const { accountId, warningId, type, title, reason, points } = req.body;
+    if (!accountId || !(warningId || type || title)) {
+      return res.status(400).json({ success: false, message: 'accountId and a predefined warning are required' });
     }
-    const data = await issueViolation(accountId, { type: violationType, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
+    const data = await issueViolation(accountId, { warningId, type: type || title, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error issuing violation:', err);

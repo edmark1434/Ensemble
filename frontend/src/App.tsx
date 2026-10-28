@@ -53,6 +53,7 @@ import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposal
 import JobProposalsFlowGuide from '@/pages/user/6_job_market/job_proposals/proposals_components/JobProposalsFlowGuide'
 import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
+import GigMyOrdersPage from '@/pages/user/7_gigs/gig_pages/gig_myorders_page.tsx'
 import GigSavesPage from '@/pages/user/7_gigs/gig_pages/gig_saves_page.tsx'
 import GigMyPostPage from '@/pages/user/7_gigs/gig_pages/gig_mypost_page.tsx'
 import GigServicesInfoGuide from '@/pages/user/7_gigs/gig_components/GigServicesInfoGuide.tsx'
@@ -99,7 +100,7 @@ const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/noti
 const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
 const AdminFeedbacksPage = lazyPage(() => import('./pages/admin/feedbacks/AdminFeedbacksPage'));
-const AdminBadgeGrantPage = lazyPage(() => import('./pages/admin/badgeGrant/AdminBadgeGrantPage'));
+const AdminBadgesPage = lazyPage(() => import('./pages/admin/badges/AdminBadgesPage'));
 const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
 const CreditEconomyPage = lazyPage(() => import('./pages/admin/creditEconomy/CreditEconomyPage'));
 const ModerationPage = lazyPage(() => import('./pages/admin/moderation/ModerationPage'));
@@ -321,6 +322,8 @@ function App() {
             <Route index element={<Navigate to="/gigs/services" replace />} />
             <Route path='services' element={<GigServicesPage />} />
             <Route path='services/:id' element={<GigServicesPage />} />
+            <Route path='my-orders' element={<GigMyOrdersPage />} />
+            <Route path='my-orders/:id' element={<GigMyOrdersPage />} />
             <Route path='saved-services' element={<GigSavesPage />} />
             <Route path='saved-services/:id' element={<GigSavesPage />} />
             <Route path='my-services' element={<GigMyPostPage />} />
@@ -332,6 +335,7 @@ function App() {
             <Route path='incoming/:gigId' element={<IncomingOrders />} />
             <Route path='sent' element={<SentOrders />} />
             <Route path='flow' element={<GigOrdersFlowGuide />} />
+            <Route path='info' element={<GigOrdersFlowGuide />} />
           </Route>
           <Route path='/gigs/orders/incoming/:gigId/order/:orderId' element={<IncomingOrderDetail />} />
           <Route path='/gigs/orders/sent/:orderId' element={<SentOrderDetail />} />
@@ -372,7 +376,8 @@ function App() {
         <Route path='/admin' element={<AdminLayout />}>
           <Route path='dashboard' element={<AdminDashboard />} />
           <Route path='feedbacks' element={<AdminFeedbacksPage />} />
-          <Route path='badge-grant' element={<AdminBadgeGrantPage />} />
+          <Route path='badges' element={<AdminBadgesPage />} />
+          <Route path='badge-grant' element={<Navigate to="/admin/badges?tab=grant" replace />} />
           <Route path='user-team' element={<UserTeamPage />} />
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />

@@ -158,6 +158,16 @@ router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
 
 const {
   getAdminBadgeCatalog,
+  getAdminBadgeRequirementTypes,
+  getAdminBadgeRequirementDefs,
+  postAdminBadgeRequirementDef,
+  patchAdminBadgeRequirementDef,
+  deleteAdminBadgeRequirementDef,
+  getAdminBadgeCategories,
+  postAdminBadgeCategory,
+  postAdminBadge,
+  patchAdminBadge,
+  deleteAdminBadge,
   getAdminBadgeRecipients,
   getAdminBadgeHolders,
   postAdminBadgeGrant,
@@ -165,10 +175,20 @@ const {
 } = require('../controllers/BadgeControllers');
 
 router.get('/badges', [checkSession, requireAdmin], getAdminBadgeCatalog);
+router.post('/badges', [checkSession, requireAdmin], postAdminBadge);
+router.get('/badge-requirement-types', [checkSession, requireAdmin], getAdminBadgeRequirementTypes);
+router.get('/badge-requirement-defs', [checkSession, requireAdmin], getAdminBadgeRequirementDefs);
+router.post('/badge-requirement-defs', [checkSession, requireAdmin], postAdminBadgeRequirementDef);
+router.patch('/badge-requirement-defs/:defId', [checkSession, requireAdmin], patchAdminBadgeRequirementDef);
+router.delete('/badge-requirement-defs/:defId', [checkSession, requireAdmin], deleteAdminBadgeRequirementDef);
+router.get('/badge-categories', [checkSession, requireAdmin], getAdminBadgeCategories);
+router.post('/badge-categories', [checkSession, requireAdmin], postAdminBadgeCategory);
 router.get('/badges/recipients', [checkSession, requireAdmin], getAdminBadgeRecipients);
 router.get('/badges/:registryId/holders', [checkSession, requireAdmin], getAdminBadgeHolders);
 router.post('/badges/:registryId/grants', [checkSession, requireAdmin], postAdminBadgeGrant);
 router.delete('/badges/grants/:accountBadgeId', [checkSession, requireAdmin], deleteAdminBadgeGrant);
+router.patch('/badges/:badgeId', [checkSession, requireAdmin], patchAdminBadge);
+router.delete('/badges/:badgeId', [checkSession, requireAdmin], deleteAdminBadge);
 const { getAdminSurveyResponsesController } = require('../controllers/AdminSurveyControllers');
 
 router.get('/survey-responses', [checkSession, requireAdmin], getAdminSurveyResponsesController);

@@ -19,6 +19,8 @@ interface WorkspaceTeam {
   visibility?: "Public" | "Private";
   team_type?: "contractual" | "standard";
   job_id?: string;
+  gig_id?: string;
+  workspace_type?: "Job" | "Gig";
   is_archived?: boolean;
   member_count: number;
   current_user_role?: string;
@@ -301,6 +303,15 @@ export default function Workspaces() {
               </span>
             )}
 
+            {/* Workspace Type Tag: Job Workspace vs Gig Workspace */}
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+              team.gig_id || team.workspace_type === "Gig"
+                ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+                : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
+            }`}>
+              {team.gig_id || team.workspace_type === "Gig" ? "Gig Workspace" : "Job Workspace"}
+            </span>
+
             {/* Category Tag */}
             {team.category && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
@@ -404,6 +415,15 @@ export default function Workspaces() {
               Active
             </span>
           )}
+
+          {/* Workspace Type Tag: Job Workspace vs Gig Workspace */}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+            team.gig_id || team.workspace_type === "Gig"
+              ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+              : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
+          }`}>
+            {team.gig_id || team.workspace_type === "Gig" ? "Gig Workspace" : "Job Workspace"}
+          </span>
 
           {team.category && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">

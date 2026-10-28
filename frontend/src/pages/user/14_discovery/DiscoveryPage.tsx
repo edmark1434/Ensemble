@@ -18,6 +18,7 @@ import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
 import { DeactivatedBadge } from "@/components/account/DeactivatedBadge";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { bannerPresetUrl, resolveBannerPreset } from "@/lib/profileBanners";
+import { DiscoveryTeamsTab } from "./DiscoveryTeamsTab";
 import {
   computeDiscoveryScore,
   computeSkillMatch,
@@ -251,7 +252,7 @@ export default function DiscoveryPage() {
 
   const { tab } = useParams<{ tab: string }>();
   const [activeTab, setActiveTab] = useState<
-    "creators" | "matched" | "gallery" | "standout" | "info"
+    "creators" | "teams" | "matched" | "gallery" | "standout" | "info"
   >((tab as any) || "creators");
 
   useEffect(() => {
@@ -872,6 +873,11 @@ export default function DiscoveryPage() {
                 icon: <Users className="w-4 h-4" />,
               },
               {
+                id: "teams",
+                label: "Discover Teams",
+                icon: <Briefcase className="w-4 h-4" />,
+              },
+              {
                 id: "matched",
                 label: "Matched Editors",
                 icon: <Sparkles className="w-4 h-4" />,
@@ -1067,6 +1073,13 @@ export default function DiscoveryPage() {
             </div>
           )}
 
+          {/* ================= TAB: DISCOVER TEAMS ================= */}
+          {activeTab === "teams" && (
+            <div className="animate-fade-in">
+              <DiscoveryTeamsTab />
+            </div>
+          )}
+
           {/* ================= TAB 1: DISCOVER CREATORS ================= */}
           {activeTab === "creators" && (
             <div className="space-y-6">
@@ -1083,6 +1096,17 @@ export default function DiscoveryPage() {
                   </div>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("teams");
+                        navigate("/discovery/teams");
+                      }}
+                      className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-blue-50/80 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-800/40 text-xs font-semibold hover:bg-blue-100/80 dark:hover:bg-blue-900/40 transition cursor-pointer shrink-0"
+                    >
+                      <Briefcase className="w-3.5 h-3.5" />
+                      <span>Browse Teams →</span>
+                    </button>
                     <form
                       onSubmit={handleSearchSubmit}
                       className="relative flex-1 sm:w-72"

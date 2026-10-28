@@ -6,6 +6,9 @@ const { getAccountById } = require('../repositories/AccountRepositories');
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function createJobServices(jobData) {
+    if (jobData.posted_as === 'Team' || jobData.team_id) {
+        throw new Error('Teams cannot post jobs. Teams can only offer services.');
+    }
     if (!jobData.title || !jobData.description) {
         throw new Error('Title and description are required.');
     }
@@ -39,6 +42,12 @@ async function createJobServices(jobData) {
             }
         }
     }
+    const { assertMeritAllows } = require('./MeritServices');
+    await assertMeritAllows(
+      jobData.payer_account_id || jobData.client_account_id,
+      jobData.is_urgent ? 'create_urgent_job' : 'create_job'
+    );
+
     if (jobData.hiring_type === 'team') {
         if (!Array.isArray(jobData.milestones) || jobData.milestones.length === 0) {
             throw new Error('At least one milestone is required for team job postings.');
@@ -58,7 +67,10 @@ async function createJobServices(jobData) {
         }
         jobData.no_of_hires = totalSlots;
     }
-    return await JobRepositories.createJobRepositories(jobData);
+    const created = await JobRepositories.createJobRepositories(jobData);
+    const { scheduleBadgeEvaluation } = require('./BadgeServices');
+    scheduleBadgeEvaluation(jobData.client_account_id);
+    return created;
 }
 
 async function getAllJobsServices(filters, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
@@ -70,6 +82,11 @@ async function getJobByIdServices(jobId, accountId = null, actorIds = [], affili
 }
 
 async function updateJobServices(jobId, accountIds, jobData) {
+    if (jobData.is_urgent) {
+        const { assertMeritAllows } = require('./MeritServices');
+        const actorId = Array.isArray(accountIds) ? accountIds[0] : accountIds;
+        await assertMeritAllows(actorId, 'create_urgent_job');
+    }
     const updated = await JobRepositories.updateJobRepositories(jobId, accountIds, jobData);
     if (!updated) {
         throw new Error('Job not found or you do not have permission to edit it.');
@@ -96,7 +113,15 @@ async function createProposalServices(proposalData) {
         error.statusCode = 400;
         throw error;
     }
-    return await JobRepositories.createProposalRepositories(proposalData);
+    const { assertMeritAllows } = require('./MeritServices');
+    await assertMeritAllows(
+      proposalData.proposed_by_account_id || proposalData.payer_account_id || proposalData.freelancer_account_id,
+      'proposal'
+    );
+    const created = await JobRepositories.createProposalRepositories(proposalData);
+    const { scheduleBadgeEvaluation } = require('./BadgeServices');
+    scheduleBadgeEvaluation(proposalData.freelancer_account_id);
+    return created;
 }
 
 async function withdrawProposalServices(proposalId, accountIds) {

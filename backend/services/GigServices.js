@@ -125,15 +125,16 @@ async function acceptGigOrderService(orderId, actorIds) {
     try {
         const notif = await createNotificationServices({
             account_id: result.client_account_id,
-            message: `Your gig order for '${result.gig_title}' has been accepted by the freelancer! Please review and confirm to start the contract.`,
-            reference_table: 'gig_requests',
-            reference_prefix: 'accepted',
-            reference_path: `/gigs/orders/sent/${orderId}`,
-            reference_id: orderId
+            message: `Your gig order for '${result.gig_title}' has been accepted! The contract is waiting for your escrow deposit to begin work.`,
+            reference_table: 'contracts',
+            reference_prefix: 'CON',
+            reference_path: result.contractId ? `/contracts/${result.contractId}` : `/gigs/orders/sent/${orderId}`,
+            reference_id: result.contractId || orderId
         });
         const io = getIo();
         if (io) {
             io.to(String(result.client_account_id)).emit('notification', notif);
+            io.emit('gigOrderUpdated', { orderId, status: 'Accepted', contractId: result.contractId });
         }
     } catch (notifErr) {
         console.error('Error sending gig accept notification:', notifErr);
@@ -143,41 +144,55 @@ async function acceptGigOrderService(orderId, actorIds) {
 
 async function confirmGigOrderContractService(orderId, actorIds) {
     const result = await confirmGigOrderContractRepository(orderId, actorIds);
-    const { contractId, gig_title, freelancer_account_id, client_account_id } = result;
+    const { contractId, teamId, gig_title, freelancer_account_id, client_account_id } = result;
 
     try {
         const io = getIo();
+        const primaryLink = teamId ? `/team-project/${teamId}` : `/contracts/${contractId}`;
         const clientNotif = await createNotificationServices({
             account_id: client_account_id,
-            message: `Your gig order contract for '${gig_title}' has started successfully.`,
-            reference_table: 'contracts',
-            reference_prefix: 'CON',
-            reference_path: `/contracts/${contractId}`,
-            reference_id: contractId
+            message: `Your gig order contract for '${gig_title}' has started successfully. Collaborative workspace is ready!`,
+            reference_table: teamId ? 'teams' : 'contracts',
+            reference_prefix: teamId ? 'TEAM' : 'CON',
+            reference_path: primaryLink,
+            reference_id: teamId || contractId
         });
         const freelancerNotif = await createNotificationServices({
             account_id: freelancer_account_id,
-            message: `The client confirmed and funded your gig order for '${gig_title}'. The contract is now active!`,
-            reference_table: 'contracts',
-            reference_prefix: 'CON',
-            reference_path: `/contracts/${contractId}`,
-            reference_id: contractId
+            message: `The client confirmed and funded your gig order for '${gig_title}'. The contract is active and workspace is ready!`,
+            reference_table: teamId ? 'teams' : 'contracts',
+            reference_prefix: teamId ? 'TEAM' : 'CON',
+            reference_path: primaryLink,
+            reference_id: teamId || contractId
         });
 
         if (io) {
             if (client_account_id) io.to(String(client_account_id)).emit('notification', clientNotif);
             if (freelancer_account_id) io.to(String(freelancer_account_id)).emit('notification', freelancerNotif);
+            io.emit('gigOrderUpdated', { orderId, status: 'In Contract', contractId, teamId });
+            io.emit('teamTaskWorkspaceUpdated', { teamId, contractId });
         }
     } catch (notifErr) {
         console.error('Error sending contract start notifications:', notifErr);
     }
 
-    return { contractId };
+    return { contractId, teamId };
+}
+
+async function toggleGigStatusService(gigId, accountIds, targetStatus = null) {
+    const { toggleGigStatusRepository } = require('../repositories/GigRepositories');
+    const result = await toggleGigStatusRepository(gigId, accountIds, targetStatus);
+    const io = getIo();
+    if (io) {
+        io.emit('gigStatusUpdated', { gigId, status: result.status });
+    }
+    return result;
 }
 
 module.exports = {
     shortlistGigOrderService,
     unshortlistGigOrderService,
     acceptGigOrderService,
-    confirmGigOrderContractService
+    confirmGigOrderContractService,
+    toggleGigStatusService
 };

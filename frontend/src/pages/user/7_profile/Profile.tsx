@@ -22,6 +22,8 @@ import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_P
 import { SocialLinksSection_ProfileDisplay } from "./Displays/SocialLinksSection_ProfileDisplay.tsx";
 import { ProfileSetupWidget } from "./Displays/ProfileSetupWidget.tsx";
 import { MainBody } from "./Displays/Body/MainBody.tsx";
+import confetti from "canvas-confetti";
+import { Award } from "lucide-react";
 import type { TabType } from "./Displays/Body/MainBody.tsx";
 import type { PortfolioItem } from "./Displays/Body/Profile_Portfolio.tsx";
 
@@ -668,7 +670,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             bio: profileData.bio || profileData.description,
             tagline: profileData.tagline,
             introduction: profileData.introduction,
-            merit_score: profileData.merit_score || 0,
+            merit_score: profileData.merit_score ?? 50,
             avatar_file_id: profileData.avatar_file_id,
             avatar_preset_url: avatarUrl,
             skills: compiledCompoundSkills,
@@ -713,7 +715,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             verification_status: profileData.verification_status,
             bio: profileData.bio || profileData.description,
             tagline: profileData.tagline,
-            merit_score: profileData.merit_score || 0,
+            merit_score: profileData.merit_score ?? 50,
             avatar_file_id: profileData.avatar_file_id,
             avatar_preset_url: avatarUrl,
             skills: [],
@@ -776,29 +778,85 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const completionSteps = [
     {
-      check: !!userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default'),
-      label: 'Upload an Avatar',
+      id: "avatar",
+      label: "Set Avatar",
+      description: "Upload a profile photo or select an avatar preset",
+      category: "identity" as const,
+      check: Boolean(
+        (userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default')) ||
+        userDetails?.avatar_file_id
+      ),
       action: () => setIsAvatarModalOpen(true)
     },
     {
-      check: !!userDetails?.tagline && !!userDetails?.bio,
-      label: 'Add Tagline & Bio',
-      action: () => openModalWithHighlight("tagline-and-bio")
+      id: "banner",
+      label: "Set Banner",
+      description: "Customize your profile banner or select an artistic preset",
+      category: "identity" as const,
+      check: Boolean(
+        (userDetails?.banner_preset && userDetails.banner_preset.trim().length > 0) ||
+        (userDetails?.banner_preset_url && userDetails.banner_preset_url.trim().length > 0) ||
+        (userDetails?.banner_file_path && userDetails.banner_file_path.trim().length > 0)
+      ),
+      action: () => setIsBannerModalOpen(true)
     },
     {
-      check: !!userDetails?.introduction,
-      label: 'Add an Introduction',
-      action: () => { setActiveTab('introduction'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+      id: "tagline",
+      label: "Set Tagline",
+      description: "Add a crisp professional tagline under your name",
+      category: "identity" as const,
+      check: Boolean(userDetails?.tagline && userDetails.tagline.trim().length > 0),
+      action: () => setIsTaglineModalOpen(true)
     },
     {
-      check: !!userDetails?.skills && userDetails.skills.length > 0,
-      label: 'Add Skills',
+      id: "bio",
+      label: "Set Bio",
+      description: "Write a summary describing your background and experience",
+      category: "identity" as const,
+      check: Boolean(userDetails?.bio && userDetails.bio.trim().length > 0),
+      action: () => openModalWithHighlight("bio")
+    },
+    {
+      id: "budget",
+      label: "Set Budget",
+      description: userDetails?.budget_credits ? `Target budget: ${Number(userDetails.budget_credits).toLocaleString()} Credits` : "Set your planned project budget allocation",
+      category: "experience" as const,
+      check: Boolean(userDetails?.budget_credits !== null && userDetails?.budget_credits !== undefined && Number(userDetails.budget_credits) > 0),
+      action: () => {
+        const el = document.querySelector('[data-tour="profile-budget"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+    {
+      id: "introduction",
+      label: "Set Introduction",
+      description: "Provide a comprehensive introduction story on your profile",
+      category: "experience" as const,
+      check: Boolean(userDetails?.introduction && userDetails.introduction.trim().length > 0),
+      action: () => { 
+        setActiveTab('introduction'); 
+        window.scrollTo({ top: 350, behavior: 'smooth' }); 
+        setTimeout(() => {
+          const editBtn = document.querySelector<HTMLButtonElement>('[data-tour="profile-intro-edit"]');
+          if (editBtn) editBtn.click();
+        }, 300);
+      }
+    },
+    {
+      id: "skills",
+      label: "Set at least 3 Skills",
+      description: `Curate at least 3 skills (${userDetails?.skills?.length || 0}/3 currently selected)`,
+      category: "experience" as const,
+      check: Boolean(userDetails?.skills && userDetails.skills.length >= 3),
       action: () => setIsSkillsModalOpen(true)
     },
     {
-      check: portfolioItems.length > 0,
-      label: 'Add a Portfolio item',
-      action: () => { setActiveTab('portfolio'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+      id: "portfolio",
+      label: "Add a Portfolio",
+      description: `Upload portfolio items or showcase past work (${portfolioItems.length} added)`,
+      category: "experience" as const,
+      check: Boolean(portfolioItems && portfolioItems.length > 0),
+      action: () => { setActiveTab('portfolio'); window.scrollTo({ top: 350, behavior: 'smooth' }); }
     }
   ];
 
@@ -843,6 +901,37 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       window.removeEventListener('profileSetupShowCongrats', handleShowCongrats);
     };
   }, [user?.account_id, userDetails?.tagline]);
+
+  useEffect(() => {
+    if (!showCongrats) {
+      confetti.reset();
+      return;
+    }
+
+    const count = 200;
+    const defaults = {
+      origin: { y: 0.7 },
+      zIndex: 99999,
+    };
+
+    const fire = (particleRatio: number, opts: confetti.Options) => {
+      confetti({
+        ...defaults,
+        ...opts,
+        particleCount: Math.floor(count * particleRatio),
+      });
+    };
+
+    fire(0.25, { spread: 26, startVelocity: 55 });
+    fire(0.2, { spread: 60 });
+    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+    fire(0.1, { spread: 120, startVelocity: 45 });
+
+    return () => {
+      confetti.reset();
+    };
+  }, [showCongrats]);
 
   useEffect(() => {
     if (completionScore === 100 && isOwner) {
@@ -896,8 +985,18 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           <ProfileSetupWidget
             completionScore={completionScore}
             completionSteps={completionSteps}
-            nextStep={nextStep}
             getProgressColor={getProgressColor}
+            onSaveBudget={async (budgetCredits) => {
+              const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
+              const saved = data?.data?.budget_credits ?? null;
+              setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
+            }}
+            currentBudget={userDetails?.budget_credits ?? null}
+            onWalkthroughComplete={() => {
+              if (completionScore === 100) {
+                setShowCongrats(true);
+              }
+            }}
           />
         )}
 
@@ -994,6 +1093,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0.0}
               assetRating={userDetails?.asset_rating ? Number(parseFloat(userDetails.asset_rating as string).toFixed(1)) : 0.0}
               successfulJobsCount={userDetails?.successful_jobs_count ? Number(userDetails.successful_jobs_count) : 0}
+              teamRating={userDetails?.team_rating ? Number(parseFloat(userDetails.team_rating as string).toFixed(1)) : 0.0}
+              teamReviewCount={userDetails?.team_review_count ? Number(userDetails.team_review_count) : 0}
               freelancerServiceRating={userDetails?.freelancer_service_rating ? Number(parseFloat(userDetails.freelancer_service_rating as string).toFixed(1)) : 0.0}
               freelancerServiceCount={userDetails?.freelancer_service_count ? Number(userDetails.freelancer_service_count) : 0}
               freelancerJobRating={userDetails?.freelancer_job_rating ? Number(parseFloat(userDetails.freelancer_job_rating as string).toFixed(1)) : 0.0}
@@ -1155,19 +1256,36 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="relative bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center border border-gray-100 dark:border-white/10"
             >
-              <div className="w-24 h-24 mx-auto bg-green-50 dark:bg-green-500/10 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                <span className="text-5xl drop-shadow-md">🎉</span>
+              {/* Profile Complete Badge Display with Emerald Pulse */}
+              <div className="relative w-28 h-28 mx-auto mb-4 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse" />
+                <div className="relative w-24 h-24 rounded-2xl bg-white dark:bg-zinc-800 border-2 border-emerald-500 shadow-xl p-2 flex items-center justify-center">
+                  <img
+                    src="/icons/badges/setup-profile.png"
+                    alt="Profile Complete Badge"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
               </div>
-              <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3 tracking-tight">Congratulations!</h2>
-              <p className="text-sm text-gray-600 dark:text-zinc-400 mb-8 leading-relaxed">
-                You've successfully completed your Profile Setup. Your profile is now 100% ready to stand out in the community!
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 mb-3">
+                <Award className="w-3.5 h-3.5" />
+                Badge Unlocked
+              </div>
+
+              <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-1.5 tracking-tight">Congratulations!</h2>
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-2">
+                You've earned the Profile Complete Badge!
+              </p>
+              <p className="text-xs text-gray-600 dark:text-zinc-400 mb-6 leading-relaxed">
+                You have successfully completed all 8 profile setup milestones. Your profile is now 100% complete and ready to stand out across the community!
               </p>
               <button
                 onClick={() => {
                   setShowCongrats(false);
                   window.location.reload();
                 }}
-                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40"
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 cursor-pointer"
               >
                 Awesome! Let's Go
               </button>

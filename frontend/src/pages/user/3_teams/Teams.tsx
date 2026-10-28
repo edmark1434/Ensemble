@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Briefcase, CheckCircle2, Clock, Crown, Grid3x3, List, Plus, Search, Star, UserPlus, Users } from "lucide-react";
+import { ArrowUpRight, Briefcase, CheckCircle2, ChevronRight, Clock, Crown, Grid3x3, List, MapPin, Plus, Search, ShieldCheck, Star, UserPlus, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -26,14 +26,23 @@ interface Team {
   team_id: string;
   display_name: string;
   handle?: string;
+  tagline?: string;
   description: string;
   avatar_path?: string;
+  banner_preset?: string;
   category?: string;
   visibility?: "Public" | "Private";
   team_type?: "contractual" | "standard";
   job_id?: string;
   is_archived?: boolean;
   member_count: number;
+  owner_name?: string;
+  owner_handle?: string;
+  owner_avatar_path?: string;
+  average_rating?: number | string;
+  review_count?: number;
+  location?: string;
+  join_policy?: string;
   current_user_role?: string;
   current_user_status?: string;
   is_business_verified?: boolean;
@@ -46,6 +55,29 @@ interface Team {
     user_reviewed_at?: string | null;
   } | null;
 }
+
+const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/+$/, "");
+
+const constructAvatarUrl = (avatarPath?: string, name?: string) => {
+  if (avatarPath) {
+    if (avatarPath.startsWith("http")) return avatarPath;
+    return `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`;
+  }
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    name || "User"
+  )}&background=27272a&color=fff&size=128`;
+};
+
+const bannerPresetUrl = (preset?: string) => {
+  if (!preset) return null;
+  return `/banners/presets/${preset}.jpg`;
+};
+
+const resolveAvatarPath = (path?: string) => {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  return `${cloudfront}/${path.replace(/^\/+/, "")}`;
+};
 
 const CardReviewTimer: React.FC<{ contractId: string; reviewedAt?: string | null }> = ({ contractId, reviewedAt }) => {
   const [timeLeftMs, setTimeLeftMs] = useState<number>(() => {
@@ -332,159 +364,202 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
     },
   ];
 
-  // Grid View Card
+  // Grid View Card - Matching Discovery style for general teams
   const renderTeamCard = (team: Team) => {
     const isProject = team.team_type === "contractual";
     const targetUrl = isProject ? `/team-project/${team.team_id}` : `/teams/${team.team_id}`;
 
+    if (isProject) {
+      return (
+        <article
+          key={team.team_id}
+          onClick={() => navigate(targetUrl, { state: { from: "/teams" } })}
+          className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs hover:border-gray-300 dark:hover:border-white/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between"
+        >
+          <div>
+            <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-gray-100 dark:bg-zinc-800">
+              {team.avatar_path ? (
+                <img
+                  src={getImageUrl(team.avatar_path)}
+                  alt={team.display_name}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+              ) : (
+                <div className="grid h-full place-items-center text-2xl font-bold text-gray-400 dark:text-zinc-500">
+                  <Briefcase className="w-10 h-10 text-gray-400 dark:text-zinc-600" />
+                </div>
+              )}
+            </div>
+            <div className="p-4 space-y-2.5">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-1">
+                {team.display_name}
+              </h3>
+              <p className="line-clamp-2 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
+                {team.description || "Workspace team project."}
+              </p>
+            </div>
+          </div>
+          <div className="px-4 py-3 border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <Users className="w-3.5 h-3.5 text-gray-400 dark:text-zinc-500" />
+              {team.member_count} {team.member_count === 1 ? "member" : "members"}
+            </span>
+            <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 group-hover:underline">
+              Open Space &rarr;
+            </span>
+          </div>
+        </article>
+      );
+    }
+
+    // General Team Card: Identical to DiscoveryTeamsTab
+    const teamThumbnailBanner =
+      resolveAvatarPath(team.avatar_path) ||
+      (team.banner_preset ? bannerPresetUrl(team.banner_preset) : null);
+
+    const ownerAvatarUrl = constructAvatarUrl(
+      team.owner_avatar_path || "",
+      team.owner_name || "Owner"
+    );
+
+    const isMember =
+      team.current_user_status === "Active" ||
+      team.current_user_role === "Owner";
+    const avgRating = Number(team.average_rating || 0);
+
     return (
       <article
         key={team.team_id}
-        onClick={() => navigate(targetUrl)}
-        className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs hover:border-gray-300 dark:hover:border-white/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between"
+        onClick={() => navigate(targetUrl, { state: { from: "/teams" } })}
+        className="group relative rounded-2xl border border-zinc-200/80 dark:border-white/10 bg-white dark:bg-zinc-900/60 overflow-hidden shadow-xs hover:shadow-md hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-200 flex flex-col cursor-pointer"
       >
-        <div>
-          {/* Card Thumbnail Banner (Zero black gradient overlay) */}
-          <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-gray-100 dark:bg-zinc-800">
-            {/* Review Status & Timer Overlay Badge - Upper Left (Sleek, less-colorful, high contrast) */}
-            {isProject && !team.is_archived && team.review_status?.needs_review && (
-              <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/85 dark:bg-black/85 text-white text-[10px] font-medium shadow-md border border-white/20 backdrop-blur-md">
-                <Star className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
-                <span className="font-semibold text-zinc-100">Rate &amp; Review</span>
-                <span className="text-zinc-500">•</span>
-                <CardReviewTimer
-                  contractId={team.review_status.contract_id}
-                  reviewedAt={team.review_status.counterparty_reviewed_at}
-                />
-              </div>
-            )}
-
-            {isProject && !team.is_archived && !team.review_status?.needs_review && team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed && (
-              <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/85 dark:bg-black/85 text-white text-[10px] font-medium shadow-md border border-white/20 backdrop-blur-md">
-                <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
-                <span className="font-semibold text-zinc-100">Awaiting Peer</span>
-                <span className="text-zinc-500">•</span>
-                <CardReviewTimer
-                  contractId={team.review_status.contract_id}
-                  reviewedAt={team.review_status.user_reviewed_at}
-                />
-              </div>
-            )}
-
-            {team.avatar_path ? (
-              <img
-                src={getImageUrl(team.avatar_path)}
-                alt={team.display_name}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-            ) : (
-              <div className="grid h-full place-items-center text-2xl font-bold text-gray-400 dark:text-zinc-500">
-                {isProject ? (
-                  <Briefcase className="w-10 h-10 text-gray-400 dark:text-zinc-600" />
-                ) : (
-                  team.display_name.slice(0, 2).toUpperCase()
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Card Content */}
-          <div className="p-4 space-y-2.5">
-            {/* Title */}
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-1 flex-1">
-                {team.display_name}
-              </h3>
+        {/* 1. Header Banner: Team thumbnail as the banner */}
+        <div className="relative h-32 w-full bg-zinc-950 overflow-hidden shrink-0 flex items-center justify-center">
+          {teamThumbnailBanner ? (
+            <img
+              src={teamThumbnailBanner}
+              alt={team.display_name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : (
+            <div className="w-full h-full bg-linear-to-r from-zinc-800 to-zinc-900 flex items-center justify-center text-zinc-600 font-bold text-xl">
+              {team.display_name.slice(0, 2).toUpperCase()}
             </div>
+          )}
+          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
-            {/* Badges Row - High-Contrast in Light Mode */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {isProject ? (
-                <>
-                  {team.is_archived ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-purple-500" />
-                      Archived
-                    </span>
-                  ) : (team.review_status?.needs_review || (team.review_status?.user_has_reviewed && !team.review_status?.counterparty_has_reviewed)) ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500 animate-pulse" />
-                      Rate &amp; Review
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
-                      Active
-                    </span>
-                  )}
+          {/* Category Pill */}
+          {team.category && (
+            <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
+              {team.category}
+            </span>
+          )}
 
-                  {/* Category Tag (Gray) */}
-                  {team.category && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                      {team.category}
-                    </span>
-                  )}
+          {/* Join Policy Pill */}
+          {team.join_policy === "Open" && (
+            <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white flex items-center gap-1 shadow-xs">
+              <CheckCircle2 className="w-3 h-3" /> Open
+            </span>
+          )}
+        </div>
 
-                  {/* Role Tag (Gray) */}
-                  {team.current_user_role && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                      {team.current_user_role === "Owner" ? "Client Owner" : team.current_user_role}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* General Team Badges */}
-                  {team.current_user_role && (
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
-                        team.current_user_role === "Owner"
-                          ? "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
-                          : team.current_user_role === "Representative" || team.current_user_role === "Admin"
-                          ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
-                          : "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
-                      }`}
-                    >
-                      {team.current_user_role === "Owner"
-                        ? "Team Leader"
-                        : team.current_user_role === "Representative" || team.current_user_role === "Admin"
-                        ? "Representative"
-                        : "Member"}
-                    </span>
-                  )}
-
-                  {team.current_user_status === "Pending" && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-50 text-yellow-900 border border-yellow-300 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800">
-                      Pending Approval
-                    </span>
-                  )}
-
-                  {team.is_business_verified && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Verified
-                    </span>
-                  )}
-                </>
+        {/* 2. Body: Owner Profile Pic, Group Name & By {owner_name} */}
+        <div className="px-5 pt-0 pb-5 flex-1 flex flex-col">
+          {/* Floating Avatar: Owner's profile pic */}
+          <div className="relative -mt-8 flex items-end justify-between mb-2.5 shrink-0">
+            <div
+              className="relative"
+              title={team.owner_name ? `Owner: ${team.owner_name}` : "Team Owner"}
+            >
+              <img
+                src={ownerAvatarUrl}
+                alt={team.owner_name || "Owner"}
+                className="w-16 h-16 rounded-full object-cover border-3 border-white dark:border-zinc-900 shadow-md bg-zinc-100 dark:bg-zinc-800"
+              />
+              {team.is_business_verified && (
+                <div
+                  className="absolute -bottom-0.5 -right-0.5 p-1 bg-blue-500 text-white rounded-full shadow-xs ring-2 ring-white dark:ring-zinc-900"
+                  title="Verified Team"
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                </div>
               )}
             </div>
 
-            {/* Description */}
-            <p className="line-clamp-2 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed pt-1">
-              {team.description || "No project brief or description provided."}
+            {team.current_user_role ? (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50">
+                {team.current_user_role === "Owner" ? "Owner" : team.current_user_role === "Admin" ? "Admin" : "Member"}
+              </span>
+            ) : isMember ? (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50">
+                Member
+              </span>
+            ) : null}
+          </div>
+
+          {/* 3. Group Name & By {owner_name} */}
+          <div className="mb-2">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
+              {team.display_name}
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">
+              By{" "}
+              <span className="text-zinc-800 dark:text-zinc-200 font-semibold">
+                {team.owner_name || (team.owner_handle ? `@${team.owner_handle}` : "Team Owner")}
+              </span>
+              {team.handle && (
+                <span className="text-[11px] text-zinc-400 font-normal ml-1">
+                  · @{team.handle}
+                </span>
+              )}
             </p>
           </div>
-        </div>
 
-        {/* Card Footer */}
-        <div className="px-4 py-3 border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
-          <span className="inline-flex items-center gap-1.5 font-medium">
-            <Users className="w-3.5 h-3.5 text-gray-400 dark:text-zinc-500" />
-            {team.member_count} {team.member_count === 1 ? "member" : "members"}
-          </span>
-          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 group-hover:underline">
-            Open Space &rarr;
-          </span>
+          {/* Tagline / Description */}
+          <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2 leading-relaxed mb-4 flex-1">
+            {team.tagline ||
+              team.description ||
+              "Collaborative creative production team on Ensemble."}
+          </p>
+
+          {/* Metrics Bar */}
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 pt-3 border-t border-zinc-100 dark:border-white/5 shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1 font-semibold text-zinc-700 dark:text-zinc-300">
+                <Users className="w-3.5 h-3.5 text-zinc-400" />
+                {team.member_count}{" "}
+                {team.member_count === 1 ? "member" : "members"}
+              </span>
+
+              <span
+                className="flex items-center gap-1 font-semibold text-zinc-900 dark:text-white"
+                title={`${avgRating > 0 ? avgRating.toFixed(1) : "5.0"} rating (${team.review_count || 0} reviews)`}
+              >
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                <span>{avgRating > 0 ? avgRating.toFixed(1) : "5.0"}</span>
+                <span className="text-[11px] text-zinc-400 font-normal">
+                  ({team.review_count || 0})
+                </span>
+              </span>
+            </div>
+
+            {team.location && (
+              <span className="flex items-center gap-1 text-[11px] text-zinc-400 truncate max-w-[100px]">
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">{team.location}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Hover Action CTA */}
+          <div className="mt-3.5 pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition">
+              View Team Profile
+            </span>
+            <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-white/5 group-hover:bg-blue-500 group-hover:text-white flex items-center justify-center text-zinc-500 dark:text-zinc-400 transition-all">
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </div>
         </div>
       </article>
     );
@@ -498,7 +573,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
     return (
       <div
         key={team.team_id}
-        onClick={() => navigate(targetUrl)}
+        onClick={() => navigate(targetUrl, { state: { from: "/teams" } })}
         className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-3.5 transition-all duration-200 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-xs cursor-pointer group"
       >
         <div className="relative h-18 w-28 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-zinc-800">

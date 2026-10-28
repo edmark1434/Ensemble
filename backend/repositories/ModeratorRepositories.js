@@ -4,9 +4,11 @@ const {
   listRecentAccountActivity,
 } = require('./AccountActivityRepositories');
 
-/** Strike weight → days until expiry (1pt = 30 days). */
+const { warningDurationDays } = require('../lib/Merit');
+
+/** Strike weight → days until expiry (1pt = 3 days, 5pt = 14 days, 10pt = 90 days). */
 function violationExpiryFromPoints(points, fromDate = new Date()) {
-  const days = Math.max(1, Number(points) || 1) * 30;
+  const days = warningDurationDays(points);
   const d = new Date(fromDate);
   d.setUTCDate(d.getUTCDate() + days);
   return d;
@@ -175,18 +177,20 @@ async function searchRestrictionAccounts(query) {
   return result.rows.map(mapDeskAccount);
 }
 
-async function issueViolation(accountId, { type, reason, points, expiresAt, duration, days, endsAt }, staffSession) {
+async function issueViolation(accountId, { warningId, type, reason, points, expiresAt, duration, days, endsAt }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
-  const violationType = String(type || 'warning').trim() || 'warning';
+  const { resolveIssuedWarning } = require('../lib/WarningCatalog');
+  const issued = resolveIssuedWarning({ warningId, type, points });
+  const violationType = issued.type;
+  const warnPoints = issued.points;
   const warnReason = String(reason || '').trim();
   if (!warnReason) {
     const error = new Error('A reason is required');
     error.statusCode = 400;
     throw error;
   }
-  const warnPoints = Number(points) || 1;
   const { warningExpiry } = require('../lib/AccountRestriction');
-  const expiry = warningExpiry({ duration, days, expiresAt, endsAt, points: warnPoints });
+  const expiry = warningExpiry({ days, expiresAt, endsAt, points: warnPoints });
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
 
   const inserted = await pool.query(
@@ -219,6 +223,7 @@ async function issueViolation(accountId, { type, reason, points, expiresAt, dura
       type: violationType,
       reason: reason || null,
       points: warnPoints,
+      warningId: issued.warningId,
       expiresAt: expiry,
     },
   });
@@ -243,6 +248,12 @@ async function issueViolation(accountId, { type, reason, points, expiresAt, dura
     });
   } catch (notifyErr) {
     console.warn('Failed to broadcast moderator warning notification:', notifyErr.message);
+  }
+
+  try {
+    require('../services/MeritServices').scheduleMeritRecompute(accountId);
+  } catch (err) {
+    console.warn('Merit recompute after moderator warning failed:', err.message);
   }
 
   return getViolationsAndRestrictions();

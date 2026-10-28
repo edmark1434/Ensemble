@@ -4089,7 +4089,7 @@ async function applyReportSanction(row, patch, staffId) {
   const { warnAccount, updateAccountStatus } = require('./AdminUserTeamRepositories');
 
   if (sanctionType === 'warning' || sanctionType === 'warn') {
-    return warnAccount(accountId, { type: 'Report sanction', reason, points: 1, days: days || 30 }, staffId);
+    return warnAccount(accountId, { warningId: 'staff_follow_up', reason, days }, staffId);
   }
   if (sanctionType === 'suspend' || sanctionType === 'suspended') {
     if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');

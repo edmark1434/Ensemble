@@ -29,7 +29,8 @@ const {
     shortlistGigOrderService,
     unshortlistGigOrderService,
     acceptGigOrderService,
-    confirmGigOrderContractService
+    confirmGigOrderContractService,
+    toggleGigStatusService
 } = require('../services/GigServices');
 
 function sendControllerError(res, error, fallbackMessage) {
@@ -54,7 +55,7 @@ async function createGigController(req, res) {
 
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
-            additionalWorkRate, tiers, milestones, questionnaires, skills,
+            additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
             thumbnailFileId, galleryFileIds
         } = req.body;
 
@@ -67,12 +68,20 @@ async function createGigController(req, res) {
         }
 
         const gigData = {
+            payer_account_id: personalAccountId,
+            acting_team_id: actor.teamId || null,
             freelancer_account_id, title, description, category, slots, termsOfService,
-            firstDraftDelivery, additionalWorkRate, tiers, milestones, questionnaires,
+            firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
             skills, thumbnailFileId, galleryFileIds
         };
 
+        await require('../services/MeritServices').assertMeritAllows(personalAccountId, 'create_gig');
         const gigId = await createGigRepository(gigData);
+        try {
+            require('../services/BadgeServices').scheduleBadgeEvaluation(freelancer_account_id);
+        } catch (badgeErr) {
+            console.error('Badge evaluation after gig create failed:', badgeErr.message);
+        }
         res.status(201).json({ success: true, message: 'Gig created successfully', gigId });
     } catch (error) {
         console.error("Error in createGigController:", error);
@@ -133,19 +142,86 @@ async function submitGigOrderController(req, res) {
         const result = await submitGigOrderRepository(actor.accountId, req.params.id, req.body, affiliatedAccountIds);
         const { requestId, freelancerAccountId, gigTitle } = result;
 
-        // Notify the freelancer of the new order request
+        // Notify the freelancer or team leader and team members
         try {
-            const notif = await createNotificationServices({
-                account_id: freelancerAccountId,
-                message: `You have a new order request for your gig '${gigTitle}'.`,
-                reference_table: 'gig_requests',
-                reference_prefix: 'new_order',
-                reference_path: `/gigs/orders/incoming/${req.params.id}`,
-                reference_id: requestId
-            });
+            const teamCheck = await pool.query(`
+                SELECT t.team_id, t.account_id, a.display_name AS team_name
+                FROM teams t
+                JOIN accounts a ON a.account_id = t.account_id
+                WHERE t.account_id = $1 AND t.deleted_at IS NULL
+            `, [freelancerAccountId]);
+
             const io = getIo();
-            if (io && notif) {
-                io.to(String(freelancerAccountId)).emit('notification', notif);
+
+            if (teamCheck.rows.length > 0) {
+                const team = teamCheck.rows[0];
+                const membersRes = await pool.query(`
+                    SELECT u.account_id, tm.role, tm.status
+                    FROM team_members tm
+                    JOIN users u ON u.user_id = tm.user_id
+                    WHERE tm.team_id = $1 AND tm.status = 'Active'
+                `, [team.team_id]);
+
+                const ownerMember = membersRes.rows.find(m => m.role === 'Owner');
+                const otherMembers = membersRes.rows.filter(m => m.role !== 'Owner');
+
+                // 1. Team leader gets the order request to manage/accept
+                if (ownerMember) {
+                    const ownerNotif = await createNotificationServices({
+                        account_id: ownerMember.account_id,
+                        message: `New team order received: You have a new order for team service '${gigTitle}'.`,
+                        reference_table: 'gig_requests',
+                        reference_prefix: 'new_order',
+                        reference_path: `/gigs/orders/incoming/${req.params.id}`,
+                        reference_id: requestId
+                    });
+                    if (io && ownerNotif) {
+                        io.to(String(ownerMember.account_id)).emit('notification', ownerNotif);
+                    }
+                }
+
+                const teamNotif = await createNotificationServices({
+                    account_id: team.account_id,
+                    message: `New order request received for team service '${gigTitle}'.`,
+                    reference_table: 'gig_requests',
+                    reference_prefix: 'new_order',
+                    reference_path: `/gigs/orders/incoming/${req.params.id}`,
+                    reference_id: requestId
+                });
+                if (io && teamNotif) {
+                    io.to(String(team.account_id)).emit('notification', teamNotif);
+                }
+
+                // 2. Rest of the team gets notified about the order in teams
+                for (const member of otherMembers) {
+                    try {
+                        const memberNotif = await createNotificationServices({
+                            account_id: member.account_id,
+                            message: `New team order: An order was placed for team service '${gigTitle}'.`,
+                            reference_table: 'teams',
+                            reference_prefix: 'team_order',
+                            reference_path: `/teams/${team.team_id}?tab=services`,
+                            reference_id: requestId
+                        });
+                        if (io && memberNotif) {
+                            io.to(String(member.account_id)).emit('notification', memberNotif);
+                        }
+                    } catch (mErr) {
+                        console.error('Error notifying team member:', mErr);
+                    }
+                }
+            } else {
+                const notif = await createNotificationServices({
+                    account_id: freelancerAccountId,
+                    message: `You have a new order request for your gig '${gigTitle}'.`,
+                    reference_table: 'gig_requests',
+                    reference_prefix: 'new_order',
+                    reference_path: `/gigs/orders/incoming/${req.params.id}`,
+                    reference_id: requestId
+                });
+                if (io && notif) {
+                    io.to(String(freelancerAccountId)).emit('notification', notif);
+                }
             }
         } catch (notifErr) {
             console.error('Error sending new gig order notification:', notifErr);
@@ -397,7 +473,31 @@ async function reportGigController(req, res) {
     }
 }
 
+async function toggleGigStatusController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const gigId = req.params.id;
+        const { status } = req.body || {};
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(freelancer_account_id);
+        const result = await toggleGigStatusService(gigId, actorIds, status);
+        res.status(200).json({
+            success: true,
+            data: result,
+            message: `Gig status successfully changed to ${result.status === 'closed' ? 'Closed' : 'Open'}`
+        });
+    } catch (error) {
+        console.error("Error in toggleGigStatusController:", error);
+        res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Failed to update gig status' });
+    }
+}
+
 module.exports = {
+    toggleGigStatusController,
     updateGigController,
     createGigController,
     getAllGigsController,
