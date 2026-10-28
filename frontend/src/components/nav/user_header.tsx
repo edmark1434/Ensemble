@@ -10,6 +10,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/pages/firebase";
 
 import UserNotificationModal from "./user_notification_modal";
+import { isPopupArchived } from "@/lib/popupNotificationStorage";
 import UserLogoutModal from "./user_logout_modal";
 import socket from "@/lib/socket";
 import useChatState from "@/components/ui/chat_bubble/chat_state";
