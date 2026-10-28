@@ -352,6 +352,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
 
         {isOwner && !isEditing && !isLoading && (
           <button
+            data-tour="profile-intro-edit"
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[11px] font-bold text-gray-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-500/30 dark:hover:border-blue-500/30 hover:bg-blue-50/50 dark:hover:bg-blue-500/10 transition-all cursor-pointer shadow-xs active:scale-95"
           >

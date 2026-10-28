@@ -114,6 +114,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
+        id="profile-portfolio-pdf-input"
         accept=".pdf"
         className="hidden"
       />
@@ -137,6 +138,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
             <>
               <button
                 disabled={isLoading}
+                data-tour="profile-portfolio-upload-btn"
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -146,6 +148,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
 
               <button
                 disabled={isLoading}
+                data-tour="profile-portfolio-link-btn"
                 onClick={() => setShowLinkModal(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
