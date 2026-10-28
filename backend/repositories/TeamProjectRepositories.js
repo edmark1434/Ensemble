@@ -469,10 +469,62 @@ async function ensureContractualGigWorkspace(dbClient, {
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (team_id, contract_id) DO UPDATE SET project_id = COALESCE(EXCLUDED.project_id, team_contract_workspaces.project_id)
     `, [teamId, contractId, clientAccountId, linkedProjectId]);
+
+    // Self-healing: if workspace already exists, ensure sub-tasks are seeded if empty or placeholder
+    const existingWsRes = await dbClient.query(`
+      SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 AND contract_id = $2 LIMIT 1
+    `, [teamId, contractId]);
+    const wsId = existingWsRes.rows[0]?.workspace_id;
+    if (wsId) {
+      const milestonesRes = await dbClient.query(`
+        SELECT contract_milestone_id, name as title, description, COALESCE(tasks, '[]'::jsonb) as tasks, index as order_index
+          FROM contract_milestones
+         WHERE contract_id = $1
+         ORDER BY index ASC
+      `, [contractId]);
+
+      for (const ms of milestonesRes.rows) {
+        let taskItems = [];
+        try {
+          taskItems = Array.isArray(ms.tasks) ? ms.tasks : JSON.parse(ms.tasks || '[]');
+        } catch (_) {
+          taskItems = [];
+        }
+        if (taskItems.length === 0) continue;
+
+        const currentTasks = await dbClient.query(`
+          SELECT task_id, title, status FROM team_workspace_tasks WHERE workspace_id = $1 AND contract_milestone_id = $2
+        `, [wsId, ms.contract_milestone_id]);
+
+        const isPlaceholderOnly = currentTasks.rows.length === 1 &&
+          currentTasks.rows[0].title.trim() === String(ms.title || '').trim() &&
+          currentTasks.rows[0].status === 'todo';
+
+        if (currentTasks.rows.length === 0 || isPlaceholderOnly) {
+          if (isPlaceholderOnly) {
+            await dbClient.query(`DELETE FROM team_workspace_tasks WHERE task_id = $1`, [currentTasks.rows[0].task_id]);
+          }
+          const isLocked = Number(ms.order_index) > 0;
+          for (let i = 0; i < taskItems.length; i++) {
+            const item = taskItems[i];
+            const rawTitle = typeof item === 'string' ? item : (item.title || item.task || `Task ${i + 1}`);
+            const taskTitle = String(rawTitle).trim().slice(0, 160);
+            const taskDesc = typeof item === 'object' ? (item.description || '') : '';
+            await dbClient.query(`
+              INSERT INTO team_workspace_tasks (
+                workspace_id, contract_milestone_id, title, description, status, priority, is_locked, sort_order, created_by_account_id
+              ) VALUES ($1, $2, $3, $4, 'todo', 'normal', $5, $6, $7)
+            `, [wsId, ms.contract_milestone_id, taskTitle, taskDesc, isLocked, i, clientAccountId]);
+          }
+        }
+      }
+    }
   }
 
   // 4. Register Freelancer (and all active team members if freelancer is a Team account)
   let extraTeamMemberAccountIds = [];
+  let primaryAssigneeAccountId = freelancerAccountId;
+
   const teamCheck = await dbClient.query(`
     SELECT t.team_id
       FROM teams t
@@ -482,16 +534,20 @@ async function ensureContractualGigWorkspace(dbClient, {
 
   if (teamCheck.rows.length > 0) {
     const tmRes = await dbClient.query(`
-      SELECT u.account_id
+      SELECT u.account_id, tm.role
         FROM team_members tm
         JOIN users u ON u.user_id = tm.user_id
        WHERE tm.team_id = $1 AND tm.status = 'Active'
+       ORDER BY CASE WHEN tm.role = 'Owner' THEN 1 WHEN tm.role = 'Leader' THEN 2 WHEN tm.role = 'Manager' THEN 3 ELSE 4 END ASC
     `, [teamCheck.rows[0].team_id]);
     extraTeamMemberAccountIds = tmRes.rows.map(r => r.account_id).filter(Boolean);
+    if (tmRes.rows.length > 0 && tmRes.rows[0].account_id) {
+      primaryAssigneeAccountId = tmRes.rows[0].account_id;
+    }
   }
 
   const candidateAccountIds = Array.from(
-    new Set([freelancerAccountId, ...extraTeamMemberAccountIds].filter(Boolean).map(String))
+    new Set([freelancerAccountId, primaryAssigneeAccountId, ...extraTeamMemberAccountIds].filter(Boolean).map(String))
   );
 
   for (const accId of candidateAccountIds) {
@@ -522,16 +578,26 @@ async function ensureContractualGigWorkspace(dbClient, {
       `, [primaryWorkspaceId, accId, clientAccountId]);
     }
 
-    // Assign all workspace tasks to the freelancer
+    // Assign all workspace tasks to the freelancer (solo user or team leader)
     const allTasks = await dbClient.query(`
-      SELECT task_id FROM team_workspace_tasks WHERE workspace_id = $1
+      SELECT twt.task_id FROM team_workspace_tasks twt
+       LEFT JOIN team_workspace_task_assignees twta ON twta.task_id = twt.task_id
+      WHERE twt.workspace_id = $1 AND twta.account_id IS NULL AND twt.deleted_at IS NULL
     `, [primaryWorkspaceId]);
     for (const t of allTasks.rows) {
       await dbClient.query(`
         INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
         VALUES ($1, $2, $3)
         ON CONFLICT (task_id, account_id) DO NOTHING
-      `, [t.task_id, freelancerAccountId, clientAccountId]);
+      `, [t.task_id, primaryAssigneeAccountId, clientAccountId]);
+
+      if (freelancerAccountId && primaryAssigneeAccountId !== freelancerAccountId) {
+        await dbClient.query(`
+          INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (task_id, account_id) DO NOTHING
+        `, [t.task_id, freelancerAccountId, clientAccountId]);
+      }
     }
 
     // Link video project if provided
@@ -769,13 +835,27 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     await pool.query('UPDATE team_workspace_tasks SET is_locked = FALSE WHERE task_id = $1', [taskId]);
   }
 
-  // Check if viewer is contractor / lead freelancer in this workspace
+  // Check if viewer is contractor / lead freelancer in this workspace (Job or Gig)
   const leadRes = await pool.query(`
     SELECT 1 FROM team_contract_workspaces tcw
       JOIN contracts c ON c.contract_id = tcw.contract_id
-      JOIN job_contracts jc ON jc.contract_id = c.contract_id
-      JOIN proposals p ON p.proposal_id = jc.proposal_id
-     WHERE tcw.team_id = $1 AND p.freelancer_account_id = $2
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+      LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+      LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+      LEFT JOIN gigs g ON g.gig_id = gt.gig_id
+     WHERE tcw.team_id = $1
+       AND (
+         p.freelancer_account_id = $2
+         OR g.freelancer_account_id = $2
+         OR EXISTS (
+           SELECT 1 FROM teams tm
+           JOIN team_members tmm ON tmm.team_id = tm.team_id
+           JOIN users u ON u.user_id = tmm.user_id
+           WHERE tm.account_id = g.freelancer_account_id AND u.account_id = $2 AND tmm.status = 'Active'
+         )
+       )
      LIMIT 1
   `, [teamId, viewerAccountId]);
   const isContractor = leadRes.rows.length > 0;
