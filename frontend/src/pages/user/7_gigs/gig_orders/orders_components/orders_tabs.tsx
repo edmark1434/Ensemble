@@ -9,21 +9,26 @@ export const OrdersTabs: React.FC = () => {
 
   const isIncoming =
     location.pathname === "/gigs/orders" ||
+    location.pathname === "/gigs/orders/" ||
     location.pathname.startsWith("/gigs/orders/incoming");
 
   const isSent = location.pathname.startsWith("/gigs/orders/sent");
-  const isFlow = location.pathname.startsWith("/gigs/orders/flow");
+  const isInfo =
+    location.pathname.startsWith("/gigs/orders/info") ||
+    location.pathname.startsWith("/gigs/orders/flow");
 
   return (
-    <div className="flex gap-1 relative">
+    <div className="flex flex-wrap gap-1 relative">
       <button
         onClick={() => navigate("/gigs/orders")}
         className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-          isIncoming ? "text-blue-600 dark:text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+          isIncoming
+            ? "text-blue-600 dark:text-blue-400 font-bold"
+            : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
-          <ClipboardList className="h-4 w-4" /> Incoming Orders
+          <ClipboardList className="h-4 w-4" /> Received Orders
         </span>
 
         {isIncoming && (
@@ -45,11 +50,13 @@ export const OrdersTabs: React.FC = () => {
       <button
         onClick={() => navigate("/gigs/orders/sent")}
         className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-          isSent ? "text-blue-600 dark:text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+          isSent
+            ? "text-blue-600 dark:text-blue-400 font-bold"
+            : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
-          <Send className="h-4 w-4" /> My Orders
+          <Send className="h-4 w-4" /> Sent Orders
         </span>
 
         {isSent && (
@@ -69,16 +76,18 @@ export const OrdersTabs: React.FC = () => {
       </button>
 
       <button
-        onClick={() => navigate("/gigs/orders/flow")}
+        onClick={() => navigate("/gigs/orders/info")}
         className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-          isFlow ? "text-blue-600 dark:text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+          isInfo
+            ? "text-blue-600 dark:text-blue-400 font-bold"
+            : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
-          <HelpCircle className="h-4 w-4" /> Order Flow
+          <HelpCircle className="h-4 w-4" /> Info
         </span>
 
-        {isFlow && (
+        {isInfo && (
           <>
             <motion.div
               layoutId="activeOrderTabGlow"

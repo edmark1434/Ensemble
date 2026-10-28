@@ -86,6 +86,8 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
   return (await pool.query(`SELECT t.team_id,t.account_id,t.category,t.visibility,
     COALESCE(t.team_type, 'standard') AS team_type,
     t.job_id,
+    t.gig_id,
+    CASE WHEN t.gig_id IS NOT NULL THEN 'Gig' ELSE 'Job' END AS workspace_type,
     COALESCE(t.is_archived, FALSE) AS is_archived,
     a.display_name,a.handle,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
@@ -97,43 +99,50 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
           (c.status = 'Done' OR NOT EXISTS (
             SELECT 1 FROM contract_milestones cm WHERE cm.contract_id = c.contract_id AND cm.status != 'completed'
           ))
-          AND c.status NOT IN ('Completed', 'Cancelled')
+          AND c.status NOT IN ('Completed', 'Cancelled', 'Waiting')
           AND NOT EXISTS (
             SELECT 1 FROM ratings r
              WHERE r.contract_id = c.contract_id
-               AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN p.freelancer_account_id ELSE j.client_account_id END)
+               AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
           )
         ),
         'user_has_reviewed', EXISTS (
           SELECT 1 FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN p.freelancer_account_id ELSE j.client_account_id END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
         ),
         'counterparty_has_reviewed', EXISTS (
           SELECT 1 FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN j.client_account_id ELSE p.freelancer_account_id END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(j.client_account_id, gr.client_account_id) ELSE COALESCE(p.freelancer_account_id, g.freelancer_account_id) END)
         ),
         'counterparty_reviewed_at', (
           SELECT r.created_at FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN j.client_account_id ELSE p.freelancer_account_id END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(j.client_account_id, gr.client_account_id) ELSE COALESCE(p.freelancer_account_id, g.freelancer_account_id) END)
            LIMIT 1
         ),
         'user_reviewed_at', (
           SELECT r.created_at FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN j.client_account_id = $1 THEN p.freelancer_account_id ELSE j.client_account_id END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
            LIMIT 1
         )
       )
       FROM team_contract_workspaces tcw
       JOIN contracts c ON c.contract_id = tcw.contract_id
-      JOIN job_contracts jc ON jc.contract_id = c.contract_id
-      JOIN proposals p ON p.proposal_id = jc.proposal_id
-      JOIN jobs j ON j.job_id = p.job_id
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN jobs j ON j.job_id = p.job_id
+      LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+      LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+      LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+      LEFT JOIN gigs g ON g.gig_id = gt.gig_id
       WHERE tcw.team_id = t.team_id
-        AND (j.client_account_id = $1 OR p.freelancer_account_id = $1)
+        AND (
+          COALESCE(j.client_account_id, gr.client_account_id) = $1 
+          OR COALESCE(p.freelancer_account_id, g.freelancer_account_id) = $1
+        )
       LIMIT 1
     ) AS review_status
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
@@ -145,7 +154,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
         ($3::boolean = TRUE AND mine.status IN ('Active', 'Pending'))
         OR ($3::boolean = FALSE AND t.visibility = 'Public')
       )
-    GROUP BY t.team_id,t.team_type,t.job_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset])).rows;
+    GROUP BY t.team_id,t.team_type,t.job_id,t.gig_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset])).rows;
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
 async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }

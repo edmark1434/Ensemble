@@ -257,10 +257,12 @@ const GigMain: React.FC = () => {
   const tabFilteredGigs = useMemo(() => {
     const isSavedTab = location.pathname.includes("/saved-services");
     const isMyServicesTab = location.pathname.includes("/my-services");
+    const isMyOrdersTab = location.pathname.includes("/my-orders");
 
     return gigsList.filter((gig) => {
       if (isSavedTab) return gig.isSaved;
       if (isMyServicesTab) return gig.isOwnGig;
+      if (isMyOrdersTab) return Boolean(gig.hasPendingOrder || gig.pendingOrderId);
 
       const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
       return isOpen;
@@ -422,6 +424,7 @@ const GigMain: React.FC = () => {
   const isServicesTab =
     !location.pathname.includes("/saved-services") &&
     !location.pathname.includes("/my-services") &&
+    !location.pathname.includes("/my-orders") &&
     !isInfoTab;
   const getBudgetStatus = (gig: Gig): GigBudgetStatus => {
     if (!budgetMatch || budgetCredits === null || !isServicesTab) return null;
@@ -539,6 +542,8 @@ const GigMain: React.FC = () => {
             navigate("/gigs/saved-services");
           } else if (location.pathname.includes("/my-services")) {
             navigate("/gigs/my-services");
+          } else if (location.pathname.includes("/my-orders")) {
+            navigate("/gigs/my-orders");
           } else {
             navigate("/gigs/services");
           }

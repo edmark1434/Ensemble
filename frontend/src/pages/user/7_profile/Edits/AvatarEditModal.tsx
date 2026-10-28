@@ -352,7 +352,7 @@ export default function AvatarEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-4xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-base/95 backdrop-blur-md p-6 lg:p-8 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] overflow-y-auto">
         <button
           onClick={handleClose}

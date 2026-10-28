@@ -118,7 +118,7 @@ export default function BannerEditModal({
       : PROFILE_BANNER_GROUPS.filter((g) => g.label === selectedCategory);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 sm:p-6 animate-fade-in font-['Plus Jakarta Sans',sans-serif]">
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 sm:p-6 animate-fade-in font-['Plus Jakarta Sans',sans-serif]">
       {/* Stable base container: fixed height (590px) and max-w-4xl so switching categories never shrinks or jumps */}
       <div className="relative w-full max-w-4xl h-[590px] rounded-2xl border border-gray-200 dark:border-white/10 bg-white/98 dark:bg-dark-base/98 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}

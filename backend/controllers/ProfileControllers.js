@@ -9,6 +9,7 @@ const {
     getProfileAvatarsByAccountIdService,
     getProfileCurrentAvatarByAccountIdService,
     getProfileReviewsByAccountIdService,
+    getProfileHistoryByAccountIdService,
     updateBudgetCreditsServices,
     updateBannerPresetServices,
     ProfileBudgetError
@@ -341,10 +342,30 @@ async function getProfileReviewsController(req, res) {
     }
 }
 
+async function getProfileHistoryController(req, res) {
+    try {
+        const { accountId } = req.params;
+        if (await hiddenProfileResponse(req, res, accountId)) return;
+        const viewerAccountId = req.session?.accountId || req.user?.accountId || req.user?.account_id || null;
+        const history = await getProfileHistoryByAccountIdService(accountId, viewerAccountId);
+        return res.status(200).json({
+            success: true,
+            data: history
+        });
+    } catch (err) {
+        console.error('Error fetching profile history:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching contract history.'
+        });
+    }
+}
+
 module.exports = {
     updateBudgetCreditsController,
     updateBannerPresetController,
     getProfileReviewsController,
+    getProfileHistoryController,
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
     updateProfileUserController,

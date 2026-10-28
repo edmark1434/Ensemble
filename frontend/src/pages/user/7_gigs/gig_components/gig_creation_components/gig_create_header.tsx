@@ -1,93 +1,83 @@
 import React from "react";
-import { ArrowLeft, Check, Rocket } from "lucide-react";
+import { ArrowLeft, RotateCcw } from "lucide-react";
+import WizardProgressTrack, { type WizardStep } from "@/components/ui/WizardProgressTrack";
 
-export interface StepConfig {
-  id: number;
-  label: string;
-}
-
-export const GIG_WIZARD_STEPS: StepConfig[] = [
-  { id: 1, label: "Core Info" },
-  { id: 2, label: "Delivery" },
-  { id: 3, label: "Tiers" },
+export const GIG_WIZARD_STEPS: WizardStep[] = [
+  { id: 1, label: "Identity" },
+  { id: 2, label: "Core Specs" },
+  { id: 3, label: "Deliverables" },
   { id: 4, label: "Milestones" },
-  { id: 5, label: "Forms" },
+  { id: 5, label: "Tiers" },
   { id: 6, label: "Review" },
 ];
 
 interface GigCreateHeaderProps {
-  highestStepReached?: number;
-  onJumpToReview?: () => void;
   currentSlide: number;
   onReturn: () => void;
+  isDraftRestored?: boolean;
+  onClearDraft?: () => void;
+  hasReachedReview?: boolean;
+  onJumpToReview?: () => void;
+  maxReachedStep?: number;
+  onStepClick?: (stepId: number) => void;
 }
 
 export const GigCreateHeader: React.FC<GigCreateHeaderProps> = ({
-  highestStepReached = 1,
-  onJumpToReview,
   currentSlide,
   onReturn,
+  isDraftRestored,
+  onClearDraft,
+  hasReachedReview,
+  onJumpToReview,
+  maxReachedStep,
+  onStepClick,
 }) => {
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-      {/* Compact Gray Pill Return Button */}
-      <button
-        onClick={onReturn}
-        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800/80 hover:bg-gray-200 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0 focus:outline-none shadow-sm"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        <span>Return</span>
-      </button>
+      {/* Return button and Draft status pill */}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <button
+          type="button"
+          onClick={onReturn}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800/80 hover:bg-gray-200 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0 focus:outline-none cursor-pointer"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Return</span>
+        </button>
+
+        {isDraftRestored && (
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 text-xs text-zinc-600 dark:text-zinc-300 shadow-2xs">
+            <span className="flex items-center gap-1.5 font-medium">
+              <RotateCcw className="h-3.5 w-3.5 text-zinc-400" />
+              <span>Draft restored</span>
+            </span>
+            {onClearDraft && (
+              <>
+                <span className="h-3 w-[1px] bg-zinc-300 dark:bg-zinc-700" />
+                <button
+                  type="button"
+                  onClick={onClearDraft}
+                  className="text-[11px] font-bold text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition cursor-pointer"
+                  title="Clear draft and reset fields"
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Stepper Assembly */}
-      <div className="flex items-center w-full max-w-lg mx-auto md:mx-0 relative justify-between z-0">
-        {GIG_WIZARD_STEPS.map((step, idx) => {
-          const isCompleted = currentSlide > step.id;
-          const isActive = currentSlide === step.id;
-
-          return (
-            <React.Fragment key={step.id}>
-              <div className="flex flex-col items-center relative z-10 select-none">
-                <div
-                  className={`h-9 w-9 rounded-full flex items-center justify-center border text-xs font-bold transition-all duration-300 shadow-md ${
-                    isCompleted
-                      ? "bg-green-500 border-green-500 text-white"
-                      : isActive
-                      ? "bg-blue-500/20 border-blue-500 text-blue-600 dark:text-blue-400 ring-4 ring-blue-500/10"
-                      : "bg-white dark:bg-dark-surface border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-500"
-                  }`}
-                >
-                  {isCompleted ? <Check className="h-4 w-4" /> : step.id}
-                </div>
-                {step.id === 6 && highestStepReached >= 6 && currentSlide < 6 && (
-                  <button 
-                    onClick={onJumpToReview}
-                    className="absolute -top-10 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg hover:bg-purple-700 transition flex items-center gap-1 animate-bounce whitespace-nowrap cursor-pointer z-50"
-                  >
-                    Jump Here <Rocket className="h-3 w-3" />
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-purple-600 rotate-45" />
-                  </button>
-                )}
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider mt-2 transition-colors absolute -bottom-5 whitespace-nowrap ${
-                    isActive ? "text-blue-600 dark:text-blue-400" : isCompleted ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-zinc-500"
-                  }`}
-                >
-                  {step.label}
-                </span>
-              </div>
-
-              {idx < GIG_WIZARD_STEPS.length - 1 && (
-                <div className="flex-1 h-[2px] bg-white dark:bg-white/5 shadow-sm dark:shadow-none mx-2 sm:mx-4 relative top-[-6px] z-0">
-                  <div
-                    className="absolute inset-y-0 left-0 bg-green-500 transition-all duration-500"
-                    style={{ width: isCompleted ? "100%" : "0%" }}
-                  />
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+      <div className="w-full max-w-xl md:max-w-2xl mx-auto md:mx-0">
+        <WizardProgressTrack
+          steps={GIG_WIZARD_STEPS}
+          currentStep={currentSlide}
+          hasReachedReview={hasReachedReview}
+          onJumpToReview={onJumpToReview}
+          maxReachedStep={maxReachedStep}
+          onStepClick={onStepClick}
+        />
       </div>
     </div>
   );

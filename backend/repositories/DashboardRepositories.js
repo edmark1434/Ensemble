@@ -235,7 +235,7 @@ async function getDashboardTasks(accountId) {
             g.gig_id as job_id,
             'individual' as job_hiring_type,
             1 as job_no_of_hires,
-            NULL::uuid as team_project_id,
+            (SELECT tcw.team_id FROM team_contract_workspaces tcw WHERE tcw.contract_id = c.contract_id LIMIT 1) as team_project_id,
             'N/A' as job_difficulty,
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id ORDER BY ga.index ASC LIMIT 1) as job_banner,
             (SELECT t.name FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id LIMIT 1) as job_category,
@@ -371,7 +371,7 @@ async function getTaskById(contractId, accountId) {
             g.gig_id as job_id,
             'individual' as job_hiring_type,
             1 as job_no_of_hires,
-            NULL::uuid as team_project_id,
+            (SELECT tcw.team_id FROM team_contract_workspaces tcw WHERE tcw.contract_id = c.contract_id LIMIT 1) as team_project_id,
             NULL as target_milestone_title,
             '[]'::jsonb as target_milestone_tasks,
             client_acc.display_name as client_name,
@@ -427,6 +427,43 @@ async function getTaskById(contractId, accountId) {
     const result = await pool.query(query, [contractId]);
     const task = result.rows[0];
     if (!task) return null;
+
+    if (!task.team_project_id && task.contract_type === 'gig') {
+        try {
+            const TeamProjectRepositories = require('./TeamProjectRepositories');
+            const gigInfo = await pool.query(`
+                SELECT gc.gig_request_id, gr.client_account_id, g.freelancer_account_id,
+                       gr.gig_tier_id, gt.gig_id, gr.linked_project_id
+                FROM gig_contracts gc
+                JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+                JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+                JOIN gigs g ON g.gig_id = gt.gig_id
+                WHERE gc.contract_id = $1
+            `, [contractId]);
+            if (gigInfo.rows.length > 0) {
+                const gi = gigInfo.rows[0];
+                const dbClient = await pool.connect();
+                try {
+                    const ws = await TeamProjectRepositories.ensureContractualGigWorkspace(dbClient, {
+                        orderId: gi.gig_request_id,
+                        gigId: gi.gig_id,
+                        clientAccountId: gi.client_account_id,
+                        contractId: contractId,
+                        freelancerAccountId: gi.freelancer_account_id,
+                        linkedProjectId: gi.linked_project_id,
+                    });
+                    if (ws?.team_id) {
+                        task.team_project_id = ws.team_id;
+                    }
+                } finally {
+                    dbClient.release();
+                }
+            }
+        } catch (healErr) {
+            console.error('Failed to auto-heal contractual gig workspace:', healErr);
+        }
+    }
+
     task.user_role = permissions.userRole;
     return task;
 }

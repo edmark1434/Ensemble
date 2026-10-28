@@ -856,6 +856,8 @@ export const ContractDetailsPage: React.FC = () => {
         requireNDA: Boolean(foundRaw.require_nda),
         portfolioUseAllowed: Boolean(foundRaw.portfolio_use_allowed),
         portfolioDuration: foundRaw.portfolio_use_duration_seconds || 60,
+        teamId: foundRaw.team_id || undefined,
+        orderId: foundRaw.proposal_id || undefined,
         milestones: mappedMilestones,
         activeDispute: foundRaw.active_dispute || null,
       };
@@ -1185,6 +1187,36 @@ export const ContractDetailsPage: React.FC = () => {
       </div>
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6 print:max-w-none print:w-full print:p-0 print:m-0 print:space-y-0">
+        {/* Awaiting Escrow Banner for Waiting Status */}
+        {contract?.status === "Waiting" && (
+          <div className="rounded-2xl border p-4 sm:p-5 shadow-xs overflow-hidden transition-all bg-blue-50/70 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                  <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>{isClient ? "Awaiting Your Escrow Funding" : "Awaiting Client Escrow Funding"}</span>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                  {isClient
+                    ? "The specialist has accepted your order specifications! Authorize and fund escrow to officially activate this agreement and launch the collaborative project workspace."
+                    : "You have accepted this order! The contract is currently waiting for the client to fund escrow. Delivery milestone countdown begins once escrow is locked."}
+                </p>
+              </div>
+
+              {isClient && contract.orderId && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/gigs/orders/sent/${contract.orderId}`)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs shrink-0 cursor-pointer"
+                >
+                  <CreditIcon className="w-4 h-4" />
+                  <span>Fund Escrow &amp; Start Workspace</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Top Breadcrumb Navigation & Action Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-dark-surface/80 border border-zinc-200/90 dark:border-white/10 rounded-2xl p-2.5 sm:px-4 shadow-xs print:hidden">
           {/* Left: Breadcrumbs + ID */}
@@ -1220,8 +1252,18 @@ export const ContractDetailsPage: React.FC = () => {
           {/* Right: View Toggle + Actions */}
           {contract && (
             <div className="flex items-center gap-2.5 self-end sm:self-auto">
-              {/* View Tasks / View Progress Action Button */}
-              {contract.status === "Active" ? (
+              {/* View Workspace / Tasks Action Button */}
+              {contract.teamId ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/team-project/${contract.teamId}`)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs hover:shadow active:scale-95"
+                  title="Open Project Workspace"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Open Workspace</span>
+                </button>
+              ) : contract.status === "Active" ? (
                 <button
                   type="button"
                   onClick={() => navigate(isFreelancer ? `/dashboard/tasks/${contract.id}` : `/dashboard/review/${contract.id}`)}
@@ -1327,13 +1369,19 @@ export const ContractDetailsPage: React.FC = () => {
                     <button
                       onClick={() => {
                         setActionsMenuOpen(false);
-                        navigate(isFreelancer ? `/dashboard/tasks/${contract.id}` : `/dashboard/review/${contract.id}`);
+                        if (contract.teamId) {
+                          navigate(`/team-project/${contract.teamId}`);
+                        } else {
+                          navigate(isFreelancer ? `/dashboard/tasks/${contract.id}` : `/dashboard/review/${contract.id}`);
+                        }
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
                     >
                       <ExternalLink className="w-4 h-4 text-zinc-400" />
                       <span>
-                        {contract.status === "Active"
+                        {contract.teamId
+                          ? "Open Project Workspace"
+                          : contract.status === "Active"
                           ? (isFreelancer ? "Open Task Delivery Workspace" : "Open Progress & Review")
                           : (isFreelancer ? "View Task History" : "View Progress History")}
                       </span>

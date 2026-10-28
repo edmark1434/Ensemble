@@ -29,7 +29,8 @@ const {
     shortlistGigOrderService,
     unshortlistGigOrderService,
     acceptGigOrderService,
-    confirmGigOrderContractService
+    confirmGigOrderContractService,
+    toggleGigStatusService
 } = require('../services/GigServices');
 
 function sendControllerError(res, error, fallbackMessage) {
@@ -54,7 +55,7 @@ async function createGigController(req, res) {
 
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
-            additionalWorkRate, tiers, milestones, questionnaires, skills,
+            additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
             thumbnailFileId, galleryFileIds
         } = req.body;
 
@@ -67,8 +68,10 @@ async function createGigController(req, res) {
         }
 
         const gigData = {
+            payer_account_id: personalAccountId,
+            acting_team_id: actor.teamId || null,
             freelancer_account_id, title, description, category, slots, termsOfService,
-            firstDraftDelivery, additionalWorkRate, tiers, milestones, questionnaires,
+            firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
             skills, thumbnailFileId, galleryFileIds
         };
 
@@ -403,7 +406,31 @@ async function reportGigController(req, res) {
     }
 }
 
+async function toggleGigStatusController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const gigId = req.params.id;
+        const { status } = req.body || {};
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(freelancer_account_id);
+        const result = await toggleGigStatusService(gigId, actorIds, status);
+        res.status(200).json({
+            success: true,
+            data: result,
+            message: `Gig status successfully changed to ${result.status === 'closed' ? 'Closed' : 'Open'}`
+        });
+    } catch (error) {
+        console.error("Error in toggleGigStatusController:", error);
+        res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Failed to update gig status' });
+    }
+}
+
 module.exports = {
+    toggleGigStatusController,
     updateGigController,
     createGigController,
     getAllGigsController,

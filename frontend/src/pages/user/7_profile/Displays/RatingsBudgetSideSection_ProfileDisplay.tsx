@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Check, DollarSign, Edit2, HelpCircle, Star, Trash2, Trophy, X } from "lucide-react";
+import { Check, Coins, Edit2, HelpCircle, Star, Trash2, Trophy, X, Briefcase } from "lucide-react";
+import { getRatingTierTag } from "./MeritSection_ProfileDisplay";
 
 const MAX_BUDGET_CREDITS = 100000000;
 
@@ -15,7 +16,7 @@ interface RatingsBudgetSideSectionProps {
 }
 
 const headerButtonClass =
-  "p-1.5 rounded-lg border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-all duration-200 disabled:opacity-50";
+  "p-1.5 rounded-lg border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-all duration-200 disabled:opacity-50 cursor-pointer";
 
 export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSideSectionProps> = ({
   loading,
@@ -33,7 +34,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
   const [isSaving, setIsSaving] = useState(false);
 
   if (loading) {
-    return <div className="h-32 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 animate-pulse" />;
+    return <div className="h-44 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 animate-pulse" />;
   }
 
   const startEdit = () => {
@@ -67,19 +68,19 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
     return save(value);
   };
 
-  const stat = (icon: React.ReactNode, label: string, value: React.ReactNode) => (
-    <div className="flex min-w-0 flex-col items-center gap-1 px-1 py-1.5 text-center">
-      <span className="flex items-center gap-1 text-[10px] font-medium text-gray-400 dark:text-zinc-500">
-        {icon} {label}
-      </span>
-      <span className="max-w-full truncate text-xs">{value}</span>
-    </div>
-  );
+  const totalTier = getRatingTierTag(avgRating, totalReviews);
+  const freelancerTier = getRatingTierTag(freelancerRating, freelancerReviews);
 
   return (
-    <div data-tour="profile-budget" className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-1 relative z-30">
-      <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
-        <h3 className="text-[11px] font-extrabold text-gray-900 dark:text-white uppercase tracking-wider">Ratings &amp; Budget</h3>
+    <div 
+      data-tour="profile-budget" 
+      className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus_Jakarta_Sans',sans-serif] space-y-3 relative z-30"
+    >
+      {/* Top Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2.5">
+        <h3 className="text-[11px] font-extrabold text-gray-900 dark:text-white uppercase tracking-wider">
+          Ratings &amp; Budget
+        </h3>
         <div className="flex items-center gap-1.5">
           <div className="relative group/help">
             <button className={`${headerButtonClass} cursor-help`}>
@@ -89,7 +90,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-white dark:border-r-[#070913]" />
               <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[5px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
               <p className="text-[10px] text-gray-600 dark:text-zinc-300 leading-relaxed font-medium">
-                Total Rating averages every review this user has received, and Freelance Rating averages reviews from work they delivered on gigs and jobs. The number in brackets is how many reviews each is based on. Budget is the amount of credits this user plans to spend on projects; only the owner can change it.
+                Total Rating averages every review this user has received across all engagements, while Freelance Rating averages reviews from work delivered on gigs and jobs. Budget indicates the planned credits budget for hiring or projects.
               </p>
             </div>
           </div>
@@ -101,68 +102,152 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
         </div>
       </div>
 
-          <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-white/5 pt-2">
-            {stat(
-              <Trophy className="h-3 w-3" />,
-              "Total",
-              <>
-                <Star className="mr-0.5 inline h-3 w-3 -mt-0.5 text-yellow-400 fill-yellow-400" />
-                <span className="font-bold text-gray-900 dark:text-white">{avgRating ? avgRating.toFixed(1) : "N/A"}</span>
-                <span className="ml-0.5 text-[10px] text-gray-400 dark:text-zinc-500">({totalReviews})</span>
-              </>
-            )}
-            {stat(
-              <Star className="h-3 w-3" />,
-              "Freelance",
-              <>
-                <Star className="mr-0.5 inline h-3 w-3 -mt-0.5 text-yellow-400 fill-yellow-400" />
-                <span className="font-bold text-gray-900 dark:text-white">{freelancerRating ? freelancerRating.toFixed(1) : "N/A"}</span>
-                <span className="ml-0.5 text-[10px] text-gray-400 dark:text-zinc-500">({freelancerReviews})</span>
-              </>
-            )}
-            {stat(
-              <DollarSign className="h-3 w-3" />,
-              "Budget",
-              budgetCredits !== null ? (
-                <span className="font-bold text-gray-900 dark:text-white" title={`${budgetCredits.toLocaleString()} credits`}>
-                  {budgetCredits.toLocaleString()}
-                </span>
-              ) : (
-                <span className="text-gray-400 dark:text-zinc-500">Not set</span>
-              )
-            )}
+      {/* 1. RATINGS SECTION (HIGHLIGHT TOTAL BIGGER) */}
+      <div className="p-3 rounded-xl bg-gray-50/80 dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/10 flex items-stretch justify-between gap-3 shadow-2xs">
+        
+        {/* Left: Total Platform Rating (Hero / Highlighted Bigger) */}
+        <div className="flex-1 min-w-0 pr-1 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+              <Trophy className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+              <span>Total Rating</span>
+            </div>
+
+            <div className="flex items-baseline gap-1 mt-1">
+              <Star className="h-5 w-5 fill-amber-400 text-amber-400 shrink-0 self-center" />
+              <span className="text-2xl font-black font-mono tracking-tight text-gray-900 dark:text-white">
+                {avgRating ? avgRating.toFixed(1) : "0.0"}
+              </span>
+              <span className="text-[11px] font-mono text-gray-400 dark:text-zinc-500">
+                ({totalReviews})
+              </span>
+            </div>
           </div>
 
-          {isEditing && (
-            <div className="space-y-2 border-t border-gray-100 dark:border-white/5 pt-2 mt-1">
-              <div className="flex items-center gap-1.5">
-                <input
-                  autoFocus
-                  inputMode="numeric"
-                  value={draft ? Number(draft).toLocaleString() : ""}
-                  onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void submit();
-                    if (e.key === "Escape") setIsEditing(false);
-                  }}
-                  placeholder="Budget in credits"
-                  className="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none focus:border-blue-500"
-                />
-                <button onClick={() => void submit()} disabled={isSaving} className={`${headerButtonClass} text-emerald-600 dark:text-emerald-400`} title="Save">
-                  <Check className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => setIsEditing(false)} disabled={isSaving} className={headerButtonClass} title="Cancel">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-                {budgetCredits !== null && (
-                  <button onClick={() => void save(null)} disabled={isSaving} className={`${headerButtonClass} text-red-500`} title="Remove budget">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+          <div className="mt-1.5">
+            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${totalTier.badgeClass}`}>
+              {totalTier.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Freelance Sub-rating */}
+        <div className="w-[100px] shrink-0 pl-3 border-l border-gray-200 dark:border-white/5 flex flex-col justify-between text-right">
+          <div>
+            <span className="text-[10px] font-medium text-gray-400 dark:text-zinc-500 flex items-center justify-end gap-1">
+              <Briefcase className="h-3 w-3 text-zinc-400 shrink-0" />
+              <span>Freelance</span>
+            </span>
+
+            <div className="flex items-center justify-end gap-1 mt-1.5">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 shrink-0" />
+              <span className="text-sm font-bold font-mono text-gray-900 dark:text-white">
+                {freelancerRating ? freelancerRating.toFixed(1) : "0.0"}
+              </span>
+              <span className="text-[10px] font-mono text-gray-400 dark:text-zinc-500">
+                ({freelancerReviews})
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-1.5 flex justify-end">
+            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${freelancerTier.badgeClass}`}>
+              {freelancerReviews > 0 ? freelancerTier.label : "None"}
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 2. BUDGET SECTION (BELOW BOTH RATINGS) */}
+      {!isEditing ? (
+        <div className="p-3 rounded-xl bg-gray-50/60 dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center shrink-0">
+              <Coins className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 block">
+                Planned Budget
+              </span>
+              <div className="truncate">
+                {budgetCredits !== null && Number(budgetCredits) > 0 ? (
+                  <span className="text-xs font-bold font-mono text-gray-900 dark:text-white" title={`${budgetCredits.toLocaleString()} credits`}>
+                    {budgetCredits.toLocaleString()} <span className="text-[10px] font-normal text-gray-400 font-sans">Credits</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-zinc-500 italic">
+                    Not set
+                  </span>
                 )}
               </div>
-              {error && <p className="text-[11px] font-medium text-red-500">{error}</p>}
             </div>
+          </div>
+
+          {isOwner && onSaveBudget && (
+            <button
+              type="button"
+              onClick={startEdit}
+              className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:text-black dark:hover:text-white px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer shrink-0 border border-transparent hover:border-gray-200 dark:hover:border-white/10"
+            >
+              {budgetCredits !== null ? "Edit" : "Set Budget"}
+            </button>
           )}
+        </div>
+      ) : (
+        /* Inline Budget Edit Box */
+        <div className="p-3 rounded-xl bg-gray-50/90 dark:bg-zinc-900/90 border border-gray-300 dark:border-zinc-700 space-y-2.5 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <Coins className="h-3.5 w-3.5 text-zinc-500" />
+              Set Planned Budget
+            </span>
+            <span className="text-[10px] text-gray-400 font-mono">Credits</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              inputMode="numeric"
+              value={draft ? Number(draft).toLocaleString() : ""}
+              onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void submit();
+                if (e.key === "Escape") setIsEditing(false);
+              }}
+              placeholder="e.g. 5,000"
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-zinc-500 font-mono"
+            />
+            <button 
+              onClick={() => void submit()} 
+              disabled={isSaving} 
+              className={`${headerButtonClass} text-emerald-600 dark:text-emerald-400`} 
+              title="Save"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button 
+              onClick={() => setIsEditing(false)} 
+              disabled={isSaving} 
+              className={headerButtonClass} 
+              title="Cancel"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+            {budgetCredits !== null && (
+              <button 
+                onClick={() => void save(null)} 
+                disabled={isSaving} 
+                className={`${headerButtonClass} text-red-500`} 
+                title="Remove budget"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {error && <p className="text-[11px] font-medium text-red-500">{error}</p>}
+        </div>
+      )}
     </div>
   );
 };

@@ -10,6 +10,7 @@ interface SkillsAutocompleteProps {
   error?: string;
   maxSkills?: number;
   hideHeader?: boolean;
+  hideJoedAi?: boolean;
   jobTitle?: string;
   jobDescription?: string;
   jobCategory?: string;
@@ -19,11 +20,12 @@ const COOLDOWN_KEY = "joed_ai_skills_cooldown";
 const COOLDOWN_DURATION_SEC = 300; // 5 minutes
 
 export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
-  skills,
+  skills = [],
   setSkills,
   error,
   maxSkills = 6,
   hideHeader = false,
+  hideJoedAi = false,
   jobTitle = "",
   jobDescription = "",
   jobCategory = "",
@@ -86,7 +88,8 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
   }, []);
 
   const getFilteredSkills = () => {
-    const existingSkillNames = skills.map((s) => s.toLowerCase());
+    const safeSkills = Array.isArray(skills) ? skills : [];
+    const existingSkillNames = safeSkills.map((s) => s.toLowerCase());
     return availableSkillsList.filter((skill) =>
       skill.name.toLowerCase().includes(skillInput.toLowerCase()) &&
       !existingSkillNames.includes(skill.name.toLowerCase())
@@ -266,7 +269,8 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
       )}
 
       {/* Action Row: Set Skills with Joed AI Button (No icon) */}
-      <div className="flex items-center justify-between gap-2">
+      {!hideJoedAi && (
+        <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-gray-500 dark:text-zinc-400">
           Not sure what to pick?
         </span>
@@ -295,6 +299,7 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
           )}
         </button>
       </div>
+      )}
 
       {/* Manual Search & Autocomplete Input */}
       <div className="relative">

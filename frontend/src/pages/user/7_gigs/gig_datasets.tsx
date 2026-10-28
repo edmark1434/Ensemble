@@ -26,10 +26,19 @@ export interface GigTier {
   price: number;
 }
 
+export interface GigAddOn {
+  id?: string;
+  title: string;
+  description?: string;
+  price: number;
+  deliveryDays?: number;
+}
+
 export interface Milestone {
   id?: string;
   name: string;
   description: string;
+  tasks?: (string | { title?: string; task?: string; description?: string })[];
 }
 
 export interface Gig {
@@ -52,6 +61,7 @@ export interface Gig {
   gallery: string[];
   milestones: Milestone[];
   tiers: GigTier[];
+  addOns?: GigAddOn[];
   additionalWorkRate: number;
   questionnaires: Questionnaire[];
   reviews?: {

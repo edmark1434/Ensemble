@@ -627,7 +627,13 @@ const DashboardMain = () => {
                                             return (
                                                 <div 
                                                     key={task.contract_id} 
-                                                    onClick={() => navigate(`/dashboard/tasks/${task.contract_id}`)}
+                                                    onClick={() => {
+                                                        if (task.team_project_id) {
+                                                            navigate(`/team-project/${task.team_project_id}`);
+                                                        } else {
+                                                            navigate(`/dashboard/tasks/${task.contract_id}`);
+                                                        }
+                                                    }}
                                                     className="group bg-white dark:bg-dark-surface/50 p-4 rounded-xl border border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50/70 dark:hover:bg-white/5 cursor-pointer transition-all shadow-xs"
                                                 >
                                                     {/* Top Row: Title, External link, Badges */}
@@ -768,7 +774,13 @@ const DashboardMain = () => {
                                             return (
                                                 <div 
                                                     key={task.contract_id} 
-                                                    onClick={() => navigate(`/dashboard/review/${task.contract_id}`)}
+                                                    onClick={() => {
+                                                        if (task.team_project_id) {
+                                                            navigate(`/team-project/${task.team_project_id}`);
+                                                        } else {
+                                                            navigate(`/dashboard/review/${task.contract_id}`);
+                                                        }
+                                                    }}
                                                     className="group bg-white dark:bg-dark-surface/50 p-4 rounded-xl border border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50/70 dark:hover:bg-white/5 cursor-pointer transition-all shadow-xs"
                                                 >
                                                     {/* Top Row: Title, External link, Badges */}

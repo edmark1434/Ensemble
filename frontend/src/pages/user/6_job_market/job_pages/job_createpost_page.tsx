@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,7 +29,9 @@ const JobCreatePostPage: React.FC = () => {
   const [isInitializingStudio, setIsInitializingStudio] = useState(true);
 
   useEffect(() => {
+    if (isSubmittedRef.current) return;
     const timer = setTimeout(() => {
+      if (isSubmittedRef.current) return;
       setIsInitializingStudio(false);
     }, 850);
     return () => clearTimeout(timer);
@@ -139,6 +141,7 @@ const JobCreatePostPage: React.FC = () => {
 
   // --- LOCALSTORAGE AUTO-SAVE DRAFT ---
   const [isDraftRestored, setIsDraftRestored] = useState(false);
+  const isSubmittedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -205,7 +208,7 @@ const JobCreatePostPage: React.FC = () => {
           portfolioDuration,
           requireNDA,
         };
-        const hasContent = Boolean(title || description || category || minBudget || skills.length > 0);
+        const hasContent = Boolean(title.trim() || description.trim() || skills.length > 0 || minBudget.trim());
         if (hasContent) {
           localStorage.setItem("ensemble_job_create_draft", JSON.stringify(draftData));
         }
@@ -220,33 +223,37 @@ const JobCreatePostPage: React.FC = () => {
     portfolioUseAllowed, portfolioDuration, requireNDA
   ]);
 
+  const resetFormFields = () => {
+    setTitle("");
+    setDescription("");
+    setCategory("");
+    setDifficulty("");
+    setSkills([]);
+    setMinBudget("");
+    setMaxBudget("");
+    setBudgetType("range");
+    setMinTimeline("3");
+    setMaxTimeline("5");
+    setDeadline("");
+    setApplicationWindowHours(72);
+    setPositions(1);
+    setScreeningQuestions([]);
+    setPreScopedMilestones([]);
+    setPortfolioUseAllowed(false);
+    setPortfolioDuration("");
+    setRequireNDA(false);
+    setThumbnail("");
+    setThumbnailFile(null);
+    setPreviewUrl(null);
+    setBriefFiles([]);
+    setErrors({});
+    setIsDraftRestored(false);
+  };
+
   const handleClearDraft = () => {
     try {
       localStorage.removeItem("ensemble_job_create_draft");
-      setTitle("");
-      setDescription("");
-      setCategory("");
-      setDifficulty("");
-      setSkills([]);
-      setMinBudget("");
-      setMaxBudget("");
-      setBudgetType("range");
-      setMinTimeline("3");
-      setMaxTimeline("5");
-      setDeadline("");
-      setApplicationWindowHours(72);
-      setPositions(1);
-      setScreeningQuestions([]);
-      setPreScopedMilestones([]);
-      setPortfolioUseAllowed(false);
-      setPortfolioDuration("");
-      setRequireNDA(false);
-      setThumbnail("");
-      setThumbnailFile(null);
-      setPreviewUrl(null);
-      setBriefFiles([]);
-      setErrors({});
-      setIsDraftRestored(false);
+      resetFormFields();
       toast.success("Job post draft cleared.");
     } catch (e) {
       console.error("Failed to clear draft", e);
@@ -257,17 +264,18 @@ const JobCreatePostPage: React.FC = () => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const hasUnsavedChanges = Boolean(
-    title ||
-      description ||
-      category ||
-      difficulty ||
+    title.trim() ||
+      description.trim() ||
+      category.trim() ||
+      difficulty.trim() ||
       previewUrl ||
       skills.length > 0 ||
-      minBudget ||
-      maxBudget ||
-      minTimeline ||
-      maxTimeline ||
-      deadline
+      minBudget.trim() ||
+      maxBudget.trim() ||
+      deadline.trim() ||
+      briefFiles.length > 0 ||
+      screeningQuestions.length > 0 ||
+      preScopedMilestones.length > 0
   );
 
   const handleReturnTrigger = () => {
@@ -470,9 +478,11 @@ const JobCreatePostPage: React.FC = () => {
       };
 
       await createJob(finalJobPayload);
+      isSubmittedRef.current = true;
       try {
         localStorage.removeItem("ensemble_job_create_draft");
       } catch (_) {}
+      resetFormFields();
       setIsDraftRestored(false);
       setIsSuccessOpen(true);
 
@@ -773,13 +783,20 @@ const JobCreatePostPage: React.FC = () => {
 
       <CreationSuccess
         isOpen={isSuccessOpen}
-        onConfirm={() => navigate("/jobs")}
+        onConfirm={() => {
+          setIsSuccessOpen(false);
+          try { localStorage.removeItem("ensemble_job_create_draft"); } catch (_) {}
+          navigate("/jobs");
+        }}
       />
 
       <PopupConfirmReturn
         isOpen={isDiscardOpen}
         onConfirm={() => {
           setIsDiscardOpen(false);
+          try {
+            localStorage.removeItem("ensemble_job_create_draft");
+          } catch (_) {}
           navigate("/jobs");
         }}
         onCancel={() => setIsDiscardOpen(false)}

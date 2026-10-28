@@ -2,9 +2,12 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const {
   createDocumentationChatResponse,
+  generateGigDraftResponse,
+  generateGigTiersResponse,
   generateJobDraftResponse,
   generateProposalPitchResponse,
   generateProposalMilestonesResponse,
+  generateOrderBriefResponse,
   generateJobSkillsResponse,
   generateProfileIntroductionResponse,
 } = require('../controllers/ChatControllers');
@@ -24,8 +27,11 @@ const chatLimiter = rateLimit({
 });
 
 router.post('/', chatLimiter, createDocumentationChatResponse);
+router.post('/generate-gig', [checkSession, requireAuth, chatLimiter], generateGigDraftResponse);
+router.post('/generate-gig-tiers', [checkSession, requireAuth, chatLimiter], generateGigTiersResponse);
 router.post('/generate-job', [checkSession, requireAuth, chatLimiter], generateJobDraftResponse);
 router.post('/generate-proposal-pitch', [checkSession, requireAuth, chatLimiter], generateProposalPitchResponse);
+router.post('/generate-order-brief', [checkSession, requireAuth, chatLimiter], generateOrderBriefResponse);
 router.post('/generate-proposal-milestones', [checkSession, requireAuth, chatLimiter], generateProposalMilestonesResponse);
 router.post('/generate-job-skills', [checkSession, requireAuth, chatLimiter], generateJobSkillsResponse);
 router.post('/generate-profile-introduction', [checkSession, requireAuth, chatLimiter], generateProfileIntroductionResponse);
