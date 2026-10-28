@@ -57,6 +57,33 @@ async function report(id,a,b){if(!clean(b.category)||!clean(b.description))throw
 async function chat(id,a){const c=await context(id,a);if(c.membership?.status!=='Active')throw new TeamError('Only active members can open Team Chat',403);let inbox=await R.getTeamInbox(id);if(!inbox)inbox=await R.createTeamInbox(c.team,await R.listMembers(id,['Active']));else inbox=await syncChat(id);return{conversationId:String(inbox._id)};}
 async function creationEligibility(accountId){return R.getTeamCreationEligibility(accountId);}
 async function teamMemberLimit(teamId){return R.getTeamMemberLimitEligibility(teamId);}
-module.exports={TeamError,create,list,detail,update,remove,members,requests,join,joinCode,invitePreview,manage,invite,invitation,leave,transfer,wallet,transactions,distributeFunds,addFunds,marketplacePosts,reviews:R.reviews,review,report,chat,permissions,STATUSES,creationEligibility,teamMemberLimit};
+
+async function listTasks(id, a) {
+  const c = await context(id, a);
+  if (c.membership?.status !== 'Active') throw new TeamError('Only active team members can view tasks', 403);
+  return R.listTeamTasks(id);
+}
+async function createTask(id, a, b) {
+  const c = await context(id, a);
+  if (c.membership?.status !== 'Active') throw new TeamError('Only active team members can create tasks', 403);
+  if (!b?.title || !String(b.title).trim()) throw new TeamError('Task title is required', 422);
+  return R.createTeamTask(id, a, b);
+}
+async function updateTask(id, a, taskId, b) {
+  const c = await context(id, a);
+  if (c.membership?.status !== 'Active') throw new TeamError('Only active team members can update tasks', 403);
+  const task = await R.updateTeamTask(id, taskId, b);
+  if (!task) throw new TeamError('Task not found', 404);
+  return task;
+}
+async function deleteTask(id, a, taskId) {
+  const c = await context(id, a);
+  if (c.membership?.status !== 'Active') throw new TeamError('Only active team members can delete tasks', 403);
+  const ok = await R.deleteTeamTask(id, taskId);
+  if (!ok) throw new TeamError('Task not found', 404);
+  return { deleted: true };
+}
+
+module.exports={TeamError,create,list,detail,update,remove,members,requests,join,joinCode,invitePreview,manage,invite,invitation,leave,transfer,wallet,transactions,distributeFunds,addFunds,marketplacePosts,reviews:R.reviews,review,report,chat,permissions,STATUSES,creationEligibility,teamMemberLimit,listTasks,createTask,updateTask,deleteTask};
 
 

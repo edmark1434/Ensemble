@@ -572,5 +572,125 @@ async function getTeamMemberLimitEligibility(teamId) {
   };
 }
 
+
+async function listTeamTasks(teamId) {
+  const query = `
+    SELECT 
+      t.task_id,
+      t.team_id,
+      t.title,
+      t.description,
+      t.status,
+      t.priority,
+      t.due_at,
+      t.sort_order,
+      t.assignee_account_id,
+      t.created_by_account_id,
+      t.created_at,
+      t.updated_at,
+      assignee.display_name AS assignee_name,
+      assignee.handle AS assignee_handle,
+      assignee_media.path AS assignee_avatar_path,
+      creator.display_name AS creator_name,
+      creator.handle AS creator_handle
+    FROM team_board_tasks t
+    LEFT JOIN accounts assignee ON assignee.account_id = t.assignee_account_id
+    LEFT JOIN files assignee_media ON assignee_media.file_id = assignee.avatar_file_id
+    LEFT JOIN accounts creator ON creator.account_id = t.created_by_account_id
+    WHERE t.team_id = $1 AND t.deleted_at IS NULL
+    ORDER BY t.sort_order ASC, t.created_at ASC
+  `;
+  const result = await pool.query(query, [teamId]);
+  return result.rows;
+}
+
+async function createTeamTask(teamId, creatorAccountId, data) {
+  const query = `
+    INSERT INTO team_board_tasks (
+      team_id,
+      created_by_account_id,
+      title,
+      description,
+      status,
+      priority,
+      due_at,
+      assignee_account_id,
+      sort_order
+    ) VALUES ($1, $2, $3, $4, COALESCE($5, 'todo'), COALESCE($6, 'normal'), $7, $8, COALESCE($9, 0))
+    RETURNING *
+  `;
+  const values = [
+    teamId,
+    creatorAccountId,
+    data.title.trim(),
+    data.description ? data.description.trim() : null,
+    data.status || 'todo',
+    data.priority || 'normal',
+    data.due_at || null,
+    data.assignee_account_id || null,
+    Number.isInteger(data.sort_order) ? data.sort_order : 0
+  ];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
+async function updateTeamTask(teamId, taskId, data) {
+  const fields = [];
+  const values = [teamId, taskId];
+  let idx = 3;
+
+  if (data.title !== undefined) {
+    fields.push(`title = ${idx++}`);
+    values.push(data.title.trim());
+  }
+  if (data.description !== undefined) {
+    fields.push(`description = ${idx++}`);
+    values.push(data.description ? data.description.trim() : null);
+  }
+  if (data.status !== undefined) {
+    fields.push(`status = ${idx++}`);
+    values.push(data.status);
+  }
+  if (data.priority !== undefined) {
+    fields.push(`priority = ${idx++}`);
+    values.push(data.priority);
+  }
+  if (data.due_at !== undefined) {
+    fields.push(`due_at = ${idx++}`);
+    values.push(data.due_at || null);
+  }
+  if (data.assignee_account_id !== undefined) {
+    fields.push(`assignee_account_id = ${idx++}`);
+    values.push(data.assignee_account_id || null);
+  }
+  if (data.sort_order !== undefined) {
+    fields.push(`sort_order = ${idx++}`);
+    values.push(Number(data.sort_order) || 0);
+  }
+
+  if (fields.length === 0) return null;
+
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  const query = `
+    UPDATE team_board_tasks
+    SET ${fields.join(', ')}
+    WHERE team_id = $1 AND task_id = $2 AND deleted_at IS NULL
+    RETURNING *
+  `;
+  const result = await pool.query(query, values);
+  return result.rows[0] || null;
+}
+
+async function deleteTeamTask(teamId, taskId) {
+  const query = `
+    UPDATE team_board_tasks
+    SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE team_id = $1 AND task_id = $2 AND deleted_at IS NULL
+    RETURNING task_id
+  `;
+  const result = await pool.query(query, [teamId, taskId]);
+  return Boolean(result.rows[0]);
+}
+
 module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility};
 
