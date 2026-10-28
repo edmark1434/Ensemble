@@ -312,9 +312,9 @@ async function createGigRepository(gigData) {
 
                 INSERT INTO gig_milestones (
 
-                    gig_id, index, name, description
+                    gig_id, index, name, description, tasks
 
-                ) VALUES ($1, $2, $3, $4)
+                ) VALUES ($1, $2, $3, $4, $5)
 
             `;
 
@@ -322,9 +322,11 @@ async function createGigRepository(gigData) {
 
                 const ms = gigData.milestones[i];
 
+                const msTasks = Array.isArray(ms.tasks) ? ms.tasks : (typeof ms.tasks === 'string' ? JSON.parse(ms.tasks || '[]') : []);
+
                 await client.query(msQuery, [
 
-                    gigId, i, (ms.name || `Phase ${i + 1}`).substring(0, 50), ms.description || ''
+                    gigId, i, (ms.name || `Phase ${i + 1}`).substring(0, 255), ms.description || '', JSON.stringify(msTasks)
 
                 ]);
 
@@ -534,14 +536,27 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             g.category as category,
 
+            (
+                SELECT COUNT(*)::int FROM gig_requests gr_c
+                JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                WHERE gt_c.gig_id = g.gig_id
+                  AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+            ) as active_orders_count,
+
             CASE 
-
+                WHEN LOWER(g.status) IN ('closed', 'paused') THEN 'Closed'
+                WHEN (
+                    SELECT COUNT(*)::int FROM gig_requests gr_c
+                    JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                    JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                    JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                    WHERE gt_c.gig_id = g.gig_id
+                      AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+                ) >= g.no_of_concurrent_max THEN 'Paused'
                 WHEN LOWER(g.status) = 'active' THEN 'Open'
-
-                WHEN LOWER(g.status) = 'paused' THEN 'Closed'
-
                 ELSE g.status
-
             END as status,
 
             g.no_of_concurrent_max as slots,
@@ -612,7 +627,7 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             (SELECT json_agg(json_build_object('id', ga.gig_addon_id, 'title', ga.name, 'price', ga.price_credits, 'deliveryDays', ga.additional_days)) FROM gig_addons ga WHERE ga.gig_id = g.gig_id AND ga.deleted_at IS NULL) as "addOns",
 
-            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
+            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description, 'tasks', COALESCE(gm.tasks, '[]'::jsonb)) ORDER BY gm.index ASC) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
 
             ${accountId ? `, (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id AND gs.account_id = $1) > 0 as "isSaved",
 
@@ -856,14 +871,27 @@ async function getSavedGigsRepository(accountId) {
 
             g.gig_id as id, g.title, g.description, g.category as category,
 
+            (
+                SELECT COUNT(*)::int FROM gig_requests gr_c
+                JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                WHERE gt_c.gig_id = g.gig_id
+                  AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+            ) as active_orders_count,
+
             CASE 
-
+                WHEN LOWER(g.status) IN ('closed', 'paused') THEN 'Closed'
+                WHEN (
+                    SELECT COUNT(*)::int FROM gig_requests gr_c
+                    JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                    JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                    JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                    WHERE gt_c.gig_id = g.gig_id
+                      AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+                ) >= g.no_of_concurrent_max THEN 'Paused'
                 WHEN LOWER(g.status) = 'active' THEN 'Open'
-
-                WHEN LOWER(g.status) = 'paused' THEN 'Closed'
-
                 ELSE g.status
-
             END as status,
 
             g.no_of_concurrent_max as slots,
@@ -930,7 +958,7 @@ async function getSavedGigsRepository(accountId) {
 
             (SELECT json_agg(json_build_object('id', ga.gig_addon_id, 'title', ga.name, 'price', ga.price_credits, 'deliveryDays', ga.additional_days)) FROM gig_addons ga WHERE ga.gig_id = g.gig_id AND ga.deleted_at IS NULL) as "addOns",
 
-            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones,
+            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description, 'tasks', COALESCE(gm.tasks, '[]'::jsonb)) ORDER BY gm.index ASC) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones,
 
             (
 
@@ -1138,6 +1166,31 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 
             throw error;
 
+        }
+
+        // Check if queue capacity is currently full
+        const capacityCheck = await client.query(`
+            SELECT g.no_of_concurrent_max,
+                   (
+                       SELECT COUNT(*)::int FROM gig_requests gr2
+                       JOIN gig_tiers gt2 ON gr2.gig_tier_id = gt2.gig_tier_id
+                       JOIN gig_contracts gc2 ON gc2.gig_request_id = gr2.gig_request_id
+                       JOIN contracts c2 ON c2.contract_id = gc2.contract_id
+                       WHERE gt2.gig_id = g.gig_id
+                         AND LOWER(c2.status) IN ('waiting', 'active', 'pending signature')
+                   ) as active_count
+            FROM gigs g
+            WHERE g.gig_id = $1
+        `, [gigId]);
+
+        if (capacityCheck.rows.length > 0) {
+            const maxSlots = parseInt(capacityCheck.rows[0].no_of_concurrent_max || 1, 10);
+            const activeCount = parseInt(capacityCheck.rows[0].active_count || 0, 10);
+            if (activeCount >= maxSlots) {
+                const error = new Error(`This service's active queue is currently full (${activeCount}/${maxSlots} slots occupied). Please check back once active orders complete.`);
+                error.statusCode = 409;
+                throw error;
+            }
         }
 
         // Auto-heal any stale 'In Contract' status if the underlying contract was cancelled or completed
@@ -1492,6 +1545,19 @@ async function getOrderByIdRepository(orderId, accountIds) {
 
             tcw.team_id as workspace_team_id,
 
+            COALESCE(g.no_of_concurrent_max, 1)::int as max_slots,
+
+            (
+                SELECT COUNT(*)::int FROM gig_requests gr_c
+                JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                WHERE gt_c.gig_id = g.gig_id
+                  AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+            ) as active_orders_count,
+
+            g.status as gig_status,
+
             tm.team_id as "teamId",
 
             (tm.team_id IS NOT NULL OR f.type = 'Team') as "isTeam",
@@ -1538,14 +1604,29 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             g.gig_id as id, g.title, g.description, g.category as category,
 
+            g.status as raw_status,
+
+            (
+                SELECT COUNT(*)::int FROM gig_requests gr_c
+                JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                WHERE gt_c.gig_id = g.gig_id
+                  AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+            ) as active_orders_count,
+
             CASE 
-
+                WHEN LOWER(g.status) IN ('closed', 'paused') THEN 'Closed'
+                WHEN (
+                    SELECT COUNT(*)::int FROM gig_requests gr_c
+                    JOIN gig_tiers gt_c ON gr_c.gig_tier_id = gt_c.gig_tier_id
+                    JOIN gig_contracts gc_c ON gc_c.gig_request_id = gr_c.gig_request_id
+                    JOIN contracts c_c ON c_c.contract_id = gc_c.contract_id
+                    WHERE gt_c.gig_id = g.gig_id
+                      AND LOWER(c_c.status) IN ('waiting', 'active', 'pending signature')
+                ) >= g.no_of_concurrent_max THEN 'Paused'
                 WHEN LOWER(g.status) = 'active' THEN 'Open'
-
-                WHEN LOWER(g.status) = 'paused' THEN 'Closed'
-
                 ELSE g.status
-
             END as status,
 
             g.no_of_concurrent_max as slots,
@@ -1616,7 +1697,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             (SELECT json_agg(json_build_object('id', ga.gig_addon_id, 'title', ga.name, 'price', ga.price_credits, 'deliveryDays', ga.additional_days)) FROM gig_addons ga WHERE ga.gig_id = g.gig_id AND ga.deleted_at IS NULL) as "addOns",
 
-            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones,
+            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description, 'tasks', COALESCE(gm.tasks, '[]'::jsonb)) ORDER BY gm.index ASC) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones,
 
             (SELECT json_agg(json_build_object(
 
@@ -1950,11 +2031,13 @@ async function updateGigRepository(gigId, accountIds, gigData) {
 
                 const m = gigData.milestones[i];
 
+                const mTasks = Array.isArray(m.tasks) ? m.tasks : (typeof m.tasks === 'string' ? JSON.parse(m.tasks || '[]') : []);
+
                 await client.query(
 
-                    'INSERT INTO gig_milestones (gig_id, index, name, description) VALUES ($1, $2, $3, $4)',
+                    'INSERT INTO gig_milestones (gig_id, index, name, description, tasks) VALUES ($1, $2, $3, $4, $5)',
 
-                    [gigId, i, m.name, m.description]
+                    [gigId, i, (m.name || `Phase ${i + 1}`).substring(0, 255), m.description || '', JSON.stringify(mTasks)]
 
                 );
 
@@ -2190,7 +2273,31 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             gig_id
         } = reqCheck.rows[0];
 
+        // 1.5 Enforce concurrent order capacity
+        const capacityRes = await client.query(`
+            SELECT g.no_of_concurrent_max,
+                   (
+                       SELECT COUNT(*)::int FROM gig_requests gr2
+                       JOIN gig_tiers gt2 ON gr2.gig_tier_id = gt2.gig_tier_id
+                       JOIN gig_contracts gc2 ON gc2.gig_request_id = gr2.gig_request_id
+                       JOIN contracts c2 ON c2.contract_id = gc2.contract_id
+                       WHERE gt2.gig_id = g.gig_id
+                         AND LOWER(c2.status) IN ('waiting', 'active', 'pending signature')
+                         AND gr2.gig_request_id != $1
+                   ) as active_count
+            FROM gigs g
+            WHERE g.gig_id = $2
+        `, [orderId, gig_id]);
 
+        if (capacityRes.rows.length > 0) {
+            const maxSlots = parseInt(capacityRes.rows[0].no_of_concurrent_max || 1, 10);
+            const activeCount = parseInt(capacityRes.rows[0].active_count || 0, 10);
+            if (activeCount >= maxSlots) {
+                const err = new Error(`Cannot accept order: active order capacity reached (${activeCount}/${maxSlots} slots occupied). Deliver or complete an existing contract before accepting more orders.`);
+                err.statusCode = 409;
+                throw err;
+            }
+        }
 
         // 2. Update gig request status to Accepted
 
@@ -2239,12 +2346,12 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
             // Create contract milestones from predefined gig milestones
             const milestonesRes = await client.query(
-                `SELECT name, description, index FROM gig_milestones WHERE gig_id = $1 ORDER BY index ASC`,
+                `SELECT name, description, index, COALESCE(tasks, '[]'::jsonb) as tasks FROM gig_milestones WHERE gig_id = $1 ORDER BY index ASC`,
                 [gig_id]
             );
             let milestones = milestonesRes.rows;
             if (milestones.length === 0) {
-                milestones = [{ name: 'Final Delivery', description: 'Complete gig delivery', index: 0 }];
+                milestones = [{ name: 'Final Delivery', description: 'Complete gig delivery', index: 0, tasks: [] }];
             }
 
             const perMilestoneCredits = Math.floor(orderCredits / (milestones.length || 1));
@@ -2264,12 +2371,13 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             }
 
             const msQuery = `
-                INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, deadline_at, credits)
-                VALUES ($1, $2, $3, $4, $5, $6, 'pending', NULL, NULL, $7)
+                INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, deadline_at, credits, tasks)
+                VALUES ($1, $2, $3, $4, $5, $6, 'pending', NULL, NULL, $7, $8)
             `;
             for (let i = 0; i < milestones.length; i++) {
                 const m = milestones[i];
                 const mDeadlineHours = milestoneHoursList[i];
+                const mTasks = Array.isArray(m.tasks) ? m.tasks : (typeof m.tasks === 'string' ? JSON.parse(m.tasks || '[]') : []);
                 await client.query(msQuery, [
                     contractId,
                     m.index || i,
@@ -2277,7 +2385,8 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
                     m.description || '',
                     mDeadlineHours,
                     no_of_revisions_max || 0,
-                    perMilestoneCredits
+                    perMilestoneCredits,
+                    JSON.stringify(mTasks)
                 ]);
             }
         }
@@ -2566,17 +2675,17 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
             );
 
             const milestonesRes = await client.query(
-                `SELECT name, description, index FROM gig_milestones WHERE gig_id = $1 ORDER BY index ASC`,
+                `SELECT name, description, index, COALESCE(tasks, '[]'::jsonb) as tasks FROM gig_milestones WHERE gig_id = $1 ORDER BY index ASC`,
                 [gig_id]
             );
             let milestones = milestonesRes.rows;
             if (milestones.length === 0) {
-                milestones = [{ name: 'Final Delivery', description: 'Complete gig delivery', index: 0 }];
+                milestones = [{ name: 'Final Delivery', description: 'Complete gig delivery', index: 0, tasks: [] }];
             }
 
             const msQuery = `
-                INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, deadline_at, credits)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, deadline_at, credits, tasks)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             `;
             const perMilestoneCredits = Math.floor(orderCredits / (milestones.length || 1));
             const baseGigHours = Math.max(1, Math.floor(totalGigHours / (milestones.length || 1)));
@@ -2595,6 +2704,7 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
                 const startedAt = isFirst ? new Date() : null;
                 const mDeadlineHours = milestoneHoursList[i];
                 let deadlineAt = (isFirst && mDeadlineHours > 0) ? new Date(startedAt.getTime() + mDeadlineHours * 3600 * 1000) : null;
+                const mTasks = Array.isArray(m.tasks) ? m.tasks : (typeof m.tasks === 'string' ? JSON.parse(m.tasks || '[]') : []);
                 await client.query(msQuery, [
                     contractId, 
                     m.index || i, 
@@ -2605,7 +2715,8 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
                     isFirst ? 'active' : 'pending',
                     startedAt,
                     deadlineAt,
-                    perMilestoneCredits
+                    perMilestoneCredits,
+                    JSON.stringify(mTasks)
                 ]);
             }
         }
@@ -3148,7 +3259,45 @@ async function unshortlistGigOrderRepository(orderId, freelancerAccountIds) {
 
 
 
+
+async function toggleGigStatusRepository(gigId, accountIds, targetStatus = null) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const currentRes = await client.query(
+            `SELECT gig_id, status FROM gigs WHERE gig_id = $1 AND freelancer_account_id = ANY($2::uuid[])`,
+            [gigId, accountIds]
+        );
+        if (currentRes.rows.length === 0) {
+            const err = new Error('Gig not found or unauthorized');
+            err.statusCode = 404;
+            throw err;
+        }
+
+        const currentStatus = (currentRes.rows[0].status || 'active').toLowerCase();
+        let nextStatus;
+        if (targetStatus) {
+            nextStatus = targetStatus.toLowerCase();
+        } else {
+            nextStatus = currentStatus === 'closed' ? 'active' : 'closed';
+        }
+
+        const updateRes = await client.query(
+            `UPDATE gigs SET status = $1, updated_at = NOW() WHERE gig_id = $2 RETURNING gig_id, status`,
+            [nextStatus, gigId]
+        );
+        await client.query('COMMIT');
+        return updateRes.rows[0];
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
+    toggleGigStatusRepository,
 
     updateGigRepository,
 

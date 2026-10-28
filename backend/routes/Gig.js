@@ -20,7 +20,8 @@ const {
     withdrawGigOrderController,
     shortlistGigOrderController,
     unshortlistGigOrderController,
-    reportGigController
+    reportGigController,
+    toggleGigStatusController
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
@@ -50,6 +51,9 @@ router.get('/orders/:orderId', getOrderByIdController);
 
 // PUT /api/gigs/:id
 router.put('/:id', updateGigController);
+
+// PATCH /api/gigs/:id/status
+router.patch('/:id/status', toggleGigStatusController);
 
 // DELETE /api/gigs/:id
 router.delete('/:id', deleteGigController);

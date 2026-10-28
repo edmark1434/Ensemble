@@ -179,9 +179,20 @@ async function confirmGigOrderContractService(orderId, actorIds) {
     return { contractId, teamId };
 }
 
+async function toggleGigStatusService(gigId, accountIds, targetStatus = null) {
+    const { toggleGigStatusRepository } = require('../repositories/GigRepositories');
+    const result = await toggleGigStatusRepository(gigId, accountIds, targetStatus);
+    const io = getIo();
+    if (io) {
+        io.emit('gigStatusUpdated', { gigId, status: result.status });
+    }
+    return result;
+}
+
 module.exports = {
     shortlistGigOrderService,
     unshortlistGigOrderService,
     acceptGigOrderService,
-    confirmGigOrderContractService
+    confirmGigOrderContractService,
+    toggleGigStatusService
 };
