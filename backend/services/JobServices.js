@@ -6,6 +6,9 @@ const { getAccountById } = require('../repositories/AccountRepositories');
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function createJobServices(jobData) {
+    if (jobData.posted_as === 'Team' || jobData.team_id) {
+        throw new Error('Teams cannot post jobs. Teams can only offer services.');
+    }
     if (!jobData.title || !jobData.description) {
         throw new Error('Title and description are required.');
     }

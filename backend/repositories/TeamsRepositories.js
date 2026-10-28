@@ -82,16 +82,38 @@ async function getTeam(teamId, accountId) {
     LEFT JOIN team_members om ON om.team_id=t.team_id AND om.role='Owner' AND om.status='Active' LEFT JOIN users ou ON ou.user_id=om.user_id LEFT JOIN accounts o ON o.account_id=ou.account_id
     WHERE t.team_id=$1 AND t.deleted_at IS NULL`, [teamId, accountId])).rows[0] || null;
 }
-async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
+async function listTeams(accountId, q='', mine=false, limit=20, offset=0, category='') {
   return (await pool.query(`SELECT t.team_id,t.account_id,t.category,t.visibility,
     COALESCE(t.team_type, 'standard') AS team_type,
     t.job_id,
     t.gig_id,
+    t.location,
+    t.website,
+    t.join_policy,
     CASE WHEN t.gig_id IS NOT NULL THEN 'Gig' ELSE 'Job' END AS workspace_type,
     COALESCE(t.is_archived, FALSE) AS is_archived,
-    a.display_name,a.handle,a.description,f.path avatar_path, a.banner_preset,
+    a.display_name,a.handle,a.tagline,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
     count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status,
+    COALESCE((
+      SELECT ROUND(AVG(score)::numeric, 1)
+      FROM (
+        SELECT tr.rating::numeric AS score FROM team_reviews tr WHERE tr.team_id = t.team_id
+        UNION ALL
+        SELECT r.stars_out_of_five::numeric AS score FROM ratings r WHERE r.account_id = t.account_id
+      ) all_scores
+    ), 0) AS average_rating,
+    COALESCE((
+      SELECT COUNT(*)::int
+      FROM (
+        SELECT tr.team_review_id FROM team_reviews tr WHERE tr.team_id = t.team_id
+        UNION ALL
+        SELECT r.rating_id FROM ratings r WHERE r.account_id = t.account_id
+      ) all_reviews
+    ), 0) AS review_count,
+    COALESCE(o.display_name, o.handle, 'Team Owner') AS owner_name,
+    o.handle AS owner_handle,
+    ofile.path AS owner_avatar_path,
     (
       SELECT json_build_object(
         'contract_id', c.contract_id,
@@ -114,12 +136,12 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
         'counterparty_has_reviewed', EXISTS (
           SELECT 1 FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(j.client_account_id, gr.client_account_id) ELSE COALESCE(p.freelancer_account_id, g.freelancer_account_id) END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
         ),
         'counterparty_reviewed_at', (
           SELECT r.created_at FROM ratings r
            WHERE r.contract_id = c.contract_id
-             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(j.client_account_id, gr.client_account_id) ELSE COALESCE(p.freelancer_account_id, g.freelancer_account_id) END)
+             AND r.account_id = (CASE WHEN COALESCE(j.client_account_id, gr.client_account_id) = $1 THEN COALESCE(p.freelancer_account_id, g.freelancer_account_id) ELSE COALESCE(j.client_account_id, gr.client_account_id) END)
            LIMIT 1
         ),
         'user_reviewed_at', (
@@ -148,13 +170,18 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id=t.account_id
     LEFT JOIN team_members am ON am.team_id=t.team_id LEFT JOIN users u ON u.account_id=$1 LEFT JOIN team_members mine ON mine.team_id=t.team_id AND mine.user_id=u.user_id
+    LEFT JOIN team_members om ON om.team_id=t.team_id AND om.role='Owner' AND om.status='Active'
+    LEFT JOIN users ou ON ou.user_id=om.user_id
+    LEFT JOIN accounts o ON o.account_id=ou.account_id
+    LEFT JOIN files ofile ON ofile.file_id=o.avatar_file_id
     WHERE t.deleted_at IS NULL
-      AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%')
+      AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%' OR t.category ILIKE '%'||$2||'%')
+      AND ($6='' OR t.category ILIKE '%'||$6||'%')
       AND (
         ($3::boolean = TRUE AND mine.status IN ('Active', 'Pending'))
         OR ($3::boolean = FALSE AND t.visibility = 'Public')
       )
-    GROUP BY t.team_id,t.team_type,t.job_id,t.gig_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset])).rows;
+    GROUP BY t.team_id,t.team_type,t.job_id,t.gig_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status,o.display_name,o.handle,ofile.path ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset,category])).rows;
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
 async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }
@@ -572,5 +599,260 @@ async function getTeamMemberLimitEligibility(teamId) {
   };
 }
 
-module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility};
+
+async function listTeamTasks(teamId) {
+  const query = `
+    SELECT 
+      t.task_id,
+      t.team_id,
+      t.title,
+      t.description,
+      t.status,
+      t.priority,
+      t.due_at,
+      t.sort_order,
+      t.assignee_account_id,
+      t.created_by_account_id,
+      t.created_at,
+      t.updated_at,
+      assignee.display_name AS assignee_name,
+      assignee.handle AS assignee_handle,
+      assignee_media.path AS assignee_avatar_path,
+      creator.display_name AS creator_name,
+      creator.handle AS creator_handle
+    FROM team_board_tasks t
+    LEFT JOIN accounts assignee ON assignee.account_id = t.assignee_account_id
+    LEFT JOIN files assignee_media ON assignee_media.file_id = assignee.avatar_file_id
+    LEFT JOIN accounts creator ON creator.account_id = t.created_by_account_id
+    WHERE t.team_id = $1 AND t.deleted_at IS NULL
+    ORDER BY t.sort_order ASC, t.created_at ASC
+  `;
+  const result = await pool.query(query, [teamId]);
+  return result.rows;
+}
+
+async function createTeamTask(teamId, creatorAccountId, data) {
+  const query = `
+    INSERT INTO team_board_tasks (
+      team_id,
+      created_by_account_id,
+      title,
+      description,
+      status,
+      priority,
+      due_at,
+      assignee_account_id,
+      sort_order
+    ) VALUES ($1, $2, $3, $4, COALESCE($5, 'todo'), COALESCE($6, 'normal'), $7, $8, COALESCE($9, 0))
+    RETURNING *
+  `;
+  const values = [
+    teamId,
+    creatorAccountId,
+    data.title.trim(),
+    data.description ? data.description.trim() : null,
+    data.status || 'todo',
+    data.priority || 'normal',
+    data.due_at || null,
+    data.assignee_account_id || null,
+    Number.isInteger(data.sort_order) ? data.sort_order : 0
+  ];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
+async function updateTeamTask(teamId, taskId, data) {
+  const fields = [];
+  const values = [teamId, taskId];
+  let idx = 3;
+
+  if (data.title !== undefined) {
+    fields.push(`title = ${idx++}`);
+    values.push(data.title.trim());
+  }
+  if (data.description !== undefined) {
+    fields.push(`description = ${idx++}`);
+    values.push(data.description ? data.description.trim() : null);
+  }
+  if (data.status !== undefined) {
+    fields.push(`status = ${idx++}`);
+    values.push(data.status);
+  }
+  if (data.priority !== undefined) {
+    fields.push(`priority = ${idx++}`);
+    values.push(data.priority);
+  }
+  if (data.due_at !== undefined) {
+    fields.push(`due_at = ${idx++}`);
+    values.push(data.due_at || null);
+  }
+  if (data.assignee_account_id !== undefined) {
+    fields.push(`assignee_account_id = ${idx++}`);
+    values.push(data.assignee_account_id || null);
+  }
+  if (data.sort_order !== undefined) {
+    fields.push(`sort_order = ${idx++}`);
+    values.push(Number(data.sort_order) || 0);
+  }
+
+  if (fields.length === 0) return null;
+
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  const query = `
+    UPDATE team_board_tasks
+    SET ${fields.join(', ')}
+    WHERE team_id = $1 AND task_id = $2 AND deleted_at IS NULL
+    RETURNING *
+  `;
+  const result = await pool.query(query, values);
+  return result.rows[0] || null;
+}
+
+async function deleteTeamTask(teamId, taskId) {
+  const query = `
+    UPDATE team_board_tasks
+    SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE team_id = $1 AND task_id = $2 AND deleted_at IS NULL
+    RETURNING task_id
+  `;
+  const result = await pool.query(query, [teamId, taskId]);
+  return Boolean(result.rows[0]);
+}
+
+
+async function listTeamVideoProjects(teamId) {
+  await ensureTeamMembersHaveProjectAccess(teamId);
+
+  const query = `
+    SELECT p.project_id as id,
+           p.project_id,
+           p.name,
+           p.status,
+           p.width,
+           p.height,
+           p.duration_seconds,
+           p.created_at,
+           p.updated_at,
+           p.updated_at as "lastUpdated",
+           (SELECT COALESCE(sum(f.size_bytes), 0)
+              FROM media_assets ma 
+              JOIN files f ON f.file_id = ma.original_file_id 
+             WHERE ma.project_id = p.project_id AND ma.deleted_at IS NULL AND f.deleted_at IS NULL) as size_bytes,
+           tf.path as thumbnail_path,
+           tvp.created_at as linked_at,
+           creator.display_name as created_by_name,
+           creator.handle as created_by_handle,
+           (
+             SELECT json_agg(json_build_object(
+               'account_id', a.account_id,
+               'display_name', a.display_name,
+               'handle', a.handle,
+               'avatar_path', f.path,
+               'role', pm.role
+             ))
+             FROM project_members pm
+             JOIN users u ON u.user_id = pm.user_id
+             JOIN accounts a ON a.account_id = u.account_id
+             LEFT JOIN files f ON f.file_id = a.avatar_file_id
+             WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL
+           ) as collaborators
+      FROM team_video_projects tvp
+      JOIN projects p ON p.project_id = tvp.project_id AND p.deleted_at IS NULL
+      LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id
+      LEFT JOIN accounts creator ON creator.account_id = tvp.created_by_account_id
+     WHERE tvp.team_id = $1
+     ORDER BY p.updated_at DESC
+  `;
+
+  const cfBase = String(process.env.CLOUDFRONT_URL || process.env.AWS_CLOUDFRONT_URL || '').replace(/\/$/, '');
+  const res = await pool.query(query, [teamId]);
+  return (res.rows || []).map((p) => {
+    const rawCollabs = Array.isArray(p.collaborators) ? p.collaborators : [];
+    const collaborators = rawCollabs.map((c) => ({
+      ...c,
+      avatar_url: c.avatar_path && cfBase
+        ? (/^https?:\/\//i.test(c.avatar_path) ? c.avatar_path : `${cfBase}/${c.avatar_path.replace(/^\/+/, '')}`)
+        : c.avatar_path || null,
+    }));
+    return {
+      ...p,
+      collaborators,
+      thumbnailUrl: p.thumbnail_path && cfBase
+        ? (/^https?:\/\//i.test(p.thumbnail_path) ? p.thumbnail_path : `${cfBase}/${p.thumbnail_path.replace(/^\/+/, '')}`)
+        : null,
+    };
+  });
+}
+
+async function createTeamVideoProject(teamId, creatorAccountId, creatorUserId, data) {
+  const name = (data.name || 'Team Video Project').trim().slice(0, 50);
+  const width = parseInt(data.width, 10) || 1920;
+  const height = parseInt(data.height, 10) || 1080;
+
+  const projRes = await pool.query(`
+    INSERT INTO projects (name, status, width, height, duration_seconds)
+    VALUES ($1, 'active', $2, $3, 0)
+    RETURNING project_id as id, project_id, name, status, width, height, duration_seconds, created_at, updated_at
+  `, [name, width, height]);
+
+  const newProject = projRes.rows[0];
+
+  await pool.query(`
+    INSERT INTO team_video_projects (team_id, project_id, created_by_account_id)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (team_id, project_id) DO NOTHING
+  `, [teamId, newProject.id, creatorAccountId]);
+
+  // Ensure all active team members receive access automatically (Leader as Owner, members as Editor)
+  await ensureTeamMembersHaveProjectAccess(teamId, newProject.id);
+
+  return newProject;
+}
+
+async function ensureTeamMembersHaveProjectAccess(teamId, specificProjectId = null) {
+  if (!teamId) return;
+
+  let projectIds = [];
+  if (specificProjectId) {
+    projectIds = [specificProjectId];
+  } else {
+    const pRes = await pool.query(`
+      SELECT project_id FROM team_video_projects WHERE team_id = $1
+    `, [teamId]);
+    projectIds = pRes.rows.map(r => r.project_id);
+  }
+
+  if (projectIds.length === 0) return;
+
+  const membersRes = await pool.query(`
+    SELECT DISTINCT u.user_id, tm.role as team_role
+      FROM team_members tm
+      JOIN users u ON u.user_id = tm.user_id
+     WHERE tm.team_id = $1 AND tm.status = 'Active'
+  `, [teamId]);
+
+  const CURSOR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#6366f1'];
+
+  for (const projId of projectIds) {
+    for (const member of membersRes.rows) {
+      const assignedRole = member.team_role === 'Owner' ? 'Owner' : 'Editor';
+      const randomColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
+      await pool.query(`
+        INSERT INTO project_members (project_id, user_id, role, cursor_color, joined_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (project_id, user_id)
+        DO UPDATE SET deleted_at = NULL, role = CASE WHEN EXCLUDED.role = 'Owner' THEN 'Owner' ELSE project_members.role END
+      `, [projId, member.user_id, assignedRole, randomColor]);
+    }
+  }
+}
+
+async function deleteTeamVideoProject(teamId, projectId) {
+  await pool.query(`
+    DELETE FROM team_video_projects WHERE team_id = $1 AND project_id = $2
+  `, [teamId, projectId]);
+  return { success: true };
+}
+
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
 

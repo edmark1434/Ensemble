@@ -12,6 +12,9 @@ import {
   Globe,
   Info,
   LayoutDashboard,
+  Coins,
+  Film,
+  Video,
   Lock,
   LogOut,
   MessageCircle,
@@ -25,10 +28,19 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { TeamOverviewTab } from "./team_components/TeamOverviewTab";
+import { TeamTaskboard } from "./team_components/TeamTaskboard";
+import { TeamChatTab } from "./team_components/TeamChatTab";
+import { TeamVideoProjectsTab } from "./team_components/TeamVideoProjectsTab";
+import { TeamContractsTab } from "./team_components/TeamContractsTab";
+import { TeamGalleryTab } from "./team_components/TeamGalleryTab";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
+import { motion } from "framer-motion";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
@@ -107,12 +119,18 @@ type TeamMarketplaceProposal = {
   detail_path: string;
 };
 type Tab =
-  | "about"
-  | "jobs"
-  | "gigs"
-  | "reviews"
-  | "members"
+  | "overview"
+  | "taskboard"
   | "tasks"
+  | "services"
+  | "gigs"
+  | "chat"
+  | "video-projects"
+  | "contracts"
+  | "members"
+  | "about"
+  | "gallery"
+  | "reviews"
   | "requests"
   | "wallet"
   | "transactions";
@@ -131,6 +149,18 @@ const imageUrl = (path?: string) =>
 export default function SelectedTeam() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnFrom = (location.state as { from?: string } | null)?.from;
+
+  const handleReturn = () => {
+    if (returnFrom) {
+      navigate(returnFrom);
+    } else if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/teams");
+    }
+  };
   const [team, setTeam] = useState<Team | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [requests, setRequests] = useState<Member[]>([]);
@@ -142,7 +172,22 @@ export default function SelectedTeam() {
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [requestSearch, setRequestSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("about");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab") as Tab | null;
+  const [activeTab, setActiveTab] = useState<Tab>(() => (urlTab === "gigs" ? "services" : urlTab) || "about");
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as Tab | null;
+    if (tabParam) {
+      setActiveTab(tabParam === "gigs" ? "services" : tabParam);
+    } else if (team) {
+      const isMember = team.current_user_status === "Active" || team.current_user_role === "Owner";
+      if (isMember && activeTab === "about") {
+        setActiveTab("overview");
+      }
+    }
+  }, [searchParams, team]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -159,6 +204,15 @@ export default function SelectedTeam() {
   const [distributionRecipientId, setDistributionRecipientId] = useState('');
   const [distributionAmount, setDistributionAmount] = useState('');
   const { user } = useGlobalState();
+  const theme = useGlobalState((state) => state.theme);
+  const [isInitializingTeam, setIsInitializingTeam] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializingTeam(false);
+    }, 750);
+    return () => clearTimeout(timer);
+  }, []);
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [personalBalance, setPersonalBalance] = useState<number>(() => Number(user?.wallet?.balance_credits || user?.credits || 0));
 
@@ -190,6 +244,13 @@ export default function SelectedTeam() {
         setRequests(response.data.data || []);
       } else {
         setRequests([]);
+      }
+      const isMember = nextTeam.current_user_status === 'Active' || nextTeam.current_user_role === 'Owner';
+      if (isMember || nextTeam.current_user_membership?.permissions?.can_view_wallet) {
+        try {
+          const walletResponse = await api.get(`/api/teams/${id}/wallet`);
+          setWallet(walletResponse.data.data);
+        } catch (_) {}
       }
     } catch (error: unknown) {
       const message = axiosMessage(error, "Unable to load Team");
@@ -349,6 +410,11 @@ export default function SelectedTeam() {
 
   const selectTab = async (tab: Tab) => {
     setActiveTab(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", tab);
+      return next;
+    }, { replace: true });
     if (tab === "wallet" && !wallet) {
       try {
         const response = await api.get(`/api/teams/${id}/wallet`);
@@ -466,12 +532,47 @@ export default function SelectedTeam() {
     }
   };
 
-  if (loading)
+  if (loading || isInitializingTeam) {
     return (
-      <Page title="Team">
-        <div className="p-8 text-gray-500 dark:text-zinc-400">Loading Team…</div>
-      </Page>
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans',sans-serif] overflow-hidden">
+        {/* Background Grid Animation */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Loading Team Workspace
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Gathering team details, collaborative tasks, and collective services...
+            </p>
+          </div>
+        </motion.div>
+      </div>
     );
+  }
   if (!team)
     return (
       <Page title="Team">
@@ -497,6 +598,11 @@ export default function SelectedTeam() {
     || member.handle.toLowerCase().includes(normalizedRequestSearch)
   );
 
+  const teamRating =
+    reviews.length > 0
+      ? (reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)
+      : (team.average_rating ? Number(team.average_rating).toFixed(1) : "5.0");
+
   return (
     <Page title={team.display_name}>
       <div className="relative h-48 overflow-hidden bg-dark-surface">
@@ -509,9 +615,9 @@ export default function SelectedTeam() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
         <button
-          onClick={() => navigate("/teams")}
+          onClick={handleReturn}
           className="absolute left-4 top-4 cursor-pointer rounded-full bg-black/50 hover:bg-black/70 active:scale-95 p-2 text-white transition"
-          title="Back to Teams"
+          title={returnFrom?.includes("discovery") ? "Back to Discovery" : "Back to Teams"}
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -617,10 +723,40 @@ export default function SelectedTeam() {
               </div>
             </div>
             <p className="mt-2 text-gray-500 dark:text-zinc-400">{team.description}</p>
-            <p className="mt-3 text-sm text-gray-500 dark:text-zinc-500">
-              @{team.handle} · {team.member_count} members · Team Leader:{" "}
-              {team.owner_name}
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
+              <span>@{team.handle}</span>
+              <span>·</span>
+              <span>{team.member_count} {team.member_count === 1 ? 'member' : 'members'}</span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-white">
+                <Star className="h-4 w-4 fill-amber-400 text-amber-400 shrink-0" />
+                <span>{teamRating}</span>
+                <span className="text-xs text-zinc-400 font-normal">
+                  ({reviews.length || team.review_count || 0})
+                </span>
+              </span>
+              <span>·</span>
+              <span>Team Leader: <strong className="text-zinc-800 dark:text-zinc-200">{team.owner_name}</strong></span>
+              {wallet && (permissions.can_view_wallet || isOwnerOrAdminOrLeader) && (
+                <>
+                  <span>·</span>
+                  <button
+                    type="button"
+                    onClick={() => selectTab("wallet")}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold text-xs border border-amber-500/20 cursor-pointer transition"
+                    title="View Team Wallet & Escrow"
+                  >
+                    <Coins className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>{Number(wallet.available_balance || 0).toLocaleString()} cr</span>
+                    {Number(wallet.escrow_balance || 0) > 0 && (
+                      <span className="text-zinc-500 dark:text-zinc-400 font-normal">
+                        ({Number(wallet.escrow_balance).toLocaleString()} in escrow)
+                      </span>
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           <div className="relative">
             <button
@@ -748,7 +884,7 @@ export default function SelectedTeam() {
 
         <TeamTabs
           active={activeTab}
-          showTasks={activeMember}
+          isMember={Boolean(activeMember)}
           showWallet={Boolean(permissions.can_view_wallet || isOwnerOrAdminOrLeader)}
           showRequests={Boolean(permissions.can_manage_requests)}
           requestCount={pendingRequests.length}
@@ -764,8 +900,14 @@ export default function SelectedTeam() {
           requestSearch={requestSearch}
           canManage={Boolean(permissions.can_manage_members)}
           isOwner={membership?.role === "Owner"}
+          isMember={Boolean(activeMember)}
           canAddFunds={canAddFunds}
           onAddFunds={() => void openAddFundsModal()}
+          onSelectTab={selectTab}
+          onOpenInviteModal={openInviteModal}
+          onOpenChat={() => void openChat()}
+          copyTeamCode={() => void copyTeamCode()}
+          codeCopied={codeCopied}
           canViewMarketplaceProposals={activeMember && ["Owner", "Representative", "Admin"].includes(membership?.role || "")}
           saving={saving}
           onSuspend={(account) =>
@@ -785,11 +927,11 @@ export default function SelectedTeam() {
           onRequestSearch={setRequestSearch}
           onApproveRequest={(account) => void manageJoinRequest(account, "approve")}
           onDenyRequest={(account) => void manageJoinRequest(account, "deny")}
+          transactions={transactions}
           transactionSearch={transactionSearch}
           transactionDate={transactionDate}
           transactionPage={transactionPage}
           transactionTotalPages={transactionTotalPages}
-          transactions={transactions}
           onTransactionSearch={setTransactionSearch}
           onTransactionDate={setTransactionDate}
           onLoadTransactions={loadTransactions}
@@ -918,239 +1060,350 @@ export default function SelectedTeam() {
 
 function TeamTabs({
   active,
-  showTasks,
+  isMember,
   showWallet,
   showRequests,
   requestCount,
   onSelect,
 }: {
   active: Tab;
-  showTasks: boolean;
+  isMember: boolean;
   showWallet: boolean;
   showRequests: boolean;
   requestCount: number;
   onSelect: (tab: Tab) => void;
 }) {
-  const tabs: Array<{ id: Tab; label: string; icon: typeof Info }> = [
-    { id: "about", label: "About", icon: Info },
-    { id: "jobs", label: "Jobs", icon: Briefcase },
-    { id: "gigs", label: "Gigs", icon: Briefcase },
-    { id: "reviews", label: "Reviews", icon: Star },
+  const memberTabs: Array<{ id: Tab; label: string; icon: any }> = [
+    { id: "overview", label: "Overview", icon: Info },
+    { id: "taskboard", label: "Taskboard", icon: LayoutDashboard },
+    { id: "services", label: "Services", icon: Briefcase },
+    { id: "chat", label: "Chat", icon: MessageCircle },
+    { id: "video-projects", label: "Video Projects", icon: Video },
+    { id: "contracts", label: "Contracts", icon: FileText },
     { id: "members", label: "Members", icon: Users },
   ];
-  if (showTasks) tabs.splice(1, 0, { id: "tasks", label: "Task Dashboard", icon: LayoutDashboard });
-  if (showRequests) tabs.push({ id: "requests", label: "Pending Requests", icon: UserPlus });
-  if (showWallet) { tabs.push({ id: "wallet", label: "Wallet", icon: Briefcase }); tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft }); }
-  return (
-    <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10">
-      {tabs.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          onClick={() => onSelect(id)}
-          className={`flex cursor-pointer items-center gap-2 rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98] ${
-            active === id
-              ? "border-b-2 border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
-          }`}
-        >
-          <Icon className="h-4 w-4" />
-          {label}
-          {id === "requests" && requestCount > 0 && (
-            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
-              {requestCount}
-            </span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-}
 
-function TeamMarketplacePosts({ teamId, type }: { teamId: string; type: "jobs" | "gigs" }) {
-  const navigate = useNavigate();
-  const [posts, setPosts] = useState<TeamMarketplacePost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const visitorTabs: Array<{ id: Tab; label: string; icon: any }> = [
+    { id: "about", label: "About", icon: Info },
+    { id: "services", label: "Services", icon: Briefcase },
+    { id: "gallery", label: "Gallery", icon: Film },
+    { id: "reviews", label: "Rate & Reviews", icon: Star },
+    { id: "members", label: "Members", icon: Users },
+  ];
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError("");
-    api.get(`/api/teams/${teamId}/marketplace-posts`, { params: { type }, signal: controller.signal })
-      .then((response) => setPosts(response.data.data || []))
-      .catch((requestError: unknown) => {
-        if (!controller.signal.aborted) setError(axiosMessage(requestError, `Unable to load Team ${type}`));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [teamId, type]);
+  const tabs = isMember ? [...memberTabs] : [...visitorTabs];
 
-  if (loading) return <div className="grid gap-3 sm:grid-cols-2"><div className="h-40 animate-pulse rounded-xl bg-white/5" /><div className="h-40 animate-pulse rounded-xl bg-white/5" /></div>;
-  if (error) return <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-400">{error}</div>;
-  if (!posts.length) return <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">This Team has no {type === "jobs" ? "job" : "gig"} posts yet.</div>;
+  if (isMember) {
+    if (showRequests) {
+      tabs.push({ id: "requests", label: "Pending Requests", icon: UserPlus });
+    }
+    if (showWallet) {
+      tabs.push({ id: "wallet", label: "Wallet", icon: Coins });
+      tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft });
+    }
+  }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {posts.map((post) => {
-        const minimum = Number(post.rate_credits_min || 0);
-        const maximum = post.rate_credits_max == null ? null : Number(post.rate_credits_max);
+    <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10 font-['Plus_Jakarta_Sans',sans-serif]">
+      {tabs.map(({ id, label, icon: Icon }) => {
+        const isCurrentActive =
+          active === id ||
+          (id === "taskboard" && active === "tasks") ||
+          (id === "services" && active === "gigs");
         return (
-          <button key={post.id} type="button" onClick={() => navigate(type === "jobs" ? `/jobs/postings/${post.id}` : `/gigs/services/${post.id}`)} className="overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-500/40 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:shadow-none">
-            <div className="h-28 bg-gray-100 dark:bg-white/5">
-              {post.thumbnail_path ? <img src={imageUrl(post.thumbnail_path)} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center"><Briefcase className="h-8 w-8 text-gray-400 dark:text-zinc-600" /></div>}
-            </div>
-            <div className="space-y-2 p-4">
-              <div className="flex items-start justify-between gap-3"><h3 className="line-clamp-2 font-semibold text-gray-900 dark:text-white">{post.title}</h3><span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-400">{post.status}</span></div>
-              <p className="line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">{post.description || "No description provided."}</p>
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-500"><span>{post.category || "Uncategorized"}</span><span>{maximum && maximum !== minimum ? `${minimum.toLocaleString()}–${maximum.toLocaleString()}` : minimum.toLocaleString()} credits</span></div>
-              <p className="text-[11px] text-gray-400 dark:text-zinc-500">{Number(post.activity_count || 0)} {type === "jobs" ? "proposals" : "orders"} · {new Date(post.created_at).toLocaleDateString()}</p>
-            </div>
+          <button
+            key={id}
+            onClick={() => onSelect(id)}
+            className={`flex cursor-pointer items-center gap-2 rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98] ${
+              isCurrentActive
+                ? "border-b-2 border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold"
+                : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+            {id === "requests" && requestCount > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                {requestCount}
+              </span>
+            )}
           </button>
         );
       })}
     </div>
   );
 }
-function TeamMarketplaceProposals({
-  teamAccountId,
-  type,
+
+function TeamServicesSection({
+  team,
+  canManage,
+  isMember,
+  isOwner,
 }: {
-  teamAccountId: string;
-  type: "jobs" | "gigs";
+  team: Team;
+  canManage: boolean;
+  isMember: boolean;
+  isOwner: boolean;
 }) {
   const navigate = useNavigate();
-  const [proposals, setProposals] = useState<TeamMarketplaceProposal[]>([]);
+  const [services, setServices] = useState<TeamMarketplacePost[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [subTab, setSubTab] = useState<"services" | "orders">("services");
   const [loading, setLoading] = useState(true);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const controller = new AbortController();
+    let mounted = true;
     setLoading(true);
     setError("");
-
-    const request = type === "jobs"
-      ? api.get("/api/jobs/proposals/sent", {
-          params: { scope: "teams" },
-          signal: controller.signal,
-        })
-      : api.get("/api/gigs/orders/sent", { signal: controller.signal });
-
-    request
-      .then((response) => {
-        const records = Array.isArray(response.data.data) ? response.data.data : [];
-        if (type === "jobs") {
-          setProposals(
-            records
-              .filter((proposal: any) => String(proposal.freelancer_account_id) === teamAccountId)
-              .map((proposal: any) => ({
-                id: proposal.proposal_id,
-                title: proposal.job_title || "Untitled job",
-                counterparty: proposal.client_name || proposal.client_handle || "Client",
-                status: proposal.status || "Pending",
-                amount_credits: Number(proposal.rate_credits || 0),
-                created_at: proposal.created_at,
-                summary: proposal.letter,
-                detail_path: `/jobs/proposals/sent/${proposal.proposal_id}`,
-              })),
-          );
-        } else {
-          setProposals(
-            records
-              .filter((order: any) => String(order.client_account_id) === teamAccountId)
-              .map((order: any) => ({
-                id: order.id,
-                title: order.gig_title || "Untitled gig",
-                counterparty: order.freelancer_name || order.freelancer_handle || "Freelancer",
-                status: order.status || "Pending",
-                amount_credits: Number(order.price || 0),
-                created_at: order.created_at,
-                summary: order.project_brief,
-                detail_path: `/gigs/orders/sent/${order.id}`,
-              })),
-          );
-        }
+    api.get(`/api/teams/${team.team_id}/marketplace-posts`, { params: { type: "gigs" } })
+      .then((res) => {
+        if (mounted) setServices(res.data.data || []);
       })
-      .catch((requestError: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(axiosMessage(requestError, `Unable to load Team ${type === "jobs" ? "job proposals" : "gig proposals"}`));
-        }
+      .catch((err) => {
+        if (mounted) setError(axiosMessage(err, "Unable to load Team services"));
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (mounted) setLoading(false);
       });
+    return () => { mounted = false; };
+  }, [team.team_id]);
 
-    return () => controller.abort();
-  }, [teamAccountId, type]);
-
-  if (loading) return <div className="grid gap-3 sm:grid-cols-2"><div className="h-36 animate-pulse rounded-xl bg-white/5" /><div className="h-36 animate-pulse rounded-xl bg-white/5" /></div>;
-  if (error) return <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-400">{error}</div>;
-  if (!proposals.length) return <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">This Team has no {type === "jobs" ? "job proposals" : "gig proposals"} yet.</div>;
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {proposals.map((proposal) => (
-        <button
-          key={proposal.id}
-          type="button"
-          onClick={() => navigate(proposal.detail_path)}
-          className="cursor-pointer rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-500/40 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:shadow-none"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="line-clamp-2 font-semibold text-gray-900 dark:text-white">{proposal.title}</h3>
-            <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-400">{proposal.status}</span>
-          </div>
-          <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">With {proposal.counterparty}</p>
-          <p className="mt-2 line-clamp-2 min-h-8 text-xs text-gray-500 dark:text-zinc-500">{proposal.summary || "No additional details provided."}</p>
-          <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-3 text-xs dark:border-white/10">
-            <span className="font-medium text-amber-500">{proposal.amount_credits.toLocaleString()} credits</span>
-            <span className="text-gray-400 dark:text-zinc-500">{new Date(proposal.created_at).toLocaleDateString()}</span>
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function TeamMarketplaceSection({
-  team,
-  type,
-  canViewProposals,
-}: {
-  team: Team;
-  type: "jobs" | "gigs";
-  canViewProposals: boolean;
-}) {
-  const [view, setView] = useState<"posts" | "proposals">("posts");
-  const singular = type === "jobs" ? "Job" : "Gig";
+  useEffect(() => {
+    if (!isMember) return;
+    let mounted = true;
+    setLoadingOrders(true);
+    api.get("/api/gigs/orders/incoming")
+      .then((res) => {
+        if (mounted) {
+          const records = Array.isArray(res.data.data) ? res.data.data : [];
+          setOrders(records);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoadingOrders(false);
+      });
+    return () => { mounted = false; };
+  }, [isMember, team.account_id]);
 
   return (
-    <section>
-      <div className="mb-4 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
-        {(["posts", "proposals"] as const).map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setView(item)}
-            className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition active:scale-[0.98] ${view === item ? "bg-blue-500 text-white shadow-sm" : "text-gray-500 hover:bg-white hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}
-          >
-            {item === "posts" ? <Briefcase className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-            {singular} {item === "posts" ? "Posts" : "Proposals"}
-          </button>
-        ))}
+    <div className="space-y-6 font-['Plus_Jakarta_Sans',sans-serif]">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 shadow-xs">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-blue-500" />
+            <span>Team Services</span>
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+            Services offered collectively by {team.display_name}.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isMember && (
+            <button
+              type="button"
+              onClick={() => navigate(`/gigs/create?teamId=${team.team_id}`)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Offer a Service</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {view === "posts" ? (
-        <TeamMarketplacePosts teamId={team.team_id} type={type} />
-      ) : canViewProposals ? (
-        <TeamMarketplaceProposals teamAccountId={team.account_id} type={type} />
-      ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">
-          Only the Team Leader or an authorized Representative can view Team {singular.toLowerCase()} proposals.
+      {/* Sub Tabs for Members: Services Offered vs Orders */}
+      {isMember && (
+        <div className="flex items-center gap-2 border-b border-gray-200 dark:border-white/10 pb-2">
+          <button
+            type="button"
+            onClick={() => setSubTab("services")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              subTab === "services"
+                ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20"
+                : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5"
+            }`}
+          >
+            Services Offered ({services.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab("orders")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              subTab === "orders"
+                ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20"
+                : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5"
+            }`}
+          >
+            <span>Client Orders</span>
+            {orders.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-500 text-white font-extrabold">
+                {orders.length}
+              </span>
+            )}
+          </button>
         </div>
       )}
-    </section>
+
+      {/* Services Grid */}
+      {subTab === "services" && (
+        <>
+          {loading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-56 animate-pulse rounded-2xl bg-white/5 border border-white/10" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-400">
+              {error}
+            </div>
+          ) : services.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-white/15 p-12 text-center bg-white/50 dark:bg-white/[0.02]">
+              <Briefcase className="w-10 h-10 text-gray-400 dark:text-zinc-500 mx-auto mb-3" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                No Services Offered Yet
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
+                {isMember
+                  ? "Your team hasn't listed any collective services yet. Create a service listing so clients can order from your team."
+                  : "This team has not listed any public services yet. Check back soon!"}
+              </p>
+              {isMember && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/gigs/create?teamId=${team.team_id}`)}
+                  className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Offer First Service</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {services.map((service) => {
+                const minimum = Number(service.rate_credits_min || 0);
+                return (
+                  <div
+                    key={service.id}
+                    onClick={() => navigate(`/gigs/services/${service.id}`)}
+                    className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] overflow-hidden shadow-xs hover:shadow-md hover:border-blue-400/40 transition-all cursor-pointer flex flex-col"
+                  >
+                    <div className="relative h-40 bg-zinc-900 overflow-hidden shrink-0">
+                      {service.thumbnail_path ? (
+                        <img
+                          src={imageUrl(service.thumbnail_path)}
+                          alt={service.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                          <Briefcase className="w-10 h-10" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent pointer-events-none" />
+                      {service.category && (
+                        <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
+                          {service.category}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-bold text-sm text-gray-900 dark:text-white line-clamp-2 group-hover:text-blue-500 transition-colors">
+                          {service.title}
+                        </h3>
+                        <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-400 line-clamp-2">
+                          {service.description || "No description provided."}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-gray-400 dark:text-zinc-500">
+                            Starting at
+                          </p>
+                          <p className="text-sm font-black text-gray-900 dark:text-white">
+                            {minimum.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">credits</span>
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-semibold text-blue-500 group-hover:translate-x-0.5 transition-transform">
+                          Order Service →
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Orders View (for Team Members & Leader) */}
+      {subTab === "orders" && isMember && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs text-blue-600 dark:text-blue-400">
+            {isOwner
+              ? "As Team Leader, you receive and manage incoming client orders for this team. All team members are notified of incoming orders."
+              : "Incoming client orders for this team. The Team Leader manages and accepts these orders on behalf of the team."}
+          </div>
+
+          {loadingOrders ? (
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-white/5 border border-white/10" />
+              ))}
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-white/15 p-10 text-center bg-white/50 dark:bg-white/[0.02]">
+              <p className="text-xs text-gray-500 dark:text-zinc-400">No active client orders found for this team yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {orders.map((ord: any) => (
+                <div
+                  key={ord.id}
+                  className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                        {ord.gig_title || "Team Service Order"}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400">
+                        {ord.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                      Ordered by: <strong className="text-gray-700 dark:text-zinc-300">{ord.client_name || ord.client_handle || "Client"}</strong>
+                      {ord.price && ` · ${Number(ord.price).toLocaleString()} credits`}
+                      {ord.created_at && ` · ${new Date(ord.created_at).toLocaleDateString()}`}
+                    </p>
+                  </div>
+
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/gigs/orders/incoming/${ord.gig_id || ''}`)}
+                      className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold transition hover:opacity-90 shrink-0 cursor-pointer"
+                    >
+                      Manage Order
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1164,8 +1417,14 @@ function TeamTabContent({
   requestSearch,
   canManage,
   isOwner,
+  isMember,
   canAddFunds,
   onAddFunds,
+  onSelectTab,
+  onOpenInviteModal,
+  onOpenChat,
+  copyTeamCode,
+  codeCopied,
   canViewMarketplaceProposals,
   saving,
   onSuspend,
@@ -1177,7 +1436,14 @@ function TeamTabContent({
   onRequestSearch,
   onApproveRequest,
   onDenyRequest,
-  transactions, transactionSearch, transactionDate, transactionPage, transactionTotalPages, onTransactionSearch, onTransactionDate, onLoadTransactions,
+  transactions,
+  transactionSearch,
+  transactionDate,
+  transactionPage,
+  transactionTotalPages,
+  onTransactionSearch,
+  onTransactionDate,
+  onLoadTransactions,
   onReview,
 }: {
   active: Tab;
@@ -1189,8 +1455,14 @@ function TeamTabContent({
   requestSearch: string;
   canManage: boolean;
   isOwner: boolean;
+  isMember: boolean;
   canAddFunds: boolean;
   onAddFunds: () => void;
+  onSelectTab: (tab: Tab) => void;
+  onOpenInviteModal: () => void;
+  onOpenChat: () => void;
+  copyTeamCode: () => void;
+  codeCopied: boolean;
   canViewMarketplaceProposals: boolean;
   saving: boolean;
   onSuspend: (account: string) => void;
@@ -1202,375 +1474,394 @@ function TeamTabContent({
   onRequestSearch: (value: string) => void;
   onApproveRequest: (account: string) => void;
   onDenyRequest: (account: string) => void;
-  transactions: TeamTransaction[]; transactionSearch: string; transactionDate: string; transactionPage: number; transactionTotalPages: number; onTransactionSearch: (value: string) => void; onTransactionDate: (value: string) => void; onLoadTransactions: (page?: number) => void;
+  transactions: TeamTransaction[];
+  transactionSearch: string;
+  transactionDate: string;
+  transactionPage: number;
+  transactionTotalPages: number;
+  onTransactionSearch: (value: string) => void;
+  onTransactionDate: (value: string) => void;
+  onLoadTransactions: (page?: number) => void;
   onReview: () => void;
 }) {
-  if (active === "about")
+  if (active === "overview") {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6">
-        <h3 className="mb-2 text-lg font-semibold">About this Team</h3>
-        <p className="text-gray-500 dark:text-zinc-400">{team.description}</p>
+      <TeamOverviewTab
+        team={team}
+        members={members}
+        reviews={reviews}
+        wallet={wallet}
+        canAddFunds={canAddFunds}
+        onAddFunds={onAddFunds}
+        onSelectTab={onSelectTab}
+        onOpenInviteModal={onOpenInviteModal}
+        onOpenChat={onOpenChat}
+        copyTeamCode={copyTeamCode}
+        codeCopied={codeCopied}
+      />
+    );
+  }
+
+  if (active === "taskboard" || active === "tasks") {
+    return (
+      <TeamTaskboard
+        teamId={team.team_id}
+        members={members}
+        canManage={canManage}
+        onBackToOverview={() => onSelectTab("overview")}
+      />
+    );
+  }
+
+  if (active === "services" || active === "gigs" || active === ("jobs" as any)) {
+    return (
+      <TeamServicesSection
+        team={team}
+        canManage={canManage}
+        isMember={isMember}
+        isOwner={isOwner}
+      />
+    );
+  }
+
+  if (active === "chat") {
+    return (
+      <TeamChatTab
+        teamId={team.team_id}
+        teamName={team.display_name}
+        memberCount={members.length}
+        members={members}
+      />
+    );
+  }
+
+  if (active === "video-projects") {
+    return (
+      <TeamVideoProjectsTab
+        teamId={team.team_id}
+        teamName={team.display_name}
+        canManage={canManage}
+        isOwner={isOwner}
+        teamLeaderName={team.owner_name}
+      />
+    );
+  }
+
+  if (active === "contracts") {
+    return (
+      <TeamContractsTab
+        teamId={team.team_id}
+        teamAccountId={team.account_id}
+        canViewProposals={canViewMarketplaceProposals}
+      />
+    );
+  }
+
+  if (active === "gallery") {
+    return (
+      <TeamGalleryTab
+        teamId={team.team_id}
+        teamName={team.display_name}
+      />
+    );
+  }
+
+  if (active === "about") {
+    return (
+      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs p-6 font-['Plus_Jakarta_Sans',sans-serif]">
+        <h3 className="mb-2 text-base font-bold text-gray-900 dark:text-white">About this Team</h3>
+        <p className="text-sm text-gray-600 dark:text-zinc-300 leading-relaxed">{team.description}</p>
+        {team.tagline && <p className="text-xs text-gray-400 mt-2 font-medium">{team.tagline}</p>}
       </div>
     );
-  if (active === "tasks") return <TeamTaskDashboard teamId={team.team_id} />;
-  if (active === "jobs" || active === "gigs")
-    return <TeamMarketplaceSection team={team} type={active} canViewProposals={canViewMarketplaceProposals} />;
-  if (active === "reviews")
+  }
+
+  if (active === "reviews") {
     return (
-      <div className="space-y-3">
-        <button
-          disabled={saving}
-          onClick={onReview}
-          className="cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
-        >
-          Add Review
-        </button>
+      <div className="space-y-4 font-['Plus_Jakarta_Sans',sans-serif]">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">
+            Ratings & Reviews ({reviews.length})
+          </h3>
+          <button
+            disabled={saving}
+            onClick={onReview}
+            className="cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-5 py-2 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+          >
+            Add Review
+          </button>
+        </div>
+
         {reviews.length ? (
-          reviews.map((review) => (
-            <div
-              key={review.team_review_id}
-              className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4"
-            >
-              <b>{review.display_name}</b>
-              <p className="text-amber-300">{"★".repeat(review.rating)}</p>
-              <p className="text-gray-500 dark:text-zinc-400">{review.comment}</p>
-            </div>
-          ))
+          <div className="grid gap-3">
+            {reviews.map((review) => (
+              <div
+                key={review.team_review_id}
+                className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <b className="text-sm text-gray-900 dark:text-white">{review.display_name}</b>
+                  <p className="text-amber-400 text-sm">{"★".repeat(review.rating)}</p>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-zinc-300">{review.comment}</p>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400">
-            No reviews yet.
+          <div className="rounded-2xl border border-dashed border-gray-300 dark:border-white/15 p-12 text-center text-xs text-gray-500 dark:text-zinc-400">
+            No reviews yet. Be the first to review this team!
           </div>
         )}
       </div>
     );
-  if (active === "requests")
+  }
+
+  if (active === "requests") {
     return (
-      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none">
+      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-white/10 dark:bg-white/[0.03] font-['Plus_Jakarta_Sans',sans-serif]">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pending join requests</h3>
-            <p className="text-sm text-gray-500 dark:text-zinc-400">Review people who asked to join this Team.</p>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Pending Join Requests</h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">Review people who asked to join this Team.</p>
           </div>
-          <label className="flex min-w-64 items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-500 focus-within:border-blue-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-400">
-            <Search className="mr-2 h-4 w-4 shrink-0" />
+          <label className="flex min-w-64 items-center rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-500 focus-within:border-blue-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-400">
+            <Search className="mr-2 h-3.5 w-3.5 shrink-0" />
             <input
               value={requestSearch}
-              onChange={(event) => onRequestSearch(event.target.value)}
-              placeholder="Search name or username"
-              className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-zinc-600"
+              onChange={(e) => onRequestSearch(e.target.value)}
+              placeholder="Search requests..."
+              className="w-full bg-transparent outline-none"
             />
           </label>
         </div>
 
-        {requests.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-200 py-12 text-center dark:border-white/10">
-            <UserPlus className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
-            <p className="mt-3 font-medium text-gray-700 dark:text-zinc-300">
-              {requestSearch.trim() ? "No matching join requests" : "No pending join requests"}
-            </p>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
-              {requestSearch.trim() ? "Try another name or username." : "New requests will appear here for approval."}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {requests.map((request) => (
-              <article key={request.account_id} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 dark:border-white/10 sm:flex-row sm:items-center">
-                {request.avatar_path ? (
-                  <img src={imageUrl(request.avatar_path)} alt={request.display_name} className="h-12 w-12 rounded-full object-cover" />
-                ) : (
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-500/15 text-sm font-semibold text-blue-300">
-                    {request.display_name.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-gray-900 dark:text-white">{request.display_name}</p>
-                  <p className="truncate text-sm text-gray-500 dark:text-zinc-400">@{request.handle}</p>
-                  <p className="mt-1 text-xs text-gray-400 dark:text-zinc-500">
-                    Requested {request.requested_at ? new Date(request.requested_at).toLocaleString() : "recently"}
-                  </p>
+        {requests.length ? (
+          <div className="divide-y divide-gray-100 dark:divide-white/5">
+            {requests.map((member) => (
+              <div
+                key={member.team_member_id}
+                className="flex items-center justify-between py-3"
+              >
+                <div>
+                  <p className="font-semibold text-sm text-gray-900 dark:text-white">{member.display_name}</p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">@{member.handle}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    type="button"
                     disabled={saving}
-                    onClick={() => onApproveRequest(request.account_id)}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-3.5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+                    onClick={() => onApproveRequest(member.account_id)}
+                    className="cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-1.5 text-xs font-bold text-white transition disabled:opacity-50"
                   >
-                    <Check className="h-4 w-4" /> Approve
+                    Approve
                   </button>
                   <button
-                    type="button"
                     disabled={saving}
-                    onClick={() => onDenyRequest(request.account_id)}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-red-400/30 hover:bg-red-500/10 active:scale-[0.98] px-3.5 py-2 text-sm font-medium text-red-400 transition disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => onDenyRequest(member.account_id)}
+                    className="cursor-pointer rounded-full border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-[0.98] px-4 py-1.5 text-xs font-bold text-gray-600 dark:text-zinc-300 transition disabled:opacity-50"
                   >
-                    <XCircle className="h-4 w-4" /> Deny
+                    Deny
                   </button>
                 </div>
-              </article>
+              </div>
             ))}
           </div>
+        ) : (
+          <div className="p-8 text-center text-xs text-gray-400">No pending join requests.</div>
         )}
       </section>
     );
-  if (active === "wallet")
-    return wallet ? (
-      <div>
-        <div className="mb-4 flex flex-wrap justify-end gap-2">
-          {canAddFunds && (
-            <button
-              type="button"
-              onClick={onAddFunds}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition shadow-sm"
-            >
-              <Plus className="h-4 w-4" /> Add Fund
-            </button>
+  }
+
+  if (active === "wallet") {
+    const available = Number(wallet?.available_balance || 0);
+    const escrowed = Number(wallet?.escrow_balance || 0);
+    const reserved = Number(wallet?.contract_reserved_balance || 0);
+    const total = Number(wallet?.total_balance ?? (available + escrowed));
+
+    return (
+      <div className="space-y-6 font-['Plus_Jakarta_Sans',sans-serif]">
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-white/5">
+            <div>
+              <div className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-amber-500" />
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Team Treasury & Escrow</h2>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                Financial overview, liquid funds, and secured escrow balances for {team.display_name}.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {canAddFunds && (
+                <button
+                  type="button"
+                  onClick={onAddFunds}
+                  className="px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Funds</span>
+                </button>
+              )}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={onDistributeFunds}
+                  className="px-4 py-2 rounded-full border border-gray-200 dark:border-white/15 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-bold text-gray-700 dark:text-zinc-200 transition cursor-pointer active:scale-95"
+                >
+                  Distribute Funds
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Treasury Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-6">
+            {/* Available Balance */}
+            <div className="p-4.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02]">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                Available Balance
+              </p>
+              <p className="text-2xl font-black text-gray-900 dark:text-white mt-1.5 font-mono">
+                {available.toLocaleString()} <span className="text-xs font-normal text-gray-400">credits</span>
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+                Liquid credits available for collective services, tools, or distribution.
+              </p>
+            </div>
+
+            {/* Escrow Balance */}
+            <div className="p-4.5 rounded-xl border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/30 dark:bg-amber-500/5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                In Escrow
+              </p>
+              <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1.5 font-mono">
+                {escrowed.toLocaleString()} <span className="text-xs font-normal text-gray-400">credits</span>
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+                Safely locked in escrow for ongoing contracts and milestone deliverables.
+              </p>
+            </div>
+
+            {/* Total Balance */}
+            <div className="p-4.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02]">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                Total Team Valuation
+              </p>
+              <p className="text-2xl font-black text-gray-900 dark:text-white mt-1.5 font-mono">
+                {total.toLocaleString()} <span className="text-xs font-normal text-gray-400">credits</span>
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+                Aggregate team assets including available liquidity and escrow.
+              </p>
+            </div>
+          </div>
+
+          {reserved > 0 && (
+            <div className="mt-4 p-3.5 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 flex items-center justify-between text-xs">
+              <span className="text-purple-700 dark:text-purple-300 font-medium">
+                Contract Reserved Payouts:
+              </span>
+              <span className="font-bold text-purple-900 dark:text-purple-200 font-mono">
+                {reserved.toLocaleString()} credits
+              </span>
+            </div>
           )}
-          {isOwner && (
-            <button
-              type="button"
-              onClick={onDistributeFunds}
-              disabled={saving || Number(wallet.unreserved_balance ?? wallet.available_balance ?? 0) <= 0}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
-            >
-              <ArrowRightLeft className="h-4 w-4" /> Distribute funds
-            </button>
-          )}
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
-            <p className="text-xs text-gray-500 dark:text-zinc-500">Unreserved Balance</p>
-            <b className="mt-1 block text-xl font-bold text-emerald-400">
-              {Number(wallet.unreserved_balance ?? wallet.available_balance ?? 0).toLocaleString()} credits
-            </b>
-            <p className="mt-1 text-[11px] text-zinc-500">Available for general team distributions</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
-            <p className="text-xs text-gray-500 dark:text-zinc-500">Reserved for Contracts</p>
-            <b className="mt-1 block text-xl font-bold text-amber-400">
-              {Number(wallet.contract_reserved_balance || 0).toLocaleString()} credits
-            </b>
-            <p className="mt-1 text-[11px] text-zinc-500">Locked for contract workspace payouts</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
-            <p className="text-xs text-gray-500 dark:text-zinc-500">Total Liquid Balance</p>
-            <b className="mt-1 block text-xl font-bold text-gray-900 dark:text-white">
-              {Number(wallet.available_balance || 0).toLocaleString()} credits
-            </b>
-            <p className="mt-1 text-[11px] text-zinc-500">Total account wallet balance</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
-            <p className="text-xs text-gray-500 dark:text-zinc-500">Escrow Balance</p>
-            <b className="mt-1 block text-xl font-bold text-gray-900 dark:text-white">
-              {Number(wallet.escrow_balance || 0).toLocaleString()} credits
-            </b>
-            <p className="mt-1 text-[11px] text-zinc-500">Held in escrow for active contracts</p>
-          </div>
         </div>
       </div>
-    ) : (
-      <p className="text-gray-500 dark:text-zinc-400">Loading wallet…</p>
     );
-  if (active === 'transactions')
+  }
+
+  if (active === "transactions") {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 shadow-sm dark:shadow-none">
-        <div className="mb-4 flex flex-wrap gap-2">
+      <div className="space-y-4 font-['Plus_Jakarta_Sans',sans-serif]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 shadow-xs">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">Transaction History</h3>
           <input
+            type="text"
+            placeholder="Search transactions..."
             value={transactionSearch}
             onChange={(e) => onTransactionSearch(e.target.value)}
-            placeholder="Search member name"
-            className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.04] px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-400"
+            className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-transparent text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
           />
-          <input
-            type="date"
-            value={transactionDate}
-            onChange={(e) => onTransactionDate(e.target.value)}
-            className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.04] px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-400"
-          />
-          <button
-            onClick={() => onLoadTransactions(1)}
-            className="cursor-pointer rounded-lg bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition shadow-sm"
-          >
-            Filter
-          </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-gray-500 dark:text-zinc-500">
-              <tr>
-                <th className="pb-2">Date</th>
-                <th className="pb-2">Recipient</th>
-                <th className="pb-2">Amount</th>
-                <th className="pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((item) => (
-                <tr key={item.credit_transaction_id} className="border-t border-gray-100 dark:border-white/[0.06]">
-                  <td className="py-3 text-gray-900 dark:text-white">{new Date(item.created_at).toLocaleDateString()}</td>
-                  <td className="text-gray-900 dark:text-white">{item.recipient_name || item.recipient_handle}</td>
-                  <td className="text-gray-900 dark:text-white">{item.amount_credits.toLocaleString()} credits</td>
-                  <td>
-                    <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-300">
-                      {item.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!transactions.length && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-gray-500 dark:text-zinc-500">
-                    No Team transactions found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 flex items-center justify-end gap-2">
-          <button
-            disabled={transactionPage <= 1}
-            onClick={() => onLoadTransactions(transactionPage - 1)}
-            className="cursor-pointer rounded-lg border border-gray-200 dark:border-white/10 px-3 py-1.5 text-xs text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span className="px-2 text-sm text-gray-500 dark:text-zinc-400">
-            {transactionPage} / {transactionTotalPages}
-          </span>
-          <button
-            disabled={transactionPage >= transactionTotalPages}
-            onClick={() => onLoadTransactions(transactionPage + 1)}
-            className="cursor-pointer rounded-lg border border-gray-200 dark:border-white/10 px-3 py-1.5 text-xs text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
+
+        {transactions.length ? (
+          <div className="divide-y divide-gray-100 dark:divide-white/5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 shadow-xs">
+            {transactions.map((tx) => (
+              <div key={tx.transaction_id} className="flex items-center justify-between py-3 text-xs">
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white">{tx.description || tx.type}</p>
+                  <p className="text-gray-400 text-[11px]">{new Date(tx.created_at).toLocaleString()}</p>
+                </div>
+                <div className="text-right">
+                  <span className={`font-bold ${Number(tx.amount_credits) >= 0 ? "text-emerald-500" : "text-red-400"}`}>
+                    {Number(tx.amount_credits) >= 0 ? "+" : ""}{Number(tx.amount_credits).toLocaleString()} cr
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-xs text-gray-400 rounded-2xl border border-dashed border-gray-200 dark:border-white/10">
+            No transactions found.
+          </div>
+        )}
       </div>
     );
+  }
+
+  // Fallback: Members tab
   return (
-    <div className="space-y-4">
-      {canManage && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-gray-600 dark:text-zinc-300 flex items-start gap-2.5">
-          <ShieldCheck className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-          <div className="space-y-0.5 leading-relaxed">
-            <p className="font-bold text-gray-900 dark:text-white">
-              General Team Role &amp; Proposal Permissions
-            </p>
-            <p>
-              By default, new members join as <strong className="text-gray-900 dark:text-white">Member</strong>. Assigning the <strong className="text-blue-600 dark:text-blue-400">Representative</strong> role grants that member permission to <strong className="text-gray-900 dark:text-white">Send Proposals to Job Posts</strong> on behalf of this Team (with you automatically included as <strong className="text-gray-900 dark:text-white">Team Leader</strong>). Only grant <strong className="text-blue-600 dark:text-blue-400">Representative</strong> to members you fully trust.
-            </p>
-          </div>
-        </div>
-      )}
+    <div className="space-y-4 font-['Plus_Jakarta_Sans',sans-serif]">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-gray-900 dark:text-white">
+          Team Members ({members.length})
+        </h3>
+        {canManage && (
+          <button
+            onClick={onOpenInviteModal}
+            className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-xs font-bold text-white transition shadow-sm"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Invite Member
+          </button>
+        )}
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {members.map((member) => {
-          const roleLabel =
-            member.role === "Owner"
-              ? "Team Leader"
-              : member.role === "Representative" || member.role === "Admin"
-              ? "Representative"
-              : member.role === "Manager"
-              ? "Member"
-              : member.role;
-          const selectRoleValue =
-            member.role === "Representative" || member.role === "Admin"
-              ? "Representative"
-              : "Member";
-
-          return (
-            <div
-              key={member.account_id}
-              className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4"
-            >
-              {member.avatar_path ? (
-                <img
-                  src={imageUrl(member.avatar_path)}
-                  alt={member.display_name}
-                  className="h-12 w-12 rounded-full object-cover shrink-0"
-                />
-              ) : (
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-500/20 font-semibold">
-                  {member.display_name.slice(0, 2)}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="font-semibold truncate">{member.display_name}</p>
-                  {member.role === "Owner" ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                      Team Leader
-                    </span>
-                  ) : roleLabel === "Representative" ? (
-                    <span
-                      className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30"
-                      title="Can send job proposals on behalf of the Team"
-                    >
-                      Representative (Can Propose)
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
-                      Member
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 dark:text-zinc-500 mt-0.5">
-                  @{member.handle} · {member.status}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {members.map((member) => (
+          <div
+            key={member.team_member_id}
+            className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 shadow-xs flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <img
+                src={imageUrl(member.avatar_path) || "/placeholders/avatar.png"}
+                alt={member.display_name}
+                className="w-10 h-10 rounded-full object-cover shrink-0 bg-gray-100 dark:bg-white/5"
+              />
+              <div className="min-w-0">
+                <p className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                  {member.display_name}
                 </p>
-                {canManage && member.role !== "Owner" && (
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
-                    <select
-                      value={selectRoleValue}
-                      disabled={saving}
-                      onChange={(event) =>
-                        onRole(member.account_id, event.target.value)
-                      }
-                      className="rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-zinc-800 px-2 py-1 text-xs font-medium text-gray-700 dark:text-zinc-200 outline-none focus:border-blue-500 cursor-pointer"
-                    >
-                      <option value="Member">Member (Default)</option>
-                      <option value="Representative">Representative (Can Send Proposals)</option>
-                    </select>
-                    {member.status === "Suspended" ? (
-                      <button
-                        disabled={saving}
-                        onClick={() => onRestore(member.account_id)}
-                        className="cursor-pointer text-emerald-500 dark:text-emerald-300 hover:text-emerald-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Restore
-                      </button>
-                    ) : (
-                      <button
-                        disabled={saving}
-                        onClick={() => onSuspend(member.account_id)}
-                        className="cursor-pointer text-amber-500 dark:text-amber-300 hover:text-amber-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Suspend
-                      </button>
-                    )}
-                    <button
-                      disabled={saving}
-                      onClick={() => onRemove(member)}
-                      className="cursor-pointer text-red-500 dark:text-red-400 hover:text-red-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Remove
-                    </button>
-                    {isOwner && member.status === "Active" && (
-                      <button
-                        disabled={saving}
-                        onClick={() => onTransfer(member.account_id)}
-                        className="cursor-pointer text-blue-500 dark:text-blue-400 hover:text-blue-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Transfer Team Leader
-                      </button>
-                    )}
-                  </div>
-                )}
+                <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
+                  @{member.handle} · <span className="font-semibold text-blue-500">{member.role}</span>
+                </p>
               </div>
             </div>
-          );
-        })}
+
+            {canManage && member.role !== "Owner" && (
+              <button
+                disabled={saving}
+                onClick={() => onRemove(member)}
+                className="cursor-pointer p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition"
+                title="Remove Member"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1585,11 +1876,12 @@ function Page({
 }) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
-      <UserHeader pageTitle={title} />
+      <UserHeader pageTitle="Team" />
       {children}
     </div>
   );
 }
+
 function axiosMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error !== null && "response" in error) {
     const response = (error as { response?: { data?: { message?: string } } })
