@@ -1,7 +1,14 @@
 const { pool } = require('./Database');
 const redisClient = require('./Redis');
 
-const { bandFor, clampMerit, BASE_MERIT, ACTION_MESSAGES } = require('./Merit');
+const {
+  bandFor,
+  clampMerit,
+  BASE_MERIT,
+  ACTION_MESSAGES,
+  actionAllowed,
+  warningDurationDays,
+} = require('./Merit');
 
 const BLOCKING_CODES = {
   banned: 'ACCOUNT_BANNED',
@@ -146,6 +153,22 @@ async function listActiveViolations(accountId) {
   }));
 }
 
+async function expireElapsedWarnings(accountId) {
+  const { rowCount } = await pool.query(
+    `
+    UPDATE violations
+    SET status = 'expired'
+    WHERE account_id = $1
+      AND deleted_at IS NULL
+      AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
+      AND expires_at IS NOT NULL
+      AND expires_at <= NOW()
+    `,
+    [accountId]
+  );
+  return rowCount > 0;
+}
+
 async function liftExpiredSuspension(accountId) {
   const { rowCount } = await pool.query(
     `
@@ -167,13 +190,22 @@ async function liftExpiredSuspension(accountId) {
   return rowCount > 0;
 }
 
-function warningExpiry({ duration, days, expiresAt, endsAt, points } = {}) {
-  const mode = String(duration || 'temporary').toLowerCase();
-  if (mode === 'permanent') return null;
-  return sanctionEndsAt(
-    { duration: 'temporary', endsAt: endsAt || expiresAt, days: days ?? (Math.max(1, Number(points) || 1) * 30) },
-    'temporary'
-  );
+function warningExpiry({ days, expiresAt, endsAt, points } = {}) {
+  const maxDays = warningDurationDays(points);
+  const cap = new Date(Date.now() + maxDays * 24 * 60 * 60 * 1000);
+  const requestedAt = endsAt || expiresAt;
+  if (requestedAt) {
+    const requested = new Date(requestedAt);
+    if (!Number.isNaN(requested.getTime()) && requested.getTime() > Date.now() && requested.getTime() <= cap.getTime()) {
+      return requested;
+    }
+  }
+  const requestedDays = Number(days);
+  if (Number.isFinite(requestedDays) && requestedDays > 0) {
+    const cappedDays = Math.min(Math.floor(requestedDays), maxDays);
+    return new Date(Date.now() + Math.max(1, cappedDays) * 24 * 60 * 60 * 1000);
+  }
+  return cap;
 }
 
 async function activeForumTimeout(accountId) {
@@ -231,12 +263,13 @@ async function getAccountAccess(accountId) {
 
   try {
     const lifted = await liftExpiredSuspension(accountId);
-    if (lifted) {
-      const { scheduleMeritRecompute } = require('../services/MeritServices');
-      scheduleMeritRecompute(accountId);
+    const warningsLapsed = await expireElapsedWarnings(accountId);
+    if (lifted || warningsLapsed) {
+      const { recomputeAccountMerit } = require('../services/MeritServices');
+      await recomputeAccountMerit(accountId);
     }
   } catch (err) {
-    console.warn('Could not lift an expired suspension:', err.message);
+    console.warn('Could not lift an expired suspension or warning:', err.message);
   }
 
   const account = await pool.query(
@@ -702,7 +735,8 @@ function rejectForumTimeout(req, res) {
     });
     return true;
   }
-  if (req.accountAccess?.meritFrozen) {
+  const meritBand = req.accountAccess?.meritBand;
+  if (meritBand && !actionAllowed('forum_write', meritBand)) {
     res.status(403).json({
       success: false,
       code: BLOCKING_CODES.meritFrozen,

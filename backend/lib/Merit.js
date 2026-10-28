@@ -6,12 +6,10 @@ const COMPLETION_CAP = 20;
 const REVIEW_CAP = 15;
 const AGE_CAP = 4;
 const AGE_DAYS_PER_POINT = 60;
-const TIMEOUT_HIT = 5;
-const SUSPEND_HIT = 15;
-const BAN_HIT = 25;
-const DISPUTE_HIT = 15;
-const WARNING_HIT_PER_POINT = 8;
-const MAX_WARNING_POINTS = 3;
+const WARNING_HIT_PER_POINT = 2;
+const MIN_WARNING_POINTS = 1;
+const MAX_WARNING_POINTS = 10;
+const WARNING_DURATION_DAYS = [3, 5, 7, 10, 14, 21, 30, 45, 60, 90];
 const RESTRICTED_PROPOSAL_DAILY_CAP = 3;
 
 const BANDS = [
@@ -27,12 +25,14 @@ const ACTION_ALLOW = {
   create_urgent_job: { frozen: false, restricted: false, watch: false, established: true, trusted: true },
   create_gig: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
   publish_asset: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
+  asset_comment: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
   proposal: { frozen: false, restricted: true, watch: true, established: true, trusted: true },
-  forum_write: { frozen: false, restricted: true, watch: true, established: true, trusted: true },
+  forum_write: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
   new_dm: { frozen: false, restricted: true, watch: true, established: true, trusted: true },
   cashout: { frozen: false, restricted: true, watch: true, established: true, trusted: true },
   create_team: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
   join_team: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
+  create_shared_project: { frozen: false, restricted: false, watch: true, established: true, trusted: true },
 };
 
 const ACTION_MESSAGES = {
@@ -40,13 +40,15 @@ const ACTION_MESSAGES = {
   create_urgent_job: 'Urgent job posts need Established merit (50+).',
   create_gig: 'Your Platform Merit is too low to create a new gig.',
   publish_asset: 'Your Platform Merit is too low to publish a marketplace listing.',
+  asset_comment: 'Your Platform Merit is too low to comment on marketplace listings.',
   proposal: 'Frozen accounts cannot send job proposals.',
   proposal_cap: `Restricted accounts can send ${RESTRICTED_PROPOSAL_DAILY_CAP} job proposals per day.`,
-  forum_write: 'Frozen accounts can read the forums but cannot post, comment, or react.',
+  forum_write: 'Your Platform Merit is too low to post in the forums. You can still read.',
   new_dm: 'Frozen accounts cannot start new messages. Existing job, gig, and contract threads stay open.',
   cashout: 'Cashout is blocked until Platform Merit is 20 or higher. Your balance is not seized.',
   create_team: 'Your Platform Merit is too low to create a team.',
   join_team: 'Your Platform Merit is too low to join a new team. Teams you already belong to stay open.',
+  create_shared_project: 'Your Platform Merit is too low to start a new shared editor project. Personal projects and live team work stay open.',
 };
 
 function clampMerit(value) {
@@ -60,9 +62,18 @@ function bandFor(score) {
   return BANDS.find((band) => n >= band.min && n <= band.max) || BANDS[3];
 }
 
+function clampWarningPoints(points) {
+  const n = Math.round(Number(points));
+  if (!Number.isFinite(n)) return MIN_WARNING_POINTS;
+  return Math.max(MIN_WARNING_POINTS, Math.min(MAX_WARNING_POINTS, n));
+}
+
+function warningDurationDays(points) {
+  return WARNING_DURATION_DAYS[clampWarningPoints(points) - 1];
+}
+
 function warningHit(points) {
-  const p = Math.max(1, Math.min(Number(points) || 1, MAX_WARNING_POINTS));
-  return p * WARNING_HIT_PER_POINT;
+  return clampWarningPoints(points) * WARNING_HIT_PER_POINT;
 }
 
 function completionPoints(count) {
@@ -100,10 +111,6 @@ function computeMeritScore(facts = {}) {
   if (facts.verified) score += IDENTITY_POINTS;
   score += agePoints(facts.createdAt);
   score -= Number(facts.warningHits || 0);
-  if (facts.timeoutActive) score -= TIMEOUT_HIT;
-  if (facts.suspended) score -= SUSPEND_HIT;
-  if (facts.banned) score -= BAN_HIT;
-  score -= Number(facts.disputeHits || 0);
   return clampMerit(score);
 }
 
@@ -123,10 +130,16 @@ function meritError(message, code = 'MERIT_RESTRICTED') {
 module.exports = {
   BASE_MERIT,
   BANDS,
+  MIN_WARNING_POINTS,
+  MAX_WARNING_POINTS,
+  WARNING_HIT_PER_POINT,
+  WARNING_DURATION_DAYS,
   RESTRICTED_PROPOSAL_DAILY_CAP,
   ACTION_MESSAGES,
   clampMerit,
   bandFor,
+  clampWarningPoints,
+  warningDurationDays,
   warningHit,
   completionPoints,
   reviewPoints,

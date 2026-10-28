@@ -191,6 +191,7 @@ async function postAdminAccountWarn(req, res) {
     const data = await warnAccount(
       accountId,
       {
+        warningId: req.body?.warningId || req.body?.warning_id,
         type: req.body?.type || req.body?.title,
         reason: req.body?.reason,
         points: req.body?.points,

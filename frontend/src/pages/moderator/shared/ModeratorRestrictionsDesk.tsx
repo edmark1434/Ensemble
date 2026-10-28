@@ -4,6 +4,7 @@ import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
 import { SanctionScheduleFields, type SanctionTiming } from '@/pages/admin/userTeam/components/SanctionSchedule';
+import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
 import { getUserTeamCapabilities, type UserTeamVariant } from '@/pages/admin/userTeam/userTeamCapabilities';
 import { accentText, titleCaseWords, type Accent } from './ui';
 
@@ -440,8 +441,7 @@ export default function ModeratorRestrictionsDesk({
   const [heldScope, setHeldScope] = useState<HeldScope>('all');
   const [workMode, setWorkMode] = useState<WorkMode>('warning');
   const [selected, setSelected] = useState<DeskAccount | null>(null);
-  const [warnForm, setWarnForm] = useState({ type: 'Community warning', reason: '', points: '1' });
-  const [warnTiming, setWarnTiming] = useState<SanctionTiming>({ duration: 'temporary', endsAt: null, summary: '' });
+  const [warnForm, setWarnForm] = useState({ warningId: 'harassment', reason: '' });
   const [sanctionTiming, setSanctionTiming] = useState<SanctionTiming>({ duration: 'temporary', endsAt: null, summary: '' });
   const [sanctionReason, setSanctionReason] = useState('');
   const [submittingWarn, setSubmittingWarn] = useState(false);
@@ -481,7 +481,7 @@ export default function ModeratorRestrictionsDesk({
     const nextId = selected?.accountId || null;
     if (previousAccountId.current && previousAccountId.current !== nextId) {
       setSanctionReason('');
-      setWarnForm((prev) => ({ ...prev, reason: '', points: '1' }));
+      setWarnForm((prev) => ({ ...prev, reason: '' }));
     }
     previousAccountId.current = nextId;
   }, [selected?.accountId]);
@@ -610,12 +610,9 @@ export default function ModeratorRestrictionsDesk({
 
   async function submitWarning(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !warnForm.type.trim() || !warnForm.reason.trim()) {
+    if (!selected || !warnForm.warningId || !warnForm.reason.trim()) {
       if (!warnForm.reason.trim()) showErrorToast('A reason is required');
-      return;
-    }
-    if (warnTiming.duration === 'temporary' && !warnTiming.endsAt) {
-      showErrorToast(warnTiming.summary || 'Choose how long this warning lasts');
+      if (!warnForm.warningId) showErrorToast('Pick a predefined warning');
       return;
     }
     setSubmittingWarn(true);
@@ -623,14 +620,11 @@ export default function ModeratorRestrictionsDesk({
     try {
       const res = await api.post(`${endpointBase}/violations`, {
         accountId: selected.accountId,
-        type: warnForm.type.trim(),
+        warningId: warnForm.warningId,
         reason: warnForm.reason.trim(),
-        points: Number(warnForm.points) || 1,
-        duration: warnTiming.duration,
-        endsAt: warnTiming.endsAt,
       });
       setData(res.data?.data || null);
-      setWarnForm((prev) => ({ ...prev, reason: '', points: '1' }));
+      setWarnForm((prev) => ({ ...prev, reason: '' }));
       showSuccessToast('Warning issued');
     } catch (err: unknown) {
       const message = apiMessage(err, 'Failed to issue violation');
@@ -1031,42 +1025,19 @@ export default function ModeratorRestrictionsDesk({
                 <div className={workMode === 'warning' ? 'mt-4' : 'hidden'}>
                   <form onSubmit={submitWarning} className="space-y-3">
                     <p className="text-xs leading-relaxed text-zinc-500">
-                      Points stay on the record until this warning expires or is rescinded.
+                      Pick a predefined warning. Points and duration are locked to that row until it expires or is rescinded.
                     </p>
-                    <Field label="Type">
-                      <input
-                        value={warnForm.type}
-                        onChange={(event) => setWarnForm((prev) => ({ ...prev, type: event.target.value }))}
-                        className={FIELD_CLASS}
-                        required
-                      />
-                    </Field>
-                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_96px]">
-                      <Field label="Reason">
-                        <textarea
-                          value={warnForm.reason}
-                          onChange={(event) => setWarnForm((prev) => ({ ...prev, reason: event.target.value }))}
-                          rows={3}
-                          className={FIELD_CLASS}
-                          placeholder="What happened"
-                          required
-                        />
-                      </Field>
-                      <Field label="Points">
-                        <input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={warnForm.points}
-                          onChange={(event) => setWarnForm((prev) => ({ ...prev, points: event.target.value }))}
-                          className={FIELD_CLASS}
-                        />
-                      </Field>
-                    </div>
-                    <SanctionScheduleFields key={`${selected.accountId}-warn`} defaultDuration="temporary" onChange={setWarnTiming} />
+                    <WarningPresetFields
+                      desk={variant}
+                      warningId={warnForm.warningId}
+                      reason={warnForm.reason}
+                      onWarningId={(id) => setWarnForm((prev) => ({ ...prev, warningId: id }))}
+                      onReason={(reason) => setWarnForm((prev) => ({ ...prev, reason }))}
+                      fieldClass={FIELD_CLASS}
+                    />
                     <button
                       type="submit"
-                      disabled={submittingWarn || !warnForm.reason.trim()}
+                      disabled={submittingWarn || !warnForm.reason.trim() || !warnForm.warningId}
                       className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium disabled:opacity-50 ${ACCENT_BTN[accent]}`}
                     >
                       {submittingWarn ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

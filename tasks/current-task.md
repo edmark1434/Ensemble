@@ -1,13 +1,13 @@
-# Active Task: Platform Merit Engine
+# Active Task: Temporary warnings + balanced band limits
 
 ## Implementation Objective
 
-New users start at merit 50 (Established). The score recomputes from real work, reviews, verification, age, and punishment hits. Crossing a band throttles products automatically. Low merit never auto-suspends, times out, or bans.
+Staff/admin warnings are always temporary. Points 1–10 set both the merit hit (×2) and duration (3–90 days). 5 points is a minor 14-day Watch slap. Low merit automatically limits forums, marketplace, jobs/gigs, and new shared editor projects. Live work stays open.
 
 ## Acceptance Criteria
 
-- [x] Join score is 50 (Established). Missing score displays 50, not 100.
-- [x] Bands: Trusted 75–100, Established 50–74, Watch 35–49, Restricted 20–34, Frozen 0–19.
-- [x] Frozen / Restricted / Watch are automatic product limits, not standing punishments.
-- [x] Recompute on close, review, verify, warn, timeout, suspend, ban, pardon, rescind.
-- [x] Backend guards on jobs, gigs, proposals, assets, forums, new DMs, teams, cashout.
+- [x] Warnings cannot be permanent. Duration follows the point ladder; staff may shorten, never lengthen past the cap.
+- [x] 1pt = −2 / 3 days; 5pt = −10 / 14 days; 10pt = −20 / 90 days.
+- [x] Watch = minor; Restricted = forum + listing + comment + new shared editor lock; Frozen = those plus proposals, new DMs, cashout.
+- [x] Expired warnings lapse on next session and recompute merit.
+- [x] Auto-suspend at 20+ active warning points (7 days), not at 3 tiny warnings.

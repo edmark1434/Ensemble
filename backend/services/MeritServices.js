@@ -77,10 +77,6 @@ async function recomputeAccountMerit(accountId, { force = false } = {}) {
     verified: Boolean(facts.verified),
     createdAt: facts.created_at,
     warningHits: facts.warning_hits,
-    timeoutActive: Boolean(facts.timeout_active),
-    suspended: status === 'suspended',
-    banned,
-    disputeHits: facts.dispute_hits,
   });
   await updateMeritScore(accountId, score);
   const nextBand = bandFor(score);

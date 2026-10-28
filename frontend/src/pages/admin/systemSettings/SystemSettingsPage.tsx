@@ -489,11 +489,11 @@ export default function SystemSettingsPage() {
             <Toggle label="Auto-escalate high priority" checked={moderation.autoEscalateHighPriority} onChange={(v) => setModeration({ ...moderation, autoEscalateHighPriority: v })} />
             <Toggle label="Auto-create ticket from report" checked={moderation.reportToTicketAutoCreate} onChange={(v) => setModeration({ ...moderation, reportToTicketAutoCreate: v })} />
             <NumberField
-              label="Max warnings before suspend"
+              label="Active warning points before auto-suspend"
               value={moderation.maxWarningsBeforeSuspend}
               onChange={(v) => setModeration({ ...moderation, maxWarningsBeforeSuspend: v })}
-              min={1}
-              max={10}
+              min={10}
+              max={50}
             />
           </SectionCard>
           </div>
