@@ -635,8 +635,54 @@ export const SentOrderDetail = () => {
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-4 sm:p-5 shadow-2xs">
 
           <OrderLifecycleTracker currentStatus={order.status || "Pending"} />
-
         </div>
+
+        {/* Queue Full Indicator Banner for Pending Orders */}
+        {order.status === "Pending" && Number(order.max_slots || 0) > 0 && Number(order.active_orders_count || 0) >= Number(order.max_slots || 0) && (
+          <div className="rounded-2xl border border-amber-300 dark:border-amber-500/30 bg-amber-50/90 dark:bg-amber-500/10 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-200">
+                    Specialist Queue Currently Full ({order.active_orders_count}/{order.max_slots} Active Contracts)
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 dark:bg-amber-500/30 text-amber-900 dark:text-amber-300">
+                    Waiting in Line
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/80 leading-relaxed max-w-2xl">
+                  The specialist has reached their concurrent order capacity. Your order is retained safely in their queue—as soon as an active contract is completed, a slot will open up automatically. You may wait for an available slot or withdraw your request anytime without penalty.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowWithdrawConfirm(true)}
+              className="px-4 py-2 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-white dark:bg-zinc-900 text-amber-900 dark:text-amber-200 hover:bg-amber-100/50 dark:hover:bg-zinc-800 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer"
+            >
+              <XCircle className="w-4 h-4 text-red-500" />
+              <span>Withdraw Request</span>
+            </button>
+          </div>
+        )}
+
+        {/* Service Provider Closed Notice for Pending Orders */}
+        {order.status === "Pending" && (order.gig_status?.toLowerCase() === "closed") && (
+          <div className="rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-800/40 p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <h4 className="text-xs sm:text-sm font-bold text-zinc-800 dark:text-zinc-200">
+                Service Provider Stopped Public Intake
+              </h4>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                The specialist has temporarily closed public intake for this service. Your pending request remains safely queued, but you can withdraw anytime if you prefer not to wait.
+              </p>
+            </div>
+          </div>
+        )}
 
 
 

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers, Maximize2, PackagePlus } from "lucide-react";
+import { Clock, Users, Star, PauseCircle, XCircle, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers, Maximize2, PackagePlus, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import type { Gig } from "../gig_datasets";
@@ -10,6 +10,7 @@ import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -26,6 +27,28 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
+  const [statusOverride, setStatusOverride] = useState<string | null>(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+
+  const effectiveStatus = statusOverride || selectedGig?.status || "Open";
+  const isClosed = effectiveStatus.toLowerCase() === "closed" || selectedGig?.raw_status === "closed";
+  const isPaused = effectiveStatus.toLowerCase() === "paused" || (!isClosed && Number(selectedGig?.slots || 0) > 0 && Number(selectedGig?.active_orders_count || 0) >= Number(selectedGig?.slots || 0));
+
+  const handleToggleStatus = async () => {
+    if (!selectedGig) return;
+    setIsTogglingStatus(true);
+    const nextStatus = isClosed ? "active" : "closed";
+    try {
+      await api.patch(`/api/gigs/${selectedGig.id}/status`, { status: nextStatus });
+      setStatusOverride(nextStatus === "closed" ? "Closed" : "Open");
+      showSuccessToast(nextStatus === "closed" ? "Service closed. Public intake is paused." : "Service reopened successfully!");
+    } catch (err: any) {
+      console.error("Failed to toggle status:", err);
+      showErrorToast(err?.response?.data?.message || "Failed to update service status.");
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  };
 
   const activeTier = selectedGig?.tiers[activeTierIdx];
   const rankInfo = selectedGig ? computeGigRankingBreakdown(selectedGig) : null;
@@ -166,18 +189,28 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               <div>
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span
-                      className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        selectedGig.status?.toLowerCase() === "open" || !selectedGig.status
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
-                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
-                      }`}
-                    >
-                      <span className="relative z-10">{selectedGig.status?.toLowerCase() === "close" ? "Closed" : (selectedGig.status || "Open")}</span>
-                      {(selectedGig.status?.toLowerCase() === "open" || !selectedGig.status) && (
-                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
-                      )}
-                    </span>
+                    {(() => {
+                      if (isClosed) {
+                        return (
+                          <span className="relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
+                            Closed
+                          </span>
+                        );
+                      }
+                      if (isPaused) {
+                        return (
+                          <span className="relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">
+                            Paused (Queue Full)
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
+                          <span className="relative z-10">Open</span>
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                        </span>
+                      );
+                    })()}
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
                     </span>
@@ -463,9 +496,22 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                           </div>
                           {idx < selectedGig.milestones.length - 1 && <div className="w-[1.5px] h-full bg-gray-200 dark:bg-white/10 mt-1" />}
                         </div>
-                        <div className="pb-2">
+                        <div className="pb-2 flex-1 min-w-0">
                           <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{m.name}</h4>
                           <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-0.5">{m.description}</p>
+                          {Array.isArray(m.tasks) && m.tasks.length > 0 && (
+                            <div className="mt-2 space-y-1.5 pl-2.5 border-l-2 border-blue-500/30">
+                              {m.tasks.map((taskItem, tIdx) => {
+                                const taskTitle = typeof taskItem === "string" ? taskItem : (taskItem.title || taskItem.task || `Task ${tIdx + 1}`);
+                                return (
+                                  <div key={tIdx} className="flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-zinc-300">
+                                    <CheckCircle2 className="h-3 w-3 text-blue-500 shrink-0" />
+                                    <span>{taskTitle}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -594,7 +640,21 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     onClick={() => navigate('/gigs/orders')}
                     className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
                   >
-                    <ShoppingCart className="h-4 w-4 text-blue-400" /> Manage Orders
+                    <ShoppingCart className="h-4 w-4 text-blue-400" /> Orders
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleToggleStatus}
+                    disabled={isTogglingStatus}
+                    title={isClosed ? "Reopen public intake" : "Pause/Close public intake"}
+                    className={`px-3 py-3 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                      isClosed
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                        : "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/20"
+                    }`}
+                  >
+                    {isClosed ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
+                    <span>{isClosed ? "Reopen" : "Close"}</span>
                   </button>
                 </div>
               ) : selectedGig.isOwnGig ? (
@@ -627,20 +687,47 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     >
                       View Full
                     </button>
-                    <button
-                          data-tour="gig-detail-order-button"
-                          onClick={() => {
-                            if (isGuestMode) return setIsModalOpen(true);
-                            void continueIfAccountVerified(
-                              () => handleOpenCheckout(),
-                              false,
-                              "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
-                            );
-                          }}
+                    {selectedGig.hasPendingOrder ? (
+                      <button
+                        data-tour="gig-detail-order-button"
+                        onClick={handleOpenCheckout}
                         className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
                       >
-                        {isGuestMode ? "Login to Order" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`)}
+                        View My Order
                       </button>
+                    ) : isClosed ? (
+                      <button
+                        disabled
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 cursor-not-allowed border border-zinc-300 dark:border-zinc-700"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>Service Currently Closed</span>
+                      </button>
+                    ) : isPaused ? (
+                      <button
+                        disabled
+                        title="Specialist queue is at maximum concurrent capacity. Intake will resume when an active contract completes."
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 cursor-not-allowed border border-amber-300 dark:border-amber-500/40"
+                      >
+                        <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <span>Queue Full ({selectedGig.active_orders_count || selectedGig.slots}/{selectedGig.slots} Active)</span>
+                      </button>
+                    ) : (
+                      <button
+                        data-tour="gig-detail-order-button"
+                        onClick={() => {
+                          if (isGuestMode) return setIsModalOpen(true);
+                          void continueIfAccountVerified(
+                            () => handleOpenCheckout(),
+                            false,
+                            "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
+                          );
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
+                      >
+                        {isGuestMode ? "Login to Order" : `Order ${activeTier?.tierName || "Package"}`}
+                      </button>
+                    )}
                   </div>
                 </>
               )}

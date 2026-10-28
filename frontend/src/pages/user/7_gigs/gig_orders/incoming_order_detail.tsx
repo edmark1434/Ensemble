@@ -569,8 +569,29 @@ export const IncomingOrderDetail = () => {
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-4 sm:p-5 shadow-2xs">
 
           <OrderLifecycleTracker currentStatus={order.status || "Pending"} />
-
         </div>
+
+        {/* Queue Full Indicator Banner for Specialist */}
+        {order.status === "Pending" && Number(order.max_slots || 0) > 0 && Number(order.active_orders_count || 0) >= Number(order.max_slots || 0) && (
+          <div className="rounded-2xl border border-amber-300 dark:border-amber-500/30 bg-amber-50/90 dark:bg-amber-500/10 p-4 sm:p-5 flex items-start gap-3 shadow-2xs">
+            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-200">
+                  Active Concurrent Capacity Reached ({order.active_orders_count}/{order.max_slots} Active Contracts)
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 dark:bg-amber-500/30 text-amber-900 dark:text-amber-300">
+                  Intake Paused
+                </span>
+              </div>
+              <p className="text-xs text-amber-800/90 dark:text-amber-300/80 leading-relaxed max-w-2xl">
+                You have reached your maximum concurrent order capacity. Complete, deliver, or resolve an active contract before accepting more orders. This pending request is kept safe in your queue so you can review and accept it as soon as a slot opens.
+              </p>
+            </div>
+          </div>
+        )}
 
 
 
@@ -1594,19 +1615,29 @@ export const IncomingOrderDetail = () => {
 
                 </button>
 
-                <button
-
-                  onClick={() => setIsAcceptModalOpen(true)}
-
-                  className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-lg shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer"
-
-                >
-
-                  <CheckCircle className="w-4 h-4" />
-
-                  <span>Review & Accept</span>
-
-                </button>
+{(() => {
+                  const isQueueFull = Number(order.max_slots || 0) > 0 && Number(order.active_orders_count || 0) >= Number(order.max_slots || 0);
+                  return (
+                    <button
+                      onClick={() => {
+                        if (isQueueFull) {
+                          return showErrorToast(`Cannot accept order: your concurrent capacity is full (${order.active_orders_count}/${order.max_slots} active contracts). Complete an active contract first.`);
+                        }
+                        setIsAcceptModalOpen(true);
+                      }}
+                      disabled={isQueueFull}
+                      title={isQueueFull ? `Queue Full (${order.active_orders_count}/${order.max_slots} slots active)` : undefined}
+                      className={`px-6 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                        isQueueFull
+                          ? "bg-zinc-400 dark:bg-zinc-700 cursor-not-allowed opacity-70 text-white shadow-none"
+                          : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 cursor-pointer"
+                      }`}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      <span>{isQueueFull ? `Queue Full (${order.active_orders_count}/${order.max_slots})` : "Review & Accept"}</span>
+                    </button>
+                  );
+                })()}
 
               </>
 
