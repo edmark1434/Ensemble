@@ -286,11 +286,15 @@ async function createSupportTicket(input, session = null) {
   if (!requesterAccountId) throw new Error('Requester account is required');
 
   const description = input?.description ? String(input.description).trim() : '';
-  let formAnswers = null;
+  let formAnswers = [];
   if (input.fields !== undefined) {
     const { sanitizeTicketFormValues } = require('../lib/TicketFormFields');
     formAnswers = sanitizeTicketFormValues(type, input.fields);
   }
+  if (formAnswers.length) {
+    formAnswers = await resolveFormAnswers(requesterAccountId, type, formAnswers);
+  }
+  const submissionContext = await buildSubmissionContext(requesterAccountId, input.context);
   const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
@@ -301,11 +305,13 @@ async function createSupportTicket(input, session = null) {
     INSERT INTO tickets (
       ticket_number, reason, type, priority, status,
       account_id, handled_by_staff_id,
-      message_count, last_message_at
+      message_count, last_message_at,
+      form_answers, submission_context
     ) VALUES (
       $1, $2, $3, $4, $5,
       $6, $7,
-      0, NULL
+      0, NULL,
+      $8::jsonb, $9::jsonb
     )
     RETURNING ticket_id
     `,
@@ -317,24 +323,12 @@ async function createSupportTicket(input, session = null) {
       status,
       requesterAccountId,
       handledBy,
+      JSON.stringify(formAnswers),
+      JSON.stringify(submissionContext),
     ]
   );
 
   const ticketId = insert.rows[0].ticket_id;
-
-  const answers = [...(formAnswers || [])];
-  if (requesterAccountId) {
-    answers.push(...(await buildTicketContextRows(requesterAccountId, input.context)));
-  }
-  for (const answer of answers) {
-    await pool.query(
-      `INSERT INTO ticket_form_values (ticket_id, field_key, field_label, value)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (ticket_id, field_key) DO UPDATE
-         SET field_label = EXCLUDED.field_label, value = EXCLUDED.value`,
-      [ticketId, answer.field_key, answer.field_label, answer.value]
-    );
-  }
 
   try {
     const { dispatchPlatformNotification } = require('../services/PlatformAlertServices');
@@ -1415,20 +1409,10 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   });
   const role = staff?.role || staffSession?.role || null;
   const showPayments = Boolean(staffSession) && canViewTicketPayments(role, ticket.type);
-  const [timeline, articles, payments, formValueResult] = await Promise.all([
+  const [timeline, articles, payments] = await Promise.all([
     staffSession ? listTicketTimeline(ticketId, row.account_id, row.created_at) : Promise.resolve([]),
     listTicketArticles(ticket.type),
     showPayments ? listTicketPaymentEvidence(row.account_id) : Promise.resolve(null),
-    pool.query(
-      `SELECT field_key, field_label, value
-       FROM ticket_form_values
-       WHERE ticket_id = $1
-       ORDER BY ticket_form_value_id ASC`,
-      [ticketId]
-    ).catch((err) => {
-      if (err?.code === '42P01' || err?.code === '42703') return { rows: [] };
-      throw err;
-    }),
   ]);
 
   return {
@@ -1448,11 +1432,8 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     timeline,
     articles,
     payments,
-    formValues: formValueResult.rows.map((answer) => ({
-      key: answer.field_key,
-      label: answer.field_label,
-      value: answer.value,
-    })),
+    formValues: mapFormAnswers(row.form_answers),
+    submissionContext: mapSubmissionContext(row.submission_context),
     canAdjustCredits: Boolean(staffSession) && canAdjustTicketCredits(role, ticket.type),
     participants,
     involved,
@@ -4530,7 +4511,84 @@ async function safeTicketRows(sql, params) {
   }
 }
 
-async function buildTicketContextRows(accountId, clientContext) {
+function clipContext(value, max = 500) {
+  const text = value == null ? '' : String(value).trim();
+  if (!text) return '';
+  return text.slice(0, max);
+}
+
+function readJsonColumn(value, fallback) {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+}
+
+function mapFormAnswers(raw) {
+  const list = readJsonColumn(raw, []);
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const key = String(item.key || '').trim();
+    const value = item.value == null ? '' : String(item.value);
+    if (!key || !value) return [];
+    const answer = {
+      key,
+      label: String(item.label || key),
+      value,
+    };
+    if (item.id) answer.id = String(item.id);
+    return [answer];
+  });
+}
+
+function mapSubmissionContext(raw) {
+  const source = readJsonColumn(raw, {});
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+  const context = {};
+  for (const key of ['accountId', 'username', 'email', 'plan', 'submittedAt', 'browser', 'device', 'page']) {
+    const value = clipContext(source[key]);
+    if (value) context[key] = value;
+  }
+  return Object.keys(context).length ? context : null;
+}
+
+const PICKER_LISTS = {
+  project: 'projects',
+  listing: 'listings',
+  order: 'orders',
+  contract: 'contracts',
+  job: 'jobs',
+};
+
+async function resolveFormAnswers(accountId, type, rows) {
+  const { fieldsForType } = require('../lib/TicketFormFields');
+  const definitions = new Map(fieldsForType(type).map((field) => [field.key, field]));
+  const needsPicker = rows.some((row) => definitions.get(row.key)?.picker);
+  const pickers = needsPicker && accountId ? await getTicketPickers(accountId) : null;
+  return rows.map((row) => {
+    const field = definitions.get(row.key);
+    const listName = field?.picker ? PICKER_LISTS[field.picker] : null;
+    if (!listName || !pickers) return row;
+    const options = pickers[listName] || [];
+    const match = options.find((option) => option.id === row.value)
+      || options.find((option) => option.label === row.value);
+    if (match) {
+      return { ...row, value: String(match.label || match.id).slice(0, 2000), id: match.id };
+    }
+    if (TICKET_ACCOUNT_UUID.test(row.value)) {
+      throw ticketError(`Choose a ${field.label.toLowerCase()} from your account`, 400);
+    }
+    return row;
+  });
+}
+
+async function buildSubmissionContext(accountId, clientContext) {
   const profile = await pool.query(
     `
     SELECT a.handle, u.email_address, COALESCE(p.name, 'Free') AS subscription_plan
@@ -4549,23 +4607,20 @@ async function buildTicketContextRows(accountId, clientContext) {
     [accountId]
   ).catch(() => ({ rows: [] }));
   const row = profile.rows[0] || {};
-  const pairs = [
-    ['context_account_id', 'Member ID', String(accountId)],
-    ['context_username', 'Username', row.handle || ''],
-    ['context_email', 'Email', row.email_address || ''],
-    ['context_plan', 'Plan', row.subscription_plan || 'Free'],
-    ['context_submitted_at', 'Submitted at', new Date().toISOString()],
-    ['context_browser', 'Browser', clientContext?.browser],
-    ['context_device', 'Device', clientContext?.device],
-    ['context_page', 'Page they came from', clientContext?.page],
-  ];
-  return pairs
-    .filter(([, , value]) => value != null && String(value).trim())
-    .map(([field_key, field_label, value]) => ({
-      field_key,
-      field_label,
-      value: String(value).trim().slice(0, 500),
-    }));
+  const context = {};
+  const assign = (key, value, max = 500) => {
+    const text = clipContext(value, max);
+    if (text) context[key] = text;
+  };
+  assign('accountId', accountId, 80);
+  assign('username', row.handle);
+  assign('email', row.email_address);
+  assign('plan', row.subscription_plan || 'Free', 80);
+  assign('submittedAt', new Date().toISOString(), 40);
+  assign('browser', clientContext?.browser);
+  assign('device', clientContext?.device);
+  assign('page', clientContext?.page);
+  return context;
 }
 
 async function findAccountByEmailOrUsername(identifier) {

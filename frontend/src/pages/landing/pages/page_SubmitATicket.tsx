@@ -440,7 +440,7 @@ const PageSubmitATicket: React.FC = () => {
                       onChange={(e) => setValue(e.target.value)}
                       style={{ ...fieldStyle, resize: "vertical" }}
                     />
-                  ) : field.kind === "select" || pickerOptions.length > 0 ? (
+                  ) : pickerOptions.length > 0 ? (
                     <select
                       required={required}
                       value={fieldValues[field.key] || ""}
@@ -448,7 +448,19 @@ const PageSubmitATicket: React.FC = () => {
                       style={fieldStyle}
                     >
                       <option value="">Choose one</option>
-                      {(pickerOptions.length ? pickerOptions.map((option) => option.label) : field.options || []).map((option) => (
+                      {pickerOptions.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                  ) : field.kind === "select" ? (
+                    <select
+                      required={required}
+                      value={fieldValues[field.key] || ""}
+                      onChange={(e) => setValue(e.target.value)}
+                      style={fieldStyle}
+                    >
+                      <option value="">Choose one</option>
+                      {(field.options || []).map((option) => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>

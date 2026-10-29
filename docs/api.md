@@ -103,7 +103,7 @@
 
 ## Support tickets
 
-- Members file their own tickets with `POST /api/users/tickets`. The requester is always the signed-in account.
+- Members file their own tickets with `POST /api/users/tickets`. The requester is always the signed-in account. `fields` holds that type's answers. A project, listing, order, contract, or job picker sends the record id; the server stores the name beside it and rejects an id the account does not own. `context` (`browser`, `device`, `page`) is stored with the account snapshot on the ticket. Ticket detail returns `formValues` and `submissionContext` separately.
 - Staff open a ticket for someone with `POST /api/staff/tickets`. Admin can use the same body on `POST /api/admin/tickets`. Body: `{ requesterAccountId, subject, type, description, priority?, assignToMe? }`. `requesterAccountId` is required and must be a live member or staff account. Description is stored as the opening staff message. `assignToMe` only succeeds when that staff role can handle the ticket type; otherwise the ticket stays unassigned in the type's queue.
 - Staff search accounts with `GET /api/staff/tickets/people?q=`.
 

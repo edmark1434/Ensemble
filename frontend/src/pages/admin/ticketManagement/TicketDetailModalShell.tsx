@@ -39,6 +39,21 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
+function submissionContextEntries(context?: TicketDetail['submissionContext']) {
+  if (!context) return [];
+  const submittedAt = context.submittedAt ? formatDateTime(context.submittedAt) : '';
+  return [
+    ['Member ID', context.accountId],
+    ['Username', context.username],
+    ['Email', context.email],
+    ['Plan', context.plan],
+    ['Submitted at', submittedAt === '—' ? '' : submittedAt],
+    ['Browser', context.browser],
+    ['Device', context.device],
+    ['Page they came from', context.page],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+}
+
 function shortId(value: string | number | null | undefined) {
   if (value == null || value === '') return '—';
   const s = String(value);
@@ -1073,6 +1088,7 @@ export default function TicketDetailModalShell({
     return { staff, users };
   }, [detail?.participants, t?.assignee]);
   const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
+  const contextEntries = submissionContextEntries(detail?.submissionContext);
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
 
   return (
@@ -1490,6 +1506,18 @@ export default function TicketDetailModalShell({
                         <div key={answer.key} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
                           <p className="text-[11px] text-zinc-500">{answer.label}</p>
                           <p className="mt-0.5 text-sm text-white">{answer.value}</p>
+                          {answer.id ? <p className="mt-0.5 break-all text-[11px] text-zinc-600">{answer.id}</p> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {contextEntries.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Submitted with</p>
+                      {contextEntries.map(([label, value]) => (
+                        <div key={label} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
+                          <p className="text-[11px] text-zinc-500">{label}</p>
+                          <p className="mt-0.5 break-all text-sm text-white">{value}</p>
                         </div>
                       ))}
                     </div>

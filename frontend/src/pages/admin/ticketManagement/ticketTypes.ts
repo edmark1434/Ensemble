@@ -468,7 +468,17 @@ export type TicketDetail = {
   articles?: TicketArticle[];
   payments?: TicketPaymentEvidence | null;
   canAdjustCredits?: boolean;
-  formValues?: { key: string; label: string; value: string }[];
+  formValues?: { key: string; label: string; value: string; id?: string }[];
+  submissionContext?: {
+    accountId?: string;
+    username?: string;
+    email?: string;
+    plan?: string;
+    submittedAt?: string;
+    browser?: string;
+    device?: string;
+    page?: string;
+  } | null;
   participants?: TicketPerson[];
   involved?: TicketPerson[];
   pendingInvites?: { accountId: string; name: string; handle?: string | null }[];

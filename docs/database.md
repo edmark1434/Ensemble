@@ -75,6 +75,12 @@
 - `reports.subject_snapshot` is JSON: `{ kind, title, body, href, extra }`. It is written at submit time so staff can still read the reported job, gig, asset, discussion, group, team, profile, or inbox message if the live row is later deleted. Inbox messages have `href: null`.
 - Migration `1826900000000_add-report-subject-snapshot` adds the column. Do not edit the original `reports` create-table migration.
 
+## Support ticket answers
+
+- `tickets.form_answers` is a JSON array of the questions that ticket type asked: `{ key, label, value, id? }`. `id` is set when the member picked one of their own projects, listings, orders, contracts, or jobs. The label is the wording shown at submit time.
+- `tickets.submission_context` is a JSON object recorded with the ticket: `accountId`, `username`, `email`, `plan`, `submittedAt`, `browser`, `device`, `page`. It is a snapshot, so later account changes do not rewrite it.
+- Migration `1827600000000_ticket-form-answers-json` copies `ticket_form_values` into those columns and drops the table. Do not edit `1822800000000_ticket-form-values`.
+
 ## Dispute enums
 
 - Live product types are **Contract** and **Transaction** only. `normalizeDisputeType` maps older labels (Gig, Job, Team → Contract; Marketplace, Forum, General, … → Transaction).

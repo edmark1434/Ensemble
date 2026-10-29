@@ -1,7 +1,7 @@
 /**
  * Extra questions on the member ticket form.
- * One ticket_form_values row per answer. Shared subject, description,
- * and files stay on the ticket and its chat.
+ * Answers are stored as a JSON list on the ticket. Shared subject,
+ * description, and files stay on the ticket and its chat.
  */
 
 const LOGGED_OUT_TICKET_TYPES = Object.freeze([
@@ -324,8 +324,8 @@ function sanitizeTicketFormValues(type, input) {
       throw new Error('Enter only the last 4 digits of the card');
     }
     rows.push({
-      field_key: field.key,
-      field_label: field.label,
+      key: field.key,
+      label: field.label,
       value: value.slice(0, 2000),
     });
   }

@@ -1,13 +1,12 @@
-# Active Task: Freeze contract dispute escrow and filer-only notes
+# Active Task: Store ticket answers on the ticket
 
 ## Implementation Objective
 
-When a contract/transaction dispute opens, freeze remaining escrow and let only the filer add information until staff make the case public.
+Keep each ticket type's answers in `tickets.form_answers`, and keep the submit-time account snapshot in `tickets.submission_context`.
 
 ## Acceptance Criteria
 
-- [x] Opening a contract dispute tags related credit transactions and stores remaining escrow on the dispute.
-- [x] Milestone release, refund, cancellation, and auto-approve cannot move frozen credits.
-- [x] Hidden disputes: only the initiator can send more information to staff.
-- [x] Public disputes: both parties can talk; other members cannot comment.
-- [x] Live types are Contract and Transaction only (`1827500000000_dispute-contract-transaction-types`).
+- [x] New tickets write both JSON columns in the same insert as the ticket.
+- [x] Existing `ticket_form_values` rows are copied, then the table is dropped.
+- [x] Picker answers store the member's record id and the name shown at submit time.
+- [x] Staff ticket detail shows answers and the submit snapshot separately.
