@@ -304,7 +304,7 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
             INSERT INTO credit_transactions
                 (type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id)
             VALUES
-                ('Escrow Release', $1, 'completed', $2, $3, 'contract_milestones', $4)
+                ('Escrow Release', $1, 'Completed', $2, $3, 'contract_milestones', $4)
             RETURNING credit_transaction_id
         `, [milestoneCredits, escrowWallet.wallet_id, accountWallet.wallet_id, milestoneId]);
 
@@ -553,7 +553,7 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
             INSERT INTO credit_transactions
                 (type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id)
             VALUES
-                ('Escrow Release', $1, 'completed', $2, $3, 'contract_milestones', $4)
+                ('Escrow Release', $1, 'Completed', $2, $3, 'contract_milestones', $4)
             RETURNING credit_transaction_id
         `, [milestoneCredits, freelancerEscrow.wallet_id, clientAccountWallet.wallet_id, milestoneId]);
 
@@ -769,7 +769,7 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
                 INSERT INTO credit_transactions
                     (type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id)
                 VALUES
-                    ('Escrow Release', $1, 'completed', $2, $3, 'contracts', $4)
+                    ('Escrow Release', $1, 'Completed', $2, $3, 'contracts', $4)
                 RETURNING credit_transaction_id
             `, [refundableCredits, freelancerEscrow.wallet_id, clientAccountWallet.wallet_id, contractId]);
             txId = txRes.rows[0].credit_transaction_id;
@@ -867,7 +867,7 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
         const txRes = await client.query(`
             INSERT INTO credit_transactions
                 (type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id)
-            VALUES ('Escrow Release', $1, 'completed', $2, $3, 'contract_milestones', $4)
+            VALUES ('Escrow Release', $1, 'Completed', $2, $3, 'contract_milestones', $4)
             RETURNING credit_transaction_id
         `, [milestoneCredits, escrowWallet.wallet_id, accountWallet.wallet_id, milestoneId]);
 

@@ -6,6 +6,7 @@ import {
   Inbox,
   LayoutGrid,
   Loader2,
+  Plus,
   RefreshCw,
   Search,
   Ticket,
@@ -21,6 +22,7 @@ import {
   VerticalBarChart,
 } from '../analytics/components/AnalyticsCharts';
 import TicketDetailModal from './TicketDetailModal';
+import CreateTicketForUserModal from './CreateTicketForUserModal';
 import TicketArticlesPanel from './TicketArticlesPanel';
 import TicketFiltersPanel from './TicketFiltersPanel';
 import {
@@ -108,6 +110,7 @@ export default function TicketManagementPage() {
   const [tab, setTab] = useState<TabId>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
+  const [creatingTicket, setCreatingTicket] = useState(false);
   const [ticketFilters, setTicketFilters] = useState<TicketFilterState>(DEFAULT_TICKET_FILTERS);
   const [myFilters, setMyFilters] = useState<TicketFilterState>({
     ...DEFAULT_TICKET_FILTERS,
@@ -265,6 +268,17 @@ export default function TicketManagementPage() {
           onUpdated={() => void load(true)}
         />
       )}
+      {creatingTicket && (
+        <CreateTicketForUserModal
+          accent="rose"
+          onClose={() => setCreatingTicket(false)}
+          onCreated={(ticketId) => {
+            setCreatingTicket(false);
+            setSelectedTicketId(ticketId);
+            void load(true);
+          }}
+        />
+      )}
 
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
         <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between md:px-8">
@@ -278,15 +292,25 @@ export default function TicketManagementPage() {
               {user?.username || 'admin'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            className="flex items-center gap-2 self-start rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start">
+            <button
+              type="button"
+              onClick={() => setCreatingTicket(true)}
+              className="flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400"
+            >
+              <Plus className="h-4 w-4" />
+              Create ticket
+            </button>
+            <button
+              type="button"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
           {TABS.map(({ id, label, icon: Icon }) => (

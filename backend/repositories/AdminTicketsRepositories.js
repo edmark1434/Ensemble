@@ -49,6 +49,8 @@ const {
   defaultPriorityForType,
   ticketTypeMeta,
   isClosedStatus,
+  isTypeAllowedForRole,
+  isValidTicketType,
 } = require('../lib/TicketEnums');
 const {
   normalizeDisputeType,
@@ -362,6 +364,108 @@ async function createSupportTicket(input, session = null) {
   }
 
   return getTicketDetail(ticketId);
+}
+
+/**
+ * Staff opens a ticket owned by another account. The member is the requester;
+ * the signed-in staff member is the author of the opening message.
+ */
+async function createStaffTicketForAccount(input, session) {
+  if (!isStaffSession(session)) {
+    throw ticketError('Only staff can open a ticket for someone', 403);
+  }
+
+  const requesterAccountId = String(input?.requesterAccountId || input?.accountId || '').trim();
+  if (!TICKET_ACCOUNT_UUID.test(requesterAccountId)) {
+    throw ticketError('Choose the member this ticket is for', 400);
+  }
+
+  const person = await findTicketParticipantAccount(requesterAccountId);
+  if (!person || person.deleted_at || (!person.user_id && !person.staff_id)) {
+    throw ticketError('Choose a member or staff account', 404);
+  }
+  const accountStatus = String(person.status || 'active').toLowerCase();
+  if (['deleted', 'inactive', 'deactivated'].includes(accountStatus)) {
+    throw ticketError('That account cannot receive a ticket', 400);
+  }
+
+  const reason = String(input?.reason || input?.subject || '').trim();
+  if (!reason) throw ticketError('Subject is required', 400);
+  if (reason.length > 200) throw ticketError('Subject must be 200 characters or less', 400);
+
+  const description = String(input?.description || '').trim();
+  if (!description) throw ticketError('Description is required', 400);
+  if (description.length < 10) throw ticketError('Description must be at least 10 characters', 400);
+  if (description.length > 5000) throw ticketError('Description must be 5,000 characters or less', 400);
+
+  const rawType = input?.type || input?.category;
+  if (!isValidTicketType(rawType)) throw ticketError('Pick a ticket type', 400);
+  const type = normalizeTicketType(rawType);
+
+  if (type === 'Appeal an account penalty') {
+    await assertCanFileAppeal(requesterAccountId);
+  }
+
+  const staff = await resolveDisputeStaffId(session);
+  if (!staff?.staff_id) throw ticketError('Staff profile not found', 403);
+
+  let handledBy = input?.handledByStaffId ?? input?.assignedStaffId ?? null;
+  if (input?.assignToMe) handledBy = staff.staff_id;
+  else if (handledBy) handledBy = String(handledBy).trim() || null;
+
+  if (handledBy) {
+    const assignee =
+      String(handledBy) === String(staff.staff_id)
+        ? staff
+        : (await pool.query(`SELECT staff_id, role FROM staff WHERE staff_id = $1`, [handledBy])).rows[0];
+    if (!assignee) throw ticketError('Staff member not found', 400);
+    if (!isAdminRole(assignee.role) && !isTypeAllowedForRole(assignee.role, type)) {
+      throw ticketError('That staff member cannot take this ticket type', 400);
+    }
+  }
+
+  const actor = await actingStaffIdentity(session);
+  const personName = person.staff_id
+    ? formatStaffIdentity({ name: person.name, handle: person.handle, role: person.staff_role })
+    : formatAccountIdentity(person);
+  const openingMessage = `${actor.label} opened this ticket on the member's behalf.\n\n${description}`;
+
+  const data = await createSupportTicket(
+    {
+      subject: reason,
+      reason,
+      type,
+      priority: input?.priority,
+      description: openingMessage,
+      requesterAccountId,
+      handledByStaffId: handledBy,
+    },
+    session
+  );
+
+  const ticketId = data?.ticket?.id;
+  if (ticketId) {
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'staff_created',
+      summary: `${actor.label} opened this ticket for ${personName}.`,
+      actorStaffId: actor.staffId,
+      actorAccountId: sessionAccountId(session),
+      metadata: {
+        requesterAccountId,
+        assigned: Boolean(handledBy),
+      },
+    });
+    await notifyTicketParticipant(
+      requesterAccountId,
+      `Staff opened ticket #${data.ticket.number} on your behalf.`,
+      'TICKET_STAFF_OPEN',
+      ticketId,
+      data.chatId || null
+    );
+  }
+
+  return data;
 }
 
 function mapDisputeRow(row) {
@@ -4756,6 +4860,7 @@ module.exports = {
   respondTicketInvite,
   getTicketCatalog,
   createSupportTicket,
+  createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,
   nextTicketNumber,

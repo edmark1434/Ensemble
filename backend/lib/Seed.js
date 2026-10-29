@@ -284,7 +284,7 @@ async function seedTeams(userAccountIds) {
     const amount = faker.number.int({ min: 50, max: Math.max(50, Math.floor(balance / 2)) });
     await pool.query(
       `INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-       VALUES ($1, $2, 'completed', $3, $4)`,
+       VALUES ($1, $2, 'Completed', $3, $4)`,
       [txType, amount, otherWalletId, walletId]
     );
   }

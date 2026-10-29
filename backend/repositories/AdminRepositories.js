@@ -38,7 +38,7 @@ async function getDashboardOverview() {
       .query(`
         SELECT
           (SELECT COUNT(*)::int FROM tickets WHERE deleted_at IS NULL AND status NOT IN ('Resolved', 'Closed')) AS open_tickets,
-          (SELECT COUNT(*)::int FROM disputes WHERE LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')) AS open_disputes,
+          (SELECT COUNT(*)::int FROM disputes WHERE status <> 'closed') AS open_disputes,
           (SELECT COUNT(*)::int FROM teams) AS total_teams,
           (SELECT COUNT(*)::int FROM marketplace_listings WHERE LOWER(status) = 'pending') AS pending_listings,
           (SELECT COALESCE(SUM(w.balance_credits), 0)::int

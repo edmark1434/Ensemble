@@ -856,7 +856,7 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
           `INSERT INTO credit_transactions (
              type, amount_credits, status, source_wallet_id, destination_wallet_id,
              reference_table, reference_id
-           ) VALUES ('Fee', $1, 'completed', $2, $3, 'market_assets', $4)`,
+           ) VALUES ('Fee', $1, 'Completed', $2, $3, 'market_assets', $4)`,
           [listingFeeCredits, creatorWallet.wallet_id, platformWallet.wallet_id, market.rows[0].market_asset_id]
         );
       }
@@ -1140,7 +1140,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
         `INSERT INTO credit_transactions
            (type, amount_credits, status, source_wallet_id, destination_wallet_id,
             fee_transaction_id, reference_table, reference_id)
-         VALUES ('Fee', $1, 'completed', $2, $3, NULL, 'market_assets', $4)
+         VALUES ('Fee', $1, 'Completed', $2, $3, NULL, 'market_assets', $4)
          RETURNING credit_transaction_id, type, amount_credits, status, created_at,
                    reference_table, reference_id`,
         [transactionFeeCredits, creatorWallet.wallet_id, platformWallet.wallet_id, assetId]
@@ -1152,7 +1152,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       `INSERT INTO credit_transactions
          (type, amount_credits, status, source_wallet_id, destination_wallet_id,
           fee_transaction_id, reference_table, reference_id)
-       VALUES ('Asset Purchase', $1, 'completed', $2, $3, $4, 'market_assets', $5)
+       VALUES ('Asset Purchase', $1, 'Completed', $2, $3, $4, 'market_assets', $5)
        RETURNING credit_transaction_id, type, amount_credits, status, created_at,
                  fee_transaction_id, reference_table, reference_id`,
       [priceCredits, buyerWallet.wallet_id, creatorWallet.wallet_id,

@@ -901,7 +901,7 @@ async function recordMilestoneAction({
                             type, amount_credits, status,
                             source_wallet_id, destination_wallet_id,
                             reference_table, reference_id
-                        ) VALUES ('Fee', $1, 'completed', $2, $3, 'contract_milestones', $4)
+                        ) VALUES ('Fee', $1, 'Completed', $2, $3, 'contract_milestones', $4)
                         RETURNING credit_transaction_id
                     `, [feeCredits, escrowWallet.wallet_id, platformWallet.wallet_id, milestoneId]);
                     feeTransaction = feeRes.rows[0];
@@ -914,7 +914,7 @@ async function recordMilestoneAction({
                         reference_table, reference_id, fee_transaction_id
                      )
                      VALUES (
-                        'Escrow Release', $1, 'completed',
+                        'Escrow Release', $1, 'Completed',
                         $2, $3, 'contract_milestones', $4, $5
                      )
                      RETURNING *`,
@@ -1350,7 +1350,7 @@ async function buyRevision({
                 reference_table, reference_id
              )
              VALUES (
-                $1, 'Escrow Hold', $2, 'completed', $3, $4,
+                $1, 'Escrow Hold', $2, 'Completed', $3, $4,
                 'contract_milestone_revisions', $5
              )`,
             [

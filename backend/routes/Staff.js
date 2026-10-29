@@ -4,6 +4,7 @@ const requireAuth = require('../middleware/RequireAuth');
 const { checkStaffRole } = require('../controllers/StaffControllers');
 const {
   getTicketParticipantSearch,
+  createStaffTicket,
   postTicketParticipant,
   deleteTicketParticipant,
   postTicketTranscript,
@@ -24,6 +25,7 @@ function requireAnyStaff(req, res, next) {
 
 router.get('/check-staff-role', [checkSession, requireAuth], checkStaffRole);
 router.get('/tickets/people', [checkSession, requireAnyStaff], getTicketParticipantSearch);
+router.post('/tickets', [checkSession, requireAnyStaff], createStaffTicket);
 router.post('/tickets/:id/participants', [checkSession, requireAnyStaff], postTicketParticipant);
 router.post('/tickets/:id/transcript', [checkSession, requireAnyStaff], postTicketTranscript);
 router.post('/tickets/:id/schedule-close', [checkSession, requireAnyStaff], postTicketScheduleClose);

@@ -159,7 +159,7 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
   }
   if (entityType && entityType !== 'all') {
     params.push(String(entityType).toLowerCase());
-    where.push(`LOWER(COALESCE(d.type, '')) = $${params.length}`);
+    where.push(`LOWER(d.type::text) = $${params.length}`);
   }
   if (search) {
     params.push(`%${String(search).toLowerCase()}%`);

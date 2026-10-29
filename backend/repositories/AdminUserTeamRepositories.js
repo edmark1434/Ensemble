@@ -1461,7 +1461,7 @@ async function adjustAccountCredits(accountId, amount, _note, staffId) {
   await pool.query(
     `
     INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-    VALUES ($1, $2, 'completed', $3, $3)
+    VALUES ($1, $2, 'Completed', $3, $3)
     `,
     [CREDIT_TRANSACTION_TYPE.FUND_TRANSFER, Math.abs(delta), wallet.wallet_id]
   );
@@ -1495,7 +1495,7 @@ async function freezeAccountCredits(accountId, freeze = true, staffId = null) {
     await pool.query(
       `
       INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-      VALUES ($1, $2, 'completed', $3, $3)
+      VALUES ($1, $2, 'Completed', $3, $3)
       `,
       [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, balance, wallet.wallet_id]
     );
@@ -1529,7 +1529,7 @@ async function freezeAccountCredits(accountId, freeze = true, staffId = null) {
   await pool.query(
     `
     INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-    VALUES ($1, $2, 'completed', $3, $3)
+    VALUES ($1, $2, 'Completed', $3, $3)
     `,
     [CREDIT_TRANSACTION_TYPE.ESCROW_RELEASE, frozen, wallet.wallet_id]
   );

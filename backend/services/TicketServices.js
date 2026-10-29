@@ -2,6 +2,7 @@ const {
     createTicket,
     createTicketChat
 } = require('../repositories/TicketRepositories');
+const { createStaffTicketForAccount } = require('../repositories/AdminTicketsRepositories');
 
 async function createTicketService(payload) {
     try {
@@ -31,6 +32,11 @@ async function createTicketService(payload) {
     }
 }
 
+async function createStaffTicketService(payload, session) {
+    return createStaffTicketForAccount(payload, session);
+}
+
 module.exports = {
-    createTicketService
+    createTicketService,
+    createStaffTicketService,
 };

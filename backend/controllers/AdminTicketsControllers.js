@@ -36,6 +36,7 @@ const {
 const { pool } = require('../lib/Database');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
+const { createStaffTicketService } = require('../services/TicketServices');
 
 async function getAdminTicketsOverview(req, res) {
   try {
@@ -76,43 +77,38 @@ async function getAdminTicketDetail(req, res) {
   }
 }
 
-async function createAdminTicket(req, res) {
+async function createStaffTicket(req, res) {
   try {
-    const {
-      subject,
-      reason,
-      type,
-      category,
-      priority,
-      description,
-      requesterAccountId,
-      assignedStaffId,
-      handledByStaffId,
-    } = req.body;
-    const subjectOrReason = (reason || subject || '').trim();
-    if (!subjectOrReason) {
-      return res.status(400).json({ success: false, message: 'Subject is required' });
+    if (req.session?.type !== 'Staff') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Staff role required' });
     }
-    const data = await createSupportTicket(
+    const data = await createStaffTicketService(
       {
-        subject: subjectOrReason,
-        reason: subjectOrReason,
-        type: type || category,
-        category,
-        priority,
-        description,
-        requesterAccountId: requesterAccountId || req.session?.account_id,
-        assignedStaffId: handledByStaffId || assignedStaffId,
-        handledByStaffId: handledByStaffId || assignedStaffId,
+        subject: req.body?.subject || req.body?.reason,
+        reason: req.body?.reason || req.body?.subject,
+        type: req.body?.type || req.body?.category,
+        priority: req.body?.priority,
+        description: req.body?.description,
+        requesterAccountId: req.body?.requesterAccountId || req.body?.accountId,
+        assignToMe: Boolean(req.body?.assignToMe),
+        assignedStaffId: req.body?.handledByStaffId || req.body?.assignedStaffId,
+        handledByStaffId: req.body?.handledByStaffId || req.body?.assignedStaffId,
       },
       req.session
     );
-    res.status(201).json({ success: true, data });
+    res.status(201).json({
+      success: true,
+      data,
+      message: data?.ticket?.number ? `Ticket ${data.ticket.number} opened` : 'Ticket opened',
+    });
   } catch (err) {
-    console.error('Error creating ticket:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to create ticket' });
+    console.error('Error creating staff ticket:', err);
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 400;
+    res.status(status).json({ success: false, message: err.message || 'Failed to create ticket' });
   }
 }
+
+const createAdminTicket = createStaffTicket;
 
 async function patchAdminTicket(req, res) {
   try {
@@ -793,6 +789,7 @@ module.exports = {
   getAdminTicketsOverview,
   getAdminTicketDetail,
   createAdminTicket,
+  createStaffTicket,
   patchAdminTicket,
   postAdminTicketMessage,
   patchAdminTicketMessage,

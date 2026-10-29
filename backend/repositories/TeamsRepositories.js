@@ -330,7 +330,7 @@ async function addTeamFunds(teamId, userAccountId, amountCredits) {
       ) VALUES (
         'Fund Transfer',
         $1,
-        'completed',
+        'Completed',
         $2,
         $3,
         NULL,
@@ -402,7 +402,7 @@ async function distributeTeamFunds(teamId, recipients) {
     await client.query('UPDATE wallets SET balance_credits=balance_credits-$1 WHERE wallet_id=$2',[total,source.wallet_id]);
     const walletsByAccountId=new Map(recipientWallets.map((wallet)=>[String(wallet.account_id),wallet]));
     const transactions=[];
-    for(const recipient of recipients){const destination=walletsByAccountId.get(String(recipient.account_id));await client.query('UPDATE wallets SET balance_credits=balance_credits+$1 WHERE wallet_id=$2',[recipient.amount_credits,destination.wallet_id]);const transaction=(await client.query(`INSERT INTO credit_transactions (type,amount_credits,status,source_wallet_id,destination_wallet_id,fee_transaction_id,reference_table,reference_id) VALUES ('Fund Transfer',$1,'completed',$2,$3,NULL,'teams',$4) RETURNING *`,[recipient.amount_credits,source.wallet_id,destination.wallet_id,teamId])).rows[0];transactions.push({...transaction,recipient_account_id:recipient.account_id});}
+    for(const recipient of recipients){const destination=walletsByAccountId.get(String(recipient.account_id));await client.query('UPDATE wallets SET balance_credits=balance_credits+$1 WHERE wallet_id=$2',[recipient.amount_credits,destination.wallet_id]);const transaction=(await client.query(`INSERT INTO credit_transactions (type,amount_credits,status,source_wallet_id,destination_wallet_id,fee_transaction_id,reference_table,reference_id) VALUES ('Fund Transfer',$1,'Completed',$2,$3,NULL,'teams',$4) RETURNING *`,[recipient.amount_credits,source.wallet_id,destination.wallet_id,teamId])).rows[0];transactions.push({...transaction,recipient_account_id:recipient.account_id});}
     await client.query('COMMIT');
     return {transactions,distributed_credits:total,available_balance:availableBalance-total,unreserved_balance:unreservedBalance-total,contract_reserved_balance:totalContractReserved};
   } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }

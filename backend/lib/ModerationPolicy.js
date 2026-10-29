@@ -225,7 +225,7 @@ async function applyDisputeAutomations(disputeRow) {
     ORDER BY (
       SELECT COUNT(*) FROM disputes d
       WHERE d.handled_by_staff_id = s.staff_id
-        AND LOWER(COALESCE(d.status, '')) <> 'closed'
+        AND d.status <> 'closed'
     ) ASC, s.staff_id ASC
     LIMIT 1
     `
@@ -238,7 +238,7 @@ async function applyDisputeAutomations(disputeRow) {
     UPDATE disputes
     SET handled_by_staff_id = $1,
         status = CASE
-          WHEN LOWER(COALESCE(status, 'pending_review')) IN ('pending_review', 'open', 'pending')
+          WHEN LOWER(status::text) IN ('pending_review', 'open', 'pending')
             THEN 'under_review'
           ELSE status
         END,
@@ -265,7 +265,7 @@ async function reconcileUnassignedDisputes() {
     FROM disputes
     WHERE handled_by_staff_id IS NULL
       AND deleted_at IS NULL
-      AND LOWER(COALESCE(status, 'open')) NOT IN ('closed', 'resolved')
+      AND status <> 'closed'
     ORDER BY opened_at ASC NULLS LAST, created_at ASC
     `
   );

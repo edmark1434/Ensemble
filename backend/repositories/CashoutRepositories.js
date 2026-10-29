@@ -125,7 +125,7 @@ async function reserveCashout(data) {
             `INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id, destination_wallet_id,
                 reference_table, reference_id
-             ) VALUES ('Cashout', $1, 'completed', $2, $3, 'cashouts', $4)
+             ) VALUES ('Cashout', $1, 'Completed', $2, $3, 'cashouts', $4)
              ON CONFLICT DO NOTHING`,
             [data.amount_credits, wallet.wallet_id, platformWallet.wallet_id, result.rows[0].cashout_id]
         );
@@ -194,7 +194,7 @@ async function applyCashoutStatus({ referenceId, payoutId, status, failureCode =
                 `INSERT INTO credit_transactions (
                     type, amount_credits, status, source_wallet_id, destination_wallet_id,
                     reference_table, reference_id
-                 ) VALUES ('Cashout Refund', $1, 'completed', $2, $3, 'cashouts', $4)
+                 ) VALUES ('Cashout Refund', $1, 'Completed', $2, $3, 'cashouts', $4)
                  ON CONFLICT DO NOTHING`,
                 [cashout.amount_credits, platformWallet.wallet_id, cashout.wallet_id, cashout.cashout_id]
             );
@@ -274,7 +274,7 @@ async function transferAccountCredits({ senderAccountId, recipientAccountId, amo
             `INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id, destination_wallet_id,
                 reference_table, reference_id
-             ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, 'accounts', $4)
+             ) VALUES ('Fund Transfer', $1, 'Completed', $2, $3, 'accounts', $4)
              RETURNING *`,
             [amountCredits, senderRow.wallet_id, recipientRow.wallet_id, recipientAccountId]
         );

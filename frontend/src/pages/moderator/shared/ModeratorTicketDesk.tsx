@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Hand, Inbox, Loader2, RefreshCw, Search, Ticket } from "lucide-react";
+import { Hand, Inbox, Loader2, Plus, RefreshCw, Search, Ticket } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import TicketFiltersPanel from "@/pages/admin/ticketManagement/TicketFiltersPanel";
@@ -17,6 +17,7 @@ import {
   MARKETPLACE_TICKET_TYPES,
   SUPPORT_TICKET_TYPES,
 } from "@/pages/admin/ticketManagement/ticketTypes";
+import CreateTicketForUserModal from "@/pages/admin/ticketManagement/CreateTicketForUserModal";
 import ModeratorTicketDetailModal from "./ModeratorTicketDetailModal";
 import { PriorityBadge, StatusBadge, type Accent } from "./ui";
 import type { SupportTicket } from "./moderatorTypes";
@@ -132,6 +133,7 @@ export default function ModeratorTicketDesk({
     return next;
   });
   const [selectedId, setSelectedId] = useState<number | string | null>(null);
+  const [creatingTicket, setCreatingTicket] = useState(false);
 
   const typeCatalog = [...QUEUE_TYPES[queueKey]];
 
@@ -242,6 +244,18 @@ export default function ModeratorTicketDesk({
           onUpdated={() => void load(true)}
         />
       )}
+      {creatingTicket && (
+        <CreateTicketForUserModal
+          accent={accent}
+          defaultTypes={typeCatalog}
+          onClose={() => setCreatingTicket(false)}
+          onCreated={(ticketId) => {
+            setCreatingTicket(false);
+            setSelectedId(ticketId);
+            void load(true);
+          }}
+        />
+      )}
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -251,15 +265,33 @@ export default function ModeratorTicketDesk({
           <h1 className="text-2xl font-bold text-white">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
         </div>
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatingTicket(true)}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold text-white ${
+              accent === "violet"
+                ? "bg-violet-500 hover:bg-violet-400"
+                : accent === "emerald"
+                  ? "bg-emerald-500 hover:bg-emerald-400"
+                  : accent === "rose"
+                    ? "bg-rose-500 hover:bg-rose-400"
+                    : "bg-sky-500 hover:bg-sky-400"
+            }`}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create ticket
+          </button>
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

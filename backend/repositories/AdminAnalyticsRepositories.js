@@ -757,7 +757,7 @@ async function fetchLiveModuleCounts() {
           `
         SELECT COUNT(*)::int AS total,
           COUNT(*) FILTER (
-            WHERE LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')
+            WHERE status <> 'closed'
           )::int AS open_count
         FROM disputes
       `

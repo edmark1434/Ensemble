@@ -475,7 +475,7 @@ async function getPublicAccountStanding(accountId) {
       WHERE d.for_account_id = a.account_id
         AND d.deleted_at IS NULL
         AND d.visibility IS TRUE
-        AND lower(COALESCE(d.status, '')) <> 'closed'
+        AND d.status <> 'closed'
       ORDER BY d.opened_at DESC NULLS LAST, d.created_at DESC
       LIMIT 1
     ) open_dispute ON true

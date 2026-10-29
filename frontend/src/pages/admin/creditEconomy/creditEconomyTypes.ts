@@ -19,7 +19,23 @@ export const CREDIT_TRANSACTION_TYPES = [
   'Asset Purchase',
   'Asset Refund',
   'Fee',
+  'Cashout',
+  'Cashout Refund',
+  'Job Posting Fee',
+  'Job Posting Fee Refund',
+  'Proposal Fee',
+  'Proposal Fee Refund',
+  'Service Posting Fee',
 ] as const;
+
+export const CREDIT_TRANSACTION_STATUSES = [
+  'Pending',
+  'Completed',
+  'Failed',
+  'Reversed',
+] as const;
+
+export type CreditTransactionStatus = (typeof CREDIT_TRANSACTION_STATUSES)[number];
 
 export type CreditTransactionType = (typeof CREDIT_TRANSACTION_TYPES)[number];
 

@@ -2737,7 +2737,7 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
 
              VALUES (
 
-                'Escrow Hold', $1, 'completed',
+                'Escrow Hold', $1, 'Completed',
 
                 $2, $3, 'contracts', $4
 

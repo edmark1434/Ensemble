@@ -614,7 +614,7 @@ async function getModerationOverview(staffSession = null) {
       .query(`
         SELECT COUNT(*)::int AS open_disputes
         FROM disputes
-        WHERE LOWER(COALESCE(status, 'open')) <> 'closed'
+        WHERE status <> 'closed'
       `)
       .catch(() => ({ rows: [{ open_disputes: 0 }] })),
     pool

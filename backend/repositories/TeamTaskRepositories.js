@@ -724,7 +724,7 @@ async function distributeContractFunds(workspaceId, teamId, contractId, distribu
            source_wallet_id, destination_wallet_id,
            fee_transaction_id, reference_table, reference_id
          ) VALUES (
-           'Fund Transfer', $1, 'completed',
+           'Fund Transfer', $1, 'Completed',
            $2, $3, NULL, 'team_contract_workspaces', $4
          ) RETURNING *`,
         [recipient.amount_credits, source.wallet_id, destination.wallet_id, workspaceId]

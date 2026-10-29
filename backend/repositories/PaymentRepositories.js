@@ -1,4 +1,8 @@
 const { pool } = require('../lib/Database');
+const {
+  normalizeCreditTransactionType,
+  normalizeCreditTransactionStatus,
+} = require('../lib/CreditTransactionEnums');
 
 
 async function createPaymentMethod(data) {
@@ -487,7 +491,16 @@ async function createCreditTransaction(data) {
                 reference_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *;
-        `, [data.type, data.amount_credits, data.status, data.source_wallet_id, data.destination_wallet_id, data.fee_transaction_id, data.reference_table, data.reference_id]);
+        `, [
+          normalizeCreditTransactionType(data.type),
+          data.amount_credits,
+          normalizeCreditTransactionStatus(data.status),
+          data.source_wallet_id,
+          data.destination_wallet_id,
+          data.fee_transaction_id,
+          data.reference_table,
+          data.reference_id,
+        ]);
         return result.rows[0];
     }catch (err) {
         console.error("Error creating credit transaction:", err);
@@ -575,7 +588,7 @@ async function settleSuccessfulTopUp(referenceId, provider = {}) {
             INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id, destination_wallet_id,
                 fee_transaction_id, reference_table, reference_id
-            ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, NULL, 'payments', $4)
+            ) VALUES ('Fund Transfer', $1, 'Completed', $2, $3, NULL, 'payments', $4)
             RETURNING *
         `, [payment.credits_granted, platformWallet.wallet_id, userWallet.wallet_id, payment.id])).rows[0];
 
@@ -683,7 +696,7 @@ async function repairPaidTopUpArtifacts(referenceId) {
             INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id, destination_wallet_id,
                 fee_transaction_id, reference_table, reference_id, created_at
-            ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, NULL, 'payments', $4,
+            ) VALUES ('Fund Transfer', $1, 'Completed', $2, $3, NULL, 'payments', $4,
                       COALESCE($5, NOW()))
             RETURNING *
         `, [

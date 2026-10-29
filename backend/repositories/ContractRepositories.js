@@ -94,7 +94,7 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
             INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id,
                 destination_wallet_id, reference_table, reference_id
-            ) VALUES ('Escrow Hold', $1, 'completed', $2, $3, 'contracts', $4)
+            ) VALUES ('Escrow Hold', $1, 'Completed', $2, $3, 'contracts', $4)
         `, [rateCredits, wallet.wallet_id, clientEscrowWallet.wallet_id, contractId]);
 
         // 5. Link Contract to Proposal
@@ -214,7 +214,7 @@ async function acceptJobOffer(freelancerIds, contractId) {
                 await client.query(`
                     INSERT INTO credit_transactions (
                         type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
-                    ) VALUES ('Escrow Refund', $1, 'completed', $2, $3, 'contracts', $4)
+                    ) VALUES ('Escrow Refund', $1, 'Completed', $2, $3, 'contracts', $4)
                 `, [transferAmount, refundEscrowRes.rows[0].wallet_id, refundPersonalRes.rows[0].wallet_id, contractId]);
             }
 
@@ -267,7 +267,7 @@ async function acceptJobOffer(freelancerIds, contractId) {
             INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id,
                 destination_wallet_id, reference_table, reference_id
-            ) VALUES ('Escrow Hold', $1, 'completed', $2, $3, 'contracts', $4)
+            ) VALUES ('Escrow Hold', $1, 'Completed', $2, $3, 'contracts', $4)
         `, [transferAmount, clientEscrow.wallet_id, freelancerEscrow.wallet_id, contractId]);
 
         // 2. Determine new contract status based on starts_at and compute overall deadline_at
@@ -498,7 +498,7 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
                 await client.query(`
                     INSERT INTO credit_transactions (
                         type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
-                    ) VALUES ('Escrow Refund', $1, 'completed', $2, $3, 'contracts', $4)
+                    ) VALUES ('Escrow Refund', $1, 'Completed', $2, $3, 'contracts', $4)
                 `, [transferAmount, escrowWalletRes.rows[0].wallet_id, personalWalletRes.rows[0].wallet_id, contractId]);
             }
         }
@@ -550,7 +550,7 @@ async function openDisputesForContracts(contractIds, viewerAccountIds) {
         FROM disputes
         WHERE contract_id = ANY($1::uuid[])
           AND deleted_at IS NULL
-          AND lower(COALESCE(status, '')) <> 'closed'
+          AND status <> 'closed'
         ORDER BY contract_id, opened_at DESC NULLS LAST, created_at DESC
     `, [ids]);
 
@@ -814,7 +814,7 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             FROM disputes
             WHERE contract_id = $1
               AND deleted_at IS NULL
-              AND lower(COALESCE(status, '')) <> 'closed'
+              AND status <> 'closed'
             LIMIT 1
         `, [contractId]);
         if (existing.rows.length) throw openDisputeError();
@@ -1084,7 +1084,7 @@ async function distributeContractSubcontractFunds({ contractId, distributorAccou
                 INSERT INTO credit_transactions (
                     type, amount_credits, status, source_wallet_id, destination_wallet_id,
                     reference_table, reference_id
-                ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, 'contracts', $4)
+                ) VALUES ('Fund Transfer', $1, 'Completed', $2, $3, 'contracts', $4)
                 RETURNING credit_transaction_id
             `, [amount, senderWallet.wallet_id, target.wallet_id, contractId]);
 

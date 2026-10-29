@@ -1,16 +1,12 @@
-# Active Task: Restore badge categories
+# Active Task: Staff create ticket for a member
 
 ## Implementation Objective
 
-Put `badge_categories` back as a catalog lookup. The badges entity stores `badge_category_id`. Existing category strings are copied into rows. Admin, profile, discovery, and grants read the joined name.
+Let any staff member or admin open a support ticket on another account from the ticket desks.
 
 ## Acceptance Criteria
 
-- [x] Migration recreates `badge_categories`, backfills from the old `badges.category` text, and drops that column.
-- [x] Catalog reads join the category name. Create/update require a live category.
-- [x] `GET/POST /api/admin/badge-categories` lists and creates categories.
-- [x] Admin catalog uses a category dropdown (plus inline create) instead of free text.
-- [x] Seed writes `badge_category_id` for Milestones and Marketplace.
-- [x] Profile, discovery, own grants, and pin UI carry `badge_category_id` / `category`.
-
-Apply with `cd backend && npm run migrate` against the intended database.
+- [x] `POST /api/staff/tickets` (any staff) and `POST /api/admin/tickets` (admin) require a requester account, type, subject, and description.
+- [x] The ticket is owned by the chosen member. Staff can assign it to themselves only when their role can handle that type.
+- [x] Admin, Support, Forum, Marketplace, and Jobs ticket desks have a Create ticket form with member search.
+- [x] Frontend build succeeds.

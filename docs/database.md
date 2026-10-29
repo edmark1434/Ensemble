@@ -23,6 +23,12 @@
 - Accounts, projects, and media assets use their existing UUID primary keys; they do not have a separate `public_id` column.
 - Do not introduce additional public identifier columns unless a future requirement explicitly defines their contract and lifecycle.
 
+## Credit transaction enums
+
+- `credit_transactions.type` is PostgreSQL enum `credit_transaction_type`: Fund Transfer, Escrow Hold, Escrow Release, Escrow Refund, Asset Purchase, Asset Refund, Fee, Cashout, Cashout Refund, Job Posting Fee, Job Posting Fee Refund, Proposal Fee, Proposal Fee Refund, Service Posting Fee.
+- `credit_transactions.status` is PostgreSQL enum `credit_transaction_status`: Pending, Completed, Failed, Reversed. Default is Completed.
+- Labels match `backend/lib/CreditTransactionEnums.js`. Migration `1827200000000_credit-transaction-native-enums` converts the old varchar columns and type CHECK constraint. Do not edit the original `credit_transactions` create-table migration.
+
 ## Transactions and money
 
 - Wallet debits, cashout creation, status transitions, and credit-transaction history must remain consistent in one database transaction where practical.
@@ -56,6 +62,13 @@
 
 - `reports.subject_snapshot` is JSON: `{ kind, title, body, href, extra }`. It is written at submit time so staff can still read the reported job, gig, asset, discussion, group, team, profile, or inbox message if the live row is later deleted. Inbox messages have `href: null`.
 - Migration `1826900000000_add-report-subject-snapshot` adds the column. Do not edit the original `reports` create-table migration.
+
+## Dispute enums
+
+- `disputes.type` is PostgreSQL enum `dispute_type`: Contract, Gig, Job, Marketplace, Feedback, Forum, Transaction, Team, General.
+- `disputes.priority` is PostgreSQL enum `dispute_priority`: Low, Medium, High. Default is High.
+- `disputes.status` is PostgreSQL enum `dispute_status`: pending_review, open, awaiting_response, under_review, closed.
+- Labels match `backend/lib/DisputeEnums.js`. Migration `1827100000000_dispute-native-enums` converts the old varchar columns and CHECK constraints. Do not edit the original `disputes` create-table migration.
 
 ## Standing punishment library
 
