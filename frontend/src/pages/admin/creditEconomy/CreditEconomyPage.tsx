@@ -8,7 +8,6 @@ import {
   Eye,
   LayoutGrid,
   Loader2,
-  Package,
   Percent,
   RefreshCw,
   ScrollText,
@@ -17,7 +16,7 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import AuditTab from './AuditTab';
@@ -38,13 +37,12 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'management', label: 'Management', icon: Settings2 },
 ];
 
-type ManagementSection = 'packages' | 'fees' | 'marketplace' | 'subscriptions';
+type ManagementSection = 'fees' | 'marketplace' | 'subscriptions';
 
-const MANAGEMENT_SECTIONS: { id: ManagementSection; label: string; icon: typeof Package }[] = [
-  { id: 'packages', label: 'Credit packages', icon: Package },
+const MANAGEMENT_SECTIONS: { id: ManagementSection; label: string; icon: typeof Percent }[] = [
   { id: 'fees', label: 'Fees', icon: Percent },
   { id: 'marketplace', label: 'Marketplace', icon: Store },
-    { id: 'subscriptions', label: 'Subscriptions', icon: Store },
+  { id: 'subscriptions', label: 'Subscriptions', icon: BadgeDollarSign },
 ];
 
 function formatDateTime(value: string) {
@@ -64,6 +62,7 @@ function formatAmount(n: number) {
 
 export default function CreditEconomyPage() {
   const { user } = useGlobalState();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
   const validTabs: TabId[] = ['overview', 'wallets', 'audit', 'management'];
@@ -97,8 +96,12 @@ export default function CreditEconomyPage() {
   }, []);
 
   useEffect(() => {
+    if (searchParams.get('section') === 'packages') {
+      navigate('/admin/system-settings?tab=economy', { replace: true });
+      return;
+    }
     if (paramTab && validTabs.includes(paramTab)) setTab(paramTab);
-  }, [paramTab]);
+  }, [paramTab, searchParams, navigate]);
 
   const switchTab = (id: TabId) => {
     setTab(id);
@@ -126,7 +129,7 @@ export default function CreditEconomyPage() {
     );
   }
 
-  const { summary, alerts, topBuyers, creditPackages, feeSettings, marketplaceSettings } = data;
+  const { summary, alerts, topBuyers, feeSettings, marketplaceSettings } = data;
 
   return (
     <main className="min-h-screen md:pl-[260px]">
@@ -228,7 +231,6 @@ export default function CreditEconomyPage() {
 
         {tab === 'management' && (
           <ManagementTab
-            creditPackages={creditPackages}
             feeSettings={feeSettings}
             marketplaceSettings={marketplaceSettings}
           />
@@ -483,11 +485,9 @@ function AuditPreview({
 }
 
 function ManagementTab({
-  creditPackages,
   feeSettings,
   marketplaceSettings,
 }: {
-  creditPackages: EconomyOverview['creditPackages'];
   feeSettings: EconomyOverview['feeSettings'];
   marketplaceSettings: EconomyOverview['marketplaceSettings'];
 }) {
@@ -495,7 +495,7 @@ function ManagementTab({
   const paramSection = searchParams.get('section') as ManagementSection | null;
   const validSections = MANAGEMENT_SECTIONS.map((s) => s.id);
   const initialSection =
-    paramSection && validSections.includes(paramSection) ? paramSection : 'packages';
+    paramSection && validSections.includes(paramSection) ? paramSection : 'fees';
   const [section, setSection] = useState<ManagementSection>(initialSection);
 
   useEffect(() => {
@@ -508,10 +508,6 @@ function ManagementTab({
   };
 
   const sectionMeta: Record<ManagementSection, { title: string; description: string }> = {
-    packages: {
-      title: 'Credit packages',
-      description: 'Live shop packages. Edit them in System Settings → Economy.',
-    },
     fees: {
       title: 'Fee schedule',
       description: 'Platform fees on purchases and services. Edit in System Settings → Economy.',
@@ -525,8 +521,6 @@ function ManagementTab({
       description: 'Manage platform membership plans.',
     },
   };
-
-  const activePackages = creditPackages.filter((p) => p.active).length;
 
   return (
     <div className="space-y-6">
@@ -564,51 +558,6 @@ function ManagementTab({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="min-w-0 space-y-4">
-          {section === 'packages' && (
-            <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-              <div className="border-b border-white/[0.06] px-5 py-3 text-xs text-zinc-500">
-                {activePackages} of {creditPackages.length} packages active
-              </div>
-              <div className="grid gap-px bg-white/[0.04] sm:grid-cols-2 xl:grid-cols-3">
-                {creditPackages.map((p) => (
-                  <div key={p.id} className="flex flex-col gap-3 bg-[#14151c] p-5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10">
-                          <Package className="h-4 w-4 text-rose-400" />
-                        </div>
-                        <p className="font-semibold text-white">{p.name}</p>
-                      </div>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          p.active
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'bg-zinc-500/15 text-zinc-400'
-                        }`}
-                      >
-                        {p.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold tabular-nums text-white">
-                        {p.credits.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-zinc-500">credits</p>
-                    </div>
-                    <p className="mt-auto text-xs text-zinc-500">
-                      {p.pricePhp.toLocaleString()} PHP · {p.salesCount} sold
-                    </p>
-                  </div>
-                ))}
-                {creditPackages.length === 0 && (
-                  <p className="col-span-full bg-[#14151c] p-8 text-center text-sm text-zinc-500">
-                    No packages configured yet.
-                  </p>
-                )}
-              </div>
-            </section>
-          )}
-
           {section === 'fees' && (
             <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
               <table className="w-full min-w-[560px] text-left text-sm">
@@ -669,7 +618,7 @@ function ManagementTab({
 
         <Panel title="Single editor">
           <p className="text-xs leading-relaxed text-zinc-500">
-            This page is a status view. Change packages, fees, and marketplace rules in{' '}
+            This page is a status view. Change credit packages, fees, and marketplace rules in{' '}
             <strong className="font-medium text-zinc-400">System Settings → Economy</strong>{' '}
             (<code className="text-zinc-400">economy.*</code>). Refresh here after saving.
           </p>

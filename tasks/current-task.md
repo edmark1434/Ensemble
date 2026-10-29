@@ -1,14 +1,13 @@
-# Active Task: User-facing Platform Merit from warning points
+# Active Task: Move credit packages into System Settings
 
 ## Implementation Objective
 
-Show Platform Merit on user surfaces as `100 − active warning points`. Do not store merit. Keep warning-point language on the backend and staff desks.
+Credit packages are edited only in System Settings → Economy. Remove the duplicate Credit packages section from Credits & Economy → Management.
 
 ## Acceptance Criteria
 
-- [x] Merit is derived, not a database column. Default 100.
-- [x] Profile Performance tab shows the Platform Merit ring.
-- [x] Owner Record and user toasts say merit, not warning points.
-- [x] Staff/admin/moderator UIs still use warning points.
-- [x] `tsc --noEmit` succeeds. Vite still fails on the existing missing `canvas-confetti` import in `Profile.tsx`.
-- [ ] Profile merit ring verified in the browser (app was not running).
+- [x] Credits & Economy Management no longer has a Credit packages section.
+- [x] System Settings → Economy remains the editor for credit packages.
+- [x] Links no longer send staff to `/admin/credit-economy?tab=management&section=packages`.
+- [x] Fees, marketplace, and subscriptions stay on Credits & Economy Management.
+- [ ] Browser-verified on both admin pages (frontend boot blocked by existing missing `canvas-confetti` import; backend could not connect to Postgres from this host).

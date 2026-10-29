@@ -501,12 +501,12 @@ export default function SystemSettingsPage() {
         {tab === 'economy' && (
           <div className="space-y-6">
             <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Canonical editor for packages, fees, and marketplace rules. Live status is in{' '}
+              Edit credit packages, fees, and marketplace rules here. Wallet activity and the audit log live in{' '}
               <Link
-                to="/admin/credit-economy?tab=management&section=packages"
+                to="/admin/credit-economy"
                 className="font-medium text-rose-400 hover:underline"
               >
-                Credits & Economy → Management
+                Credits & Economy
               </Link>
               .
             </p>
