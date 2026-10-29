@@ -39,7 +39,7 @@
 
 - `credit_transactions.type` is PostgreSQL enum `credit_transaction_type`: Fund Transfer, Escrow Hold, Escrow Release, Escrow Refund, Asset Purchase, Asset Refund, Fee, Cashout, Cashout Refund, Job Posting Fee, Job Posting Fee Refund, Proposal Fee, Proposal Fee Refund, Service Posting Fee.
 - `credit_transactions.status` is PostgreSQL enum `credit_transaction_status`: Pending, Completed, Failed, Reversed. Default is Completed.
-- Labels match `backend/lib/CreditTransactionEnums.js`. Migration `1827200000000_credit-transaction-native-enums` converts the old varchar columns and type CHECK constraint. Do not edit the original `credit_transactions` create-table migration.
+- Labels match `backend/lib/CreditTransactionEnums.js`. Migration `1827200000000_credit-transaction-native-enums` converts the old varchar columns and type CHECK constraint. Partial unique indexes on `type` are dropped and recreated with enum casts; Postgres cannot rewrite those predicates during `ALTER COLUMN TYPE`. Do not edit the original `credit_transactions` create-table migration.
 
 ## Transactions and money
 

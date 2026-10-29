@@ -1,14 +1,13 @@
-# Active Task: Staff ERD types
+# Active Task: Credit transaction enum migration
 
 ## Implementation Objective
 
-Align `staff` with the ER diagram: `role` is an enum, name/email/password fields are unbounded strings.
+Finish `credit_transactions.type` / `status` native enums after production migrate failed on partial-index rewrite.
 
 ## Acceptance Criteria
 
-- [x] Migration creates `staff_role` and converts `staff.role`.
-- [x] `password_hash`, `firebase_staff_uuid`, `first_name`, `last_name`, and `email_address` are unbounded `varchar`.
-- [x] Alias roles such as Jobs Moderator map to `Jobs N Gigs Moderator`.
-- [x] `docs/database.md` records the mapping.
+- [x] `1827200000000_credit-transaction-native-enums` drops the three `type` partial unique indexes, converts the columns, then recreates the indexes with enum casts.
+- [x] Down path restores varchar columns, the type CHECK, and the original indexes.
+- [x] `docs/database.md` notes why the indexes are rebuilt.
 
 Apply with `cd backend && npm run migrate` against the intended database.
