@@ -1,6 +1,6 @@
-const { randomUUID } = require('crypto');
 const { pool } = require('../lib/Database');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
+const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 
 function reportError(message, statusCode = 400) {
   const error = new Error(message);
@@ -30,17 +30,13 @@ function validateReport(reason, description) {
   return { type, details };
 }
 
-function reportNumber() {
-  return `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
-}
-
 async function submitUserReport(targetAccountId, payload, session) {
   const reporter = await reporterAccountId(session);
   if (String(reporter) === String(targetAccountId)) {
     throw reportError('You cannot report yourself', 403);
   }
   const account = await pool.query(
-    `SELECT account_id, display_name, handle, type
+    `SELECT account_id, display_name, handle, type, tagline, description
      FROM accounts
      WHERE account_id = $1 AND deleted_at IS NULL`,
     [targetAccountId]
@@ -50,23 +46,31 @@ async function submitUserReport(targetAccountId, payload, session) {
     throw reportError('This account cannot be reported', 403);
   }
   const details = validateReport(payload?.reason || payload?.type, payload?.description || payload?.details);
+  const row = account.rows[0];
+  const title = row.display_name || row.handle || 'Reported account';
   return createReport({
-    reportNumber: reportNumber(),
+    reportNumber: createReportNumber(),
     reporterAccountId: reporter,
-    targetAccountId: account.rows[0].account_id,
+    targetAccountId: row.account_id,
     targetType: 'user',
-    targetId: String(account.rows[0].account_id),
+    targetId: String(row.account_id),
     referenceTable: 'accounts',
     referencePrefix: 'user',
     type: details.type,
     description: details.details,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'user',
+      title,
+      body: row.tagline || row.description,
+      href: `/profile/${row.account_id}`,
+    }),
   });
 }
 
 async function submitJobReport(jobId, payload, session) {
   const reporter = await reporterAccountId(session);
   const job = await pool.query(
-    `SELECT job_id, title, client_account_id FROM jobs WHERE job_id = $1`,
+    `SELECT job_id, title, description, client_account_id FROM jobs WHERE job_id = $1`,
     [jobId]
   );
   if (!job.rows.length) throw reportError('Job not found', 404);
@@ -77,7 +81,7 @@ async function submitJobReport(jobId, payload, session) {
   }
   const details = validateReport(payload?.reason || payload?.type, payload?.description || payload?.details);
   return createReport({
-    reportNumber: reportNumber(),
+    reportNumber: createReportNumber(),
     reporterAccountId: reporter,
     targetAccountId: row.client_account_id,
     targetType: 'job',
@@ -86,13 +90,19 @@ async function submitJobReport(jobId, payload, session) {
     referencePrefix: 'job',
     type: details.type,
     description: details.details,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'job',
+      title: row.title,
+      body: row.description,
+      href: `/jobs/${row.job_id}/page`,
+    }),
   });
 }
 
 async function submitGigReport(gigId, payload, session) {
   const reporter = await reporterAccountId(session);
   const gig = await pool.query(
-    `SELECT gig_id, title, freelancer_account_id FROM gigs WHERE gig_id = $1`,
+    `SELECT gig_id, title, description, freelancer_account_id FROM gigs WHERE gig_id = $1`,
     [gigId]
   );
   if (!gig.rows.length) throw reportError('Gig not found', 404);
@@ -103,7 +113,7 @@ async function submitGigReport(gigId, payload, session) {
   }
   const details = validateReport(payload?.reason || payload?.type, payload?.description || payload?.details);
   return createReport({
-    reportNumber: reportNumber(),
+    reportNumber: createReportNumber(),
     reporterAccountId: reporter,
     targetAccountId: row.freelancer_account_id,
     targetType: 'gig',
@@ -112,6 +122,12 @@ async function submitGigReport(gigId, payload, session) {
     referencePrefix: 'gig',
     type: details.type,
     description: details.details,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'gig',
+      title: row.title,
+      body: row.description,
+      href: `/gigs/services/${row.gig_id}/page`,
+    }),
   });
 }
 

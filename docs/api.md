@@ -62,6 +62,11 @@
 - Admin CRUD: `GET/POST /api/admin/punishment-defs`, `PATCH/DELETE /api/admin/punishment-defs/:punishmentDefId`. Body `{ label, kind, category, durationDays, permanent, desks, note }`. Duration 1–365 days, or `permanent: true` / `durationDays: null`. Ban rows are limited to admin and support desks. Delete is a soft-delete.
 - Staff `PATCH /api/admin/accounts/:accountId/status` and moderator restriction patches require `punishmentId` for ban, suspend, and timeout. Catalog duration is used unless `customDuration: true` with `duration` / `endsAt` / `days`. Reason is still required. Lock and lift actions do not use the catalog.
 
+## Member reports
+
+- Member report POSTs (`/api/jobs/:jobId/report`, `/api/gigs/:id/report`, `/api/assets/:assetId/report`, `/api/accounts/:accountId/report`, `/api/inbox/message/:messageId/report`, `/api/forum/reports/...`, `/api/teams/:teamId/reports`, `/api/team-projects/:id/report`) store `subject_snapshot` on `reports`: `{ kind, title, body, href, extra }`. `description` is the reporter's reason text only.
+- Staff `GET /api/admin/reports/:id` and the matching moderator report detail routes return `subject` with `headline`, `preview`, `available`, `linkable`, `links`, and (for chat) `message`. `links` are member-site paths; staff consoles wrap them in platform-view. Inbox messages are not linkable, so the snapshot body is shown instead. Deleted jobs, gigs, assets, discussions, groups, and teams keep the snapshot and drop the dead Open link.
+
 ## Marketplace license endpoints
 
 - `POST /api/assets/:assetId/purchase` returns `license` alongside the existing purchase response. `alreadyPurchased` means an active unassigned license was reused without another charge. Asset responses include `available_license_count`; `is_purchased` still means the viewer has at least one active purchased license.

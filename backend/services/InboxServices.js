@@ -494,9 +494,11 @@ async function reportMessageServices(messageId, payload, accountId) {
 
 
 
+    const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
+
     return createReport({
 
-        reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
+        reportNumber: createReportNumber(),
 
         reporterAccountId: String(accountId),
 
@@ -508,23 +510,23 @@ async function reportMessageServices(messageId, payload, accountId) {
 
         type: reason,
 
-        description: [
-
-            conversationContext,
-
-            details || 'No additional details provided.',
-
-            `Conversation: ${conversationId}`,
-
-            `Exact reported message:\n${exactMessage || '[No text content]'}`,
-
-            attachmentSummary ? `Reported attachments:\n${attachmentSummary}` : null,
-
-        ].filter(Boolean).join('\n\n'),
+        description: details || 'No additional details provided.',
 
         referenceTable: 'messages',
 
         referencePrefix: 'inbox',
+
+        subjectSnapshot: buildSubjectSnapshot({
+            kind: 'chat_message',
+            title: conversationContext,
+            body: exactMessage || (attachmentSummary ? `[Attachment] ${attachmentSummary}` : '[No text content]'),
+            href: null,
+            extra: {
+                conversationId,
+                attachments: attachmentSummary ? attachmentSummary.split(', ').filter(Boolean) : [],
+                preview: messagePreview,
+            },
+        }),
 
     });
 

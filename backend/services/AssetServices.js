@@ -870,10 +870,10 @@ async function reportAssetServices(assetId, accountId, payload) {
   const type = cleanText(payload?.type, 'Report reason', 100);
   const description = cleanText(payload?.description, 'Report details', 2000);
   if (description.length < 20) throw new AssetError('Report details must contain at least 20 characters.');
-  const { randomUUID } = require('crypto');
   const { createReport } = require('../repositories/ModeratorSharedRepositories');
+  const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
   return createReport({
-    reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
+    reportNumber: createReportNumber(),
     reporterAccountId: accountId,
     targetAccountId: asset.owner_account_id,
     targetType: 'asset',
@@ -881,7 +881,13 @@ async function reportAssetServices(assetId, accountId, payload) {
     referenceTable: 'market_assets',
     referencePrefix: 'asset',
     type,
-    description: `${asset.name}\n${description}`,
+    description,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'asset',
+      title: asset.name,
+      body: asset.description,
+      href: `/assets/${assetId}`,
+    }),
   });
 }
 

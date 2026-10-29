@@ -31,6 +31,7 @@ const JOBS_REPORT_TYPES = Object.freeze([
   'jobs',
   'gigs',
   'feedback',
+  'team_project',
 ]);
 
 const REPORT_QUEUE_SCOPES = Object.freeze({

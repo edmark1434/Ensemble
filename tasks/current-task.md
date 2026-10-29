@@ -1,13 +1,13 @@
-# Active Task: Standing punishment catalog for ban, suspend, and timeout
+# Active Task: Link reported content on staff report desks
 
 ## Implementation Objective
 
-Staff pick a predefined ban, suspension, or timeout (with default duration) and can override the clock. Admin CRUD lives next to the warning library.
+Whenever a member files a report, store a snapshot of the reported item and give staff a live platform-view link when one exists. If the item is private, deleted, or otherwise not linkable, show the snapshot inline.
 
 ## Acceptance Criteria
 
-- [x] `punishment_defs` table seeded from platform harms (forums, jobs, gigs, marketplace, inbox, identity, money).
-- [x] Admin CRUD for standing punishments (kind, duration or permanent, desks, note).
-- [x] Ban / suspend / timeout pickers require a catalog row, allow custom duration, and require a reason.
-- [x] Backend copies catalog duration unless staff send a custom clock. Kind must match the action.
-- [x] Docs updated. `tsc --noEmit` succeeds.
+- [x] `reports.subject_snapshot` stores kind, title, body preview, and href at submit time.
+- [x] Jobs, gigs, assets, profiles, forums, teams, team projects, and inbox reports capture that snapshot.
+- [x] Staff report detail shows an Open link through platform view when the item is still reachable.
+- [x] Chat messages and missing/deleted items show the captured preview instead of a dead link.
+- [x] Docs describe the subject contract.

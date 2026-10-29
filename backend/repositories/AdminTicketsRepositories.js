@@ -21,7 +21,7 @@ const {
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const { createNotificationServices } = require('../services/NotificationServices');
-const { buildReportSubject } = require('../lib/ReportSubject');
+const { buildReportSubject, snapshotTitle } = require('../lib/ReportSubject');
 const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 const { getSectionValue } = require('./AdminSettingsRepositories');
 const {
@@ -430,6 +430,7 @@ function mapReportRow(row) {
     type: row.type || 'Other',
     targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
+    subjectTitle: snapshotTitle(row),
     description: row.description,
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     status: String(row.status || 'open').toLowerCase(),

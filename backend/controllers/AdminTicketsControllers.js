@@ -34,8 +34,8 @@ const {
   adjustTicketCredits,
 } = require('../repositories/TicketHelpRepositories');
 const { pool } = require('../lib/Database');
-const { randomUUID } = require('crypto');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
+const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 
 async function getAdminTicketsOverview(req, res) {
   try {
@@ -591,7 +591,7 @@ async function createMyTechnicalReport(req, res) {
     }
 
     const report = await createReport({
-      reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
+      reportNumber: createReportNumber(),
       reporterAccountId: accountId,
       targetAccountId: accountId,
       targetType: 'technical_problem',
@@ -600,6 +600,12 @@ async function createMyTechnicalReport(req, res) {
       description,
       referenceTable: 'accounts',
       referencePrefix: 'settings',
+      subjectSnapshot: buildSubjectSnapshot({
+        kind: 'technical_problem',
+        title: subject,
+        body: description,
+        href: null,
+      }),
     });
     return res.status(201).json({ success: true, data: report });
   } catch (err) {

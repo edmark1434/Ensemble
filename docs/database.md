@@ -51,6 +51,11 @@
 - `warning_thresholds` maps stacked active points to an automatic effect (`none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`). Highest matching `min_points` wins. Auto-suspend rows also store `suspend_days`.
 - Migration `1826400000000_warning-defs` seeds the original hardcoded catalog. `1826600000000_warning-duration-and-thresholds` adds duration and seeds the default point ladder. Soft-delete hides a row from desks without touching issued warnings.
 
+## Member reports
+
+- `reports.subject_snapshot` is JSON: `{ kind, title, body, href, extra }`. It is written at submit time so staff can still read the reported job, gig, asset, discussion, group, team, profile, or inbox message if the live row is later deleted. Inbox messages have `href: null`.
+- Migration `1826900000000_add-report-subject-snapshot` adds the column. Do not edit the original `reports` create-table migration.
+
 ## Standing punishment library
 
 - `punishment_defs` is the named ban / suspend / timeout catalog: slug, kind, label, category, duration_days (null = permanent), desks, note, `is_system`, and `deleted_at`.

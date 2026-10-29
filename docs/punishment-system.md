@@ -416,6 +416,9 @@ When standing changes, **do not strand the other party or their credits.** Warni
 Forum post/report ──► Forum desk ──► warn / timeout / suspend / lock
 Asset listing/report ──► Marketplace desk ──► warn / suspend / lock / unpublish
 Job, gig, proposal, order, contract report ──► Jobs desk ──► warn / suspend / lock
+Team / profile / inbox report ──► Support ──► full ladder except treat pardon as Support+Admin
+
+Each report stores a snapshot of the reported item. Staff get a platform-view link when the item still exists; otherwise the desk shows the snapshot (inbox messages are never linked).
 Ticket / appeal / identity / billing ──► Support ──► full ladder + pardon
 Dispute conviction ──► Support/Admin dispute decision ──► permanent ban (warn separately if points should apply)
 20+ active warning points ──► system ──► 7-day suspend (no extra points beyond the warnings)

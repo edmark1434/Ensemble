@@ -571,6 +571,9 @@ export default function ReportDesk({
                   >
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{r.number}</p>
+                      {r.subjectTitle && (
+                        <p className="mt-0.5 line-clamp-1 text-xs text-zinc-300">{r.subjectTitle}</p>
+                      )}
                       {r.description && (
                         <p className="mt-0.5 line-clamp-1 text-xs text-zinc-600">{r.description}</p>
                       )}

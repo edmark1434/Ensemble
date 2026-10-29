@@ -6,6 +6,7 @@ const {
   isClosedStatus,
 } = require('../lib/TicketEnums');
 const { normalizeDisputeType, normalizeDisputePriority } = require('../lib/DisputeEnums');
+const { snapshotTitle } = require('../lib/ReportSubject');
 
 function normalizeStatus(status) {
   // Keep dispute/report helpers on snake-ish labels; tickets use Title Case via ticketEnums.
@@ -104,6 +105,7 @@ function mapReportRow(row) {
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
+    subjectTitle: snapshotTitle(row),
     description: row.description,
     status: String(row.status || 'open').toLowerCase(),
     priority: String(row.priority || 'medium').toLowerCase(),
@@ -357,6 +359,7 @@ async function createReport({
   referenceTable,
   referencePrefix = 'forum',
   referenceId = null,
+  subjectSnapshot = null,
 }) {
   const reportType = String(type || 'Other').trim() || 'Other';
   const result = await pool.query(
@@ -373,11 +376,12 @@ async function createReport({
       reference_table,
       reference_prefix,
       reference_id,
+      subject_snapshot,
       status,
       is_created_by_bot,
       updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, 'medium', $7, $8, $9, $10, 'open', false, NOW())
+    VALUES ($1, $2, $3, $4, $5, $6, 'medium', $7, $8, $9, $10, $11::jsonb, 'open', false, NOW())
     RETURNING *
     `,
     [
@@ -391,6 +395,7 @@ async function createReport({
       referenceTable,
       referencePrefix,
       referenceId || targetId,
+      subjectSnapshot ? JSON.stringify(subjectSnapshot) : null,
     ]
   );
   const row = result.rows[0];

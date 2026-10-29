@@ -1,8 +1,8 @@
-const { randomUUID } = require('crypto');
 const { getForumGroupById } = require('../repositories/ForumGroupRepositories');
 const { getForumDiscussionById } = require('../repositories/ForumDiscussionRepositories');
 const { getUserById } = require('../repositories/UserRepositories');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
+const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 
 function reportError(message, statusCode = 400) {
   const error = new Error(message);
@@ -32,10 +32,6 @@ async function requireUser(userId, message) {
   return user;
 }
 
-function createReportNumber() {
-  return `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
-}
-
 async function submitGroupReport(groupId, payload, session) {
   const reporter = await requireUser(session?.userId, 'Reporter account not found');
   const group = await getForumGroupById(groupId);
@@ -59,7 +55,13 @@ async function submitGroupReport(groupId, payload, session) {
     targetId: String(group._id),
     referenceTable: 'forum_groups',
     type: details.type,
-    description: `${label}\n${details.description}`,
+    description: details.description,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'group',
+      title: label,
+      body: group.description,
+      href: `/forums/group/${group._id}`,
+    }),
   });
 }
 
@@ -82,6 +84,7 @@ async function submitMemberReport(groupId, memberId, payload, session) {
 
   const details = validateReportDetails(payload.type || payload.reason, payload.description);
   const targetName = [target.first_name, target.last_name].filter(Boolean).join(' ') || target.handle;
+  const groupName = group.group_name || 'forum group';
   return createReport({
     reportNumber: createReportNumber(),
     reporterAccountId: reporter.account_id,
@@ -91,7 +94,13 @@ async function submitMemberReport(groupId, memberId, payload, session) {
     referenceTable: 'forum_groups',
     referenceId: String(group._id),
     type: details.type,
-    description: `${targetName || 'Forum member'}\n${details.description}`,
+    description: details.description,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'member',
+      title: targetName || 'Forum member',
+      body: `${targetName || 'Member'} in ${groupName}`,
+      href: `/forums/group/${group._id}`,
+    }),
   });
 }
 
@@ -108,6 +117,7 @@ async function submitDiscussionReport(discussionId, payload, session) {
   }
 
   const details = validateReportDetails(payload.type || payload.reason, payload.description);
+  const groupId = discussion.forum_group_id || discussion.group_id || discussion.groupId;
   return createReport({
     reportNumber: createReportNumber(),
     reporterAccountId: reporter.account_id,
@@ -115,8 +125,15 @@ async function submitDiscussionReport(discussionId, payload, session) {
     targetType: 'discussion',
     targetId: String(discussion._id),
     referenceTable: 'forum_discussions',
+    referenceId: groupId ? String(groupId) : null,
     type: details.type,
-    description: `${discussion.title || 'Forum discussion'}\n${details.description}`,
+    description: details.description,
+    subjectSnapshot: buildSubjectSnapshot({
+      kind: 'discussion',
+      title: discussion.title || 'Forum discussion',
+      body: discussion.content,
+      href: `/forums/discussion/${discussion._id}`,
+    }),
   });
 }
 

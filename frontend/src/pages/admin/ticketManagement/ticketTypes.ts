@@ -193,6 +193,7 @@ export type UserReport = {
   reporter: TicketPerson;
   targetType: string;
   targetId: string | null;
+  subjectTitle?: string | null;
   type: string;
   description: string | null;
   status: string;

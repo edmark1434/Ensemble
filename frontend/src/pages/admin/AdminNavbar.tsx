@@ -4,6 +4,7 @@ import {
   BadgeDollarSign,
   BarChart3,
   Eye,
+  Flag,
   LayoutDashboard,
   MessageSquare,
   Settings2,
@@ -13,7 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import LogoutButton from '@/pages/moderator/shared/LogoutButton';
 import { ADMIN_LOGIN_PATH } from '@/lib/staffRoutes';
 
@@ -23,11 +24,14 @@ type NavItem = {
   to: string;
 };
 
+const REPORTS_HREF = '/admin/moderation?tab=cases&queue=reports';
+
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard' },
   { label: 'User & Team', icon: Users, to: '/admin/user-team' },
   { label: 'Credit & Economy', icon: BadgeDollarSign, to: '/admin/credit-economy' },
   { label: 'Moderation', icon: ShieldAlert, to: '/admin/moderation' },
+  { label: 'Reports', icon: Flag, to: REPORTS_HREF },
   { label: 'Analytics', icon: BarChart3, to: '/admin/analytics' },
   { label: 'Tickets', icon: Ticket, to: '/admin/ticket-management' },
   { label: 'Platform Feedback', icon: MessageSquare, to: '/admin/feedbacks' },
@@ -37,7 +41,15 @@ const navItems: NavItem[] = [
   { label: 'Platform view', icon: Eye, to: '/admin/platform-view' },
 ];
 
+function itemIsActive(to: string, pathname: string, search: string, navActive: boolean) {
+  const reportsOpen = pathname === '/admin/moderation' && new URLSearchParams(search).get('queue') === 'reports';
+  if (to === REPORTS_HREF) return reportsOpen;
+  if (to === '/admin/moderation') return navActive && !reportsOpen;
+  return navActive;
+}
+
 const AdminNavbar = () => {
+  const location = useLocation();
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-white/[0.06] bg-[#08090f]/95 backdrop-blur-2xl md:flex">
       <div className="border-b border-white/[0.06] px-5 py-6">
@@ -63,28 +75,32 @@ const AdminNavbar = () => {
             key={label}
             to={to}
             end={to === '/admin/dashboard'}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                isActive
+            className={({ isActive }) => {
+              const active = itemIsActive(to, location.pathname, location.search, isActive);
+              return `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                active
                   ? 'bg-gradient-to-r from-rose-500/20 to-orange-500/10 text-white shadow-inner shadow-rose-500/5'
                   : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100'
-              }`
-            }
+              }`;
+            }}
           >
-            {({ isActive }) => (
-              <>
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-rose-500/20 text-rose-300'
-                      : 'bg-white/[0.03] text-zinc-500 group-hover:text-zinc-300'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-                {label}
-              </>
-            )}
+            {({ isActive }) => {
+              const active = itemIsActive(to, location.pathname, location.search, isActive);
+              return (
+                <>
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      active
+                        ? 'bg-rose-500/20 text-rose-300'
+                        : 'bg-white/[0.03] text-zinc-500 group-hover:text-zinc-300'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  {label}
+                </>
+              );
+            }}
           </NavLink>
         ))}
       </nav>

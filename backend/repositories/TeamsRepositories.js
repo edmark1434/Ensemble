@@ -428,7 +428,38 @@ async function listMarketplacePosts(teamId, type) {
 }
 async function reviews(teamId){return (await pool.query(`SELECT tr.*,a.display_name,a.handle,f.path avatar_path FROM team_reviews tr JOIN accounts a ON a.account_id=tr.reviewer_account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tr.team_id=$1 ORDER BY tr.created_at DESC`,[teamId])).rows;}
 async function addReview(teamId,accountId,data){return (await pool.query(`INSERT INTO team_reviews(team_id,reviewer_account_id,rating,comment,reference_type,reference_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[teamId,accountId,data.rating,data.comment||null,data.referenceType||null,data.referenceId||null])).rows[0];}
-async function addReport(teamId,accountId,data){const team=await getTeam(teamId,accountId);const forAccountId=data.targetAccountId||team.account_id;const targetType=data.targetType||'Team';const targetId=data.targetAccountId||teamId;return (await pool.query(`INSERT INTO reports(type,reference_table,reference_prefix,reference_id,status,by_account_id,for_account_id,target_type,target_id,description,updated_at) VALUES($1,'teams','TEAM',$2,'Open',$3,$4,$5,$6,$7,NOW()) RETURNING *`,[data.category || 'Team Report',teamId,accountId,forAccountId,targetType,targetId,data.description])).rows[0];}
+async function addReport(teamId,accountId,data){
+  const team=await getTeam(teamId,accountId);
+  if(!team){
+    const error=new Error('Team not found');
+    error.statusCode=404;
+    throw error;
+  }
+  const { createReport } = require('./ModeratorSharedRepositories');
+  const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
+  const forAccountId=data.targetAccountId||team.account_id;
+  const isProject=data.source==='project';
+  const isMember=Boolean(data.targetAccountId);
+  const targetType=isMember?'team_member':(isProject?'team_project':'team');
+  const href=isProject?`/team-project/${teamId}`:`/teams/${teamId}`;
+  const title=isMember?(data.targetName||'Team member'):(team.display_name||'Team');
+  const body=isMember
+    ? `${data.targetName||'Member'} in ${team.display_name||'team'}`
+    : (team.description||team.tagline||null);
+  return createReport({
+    reportNumber: createReportNumber(),
+    reporterAccountId: accountId,
+    targetAccountId: forAccountId,
+    targetType,
+    targetId: isMember?String(data.targetAccountId):String(teamId),
+    referenceTable: 'teams',
+    referencePrefix: isProject?'project':'team',
+    referenceId: String(teamId),
+    type: data.category || 'Team Report',
+    description: data.description,
+    subjectSnapshot: buildSubjectSnapshot({ kind: targetType, title, body, href }),
+  });
+}
 async function getTeamInbox(teamId){return TeamInbox.findOne({team_id:String(teamId),deleted_at:null});}
 async function createTeamInbox(team,members){const now=new Date();const isContractual = team.team_type === 'contractual' || Boolean(team.job_id);const conversationType = isContractual ? 'engagement' : 'group';const result=await TeamInbox.insertOne({team_id:String(team.team_id),team_account_id:String(team.account_id),job_id:team.job_id?String(team.job_id):null,listing_type:isContractual?'job':null,listing_title:team.display_name,conversation_name:team.display_name,conversation_type:conversationType,conversation_image_key:team.avatar_path||null,members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),pinned_messages:[],created_at:now,updated_at:now,deleted_at:null});return TeamInbox.findOne({_id:result.insertedId});}
 async function syncTeamInboxMembers(teamId,members){const inbox=await getTeamInbox(teamId);if(!inbox)return null;const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});const teamRes = await pool.query('SELECT t.team_type, t.job_id FROM teams t WHERE t.team_id = $1', [teamId]);const isContractual = teamRes.rows[0]?.team_type === 'contractual' || Boolean(teamRes.rows[0]?.job_id);const updateFields = { members: merged, updated_at: now };if (isContractual && inbox.conversation_type !== 'engagement') { updateFields.conversation_type = 'engagement'; updateFields.listing_type = 'job'; if (teamRes.rows[0]?.job_id) updateFields.job_id = String(teamRes.rows[0].job_id); }await TeamInbox.updateOne({_id:inbox._id},{$set:updateFields});return TeamInbox.findOne({_id:inbox._id});}

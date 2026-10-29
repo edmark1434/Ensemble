@@ -90,7 +90,7 @@ async function deleteProject(teamId, viewerAccountId) {
 }
 
 async function reportProject(teamId, viewerAccountId, data) {
-  return await TeamsServices.report(teamId, viewerAccountId, data);
+  return await TeamsServices.report(teamId, viewerAccountId, { ...data, source: 'project' });
 }
 
 async function getProjectChat(teamId, viewerAccountId) {

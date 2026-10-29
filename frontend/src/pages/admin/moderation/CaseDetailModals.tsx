@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ExternalLink, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
+import { ExternalLink, FileWarning, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ModerationCase } from './moderationTypes';
@@ -69,7 +69,15 @@ type ReportDetailPayload = {
   };
   subject?: {
     headline: string;
+    kind?: string;
     description: string;
+    preview?: {
+      title: string;
+      body: string | null;
+      extra?: { attachments?: string[] } | null;
+    };
+    available?: boolean;
+    linkable?: boolean;
     message: {
       unavailable?: boolean;
       content: string;
@@ -284,41 +292,53 @@ export function ReportCaseDetailModal({
                 Reported by {report.reporter.name} (@{report.reporter.username}) ·{' '}
                 {formatDateTime(report.createdAt)}
               </p>
-              {detail.subject?.headline && (
-                <p className="mt-2 text-sm font-medium text-zinc-200">{detail.subject.headline}</p>
-              )}
             </div>
 
-            {(detail.subject?.links?.length || detail.subject?.reportedAccount) && (
-              <div className="flex flex-wrap gap-2">
-                {detail.subject?.links?.map((link) => (
-                  <a
-                    key={link.path}
-                    href={staffPlatformViewHref(location.pathname, link.path)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-sky-200 hover:bg-white/[0.08]"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {link.label}
-                  </a>
-                ))}
-              </div>
-            )}
-
-            {detail.subject?.message && (
-              <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Reported message</p>
+            <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Reported item</p>
+              <p className="mt-2 text-sm font-medium text-zinc-100">
+                {detail.subject?.headline || titleCaseLabel(report.targetType) || 'Reported item'}
+              </p>
+              {detail.subject?.available === false && (
+                <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-amber-200/90">
+                  <FileWarning className="h-3.5 w-3.5" />
+                  This item is no longer available. Showing the snapshot from when it was reported.
+                </p>
+              )}
+              {detail.subject?.message ? (
                 <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">
                   {detail.subject.message.unavailable && !detail.subject.message.content
                     ? 'This message is no longer available.'
                     : detail.subject.message.content || '[No text content]'}
                 </p>
-                {detail.subject.message.attachments.length > 0 && (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Attachments: {detail.subject.message.attachments.join(', ')}
-                  </p>
-                )}
-              </div>
-            )}
+              ) : detail.subject?.preview?.body ? (
+                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-300">{detail.subject.preview.body}</p>
+              ) : (
+                !detail.subject?.linkable && (
+                  <p className="mt-2 text-sm text-zinc-500">No preview was stored for this report.</p>
+                )
+              )}
+              {(detail.subject?.message?.attachments?.length || detail.subject?.preview?.extra?.attachments?.length) ? (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Attachments:{' '}
+                  {(detail.subject.message?.attachments || detail.subject.preview?.extra?.attachments || []).join(', ')}
+                </p>
+              ) : null}
+              {detail.subject?.links?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {detail.subject.links.map((link) => (
+                    <a
+                      key={link.path}
+                      href={staffPlatformViewHref(location.pathname, link.path)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-sky-200 hover:bg-white/[0.08]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Description</p>
