@@ -23,6 +23,18 @@
 - Accounts, projects, and media assets use their existing UUID primary keys; they do not have a separate `public_id` column.
 - Do not introduce additional public identifier columns unless a future requirement explicitly defines their contract and lifecycle.
 
+## Staff types
+
+- `staff.role` is PostgreSQL enum `staff_role`: Admin, Support Moderator, Marketplace Moderator, Forum Moderator, Jobs N Gigs Moderator.
+- ER diagram `string` columns are unbounded `varchar`: `password_hash`, `firebase_staff_uuid`, `first_name`, `last_name`, `email_address`.
+- Labels match `backend/lib/StaffEnums.js`. Migration `1827400000000_staff-erd-types` converts the old varchar(50)/text columns. Do not edit the original `staff` create-table migration.
+
+## Account activity types
+
+- ER diagram `string` columns are unbounded `varchar`: `action`, `event_code`, `reference_table`, `reference_prefix`, `reference_id`.
+- `created_at` is `timestamp without time zone`.
+- `reference_id` is not an integer. Rows store UUIDs and codes (violations, tickets, wallets), so the column stays a string. Migration `1827300000000_account-activity-erd-types` aligns the rest. Do not edit the original `account_activity` create-table migration.
+
 ## Credit transaction enums
 
 - `credit_transactions.type` is PostgreSQL enum `credit_transaction_type`: Fund Transfer, Escrow Hold, Escrow Release, Escrow Refund, Asset Purchase, Asset Refund, Fee, Cashout, Cashout Refund, Job Posting Fee, Job Posting Fee Refund, Proposal Fee, Proposal Fee Refund, Service Posting Fee.

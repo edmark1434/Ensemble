@@ -219,7 +219,7 @@ async function applyDisputeAutomations(disputeRow) {
     JOIN accounts a ON a.account_id = s.account_id
     WHERE a.deleted_at IS NULL
       AND LOWER(COALESCE(a.status, 'active')) = 'active'
-      AND LOWER(COALESCE(s.role, '')) IN (
+      AND LOWER(s.role::text) IN (
         'admin', 'support moderator', 'support_moderator', 'moderator'
       )
     ORDER BY (

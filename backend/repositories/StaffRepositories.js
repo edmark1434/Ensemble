@@ -3,15 +3,12 @@ const bcrypt = require('bcrypt');
 const { pool } = require('../lib/Database');
 const { getAccountByHandle } = require('./AccountRepositories');
 const { getUserByEmail } = require('./UserRepositories');
+const {
+    MODERATOR_ROLES,
+    ALLOWED_STAFF_ROLES,
+    normalizeStaffRole,
+} = require('../lib/StaffEnums');
 
-const MODERATOR_ROLES = [
-    'Support Moderator',
-    'Marketplace Moderator',
-    'Forum Moderator',
-    'Jobs N Gigs Moderator',
-];
-
-const ALLOWED_STAFF_ROLES = ['Admin', ...MODERATOR_ROLES];
 const SALT_ROUNDS = 10;
 
 async function createStaff({
@@ -55,7 +52,7 @@ async function createStaffAccount({
     const trimmedLast = String(lastName || '').trim();
     const handle = String(username || '').trim();
     const email = String(emailAddress || '').trim().toLowerCase();
-    const staffRole = String(role || '').trim();
+    const staffRole = normalizeStaffRole(role, '');
 
     if (!trimmedFirst || !trimmedLast) {
         throw Object.assign(new Error('First name and last name are required'), { status: 400 });

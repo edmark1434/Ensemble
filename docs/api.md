@@ -95,6 +95,12 @@
 - Editor export requests carry projectId and an explicit marketDraft flag. The signed editor session supplies the render identity (including status/cancellation requests); client identity headers are not trusted. Internal render-source checks membership and the actual project license for every market media file. Licensed media uses protected originals; unlicensed media is rejected for clean export and uses a validated generated proxy only for explicit drafts. Export never makes a purchase.
 - Render source URLs expire after 24 hours to allow queueing and are inserted only into the render job copy, never project history. The render server progress endpoints return only format/type/project name from job input and redact raw error details; they do not expose source URLs. Existing 60-second preview/download URL expiry is unchanged.
 
+## Support tickets
+
+- Members file their own tickets with `POST /api/users/tickets`. The requester is always the signed-in account.
+- Staff open a ticket for someone with `POST /api/staff/tickets`. Admin can use the same body on `POST /api/admin/tickets`. Body: `{ requesterAccountId, subject, type, description, priority?, assignToMe? }`. `requesterAccountId` is required and must be a live member or staff account. Description is stored as the opening staff message. `assignToMe` only succeeds when that staff role can handle the ticket type; otherwise the ticket stays unassigned in the type's queue.
+- Staff search accounts with `GET /api/staff/tickets/people?q=`.
+
 ### Editor project licensed collections
 
 - `GET /api/market-assets?view=licensed&projectId=...&type=image|video|audio` lists assets with active, non-deleted licenses assigned to the current project. A signed session and active membership in a non-deleted project are required. The collection includes collaborator/free licenses and licensed unpublished listings; it excludes unassigned and other-project licenses. Existing search, bundle pagination and media counts apply.
