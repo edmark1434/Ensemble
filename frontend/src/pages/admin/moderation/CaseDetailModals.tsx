@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { ExternalLink, FileWarning, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ModerationCase } from './moderationTypes';
 import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
-import { staffPlatformViewHref } from '@/lib/staffRoutes';
+import ReportedItemPreviewOverlay from './ReportedItemPreviewOverlay';
 
 function titleCaseLabel(value: string) {
   return String(value || '')
@@ -109,8 +109,8 @@ export function ReportCaseDetailModal({
   endpointBase?: string;
   accent?: 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 }) {
-  const location = useLocation();
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
+  const [preview, setPreview] = useState<{ path: string; label: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('open');
@@ -261,7 +261,11 @@ export function ReportCaseDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0f1016] shadow-2xl">
+      <motion.div
+        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0f1016] shadow-2xl"
+        animate={preview ? { scale: 0.97, opacity: 0.55 } : { scale: 1, opacity: 1 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      >
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentLabel}`}>Report detail</p>
@@ -327,14 +331,15 @@ export function ReportCaseDetailModal({
               {detail.subject?.links?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {detail.subject.links.map((link) => (
-                    <a
+                    <button
                       key={link.path}
-                      href={staffPlatformViewHref(location.pathname, link.path)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-sky-200 hover:bg-white/[0.08]"
+                      type="button"
+                      onClick={() => setPreview({ path: link.path, label: link.label })}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:bg-white/[0.08]"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                       {link.label}
-                    </a>
+                    </button>
                   ))}
                 </div>
               ) : null}
@@ -545,7 +550,13 @@ export function ReportCaseDetailModal({
         ) : (
           <p className="py-12 text-center text-zinc-500">Report not found.</p>
         )}
-      </div>
+      </motion.div>
+      <ReportedItemPreviewOverlay
+        open={Boolean(preview)}
+        path={preview?.path || null}
+        title={preview?.label || detail?.subject?.headline}
+        onClose={() => setPreview(null)}
+      />
     </div>
   );
 }
