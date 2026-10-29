@@ -11,6 +11,8 @@ export interface BadgeMetadata {
   glowColor: string;
   condition: string;
   dateObtained: string;
+  category?: string;
+  display_order?: number | null;
 }
 
 interface BadgeSectionProps {
@@ -168,6 +170,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                         </div>
                         <div className="space-y-1 min-w-0 flex-1">
                           <h4 className="font-black text-sm text-gray-900 dark:text-white tracking-wide">{b.name}</h4>
+                          {b.category && <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-zinc-500">{b.category}</p>}
                           <p className="text-[11px] text-gray-600 dark:text-zinc-400 font-medium leading-relaxed">{b.description}</p>
                         </div>
                       </div>
@@ -220,6 +223,9 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                       <p className="font-semibold text-gray-700 dark:text-zinc-300 tracking-wide truncate text-[11px] group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
                         {b.name}
                       </p>
+                      {b.category && (
+                        <p className="text-[10px] text-gray-400 dark:text-zinc-500 truncate">{b.category}</p>
+                      )}
                     </div>
 
                     {/* Tooltip */}
@@ -232,6 +238,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                         </div>
                         <div className="space-y-1 min-w-0 flex-1">
                           <h4 className="font-black text-sm text-gray-900 dark:text-white tracking-wide">{b.name}</h4>
+                          {b.category && <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-zinc-500">{b.category}</p>}
                           <p className="text-[11px] text-gray-600 dark:text-zinc-400 font-medium leading-relaxed">{b.description}</p>
                         </div>
                       </div>

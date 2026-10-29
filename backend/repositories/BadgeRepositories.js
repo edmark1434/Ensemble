@@ -414,9 +414,11 @@ async function hasClaimedBadge(accountId, registryId) {
 
 async function getOwnBadgeGrants(accountId) {
     const { rows } = await pool.query(`
-        SELECT ab.account_badge_id, ab.status, ab.grant_message, ab.created_at, ab.claimed_at, b.registry_id, b.name
+        SELECT ab.account_badge_id, ab.status, ab.grant_message, ab.created_at, ab.claimed_at,
+               b.registry_id, b.name, b.badge_category_id, bc.name AS category
         FROM account_badges ab
         JOIN badges b ON b.badge_id = ab.badge_id
+        JOIN badge_categories bc ON bc.badge_category_id = b.badge_category_id
         WHERE ab.account_id = $1 AND ab.status IN ('pending', 'claimed')
         ORDER BY ab.created_at DESC
     `, [accountId]);

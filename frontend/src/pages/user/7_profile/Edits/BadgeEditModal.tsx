@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Sparkles, AlertCircle, ArrowUp, ArrowDown, RefreshCw, List, LayoutGrid } from "lucide-react";
-import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry.ts";
+import { badgesRegistry, hydrateBadge } from "@/pages/user/7_profile/Utilities/BadgesRegistry.ts";
 import type { BadgeMetadata } from "../Displays/BadgeSideSection_ProfileDisplay.tsx";
 
 interface BadgeEditModalProps {
@@ -139,7 +139,11 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
             {/* Inventory Container Scroller Grid */}
             <div className="overflow-y-auto pr-1 flex-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-white/10 scrollbar-track-transparent">
               <div className={inventoryMode === "RowList" ? "space-y-2" : "grid grid-cols-5 gap-3 pb-2 animate-fadeIn"}>
-                {badgesRegistry.map((b) => {
+                {[
+                  ...badgesRegistry,
+                  ...unlockedBadges.filter((badge) => !badgesRegistry.some((item) => String(item.id) === String(badge.id))),
+                ].map((raw) => {
+                  const b = hydrateBadge(raw);
                   const isUnlocked = unlockedBadges.some(ub => String(ub.id) === String(b.id));
                   const currentSlotIndex = selectedBadges.findIndex((item) => item.id === b.id);
                   const isSelected = currentSlotIndex !== -1;
@@ -172,6 +176,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                             <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100 tracking-wide truncate">
                               {b.name} {!isUnlocked && <span className="ml-2 text-[10px] uppercase font-black text-red-500 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-500/20">Locked</span>}
                             </h4>
+                            {b.category && <p className="text-[10px] uppercase tracking-wider text-zinc-400">{b.category}</p>}
                             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium line-clamp-1 leading-normal">{b.description}</p>
                             <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-normal pt-0.5">
                               <span className="text-zinc-500 dark:text-zinc-400/60 font-semibold">Criteria:</span> {b.condition}

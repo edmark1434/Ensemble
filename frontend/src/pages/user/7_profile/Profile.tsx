@@ -29,7 +29,7 @@ import type { TabType } from "./Displays/Body/MainBody.tsx";
 import type { PortfolioItem } from "./Displays/Body/Profile_Portfolio.tsx";
 
 // Badges Registry & Type Infrastructure
-import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry.ts";
+import { hydrateBadge, pinnedBadges } from "@/pages/user/7_profile/Utilities/BadgesRegistry.ts";
 import type { BadgeMetadata } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 
 // System Modals
@@ -1077,11 +1077,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             />
             <BadgeSideSection_ProfileDisplay
               loading={loading}
-              badges={(userDetails?.badges || [])
-                .filter(b => b.display_order !== null)
-                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-                .map(b => badgesRegistry.find(reg => reg.id === b.id))
-                .filter(Boolean) as BadgeMetadata[]}
+              badges={pinnedBadges(userDetails?.badges || [])}
               isOwner={isOwner}
               onEditClick={() => setIsBadgeModalOpen(true)}
             />
@@ -1281,12 +1277,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       <BadgeEditModal
         isOpen={isBadgeModalOpen}
         onClose={() => setIsBadgeModalOpen(false)}
-        unlockedBadges={(userDetails?.badges || []).map(b => badgesRegistry.find(reg => reg.id === b.id)).filter(Boolean) as BadgeMetadata[]}
-        currentlyDisplayedBadges={(userDetails?.badges || [])
-          .filter(b => b.display_order !== null)
-          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-          .map(b => badgesRegistry.find(reg => reg.id === b.id))
-          .filter(Boolean) as BadgeMetadata[]}
+        unlockedBadges={(userDetails?.badges || []).map(hydrateBadge)}
+        currentlyDisplayedBadges={pinnedBadges(userDetails?.badges || [])}
         onSave={saveSelectedBadges}
       />
 

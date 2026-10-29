@@ -45,6 +45,7 @@
 - `GET /api/admin/badge-requirement-types` lists evaluable metrics (jobs, gigs, assets, profile, reviews, followers) plus honorary `admin_grant`.
 - Catalog `POST/PATCH /api/admin/badges` stores one unlock on the badge: `{ triggerEventCode, conditionValue, badgeCategoryId }`. `category` (name) is still accepted if it matches a live row. `admin_grant` means honorary. Evaluation pending-grants when that one unlock is met.
 - `GET /api/admin/badge-categories` lists live categories. `POST /api/admin/badge-categories` creates one (`{ name, description }`). Duplicate live names return 409.
+- Badge payloads (`GET /api/admin/badges`, profile `badges`, discovery cards, `GET /api/accounts/badges/mine`) include `badge_category_id` and `category` (the live category name). The badges row stores only the foreign key.
 
 ## Platform Merit
 

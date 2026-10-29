@@ -9,6 +9,7 @@ export type CatalogBadge = {
   condition_value: number;
   badge_category_id: string;
   category: string;
+  category_description?: string;
   claimed_count: number;
   pending_count: number;
   is_system: boolean;

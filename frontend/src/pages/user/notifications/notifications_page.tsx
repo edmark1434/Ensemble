@@ -46,6 +46,7 @@ interface BadgeGrant {
   status: "pending" | "claimed";
   registry_id: string;
   name: string;
+  category?: string;
 }
 
 const badgeMetaById = new Map(badgesRegistry.map(b => [String(b.id), b]));
@@ -334,7 +335,7 @@ const NotificationsPage: React.FC = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
-                              {getNotificationLabel(n.reference_prefix)}{grant ? ` · ${meta?.name || grant.name}` : ""}
+                              {getNotificationLabel(n.reference_prefix)}{grant ? ` · ${meta?.name || grant.name}` : ""}{grant?.category ? ` · ${grant.category}` : ""}
                             </span>
                             <p className={`text-xs sm:text-sm leading-snug mt-0.5 line-clamp-2 ${!n.is_read ? "text-gray-900 dark:text-white font-semibold" : "text-gray-700 dark:text-zinc-300"}`}>
                               {n.message}

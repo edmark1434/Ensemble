@@ -2,7 +2,7 @@ import React from "react";
 import { X, Star, Tag } from "lucide-react";
 import FlipCard from "./FlipCard";
 import { useNavigate } from "react-router-dom";
-import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
+import { pinnedBadges } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
 import { bannerPresetUrl, resolveBannerPreset } from "@/lib/profileBanners";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
@@ -25,7 +25,7 @@ export interface DiscoveryFlipCardUser {
   totalAssets?: number;
   joinedDate?: string;
   email?: string;
-  badges?: { id: string; display_order: number | null }[];
+  badges?: { id: string; display_order: number | null; name?: string; category?: string }[];
   bannerPreset?: string | null;
 }
 
@@ -36,8 +36,6 @@ const SUBSCRIPTION_ICONS: Record<string, string> = {
   premium: "/icons/subscription/premium.png",
   business: "/icons/subscription/studio.png",
 };
-
-const badgeMetaById = new Map(badgesRegistry.map(b => [String(b.id), b]));
 
 interface DiscoveryFlipCardModalProps {
   user: DiscoveryFlipCardUser;
@@ -51,11 +49,7 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
   const subscription = user.subscriptionType || "Free";
   const effectivePreset = resolveBannerPreset(user.bannerPreset ?? null, user.username || user.name || user.id);
   const bannerUrl = bannerPresetUrl(effectivePreset);
-  const displayedBadges = (user.badges || [])
-    .filter(b => b.display_order !== null)
-    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-    .map(b => badgeMetaById.get(String(b.id)))
-    .filter((b): b is NonNullable<typeof b> => !!b);
+  const displayedBadges = pinnedBadges(user.badges || []);
   const topBadges = displayedBadges.slice(0, 3);
   const extraBadgeCount = displayedBadges.length - topBadges.length;
   const avatarUrl = constructAvatarUrl(user.avatar, user.name);

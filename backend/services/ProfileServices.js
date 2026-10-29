@@ -333,10 +333,7 @@ async function getProfileByAccountIdService(accountId) {
             const { listVisibleAccountDisputes } = require('../repositories/DisputeChatRepositories');
             profile.disputes = await listVisibleAccountDisputes(profile.account_id);
             const badges = await getAccountBadges(accountId);
-            profile.badges = badges.map(b => ({
-                id: b.registry_id,
-                display_order: b.display_order
-            }));
+            profile.badges = badges;
         }
         return profile;
     } catch (err) {

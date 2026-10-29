@@ -52,6 +52,16 @@ export default function BadgeGrantTab() {
   const registryById = useMemo(() => new Map(badgesRegistry.map((b) => [String(b.id), b])), []);
   const selectedBadge = catalog.find((b) => b.registry_id === selectedId) || null;
   const selectedMeta = selectedId ? registryById.get(selectedId) : undefined;
+  const groupedCatalog = useMemo(() => {
+    const groups = new Map<string, CatalogBadge[]>();
+    for (const badge of catalog) {
+      const key = badge.category || 'Uncategorized';
+      const list = groups.get(key) || [];
+      list.push(badge);
+      groups.set(key, list);
+    }
+    return [...groups.entries()];
+  }, [catalog]);
 
   const loadCatalog = useCallback(async () => {
     try {
@@ -156,30 +166,37 @@ export default function BadgeGrantTab() {
         ) : catalog.length === 0 ? (
           <p className="px-2 py-6 text-sm text-zinc-500">No badges found. Add one on the Catalog tab.</p>
         ) : (
-          <div className="space-y-1">
-            {catalog.map((badge) => {
-              const meta = registryById.get(badge.registry_id);
-              const active = badge.registry_id === selectedId;
-              return (
-                <button
-                  key={badge.badge_id}
-                  onClick={() => setSelectedId(badge.registry_id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors ${
-                    active ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'
-                  }`}
-                >
-                  {meta?.icon ? (
-                    <img src={meta.icon} alt="" className="h-9 w-9 shrink-0 object-contain" />
-                  ) : (
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"><Award className="h-4 w-4" /></span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-white">{badge.name}</span>
-                    <span className="block text-[11px] text-zinc-500">{badge.claimed_count} claimed · {badge.pending_count} pending</span>
-                  </span>
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            {groupedCatalog.map(([category, badges]) => (
+              <div key={category}>
+                <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">{category}</p>
+                <div className="space-y-1">
+                  {badges.map((badge) => {
+                    const meta = registryById.get(badge.registry_id);
+                    const active = badge.registry_id === selectedId;
+                    return (
+                      <button
+                        key={badge.badge_id}
+                        onClick={() => setSelectedId(badge.registry_id)}
+                        className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors ${
+                          active ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        {meta?.icon ? (
+                          <img src={meta.icon} alt="" className="h-9 w-9 shrink-0 object-contain" />
+                        ) : (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"><Award className="h-4 w-4" /></span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-white">{badge.name}</span>
+                          <span className="block text-[11px] text-zinc-500">{badge.claimed_count} claimed · {badge.pending_count} pending</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -191,6 +208,9 @@ export default function BadgeGrantTab() {
               {selectedMeta?.icon && <img src={selectedMeta.icon} alt="" className="h-16 w-16 object-contain" />}
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-white">{selectedBadge.name}</h2>
+                {selectedBadge.category && (
+                  <p className="mt-0.5 text-[11px] uppercase tracking-wider text-zinc-500">{selectedBadge.category}</p>
+                )}
                 <p className="mt-1 text-sm text-zinc-400">{selectedMeta?.description || selectedBadge.description}</p>
                 {selectedMeta?.condition && <p className="mt-1 text-xs text-zinc-500">Criteria: {selectedMeta.condition}</p>}
               </div>

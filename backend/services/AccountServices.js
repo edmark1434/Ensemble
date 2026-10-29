@@ -117,11 +117,7 @@ async function getProfileServices(accountId) {
         const profile = await getProfileRepositories(accountId);
         if (profile) {
             const badges = await getAccountBadges(accountId);
-            // Format badges as an array of objects to map easily in the frontend
-            profile.badges = badges.map(b => ({
-                id: b.registry_id,
-                display_order: b.display_order
-            }));
+            profile.badges = badges;
         }
         return profile;
     } catch (err) {

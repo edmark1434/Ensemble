@@ -161,8 +161,17 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 100,
                 '[]'::json
             ) AS skills,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', b.registry_id, 'display_order', ab.display_order) ORDER BY ab.display_order)
-                 FROM account_badges ab JOIN badges b ON b.badge_id = ab.badge_id
+                (SELECT json_agg(json_build_object(
+                    'id', b.registry_id,
+                    'name', b.name,
+                    'description', b.description,
+                    'display_order', ab.display_order,
+                    'badge_category_id', b.badge_category_id,
+                    'category', bc.name
+                 ) ORDER BY ab.display_order)
+                 FROM account_badges ab
+                 JOIN badges b ON b.badge_id = ab.badge_id
+                 JOIN badge_categories bc ON bc.badge_category_id = b.badge_category_id
                  WHERE ab.account_id = a.account_id AND ab.status = 'claimed' AND ab.display_order IS NOT NULL),
                 '[]'::json
             ) AS badges
@@ -571,13 +580,22 @@ async function checkIsFollowing(followerId, followedId) {
 async function getAccountBadges(accountId) {
     try {
         const query = `
-            SELECT b.registry_id, ab.display_order
+            SELECT b.registry_id, b.name, b.description, ab.display_order,
+                   b.badge_category_id, bc.name AS category
             FROM account_badges ab
             JOIN badges b ON b.badge_id = ab.badge_id
+            JOIN badge_categories bc ON bc.badge_category_id = b.badge_category_id
             WHERE ab.account_id = $1 AND ab.status = 'claimed'
         `;
         const result = await pool.query(query, [accountId]);
-        return result.rows;
+        return result.rows.map((row) => ({
+            id: row.registry_id,
+            name: row.name,
+            description: row.description,
+            display_order: row.display_order,
+            badge_category_id: row.badge_category_id,
+            category: row.category,
+        }));
     } catch (err) {
         console.error(`Error fetching badges for account ${accountId}:`, err);
         throw err;

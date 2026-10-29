@@ -4,6 +4,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   // --- CORE ECOSYSTEM FOUNDATION TRACKS ---
   {
     id: "acc-alpha",
+    category: "Milestones",
     name: "Alpha Tester",
     description: "Granted to core ecosystem pioneers who tested the platform during its early alpha stages.",
     icon: "/icons/badges/alpha_b.png",
@@ -14,6 +15,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-beta",
+    category: "Milestones",
     name: "Beta Tester",
     description: "Granted to core ecosystem pioneers who tested the platform during its early beta stages.",
     icon: "/icons/badges/beta_b.png",
@@ -25,6 +27,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   // --- PROFILE MILESTONES ---
   {
     id: "setup-profile",
+    category: "Milestones",
     name: "Profile Complete",
     description: "Granted to users who have successfully fully completed their profile setup.",
     icon: "/icons/badges/setup-profile.png",
@@ -37,6 +40,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   // --- FREELANCE RANK PROGRESSION TRACKS ---
   {
     id: "acc-freelance-1",
+    category: "Milestones",
     name: "Fresh Freelancer",
     description: "Granted to users who have newly started becoming a freelancer on this platform.",
     icon: "/icons/badges/freelance_1.png",
@@ -47,6 +51,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-freelance-2",
+    category: "Milestones",
     name: "Rising Freelancer",
     description: "Granted to active freelancers establishing a consistent workspace pipeline.",
     icon: "/icons/badges/freelance_2.png",
@@ -57,6 +62,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-freelance-3",
+    category: "Milestones",
     name: "Elite Freelancer",
     description: "Granted to high-tier freelancers delivering premium-grade production deliverables.",
     icon: "/icons/badges/freelance_3.png",
@@ -67,6 +73,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-freelance-4",
+    category: "Milestones",
     name: "Grand Freelancer",
     description: "The absolute pinnacle of freelance production excellence across the platform ecosystem.",
     icon: "/icons/badges/freelance_4.png",
@@ -79,6 +86,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   // --- CLIENT RANK PROGRESSION TRACKS ---
   {
     id: "acc-client-1",
+    category: "Milestones",
     name: "Fresh Client",
     description: "Granted to users who have successfully become a Client for the first time.",
     icon: "/icons/badges/client_1.png",
@@ -89,6 +97,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-client-2",
+    category: "Milestones",
     name: "Rising Client",
     description: "Granted to clients expanding their workforce layout and regular contract deployments.",
     icon: "/icons/badges/client_2.png",
@@ -99,6 +108,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-client-3",
+    category: "Milestones",
     name: "Elite Client",
     description: "Granted to trusted high-volume spenders and milestone managers inside the hub.",
     icon: "/icons/badges/client_3.png",
@@ -109,6 +119,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-client-4",
+    category: "Milestones",
     name: "Grand Client",
     description: "Ecosystem power client commanding substantial studio pipelines and commercial arrays.",
     icon: "/icons/badges/client_4.png",
@@ -121,6 +132,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   // --- CREATOR / ASSET RANK PROGRESSION TRACKS ---
   {
     id: "acc-asset-1",
+    category: "Marketplace",
     name: "Fresh Creator",
     description: "Granted to users who have successfully uploaded their first production asset.",
     icon: "/icons/badges/asset_1.png",
@@ -131,6 +143,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-asset-2",
+    category: "Marketplace",
     name: "Rising Creator",
     description: "Granted to assets creators with growing distribution tracking metrics.",
     icon: "/icons/badges/asset_2.png",
@@ -141,6 +154,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-asset-3",
+    category: "Marketplace",
     name: "Elite Creator",
     description: "Granted to top-tier library authors crafting high-fidelity design standards.",
     icon: "/icons/badges/asset_3.png",
@@ -151,6 +165,7 @@ export const badgesRegistry: BadgeMetadata[] = [
   },
   {
     id: "acc-asset-4",
+    category: "Marketplace",
     name: "Grand Creator",
     description: "Legendary library architect setting the structural baseline style across the global market.",
     icon: "/icons/badges/asset_4.png",
@@ -160,3 +175,28 @@ export const badgesRegistry: BadgeMetadata[] = [
     dateObtained: "Master Architect Status"
   }
 ];
+
+type BadgeRow = Partial<BadgeMetadata> & { id: string | number };
+
+export function hydrateBadge(row: BadgeRow): BadgeMetadata {
+  const meta = badgesRegistry.find((item) => String(item.id) === String(row.id));
+  return {
+    id: row.id,
+    name: row.name || meta?.name || "Badge",
+    description: row.description || meta?.description || "",
+    icon: meta?.icon || row.icon || "",
+    borderColor: meta?.borderColor || "#71717a",
+    glowColor: meta?.glowColor || "#71717a",
+    condition: meta?.condition || row.condition || "",
+    dateObtained: meta?.dateObtained || row.dateObtained || "",
+    category: row.category || meta?.category,
+    display_order: row.display_order ?? null,
+  };
+}
+
+export function pinnedBadges(rows: BadgeRow[] = []) {
+  return rows
+    .filter((row) => row.display_order != null)
+    .sort((a, b) => (Number(a.display_order) || 0) - (Number(b.display_order) || 0))
+    .map(hydrateBadge);
+}
