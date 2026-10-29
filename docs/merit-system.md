@@ -24,7 +24,8 @@ When a warning expires or is rescinded, merit comes back by itself. Completions,
 
 | Surface | What shows |
 |---|---|
-| Profile Performance tab | Platform Merit ring, 0–100. Default 100. |
+| Profile sidebar (always visible) | Platform Merit ring, 0–100. Default 100. |
+| Profile Performance tab | Same ring with Record / dispute actions. |
 | Owner Record | Current merit, named warnings, standing. Warnings show as merit taken (`−5 merit`), not “warning points.” |
 | Public chips | Banned / Suspended / Locked / Timeout / Under dispute. Not the merit band name, not warning text. |
 | Staff desks | Warning points, catalog, thresholds. Not this display name. |

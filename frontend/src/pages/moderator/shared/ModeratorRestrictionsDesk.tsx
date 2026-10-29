@@ -7,6 +7,7 @@ import { SanctionScheduleFields, type SanctionTiming } from '@/pages/admin/userT
 import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
 import { getUserTeamCapabilities, type UserTeamVariant } from '@/pages/admin/userTeam/userTeamCapabilities';
 import { accentText, titleCaseWords, type Accent } from './ui';
+import { meritBandLabel, meritFromWarningPoints } from '@/lib/merit';
 
 type DeskAccount = {
   accountId: string;
@@ -561,6 +562,7 @@ export default function ModeratorRestrictionsDesk({
   const activePoints = selectedWarnings
     .filter((row) => warningBucket(row) === 'active')
     .reduce((sum, row) => sum + (Number(row.points) || 0), 0);
+  const selectedMerit = meritFromWarningPoints(activePoints);
 
   async function runAction(action: string) {
     if (!selected) return;
@@ -1005,7 +1007,8 @@ export default function ModeratorRestrictionsDesk({
                   <Fact label="Email" value={selected.email || 'No email on file'} />
                   <Fact label="Legal name" value={selected.legalName || '—'} />
                   <Fact label="Account type" value={selected.type || '—'} />
-                  <Fact label="Active points" value={String(activePoints)} />
+                  <Fact label="Platform Merit" value={`${selectedMerit} · ${meritBandLabel(selectedMerit)}`} />
+                  <Fact label="Active warning points" value={String(activePoints)} />
                   <Fact label="Warnings" value={String(selectedWarnings.length)} />
                   <Fact label="Account id" value={shortId(selected.accountId)} title={selected.accountId} />
                 </dl>

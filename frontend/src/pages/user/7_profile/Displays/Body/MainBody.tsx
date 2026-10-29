@@ -153,7 +153,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                       <div className="pt-2">
                           <RatingsSection_ProfileDisplay
                             loading={loading}
-                            meritScore={userDetails?.standing?.merit ?? 100}
+                            meritScore={Number.isFinite(Number(userDetails?.standing?.merit)) ? Number(userDetails.standing.merit) : 100}
                             avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating).toFixed(1)) : 0.0}
                             totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
                             clientRating={userDetails?.client_rating ? Number(parseFloat(userDetails.client_rating).toFixed(1)) : 0.0}

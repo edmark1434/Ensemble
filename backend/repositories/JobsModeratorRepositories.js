@@ -14,6 +14,8 @@ const {
   CHART_COLORS,
 } = require('./ModeratorSharedRepositories');
 const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
+const { sumActiveWarningPoints } = require('./WarningBandRepositories');
+const { meritFromWarningPoints } = require('../lib/WarningBands');
 
 // Jobs & Gigs moderation covers Jobs and Gigs tickets + related disputes.
 const JOBS_TICKET_SCOPE = QUEUE_SCOPES.jobs;
@@ -472,7 +474,7 @@ async function getUserJobsHistory(accountId) {
   if (!accountResult.rows.length) return null;
   const acc = accountResult.rows[0];
 
-  const [jobsResult, gigsResult, contractsResult, proposalsResult, gigRequestsResult] = await Promise.all([
+  const [jobsResult, gigsResult, contractsResult, proposalsResult, gigRequestsResult, warningPoints] = await Promise.all([
     pool.query(
       `SELECT job_id, title, status, payment_type, rate_credits_min, rate_credits_max, created_at, deleted_at
        FROM jobs WHERE client_account_id = $1 ORDER BY created_at DESC LIMIT 50`,
@@ -532,10 +534,17 @@ async function getUserJobsHistory(accountId) {
       `,
       [accountId]
     ),
+    sumActiveWarningPoints(accountId),
   ]);
 
   return {
-    account: { accountId: acc.account_id, name: acc.name || 'Unknown', handle: acc.handle || '—', status: acc.status },
+    account: {
+      accountId: acc.account_id,
+      name: acc.name || 'Unknown',
+      handle: acc.handle || '—',
+      status: acc.status,
+      merit: meritFromWarningPoints(warningPoints),
+    },
     jobs: jobsResult.rows.map((r) => ({
       id: r.job_id,
       title: r.title,

@@ -106,6 +106,7 @@ export type SellerListingsHistory = {
     name: string;
     handle: string;
     status: string;
+    merit?: number;
   };
   counts: {
     total: number;

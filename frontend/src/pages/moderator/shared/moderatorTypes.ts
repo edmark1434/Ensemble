@@ -450,7 +450,7 @@ export type GigPostingDetail = {
 export type JobsGigsPostingDetail = JobPostingDetail | GigPostingDetail;
 
 export type UserJobsHistory = {
-  account: { accountId: string; name: string; handle: string; status: string };
+  account: { accountId: string; name: string; handle: string; status: string; merit?: number };
   jobs: {
     id: string;
     title: string;

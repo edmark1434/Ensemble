@@ -3,6 +3,8 @@ const { QUEUE_SCOPES } = require('../lib/TicketEnums');
 const { MARKETPLACE_REPORT_TYPES } = require('../lib/ReportEnums');
 const { recordAccountActivity } = require('./AccountActivityRepositories');
 const { sendMarketplaceListingNotification } = require('../lib/ModerationPolicy');
+const { sumActiveWarningPoints } = require('./WarningBandRepositories');
+const { meritFromWarningPoints } = require('../lib/WarningBands');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
@@ -129,7 +131,8 @@ async function getSellerMarketplaceListings(accountId) {
   );
   if (!accountResult.rows[0]) return null;
 
-  const listingsResult = await pool.query(
+  const [listingsResult, warningPoints] = await Promise.all([
+    pool.query(
     `
     SELECT
       listing_id,
@@ -147,7 +150,9 @@ async function getSellerMarketplaceListings(accountId) {
     LIMIT 100
     `,
     [accountId]
-  );
+    ),
+    sumActiveWarningPoints(accountId),
+  ]);
 
   const account = accountResult.rows[0];
   const listings = listingsResult.rows.map((row) => ({
@@ -176,6 +181,7 @@ async function getSellerMarketplaceListings(accountId) {
       name: account.name,
       handle: account.handle || '—',
       status: account.status || 'active',
+      merit: meritFromWarningPoints(warningPoints),
     },
     counts,
     listings,

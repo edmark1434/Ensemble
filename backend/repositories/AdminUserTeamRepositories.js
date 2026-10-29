@@ -1,6 +1,7 @@
 const { pool } = require('../lib/Database');
 const { CREDIT_TRANSACTION_TYPE } = require('../lib/CreditTransactionEnums');
 const { isViolationActive } = require('./ModeratorRepositories');
+const { meritFromWarningPoints } = require('../lib/WarningBands');
 const {
   recordAccountActivity,
   fetchActivityForAccounts,
@@ -262,11 +263,15 @@ function buildHistory(accountId, historyMap, activityMap = new Map()) {
   const caution =
     data.violations.some((v) => v.active !== false) || activeDisputes.length > 0;
   const activity = activityMap.get(accountId) || [];
+  const activePoints = data.violations
+    .filter((v) => v.active)
+    .reduce((sum, v) => sum + Number(v.points || 0), 0);
 
   return {
     summaryLabel: caution
       ? 'Active, Under Review, Deal with Caution'
       : 'Active — Good standing',
+    merit: meritFromWarningPoints(activePoints),
     totalViolations: data.violations.length,
     totalDisputes: data.disputes.length,
     openDisputes: activeDisputes.length,
@@ -955,6 +960,7 @@ async function getUsersManagement() {
 
   const enriched = users.map((u) => {
     const { verificationMeta, walletBalance, ...rest } = u;
+    const history = buildHistory(u.accountId, historyMap, activityMap);
     return {
       ...rest,
       profileId: `USR-${String(u.id).slice(0, 8).toUpperCase()}`,
@@ -967,7 +973,8 @@ async function getUsersManagement() {
           created_at: u.joinedAt,
         }
       ),
-      history: buildHistory(u.accountId, historyMap, activityMap),
+      history,
+      merit: history.merit,
       stats: {
         totalAssets: Number(assetsByAccount.get(u.accountId) || 0),
         totalCredits: walletBalance,

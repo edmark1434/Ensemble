@@ -16,6 +16,7 @@ import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
 import { type PublicProfileDispute } from "./Displays/RatingsSection_ProfileDisplay.tsx";
 import type { PublicStanding } from "./Displays/AccountStanding.tsx";
+import { DEFAULT_MERIT } from "@/lib/merit";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
 import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_ProfileDisplay.tsx";
@@ -148,6 +149,14 @@ const ID_PATTERN =
 
 const isUuid = (value: string | undefined): value is string =>
   Boolean(value && ID_PATTERN.test(value));
+
+function standingWithMerit(standing?: PublicStanding | null): PublicStanding {
+  const merit = Number(standing?.merit);
+  return {
+    ...(standing || {}),
+    merit: Number.isFinite(merit) ? Math.min(Math.max(merit, 0), 100) : DEFAULT_MERIT,
+  };
+}
 
 export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
@@ -693,7 +702,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             client_service_count: profileData.client_service_count,
             client_job_rating: profileData.client_job_rating,
             client_job_count: profileData.client_job_count,
-            standing: profileData.standing || null,
+            standing: standingWithMerit(profileData.standing),
             disputes: profileData.disputes || [],
           });
         } catch (skillsError) {
@@ -737,7 +746,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             client_service_count: profileData.client_service_count,
             client_job_rating: profileData.client_job_rating,
             client_job_count: profileData.client_job_count,
-            standing: profileData.standing || null,
+            standing: standingWithMerit(profileData.standing),
             disputes: profileData.disputes || [],
           });
         }
@@ -1054,6 +1063,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             <RatingsBudgetSideSection_ProfileDisplay
               loading={loading}
               isOwner={isOwner}
+              meritScore={userDetails?.standing?.merit ?? DEFAULT_MERIT}
               avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating as string).toFixed(1)) : 0}
               totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
               freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0}

@@ -432,6 +432,7 @@ export default function UsersTab({
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Username</th>
                 <th className="px-4 py-3">Verification</th>
+                <th className="px-4 py-3">Merit</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Last seen</th>
                 <th className="px-4 py-3">Date created</th>
@@ -465,6 +466,7 @@ export default function UsersTab({
                     <td className="px-4 py-3">{user.email}</td>
                     <td className="px-4 py-3">@{user.username}</td>
                     <td className="px-4 py-3">{user.verificationStatus}</td>
+                    <td className="px-4 py-3">{user.merit ?? user.history?.merit ?? 100}</td>
                     <td className="px-4 py-3">{user.status}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.lastSeenAt)}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.joinedAt)}</td>

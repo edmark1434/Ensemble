@@ -18,6 +18,7 @@ import type {
 } from '../userTeamTypes';
 import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVerificationConfig';
 import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule';
+import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } from '@/lib/merit';
 import { WarningPresetFields } from './WarningPresetFields';
 
 function formatDateTime(value: string | null) {
@@ -1296,10 +1297,18 @@ export function HistoryModal({
       : history.activeDispute
         ? [history.activeDispute]
         : [];
+  const displayedMerit = Number.isFinite(Number(history.merit))
+    ? Number(history.merit)
+    : meritFromWarnings(history.violations);
 
   return (
     <ModalShell title={`${entityName} history`} subtitle={history.summaryLabel} onClose={onClose}>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl bg-white/[0.03] p-4">
+          <p className="text-xs text-zinc-500">Platform Merit</p>
+          <p className="text-2xl font-bold text-white">{displayedMerit}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{meritBandLabel(displayedMerit)}</p>
+        </div>
         <div className="rounded-xl bg-white/[0.03] p-4">
           <p className="text-xs text-zinc-500">Total violations</p>
           <p className="text-2xl font-bold text-white">{history.totalViolations}</p>
@@ -1364,7 +1373,13 @@ export function HistoryModal({
                 <p className="font-medium text-white">{v.type}</p>
                 <p className="mt-1 text-zinc-500">{v.reason}</p>
                 <p className="mt-2 text-xs text-zinc-600">
-                  By: {v.by} · +{v.points} warning points · {v.id} · {v.timeAgo}
+                  By: {v.by} · {v.points} warning points
+                  {Number(v.points) > 0
+                    ? isActiveWarning(v)
+                      ? ` · currently −${v.points} merit`
+                      : ' · no longer deducts merit'
+                    : ''}
+                  {' · '}{v.id} · {v.timeAgo}
                   {v.expiresAt ? ` · expires ${new Date(v.expiresAt).toLocaleDateString()}` : ''}
                   {String(v.status || '').toLowerCase() === 'rescinded' ? ' · rescinded' : v.active === false ? ' · inactive' : ''}
                 </p>
@@ -1597,6 +1612,9 @@ export function UserOverviewModal({
           <p className="text-sm text-zinc-400">@{user.username}</p>
           {user.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{user.tagline}”</p>}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
+              Merit {user.merit ?? user.history?.merit ?? DEFAULT_MERIT}
+            </span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{user.status}</span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
               {user.verificationStatus}
@@ -1620,6 +1638,15 @@ export function UserOverviewModal({
       {/* Account */}
       <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Account</p>
       <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-zinc-500">Platform Merit</dt>
+          <dd className="text-white">
+            {user.merit ?? user.history?.merit ?? DEFAULT_MERIT}
+            <span className="ml-2 text-xs text-zinc-500">
+              {meritBandLabel(user.merit ?? user.history?.merit ?? DEFAULT_MERIT)} · 100 minus active warnings
+            </span>
+          </dd>
+        </div>
         <div>
           <dt className="text-zinc-500">Email</dt>
           <dd className="text-white">
@@ -1722,6 +1749,7 @@ export function UserOverviewModal({
       <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Credits & activity</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
+          ['Merit', user.merit ?? user.history?.merit ?? DEFAULT_MERIT],
           ['Wallet', user.stats.totalCredits.toLocaleString()],
           ['Frozen', (user.frozenBalance ?? 0).toLocaleString()],
           ['Assets', user.stats.totalAssets],

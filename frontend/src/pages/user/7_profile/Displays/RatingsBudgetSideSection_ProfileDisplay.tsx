@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { Check, Coins, Edit2, HelpCircle, Star, Trash2, Trophy, X, Briefcase } from "lucide-react";
 import { getRatingTierTag } from "./RatingsSection_ProfileDisplay";
+import { DEFAULT_MERIT, meritBandLabel, meritColor } from "@/lib/merit";
 
 const MAX_BUDGET_CREDITS = 100000000;
 
 interface RatingsBudgetSideSectionProps {
   loading?: boolean;
   isOwner?: boolean;
+  meritScore?: number;
   avgRating?: number;
   totalReviews?: number;
   freelancerRating?: number;
@@ -21,6 +23,7 @@ const headerButtonClass =
 export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSideSectionProps> = ({
   loading,
   isOwner = false,
+  meritScore,
   avgRating = 0,
   totalReviews = 0,
   freelancerRating = 0,
@@ -70,6 +73,11 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
 
   const totalTier = getRatingTierTag(avgRating, totalReviews);
   const freelancerTier = getRatingTierTag(freelancerRating, freelancerReviews);
+  const safeMerit = meritScore != null
+    ? Math.min(Math.max(meritScore, 0), 100)
+    : DEFAULT_MERIT;
+  const ringColor = meritColor(safeMerit);
+  const meritBand = meritBandLabel(safeMerit);
 
   return (
     <div 
@@ -79,7 +87,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
       {/* Top Header */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2.5">
         <h3 className="text-[11px] font-extrabold text-gray-900 dark:text-white uppercase tracking-wider">
-          Ratings &amp; Budget
+          Merit, Ratings &amp; Budget
         </h3>
         <div className="flex items-center gap-1.5">
           <div className="relative group/help">
@@ -90,7 +98,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-white dark:border-r-[#070913]" />
               <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[5px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
               <p className="text-[10px] text-gray-600 dark:text-zinc-300 leading-relaxed font-medium">
-                Total Rating averages every review this user has received across all engagements, while Freelance Rating averages reviews from work delivered on gigs and jobs. Budget indicates the planned credits budget for hiring or projects.
+                Platform Merit starts at {DEFAULT_MERIT} and drops only while warnings are still active. Total Rating averages every review this user has received, while Freelance Rating averages reviews from work delivered on gigs and jobs. Budget is the planned credits budget for hiring or projects.
               </p>
             </div>
           </div>
@@ -99,6 +107,47 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
               <Edit2 className="h-3 w-3" />
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="p-3 rounded-xl bg-gray-50/80 dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-3 shadow-2xs">
+        <div className="min-w-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 block">
+            Platform Merit
+          </span>
+          <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
+            {meritBand}. Starts at {DEFAULT_MERIT}.
+          </p>
+        </div>
+        <div className="relative inline-flex items-center justify-center shrink-0 w-[64px] h-[64px] select-none">
+          <svg width={64} height={64} className="-rotate-90">
+            <circle
+              cx={32}
+              cy={32}
+              r={26}
+              className="stroke-gray-200 dark:stroke-white/10"
+              strokeWidth={6}
+              fill="none"
+            />
+            <circle
+              cx={32}
+              cy={32}
+              r={26}
+              className="transition-all duration-700 ease-out"
+              style={{ stroke: ringColor }}
+              strokeWidth={6}
+              strokeDasharray={2 * Math.PI * 26}
+              strokeDashoffset={2 * Math.PI * 26 - (safeMerit / 100) * (2 * Math.PI * 26)}
+              strokeLinecap="round"
+              fill="none"
+            />
+          </svg>
+          <span
+            className="absolute inset-0 flex items-center justify-center text-sm font-bold font-mono tracking-tight"
+            style={{ color: ringColor }}
+          >
+            {safeMerit}
+          </span>
         </div>
       </div>
 

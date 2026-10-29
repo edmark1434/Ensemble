@@ -185,6 +185,7 @@ export type AccountActivityItem = {
 
 export type TeamHistory = {
   summaryLabel: string;
+  merit?: number;
   totalViolations: number;
   totalDisputes: number;
   openDisputes: number;
@@ -271,6 +272,7 @@ export type PlatformUserAccount = {
   teams: UserTeamMembership[];
   creditActivity: CreditActivityItem[];
   verification: VerificationDetail;
+  merit?: number;
   history: TeamHistory;
   stats: {
     totalAssets: number;

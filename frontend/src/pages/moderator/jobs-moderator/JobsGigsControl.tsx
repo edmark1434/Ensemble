@@ -725,6 +725,7 @@ function UserHistoryModal({
                   </p>
                   <p className="text-xs text-zinc-500">
                     Account status: <span className="capitalize text-zinc-300">{history.account.status}</span>
+                    {' · '}Merit {history.account.merit ?? 100}
                   </p>
                 </div>
               </div>
