@@ -62,34 +62,23 @@ async function loadSeedContext(userAccountIds) {
 async function seedBadges(userAccountIds) {
   await pool.query(`DELETE FROM account_badges`);
   await pool.query(`DELETE FROM badges`);
-  await pool.query(`DELETE FROM badge_categories`);
 
-  const catRes = await pool.query(
-    `INSERT INTO badge_categories (name, description)
-     VALUES
-       ('Milestones', 'Progress and completion achievements'),
-       ('Community', 'Participation and collaboration badges'),
-       ('Marketplace', 'Buying and selling milestones')
-     RETURNING badge_category_id, name`
-  );
-
-  const cats = catRes.rows;
   const badgeDefs = [
-    ['acc-alpha', 'Alpha Tester', 'Granted to core ecosystem pioneers who tested the platform during its early alpha stages.', 'alpha_access', 'boolean', 1, cats[0].badge_category_id],
-    ['acc-beta', 'Beta Tester', 'Granted to core ecosystem pioneers who tested the platform during its early beta stages.', 'beta_access', 'boolean', 1, cats[0].badge_category_id],
-    ['setup-profile', 'Profile Complete', 'Granted to users who have successfully fully completed their profile setup.', 'profile_complete', 'boolean', 1, cats[0].badge_category_id],
-    ['acc-freelance-1', 'Fresh Freelancer', 'Granted to users who have newly started becoming a freelancer on this platform.', 'gig_completed', 'count', 1, cats[0].badge_category_id],
-    ['acc-freelance-2', 'Rising Freelancer', 'Granted to active freelancers establishing a consistent workspace pipeline.', 'gig_completed', 'count', 10, cats[0].badge_category_id],
-    ['acc-freelance-3', 'Elite Freelancer', 'Granted to high-tier freelancers delivering premium-grade production deliverables.', 'gig_completed', 'count', 50, cats[0].badge_category_id],
-    ['acc-freelance-4', 'Grand Freelancer', 'The absolute pinnacle of freelance production excellence across the platform ecosystem.', 'gig_completed', 'count', 100, cats[0].badge_category_id],
-    ['acc-client-1', 'Fresh Client', 'Granted to users who have successfully become a Client for the first time.', 'contract_funded', 'count', 1, cats[0].badge_category_id],
-    ['acc-client-2', 'Rising Client', 'Granted to clients expanding their workforce layout and regular contract deployments.', 'contract_funded', 'count', 10, cats[0].badge_category_id],
-    ['acc-client-3', 'Elite Client', 'Granted to trusted high-volume spenders and milestone managers inside the hub.', 'contract_funded', 'count', 50, cats[0].badge_category_id],
-    ['acc-client-4', 'Grand Client', 'Ecosystem power client commanding substantial studio pipelines and commercial arrays.', 'contract_funded', 'count', 100, cats[0].badge_category_id],
-    ['acc-asset-1', 'Fresh Creator', 'Granted to users who have successfully uploaded their first production asset.', 'asset_published', 'count', 1, cats[2].badge_category_id],
-    ['acc-asset-2', 'Rising Creator', 'Granted to assets creators with growing distribution tracking metrics.', 'asset_published', 'count', 10, cats[2].badge_category_id],
-    ['acc-asset-3', 'Elite Creator', 'Granted to top-tier library authors crafting high-fidelity design standards.', 'asset_published', 'count', 50, cats[2].badge_category_id],
-    ['acc-asset-4', 'Grand Creator', 'Legendary library architect setting the structural baseline style across the global market.', 'asset_published', 'count', 100, cats[2].badge_category_id],
+    ['acc-alpha', 'Alpha Tester', 'Granted to core ecosystem pioneers who tested the platform during its early alpha stages.', 'alpha_access', 'boolean', 1, 'Milestones'],
+    ['acc-beta', 'Beta Tester', 'Granted to core ecosystem pioneers who tested the platform during its early beta stages.', 'beta_access', 'boolean', 1, 'Milestones'],
+    ['setup-profile', 'Profile Complete', 'Granted to users who have successfully fully completed their profile setup.', 'profile_complete', 'boolean', 1, 'Milestones'],
+    ['acc-freelance-1', 'Fresh Freelancer', 'Granted to users who have newly started becoming a freelancer on this platform.', 'freelance_close', 'count', 1, 'Milestones'],
+    ['acc-freelance-2', 'Rising Freelancer', 'Granted to active freelancers establishing a consistent workspace pipeline.', 'freelance_close', 'count', 10, 'Milestones'],
+    ['acc-freelance-3', 'Elite Freelancer', 'Granted to high-tier freelancers delivering premium-grade production deliverables.', 'freelance_close', 'count', 50, 'Milestones'],
+    ['acc-freelance-4', 'Grand Freelancer', 'The absolute pinnacle of freelance production excellence across the platform ecosystem.', 'freelance_close', 'count', 100, 'Milestones'],
+    ['acc-client-1', 'Fresh Client', 'Granted to users who have successfully become a Client for the first time.', 'client_close', 'count', 1, 'Milestones'],
+    ['acc-client-2', 'Rising Client', 'Granted to clients expanding their workforce layout and regular contract deployments.', 'client_close', 'count', 10, 'Milestones'],
+    ['acc-client-3', 'Elite Client', 'Granted to trusted high-volume spenders and milestone managers inside the hub.', 'client_close', 'count', 50, 'Milestones'],
+    ['acc-client-4', 'Grand Client', 'Ecosystem power client commanding substantial studio pipelines and commercial arrays.', 'client_close', 'count', 100, 'Milestones'],
+    ['acc-asset-1', 'Fresh Creator', 'Granted to users who have successfully uploaded their first production asset.', 'asset_published', 'count', 1, 'Marketplace'],
+    ['acc-asset-2', 'Rising Creator', 'Granted to assets creators with growing distribution tracking metrics.', 'asset_published', 'count', 10, 'Marketplace'],
+    ['acc-asset-3', 'Elite Creator', 'Granted to top-tier library authors crafting high-fidelity design standards.', 'asset_published', 'count', 50, 'Marketplace'],
+    ['acc-asset-4', 'Grand Creator', 'Legendary library architect setting the structural baseline style across the global market.', 'asset_published', 'count', 100, 'Marketplace'],
   ];
 
   const badgeIds = [];
@@ -98,7 +87,7 @@ async function seedBadges(userAccountIds) {
   for (const b of badgeDefs) {
     const res = await pool.query(
       `INSERT INTO badges (
-         registry_id, name, description, is_secret, trigger_event_code, condition_type, condition_value, badge_category_id
+         registry_id, name, description, is_secret, trigger_event_code, condition_type, condition_value, category
        ) VALUES ($1,$2,$3,false,$4,$5,$6,$7)
        RETURNING badge_id, registry_id, name`,
       b
@@ -109,16 +98,12 @@ async function seedBadges(userAccountIds) {
     }
   }
 
-  const { seedRequirementLibraryAndAttach } = require('../repositories/BadgeRepositories');
-  await seedRequirementLibraryAndAttach();
-
-  // Alpha Tester is delivered as a pending grant with a System notification, like real signups
   if (alphaBadge && userAccountIds.length) {
     const { createPendingBadgeGrants } = require('../repositories/BadgeRepositories');
     await createPendingBadgeGrants({ badge: alphaBadge, accountIds: userAccountIds });
   }
 
-  console.log(`✅ Seeded ${cats.length} badge categories, ${badgeIds.length} badges`);
+  console.log(`✅ Seeded ${badgeIds.length} badges`);
 }
 
 async function seedProfileExtras(ctx) {

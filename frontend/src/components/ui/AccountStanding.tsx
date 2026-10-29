@@ -143,7 +143,7 @@ function ViolationLines({ violations }: { violations: AccountViolation[] }) {
         >
           <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {violation.type || 'Violation'}
-            {Number(violation.points) > 0 ? ` · ${violation.points} pts` : ''}
+            {Number(violation.points) > 0 ? ` · −${violation.points} merit` : ''}
           </p>
           {violation.reason ? (
             <p className="mt-0.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{violation.reason}</p>
@@ -304,7 +304,7 @@ export function showAccountWarningToast(payload: {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-white">
               {warnType}
-              {Number(payload.points) > 0 ? ` (+${payload.points} penalty pt${payload.points === 1 ? '' : 's'})` : ''}
+              {Number(payload.points) > 0 ? ` (−${payload.points} merit)` : ''}
             </p>
             {warnReason && (
               <p className="mt-1 text-xs leading-relaxed text-zinc-300">
@@ -312,7 +312,7 @@ export function showAccountWarningToast(payload: {
               </p>
             )}
             <p className="mt-2 text-[11px] text-amber-300/80">
-              Please review community guidelines. Multiple warnings may trigger automatic account suspension.
+              Please review community guidelines. Repeated warnings lower Platform Merit and can suspend this account.
             </p>
           </div>
         </div>

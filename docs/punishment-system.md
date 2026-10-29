@@ -2,9 +2,9 @@
 
 This is the operating contract for standing locks. One ladder, wired into every Ensemble product: jobs, proposals, gigs, orders, contracts, dashboard, disputes, asset marketplace, discovery, forums, teams, projects/editor, inbox/calls, credits/wallets/cashout/subscriptions, profile/verification, tickets/reports, notifications, and all staff desks.
 
-If someone is **warned**, warning points apply and may auto-limit products. Timeout, suspend, lock, and ban lock access immediately. Backend enforces every lock in this file. Frontend only displays it.
+If someone is **warned**, warning points apply and may auto-limit products. Timeout, suspend, lock, and ban lock access immediately. Backend enforces every lock in this file. Users see those points as **Platform Merit** ([merit-system.md](merit-system.md)).
 
-Punishment answers “what is locked right now?” Warnings answer “did they break the rules?” ([warning-system.md](warning-system.md)). Stars answer “was the work good?” Badges answer “what have they earned?” ([badges-system.md](badges-system.md)).
+Punishment answers “what is locked right now?” Warnings answer “did they break the rules?” ([warning-system.md](warning-system.md)). Stars answer “was the work good?” Badges answer “what have they earned?” ([badges-system.md](badges-system.md)). Merit answers “can we trust this account?”
 
 ---
 

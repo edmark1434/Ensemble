@@ -1,26 +1,24 @@
-import { Award, Library, ListChecks } from 'lucide-react';
+import { Award, Library } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BadgeCatalogTab from './BadgeCatalogTab';
 import BadgeGrantTab from './BadgeGrantTab';
-import BadgeRequirementsTab from './BadgeRequirementsTab';
 
-type TabId = 'catalog' | 'requirements' | 'grant';
+type TabId = 'catalog' | 'grant';
 
 const TABS: { id: TabId; label: string; icon: typeof Library }[] = [
   { id: 'catalog', label: 'Catalog', icon: Library },
-  { id: 'requirements', label: 'Requirements', icon: ListChecks },
   { id: 'grant', label: 'Grant', icon: Award },
 ];
 
 export default function AdminBadgesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const initialTab = paramTab === 'grant' || paramTab === 'requirements' ? paramTab : 'catalog';
+  const initialTab = paramTab === 'grant' ? 'grant' : 'catalog';
   const [tab, setTab] = useState<TabId>(initialTab);
 
   useEffect(() => {
-    setTab(paramTab === 'grant' || paramTab === 'requirements' ? paramTab : 'catalog');
+    setTab(paramTab === 'grant' ? 'grant' : 'catalog');
   }, [paramTab]);
 
   const switchTab = (id: TabId) => {
@@ -35,7 +33,7 @@ export default function AdminBadgesPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Admin</p>
           <h1 className="text-xl font-bold text-white">Badges</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Build named requirements, attach them to badges, then grant or revoke from the Grant tab. Users claim pending badges in Notifications.
+            Each badge stores one unlock on the same row. Grant or revoke from the Grant tab. Users claim pending badges in Notifications.
           </p>
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
@@ -59,7 +57,6 @@ export default function AdminBadgesPage() {
 
       <div className="px-6 py-6 md:px-8 md:py-8">
         {tab === 'catalog' && <BadgeCatalogTab />}
-        {tab === 'requirements' && <BadgeRequirementsTab />}
         {tab === 'grant' && <BadgeGrantTab />}
       </div>
     </main>

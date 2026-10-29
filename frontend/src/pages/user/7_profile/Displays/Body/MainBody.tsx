@@ -153,6 +153,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                       <div className="pt-2">
                           <RatingsSection_ProfileDisplay
                             loading={loading}
+                            meritScore={userDetails?.standing?.merit ?? 100}
                             avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating).toFixed(1)) : 0.0}
                             totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
                             clientRating={userDetails?.client_rating ? Number(parseFloat(userDetails.client_rating).toFixed(1)) : 0.0}
@@ -169,7 +170,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                             clientServiceCount={userDetails?.client_service_count ? Number(userDetails.client_service_count) : 0}
                             clientJobRating={userDetails?.client_job_rating ? Number(parseFloat(userDetails.client_job_rating).toFixed(1)) : 0.0}
                             clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
-                            viewMode="ratings"
+                            viewMode="both"
                             isOwner={isOwner}
                             onNavigateToReviews={(filter) => {
                               setReviewFilter(filter);

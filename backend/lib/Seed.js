@@ -123,7 +123,6 @@ async function resetSeedTables() {
         projects,
         account_badges,
         badges,
-        badge_categories,
         account_link,
         account_profile_files,
         user_tags,

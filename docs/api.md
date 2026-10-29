@@ -40,11 +40,15 @@
 - Event names and payload shapes must remain stable and scoped to authorized rooms/users.
 - Always expose a normal HTTP read endpoint so refresh or reconnect restores current state.
 
-## Badge requirement library
+## Badge catalog
 
-- `GET /api/admin/badge-requirement-types` lists evaluable metrics (jobs, gigs, assets, profile, reviews, followers). Used when creating a named rule.
-- `GET /api/admin/badge-requirement-defs` lists named rules. `POST` creates a custom rule `{ name, description, metric, operator, threshold }`. `PATCH /api/admin/badge-requirement-defs/:defId` updates it. `DELETE` soft-deletes a custom rule that is not attached to a badge. Product (`is_system`) rules can be renamed but not deleted or have their metric/threshold changed.
-- Catalog `POST/PATCH /api/admin/badges` attaches rules with `{ requirements: [{ requirementDefId }] }`. Empty list means honorary. Evaluation still pending-grants when every attached rule is met.
+- `GET /api/admin/badge-requirement-types` lists evaluable metrics (jobs, gigs, assets, profile, reviews, followers) plus honorary `admin_grant`.
+- Catalog `POST/PATCH /api/admin/badges` stores one unlock on the badge: `{ triggerEventCode, conditionValue, category }`. `admin_grant` means honorary. Evaluation pending-grants when that one unlock is met.
+
+## Platform Merit
+
+- Not stored. Profile `standing.merit` and `GET /api/users/me/standing` `merit` are `clamp(100 − active warning points, 0, 100)`.
+- Staff restriction payloads still include `warningPoints`. User-facing payloads should use `merit`.
 
 ## Warning library
 

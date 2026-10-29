@@ -20,8 +20,7 @@ async function sumActiveWarningPoints(accountId) {
     WHERE account_id = $1
       AND deleted_at IS NULL
       AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
-      AND expires_at IS NOT NULL
-      AND expires_at > NOW()
+      AND (expires_at IS NULL OR expires_at > NOW())
     `,
     [accountId]
   );

@@ -7,28 +7,12 @@ export type CatalogBadge = {
   trigger_event_code: string;
   condition_type: 'boolean' | 'count' | string;
   condition_value: number;
-  badge_category_id: string;
-  category_name: string;
+  category: string;
   claimed_count: number;
   pending_count: number;
   is_system: boolean;
   created_at: string;
   updated_at: string;
-  requirements: BadgeRequirement[];
-};
-
-export type RequirementOperator = 'gte' | 'eq' | 'lte';
-
-export type BadgeRequirement = {
-  requirement_def_id: string;
-  code: string;
-  metric: string;
-  name: string;
-  slug?: string;
-  operator: RequirementOperator | string;
-  threshold: number;
-  kind: 'boolean' | 'count' | string;
-  description?: string;
 };
 
 export type RequirementType = {
@@ -39,74 +23,34 @@ export type RequirementType = {
   description: string;
 };
 
-export type RequirementDef = {
-  requirement_def_id: string;
-  slug: string;
-  name: string;
-  description: string;
-  metric: string;
-  operator: RequirementOperator | string;
-  threshold: number;
-  is_system: boolean;
-  kind: 'boolean' | 'count' | string;
-  attached_count: number;
-  created_at: string;
-  updated_at: string;
-};
-
-export type BadgeCategory = {
-  badge_category_id: string;
-  name: string;
-  description: string;
-};
-
 export type BadgeFormState = {
   registryId: string;
   name: string;
   description: string;
-  categoryId: string;
-  categoryName: string;
-  categoryDescription: string;
+  category: string;
   isSecret: boolean;
-  requirements: BadgeRequirement[];
+  triggerEventCode: string;
+  conditionValue: number;
 };
-
-export const OPERATORS: { id: RequirementOperator; label: string }[] = [
-  { id: 'gte', label: 'at least' },
-  { id: 'eq', label: 'exactly' },
-  { id: 'lte', label: 'at most' },
-];
 
 export const emptyBadgeForm = (): BadgeFormState => ({
   registryId: '',
   name: '',
   description: '',
-  categoryId: '',
-  categoryName: '',
-  categoryDescription: '',
+  category: 'Milestones',
   isSecret: false,
-  requirements: [],
+  triggerEventCode: 'admin_grant',
+  conditionValue: 1,
 });
 
 export const formFromBadge = (badge: CatalogBadge): BadgeFormState => ({
   registryId: badge.registry_id,
   name: badge.name,
   description: badge.description,
-  categoryId: badge.badge_category_id,
-  categoryName: '',
-  categoryDescription: '',
+  category: badge.category || 'Milestones',
   isSecret: Boolean(badge.is_secret),
-  requirements: (badge.requirements || []).map((requirement) => ({
-    requirement_def_id: requirement.requirement_def_id,
-    code: requirement.metric || requirement.code,
-    metric: requirement.metric || requirement.code,
-    name: requirement.name || requirement.code,
-    slug: requirement.slug,
-    operator: requirement.operator || 'gte',
-    threshold: Number(requirement.threshold || 1),
-    kind: requirement.kind || 'count',
-    description: requirement.description,
-  })),
+  triggerEventCode: badge.trigger_event_code || 'admin_grant',
+  conditionValue: Number(badge.condition_value || 1),
 });
 
 export const errorMessage = (err: unknown, fallback: string) => {
@@ -114,20 +58,10 @@ export const errorMessage = (err: unknown, fallback: string) => {
   return response || fallback;
 };
 
-export function operatorLabel(operator: string) {
-  return OPERATORS.find((item) => item.id === operator)?.label || operator;
-}
-
-export function formatRequirement(requirement: Pick<RequirementDef, 'name' | 'metric' | 'operator' | 'threshold' | 'kind'>, types: RequirementType[]) {
-  if (requirement.name) return requirement.name;
-  const type = types.find((item) => item.code === requirement.metric);
-  const label = type?.label || requirement.metric;
-  if ((requirement.kind || type?.kind) === 'boolean') return label;
-  return `${label} ${operatorLabel(requirement.operator)} ${requirement.threshold}`;
-}
-
-export function summarizeRequirements(badge: CatalogBadge, types: RequirementType[]) {
-  const requirements = badge.requirements || [];
-  if (!requirements.length) return 'Honorary — grant only';
-  return requirements.map((requirement) => formatRequirement(requirement, types)).join(' + ');
+export function summarizeUnlock(badge: CatalogBadge, types: RequirementType[]) {
+  const code = badge.trigger_event_code || 'admin_grant';
+  if (code === 'admin_grant') return 'Honorary — grant only';
+  const type = types.find((item) => item.code === code);
+  if ((type?.kind || badge.condition_type) === 'boolean') return type?.label || code;
+  return `${type?.label || code} at least ${badge.condition_value}`;
 }

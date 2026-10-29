@@ -17,6 +17,7 @@ Read this file before changing the repository. Load only the relevant document u
 - Controllers, services, repositories, routes, or external APIs: `docs/api.md`
 - React, styling, forms, state, or browser behavior: `docs/frontend.md`
 - Redis, cached state, reconciliation, or invalidation: `docs/caching.md`
+- User-facing Platform Merit (100 minus active warning points): `docs/merit-system.md`
 - Warning catalog, points, and automatic bands: `docs/warning-system.md`
 - Warnings, timeouts, suspensions, locks, bans, and appeals: `docs/punishment-system.md`
 - Badge catalog, grants, claims, and display: `docs/badges-system.md`

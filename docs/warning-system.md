@@ -4,6 +4,8 @@ This is the contract for conduct. **Stars** answer “was the work good?” **Wa
 
 Automatic product limits follow **active warning points**. Stars stay for quality.
 
+Users never see “warning points.” They see **Platform Merit** = `100 − active warning points`, derived and not stored. User-facing contract: [merit-system.md](merit-system.md).
+
 You cannot buy your way out with credits, Premium, or Business.
 
 ---
@@ -179,7 +181,7 @@ active points =
   FROM violations
   WHERE not deleted
     AND status in (active, open, pending)
-    AND expires_at > now()
+    AND (expires_at is null OR expires_at > now())
 ```
 
 Rescinded, expired, pardoned, reversed, and deleted rows do not count.
@@ -311,9 +313,9 @@ Admin and Support see every catalog row. Other desks only see rows whose `desks`
 
 ## 14. Visibility
 
-**Public** profile / job / gig / asset chips: Banned, Suspended, Locked, Timeout, Under dispute. **Not** warning text, points, or the Limited/Restricted/Frozen-access band.
+**Public** profile / job / gig / asset chips: Banned, Suspended, Locked, Timeout, Under dispute, plus the Platform Merit ring. **Not** warning text, warning points, or the Limited/Restricted/Frozen-access band name.
 
-**Owner Record:** standing, each warning (type, points, expiry, status), what is auto-locked.
+**Owner Record:** Platform Merit, standing, each warning (type, merit taken, expiry, status), what is auto-locked.
 
 **Never public:** case notes, staff names, case IDs, rescinded rows as if they were active.
 

@@ -2,9 +2,9 @@
 
 This is the operating contract for milestones. One catalog, granted from real products: signup/alpha, profile setup, jobs, gigs, and the asset marketplace. Users claim from notifications, pin up to five on `/profile`, and staff revoke only for fraud or a mistaken grant.
 
-Badges never change warning points. Warning points never delete badges.
+Badges never change Platform Merit. Merit never deletes badges.
 
-Badges answer “what have they earned?” Stars answer “was the work good?” Warnings answer “did they break the rules?” ([warning-system.md](warning-system.md)). Punishment answers “what is locked right now?” ([punishment-system.md](punishment-system.md)).
+Badges answer “what have they earned?” Stars answer “was the work good?” Merit answers “can we trust this account?” ([merit-system.md](merit-system.md)). Warnings are the backend input to merit ([warning-system.md](warning-system.md)). Punishment answers “what is locked right now?” ([punishment-system.md](punishment-system.md)).
 
 ---
 
@@ -43,7 +43,7 @@ eligible on a real product
 
 Warning bands and punishments never grant or delete badges. Frozen access / Banned / Locked **hide** claimed badges on the public profile. They are not removed from the account.
 
-Publishing an asset grants a creator badge. Completing work grants freelance/client ranks. Neither changes warning points.
+Publishing an asset grants a creator badge. Completing work grants freelance/client ranks. Neither changes Platform Merit.
 
 ---
 
@@ -68,7 +68,7 @@ Subscriptions (Free / Premium / Business) never buy a badge.
 | Claimed | None until they claim |
 | Pins | None |
 
-Warning points start at 0 and standing starts Active — those are the other two systems.
+Platform Merit starts at 100 and standing starts Active — those are the other two systems.
 
 ---
 
@@ -162,16 +162,16 @@ No badge grants in v1. Team work still grants the **acting user’s** freelance/
 
 | Desk | Route | Can do |
 |---|---|---|
-| Admin | `/admin/badges` | catalog CRUD, named requirement library, grant (including honorary / beta), revoke for fraud or mistake |
+| Admin | `/admin/badges` | catalog CRUD, grant (including honorary / beta), revoke for fraud or mistake |
 | Other desks | — | no grant, no revoke |
 
 Product catalog IDs (`acc-alpha`, ranks, `setup-profile`) can be renamed but not deleted or re-id'd. Honorary badges can be created, edited, and soft-deleted. Soft-delete hides the definition; grants stay until staff revoke them. `/admin/badge-grant` redirects to the Grant tab.
 
-Requirements are a named library (`badge_requirement_defs`), not inline numbers on the badge. Staff create a rule (metric + at least / exactly / at most + threshold), then attach one or more rules to a badge. All attached rules must be true (AND) before the pending grant is sent. Empty attachments means honorary.
+Each badge stores one unlock on the `badges` row: `trigger_event_code` (the metric), `condition_type` (`boolean` or `count`), and `condition_value` (the number). `admin_grant` means honorary. Category is a text field on the same row. Product unlocks cannot be changed.
 
-The 15 product badges ship with library rows already attached: alpha signup, beta flag, profile checklist, freelancer/client/creator ranks at 1 / 10 / 50 / 100. Extra starter rules exist for jobs posted, proposals, gigs listed, followers, reviews, portfolio, and skills. Staff can add more (for example “25 followers”) and attach them to any badge.
+The 15 product badges ship with those columns already set: alpha signup, beta flag, profile checklist, freelancer/client/creator ranks at 1 / 10 / 50 / 100. Staff can add honorary badges or a custom single-metric badge (for example “at least 25 followers”).
 
-Forums, chat, editor, identity verification, and paid plans are not requirement sources. Product library rows can be renamed but not deleted or have their metric/threshold changed.
+Forums, chat, editor, identity verification, and paid plans are not unlock sources.
 
 Restrictions views do not need a badge editor. Show claimed badges on the user record so staff can spot a mistaken grant.
 
@@ -189,16 +189,16 @@ first job hired as client → pending Fresh Client
 first published asset → pending Fresh Creator
 ```
 
-Warning points on that same path are independent ([warning-system.md](warning-system.md)).
+Platform Merit on that same path is independent ([merit-system.md](merit-system.md)).
 
 ### Frozen access then they finish work
 
 ```
-16+ active warning points (Frozen access), badges already claimed
+Platform Merit 84 or below (Frozen access), badges already claimed
 they deliver a live gig
   → Fresh/next freelancer rank may pending-grant
   → they may claim from notifications
-  → public profile still hides pins until warning points drop below 16
+  → public profile still hides pins until Platform Merit recovers above 84
 ```
 
 ### Dispute conviction
@@ -222,7 +222,7 @@ appeal restore does not re-grant anything; pins come back when standing allows p
 Build order (badge slice):
 
 1. Keep pending-until-claim. Fix registry IDs. Alpha/Beta banners already require the claimed badge.
-2. Auto-award 1/10/50/100 on job/gig close and on publish. `evaluateAccountBadges` pending-grants any catalog row whose requirements are all met.
+2. Auto-award 1/10/50/100 on job/gig close and on publish. `evaluateAccountBadges` pending-grants any catalog row whose single unlock is met.
 3. Hide pins on public profile while Frozen / Banned / Locked.
 
 Do not describe this as live in `backend/data/` until it ships.

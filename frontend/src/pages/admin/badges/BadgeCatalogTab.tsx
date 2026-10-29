@@ -7,46 +7,34 @@ import {
   emptyBadgeForm,
   errorMessage,
   formFromBadge,
-  formatRequirement,
-  operatorLabel,
-  summarizeRequirements,
-  type BadgeCategory,
+  summarizeUnlock,
   type BadgeFormState,
   type CatalogBadge,
-  type RequirementDef,
   type RequirementType,
 } from './badgeAdminTypes';
 
 const fieldClass =
   'w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20';
 
-const NEW_CATEGORY = '__new__';
-
 function iconFor(registryId: string) {
   return badgesRegistry.find((badge) => String(badge.id) === registryId)?.icon;
 }
 
 function payloadFromForm(form: BadgeFormState) {
-  const creatingCategory = form.categoryId === NEW_CATEGORY;
   return {
     registryId: form.registryId.trim().toLowerCase(),
     name: form.name.trim(),
     description: form.description.trim(),
+    category: form.category.trim(),
     isSecret: form.isSecret,
-    categoryId: creatingCategory ? undefined : form.categoryId,
-    categoryName: creatingCategory ? form.categoryName.trim() : undefined,
-    categoryDescription: creatingCategory ? form.categoryDescription.trim() : undefined,
-    requirements: form.requirements.map((requirement) => ({
-      requirementDefId: requirement.requirement_def_id,
-    })),
+    triggerEventCode: form.triggerEventCode,
+    conditionValue: form.conditionValue,
   };
 }
 
 export default function BadgeCatalogTab() {
   const [badges, setBadges] = useState<CatalogBadge[]>([]);
-  const [categories, setCategories] = useState<BadgeCategory[]>([]);
-  const [requirementTypes, setRequirementTypes] = useState<RequirementType[]>([]);
-  const [requirementDefs, setRequirementDefs] = useState<RequirementDef[]>([]);
+  const [unlockTypes, setUnlockTypes] = useState<RequirementType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<'create' | CatalogBadge | null>(null);
@@ -55,16 +43,12 @@ export default function BadgeCatalogTab() {
   const [formError, setFormError] = useState('');
 
   const load = async () => {
-    const [badgeRes, categoryRes, requirementRes, defRes] = await Promise.all([
+    const [badgeRes, typeRes] = await Promise.all([
       api.get('/api/admin/badges'),
-      api.get('/api/admin/badge-categories'),
       api.get('/api/admin/badge-requirement-types'),
-      api.get('/api/admin/badge-requirement-defs'),
     ]);
     setBadges(badgeRes.data?.data || []);
-    setCategories(categoryRes.data?.data || []);
-    setRequirementTypes(requirementRes.data?.data || []);
-    setRequirementDefs(defRes.data?.data || []);
+    setUnlockTypes(typeRes.data?.data || []);
   };
 
   useEffect(() => {
@@ -77,43 +61,27 @@ export default function BadgeCatalogTab() {
     const term = search.trim().toLowerCase();
     if (!term) return badges;
     return badges.filter((badge) =>
-      [badge.name, badge.registry_id, badge.category_name, summarizeRequirements(badge, requirementTypes)]
+      [badge.name, badge.registry_id, badge.category, summarizeUnlock(badge, unlockTypes)]
         .join(' ')
         .toLowerCase()
         .includes(term)
     );
-  }, [badges, search, requirementTypes]);
+  }, [badges, search, unlockTypes]);
 
-  const usedDefIds = useMemo(
-    () => new Set(form.requirements.map((requirement) => requirement.requirement_def_id)),
-    [form.requirements]
-  );
-  const usedMetrics = useMemo(
-    () => new Set(form.requirements.map((requirement) => requirement.metric || requirement.code)),
-    [form.requirements]
-  );
-
-  const availableDefs = requirementDefs.filter(
-    (def) => !usedDefIds.has(def.requirement_def_id) && !usedMetrics.has(def.metric)
-  );
-
-  const groupedDefs = useMemo(() => {
-    const groups = new Map<string, RequirementDef[]>();
-    for (const def of requirementDefs) {
-      const type = requirementTypes.find((item) => item.code === def.metric);
-      const group = type?.group || 'Other';
-      const list = groups.get(group) || [];
-      list.push(def);
-      groups.set(group, list);
+  const selectedType = unlockTypes.find((item) => item.code === form.triggerEventCode);
+  const countUnlock = selectedType?.kind === 'count';
+  const groupedTypes = useMemo(() => {
+    const groups = new Map<string, RequirementType[]>();
+    for (const type of unlockTypes) {
+      const list = groups.get(type.group) || [];
+      list.push(type);
+      groups.set(type.group, list);
     }
     return [...groups.entries()];
-  }, [requirementDefs, requirementTypes]);
+  }, [unlockTypes]);
 
   const openCreate = () => {
-    setForm({
-      ...emptyBadgeForm(),
-      categoryId: categories[0]?.badge_category_id || NEW_CATEGORY,
-    });
+    setForm(emptyBadgeForm());
     setFormError('');
     setEditor('create');
   };
@@ -130,57 +98,14 @@ export default function BadgeCatalogTab() {
     setFormError('');
   };
 
-  const requirementFromDef = (def: RequirementDef) => ({
-    requirement_def_id: def.requirement_def_id,
-    code: def.metric,
-    metric: def.metric,
-    name: def.name,
-    slug: def.slug,
-    operator: def.operator,
-    threshold: Number(def.threshold || 1),
-    kind: def.kind,
-    description: def.description,
-  });
-
-  const addRequirement = () => {
-    const next = availableDefs[0];
-    if (!next) return;
-    setForm((current) => ({
-      ...current,
-      requirements: [...current.requirements, requirementFromDef(next)],
-    }));
-  };
-
-  const updateRequirement = (index: number, defId: string) => {
-    const def = requirementDefs.find((item) => item.requirement_def_id === defId);
-    if (!def) return;
-    setForm((current) => ({
-      ...current,
-      requirements: current.requirements.map((requirement, i) =>
-        i === index ? requirementFromDef(def) : requirement
-      ),
-    }));
-  };
-
-  const removeRequirement = (index: number) => {
-    setForm((current) => ({
-      ...current,
-      requirements: current.requirements.filter((_, i) => i !== index),
-    }));
-  };
-
   const save = async () => {
     const payload = payloadFromForm(form);
     if (!payload.registryId || !payload.name || !payload.description) {
       setFormError('Name, registry ID, and description are required.');
       return;
     }
-    if (form.categoryId === NEW_CATEGORY && !payload.categoryName) {
-      setFormError('Give the new category a name.');
-      return;
-    }
-    if (form.categoryId !== NEW_CATEGORY && !payload.categoryId) {
-      setFormError('Choose a category.');
+    if (!payload.category) {
+      setFormError('Category is required.');
       return;
     }
     setSaving(true);
@@ -222,6 +147,8 @@ export default function BadgeCatalogTab() {
     );
   }
 
+  const editingSystem = editor !== 'create' && Boolean(editor?.is_system);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -230,7 +157,7 @@ export default function BadgeCatalogTab() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, ID, or requirement"
+            placeholder="Search name, ID, or unlock"
             className={`${fieldClass} pl-9`}
           />
         </div>
@@ -251,7 +178,7 @@ export default function BadgeCatalogTab() {
               <tr>
                 <th className="px-4 py-3 font-medium">Badge</th>
                 <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Requirements</th>
+                <th className="px-4 py-3 font-medium">Unlock</th>
                 <th className="px-4 py-3 font-medium">Holders</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
@@ -280,9 +207,9 @@ export default function BadgeCatalogTab() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-zinc-300">{badge.category_name}</td>
+                    <td className="px-4 py-3 text-zinc-300">{badge.category}</td>
                     <td className="max-w-xs px-4 py-3 text-zinc-400">
-                      {summarizeRequirements(badge, requirementTypes)}
+                      {summarizeUnlock(badge, unlockTypes)}
                     </td>
                     <td className="px-4 py-3 text-zinc-400">
                       {badge.claimed_count} claimed · {badge.pending_count} pending
@@ -330,7 +257,7 @@ export default function BadgeCatalogTab() {
                   {editor === 'create' ? 'New badge' : `Edit ${editor.name}`}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Leave requirements empty for an honorary badge. Attach named rules from the Requirements tab; every attached rule must be true before the pending grant is sent.
+                  One unlock per badge. Honorary badges stay grant-only until staff send them.
                 </p>
               </div>
               <button type="button" onClick={closeEditor} className="rounded-lg p-1.5 text-zinc-500 hover:text-white" aria-label="Close">
@@ -353,7 +280,7 @@ export default function BadgeCatalogTab() {
                 <input
                   value={form.registryId}
                   onChange={(event) => setForm((current) => ({ ...current, registryId: event.target.value }))}
-                  disabled={editor !== 'create' && editor.is_system}
+                  disabled={editingSystem}
                   placeholder="honorary-mentor"
                   className={`${fieldClass} disabled:opacity-60`}
                   maxLength={50}
@@ -369,115 +296,54 @@ export default function BadgeCatalogTab() {
                   maxLength={2000}
                 />
               </label>
-              <label className="sm:col-span-2">
+              <label>
                 <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Category</span>
-                <select
-                  value={form.categoryId}
-                  onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
+                <input
+                  value={form.category}
+                  onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
                   className={fieldClass}
+                  maxLength={50}
+                />
+              </label>
+              <label>
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Unlock</span>
+                <select
+                  value={form.triggerEventCode}
+                  disabled={editingSystem}
+                  onChange={(event) => setForm((current) => ({ ...current, triggerEventCode: event.target.value }))}
+                  className={`${fieldClass} disabled:opacity-60`}
                 >
-                  {categories.map((category) => (
-                    <option key={category.badge_category_id} value={category.badge_category_id}>
-                      {category.name}
-                    </option>
+                  {groupedTypes.map(([group, types]) => (
+                    <optgroup key={group} label={group}>
+                      {types.map((type) => (
+                        <option key={type.code} value={type.code}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
-                  <option value={NEW_CATEGORY}>New category…</option>
                 </select>
               </label>
-              {form.categoryId === NEW_CATEGORY && (
-                <>
-                  <label>
-                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Category name</span>
-                    <input
-                      value={form.categoryName}
-                      onChange={(event) => setForm((current) => ({ ...current, categoryName: event.target.value }))}
-                      className={fieldClass}
-                      maxLength={50}
-                    />
-                  </label>
-                  <label>
-                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Category description</span>
-                    <input
-                      value={form.categoryDescription}
-                      onChange={(event) => setForm((current) => ({ ...current, categoryDescription: event.target.value }))}
-                      className={fieldClass}
-                      maxLength={500}
-                    />
-                  </label>
-                </>
+              {countUnlock && (
+                <label>
+                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">At least</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    disabled={editingSystem}
+                    value={form.conditionValue}
+                    onChange={(event) => setForm((current) => ({
+                      ...current,
+                      conditionValue: Number(event.target.value || 1),
+                    }))}
+                    className={`${fieldClass} disabled:opacity-60`}
+                  />
+                </label>
               )}
-
-              <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Requirements</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">All of these must be true. Create named rules on the Requirements tab, then attach them here.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addRequirement}
-                    disabled={!availableDefs.length}
-                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white disabled:opacity-40"
-                  >
-                    <Plus className="h-3 w-3" />
-                    Add
-                  </button>
-                </div>
-
-                {form.requirements.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-zinc-500">
-                    No requirements. This stays honorary until you grant it from the Grant tab.
-                  </p>
-                )}
-
-                {form.requirements.map((requirement, index) => {
-                  const selected = requirementDefs.find((def) => def.requirement_def_id === requirement.requirement_def_id)
-                    || requirement;
-                  const type = requirementTypes.find((item) => item.code === selected.metric);
-                  return (
-                    <div key={`${requirement.requirement_def_id}-${index}`} className="grid gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto]">
-                      <select
-                        value={requirement.requirement_def_id}
-                        onChange={(event) => updateRequirement(index, event.target.value)}
-                        className={fieldClass}
-                      >
-                        {!requirementDefs.some((def) => def.requirement_def_id === requirement.requirement_def_id) && (
-                          <option value={requirement.requirement_def_id}>
-                            {formatRequirement(requirement, requirementTypes)}
-                          </option>
-                        )}
-                        {groupedDefs.map(([group, defs]) => (
-                          <optgroup key={group} label={group}>
-                            {defs
-                              .filter((def) =>
-                                def.requirement_def_id === requirement.requirement_def_id
-                                || (!usedDefIds.has(def.requirement_def_id) && !usedMetrics.has(def.metric))
-                              )
-                              .map((def) => (
-                                <option key={def.requirement_def_id} value={def.requirement_def_id}>
-                                  {formatRequirement(def, requirementTypes)}
-                                </option>
-                              ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => removeRequirement(index)}
-                        className="rounded-lg p-2 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"
-                        aria-label="Remove requirement"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                      <p className="sm:col-span-2 text-[11px] text-zinc-500">
-                        {type?.kind === 'boolean'
-                          ? (selected.description || type.description)
-                          : `${type?.label || selected.metric} ${operatorLabel(selected.operator)} ${selected.threshold}${selected.description ? ` · ${selected.description}` : ''}`}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
+              {selectedType?.description && (
+                <p className="sm:col-span-2 text-[11px] text-zinc-500">{selectedType.description}</p>
+              )}
 
               <button
                 type="button"

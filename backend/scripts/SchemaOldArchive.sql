@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     tagline VARCHAR(255),
     description TEXT,
     type VARCHAR(50) NOT NULL DEFAULT 'User',
-    merit_score INTEGER DEFAULT 0,
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ

@@ -7,6 +7,7 @@ const {
   warningDurationDays,
   clampDurationDays,
   bandForPoints,
+  meritFromWarningPoints,
   refreshLiveThresholds,
 } = require('./WarningBands');
 
@@ -230,6 +231,7 @@ function emptyAccess() {
     warningFrozen: false,
     warningPoints: 0,
     warningBand: 'none',
+    merit: meritFromWarningPoints(0),
     suspensionEndsAt: null,
     forumTimeoutEndsAt: null,
     code: null,
@@ -341,6 +343,7 @@ async function getAccountAccess(accountId) {
     warningFrozen,
     warningPoints,
     warningBand: warningBand.id,
+    merit: meritFromWarningPoints(warningPoints),
     suspensionEndsAt: row.suspension_ends_at || null,
     forumTimeoutEndsAt,
     code,
@@ -434,6 +437,16 @@ async function loadBanNotice(accountId) {
 }
 
 async function getPublicAccountStanding(accountId) {
+  try {
+    const warningsLapsed = await expireElapsedWarnings(accountId);
+    if (warningsLapsed) {
+      const { refreshWarningBand } = require('../services/WarningBandServices');
+      await refreshWarningBand(accountId);
+    }
+  } catch (err) {
+    console.warn('Could not expire elapsed warnings for standing:', err.message);
+  }
+
   const result = await pool.query(
     `
     SELECT
@@ -474,7 +487,17 @@ async function getPublicAccountStanding(accountId) {
   if (!row) return null;
   const banned = normalizeAccountStatus(row.status) === 'banned';
   const banNotice = banned ? await loadBanNotice(accountId) : null;
-  return publicStandingFromRow(row, banNotice);
+  let warningPoints = 0;
+  try {
+    const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
+    warningPoints = await sumActiveWarningPoints(accountId);
+  } catch (err) {
+    console.warn('Could not load warning points for merit:', err.message);
+  }
+  return {
+    ...publicStandingFromRow(row, banNotice),
+    merit: meritFromWarningPoints(warningPoints),
+  };
 }
 
 async function getOwnAccountRecord(accountId) {
@@ -524,7 +547,7 @@ async function getOwnAccountRecord(accountId) {
   ]);
 
   return {
-    ...(standing || { status: 'Active', endsAt: null, forumTimeout: false, forumTimeoutEndsAt: null }),
+    ...(standing || { status: 'Active', endsAt: null, forumTimeout: false, forumTimeoutEndsAt: null, merit: meritFromWarningPoints(0) }),
     warnings: warnings.rows.map((row) => ({
       id: row.violation_id,
       number: row.violation_number,

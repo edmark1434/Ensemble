@@ -5,6 +5,7 @@ const {
   bandForPoints,
   actionAllowed,
   warningBandError,
+  meritFromWarningPoints,
   refreshLiveThresholds,
 } = require('../lib/WarningBands');
 
@@ -20,10 +21,11 @@ async function getWarningBand(accountId) {
 
 async function notifyWarningBandChange(accountId, previousBand, nextBand, points) {
   if (!previousBand || !nextBand || previousBand.id === nextBand.id) return;
+  const merit = meritFromWarningPoints(points);
   const dropped = nextBand.min > previousBand.min;
   const message = dropped
-    ? `Your account is now ${nextBand.label} (${points} active warning point${points === 1 ? '' : 's'}). Some actions are limited until warnings expire.`
-    : `Warning limits lifted to ${nextBand.label} (${points} active warning point${points === 1 ? '' : 's'}).`;
+    ? `Your Platform Merit is now ${merit}. Some actions are limited until it recovers.`
+    : `Your Platform Merit recovered to ${merit}.`;
   try {
     const { createNotificationServices } = require('./NotificationServices');
     const notification = await createNotificationServices({
@@ -73,7 +75,7 @@ async function assertWarningAllows(accountId, action, extras = {}) {
   }
 
   if (!actionAllowed(action, band.id)) {
-    throw warningBandError(ACTION_MESSAGES[action] || 'Active warnings do not allow this action.', 'WARNING_RESTRICTED');
+    throw warningBandError(ACTION_MESSAGES[action] || 'Your Platform Merit does not allow this action.', 'WARNING_RESTRICTED');
   }
   return { points, band };
 }

@@ -1,3 +1,4 @@
+const DEFAULT_MERIT = 100;
 const MIN_WARNING_POINTS = 1;
 const MAX_WARNING_POINTS = 10;
 const MIN_DURATION_DAYS = 1;
@@ -46,20 +47,26 @@ const ACTION_ALLOW = {
 };
 
 const ACTION_MESSAGES = {
-  create_job: 'Active warnings are too high to post a new job. Finish live work or wait for warnings to expire.',
-  create_urgent_job: 'Urgent job posts are blocked while a Limited warning threshold is in effect.',
-  create_gig: 'Active warnings are too high to create a new gig.',
-  publish_asset: 'Active warnings are too high to publish a marketplace listing.',
-  asset_comment: 'Active warnings are too high to comment on marketplace listings.',
-  proposal: 'Frozen-access accounts cannot send job proposals.',
-  proposal_cap: `Restricted accounts can send ${RESTRICTED_PROPOSAL_DAILY_CAP} job proposals per day.`,
-  forum_write: 'Active warnings are too high to post in the forums. You can still read.',
-  new_dm: 'Frozen-access accounts cannot start new messages. Existing job, gig, and contract threads stay open.',
-  cashout: 'Cashout is blocked while Frozen access is in effect. Your balance is not seized.',
-  create_team: 'Active warnings are too high to create a team.',
-  join_team: 'Active warnings are too high to join a new team. Teams you already belong to stay open.',
-  create_shared_project: 'Active warnings are too high to start a new shared editor project. Personal projects and live team work stay open.',
+  create_job: 'Your Platform Merit is too low to post a new job. Finish live work or wait for it to recover.',
+  create_urgent_job: 'Urgent job posts are blocked while your Platform Merit is reduced.',
+  create_gig: 'Your Platform Merit is too low to create a new gig.',
+  publish_asset: 'Your Platform Merit is too low to publish a marketplace listing.',
+  asset_comment: 'Your Platform Merit is too low to comment on marketplace listings.',
+  proposal: 'Your Platform Merit is too low to send job proposals.',
+  proposal_cap: `Your Platform Merit is too low to send more than ${RESTRICTED_PROPOSAL_DAILY_CAP} job proposals per day.`,
+  forum_write: 'Your Platform Merit is too low to post in the forums. You can still read.',
+  new_dm: 'Your Platform Merit is too low to start new messages. Existing job, gig, and contract threads stay open.',
+  cashout: 'Cashout is blocked while your Platform Merit is reduced. Your balance is not seized.',
+  create_team: 'Your Platform Merit is too low to create a team.',
+  join_team: 'Your Platform Merit is too low to join a new team. Teams you already belong to stay open.',
+  create_shared_project: 'Your Platform Merit is too low to start a new shared editor project. Personal projects and live team work stay open.',
 };
+
+function meritFromWarningPoints(points) {
+  const n = Math.max(0, Math.round(Number(points) || 0));
+  if (!Number.isFinite(n)) return DEFAULT_MERIT;
+  return Math.max(0, Math.min(DEFAULT_MERIT, DEFAULT_MERIT - n));
+}
 
 let liveThresholds = null;
 let liveThresholdsAt = 0;
@@ -171,6 +178,7 @@ async function refreshLiveThresholds() {
 }
 
 module.exports = {
+  DEFAULT_MERIT,
   MIN_WARNING_POINTS,
   MAX_WARNING_POINTS,
   MIN_DURATION_DAYS,
@@ -186,6 +194,7 @@ module.exports = {
   THRESHOLD_EFFECTS,
   DEFAULT_THRESHOLDS,
   ACTION_MESSAGES,
+  meritFromWarningPoints,
   clampWarningPoints,
   clampDurationDays,
   warningDurationDays,

@@ -2,12 +2,6 @@ const {
     grantBadgeService,
     getBadgeCatalogService,
     getBadgeRequirementTypesService,
-    getBadgeRequirementDefsService,
-    createBadgeRequirementDefService,
-    updateBadgeRequirementDefService,
-    deleteBadgeRequirementDefService,
-    getBadgeCategoriesService,
-    createBadgeCategoryService,
     createBadgeService,
     updateBadgeService,
     deleteBadgeService,
@@ -42,59 +36,7 @@ async function getAdminBadgeRequirementTypes(req, res) {
     try {
         return res.status(200).json({ success: true, data: await getBadgeRequirementTypesService() });
     } catch (err) {
-        return sendError(res, err, 'Unable to load badge requirements');
-    }
-}
-
-async function getAdminBadgeRequirementDefs(req, res) {
-    try {
-        return res.status(200).json({ success: true, data: await getBadgeRequirementDefsService() });
-    } catch (err) {
-        return sendError(res, err, 'Unable to load badge requirements');
-    }
-}
-
-async function postAdminBadgeRequirementDef(req, res) {
-    try {
-        const data = await createBadgeRequirementDefService(req.body || {});
-        return res.status(201).json({ success: true, data });
-    } catch (err) {
-        return sendError(res, err, 'Unable to create requirement');
-    }
-}
-
-async function patchAdminBadgeRequirementDef(req, res) {
-    try {
-        const data = await updateBadgeRequirementDefService(req.params.defId, req.body || {});
-        return res.status(200).json({ success: true, data });
-    } catch (err) {
-        return sendError(res, err, 'Unable to update requirement');
-    }
-}
-
-async function deleteAdminBadgeRequirementDef(req, res) {
-    try {
-        const data = await deleteBadgeRequirementDefService(req.params.defId);
-        return res.status(200).json({ success: true, data });
-    } catch (err) {
-        return sendError(res, err, 'Unable to delete requirement');
-    }
-}
-
-async function getAdminBadgeCategories(req, res) {
-    try {
-        return res.status(200).json({ success: true, data: await getBadgeCategoriesService() });
-    } catch (err) {
-        return sendError(res, err, 'Unable to load badge categories');
-    }
-}
-
-async function postAdminBadgeCategory(req, res) {
-    try {
-        const data = await createBadgeCategoryService(req.body || {});
-        return res.status(201).json({ success: true, data });
-    } catch (err) {
-        return sendError(res, err, 'Unable to create badge category');
+        return sendError(res, err, 'Unable to load badge unlocks');
     }
 }
 
@@ -184,12 +126,6 @@ async function postClaimBadge(req, res) {
 module.exports = {
     getAdminBadgeCatalog,
     getAdminBadgeRequirementTypes,
-    getAdminBadgeRequirementDefs,
-    postAdminBadgeRequirementDef,
-    patchAdminBadgeRequirementDef,
-    deleteAdminBadgeRequirementDef,
-    getAdminBadgeCategories,
-    postAdminBadgeCategory,
     postAdminBadge,
     patchAdminBadge,
     deleteAdminBadge,

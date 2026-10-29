@@ -37,11 +37,12 @@
 - Paginate growing histories with deterministic ordering and a tie-breaker.
 - Treat schema errors as migration/version mismatches before adding query workarounds.
 
-## Badge requirements
+## Badge catalog
 
-- `badge_requirement_defs` is the named library: slug, name, metric, operator (`gte` / `eq` / `lte`), threshold, and `is_system`.
-- `badge_requirements` attaches library rows to a badge (`requirement_def_id`). A badge may have several AND requirements or none (honorary).
-- Migration `1825400000000_badge-requirement-defs` seeds the live product catalog (alpha, beta, profile, freelance/client/creator ranks) and extra reusable starters. Do not edit `1825300000000_badge-requirements`.
+- Unlock rules live on `badges`: `trigger_event_code`, `condition_type` (`boolean` or `count`), `condition_value`, and `category`.
+- `admin_grant` means honorary (staff grant only). Count badges use “at least” the stored number.
+- `account_badges` is the grant table (pending / claimed / revoked). It is not the catalog.
+- Migration `1826700000000_collapse-badges-to-single-table` copies category names onto `badges` and drops `badge_categories`, `badge_requirements`, and `badge_requirement_defs`. Do not edit the original create-table migrations.
 
 ## Warning library
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '@/lib/axios';
+import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } from '@/lib/merit';
 
 export type PublicStanding = {
   status?: string | null;
@@ -12,6 +13,7 @@ export type PublicStanding = {
   underDispute?: boolean;
   underDisputeId?: string | null;
   underDisputeNumber?: string | null;
+  merit?: number;
 };
 
 type WarningRow = {
@@ -166,17 +168,34 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
   }, []);
 
   const badges = standingBadges(record);
+  const displayedMerit = record
+    ? meritFromWarnings(record.warnings)
+    : DEFAULT_MERIT;
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account record</h2>
-      <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
-        Your warnings, suspensions, locks, timeouts, and bans. Other people only see the public badges.
-      </p>
+      {!hideHeader ? (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account record</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
+            Your merit, warnings, suspensions, locks, timeouts, and bans. Other people only see the public badges.
+          </p>
+        </>
+      ) : null}
       {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p> : null}
       {!record && !error ? <p className="mt-3 text-sm text-gray-500">Loading your record…</p> : null}
       {record ? (
         <div className="mt-4 space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Platform Merit</p>
+            <p className="mt-2 text-sm text-gray-800 dark:text-zinc-200">
+              {displayedMerit} / {DEFAULT_MERIT}
+              <span className="text-gray-500 dark:text-zinc-500"> · {meritBandLabel(displayedMerit)}</span>
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Starts at {DEFAULT_MERIT}. Only unexpired warnings lower it.
+            </p>
+          </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Current standing</p>
             {badges.length === 0 ? (
@@ -210,7 +229,12 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
                     {warning.reason ? <p className="mt-1 text-sm text-gray-700 dark:text-zinc-300">{warning.reason}</p> : null}
                     <p className="mt-1 text-xs text-gray-500">
                       {warning.number ? `${warning.number} · ` : ''}
-                      {warning.points || 0} pts · {formatWhen(warning.createdAt)}
+                      {Number(warning.points) > 0
+                        ? isActiveWarning(warning)
+                          ? `−${warning.points} merit · `
+                          : `no longer deducts merit · `
+                        : ''}
+                      {formatWhen(warning.createdAt)}
                       {warning.expiresAt ? ` · expires ${formatWhen(warning.expiresAt)}` : ' · stays until rescinded'}
                     </p>
                   </li>

@@ -11,6 +11,7 @@
 ## Component practices
 
 - Admin warning catalog and point thresholds live at `/admin/warnings` (`AdminWarningsPage`). Staff warn pickers load `/api/admin/warning-catalog` (or `/api/moderator/warning-catalog`) instead of a hardcoded list. Duration is displayed read-only; staff cannot set it.
+- User-facing screens say **Platform Merit**, never “warning points.” Merit is `100 − active warning points` from standing (`frontend/src/lib/merit.ts`). Staff desks keep warning-point language.
 - Follow the existing dark Ensemble theme, spacing, typography, borders, and controls.
 - Do not introduce gradients or visually unrelated component systems unless requested.
 - Reuse existing components and tokens before creating new ones.

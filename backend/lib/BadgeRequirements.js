@@ -32,51 +32,6 @@ const OPERATORS = {
   lte: { label: 'at most', compare: (current, threshold) => current <= threshold },
 };
 
-/** Named library rows created from the live product catalog. */
-const NAMED_REQUIREMENTS = [
-  { slug: 'alpha-signup', name: 'Signed up during alpha', metric: 'alpha_access', operator: 'eq', threshold: 1, description: 'Alpha Tester. Fired on signup while alpha is open.' },
-  { slug: 'beta-flag', name: 'Beta tester', metric: 'beta_access', operator: 'eq', threshold: 1, description: 'Beta Tester. Admin grant or beta flag.' },
-  { slug: 'profile-complete', name: 'Profile checklist 100%', metric: 'profile_complete', operator: 'eq', threshold: 1, description: 'Profile Complete.' },
-  { slug: 'freelance-close-1', name: '1 freelancer close', metric: 'freelance_close', operator: 'gte', threshold: 1, description: 'Fresh Freelancer.' },
-  { slug: 'freelance-close-10', name: '10 freelancer closes', metric: 'freelance_close', operator: 'gte', threshold: 10, description: 'Rising Freelancer.' },
-  { slug: 'freelance-close-50', name: '50 freelancer closes', metric: 'freelance_close', operator: 'gte', threshold: 50, description: 'Elite Freelancer.' },
-  { slug: 'freelance-close-100', name: '100 freelancer closes', metric: 'freelance_close', operator: 'gte', threshold: 100, description: 'Grand Freelancer.' },
-  { slug: 'client-close-1', name: '1 client close', metric: 'client_close', operator: 'gte', threshold: 1, description: 'Fresh Client.' },
-  { slug: 'client-close-10', name: '10 client closes', metric: 'client_close', operator: 'gte', threshold: 10, description: 'Rising Client.' },
-  { slug: 'client-close-50', name: '50 client closes', metric: 'client_close', operator: 'gte', threshold: 50, description: 'Elite Client.' },
-  { slug: 'client-close-100', name: '100 client closes', metric: 'client_close', operator: 'gte', threshold: 100, description: 'Grand Client.' },
-  { slug: 'asset-published-1', name: '1 published asset', metric: 'asset_published', operator: 'gte', threshold: 1, description: 'Fresh Creator.' },
-  { slug: 'asset-published-10', name: '10 published assets', metric: 'asset_published', operator: 'gte', threshold: 10, description: 'Rising Creator.' },
-  { slug: 'asset-published-50', name: '50 published assets', metric: 'asset_published', operator: 'gte', threshold: 50, description: 'Elite Creator.' },
-  { slug: 'asset-published-100', name: '100 published assets', metric: 'asset_published', operator: 'gte', threshold: 100, description: 'Grand Creator.' },
-  { slug: 'jobs-posted-1', name: '1 job posted', metric: 'jobs_posted', operator: 'gte', threshold: 1, description: 'Created a job listing.' },
-  { slug: 'proposals-sent-1', name: '1 job proposal sent', metric: 'proposals_sent', operator: 'gte', threshold: 1, description: 'Applied to a job.' },
-  { slug: 'gigs-listed-1', name: '1 gig listed', metric: 'gigs_listed', operator: 'gte', threshold: 1, description: 'Published a gig service.' },
-  { slug: 'followers-1', name: '1 follower', metric: 'followers', operator: 'gte', threshold: 1, description: 'Someone follows this profile.' },
-  { slug: 'reviews-received-1', name: '1 contract review received', metric: 'reviews_received', operator: 'gte', threshold: 1, description: 'Rated after a close.' },
-  { slug: 'portfolio-items-1', name: '1 portfolio item', metric: 'portfolio_items', operator: 'gte', threshold: 1, description: 'Gallery item on profile.' },
-  { slug: 'skills-added-1', name: '1 skill on profile', metric: 'skills_added', operator: 'gte', threshold: 1, description: 'A skill attached to the profile.' },
-];
-
-/** registry_id → named requirement slugs, from the current 15 product badges. */
-const EXISTING_BADGE_REQUIREMENTS = {
-  'acc-alpha': ['alpha-signup'],
-  'acc-beta': ['beta-flag'],
-  'setup-profile': ['profile-complete'],
-  'acc-freelance-1': ['freelance-close-1'],
-  'acc-freelance-2': ['freelance-close-10'],
-  'acc-freelance-3': ['freelance-close-50'],
-  'acc-freelance-4': ['freelance-close-100'],
-  'acc-client-1': ['client-close-1'],
-  'acc-client-2': ['client-close-10'],
-  'acc-client-3': ['client-close-50'],
-  'acc-client-4': ['client-close-100'],
-  'acc-asset-1': ['asset-published-1'],
-  'acc-asset-2': ['asset-published-10'],
-  'acc-asset-3': ['asset-published-50'],
-  'acc-asset-4': ['asset-published-100'],
-};
-
 const byCode = new Map(REQUIREMENT_CATALOG.map((item) => [item.code, item]));
 
 function normalizeRequirementCode(code) {
@@ -89,24 +44,11 @@ function getRequirementDefinition(code) {
 }
 
 function listRequirementCatalog() {
-  return REQUIREMENT_CATALOG.filter((item) => item.code !== 'admin_grant').map((item) => ({ ...item }));
-}
-
-function listNamedRequirementSeeds() {
-  return NAMED_REQUIREMENTS.map((item) => ({ ...item, is_system: true }));
-}
-
-function listExistingBadgeRequirementMap() {
-  return { ...EXISTING_BADGE_REQUIREMENTS };
+  return REQUIREMENT_CATALOG.map((item) => ({ ...item }));
 }
 
 function requirementKind(code) {
   return getRequirementDefinition(code)?.kind || 'count';
-}
-
-function normalizeOperator(value) {
-  const operator = String(value || 'gte').toLowerCase();
-  return OPERATORS[operator] ? operator : null;
 }
 
 function compareProgress(operator, current, threshold) {
@@ -114,27 +56,31 @@ function compareProgress(operator, current, threshold) {
   return fn.compare(Number(current || 0), Number(threshold || 1));
 }
 
-function formatRequirementLabel(def) {
-  const metric = getRequirementDefinition(def.metric || def.code);
-  const kind = metric?.kind || 'count';
-  if (kind === 'boolean') return def.name || metric?.label || def.metric;
-  const op = OPERATORS[def.operator]?.label || 'at least';
-  return def.name || `${metric?.label || def.metric} ${op} ${def.threshold}`;
+function formatUnlockLabel(code, conditionType, conditionValue) {
+  const metric = getRequirementDefinition(code);
+  if (!metric || metric.code === 'admin_grant') return 'Honorary — grant only';
+  if (metric.kind === 'boolean' || conditionType === 'boolean') return metric.label;
+  return `${metric.label} at least ${Number(conditionValue || 1)}`;
+}
+
+function badgeUnlockIsMet(badge, progress, context) {
+  const code = normalizeRequirementCode(badge.trigger_event_code);
+  if (!code || code === 'admin_grant') return false;
+  if (code === 'alpha_access') return context.event === 'signup';
+  if (code === 'beta_access') return context.event === 'beta';
+  const operator = badge.condition_type === 'boolean' ? 'eq' : 'gte';
+  return compareProgress(operator, progress[code], badge.condition_value);
 }
 
 module.exports = {
   REQUIREMENT_CATALOG,
   LEGACY_CODE_MAP,
   OPERATORS,
-  NAMED_REQUIREMENTS,
-  EXISTING_BADGE_REQUIREMENTS,
   normalizeRequirementCode,
   getRequirementDefinition,
   listRequirementCatalog,
-  listNamedRequirementSeeds,
-  listExistingBadgeRequirementMap,
   requirementKind,
-  normalizeOperator,
   compareProgress,
-  formatRequirementLabel,
+  formatUnlockLabel,
+  badgeUnlockIsMet,
 };
