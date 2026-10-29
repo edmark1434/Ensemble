@@ -44,8 +44,10 @@ const restrictionDeskStaff = requireStaffRole([
   'Jobs N Gigs Moderator',
 ]);
 const { getWarningCatalog } = require('../controllers/WarningDefControllers');
+const { getPunishmentCatalog } = require('../controllers/PunishmentDefControllers');
 
 router.get('/warning-catalog', [checkSession, restrictionDeskStaff], getWarningCatalog);
+router.get('/punishment-catalog', [checkSession, restrictionDeskStaff], getPunishmentCatalog);
 
 // ─── Marketplace Moderator ───────────────────────────────────────────────
 router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOverview);

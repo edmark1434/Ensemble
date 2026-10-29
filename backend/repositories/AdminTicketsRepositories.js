@@ -3965,6 +3965,7 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
   await updateAccountStatus(accountId, 'ban', staff.staff_id, {
     reason,
     duration: 'permanent',
+    punishmentId: 'ban_dispute_conviction',
     disputeId: row.dispute_id,
     disputeNumber: row.dispute_number || null,
   });
@@ -4093,10 +4094,19 @@ async function applyReportSanction(row, patch, staffId) {
   }
   if (sanctionType === 'suspend' || sanctionType === 'suspended') {
     if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');
-    return updateAccountStatus(accountId, 'suspend', staffId, { reason, duration: 'temporary', days });
+    return updateAccountStatus(accountId, 'suspend', staffId, {
+      reason,
+      duration: 'temporary',
+      days,
+      skipPunishmentCatalog: true,
+    });
   }
   if (sanctionType === 'ban' || sanctionType === 'banned') {
-    return updateAccountStatus(accountId, 'ban', staffId, { reason, duration: 'permanent' });
+    return updateAccountStatus(accountId, 'ban', staffId, {
+      reason,
+      duration: 'permanent',
+      skipPunishmentCatalog: true,
+    });
   }
   throw reportDecisionError('Choose a warning, suspension, or ban');
 }

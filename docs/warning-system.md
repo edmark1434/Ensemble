@@ -259,9 +259,11 @@ Warnings do not replace the punishment ladder. They feed it.
 | Forum timeout | Cannot write `/api/forum*`. Other products stay. | Optional on top of a forum warning. |
 | Suspend | Site-wide reads only. Manual 1–30 days typical. Auto 7 or 14. | 20+ points, or staff skip. |
 | Lock | Investigation / compromised. Appeal only. | Fake ID, impersonation, malware. Outcome: warn, suspend, ban, or restore. |
-| Ban | Temp or permanent. Appeal only. | Threats, payment fraud, dispute conviction. |
+| Ban | Temp or permanent. Appeal only. | Threats, payment fraud, dispute conviction. Staff pick a named ban; they may override duration. |
 
 Staff may skip rungs for severe harm. Skipping does not add extra warning points unless they also issue a warning.
+
+Ban, suspend, and timeout use `punishment_defs`. Admin CRUD sits next to the warning library at `/admin/warnings`. Staff must pick a named row and a reason. The catalog clock is the default; they can set a custom duration. Lock stays free-form (investigation). The engine still never auto-bans.
 
 Forum timeout does not block jobs, gigs, marketplace, inbox, or editor.
 
@@ -378,10 +380,12 @@ Frozen access: no proposals, no new DMs, no cashout.
 - `warning_defs` — named library: slug, label, category, points 1–10, duration_days 1–365, desks jsonb, note, is_system, sort_order, deleted_at. Migration `1826400000000_warning-defs` plus `1826600000000_warning-duration-and-thresholds`.
 - `warning_thresholds` — min_points, effect (`none` / `record` / `limited` / `restricted` / `frozen` / `auto_suspend`), label, suspend_days, is_system, deleted_at.
 - `violations` — issued cases: type (label), reason, points, status, staff_id, expires_at.
+- `punishment_defs` — named ban / suspend / timeout library. See [punishment-system.md](punishment-system.md) and [database.md](database.md).
 
 ### APIs
 
 - `GET /api/admin/warning-catalog?desk=` and `GET /api/moderator/warning-catalog?desk=`
+- `GET /api/admin/punishment-catalog?desk=&kind=` and `GET /api/moderator/punishment-catalog`
 - `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId` `{ label, category, points, durationDays, desks, note }`
 - `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId` `{ minPoints, effect, label, suspendDays, note }` (Admin only)
 - `POST /api/admin/accounts/:accountId/warn` `{ warningId, reason }`

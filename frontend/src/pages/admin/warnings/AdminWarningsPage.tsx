@@ -10,6 +10,7 @@ import {
   warningDurationDays,
 } from '@/lib/warningLadder';
 import AdminWarningThresholdsPanel from './AdminWarningThresholdsPanel';
+import AdminPunishmentDefsPanel from './AdminPunishmentDefsPanel';
 
 const fieldClass =
   'w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20';
@@ -71,7 +72,7 @@ export default function AdminWarningsPage() {
   const [form, setForm] = useState<DefForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [tab, setTab] = useState<'catalog' | 'thresholds'>('catalog');
+  const [tab, setTab] = useState<'catalog' | 'thresholds' | 'punishments'>('catalog');
 
   const load = async () => {
     const res = await api.get('/api/admin/warning-defs');
@@ -187,10 +188,9 @@ export default function AdminWarningsPage() {
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
         <div className="px-6 py-4 md:px-8">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Admin</p>
-          <h1 className="text-xl font-bold text-white">Warnings</h1>
+          <h1 className="text-xl font-bold text-white">Warnings & punishments</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Create named warnings with locked points and duration. Staff pick a row; they cannot change the clock.
-            Thresholds decide what happens when active points stack.
+            Warnings lock points and duration. Ban, suspend, and timeout rows set a default clock that staff can override.
           </p>
         </div>
       </header>
@@ -199,6 +199,7 @@ export default function AdminWarningsPage() {
         <div className="flex gap-2">
           {([
             { id: 'catalog', label: 'Warning library' },
+            { id: 'punishments', label: 'Ban, suspend, timeout' },
             { id: 'thresholds', label: 'Point thresholds' },
           ] as const).map((item) => (
             <button
@@ -217,6 +218,7 @@ export default function AdminWarningsPage() {
         </div>
 
         {tab === 'thresholds' ? <AdminWarningThresholdsPanel /> : null}
+        {tab === 'punishments' ? <AdminPunishmentDefsPanel /> : null}
 
         {tab === 'catalog' ? (
         <>

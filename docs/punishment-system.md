@@ -118,9 +118,13 @@ A first confirmed no-show is **No-show / ghosting after hire** (5 points, 14 day
 
 Timeout itself adds no points. The warning on the same action is the only hit.
 
+Staff pick a **named timeout** from `punishment_defs` (`kind = timeout`). Duration is the catalog default (seeded 1–14 days). Staff may override the clock and must write case notes.
+
 ### 4.4 Suspension
 
 Read the whole platform. Writes blocked except logout, token refresh, mark notifications read. Cannot complete contract actions, chat-send, list, cash out, or ticket-create. Public Suspended chip. Auto-suspend is always 7 days. Manual 1–30 typical.
+
+Staff pick a **named suspension** from `punishment_defs` (`kind = suspend`). Duration is the catalog default unless they set a custom clock. Auto-suspend from warning points does not use this catalog.
 
 Warning points: leftover active points still apply the auto band.
 
@@ -133,6 +137,8 @@ Investigation / compromised account. Users: appeal-only (`/account/appeal`, tick
 ### 4.6 Ban
 
 Temp or permanent. Dispute conviction = permanent ban of `for_account_id`. Sign in only to appeal and view tickets/disputes. Listings/gigs/jobs stop being actionable; staff hide or close them. Badges hidden on public profile. Appeal accept → lift in **24 hours**, then recompute. Reopening a dispute does not unban.
+
+Staff pick a **named ban** from `punishment_defs` (`kind = ban`). Duration is the catalog default (days or permanent) unless they set a custom clock. Only Admin and Support can ban. Admin CRUD is `/admin/warnings` → Ban, suspend, timeout.
 
 Warning points stay on leftover unexpired rows. After appeal lift, the auto band is calculated from those leftover points.
 

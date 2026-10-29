@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
   { label: 'Tickets', icon: Ticket, to: '/admin/ticket-management' },
   { label: 'Platform Feedback', icon: MessageSquare, to: '/admin/feedbacks' },
   { label: 'Badges', icon: Award, to: '/admin/badges' },
-  { label: 'Warnings', icon: AlertTriangle, to: '/admin/warnings' },
+  { label: 'Warnings & punishments', icon: AlertTriangle, to: '/admin/warnings' },
   { label: 'Settings', icon: Settings2, to: '/admin/system-settings' },
   { label: 'Platform view', icon: Eye, to: '/admin/platform-view' },
 ];

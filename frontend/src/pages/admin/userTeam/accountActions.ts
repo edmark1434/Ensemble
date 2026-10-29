@@ -1,7 +1,15 @@
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 
-type ActionOptions = { silent?: boolean; days?: number | null; duration?: 'temporary' | 'permanent'; endsAt?: string | null; reason?: string };
+type ActionOptions = {
+  silent?: boolean;
+  days?: number | null;
+  duration?: 'temporary' | 'permanent';
+  endsAt?: string | null;
+  reason?: string;
+  punishmentId?: string;
+  customDuration?: boolean;
+};
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
   const res = await api.patch(`/api/admin/accounts/${accountId}/status`, {
@@ -10,6 +18,8 @@ export async function setAccountStatus(accountId: string, action: string, option
     duration: options?.duration,
     endsAt: options?.endsAt,
     reason: options?.reason,
+    punishmentId: options?.punishmentId,
+    customDuration: options?.customDuration,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {

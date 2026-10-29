@@ -185,6 +185,13 @@ const {
   deleteAdminWarningDef,
 } = require('../controllers/WarningDefControllers');
 const {
+  getPunishmentCatalog,
+  getAdminPunishmentDefs,
+  postAdminPunishmentDef,
+  patchAdminPunishmentDef,
+  deleteAdminPunishmentDef,
+} = require('../controllers/PunishmentDefControllers');
+const {
   getAdminWarningThresholds,
   postAdminWarningThreshold,
   patchAdminWarningThreshold,
@@ -192,6 +199,11 @@ const {
 } = require('../controllers/WarningThresholdControllers');
 
 router.get('/warning-catalog', [checkSession, requireUserTeamAccess], getWarningCatalog);
+router.get('/punishment-catalog', [checkSession, requireUserTeamAccess], getPunishmentCatalog);
+router.get('/punishment-defs', [checkSession, requireAdmin], getAdminPunishmentDefs);
+router.post('/punishment-defs', [checkSession, requireAdmin], postAdminPunishmentDef);
+router.patch('/punishment-defs/:punishmentDefId', [checkSession, requireAdmin], patchAdminPunishmentDef);
+router.delete('/punishment-defs/:punishmentDefId', [checkSession, requireAdmin], deleteAdminPunishmentDef);
 router.get('/warning-defs', [checkSession, requireAdmin], getAdminWarningDefs);
 router.post('/warning-defs', [checkSession, requireAdmin], postAdminWarningDef);
 router.patch('/warning-defs/:warningDefId', [checkSession, requireAdmin], patchAdminWarningDef);

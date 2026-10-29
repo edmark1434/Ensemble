@@ -1149,14 +1149,21 @@ function sanctionReason(options = {}) {
 async function updateAccountStatus(accountId, actionOrStatus, staffId = null, options = {}) {
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
-  const reason = sanctionReason(options);
+  const { resolveStandingOptions } = require('../services/PunishmentDefServices');
+  const resolvedOptions = await resolveStandingOptions(key, options);
+  const reason = sanctionReason(resolvedOptions);
   const {
     sanctionEndsAt,
     getAccountAccess,
   } = require('../lib/AccountRestriction');
+  const punishmentMeta = {
+    ...(resolvedOptions.punishmentId ? { punishmentId: resolvedOptions.punishmentId } : {}),
+    ...(resolvedOptions.punishmentLabel ? { punishmentLabel: resolvedOptions.punishmentLabel } : {}),
+    ...(resolvedOptions.customDuration ? { customDuration: true } : {}),
+  };
 
   if (key === 'timeout' || key === 'forum_timeout') {
-    const endsAt = sanctionEndsAt(options, 'temporary');
+    const endsAt = sanctionEndsAt(resolvedOptions, 'temporary');
     await pool.query(
       `
       INSERT INTO restrictions (type, module, starts_at, ends_at, account_id, staff_id)
@@ -1172,7 +1179,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: { endsAt, days: options.days ?? null, reason },
+      metadata: { endsAt, days: resolvedOptions.days ?? null, reason, ...punishmentMeta },
     });
     let restriction = null;
     try {
@@ -1240,9 +1247,9 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const status = STATUS_MAP[key] || null;
   if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
 
-  const suspensionEndsAt = status === 'Suspended' ? sanctionEndsAt(options, 'temporary') : null;
-  const banEndsAt = status === 'Banned' ? sanctionEndsAt(options, 'permanent') : null;
-  const lockEndsAt = status === 'Locked' ? sanctionEndsAt(options, 'permanent') : null;
+  const suspensionEndsAt = status === 'Suspended' ? sanctionEndsAt(resolvedOptions, 'temporary') : null;
+  const banEndsAt = status === 'Banned' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
+  const lockEndsAt = status === 'Locked' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   await pool.query(
     `
     UPDATE accounts
@@ -1271,8 +1278,9 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       banEndsAt,
       lockEndsAt,
       reason,
-      ...(options.disputeId ? { disputeId: String(options.disputeId) } : {}),
-      ...(options.disputeNumber ? { disputeNumber: String(options.disputeNumber) } : {}),
+      ...punishmentMeta,
+      ...(resolvedOptions.disputeId ? { disputeId: String(resolvedOptions.disputeId) } : {}),
+      ...(resolvedOptions.disputeNumber ? { disputeNumber: String(resolvedOptions.disputeNumber) } : {}),
     },
   });
 

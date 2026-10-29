@@ -51,6 +51,12 @@
 - `warning_thresholds` maps stacked active points to an automatic effect (`none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`). Highest matching `min_points` wins. Auto-suspend rows also store `suspend_days`.
 - Migration `1826400000000_warning-defs` seeds the original hardcoded catalog. `1826600000000_warning-duration-and-thresholds` adds duration and seeds the default point ladder. Soft-delete hides a row from desks without touching issued warnings.
 
+## Standing punishment library
+
+- `punishment_defs` is the named ban / suspend / timeout catalog: slug, kind, label, category, duration_days (null = permanent), desks, note, `is_system`, and `deleted_at`.
+- Staff issue standing by picking a live row. The default clock is copied unless they send a custom duration. Later catalog edits do not rewrite old sanctions.
+- Migration `1826800000000_punishment-defs` seeds the platform catalog. Soft-delete hides a row from desks without lifting active bans, suspensions, or timeouts.
+
 ## Marketplace licenses
 
 - `market_asset_licenses` replaces `user_market_assets`. Each row records one asset/bundle use: buyer, asset, paid price, purchase transaction, purchase date, status, and optional project/assignment date.

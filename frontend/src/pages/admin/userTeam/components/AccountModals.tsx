@@ -20,6 +20,8 @@ import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVe
 import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule';
 import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } from '@/lib/merit';
 import { WarningPresetFields } from './WarningPresetFields';
+import { PunishmentPresetFields } from './PunishmentPresetFields';
+import { punishmentDurationLabel, type PunishmentKind, type PunishmentPreset } from '@/lib/punishmentCatalog';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -125,12 +127,24 @@ export function ConfirmStatusModal({
   entityName: string;
   action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
   onClose: () => void;
-  onConfirm: (options?: { duration?: 'temporary' | 'permanent'; endsAt?: string | null; reason: string }) => Promise<void>;
+  onConfirm: (options?: {
+    duration?: 'temporary' | 'permanent';
+    endsAt?: string | null;
+    reason: string;
+    punishmentId?: string;
+    customDuration?: boolean;
+  }) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
-  const choosesDuration = action === 'ban' || action === 'suspend' || action === 'lock' || action === 'timeout';
+  const choosesCatalog = action === 'ban' || action === 'suspend' || action === 'timeout';
+  const choosesDuration = choosesCatalog || action === 'lock';
+  const [punishmentId, setPunishmentId] = useState('');
+  const [preset, setPreset] = useState<PunishmentPreset | null>(null);
+  const [customDuration, setCustomDuration] = useState(false);
+  const [punishmentError, setPunishmentError] = useState('');
+  const catalogKind: PunishmentKind | undefined = choosesCatalog ? action : undefined;
   const [timing, setTiming] = useState<SanctionTiming>({
     duration: action === 'ban' || action === 'lock' ? 'permanent' : 'temporary',
     endsAt: null,
@@ -204,8 +218,17 @@ export function ConfirmStatusModal({
           </button>
           <button
             type="button"
-            disabled={saving || !reason.trim() || (choosesDuration && timing.duration === 'temporary' && !timing.endsAt)}
+            disabled={
+              saving
+              || !reason.trim()
+              || (choosesCatalog && !punishmentId)
+              || (choosesDuration && customDuration && timing.duration === 'temporary' && !timing.endsAt)
+            }
             onClick={async () => {
+              if (choosesCatalog && !punishmentId) {
+                setPunishmentError('Pick a predefined punishment.');
+                return;
+              }
               if (!reason.trim()) {
                 setReasonError('A reason is required.');
                 return;
@@ -213,9 +236,11 @@ export function ConfirmStatusModal({
               setSaving(true);
               try {
                 await onConfirm({
-                  duration: choosesDuration ? timing.duration : undefined,
-                  endsAt: choosesDuration ? timing.endsAt : undefined,
+                  duration: choosesDuration && (customDuration || action === 'lock') ? timing.duration : undefined,
+                  endsAt: choosesDuration && (customDuration || action === 'lock') ? timing.endsAt : undefined,
                   reason: reason.trim(),
+                  punishmentId: choosesCatalog ? punishmentId : undefined,
+                  customDuration: choosesCatalog ? customDuration : undefined,
                 });
                 onClose();
               } catch (err) {
@@ -244,9 +269,48 @@ export function ConfirmStatusModal({
                   ? 'They can post, comment, and react in the forums again.'
                   : 'The account will regain normal platform access.'}
       </p>
-      {choosesDuration && (
+      {choosesCatalog && (
+        <div className="mt-4">
+          <PunishmentPresetFields
+            kind={catalogKind}
+            punishmentId={punishmentId}
+            onPunishmentId={(id) => {
+              setPunishmentId(id);
+              if (id) setPunishmentError('');
+            }}
+            onPreset={(next) => {
+              setPreset(next);
+              setCustomDuration(false);
+            }}
+          />
+          {punishmentError ? <p className="mt-1 text-xs text-red-300">{punishmentError}</p> : null}
+          {preset ? (
+            <p className="mt-2 text-xs text-zinc-400">
+              Catalog default: {punishmentDurationLabel(preset)}.
+            </p>
+          ) : null}
+          <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={customDuration}
+              onChange={(event) => setCustomDuration(event.target.checked)}
+              className="rounded border-white/20 bg-transparent"
+            />
+            Set a custom duration
+          </label>
+        </div>
+      )}
+      {choosesDuration && (action === 'lock' || customDuration) && (
         <SanctionScheduleFields
-          defaultDuration={action === 'ban' || action === 'lock' ? 'permanent' : 'temporary'}
+          key={`${action}-${punishmentId}-${customDuration ? 'custom' : 'catalog'}`}
+          defaultDuration={
+            action === 'lock'
+              ? 'permanent'
+              : preset?.durationDays == null
+                ? 'permanent'
+                : 'temporary'
+          }
+          defaultDays={preset?.durationDays || 7}
           onChange={setTiming}
         />
       )}

@@ -56,6 +56,12 @@
 - Admin CRUD: `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId`. Body `{ label, category, points, durationDays, desks, note }`. Points 1–10. Duration 1–365 days. Delete is a soft-delete. Staff-issued warnings copy points and duration; client-sent clocks are ignored.
 - Admin-only thresholds: `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId`. Body `{ minPoints, effect, label, suspendDays, note }`. Effects: `none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`. `suspendDays` is required for auto-suspend.
 
+## Standing punishment library
+
+- `GET /api/admin/punishment-catalog?desk=&kind=` lists live named bans, suspensions, and timeouts for a desk. Same payload on `GET /api/moderator/punishment-catalog`. `kind` is `ban`, `suspend`, or `timeout`. `durationDays` is null when the default is permanent.
+- Admin CRUD: `GET/POST /api/admin/punishment-defs`, `PATCH/DELETE /api/admin/punishment-defs/:punishmentDefId`. Body `{ label, kind, category, durationDays, permanent, desks, note }`. Duration 1–365 days, or `permanent: true` / `durationDays: null`. Ban rows are limited to admin and support desks. Delete is a soft-delete.
+- Staff `PATCH /api/admin/accounts/:accountId/status` and moderator restriction patches require `punishmentId` for ban, suspend, and timeout. Catalog duration is used unless `customDuration: true` with `duration` / `endsAt` / `days`. Reason is still required. Lock and lift actions do not use the catalog.
+
 ## Marketplace license endpoints
 
 - `POST /api/assets/:assetId/purchase` returns `license` alongside the existing purchase response. `alreadyPurchased` means an active unassigned license was reused without another charge. Asset responses include `available_license_count`; `is_purchased` still means the viewer has at least one active purchased license.

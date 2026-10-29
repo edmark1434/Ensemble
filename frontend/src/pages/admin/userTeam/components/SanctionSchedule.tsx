@@ -57,14 +57,16 @@ function formatWhen(date: Date) {
 
 export function SanctionScheduleFields({
   defaultDuration = 'temporary',
+  defaultDays = 7,
   onChange,
 }: {
   defaultDuration?: 'temporary' | 'permanent';
+  defaultDays?: number;
   onChange: (timing: SanctionTiming) => void;
 }) {
   const [duration, setDuration] = useState<'temporary' | 'permanent'>(defaultDuration);
   const [timedMode, setTimedMode] = useState<TimedMode>('length');
-  const [amount, setAmount] = useState('7');
+  const [amount, setAmount] = useState(String(defaultDays > 0 ? defaultDays : 7));
   const [unit, setUnit] = useState<Unit>('days');
   const tomorrow = useMemo(() => {
     const date = new Date();

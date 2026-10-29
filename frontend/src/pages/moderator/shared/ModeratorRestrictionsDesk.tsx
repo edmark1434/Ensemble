@@ -5,6 +5,8 @@ import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
 import { SanctionScheduleFields, type SanctionTiming } from '@/pages/admin/userTeam/components/SanctionSchedule';
 import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
+import { PunishmentPresetFields } from '@/pages/admin/userTeam/components/PunishmentPresetFields';
+import type { PunishmentKind, PunishmentPreset } from '@/lib/punishmentCatalog';
 import { getUserTeamCapabilities, type UserTeamVariant } from '@/pages/admin/userTeam/userTeamCapabilities';
 import { accentText, titleCaseWords, type Accent } from './ui';
 import { meritBandLabel, meritFromWarningPoints } from '@/lib/merit';
@@ -445,6 +447,9 @@ export default function ModeratorRestrictionsDesk({
   const [warnForm, setWarnForm] = useState({ warningId: 'harassment', reason: '' });
   const [sanctionTiming, setSanctionTiming] = useState<SanctionTiming>({ duration: 'temporary', endsAt: null, summary: '' });
   const [sanctionReason, setSanctionReason] = useState('');
+  const [punishmentId, setPunishmentId] = useState('');
+  const [punishmentPreset, setPunishmentPreset] = useState<PunishmentPreset | null>(null);
+  const [customDuration, setCustomDuration] = useState(false);
   const [submittingWarn, setSubmittingWarn] = useState(false);
   const workRef = useRef<HTMLElement>(null);
   const previousAccountId = useRef<string | null>(null);
@@ -567,11 +572,25 @@ export default function ModeratorRestrictionsDesk({
   async function runAction(action: string) {
     if (!selected) return;
     const removing = ['unsuspend', 'unban', 'unlock', 'clear_timeout'].includes(action);
+    const standingKind: PunishmentKind | null =
+      action === 'ban' || action === 'suspend' || action === 'timeout' ? action : null;
     if (!sanctionReason.trim()) {
       showErrorToast('A reason is required');
       return;
     }
-    if (!removing && sanctionTiming.duration === 'temporary' && !sanctionTiming.endsAt) {
+    if (standingKind && !punishmentId) {
+      showErrorToast('Pick a predefined punishment');
+      return;
+    }
+    if (standingKind && punishmentPreset && punishmentPreset.kind !== standingKind) {
+      showErrorToast(`Pick a ${standingKind} punishment, or choose the matching action.`);
+      return;
+    }
+    if (!removing && customDuration && sanctionTiming.duration === 'temporary' && !sanctionTiming.endsAt) {
+      showErrorToast(sanctionTiming.summary || 'Choose how long this lasts');
+      return;
+    }
+    if (!removing && action === 'lock' && sanctionTiming.duration === 'temporary' && !sanctionTiming.endsAt) {
       showErrorToast(sanctionTiming.summary || 'Choose how long this lasts');
       return;
     }
@@ -579,9 +598,11 @@ export default function ModeratorRestrictionsDesk({
     try {
       const res = await api.patch(`${endpointBase}/accounts/${selected.accountId}`, {
         action,
-        duration: removing ? undefined : sanctionTiming.duration,
-        endsAt: removing ? undefined : sanctionTiming.endsAt,
+        duration: removing || (standingKind && !customDuration) ? undefined : sanctionTiming.duration,
+        endsAt: removing || (standingKind && !customDuration) ? undefined : sanctionTiming.endsAt,
         reason: sanctionReason.trim(),
+        punishmentId: standingKind ? punishmentId : undefined,
+        customDuration: standingKind ? customDuration : undefined,
       });
       setData(res.data?.data || null);
       setSanctionReason('');
@@ -1051,9 +1072,33 @@ export default function ModeratorRestrictionsDesk({
 
                 <div className={workMode === 'standing' ? 'mt-4 space-y-4' : 'hidden'}>
                   <p className="text-xs leading-relaxed text-zinc-500">
-                    Lift actions appear only while that sanction is active. A reason is stored with every change.
+                    Pick a named punishment for ban, suspend, or timeout. Lift actions only need a reason.
                   </p>
-                  <SanctionScheduleFields key={`${selected.accountId}-standing`} defaultDuration="temporary" onChange={setSanctionTiming} />
+                  <PunishmentPresetFields
+                    desk={variant}
+                    punishmentId={punishmentId}
+                    onPunishmentId={(id) => {
+                      setPunishmentId(id);
+                      setCustomDuration(false);
+                    }}
+                    onPreset={setPunishmentPreset}
+                    fieldClass={FIELD_CLASS}
+                  />
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={customDuration}
+                      onChange={(event) => setCustomDuration(event.target.checked)}
+                      className="rounded border-white/20 bg-transparent"
+                    />
+                    Use a custom duration instead of the catalog default
+                  </label>
+                  <SanctionScheduleFields
+                    key={`${selected.accountId}-${punishmentId}`}
+                    defaultDuration={punishmentPreset?.durationDays == null ? 'permanent' : 'temporary'}
+                    defaultDays={punishmentPreset?.durationDays || 7}
+                    onChange={setSanctionTiming}
+                  />
                   <Field label="Reason">
                     <textarea
                       value={sanctionReason}
