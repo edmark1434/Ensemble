@@ -494,12 +494,12 @@ async function getSessionTimeoutSeconds() {
     try {
         const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
         const platform = await getSectionValue('platform');
-        const minutes = Number(platform?.sessionTimeoutMinutes);
-        if (Number.isFinite(minutes) && minutes > 0) {
-            return Math.floor(minutes * 60);
+        const days = Number(platform?.sessionTimeoutDays ?? (platform?.sessionTimeoutMinutes ? platform.sessionTimeoutMinutes / 1440 : 30));
+        if (Number.isFinite(days) && days > 0) {
+            return Math.floor(days * 86400);
         }
     } catch (_err) {}
-    return 60 * 60; // default 60 minutes
+    return 30 * 86400; // default 30 days
 }
 
 async function createSessionId(credentials){

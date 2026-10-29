@@ -6,7 +6,7 @@ const DEFAULT_SETTINGS = {
     registrationEnabled: true,
     supportEmail: 'support@ensemble.app',
     maxUploadMb: 50,
-    sessionTimeoutMinutes: 60,
+    sessionTimeoutDays: 30,
   },
   moderation: {
     spamFilterEnabled: true,
@@ -80,7 +80,7 @@ const FIELD_META = {
   'platform.registrationEnabled': { name: 'Registration enabled', description: 'Allow new user sign-ups.' },
   'platform.supportEmail': { name: 'Support email', description: 'Public support contact address.' },
   'platform.maxUploadMb': { name: 'Max upload size (MB)', description: 'Maximum file upload size in megabytes.' },
-  'platform.sessionTimeoutMinutes': { name: 'Session timeout (minutes)', description: 'Idle session lifetime in minutes.' },
+  'platform.sessionTimeoutDays': { name: 'Session timeout (days)', description: 'Idle session lifetime in days.' },
   'moderation.spamFilterEnabled': { name: 'Spam filter', description: 'Enable automated spam filtering.' },
   'moderation.autoFlagProfanity': { name: 'Auto-flag profanity', description: 'Automatically flag content that contains profanity.' },
   'moderation.autoHoldNewAccounts': { name: 'Hold new accounts', description: 'Delay full access for new accounts pending review.' },
@@ -227,7 +227,19 @@ function assembleSection(sectionKey, defaults, rowsOrMap) {
     return assembled;
   }
 
-  return walk(sectionKey, defaults);
+  const assembled = walk(sectionKey, defaults);
+  if (sectionKey === 'platform') {
+    if (assembled.sessionTimeoutDays === undefined || assembled.sessionTimeoutDays === null) {
+      if (rowsByKey['platform.sessionTimeoutMinutes']) {
+        const legacyMin = Number(rowsByKey['platform.sessionTimeoutMinutes'].current_value_literal);
+        assembled.sessionTimeoutDays = Number.isFinite(legacyMin) && legacyMin > 0 ? Math.max(1, Math.round(legacyMin / 1440)) : 30;
+      } else {
+        assembled.sessionTimeoutDays = 30;
+      }
+    }
+    assembled.sessionTimeoutMinutes = assembled.sessionTimeoutDays * 1440;
+  }
+  return assembled;
 }
 
 function sectionKeyFromConfigurationKey(configurationKey) {
@@ -255,6 +267,16 @@ function deepMergeSettings(defaults, current, patch) {
     } else {
       merged[key] = value;
     }
+  }
+
+  if (fromPatch.sessionTimeoutDays !== undefined) {
+    const days = Number(fromPatch.sessionTimeoutDays);
+    merged.sessionTimeoutDays = Number.isFinite(days) && days > 0 ? days : 30;
+    delete merged.sessionTimeoutMinutes;
+  } else if (fromPatch.sessionTimeoutMinutes !== undefined && fromPatch.sessionTimeoutDays === undefined) {
+    const mins = Number(fromPatch.sessionTimeoutMinutes);
+    merged.sessionTimeoutDays = Number.isFinite(mins) && mins > 0 ? Math.max(1, Math.round(mins / 1440)) : 30;
+    delete merged.sessionTimeoutMinutes;
   }
 
   return merged;
