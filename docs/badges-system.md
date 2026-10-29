@@ -167,7 +167,7 @@ No badge grants in v1. Team work still grants the **acting user’s** freelance/
 
 Product catalog IDs (`acc-alpha`, ranks, `setup-profile`) can be renamed but not deleted or re-id'd. Honorary badges can be created, edited, and soft-deleted. Soft-delete hides the definition; grants stay until staff revoke them. `/admin/badge-grant` redirects to the Grant tab.
 
-Each badge stores one unlock on the `badges` row: `trigger_event_code` (the metric), `condition_type` (`boolean` or `count`), and `condition_value` (the number). `admin_grant` means honorary. Category is a text field on the same row. Product unlocks cannot be changed.
+Each badge stores one unlock on the `badges` row: `trigger_event_code` (the metric), `condition_type` (`boolean` or `count`), and `condition_value` (the number). `admin_grant` means honorary. Category is a `badge_categories` row (`badge_category_id` on the badge). Product unlocks cannot be changed.
 
 The 15 product badges ship with those columns already set: alpha signup, beta flag, profile checklist, freelancer/client/creator ranks at 1 / 10 / 50 / 100. Staff can add honorary badges or a custom single-metric badge (for example “at least 25 followers”).
 

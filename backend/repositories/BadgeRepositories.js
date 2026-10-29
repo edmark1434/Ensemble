@@ -3,18 +3,25 @@ const { pool } = require('../lib/Database');
 const CATALOG_SELECT = `
         SELECT b.badge_id, b.registry_id, b.name, b.description, b.is_secret,
                b.trigger_event_code, b.condition_type, b.condition_value,
-               b.category, b.created_at, b.updated_at, b.deleted_at,
-               COUNT(ab.account_id) FILTER (WHERE ab.status = 'claimed')::int AS claimed_count,
-               COUNT(ab.account_id) FILTER (WHERE ab.status = 'pending')::int AS pending_count
+               b.badge_category_id, bc.name AS category, bc.description AS category_description,
+               b.created_at, b.updated_at, b.deleted_at,
+               COALESCE(counts.claimed_count, 0)::int AS claimed_count,
+               COALESCE(counts.pending_count, 0)::int AS pending_count
         FROM badges b
-        LEFT JOIN account_badges ab ON ab.badge_id = b.badge_id
+        JOIN badge_categories bc ON bc.badge_category_id = b.badge_category_id
+        LEFT JOIN (
+            SELECT badge_id,
+                   COUNT(*) FILTER (WHERE status = 'claimed')::int AS claimed_count,
+                   COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count
+            FROM account_badges
+            GROUP BY badge_id
+        ) counts ON counts.badge_id = b.badge_id
 `
 
 async function getBadgeCatalog() {
     const { rows } = await pool.query(`
         ${CATALOG_SELECT}
         WHERE b.deleted_at IS NULL AND b.registry_id IS NOT NULL
-        GROUP BY b.badge_id
         ORDER BY b.created_at, b.name
     `);
     return rows;
@@ -24,8 +31,49 @@ async function getBadgeCatalogItem(badgeId) {
     const { rows } = await pool.query(`
         ${CATALOG_SELECT}
         WHERE b.badge_id = $1
-        GROUP BY b.badge_id
     `, [badgeId]);
+    return rows[0] || null;
+}
+
+async function listBadgeCategories() {
+    const { rows } = await pool.query(`
+        SELECT bc.badge_category_id, bc.name, bc.description, bc.created_at, bc.updated_at,
+               COUNT(b.badge_id) FILTER (WHERE b.deleted_at IS NULL)::int AS badge_count
+        FROM badge_categories bc
+        LEFT JOIN badges b ON b.badge_category_id = bc.badge_category_id
+        WHERE bc.deleted_at IS NULL
+        GROUP BY bc.badge_category_id
+        ORDER BY bc.name
+    `);
+    return rows;
+}
+
+async function getBadgeCategory(categoryId) {
+    const { rows } = await pool.query(
+        `SELECT badge_category_id, name, description, created_at, updated_at, deleted_at
+         FROM badge_categories
+         WHERE badge_category_id = $1`,
+        [categoryId]
+    );
+    return rows[0] || null;
+}
+
+async function findBadgeCategoryByName(name) {
+    const { rows } = await pool.query(
+        `SELECT badge_category_id, name, description, created_at, updated_at, deleted_at
+         FROM badge_categories
+         WHERE lower(name) = lower($1) AND deleted_at IS NULL`,
+        [name]
+    );
+    return rows[0] || null;
+}
+
+async function createBadgeCategory({ name, description }) {
+    const { rows } = await pool.query(`
+        INSERT INTO badge_categories (name, description)
+        VALUES ($1, $2)
+        RETURNING badge_category_id, name, description, created_at, updated_at
+    `, [name, description]);
     return rows[0] || null;
 }
 
@@ -37,12 +85,12 @@ async function createBadge({
     triggerEventCode,
     conditionType,
     conditionValue,
-    category,
+    badgeCategoryId,
 }) {
     const { rows } = await pool.query(`
         INSERT INTO badges (
             registry_id, name, description, is_secret,
-            trigger_event_code, condition_type, condition_value, category
+            trigger_event_code, condition_type, condition_value, badge_category_id
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (registry_id) DO UPDATE
@@ -52,12 +100,12 @@ async function createBadge({
                trigger_event_code = EXCLUDED.trigger_event_code,
                condition_type = EXCLUDED.condition_type,
                condition_value = EXCLUDED.condition_value,
-               category = EXCLUDED.category,
+               badge_category_id = EXCLUDED.badge_category_id,
                deleted_at = NULL,
                updated_at = CURRENT_TIMESTAMP
            WHERE badges.deleted_at IS NOT NULL
         RETURNING badge_id
-    `, [registryId, name, description, isSecret, triggerEventCode, conditionType, conditionValue, category]);
+    `, [registryId, name, description, isSecret, triggerEventCode, conditionType, conditionValue, badgeCategoryId]);
     return rows[0] || null;
 }
 
@@ -378,6 +426,10 @@ async function getOwnBadgeGrants(accountId) {
 module.exports = {
     getBadgeCatalog,
     getBadgeCatalogItem,
+    listBadgeCategories,
+    getBadgeCategory,
+    findBadgeCategoryByName,
+    createBadgeCategory,
     createBadge,
     updateBadge,
     listHeldBadgeIds,

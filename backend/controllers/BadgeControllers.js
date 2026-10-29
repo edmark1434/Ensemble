@@ -2,6 +2,8 @@ const {
     grantBadgeService,
     getBadgeCatalogService,
     getBadgeRequirementTypesService,
+    getBadgeCategoriesService,
+    createBadgeCategoryService,
     createBadgeService,
     updateBadgeService,
     deleteBadgeService,
@@ -37,6 +39,23 @@ async function getAdminBadgeRequirementTypes(req, res) {
         return res.status(200).json({ success: true, data: await getBadgeRequirementTypesService() });
     } catch (err) {
         return sendError(res, err, 'Unable to load badge unlocks');
+    }
+}
+
+async function getAdminBadgeCategories(req, res) {
+    try {
+        return res.status(200).json({ success: true, data: await getBadgeCategoriesService() });
+    } catch (err) {
+        return sendError(res, err, 'Unable to load badge categories');
+    }
+}
+
+async function postAdminBadgeCategory(req, res) {
+    try {
+        const data = await createBadgeCategoryService(req.body || {});
+        return res.status(201).json({ success: true, data });
+    } catch (err) {
+        return sendError(res, err, 'Unable to create category');
     }
 }
 
@@ -126,6 +145,8 @@ async function postClaimBadge(req, res) {
 module.exports = {
     getAdminBadgeCatalog,
     getAdminBadgeRequirementTypes,
+    getAdminBadgeCategories,
+    postAdminBadgeCategory,
     postAdminBadge,
     patchAdminBadge,
     deleteAdminBadge,

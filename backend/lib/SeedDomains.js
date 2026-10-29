@@ -59,9 +59,30 @@ async function loadSeedContext(userAccountIds) {
   return { users, files, tags, purposes, survey, questions, plans, subscriptions };
 }
 
+async function ensureBadgeCategory(name, description) {
+  const existing = await pool.query(
+    `SELECT badge_category_id FROM badge_categories
+     WHERE lower(name) = lower($1) AND deleted_at IS NULL`,
+    [name]
+  );
+  if (existing.rows[0]) return existing.rows[0].badge_category_id;
+  const created = await pool.query(
+    `INSERT INTO badge_categories (name, description)
+     VALUES ($1, $2)
+     RETURNING badge_category_id`,
+    [name, description]
+  );
+  return created.rows[0].badge_category_id;
+}
+
 async function seedBadges(userAccountIds) {
   await pool.query(`DELETE FROM account_badges`);
   await pool.query(`DELETE FROM badges`);
+
+  const categoryIds = {
+    Milestones: await ensureBadgeCategory('Milestones', 'Account, profile, and rank achievements'),
+    Marketplace: await ensureBadgeCategory('Marketplace', 'Asset library creator ranks'),
+  };
 
   const badgeDefs = [
     ['acc-alpha', 'Alpha Tester', 'Granted to core ecosystem pioneers who tested the platform during its early alpha stages.', 'alpha_access', 'boolean', 1, 'Milestones'],
@@ -84,13 +105,13 @@ async function seedBadges(userAccountIds) {
   const badgeIds = [];
   let alphaBadge = null;
 
-  for (const b of badgeDefs) {
+  for (const [registryId, name, description, trigger, conditionType, conditionValue, categoryName] of badgeDefs) {
     const res = await pool.query(
       `INSERT INTO badges (
-         registry_id, name, description, is_secret, trigger_event_code, condition_type, condition_value, category
+         registry_id, name, description, is_secret, trigger_event_code, condition_type, condition_value, badge_category_id
        ) VALUES ($1,$2,$3,false,$4,$5,$6,$7)
        RETURNING badge_id, registry_id, name`,
-      b
+      [registryId, name, description, trigger, conditionType, conditionValue, categoryIds[categoryName]]
     );
     badgeIds.push(res.rows[0].badge_id);
     if (res.rows[0].registry_id === 'acc-alpha') {

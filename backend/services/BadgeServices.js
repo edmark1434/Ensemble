@@ -1,6 +1,10 @@
 const {
     getBadgeCatalog,
     getBadgeCatalogItem,
+    listBadgeCategories,
+    getBadgeCategory,
+    findBadgeCategoryByName,
+    createBadgeCategory,
     createBadge,
     updateBadge,
     listHeldBadgeIds,
@@ -132,14 +136,24 @@ function parseUnlock(body, existing) {
     return { triggerEventCode: code, conditionType, conditionValue };
 }
 
-function parseCategory(body, existing, required = false) {
-    const category = trimText(body.category ?? body.category_name, {
-        required,
-        max: 50,
-        field: 'Category',
-    });
-    if (category) return category;
-    if (existing?.category) return existing.category;
+async function resolveBadgeCategoryId(body, existing, required = false) {
+    const rawId = body.badgeCategoryId ?? body.badge_category_id;
+    if (rawId != null && String(rawId).trim() !== '') {
+        const categoryId = String(rawId).trim();
+        if (!UUID_PATTERN.test(categoryId)) throw badgeError('Invalid category');
+        const row = await getBadgeCategory(categoryId);
+        if (!row || row.deleted_at) throw badgeError('Category not found', 404);
+        return row.badge_category_id;
+    }
+
+    const name = trimText(body.category ?? body.category_name, { max: 50, field: 'Category' });
+    if (name) {
+        const row = await findBadgeCategoryByName(name);
+        if (!row) throw badgeError('Category not found');
+        return row.badge_category_id;
+    }
+
+    if (existing?.badge_category_id) return existing.badge_category_id;
     if (required) throw badgeError('Category is required');
     return undefined;
 }
@@ -193,12 +207,30 @@ async function getBadgeRequirementTypesService() {
     return listRequirementCatalog();
 }
 
+async function getBadgeCategoriesService() {
+    return listBadgeCategories();
+}
+
+async function createBadgeCategoryService(body = {}) {
+    const name = trimText(body.name, { required: true, max: 50, field: 'Name' });
+    const description = trimText(body.description, { max: 2000, field: 'Description' }) || name;
+    let created;
+    try {
+        created = await createBadgeCategory({ name, description });
+    } catch (err) {
+        if (err.code === '23505') throw badgeError('A category with that name already exists', 409);
+        throw err;
+    }
+    if (!created) throw badgeError('Unable to create category');
+    return { ...created, badge_count: 0 };
+}
+
 async function createBadgeService(body = {}) {
     const registryId = parseRegistryId(body.registryId ?? body.registry_id, true);
     const name = trimText(body.name, { required: true, max: 50, field: 'Name' });
     const description = trimText(body.description, { required: true, max: 2000, field: 'Description' });
     const isSecret = parseBoolean(body.isSecret ?? body.is_secret, 'Secret flag') ?? false;
-    const category = parseCategory(body, null, true);
+    const badgeCategoryId = await resolveBadgeCategoryId(body, null, true);
     const unlock = parseUnlock(body);
 
     let created;
@@ -211,7 +243,7 @@ async function createBadgeService(body = {}) {
             triggerEventCode: unlock.triggerEventCode,
             conditionType: unlock.conditionType,
             conditionValue: unlock.conditionValue,
-            category,
+            badgeCategoryId,
         });
     } catch (err) {
         if (err.code === '23505') throw badgeError('A badge with this registry ID already exists', 409);
@@ -244,8 +276,12 @@ async function updateBadgeService(badgeId, body = {}) {
         fields.is_secret = parseBoolean(body.isSecret ?? body.is_secret, 'Secret flag', true);
     }
 
-    const category = parseCategory(body, existing);
-    if (category) fields.category = category;
+    const categoryTouched = body.badgeCategoryId != null || body.badge_category_id != null
+        || body.category != null || body.category_name != null;
+    if (categoryTouched) {
+        const badgeCategoryId = await resolveBadgeCategoryId(body, existing, true);
+        if (badgeCategoryId) fields.badge_category_id = badgeCategoryId;
+    }
 
     const unlockTouched = body.triggerEventCode != null || body.trigger_event_code != null
         || body.conditionValue != null || body.condition_value != null;
@@ -351,6 +387,8 @@ module.exports = {
     grantBadgeService,
     getBadgeCatalogService,
     getBadgeRequirementTypesService,
+    getBadgeCategoriesService,
+    createBadgeCategoryService,
     createBadgeService,
     updateBadgeService,
     deleteBadgeService,

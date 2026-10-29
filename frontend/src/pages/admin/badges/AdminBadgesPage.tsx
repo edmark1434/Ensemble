@@ -33,7 +33,7 @@ export default function AdminBadgesPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Admin</p>
           <h1 className="text-xl font-bold text-white">Badges</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Each badge stores one unlock on the same row. Grant or revoke from the Grant tab. Users claim pending badges in Notifications.
+            Each badge stores one unlock and belongs to a category. Grant or revoke from the Grant tab. Users claim pending badges in Notifications.
           </p>
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">

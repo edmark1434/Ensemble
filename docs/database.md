@@ -39,10 +39,11 @@
 
 ## Badge catalog
 
-- Unlock rules live on `badges`: `trigger_event_code`, `condition_type` (`boolean` or `count`), `condition_value`, and `category`.
+- Unlock rules live on `badges`: `trigger_event_code`, `condition_type` (`boolean` or `count`), and `condition_value`.
 - `admin_grant` means honorary (staff grant only). Count badges use “at least” the stored number.
+- `badge_categories` is the catalog grouping (`name`, `description`, soft-delete). `badges.badge_category_id` is required. Live category names are unique.
 - `account_badges` is the grant table (pending / claimed / revoked). It is not the catalog.
-- Migration `1826700000000_collapse-badges-to-single-table` copies category names onto `badges` and drops `badge_categories`, `badge_requirements`, and `badge_requirement_defs`. Do not edit the original create-table migrations.
+- Migration `1826700000000_collapse-badges-to-single-table` copied category names onto `badges` and dropped `badge_categories`, `badge_requirements`, and `badge_requirement_defs`. `1827000000000_restore-badge-categories` puts the lookup table back and drops `badges.category`. Do not edit the original create-table migrations.
 
 ## Warning library
 

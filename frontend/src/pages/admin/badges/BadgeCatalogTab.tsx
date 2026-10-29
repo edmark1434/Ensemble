@@ -8,6 +8,7 @@ import {
   errorMessage,
   formFromBadge,
   summarizeUnlock,
+  type BadgeCategory,
   type BadgeFormState,
   type CatalogBadge,
   type RequirementType,
@@ -25,30 +26,43 @@ function payloadFromForm(form: BadgeFormState) {
     registryId: form.registryId.trim().toLowerCase(),
     name: form.name.trim(),
     description: form.description.trim(),
-    category: form.category.trim(),
+    badgeCategoryId: form.badgeCategoryId,
     isSecret: form.isSecret,
     triggerEventCode: form.triggerEventCode,
     conditionValue: form.conditionValue,
   };
 }
 
+function defaultCategoryId(categories: BadgeCategory[]) {
+  return categories.find((item) => item.name === 'Milestones')?.badge_category_id
+    || categories[0]?.badge_category_id
+    || '';
+}
+
 export default function BadgeCatalogTab() {
   const [badges, setBadges] = useState<CatalogBadge[]>([]);
+  const [categories, setCategories] = useState<BadgeCategory[]>([]);
   const [unlockTypes, setUnlockTypes] = useState<RequirementType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [editor, setEditor] = useState<'create' | CatalogBadge | null>(null);
   const [form, setForm] = useState<BadgeFormState>(emptyBadgeForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   const load = async () => {
-    const [badgeRes, typeRes] = await Promise.all([
+    const [badgeRes, typeRes, categoryRes] = await Promise.all([
       api.get('/api/admin/badges'),
       api.get('/api/admin/badge-requirement-types'),
+      api.get('/api/admin/badge-categories'),
     ]);
     setBadges(badgeRes.data?.data || []);
     setUnlockTypes(typeRes.data?.data || []);
+    setCategories(categoryRes.data?.data || []);
   };
 
   useEffect(() => {
@@ -59,14 +73,15 @@ export default function BadgeCatalogTab() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return badges;
-    return badges.filter((badge) =>
-      [badge.name, badge.registry_id, badge.category, summarizeUnlock(badge, unlockTypes)]
+    return badges.filter((badge) => {
+      if (categoryFilter !== 'all' && badge.badge_category_id !== categoryFilter) return false;
+      if (!term) return true;
+      return [badge.name, badge.registry_id, badge.category, summarizeUnlock(badge, unlockTypes)]
         .join(' ')
         .toLowerCase()
-        .includes(term)
-    );
-  }, [badges, search, unlockTypes]);
+        .includes(term);
+    });
+  }, [badges, search, categoryFilter, unlockTypes]);
 
   const selectedType = unlockTypes.find((item) => item.code === form.triggerEventCode);
   const countUnlock = selectedType?.kind === 'count';
@@ -81,14 +96,18 @@ export default function BadgeCatalogTab() {
   }, [unlockTypes]);
 
   const openCreate = () => {
-    setForm(emptyBadgeForm());
+    setForm(emptyBadgeForm(defaultCategoryId(categories)));
     setFormError('');
+    setNewCategoryName('');
+    setNewCategoryDescription('');
     setEditor('create');
   };
 
   const openEdit = (badge: CatalogBadge) => {
     setForm(formFromBadge(badge));
     setFormError('');
+    setNewCategoryName('');
+    setNewCategoryDescription('');
     setEditor(badge);
   };
 
@@ -104,7 +123,7 @@ export default function BadgeCatalogTab() {
       setFormError('Name, registry ID, and description are required.');
       return;
     }
-    if (!payload.category) {
+    if (!payload.badgeCategoryId) {
       setFormError('Category is required.');
       return;
     }
@@ -139,6 +158,34 @@ export default function BadgeCatalogTab() {
     }
   };
 
+  const createCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      setFormError('Category name is required.');
+      return;
+    }
+    setCreatingCategory(true);
+    setFormError('');
+    try {
+      const res = await api.post('/api/admin/badge-categories', {
+        name,
+        description: newCategoryDescription.trim() || name,
+      });
+      const created = res.data?.data as BadgeCategory | undefined;
+      await load();
+      if (created?.badge_category_id) {
+        setForm((current) => ({ ...current, badgeCategoryId: created.badge_category_id }));
+      }
+      setNewCategoryName('');
+      setNewCategoryDescription('');
+      showSuccessToast('Category created');
+    } catch (err) {
+      setFormError(errorMessage(err, 'Unable to create category'));
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -152,14 +199,29 @@ export default function BadgeCatalogTab() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, ID, or unlock"
-            className={`${fieldClass} pl-9`}
-          />
+        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search name, ID, or unlock"
+              className={`${fieldClass} pl-9`}
+            />
+          </div>
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className={`${fieldClass} sm:max-w-[12rem]`}
+            aria-label="Filter by category"
+          >
+            <option value="all">All categories</option>
+            {categories.map((category) => (
+              <option key={category.badge_category_id} value={category.badge_category_id} className="bg-[#0c0d12]">
+                {category.name}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           type="button"
@@ -298,12 +360,18 @@ export default function BadgeCatalogTab() {
               </label>
               <label>
                 <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Category</span>
-                <input
-                  value={form.category}
-                  onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+                <select
+                  value={form.badgeCategoryId}
+                  onChange={(event) => setForm((current) => ({ ...current, badgeCategoryId: event.target.value }))}
                   className={fieldClass}
-                  maxLength={50}
-                />
+                >
+                  {categories.length === 0 && <option value="">No categories yet</option>}
+                  {categories.map((category) => (
+                    <option key={category.badge_category_id} value={category.badge_category_id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Unlock</span>
@@ -344,6 +412,34 @@ export default function BadgeCatalogTab() {
               {selectedType?.description && (
                 <p className="sm:col-span-2 text-[11px] text-zinc-500">{selectedType.description}</p>
               )}
+
+              <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">New category</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <input
+                    value={newCategoryName}
+                    onChange={(event) => setNewCategoryName(event.target.value)}
+                    placeholder="Honorary"
+                    className={fieldClass}
+                    maxLength={50}
+                  />
+                  <input
+                    value={newCategoryDescription}
+                    onChange={(event) => setNewCategoryDescription(event.target.value)}
+                    placeholder="Optional description"
+                    className={fieldClass}
+                    maxLength={2000}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void createCategory()}
+                    disabled={creatingCategory}
+                    className="rounded-xl border border-white/10 px-3 py-2.5 text-sm text-zinc-300 hover:text-white disabled:opacity-50"
+                  >
+                    {creatingCategory ? 'Adding…' : 'Add'}
+                  </button>
+                </div>
+              </div>
 
               <button
                 type="button"

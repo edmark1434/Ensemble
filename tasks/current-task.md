@@ -1,13 +1,13 @@
-# Active Task: Link reported content on staff report desks
+# Active Task: Restore badge categories
 
 ## Implementation Objective
 
-Whenever a member files a report, store a snapshot of the reported item and give staff a live platform-view link when one exists. If the item is private, deleted, or otherwise not linkable, show the snapshot inline.
+Put `badge_categories` back as a catalog lookup. Badges store `badge_category_id`. Staff pick or create a category in `/admin/badges`. Grant, claim, pin, and evaluate stay unchanged.
 
 ## Acceptance Criteria
 
-- [x] `reports.subject_snapshot` stores kind, title, body preview, and href at submit time.
-- [x] Jobs, gigs, assets, profiles, forums, teams, team projects, and inbox reports capture that snapshot.
-- [x] Staff report detail shows an Open link through platform view when the item is still reachable.
-- [x] Chat messages and missing/deleted items show the captured preview instead of a dead link.
-- [x] Docs describe the subject contract.
+- [ ] Migration recreates `badge_categories`, backfills from the old `badges.category` text, and drops that column.
+- [ ] Catalog reads join the category name. Create/update require a live category.
+- [ ] `GET/POST /api/admin/badge-categories` lists and creates categories.
+- [ ] Admin catalog uses a category dropdown (plus inline create) instead of free text.
+- [ ] Seed writes `badge_category_id` for Milestones and Marketplace.

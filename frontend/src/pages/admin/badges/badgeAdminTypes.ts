@@ -7,12 +7,20 @@ export type CatalogBadge = {
   trigger_event_code: string;
   condition_type: 'boolean' | 'count' | string;
   condition_value: number;
+  badge_category_id: string;
   category: string;
   claimed_count: number;
   pending_count: number;
   is_system: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type BadgeCategory = {
+  badge_category_id: string;
+  name: string;
+  description: string;
+  badge_count: number;
 };
 
 export type RequirementType = {
@@ -27,17 +35,17 @@ export type BadgeFormState = {
   registryId: string;
   name: string;
   description: string;
-  category: string;
+  badgeCategoryId: string;
   isSecret: boolean;
   triggerEventCode: string;
   conditionValue: number;
 };
 
-export const emptyBadgeForm = (): BadgeFormState => ({
+export const emptyBadgeForm = (categoryId = ''): BadgeFormState => ({
   registryId: '',
   name: '',
   description: '',
-  category: 'Milestones',
+  badgeCategoryId: categoryId,
   isSecret: false,
   triggerEventCode: 'admin_grant',
   conditionValue: 1,
@@ -47,7 +55,7 @@ export const formFromBadge = (badge: CatalogBadge): BadgeFormState => ({
   registryId: badge.registry_id,
   name: badge.name,
   description: badge.description,
-  category: badge.category || 'Milestones',
+  badgeCategoryId: badge.badge_category_id || '',
   isSecret: Boolean(badge.is_secret),
   triggerEventCode: badge.trigger_event_code || 'admin_grant',
   conditionValue: Number(badge.condition_value || 1),
