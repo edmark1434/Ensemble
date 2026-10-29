@@ -501,7 +501,7 @@ export default function SystemSettingsPage() {
         {tab === 'economy' && (
           <div className="space-y-6">
             <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Edit credit packages, fees, and marketplace rules here. Wallet activity and the audit log live in{' '}
+              Credit packages, fees, marketplace rules, and subscriptions are edited here. Wallet activity and the audit log live in{' '}
               <Link
                 to="/admin/credit-economy"
                 className="font-medium text-rose-400 hover:underline"
@@ -714,15 +714,11 @@ export default function SystemSettingsPage() {
                 />
               </div>
             </SectionCard>
-          </div>
-        )}
 
-
-        {tab === 'economy' && (
-          <div className="pt-8 border-t border-white/[0.06] mt-8">
             <AdminSubscriptionsTab />
           </div>
         )}
+
         {tab === 'notifications' && (
           <SectionCard
             title="Email & desk notifications"

@@ -1,22 +1,17 @@
-import { AdminSubscriptionsTab } from './components/AdminSubscriptionsTab';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  BadgeDollarSign,
   CheckCircle2,
   Coins,
   Eye,
   LayoutGrid,
   Loader2,
-  Percent,
   RefreshCw,
   ScrollText,
-  Settings2,
-  Store,
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import AuditTab from './AuditTab';
@@ -28,21 +23,12 @@ import type {
   EconomyWallet,
 } from './creditEconomyTypes';
 
-type TabId = 'overview' | 'wallets' | 'audit' | 'management';
+type TabId = 'overview' | 'wallets' | 'audit';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'wallets', label: 'Wallets', icon: Wallet },
   { id: 'audit', label: 'Audit log', icon: ScrollText },
-  { id: 'management', label: 'Management', icon: Settings2 },
-];
-
-type ManagementSection = 'fees' | 'marketplace' | 'subscriptions';
-
-const MANAGEMENT_SECTIONS: { id: ManagementSection; label: string; icon: typeof Percent }[] = [
-  { id: 'fees', label: 'Fees', icon: Percent },
-  { id: 'marketplace', label: 'Marketplace', icon: Store },
-  { id: 'subscriptions', label: 'Subscriptions', icon: BadgeDollarSign },
 ];
 
 function formatDateTime(value: string) {
@@ -65,7 +51,7 @@ export default function CreditEconomyPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const validTabs: TabId[] = ['overview', 'wallets', 'audit', 'management'];
+  const validTabs: TabId[] = ['overview', 'wallets', 'audit'];
   const initialTab = paramTab && validTabs.includes(paramTab) ? paramTab : 'overview';
 
   const [data, setData] = useState<EconomyOverview | null>(null);
@@ -96,7 +82,7 @@ export default function CreditEconomyPage() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('section') === 'packages') {
+    if (searchParams.get('tab') === 'management') {
       navigate('/admin/system-settings?tab=economy', { replace: true });
       return;
     }
@@ -129,7 +115,7 @@ export default function CreditEconomyPage() {
     );
   }
 
-  const { summary, alerts, topBuyers, feeSettings, marketplaceSettings } = data;
+  const { summary, alerts, topBuyers } = data;
 
   return (
     <main className="min-h-screen md:pl-[260px]">
@@ -139,7 +125,7 @@ export default function CreditEconomyPage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">
               Credit & economy
             </p>
-            <h1 className="text-xl font-bold text-white">Credits & economy management</h1>
+            <h1 className="text-xl font-bold text-white">Credits & economy</h1>
             <p className="mt-1 text-xs text-zinc-500">
               {summary.activeWallets} active wallets · @
               {user?.username || 'admin'}
@@ -226,13 +212,6 @@ export default function CreditEconomyPage() {
               const w = data.wallets.find((x) => x.walletId === walletId);
               if (w) setSelectedWallet(w);
             }}
-          />
-        )}
-
-        {tab === 'management' && (
-          <ManagementTab
-            feeSettings={feeSettings}
-            marketplaceSettings={marketplaceSettings}
           />
         )}
       </div>
@@ -481,155 +460,5 @@ function AuditPreview({
         </table>
       </div>
     </section>
-  );
-}
-
-function ManagementTab({
-  feeSettings,
-  marketplaceSettings,
-}: {
-  feeSettings: EconomyOverview['feeSettings'];
-  marketplaceSettings: EconomyOverview['marketplaceSettings'];
-}) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const paramSection = searchParams.get('section') as ManagementSection | null;
-  const validSections = MANAGEMENT_SECTIONS.map((s) => s.id);
-  const initialSection =
-    paramSection && validSections.includes(paramSection) ? paramSection : 'fees';
-  const [section, setSection] = useState<ManagementSection>(initialSection);
-
-  useEffect(() => {
-    if (paramSection && validSections.includes(paramSection)) setSection(paramSection);
-  }, [paramSection]);
-
-  const switchSection = (id: ManagementSection) => {
-    setSection(id);
-    setSearchParams({ tab: 'management', section: id }, { replace: true });
-  };
-
-  const sectionMeta: Record<ManagementSection, { title: string; description: string }> = {
-    fees: {
-      title: 'Fee schedule',
-      description: 'Platform fees on purchases and services. Edit in System Settings → Economy.',
-    },
-    marketplace: {
-      title: 'Marketplace rules',
-      description: 'Listing, escrow, payout, and refund rules. Edit in System Settings → Economy.',
-    },
-    subscriptions: {
-      title: 'Subscription Packages',
-      description: 'Manage platform membership plans.',
-    },
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-white/[0.08] bg-[#14151c] p-1.5">
-        {MANAGEMENT_SECTIONS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => switchSection(id)}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
-              section === id
-                ? 'bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]'
-                : 'text-zinc-500 hover:text-zinc-200'
-            }`}
-          >
-            <Icon className={`h-4 w-4 ${section === id ? 'text-rose-400' : ''}`} />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-white">{sectionMeta[section].title}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{sectionMeta[section].description}</p>
-        </div>
-        <Link
-          to="/admin/system-settings?tab=economy"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
-        >
-          <Settings2 className="h-4 w-4" />
-          Edit in Settings
-        </Link>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <div className="min-w-0 space-y-4">
-          {section === 'fees' && (
-            <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-              <table className="w-full min-w-[560px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase tracking-wide text-zinc-500">
-                    <th className="px-5 py-3">Fee</th>
-                    <th className="px-5 py-3 text-right">Rate</th>
-                    <th className="px-5 py-3 text-right">Flat fee</th>
-                    <th className="px-5 py-3">Applies to</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {feeSettings.map((f) => (
-                    <tr key={f.id} className="border-b border-white/[0.04]">
-                      <td className="px-5 py-3.5 font-medium text-white">{f.label}</td>
-                      <td className="px-5 py-3.5 text-right tabular-nums text-rose-300">{f.percent}%</td>
-                      <td className="px-5 py-3.5 text-right tabular-nums text-zinc-300">{f.flatFee}</td>
-                      <td className="px-5 py-3.5 text-zinc-400">{f.appliesTo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-
-          {section === 'subscriptions' && <AdminSubscriptionsTab />}
-
-          {section === 'marketplace' && (
-            <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-6">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                {(
-                  [
-                    ['listingFeeCredits', 'Listing fee', 'credits'],
-                    ['transactionFeePercent', 'Transaction fee', '%'],
-                    ['escrowHoldDays', 'Escrow hold period', 'days'],
-                    ['minPayoutCredits', 'Minimum payout', 'credits'],
-                    ['refundWindowDays', 'Refund window', 'days'],
-                  ] as const
-                ).map(([key, label, unit]) => (
-                  <div key={key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{label}</p>
-                    <div className="mt-2 flex items-baseline gap-1.5">
-                      <p className="text-2xl font-bold tabular-nums text-white">
-                        {marketplaceSettings[key].toLocaleString()}
-                      </p>
-                      <span className="shrink-0 text-xs text-zinc-500">{unit}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-5 flex items-center gap-2 border-t border-white/[0.06] pt-5 text-xs text-zinc-500">
-                <BadgeDollarSign className="h-4 w-4 text-rose-400" />
-                These values apply to new listings and transactions after you save them in Settings.
-              </p>
-            </section>
-          )}
-        </div>
-
-        <Panel title="Single editor">
-          <p className="text-xs leading-relaxed text-zinc-500">
-            This page is a status view. Change credit packages, fees, and marketplace rules in{' '}
-            <strong className="font-medium text-zinc-400">System Settings → Economy</strong>{' '}
-            (<code className="text-zinc-400">economy.*</code>). Refresh here after saving.
-          </p>
-          <Link
-            to="/admin/system-settings?tab=economy"
-            className="mt-3 inline-flex text-xs font-medium text-rose-400 hover:underline"
-          >
-            Open Settings → Economy
-          </Link>
-        </Panel>
-      </div>
-    </div>
   );
 }
