@@ -46,6 +46,12 @@
 - `GET /api/admin/badge-requirement-defs` lists named rules. `POST` creates a custom rule `{ name, description, metric, operator, threshold }`. `PATCH /api/admin/badge-requirement-defs/:defId` updates it. `DELETE` soft-deletes a custom rule that is not attached to a badge. Product (`is_system`) rules can be renamed but not deleted or have their metric/threshold changed.
 - Catalog `POST/PATCH /api/admin/badges` attaches rules with `{ requirements: [{ requirementDefId }] }`. Empty list means honorary. Evaluation still pending-grants when every attached rule is met.
 
+## Warning library
+
+- `GET /api/admin/warning-catalog?desk=` lists live named warnings for a desk (admin/support see all). Same payload on `GET /api/moderator/warning-catalog` for restriction-desk staff. Each row includes locked `points` and `durationDays`.
+- Admin CRUD: `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId`. Body `{ label, category, points, durationDays, desks, note }`. Points 1–10. Duration 1–365 days. Delete is a soft-delete. Staff-issued warnings copy points and duration; client-sent clocks are ignored.
+- Admin-only thresholds: `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId`. Body `{ minPoints, effect, label, suspendDays, note }`. Effects: `none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`. `suspendDays` is required for auto-suspend.
+
 ## Marketplace license endpoints
 
 - `POST /api/assets/:assetId/purchase` returns `license` alongside the existing purchase response. `alreadyPurchased` means an active unassigned license was reused without another charge. Asset responses include `available_license_count`; `is_purchased` still means the viewer has at least one active purchased license.

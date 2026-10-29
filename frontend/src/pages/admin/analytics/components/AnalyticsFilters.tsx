@@ -15,7 +15,7 @@ export type Granularity = 'day' | 'week' | 'month' | 'year';
 
 export type ProfileFilter = 'all' | 'complete' | 'has_avatar' | 'incomplete';
 export type CreditBand = 'all' | '0-1k' | '1k-10k' | '10k-50k' | '50k+';
-export type SortBy = 'newest' | 'oldest' | 'merit_desc' | 'merit_asc' | 'credits_desc' | 'name';
+export type SortBy = 'newest' | 'oldest' | 'credits_desc' | 'name';
 
 export type AnalyticsFilterState = {
   timeRange: TimeRange;
@@ -26,7 +26,6 @@ export type AnalyticsFilterState = {
   dateTo: string;
   status: string;
   verification: string;
-  meritTier: string;
   profile: ProfileFilter;
   creditBand: CreditBand;
   sortBy: SortBy;
@@ -49,7 +48,6 @@ export const DEFAULT_ANALYTICS_FILTERS: AnalyticsFilterState = {
   dateTo: '',
   status: 'all',
   verification: 'all',
-  meritTier: 'all',
   profile: 'all',
   creditBand: 'all',
   sortBy: 'newest',
@@ -92,7 +90,6 @@ const MONTH_OPTIONS = [
 
 const STATUS_OPTIONS = ['all', 'Active', 'Suspended', 'Banned', 'Pending'];
 const VERIFICATION_OPTIONS = ['all', 'Fully verified', 'Partially verified', 'Unverified', 'Pending review'];
-const TIER_OPTIONS = ['all', 'Frozen', 'Restricted', 'Watch', 'Established', 'Trusted'];
 const PROFILE_OPTIONS: { value: ProfileFilter; label: string }[] = [
   { value: 'all', label: 'All profiles' },
   { value: 'complete', label: 'Complete (avatar + tagline)' },
@@ -109,8 +106,6 @@ const CREDIT_OPTIONS: { value: CreditBand; label: string }[] = [
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
-  { value: 'merit_desc', label: 'Merit high → low' },
-  { value: 'merit_asc', label: 'Merit low → high' },
   { value: 'credits_desc', label: 'Credits high → low' },
   { value: 'name', label: 'Name A → Z' },
 ];
@@ -210,7 +205,6 @@ export function isFilterActive(filters: AnalyticsFilterState): boolean {
     Boolean(filters.dateTo) ||
     filters.status !== 'all' ||
     filters.verification !== 'all' ||
-    filters.meritTier !== 'all' ||
     filters.profile !== 'all' ||
     filters.creditBand !== 'all' ||
     filters.sortBy !== 'newest' ||
@@ -351,12 +345,6 @@ export default function AnalyticsFilters({
               onChange={(v) => patch({ verification: v })}
             />
             <SelectField
-              label="Merit tier"
-              value={filters.meritTier}
-              options={TIER_OPTIONS}
-              onChange={(v) => patch({ meritTier: v })}
-            />
-            <SelectField
               label="Profile"
               value={filters.profile}
               options={PROFILE_OPTIONS}
@@ -379,14 +367,6 @@ export default function AnalyticsFilters({
       </div>
     </div>
   );
-}
-
-export function meritToTier(merit: number): string {
-  if (merit <= 19) return 'Frozen';
-  if (merit <= 34) return 'Restricted';
-  if (merit <= 49) return 'Watch';
-  if (merit <= 74) return 'Established';
-  return 'Trusted';
 }
 
 function matchesCreditBand(credits: number, band: CreditBand): boolean {
@@ -414,7 +394,6 @@ export function filterMembersByState<
     joinedAt: string | null;
     status: string;
     verification: string;
-    merit: number;
     credits: number;
     hasAvatar: boolean;
     hasTagline: boolean;
@@ -433,7 +412,6 @@ export function filterMembersByState<
     }
     if (filters.status !== 'all' && m.status !== filters.status) return false;
     if (filters.verification !== 'all' && m.verification !== filters.verification) return false;
-    if (filters.meritTier !== 'all' && meritToTier(m.merit) !== filters.meritTier) return false;
     if (!matchesProfile(m, filters.profile)) return false;
     if (!matchesCreditBand(m.credits, filters.creditBand)) return false;
     return true;
@@ -443,10 +421,6 @@ export function filterMembersByState<
     switch (filters.sortBy) {
       case 'oldest':
         return new Date(a.joinedAt || 0).getTime() - new Date(b.joinedAt || 0).getTime();
-      case 'merit_desc':
-        return b.merit - a.merit;
-      case 'merit_asc':
-        return a.merit - b.merit;
       case 'credits_desc':
         return b.credits - a.credits;
       case 'name':

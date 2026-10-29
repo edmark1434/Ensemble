@@ -36,6 +36,16 @@ const marketplaceModerator = requireStaffRole(['Marketplace Moderator']);
 const supportModerator = requireStaffRole(['Support Moderator']);
 const forumModerator = requireStaffRole(['Forum Moderator']);
 const jobsModerator = requireStaffRole(['Jobs N Gigs Moderator']);
+const restrictionDeskStaff = requireStaffRole([
+  'Admin',
+  'Support Moderator',
+  'Forum Moderator',
+  'Marketplace Moderator',
+  'Jobs N Gigs Moderator',
+]);
+const { getWarningCatalog } = require('../controllers/WarningDefControllers');
+
+router.get('/warning-catalog', [checkSession, restrictionDeskStaff], getWarningCatalog);
 
 // ─── Marketplace Moderator ───────────────────────────────────────────────
 router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOverview);

@@ -221,8 +221,8 @@ async function seedTeams(userAccountIds) {
 
   for (const def of teamDefs) {
     const accountRes = await pool.query(
-      `INSERT INTO accounts (display_name, handle, type, merit_score, status, created_at)
-       VALUES ($1, $2, 'Team', 75, 'Active', NOW())
+      `INSERT INTO accounts (display_name, handle, type, status, created_at)
+       VALUES ($1, $2, 'Team', 'Active', NOW())
        RETURNING account_id`,
       [cap(def.name, 50), cap(def.handle, 50)]
     );
@@ -351,9 +351,9 @@ async function seed() {
     // 1. Seed STAFF (fixed named moderators — always the same after seed)
     for (const staff of STAFF_SEED) {
       const accountRes = await pool.query(
-        `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
-        [cap(staff.displayName, 50), cap(staff.handle, 50), 'Staff', 100, 'Active']
+        `INSERT INTO ACCOUNTS (display_name, handle, type, status, created_at)
+         VALUES ($1, $2, $3, $4, NOW()) RETURNING account_id`,
+        [cap(staff.displayName, 50), cap(staff.handle, 50), 'Staff', 'Active']
       );
 
       const accountId = accountRes.rows[0].account_id;
@@ -382,9 +382,9 @@ async function seed() {
       const userEmail = cap(buildShortEmail(`${firstName}${lastName}`), 50);
 
       const accountRes = await pool.query(
-        `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
-        [cap(`${firstName} ${lastName}`, 50), userHandle, 'User', 50, 'Active']
+        `INSERT INTO ACCOUNTS (display_name, handle, type, status, created_at)
+         VALUES ($1, $2, $3, $4, NOW()) RETURNING account_id`,
+        [cap(`${firstName} ${lastName}`, 50), userHandle, 'User', 'Active']
       );
 
       const accountId = accountRes.rows[0].account_id;

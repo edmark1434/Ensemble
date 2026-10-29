@@ -181,7 +181,7 @@ async function shareProjectInvitationService({ projectId, recipientUserId }, inv
     const inviterAccountId = inviter?.account_id || null;
     if (inviterAccountId) {
         try {
-            await require('./MeritServices').assertMeritAllows(inviterAccountId, 'create_shared_project');
+            await require('./WarningBandServices').assertWarningAllows(inviterAccountId, 'create_shared_project');
         } catch (err) {
             throw new InvitationServiceError(err.message || 'Not allowed to share this project', err.statusCode || 403);
         }

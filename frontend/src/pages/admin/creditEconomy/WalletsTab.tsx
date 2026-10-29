@@ -71,8 +71,6 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
-        case 'merit':
-          return b.meritScore - a.meritScore;
         case 'assets':
           return b.totalAssets - a.totalAssets;
         case 'revenue':
@@ -201,7 +199,6 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
             options: [
               { value: 'credits', label: 'Highest credits' },
               { value: 'name', label: 'Name A–Z' },
-              { value: 'merit', label: 'Highest merit' },
               { value: 'assets', label: 'Most assets' },
               { value: 'revenue', label: 'Highest revenue' },
             ],
@@ -248,7 +245,6 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Total credits</th>
               <th className="px-4 py-3 text-right">Total assets</th>
-              <th className="px-4 py-3 text-right">Merit</th>
               <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
@@ -296,7 +292,6 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
                     {w.totalCredits.toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{w.totalAssets}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-zinc-400">{w.meritScore}</td>
                   <td className="px-4 py-3 text-center">
                     <button
                       type="button"

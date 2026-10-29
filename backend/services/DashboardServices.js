@@ -482,8 +482,6 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
         if (reviewResult.contractCompleted) {
             const { scheduleBadgeEvaluation } = require('./BadgeServices');
             scheduleBadgeEvaluation([task.client_account_id, task.freelancer_account_id]);
-            const { scheduleMeritRecompute } = require('./MeritServices');
-            scheduleMeritRecompute([task.client_account_id, task.freelancer_account_id]);
             io.emit('contractFullyCompleted', {
                 contract_id: normalizedContractId,
                 team_id: reviewResult.archivedTeamId ? String(reviewResult.archivedTeamId) : null,
@@ -529,13 +527,6 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
         } catch (notifErr) {
             console.error('Unable to create review notification:', notifErr.message);
         }
-    }
-
-    try {
-        const { scheduleMeritRecompute } = require('./MeritServices');
-        scheduleMeritRecompute(reviewResult.targetAccountId);
-    } catch (err) {
-        console.error('Merit recompute after review failed:', err.message);
     }
 
     return {

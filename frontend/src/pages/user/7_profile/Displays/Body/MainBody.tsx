@@ -11,7 +11,7 @@ import { Profile_History } from "./Profile_History";
 import { Profile_Reviews, type ReviewFilter } from "./Profile_Reviews";
 import { Profile_Introduction } from "./Profile_Introduction";
 import { Profile_Gallery } from "./Profile_Gallery";
-import { MeritSection_ProfileDisplay } from "../MeritSection_ProfileDisplay";
+import { RatingsSection_ProfileDisplay } from "../RatingsSection_ProfileDisplay";
 import { User, Activity, Image as ImageIcon2 } from "lucide-react";
 
 export type TabType = "introduction" | "portfolio" | "gallery" | "services" | "job-posts" | "assets" | "performance";
@@ -151,9 +151,8 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
                   {performanceTab === "ratings" && (
                       <div className="pt-2">
-                          <MeritSection_ProfileDisplay
+                          <RatingsSection_ProfileDisplay
                             loading={loading}
-                            meritScore={userDetails?.merit_score}
                             avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating).toFixed(1)) : 0.0}
                             totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
                             clientRating={userDetails?.client_rating ? Number(parseFloat(userDetails.client_rating).toFixed(1)) : 0.0}

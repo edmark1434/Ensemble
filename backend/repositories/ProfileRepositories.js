@@ -215,7 +215,6 @@ async function getProfileByAccountId(accountId) {
                 U.COUNTRY as country,
                 U.ZIP_CODE as zipCode,
                 U.ADDRESS as location,
-                A.MERIT_SCORE as merit_Score,
                 A.AVATAR_FILE_ID as avatar_file_id,
                 A.DESCRIPTION as bio,
                 A.INTRODUCTION as introduction,

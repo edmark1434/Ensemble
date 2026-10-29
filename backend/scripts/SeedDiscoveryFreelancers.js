@@ -1,7 +1,7 @@
 /**
  * Seed realistic, rich user datasets (Freelancers, Clients, Enthusiasts) for the Discovery page.
  * Populates:
- * - accounts (with avatar_file_id using preset avatars p1..p12, banner_preset, tagline, bio, merit_score)
+ * - accounts (with avatar_file_id using preset avatars p1..p12, banner_preset, tagline, bio)
  * - users (with bcrypt password "user123")
  * - user_platform_purpose (Freelancer, Client, Enthusiast)
  * - user_tags (skills with proficiency and years of experience)
@@ -502,21 +502,16 @@ async function main() {
 
       const avatarFileId = avatarFileIds[i % avatarFileIds.length];
       const bannerPreset = BANNER_PRESETS[i % BANNER_PRESETS.length];
-      const meritScore = persona.ratings.length
-        ? Math.round((persona.ratings.reduce((a, b) => a + b, 0) / persona.ratings.length) * 20)
-        : 50;
-
       const accountId = (
         await client.query(
-          `INSERT INTO accounts (display_name, handle, type, tagline, description, merit_score, avatar_file_id, banner_preset, status, created_at)
-           VALUES ($1, $2, 'User', $3, $4, $5, $6, $7, 'Active', NOW() - ($8 || ' days')::interval)
+          `INSERT INTO accounts (display_name, handle, type, tagline, description, avatar_file_id, banner_preset, status, created_at)
+           VALUES ($1, $2, 'User', $3, $4, $5, $6, 'Active', NOW() - ($7 || ' days')::interval)
            RETURNING account_id`,
           [
             displayName,
             handle,
             persona.tagline,
             persona.bio,
-            meritScore,
             avatarFileId,
             bannerPreset,
             String((i % 25) + 1),

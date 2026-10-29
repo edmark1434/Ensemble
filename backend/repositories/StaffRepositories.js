@@ -109,8 +109,8 @@ async function createStaffAccount({
 
         const account = (await client.query(
             `INSERT INTO accounts (
-                display_name, handle, type, merit_score, status, created_at
-             ) VALUES ($1, $2, 'Staff', 100, 'Active', NOW())
+                display_name, handle, type, status, created_at
+             ) VALUES ($1, $2, 'Staff', 'Active', NOW())
              RETURNING account_id, handle, status, display_name, created_at`,
             [displayName.slice(0, 50), handle.slice(0, 50)]
         )).rows[0];

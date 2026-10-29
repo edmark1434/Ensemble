@@ -44,7 +44,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'growth', label: 'Growth & members', icon: TrendingUp },
   { id: 'community', label: 'Community', icon: MessageSquare },
-  { id: 'economy', label: 'Credits & merit', icon: Coins },
+  { id: 'economy', label: 'Credits', icon: Coins },
   { id: 'finance', label: 'Platform finance & transactions', icon: BadgeDollarSign },
   { id: 'health', label: 'Platform health', icon: Shield },
 ];
@@ -415,7 +415,7 @@ function OverviewTab({
         <KpiCard
           label="Credits in circulation"
           value={kpis.totalCreditsInCirculation.toLocaleString()}
-          sub={`Avg merit ${kpis.avgMemberMerit}`}
+          sub={`${kpis.activeMembers} active members`}
           icon={Coins}
         />
       </div>
@@ -530,8 +530,8 @@ function OverviewTab({
         </ChartCard>
         <ChartCard>
           <HorizontalBarChart
-            title="Merit tiers"
-            data={data.audience.meritTiers.map((t) => ({ label: t.tier, value: t.count }))}
+            title="Credit balance tiers"
+            data={charts.creditBuckets.map((t) => ({ label: t.label, value: t.count }))}
           />
         </ChartCard>
       </div>
@@ -553,12 +553,11 @@ function OverviewTab({
         </ChartCard>
         <div className="grid gap-5">
           <DataTable
-            title="Top members by merit"
-            columns={['Rank', 'Member', 'Merit', 'Credits', 'Status']}
+            title="Top members by credits"
+            columns={['Rank', 'Member', 'Credits', 'Status']}
             rows={data.audience.topMembers.slice(0, 6).map((m) => [
               String(m.rank),
               m.name,
-              String(m.merit),
               m.credits.toLocaleString(),
               m.status,
             ])}
@@ -621,8 +620,8 @@ function GrowthTab({
         </ChartCard>
         <ChartCard>
           <HorizontalBarChart
-            title="Merit tier distribution"
-            data={charts.meritTierBars.map((t) => ({ label: t.label, value: t.value }))}
+            title="Credit balance tiers"
+            data={charts.creditBuckets.map((t) => ({ label: t.label, value: t.count }))}
           />
         </ChartCard>
       </div>
@@ -659,24 +658,23 @@ function GrowthTab({
 
       <DataTable
         title="Filtered member directory"
-        columns={['Member', 'Username', 'Status', 'Verification', 'Merit', 'Joined']}
+        columns={['Member', 'Username', 'Status', 'Verification', 'Credits', 'Joined']}
         rows={filteredMembers.slice(0, 25).map((m) => [
           m.name,
           `@${m.username}`,
           m.status,
           m.verification,
-          String(m.merit),
+          m.credits.toLocaleString(),
           formatDate(m.joinedAt),
         ])}
       />
 
       <DataTable
         title="Newest signups (platform-wide)"
-        columns={['Member', 'Username', 'Merit', 'Status', 'Joined']}
+        columns={['Member', 'Username', 'Status', 'Joined']}
         rows={growth.newestMembers.map((m) => [
           m.name,
           `@${m.username}`,
-          String(m.merit),
           m.status,
           formatDate(m.joinedAt),
         ])}
@@ -763,26 +761,23 @@ function EconomyTab({
   const { economy, charts } = data;
 
   const filteredCredits = filteredMembers.reduce((s, m) => s + m.credits, 0);
-  const filteredMerit = filteredMembers.reduce((s, m) => s + m.merit, 0);
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Credits in circulation" value={economy.totalCreditsInCirculation.toLocaleString()} icon={Coins} />
-        <KpiCard label="Total merit" value={economy.totalMerit.toLocaleString()} icon={BarChart3} />
         <KpiCard label="Avg credits / member" value={economy.avgCreditsPerMember.toLocaleString()} icon={Users} />
-        <KpiCard label="Avg merit / member" value={economy.avgMeritPerMember} icon={TrendingUp} />
         <KpiCard
           label="Credit transactions"
           value={economy.creditTransactions ?? data.liveModules?.creditTransactions ?? 0}
           icon={Activity}
         />
+        <KpiCard label="Filtered credits" value={filteredCredits.toLocaleString()} icon={TrendingUp} />
       </div>
 
       {filteredMembers.length !== data.memberDirectory.length && (
         <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-sm text-rose-100">
-          Filtered subset: {filteredCredits.toLocaleString()} credits · {filteredMerit.toLocaleString()} total merit across{' '}
-          {filteredMembers.length} members
+          Filtered subset: {filteredCredits.toLocaleString()} credits across {filteredMembers.length} members
         </div>
       )}
 
@@ -798,33 +793,18 @@ function EconomyTab({
           />
         </ChartCard>
         <ChartCard>
-          <VerticalBarChart
-            title="Merit tier distribution"
-            data={charts.meritTierBars.map((t) => ({ label: t.label, value: t.value }))}
-            color="#fbbf24"
+          <HorizontalBarChart
+            title="Credit leaders"
+            data={economy.creditLeaders.map((m) => ({ label: m.name.slice(0, 18), value: m.credits }))}
           />
         </ChartCard>
       </div>
 
-      <ChartCard>
-        <HorizontalBarChart
-          title="Merit leaders"
-          data={economy.meritLeaders.map((m) => ({ label: m.name.slice(0, 18), value: m.merit }))}
-        />
-      </ChartCard>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <DataTable
-          title="Economy leaders detail"
-          columns={['Member', 'Username', 'Merit', 'Credits']}
-          rows={economy.meritLeaders.map((m) => [m.name, `@${m.username}`, String(m.merit), m.credits.toLocaleString()])}
-        />
-        <DataTable
-          title="Merit distribution by tier"
-          columns={['Tier', 'Range', 'Members']}
-          rows={economy.distribution.map((d) => [d.tier, d.range, String(d.count)])}
-        />
-      </div>
+      <DataTable
+        title="Economy leaders detail"
+        columns={['Member', 'Username', 'Credits']}
+        rows={economy.creditLeaders.map((m) => [m.name, `@${m.username}`, m.credits.toLocaleString()])}
+      />
     </div>
   );
 }

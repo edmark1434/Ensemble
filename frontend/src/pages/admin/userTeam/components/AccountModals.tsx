@@ -455,10 +455,6 @@ export function TeamOverviewModal({
               <dt className="text-zinc-500">Verification</dt>
               <dd className="text-white">{team.verificationStatus}</dd>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Merit score</dt>
-              <dd className="text-emerald-300">{(team.meritCredits ?? 0).toLocaleString()}</dd>
-            </div>
           </dl>
         </div>
         <div className="space-y-4">
@@ -1726,7 +1722,6 @@ export function UserOverviewModal({
       <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Credits & activity</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
-          ['Merit', user.meritCredits.toLocaleString()],
           ['Wallet', user.stats.totalCredits.toLocaleString()],
           ['Frozen', (user.frozenBalance ?? 0).toLocaleString()],
           ['Assets', user.stats.totalAssets],

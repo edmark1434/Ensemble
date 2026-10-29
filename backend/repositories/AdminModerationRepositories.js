@@ -569,7 +569,6 @@ async function getModerationOverview(staffSession = null) {
         a.handle,
         a.display_name,
         a.status,
-        a.merit_score,
         a.created_at,
         a.deleted_at
       FROM users u

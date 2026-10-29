@@ -7,7 +7,6 @@ export type PlatformKpis = {
   openTickets: number;
   pendingApproval: number;
   totalStaff: number;
-  avgUserMerit: number;
   forumGroups: number | null;
   forumDiscussions: number | null;
 };
@@ -26,7 +25,6 @@ export type StaffMember = {
   role: string;
   roleLabel: string;
   status: string;
-  meritCredits: number;
   joinedAt: string | null;
   isAdmin: boolean;
 };
@@ -38,7 +36,6 @@ export type PlatformUser = {
   username: string;
   displayName: string | null;
   status: string;
-  meritCredits: number;
   joinedAt: string | null;
   hasAvatar: boolean;
   tagline: string | null;
@@ -51,7 +48,6 @@ export type VerificationItem = {
   email: string;
   username: string;
   status: string;
-  meritCredits: number;
   submittedAt: string | null;
   accountType: string;
 };
@@ -69,7 +65,6 @@ export type EconomyEvent = {
   rank: number;
   name: string;
   username: string;
-  meritChange: number;
   label: string;
   timeAgo: string;
   status: string;

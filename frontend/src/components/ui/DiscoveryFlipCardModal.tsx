@@ -15,7 +15,7 @@ export interface DiscoveryFlipCardUser {
   skills: string[];
   rawSkills?: { name: string; proficiency: string; years: number }[];
   verified: boolean;
-  meritScore: string;
+  starRating: string;
   followersCount: number;
   roles?: { role_name: string }[];
   subscriptionType?: string;
@@ -155,7 +155,7 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
                 <div className="text-center">
                   <div className="text-[10px] uppercase tracking-wider text-zinc-600 dark:text-zinc-300 font-semibold">Rating</div>
                   <div className="font-bold text-xl flex items-center justify-center gap-1">
-                    {user.meritScore !== "No Rating" ? <><Star className="w-4 h-4 text-amber-400 fill-amber-400" /> {user.meritScore}</> : <span className="text-sm">New</span>}
+                    {user.starRating !== "No Rating" ? <><Star className="w-4 h-4 text-amber-400 fill-amber-400" /> {user.starRating}</> : <span className="text-sm">New</span>}
                   </div>
                 </div>
               </div>

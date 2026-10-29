@@ -138,7 +138,7 @@ export default function CreditEconomyPage() {
             </p>
             <h1 className="text-xl font-bold text-white">Credits & economy management</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {summary.activeWallets} active wallets · {summary.totalMeritPoints.toLocaleString()} merit in system · @
+              {summary.activeWallets} active wallets · @
               {user?.username || 'admin'}
             </p>
           </div>
@@ -365,7 +365,6 @@ function WalletsPreview({
               <th className="px-4 py-3">Account type</th>
               <th className="px-4 py-3 text-right">Total credits</th>
               <th className="px-4 py-3 text-right">Total assets</th>
-              <th className="px-4 py-3 text-right">Merit</th>
               <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
@@ -381,7 +380,6 @@ function WalletsPreview({
                   {w.totalCredits.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">{w.totalAssets}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-zinc-400">{w.meritScore}</td>
                 <td className="px-4 py-3 text-center">
                   <button
                     type="button"

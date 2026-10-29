@@ -2,13 +2,13 @@ const { pool } = require('./Database');
 const redisClient = require('./Redis');
 
 const {
-  bandFor,
-  clampMerit,
-  BASE_MERIT,
   ACTION_MESSAGES,
   actionAllowed,
   warningDurationDays,
-} = require('./Merit');
+  clampDurationDays,
+  bandForPoints,
+  refreshLiveThresholds,
+} = require('./WarningBands');
 
 const BLOCKING_CODES = {
   banned: 'ACCOUNT_BANNED',
@@ -16,7 +16,7 @@ const BLOCKING_CODES = {
   locked: 'ACCOUNT_LOCKED',
   deleted: 'ACCOUNT_DELETED',
   forumTimeout: 'FORUM_TIMEOUT',
-  meritFrozen: 'MERIT_FROZEN',
+  warningFrozen: 'WARNING_FROZEN',
 };
 
 const APPEAL_TICKET_TYPE = 'Appeal an account penalty';
@@ -190,22 +190,9 @@ async function liftExpiredSuspension(accountId) {
   return rowCount > 0;
 }
 
-function warningExpiry({ days, expiresAt, endsAt, points } = {}) {
-  const maxDays = warningDurationDays(points);
-  const cap = new Date(Date.now() + maxDays * 24 * 60 * 60 * 1000);
-  const requestedAt = endsAt || expiresAt;
-  if (requestedAt) {
-    const requested = new Date(requestedAt);
-    if (!Number.isNaN(requested.getTime()) && requested.getTime() > Date.now() && requested.getTime() <= cap.getTime()) {
-      return requested;
-    }
-  }
-  const requestedDays = Number(days);
-  if (Number.isFinite(requestedDays) && requestedDays > 0) {
-    const cappedDays = Math.min(Math.floor(requestedDays), maxDays);
-    return new Date(Date.now() + Math.max(1, cappedDays) * 24 * 60 * 60 * 1000);
-  }
-  return cap;
+function warningExpiry({ durationDays, points } = {}) {
+  const days = clampDurationDays(durationDays, warningDurationDays(points));
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
 async function activeForumTimeout(accountId) {
@@ -240,9 +227,9 @@ function emptyAccess() {
     reactivationAvailableAt: null,
     reactivationReady: true,
     forumTimeout: false,
-    meritFrozen: false,
-    meritScore: BASE_MERIT,
-    meritBand: 'established',
+    warningFrozen: false,
+    warningPoints: 0,
+    warningBand: 'none',
     suspensionEndsAt: null,
     forumTimeoutEndsAt: null,
     code: null,
@@ -264,16 +251,16 @@ async function getAccountAccess(accountId) {
   try {
     const lifted = await liftExpiredSuspension(accountId);
     const warningsLapsed = await expireElapsedWarnings(accountId);
-    if (lifted || warningsLapsed) {
-      const { recomputeAccountMerit } = require('../services/MeritServices');
-      await recomputeAccountMerit(accountId);
+    if (warningsLapsed) {
+      const { refreshWarningBand } = require('../services/WarningBandServices');
+      await refreshWarningBand(accountId);
     }
   } catch (err) {
     console.warn('Could not lift an expired suspension or warning:', err.message);
   }
 
   const account = await pool.query(
-    `SELECT status, type, merit_score, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
+    `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
     [accountId]
   );
   const row = account.rows[0];
@@ -305,9 +292,18 @@ async function getAccountAccess(accountId) {
 
   const normalized = normalizeAccountStatus(row.status);
   const member = String(row.type || '').toLowerCase() === 'user';
-  const meritScore = member ? clampMerit(row.merit_score) : BASE_MERIT;
-  const meritBand = bandFor(meritScore);
-  const meritFrozen = member && meritBand.id === 'frozen' && normalized === 'active';
+  let warningPoints = 0;
+  try {
+    if (member) {
+      const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
+      warningPoints = await sumActiveWarningPoints(accountId);
+    }
+  } catch (err) {
+    console.warn('Could not load warning points:', err.message);
+  }
+  await refreshLiveThresholds();
+  const warningBand = bandForPoints(member ? warningPoints : 0);
+  const warningFrozen = member && warningBand.id === 'frozen' && normalized === 'active';
   const deactivated = normalized === 'deactivated' && member;
   const reactivationAvailableAt = row.reactivation_available_at || null;
   const reactivationReady = !deactivated
@@ -327,8 +323,8 @@ async function getAccountAccess(accountId) {
           ? BLOCKING_CODES.suspended
           : forumTimeout
             ? BLOCKING_CODES.forumTimeout
-            : meritFrozen
-              ? BLOCKING_CODES.meritFrozen
+            : warningFrozen
+              ? BLOCKING_CODES.warningFrozen
               : null;
 
   return {
@@ -342,9 +338,9 @@ async function getAccountAccess(accountId) {
     reactivationAvailableAt: deactivated ? reactivationAvailableAt : null,
     reactivationReady,
     forumTimeout,
-    meritFrozen,
-    meritScore,
-    meritBand: meritBand.id,
+    warningFrozen,
+    warningPoints,
+    warningBand: warningBand.id,
     suspensionEndsAt: row.suspension_ends_at || null,
     forumTimeoutEndsAt,
     code,
@@ -352,7 +348,7 @@ async function getAccountAccess(accountId) {
       ? blockMessage(normalized, { member, suspensionEndsAt: row.suspension_ends_at })
       : forumTimeout
         ? forumTimeoutMessage(forumTimeoutEndsAt)
-        : meritFrozen
+        : warningFrozen
           ? ACTION_MESSAGES.forum_write
           : null,
     violations,
@@ -735,11 +731,11 @@ function rejectForumTimeout(req, res) {
     });
     return true;
   }
-  const meritBand = req.accountAccess?.meritBand;
-  if (meritBand && !actionAllowed('forum_write', meritBand)) {
+  const warningBand = req.accountAccess?.warningBand;
+  if (warningBand && !actionAllowed('forum_write', warningBand)) {
     res.status(403).json({
       success: false,
-      code: BLOCKING_CODES.meritFrozen,
+      code: BLOCKING_CODES.warningFrozen,
       message: ACTION_MESSAGES.forum_write,
       restriction: req.accountAccess,
     });

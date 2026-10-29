@@ -1,6 +1,6 @@
 /**
- * Predefined warnings. Staff pick one of these; points (and duration) are locked.
- * Keep in sync with frontend/src/lib/warningCatalog.ts.
+ * Seed + fallback catalog. Live rows live in warning_defs (admin CRUD).
+ * Keep the seed list in sync with frontend/src/lib/warningCatalog.ts.
  */
 
 const ALL_DESKS = Object.freeze(['admin', 'support', 'forum', 'marketplace', 'jobs']);

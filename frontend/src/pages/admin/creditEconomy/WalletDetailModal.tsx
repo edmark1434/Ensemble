@@ -179,9 +179,6 @@ export default function WalletDetailModal({ wallet, onClose }: WalletDetailModal
               <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-xs text-zinc-400">
                 Status: {detail.status}
               </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-xs text-zinc-400">
-                Merit: {detail.meritScore}
-              </span>
               {detail.memberCount != null && (
                 <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-xs text-zinc-400">
                   {detail.memberCount} members

@@ -207,20 +207,6 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
-    // Test 5: Dynamic Default User Merit Score Configuration
-    // -------------------------------------------------------------
-    {
-      const platformSettings = await getSectionValue('platform');
-      const defaultMerit = Number(platformSettings?.defaultUserMerit);
-      const ok = Number.isFinite(defaultMerit) && defaultMerit > 0;
-      record(
-        'Dynamic platform.defaultUserMerit configuration lookup',
-        ok,
-        `Configured defaultUserMerit is ${defaultMerit}`
-      );
-    }
-
-    // -------------------------------------------------------------
     // Test 6: Dynamic Ticket Notifications Configuration Lookup
     // -------------------------------------------------------------
     {

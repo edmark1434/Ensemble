@@ -14,7 +14,7 @@ import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
-import { MeritSection_ProfileDisplay, type PublicProfileDispute } from "./Displays/MeritSection_ProfileDisplay.tsx";
+import { type PublicProfileDispute } from "./Displays/RatingsSection_ProfileDisplay.tsx";
 import type { PublicStanding } from "./Displays/AccountStanding.tsx";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
@@ -88,7 +88,6 @@ interface UserDetail {
   bio: string;
   tagline: string;
   introduction?: string;
-  merit_score: number;
   avatar_file_id: number | null;
   avatar_preset_url?: string;
   skills?: SkillObject[];
@@ -670,7 +669,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             bio: profileData.bio || profileData.description,
             tagline: profileData.tagline,
             introduction: profileData.introduction,
-            merit_score: profileData.merit_score ?? 50,
             avatar_file_id: profileData.avatar_file_id,
             avatar_preset_url: avatarUrl,
             skills: compiledCompoundSkills,
@@ -715,7 +713,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             verification_status: profileData.verification_status,
             bio: profileData.bio || profileData.description,
             tagline: profileData.tagline,
-            merit_score: profileData.merit_score ?? 50,
             avatar_file_id: profileData.avatar_file_id,
             avatar_preset_url: avatarUrl,
             skills: [],
@@ -1084,29 +1081,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               onEditClick={isOwner ? () => setIsSkillsModalOpen(true) : undefined}
             />
             
-            <MeritSection_ProfileDisplay
-              loading={loading}
-              meritScore={userDetails?.merit_score}
-              avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating as string).toFixed(1)) : 0.0}
-              totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
-              clientRating={userDetails?.client_rating ? Number(parseFloat(userDetails.client_rating as string).toFixed(1)) : 0.0}
-              freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0.0}
-              assetRating={userDetails?.asset_rating ? Number(parseFloat(userDetails.asset_rating as string).toFixed(1)) : 0.0}
-              successfulJobsCount={userDetails?.successful_jobs_count ? Number(userDetails.successful_jobs_count) : 0}
-              teamRating={userDetails?.team_rating ? Number(parseFloat(userDetails.team_rating as string).toFixed(1)) : 0.0}
-              teamReviewCount={userDetails?.team_review_count ? Number(userDetails.team_review_count) : 0}
-              freelancerServiceRating={userDetails?.freelancer_service_rating ? Number(parseFloat(userDetails.freelancer_service_rating as string).toFixed(1)) : 0.0}
-              freelancerServiceCount={userDetails?.freelancer_service_count ? Number(userDetails.freelancer_service_count) : 0}
-              freelancerJobRating={userDetails?.freelancer_job_rating ? Number(parseFloat(userDetails.freelancer_job_rating as string).toFixed(1)) : 0.0}
-              freelancerJobCount={userDetails?.freelancer_job_count ? Number(userDetails.freelancer_job_count) : 0}
-              clientServiceRating={userDetails?.client_service_rating ? Number(parseFloat(userDetails.client_service_rating as string).toFixed(1)) : 0.0}
-              clientServiceCount={userDetails?.client_service_count ? Number(userDetails.client_service_count) : 0}
-              clientJobRating={userDetails?.client_job_rating ? Number(parseFloat(userDetails.client_job_rating as string).toFixed(1)) : 0.0}
-              clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
-              viewMode="merit"
-              isOwner={isOwner}
-              disputes={userDetails?.disputes || []}
-            />
             <SocialLinksSection_ProfileDisplay
               loading={loading}
               socialLinks={userDetails?.social_links}
@@ -1205,7 +1179,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             skills: (userDetails.skills || []).map((s: any) => s.name || s), // fallback string map
             rawSkills: userDetails.skills || [],
             verified: !!userDetails.verification_status,
-            meritScore: parseFloat(String(userDetails.avg_rating ?? 0)) > 0
+            starRating: parseFloat(String(userDetails.avg_rating ?? 0)) > 0
               ? parseFloat(String(userDetails.avg_rating)).toFixed(1)
               : "No Rating",
             followersCount: userDetails.followers_count || 0,

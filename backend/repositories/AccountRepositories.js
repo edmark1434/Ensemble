@@ -28,7 +28,6 @@ async function createAccount({
     description = null,
     type = 'User',
     status = 'active',
-    meritScore = 50,
     deletedAt = null,
 } = {}) {
     try {
@@ -41,11 +40,10 @@ async function createAccount({
                 description,
                 type,
                 status,
-                merit_score,
                 deleted_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING account_id, type, handle, status, display_name, merit_score`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING account_id, type, handle, status, display_name`,
             [
                 displayName,
                 handle,
@@ -54,7 +52,6 @@ async function createAccount({
                 description,
                 type,
                 status,
-                Math.max(0, Number(meritScore) || 0),
                 deletedAt,
             ]
         );
@@ -136,8 +133,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 100,
             f.path AS avatar_preset_url,
             COALESCE(v.is_verified, FALSE) AS verification_status,
             p.name AS subscriptiontype,
-            a.merit_score,
-            (SELECT COALESCE(AVG(stars_out_of_five), 0) FROM ratings WHERE account_id = a.account_id) AS overall_rating,
+            a.(SELECT COALESCE(AVG(stars_out_of_five), 0) FROM ratings WHERE account_id = a.account_id) AS overall_rating,
             (SELECT COUNT(*) FROM ratings WHERE account_id = a.account_id) AS rating_count,
             (SELECT COUNT(*) FROM account_followers WHERE followed_id = a.account_id) AS followers_count,
             (SELECT COUNT(*) FROM account_followers WHERE follower_id = a.account_id) AS following_count,
@@ -342,7 +338,6 @@ async function getProfileRepositories(accountId) {
                 A.TAGLINE, 
                 A.DESCRIPTION AS BIO, 
                 A.CREATED_AT, 
-                A.MERIT_SCORE, 
                 A.AVATAR_FILE_ID,
                 U.COUNTRY AS COUNTRY, U.ADDRESS AS LOCATION, U.ZIP_CODE,
                 U.USER_ID,

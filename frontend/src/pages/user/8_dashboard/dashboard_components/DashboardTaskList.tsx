@@ -447,7 +447,7 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                                     isFreelancerRole ? task.client_avatar : task.freelancer_avatar
                                                 )}
                                                 className="group inline-flex items-center active:scale-98 rounded-xl text-xs font-bold transition-all shadow-xs overflow-hidden border border-emerald-600 dark:border-emerald-500"
-                                                title="Review required within 24 hours of milestone completion to avoid Merit Score penalty"
+                                                title="Review required within 24 hours of milestone completion"
                                             >
                                                 <div className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 group-hover:bg-emerald-700 text-white transition-colors">
                                                     <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0 transition-transform group-hover:scale-110" />

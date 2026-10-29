@@ -12,7 +12,6 @@ export type PlatformKpis = {
   forumGroups: number | null;
   forumDiscussions: number | null;
   totalCreditsInCirculation: number;
-  avgMemberMerit: number;
   moderationTeamSize: number;
   pendingVerifications: number;
   openTickets?: number;
@@ -43,7 +42,6 @@ export type MemberDirectoryEntry = {
   username: string;
   status: string;
   verification: string;
-  merit: number;
   credits: number;
   joinedAt: string | null;
   hasAvatar: boolean;
@@ -255,7 +253,6 @@ export type PlatformAnalytics = {
       joinedAt: string | null;
       status: string;
       verification: string;
-      merit: number;
     }[];
     retentionEstimate: number;
     avgSignupsPerWeek: number;
@@ -263,7 +260,6 @@ export type PlatformAnalytics = {
   charts: {
     verificationMix: ChartSegment[];
     statusMix: ChartSegment[];
-    meritTierBars: { label: string; value: number }[];
     creditBuckets: { label: string; count: number }[];
     groupSizeDistribution: { label: string; count: number }[];
     platformActivity?: ChartSegment[];
@@ -280,8 +276,7 @@ export type PlatformAnalytics = {
       unverified: number;
       pendingReview: number;
     };
-    meritTiers: { tier: string; range: string; count: number }[];
-    topMembers: { rank: number; name: string; username: string; merit: number; credits: number; status: string }[];
+    topMembers: { rank: number; name: string; username: string; credits: number; status: string }[];
     profileHealth: {
       withAvatar: number;
       withTagline: number;
@@ -312,12 +307,9 @@ export type PlatformAnalytics = {
     message?: string;
   };
   economy: {
-    totalMerit: number;
     totalCreditsInCirculation: number;
     avgCreditsPerMember: number;
-    avgMeritPerMember: number;
-    meritLeaders: { name: string; username: string; merit: number; credits: number }[];
-    distribution: { tier: string; range: string; count: number }[];
+    creditLeaders: { name: string; username: string; credits: number }[];
     creditBuckets: { label: string; count: number }[];
     creditTransactions?: number;
     platformRevenue?: PlatformRevenue;

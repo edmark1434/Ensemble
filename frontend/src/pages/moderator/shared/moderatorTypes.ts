@@ -395,7 +395,7 @@ export type JobPostingDetail = {
   updatedAt: string;
   lastViewedAt: string | null;
   archivedAt: string | null;
-  author: { accountId: string; name: string; handle: string; status: string; meritScore: number | null };
+  author: { accountId: string; name: string; handle: string; status: string; warningPoints: number | null };
   tags: string[];
   attachments: PostingAttachment[];
   proposals: {
@@ -423,7 +423,7 @@ export type GigPostingDetail = {
   updatedAt: string;
   lastViewedAt: string | null;
   archivedAt: string | null;
-  author: { accountId: string; name: string; handle: string; status: string; meritScore: number | null };
+  author: { accountId: string; name: string; handle: string; status: string; warningPoints: number | null };
   tags: string[];
   attachments: PostingAttachment[];
   tiers: {

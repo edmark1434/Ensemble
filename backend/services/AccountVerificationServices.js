@@ -115,11 +115,6 @@ async function processDiditVerificationStatusUpdate(webhookPayload, options = {}
                     verification_session_id: session.verification_session_id || null
                 });
                 await notify('Your account verification has been approved.', result?.verification_id || accountId);
-                try {
-                    require('./MeritServices').scheduleMeritRecompute(accountId);
-                } catch (err) {
-                    console.warn('Merit recompute after verification failed:', err.message);
-                }
             }
 
             const verification = decision?.id_verifications?.[0];

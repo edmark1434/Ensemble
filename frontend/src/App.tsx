@@ -101,6 +101,7 @@ const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
 const AdminFeedbacksPage = lazyPage(() => import('./pages/admin/feedbacks/AdminFeedbacksPage'));
 const AdminBadgesPage = lazyPage(() => import('./pages/admin/badges/AdminBadgesPage'));
+const AdminWarningsPage = lazyPage(() => import('./pages/admin/warnings/AdminWarningsPage'));
 const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
 const CreditEconomyPage = lazyPage(() => import('./pages/admin/creditEconomy/CreditEconomyPage'));
 const ModerationPage = lazyPage(() => import('./pages/admin/moderation/ModerationPage'));
@@ -377,6 +378,7 @@ function App() {
           <Route path='dashboard' element={<AdminDashboard />} />
           <Route path='feedbacks' element={<AdminFeedbacksPage />} />
           <Route path='badges' element={<AdminBadgesPage />} />
+          <Route path='warnings' element={<AdminWarningsPage />} />
           <Route path='badge-grant' element={<Navigate to="/admin/badges?tab=grant" replace />} />
           <Route path='user-team' element={<UserTeamPage />} />
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />

@@ -23,7 +23,7 @@ interface UserProfile {
   verified: boolean;
   subscriptionType: "Free" | "Premium" | "Business";
   roles: { role_id: number | string; role_name: string }[];
-  meritScore: number | string;
+  starRating: number | string;
   deactivated?: boolean;
   followersCount: number;
   followingCount: number;
@@ -53,7 +53,7 @@ export const UserProfilesList: React.FC = () => {
     if (sortOption === "following") {
       result = result.filter(p => p.isFollowing);
     } else if (sortOption === "top_rated") {
-      result.sort((a, b) => parseFloat(String(b.meritScore)) - parseFloat(String(a.meritScore)));
+      result.sort((a, b) => parseFloat(String(b.starRating)) - parseFloat(String(a.starRating)));
     }
     return result;
   }, [profiles, sortOption]);
@@ -111,7 +111,7 @@ export const UserProfilesList: React.FC = () => {
             verified: !!account.verification_status,
             subscriptionType: account.subscriptiontype || "Free",
             roles: Array.isArray(account.roles) ? account.roles : [],
-            meritScore: account.overall_rating !== null && parseFloat(account.overall_rating) > 0 ? parseFloat(account.overall_rating).toFixed(1) : "No Rating",
+            starRating: account.overall_rating !== null && parseFloat(account.overall_rating) > 0 ? parseFloat(account.overall_rating).toFixed(1) : "No Rating",
             followersCount: parseInt(account.followers_count || "0", 10),
             followingCount: parseInt(account.following_count || "0", 10),
             isFollowing: !!account.is_following,
@@ -331,12 +331,12 @@ export const UserProfilesList: React.FC = () => {
                     {/* Stats Row */}
                     <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
                       <div className="flex items-center gap-1">
-                        {profile.meritScore === "No Rating" ? (
+                        {profile.starRating === "No Rating" ? (
                           <span className="text-zinc-500 dark:text-zinc-400 font-medium">No Rating</span>
                         ) : (
                           <>
                             <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mb-0.5" />
-                            <span className="font-bold text-zinc-900 dark:text-white">{profile.meritScore}</span>
+                            <span className="font-bold text-zinc-900 dark:text-white">{profile.starRating}</span>
                           </>
                         )}
                       </div>

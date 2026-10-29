@@ -193,7 +193,7 @@ async function getJobsGigsPostingDetail(type, id) {
     const jobResult = await pool.query(
       `
       SELECT j.*, COALESCE(a.display_name, u.first_name || ' ' || u.last_name) AS author_name,
-             a.handle AS author_handle, a.status AS author_status, a.merit_score AS author_merit
+             a.handle AS author_handle, a.status AS author_status
       FROM jobs j
       LEFT JOIN accounts a ON a.account_id = j.client_account_id
       LEFT JOIN users u ON u.account_id = a.account_id
@@ -270,7 +270,7 @@ async function getJobsGigsPostingDetail(type, id) {
         name: j.author_name || 'Unknown',
         handle: j.author_handle || '—',
         status: j.author_status,
-        meritScore: j.author_merit === null ? null : Number(j.author_merit),
+        warningPoints: null,
       },
       tags: tagsResult.rows.map((r) => r.name),
       attachments: attachmentsResult.rows.map((r) => ({
@@ -305,7 +305,7 @@ async function getJobsGigsPostingDetail(type, id) {
     const gigResult = await pool.query(
       `
       SELECT g.*, COALESCE(a.display_name, u.first_name || ' ' || u.last_name) AS author_name,
-             a.handle AS author_handle, a.status AS author_status, a.merit_score AS author_merit
+             a.handle AS author_handle, a.status AS author_status
       FROM gigs g
       LEFT JOIN accounts a ON a.account_id = g.freelancer_account_id
       LEFT JOIN users u ON u.account_id = a.account_id
@@ -387,7 +387,7 @@ async function getJobsGigsPostingDetail(type, id) {
         name: g.author_name || 'Unknown',
         handle: g.author_handle || '—',
         status: g.author_status,
-        meritScore: g.author_merit === null ? null : Number(g.author_merit),
+        warningPoints: null,
       },
       tags: tagsResult.rows.map((r) => r.name),
       attachments: attachmentsResult.rows.map((r) => ({
