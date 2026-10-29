@@ -11,6 +11,7 @@
 
 const { pool } = require('../lib/Database');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
+const { assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const AUTO_APPROVE_DAYS_JOB  = 5;   // Days after submission before auto-approve (job contracts)
@@ -240,6 +241,12 @@ async function getSubmissionsReadyForAutoApproval() {
             OR
             (c.contract_type = 'gig' AND NOW() > ms.submitted_at + ($2 || ' days')::interval)
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM disputes d
+            WHERE d.contract_id = c.contract_id
+              AND d.deleted_at IS NULL
+              AND d.status <> 'closed'
+          )
     `, [AUTO_APPROVE_DAYS_JOB, AUTO_APPROVE_DAYS_GIG]);
     return res.rows;
 }
@@ -252,6 +259,7 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await assertNoOpenContractDispute(client, contractId);
 
         // 1. Lock & verify submission is still under_review
         const lockRes = await client.query(`
@@ -511,6 +519,7 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
         }
 
         const { credits, contract_id, index: milestoneIndex } = milestoneRes.rows[0];
+        await assertNoOpenContractDispute(client, contract_id);
         const milestoneCredits = Number(credits);
 
         // 2. Get wallets
@@ -686,6 +695,7 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await assertNoOpenContractDispute(client, contractId);
 
         // 1. Lock contract
         const contractRes = await client.query(`
@@ -824,6 +834,7 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await assertNoOpenContractDispute(client, contractId);
 
         // Lock the latest under_review submission for this milestone
         const submitRes = await client.query(`
@@ -1044,6 +1055,8 @@ async function createCancellationRequestRepository({
         throw err;
     }
 
+    await assertNoOpenContractDispute(pool, contractId);
+
     const res = await pool.query(
         `INSERT INTO contract_cancellation_requests
             (contract_id, initiator_account_id, recipient_account_id, initiator_role, reason, message, auto_cancel_at)
@@ -1109,6 +1122,7 @@ async function respondCancellationRequestRepository({
     }
 
     if (action === 'accept') {
+        await assertNoOpenContractDispute(pool, contractId);
         await pool.query(
             `UPDATE contract_cancellation_requests
              SET status = 'accepted', responded_at = NOW()
@@ -1194,7 +1208,13 @@ async function getExpiredPendingCancellationRequests() {
          ) gc_info ON c.contract_id = gc_info.contract_id
          WHERE cr.status = 'pending'
            AND cr.auto_cancel_at <= NOW()
-           AND c.status IN ('Active', 'Waiting')`
+           AND c.status IN ('Active', 'Waiting')
+           AND NOT EXISTS (
+             SELECT 1 FROM disputes d
+             WHERE d.contract_id = c.contract_id
+               AND d.deleted_at IS NULL
+               AND d.status <> 'closed'
+           )`
     );
     return res.rows;
 }

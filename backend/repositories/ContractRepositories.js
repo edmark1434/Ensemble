@@ -1,5 +1,6 @@
 const { pool } = require('../lib/Database');
 const { normalizeDisputePriority } = require('../lib/DisputeEnums');
+const { freezeContractEscrowForDispute, assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
 
@@ -157,6 +158,7 @@ async function acceptJobOffer(freelancerIds, contractId) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await assertNoOpenContractDispute(client, contractId);
 
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
@@ -436,6 +438,7 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await assertNoOpenContractDispute(client, contractId);
 
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
@@ -848,8 +851,12 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             creditAmount,
             contractId,
         ]);
+        const frozen = await freezeContractEscrowForDispute(client, {
+            disputeId: disputeRes.rows[0].dispute_id,
+            contractId,
+        });
         await client.query('COMMIT');
-        createdDispute = disputeRes.rows[0];
+        createdDispute = { ...disputeRes.rows[0], ...frozen };
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         if (err.code === '23505') throw openDisputeError();

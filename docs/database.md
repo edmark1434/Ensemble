@@ -77,10 +77,11 @@
 
 ## Dispute enums
 
-- `disputes.type` is PostgreSQL enum `dispute_type`: Contract, Gig, Job, Marketplace, Feedback, Forum, Transaction, Team, General.
+- Live product types are **Contract** and **Transaction** only. `normalizeDisputeType` maps older labels (Gig, Job, Team → Contract; Marketplace, Forum, General, … → Transaction).
 - `disputes.priority` is PostgreSQL enum `dispute_priority`: Low, Medium, High. Default is High.
 - `disputes.status` is PostgreSQL enum `dispute_status`: pending_review, open, awaiting_response, under_review, closed.
-- Labels match `backend/lib/DisputeEnums.js`. Migration `1827100000000_dispute-native-enums` converts the old varchar columns and CHECK constraints. Do not edit the original `disputes` create-table migration.
+- Opening a contract dispute freezes remaining escrow: existing `credit_transactions` for that contract/milestones get `related_dispute_id`, and `disputes.related_credit_transaction_id` / `credit_amount_involved` store the latest hold and remaining credits. Release, refund, and cancellation cannot move those credits until the dispute is closed.
+- Labels match `backend/lib/DisputeEnums.js`. Migration `1827100000000_dispute-native-enums` converts the old varchar columns. `1827500000000_dispute-contract-transaction-types` remaps leftover types and shrinks `dispute_type` to Contract, Transaction. Do not edit the original `disputes` create-table migration.
 
 ## Standing punishment library
 

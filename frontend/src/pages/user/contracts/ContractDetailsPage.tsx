@@ -1387,7 +1387,7 @@ export const ContractDetailsPage: React.FC = () => {
                       </span>
                     </button>
 
-                    {contract.status === "Active" && !activeCancellation && (
+                    {contract.status === "Active" && !activeCancellation && !contract.activeDispute && (
                       <button
                         onClick={() => {
                           setActionsMenuOpen(false);
@@ -1551,7 +1551,7 @@ export const ContractDetailsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAcceptCancellation}
-                        disabled={actionLoading}
+                        disabled={actionLoading || Boolean(contract.activeDispute)}
                         className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm disabled:opacity-50"
                       >
                         {actionLoading ? "Processing..." : "Accept Cancellation & Refund Escrow"}
@@ -1569,11 +1569,12 @@ export const ContractDetailsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-bold text-rose-900 dark:text-rose-100">This contract is under dispute</p>
                     <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
+                      Remaining escrow is frozen. Credits cannot be released or refunded until staff close the case.
                       {contract.activeDispute.visibility
                         ? (contract.activeDispute.number
-                          ? `Dispute ${contract.activeDispute.number} is open to both parties.`
-                          : "This dispute is open to both parties.")
-                        : "You filed this dispute. It stays with staff until they open it."}
+                          ? ` Dispute ${contract.activeDispute.number} is open to both parties.`
+                          : " This dispute is open to both parties.")
+                        : " You filed this dispute. Add more information for staff until they open it to the other party."}
                     </p>
                   </div>
                 </div>

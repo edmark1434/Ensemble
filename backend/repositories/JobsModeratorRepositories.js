@@ -19,7 +19,7 @@ const { meritFromWarningPoints } = require('../lib/WarningBands');
 
 // Jobs & Gigs moderation covers Jobs and Gigs tickets + related disputes.
 const JOBS_TICKET_SCOPE = QUEUE_SCOPES.jobs;
-const JOBS_DISPUTE_ENTITIES = ['job', 'gig', 'contract', 'feedback'];
+const JOBS_DISPUTE_ENTITIES = ['contract', 'transaction'];
 
 /** Canonical moderator statuses: active | paused | closed | archived */
 function normalizePostingStatus(rawStatus, deletedAt) {

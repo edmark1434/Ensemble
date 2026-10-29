@@ -21,6 +21,7 @@ type Discussion = {
   description?: string | null;
   initiator?: { name?: string; handle?: string | null };
   respondent?: { name?: string; handle?: string | null };
+  canComment?: boolean;
   messages: DiscussionMessage[];
 };
 
@@ -87,7 +88,9 @@ export default function PublicDisputePage() {
     try {
       const res = await api.post(`/api/accounts/disputes/${id}/messages`, { body: comment.trim() });
       setComment("");
-      toast.success(res.data?.message || "Comment sent to staff.");
+      toast.success(res.data?.message || "Comment posted to the discussion.");
+      const refresh = await api.get(`/api/accounts/disputes/${id}`);
+      setDiscussion(refresh.data?.data || discussion);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Could not send that comment.");
     } finally {
@@ -113,7 +116,7 @@ export default function PublicDisputePage() {
             <p className="text-xs text-gray-500 dark:text-zinc-500">{discussion.number || "Dispute"}</p>
             <h1 className="mt-1 text-2xl font-bold">{discussion.title || "Dispute"}</h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
-              {party(discussion.initiator)} vs {party(discussion.respondent)} · {discussion.type || "General"}
+              {party(discussion.initiator)} vs {party(discussion.respondent)} · {discussion.type || "Contract"}
             </p>
             <p className="mt-3 text-sm">
               Status: <span className="font-semibold">{label(discussion.status)}</span>
@@ -127,7 +130,7 @@ export default function PublicDisputePage() {
             <h2 className="text-sm font-semibold">Discussion</h2>
             {discussion.messages.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-white/10">
-                No public messages in this discussion yet.
+                No messages in this discussion yet.
               </p>
             ) : (
               discussion.messages.map((message) => (
@@ -146,32 +149,43 @@ export default function PublicDisputePage() {
 
           <section className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
             <h2 className="text-sm font-semibold">Add a comment</h2>
-            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">
-              Comments stay private until staff publish them. Published comments appear in the discussion above.
-            </p>
-            {isAuthenticated ? (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  maxLength={2000}
-                  rows={4}
-                  placeholder="Write a comment"
-                  className="w-full resize-none rounded-xl border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-white/10"
-                />
-                <button
-                  type="button"
-                  onClick={() => void sendComment()}
-                  disabled={sending || !comment.trim()}
-                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
-                >
-                  {sending ? "Sending…" : "Send to staff"}
-                </button>
-              </div>
+            {!isAuthenticated ? (
+              <>
+                <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">
+                  Sign in as a party on this dispute to comment.
+                </p>
+                <Link to="/login" className="mt-3 inline-block text-sm font-medium underline">
+                  Sign in to comment
+                </Link>
+              </>
+            ) : discussion.canComment ? (
+              <>
+                <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">
+                  Staff made this dispute public, so both parties can write in this discussion.
+                </p>
+                <div className="mt-3 space-y-2">
+                  <textarea
+                    value={comment}
+                    onChange={(event) => setComment(event.target.value)}
+                    maxLength={2000}
+                    rows={4}
+                    placeholder="Write a comment"
+                    className="w-full resize-none rounded-xl border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-white/10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendComment()}
+                    disabled={sending || !comment.trim()}
+                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
+                  >
+                    {sending ? "Sending…" : "Post comment"}
+                  </button>
+                </div>
+              </>
             ) : (
-              <Link to="/login" className="mt-3 inline-block text-sm font-medium underline">
-                Sign in to comment
-              </Link>
+              <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">
+                Only the two parties can comment after staff make a dispute public.
+              </p>
             )}
           </section>
         </article>

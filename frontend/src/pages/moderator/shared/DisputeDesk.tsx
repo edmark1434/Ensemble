@@ -135,14 +135,7 @@ const WORKFLOW_STATUSES = [
 
 const KNOWN_ENTITY_TYPES = [
   'Contract',
-  'Feedback',
-  'Job',
-  'Gig',
-  'Marketplace',
-  'Team',
-  'Forum',
   'Transaction',
-  'General',
 ] as const;
 
 const HANDLER_ROLES = new Set([

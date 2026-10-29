@@ -1,5 +1,6 @@
 const pool = require('../lib/Database').pool;
 const { getAffiliatedAccountIds } = require('./MarketplaceActorRepositories');
+const { assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
 
 async function getContractPermissions(contractId, personalAccountId, dbClient = pool) {
     const participantsResult = await dbClient.query(
@@ -752,6 +753,7 @@ async function recordMilestoneAction({
         let milestoneRelease = null;
         let contractCompletion = null;
         if (releaseOnContractCompletion && milestoneStatus === 'completed') {
+            await assertNoOpenContractDispute(client, contractId);
             const milestoneCredits = Number(milestone.credits);
             if (Number.isSafeInteger(milestoneCredits) && milestoneCredits > 0) {
                 const existingReleaseResult = await client.query(

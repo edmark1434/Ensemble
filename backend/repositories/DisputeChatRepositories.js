@@ -88,6 +88,7 @@ function mapMongoDisputeMessage(m) {
     authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
     authorName: m.author_name || 'Unknown',
     authorRole: m.author_role || (m.author_type === 'staff' ? 'staff' : null),
+    senderAccountId: m.sender_id || m.senderId || null,
     body: m.message_content || m.body || '',
     isInternal: Boolean(m.is_internal) || audience === 'staff',
     audience,
@@ -100,6 +101,16 @@ const DISPUTE_MESSAGE_AUDIENCES = ['staff', 'author_and_staff', 'parties', 'publ
 
 function isPublishedAudience(audience) {
   return audience === 'parties' || audience === 'public';
+}
+
+function canViewerSeeMessage(message, { accountId, isParty, visibility }) {
+  const audience = message.audience || 'staff';
+  if (audience === 'public') return true;
+  if (audience === 'parties') return Boolean(visibility && isParty);
+  if (audience === 'author_and_staff') {
+    return Boolean(accountId && String(message.senderAccountId) === String(accountId));
+  }
+  return false;
 }
 
 /** Load all messages for a dispute chat from the Mongo `messages` collection. */
@@ -229,7 +240,10 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
   return nextAudience;
 }
 
-function mapDisputeSummary(row) {
+function mapDisputeSummary(row, accountId) {
+  const filedByMe = Boolean(accountId && String(row.by_account_id) === String(accountId));
+  const closed = String(row.status || '').toLowerCase() === 'closed';
+  const visibility = Boolean(row.visibility);
   return {
     id: row.dispute_id,
     number: row.dispute_number,
@@ -237,7 +251,9 @@ function mapDisputeSummary(row) {
     type: row.type,
     status: row.status,
     reason: row.description || null,
-    visibility: Boolean(row.visibility),
+    visibility,
+    filedByMe,
+    canAddInformation: filedByMe && !visibility && !closed,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -246,7 +262,8 @@ function mapDisputeSummary(row) {
 async function listAccountDisputes(accountId) {
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, title, type, status, description, visibility, created_at, updated_at
+    SELECT dispute_id, dispute_number, title, type, status, description, visibility,
+           by_account_id, created_at, updated_at
     FROM disputes
     WHERE deleted_at IS NULL
       AND (
@@ -257,7 +274,7 @@ async function listAccountDisputes(accountId) {
     `,
     [accountId]
   );
-  return result.rows.map(mapDisputeSummary);
+  return result.rows.map((row) => mapDisputeSummary(row, accountId));
 }
 
 const DISPUTE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -268,7 +285,7 @@ function mapVisibleDispute(row, accountId) {
     id: row.dispute_id,
     number: row.dispute_number || null,
     title: row.title || 'Dispute',
-    type: row.type || 'General',
+    type: row.type || 'Contract',
     status: String(row.status || 'open').toLowerCase(),
     updatedAt: row.updated_at || row.created_at || null,
     role: filed ? 'filed' : 'respondent',
@@ -327,20 +344,30 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
   const row = result.rows[0];
   if (!row || !row.visibility) return null;
 
+  const isParty = Boolean(
+    viewerAccountId
+    && (String(row.by_account_id) === String(viewerAccountId)
+      || String(row.for_account_id) === String(viewerAccountId))
+  );
   const chatId = await getDisputeChatId(disputeId);
-  const messages = (await listDisputeMessages(chatId)).filter(
-    (message) => message.audience === 'public' && !message.isInternal
+  const messages = (await listDisputeMessages(chatId)).filter((message) =>
+    canViewerSeeMessage(message, {
+      accountId: viewerAccountId,
+      isParty,
+      visibility: true,
+    })
   );
 
   return {
     id: row.dispute_id,
     number: row.dispute_number || null,
     title: row.title || 'Dispute',
-    type: row.type || 'General',
+    type: row.type || 'Contract',
     status: String(row.status || 'open').toLowerCase(),
     description: row.description || null,
     initiator: { name: row.initiator_name || 'Unknown', handle: row.initiator_handle || null },
     respondent: { name: row.respondent_name || 'Unknown', handle: row.respondent_handle || null },
+    canComment: isParty,
     messages,
   };
 }
@@ -362,12 +389,17 @@ async function getAccountDispute(disputeId, accountId) {
   const row = result.rows[0];
   if (!row) return null;
   const filer = String(row.by_account_id) === String(accountId);
+  const isParty = filer || String(row.for_account_id) === String(accountId);
   if (!row.visibility && !filer) return null;
   const chatId = await getDisputeChatId(disputeId);
-  const messages = (await listDisputeMessages(chatId)).filter(
-    (message) => message.audience === 'public' && !message.isInternal
+  const messages = (await listDisputeMessages(chatId)).filter((message) =>
+    canViewerSeeMessage(message, {
+      accountId,
+      isParty,
+      visibility: Boolean(row.visibility),
+    })
   );
-  return { ...mapDisputeSummary(row), messages };
+  return { ...mapDisputeSummary(row, accountId), messages };
 }
 
 async function postPublicDisputeComment(disputeId, accountId, body) {
@@ -390,16 +422,38 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
 
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, visibility, by_account_id, for_account_id
+    SELECT dispute_id, dispute_number, visibility, status, by_account_id, for_account_id
     FROM disputes
     WHERE dispute_id = $1 AND deleted_at IS NULL
     `,
     [disputeId]
   );
   const row = result.rows[0];
-  if (!row || !row.visibility) {
+  if (!row) {
     const error = new Error('This dispute is not public.');
     error.statusCode = 404;
+    throw error;
+  }
+
+  const isFiler = String(row.by_account_id) === String(accountId);
+  const isRespondent = String(row.for_account_id) === String(accountId);
+  const isParty = isFiler || isRespondent;
+  const closed = String(row.status || '').toLowerCase() === 'closed';
+
+  if (!row.visibility) {
+    if (!isFiler) {
+      const error = new Error('This dispute is not public.');
+      error.statusCode = 404;
+      throw error;
+    }
+    if (closed) {
+      const error = new Error('This dispute is closed.');
+      error.statusCode = 400;
+      throw error;
+    }
+  } else if (!isParty) {
+    const error = new Error('Only the people on this dispute can comment.');
+    error.statusCode = 403;
     throw error;
   }
 
@@ -409,11 +463,9 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
   );
   const profile = account.rows[0] || {};
   const authorName = profile.display_name || profile.handle || 'Member';
-  const authorRole = String(row.by_account_id) === String(accountId)
-    ? 'disputer'
-    : String(row.for_account_id) === String(accountId)
-      ? 'disputee'
-      : 'public';
+  const authorRole = isFiler ? 'disputer' : isRespondent ? 'disputee' : 'public';
+  const forStaff = !row.visibility && isFiler;
+  const audience = forStaff ? 'author_and_staff' : 'parties';
 
   const chatId = await ensureDisputeChat(disputeId, row);
   await createDisputeMessage({
@@ -423,17 +475,23 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
     authorName,
     authorType: 'user',
     authorRole,
-    audience: 'staff',
-    audiences: ['staff'],
-    isInternal: true,
+    audience,
+    audiences: [audience],
+    isInternal: forStaff,
   });
-  const number = row.dispute_number || 'Dispute';
-  await notifyDisputeParties(row, {
-    message: `New reply on dispute ${number}. It shows in the discussion after staff publish it.`,
-    path: `/disputes/${disputeId}`,
-    excludeAccountId: accountId,
-  });
-  return { private: true };
+  if (row.visibility) {
+    const number = row.dispute_number || 'Dispute';
+    await notifyDisputeParties(row, {
+      message: `New reply on dispute ${number}.`,
+      path: `/disputes/${disputeId}`,
+      excludeAccountId: accountId,
+    });
+  }
+  return {
+    private: forStaff,
+    forStaff,
+    audience,
+  };
 }
 
 async function notifyDisputeParties(row, { message, path, excludeAccountId = null, onlyFiler = false } = {}) {

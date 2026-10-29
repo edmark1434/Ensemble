@@ -292,12 +292,14 @@ Each subsection is: where it lives, how a punishment starts, what standing does,
 
 **Routes:** `/contracts/dispute-form`, `/contracts/disputes`, `/disputes/:id`
 
-- Opening a visible dispute: public **Under dispute** chip. **No warning-point change.**
+- Product disputes are **Contract** or **Transaction** only. Users file from a contract; remaining escrow is frozen until staff close the case.
+- Hidden (not yet public): only the filer can send more information to staff. The other party cannot see or reply.
+- Opening a visible dispute: public **Under dispute** chip, and both parties can talk. **No warning-point change.**
 - Respondent found at fault: standing as staff chose. Conviction path already permanent-bans `for_account_id`. **No automatic extra points.** Staff may also issue a warning if they want points taken.
 - Filer found to be abusing disputes: `work` or `conduct` warning on the **filer** — that warning is the point hit.
 - Suspended cannot file a new dispute (write block) — the other party or staff can still open from the staff desk if money is trapped.
 - Banned/locked: appeal and tickets only. Reopening a dispute does not unban.
-- Escrow release / refund stays a staff action. Punishment never moves credits by itself.
+- Escrow release / refund stays a staff action. Punishment never moves credits by itself. An open dispute also blocks party release, refund, and cancellation.
 
 **Staff:** Support for appeals; Jobs/Marketplace desks for the related entity; Admin for pardon.
 

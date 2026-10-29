@@ -1,7 +1,11 @@
 /**
  * Dispute enums — Title Case labels for dispute.type.
  * Workflow status remains snake_case tokens used by the dispute desk.
+ * Product disputes are Contract or Transaction only. Older catalog labels
+ * remain in DISPUTE_TYPES so already-applied enum migrations stay valid.
  */
+
+const LIVE_DISPUTE_TYPES = Object.freeze(['Contract', 'Transaction']);
 
 const DISPUTE_TYPES = Object.freeze([
   'Contract',
@@ -15,6 +19,11 @@ const DISPUTE_TYPES = Object.freeze([
   'General',
 ]);
 
+const DISPUTE_TYPE = Object.freeze({
+  CONTRACT: 'Contract',
+  TRANSACTION: 'Transaction',
+});
+
 const DISPUTE_STATUSES = Object.freeze([
   'pending_review',
   'open',
@@ -27,21 +36,21 @@ const DISPUTE_PRIORITIES = Object.freeze(['Low', 'Medium', 'High']);
 
 const LEGACY_TYPE_MAP = Object.freeze({
   contract: 'Contract',
-  gig: 'Gig',
-  job: 'Job',
-  jobs: 'Job',
-  marketplace: 'Marketplace',
-  asset: 'Marketplace',
-  listing: 'Marketplace',
-  feedback: 'Feedback',
-  forum: 'Forum',
-  forums: 'Forum',
+  gig: 'Contract',
+  job: 'Contract',
+  jobs: 'Contract',
+  team: 'Contract',
+  marketplace: 'Transaction',
+  asset: 'Transaction',
+  listing: 'Transaction',
+  feedback: 'Transaction',
+  forum: 'Transaction',
+  forums: 'Transaction',
   transaction: 'Transaction',
   payment: 'Transaction',
   credit: 'Transaction',
-  team: 'Team',
-  general: 'General',
-  other: 'General',
+  general: 'Transaction',
+  other: 'Transaction',
 });
 
 function titleCaseKey(value) {
@@ -52,13 +61,13 @@ function titleCaseKey(value) {
     .replace(/\s+/g, ' ');
 }
 
-function normalizeDisputeType(value, fallback = 'General') {
+function normalizeDisputeType(value, fallback = 'Contract') {
   if (value == null || value === '') return fallback;
   const raw = String(value).trim();
-  if (DISPUTE_TYPES.includes(raw)) return raw;
+  if (LIVE_DISPUTE_TYPES.includes(raw)) return raw;
   const mapped = LEGACY_TYPE_MAP[titleCaseKey(raw)];
   if (mapped) return mapped;
-  const exact = DISPUTE_TYPES.find((t) => t.toLowerCase() === raw.toLowerCase());
+  const exact = LIVE_DISPUTE_TYPES.find((t) => t.toLowerCase() === raw.toLowerCase());
   return exact || fallback;
 }
 
@@ -93,7 +102,6 @@ function normalizeDisputeVisibility(value, fallback = false) {
  * Default dispute title: "{Disputee} v {Disputer} {Type} Dispute"
  * Disputee = respondent (accused / opposing party)
  * Disputer = initiator (who filed)
- * Type comes from dispute.type (Feedback, Contract, Transaction, …)
  */
 function buildDefaultDisputeTitle({
   disputeeName,
@@ -104,12 +112,14 @@ function buildDefaultDisputeTitle({
 } = {}) {
   const disputee = String(disputeeName || respondentName || 'Disputee').trim() || 'Disputee';
   const disputer = String(disputerName || initiatorName || 'Disputer').trim() || 'Disputer';
-  const kind = normalizeDisputeType(type, 'General');
+  const kind = normalizeDisputeType(type, 'Contract');
   return `${disputee} v ${disputer} ${kind} Dispute`;
 }
 
 module.exports = {
+  LIVE_DISPUTE_TYPES,
   DISPUTE_TYPES,
+  DISPUTE_TYPE,
   DISPUTE_STATUSES,
   DISPUTE_PRIORITIES,
   normalizeDisputeType,

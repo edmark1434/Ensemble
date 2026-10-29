@@ -64,6 +64,12 @@
 - Admin CRUD: `GET/POST /api/admin/punishment-defs`, `PATCH/DELETE /api/admin/punishment-defs/:punishmentDefId`. Body `{ label, kind, category, durationDays, permanent, desks, note }`. Duration 1–365 days, or `permanent: true` / `durationDays: null`. Ban rows are limited to admin and support desks. Delete is a soft-delete.
 - Staff `PATCH /api/admin/accounts/:accountId/status` and moderator restriction patches require `punishmentId` for ban, suspend, and timeout. Catalog duration is used unless `customDuration: true` with `duration` / `endsAt` / `days`. Reason is still required. Lock and lift actions do not use the catalog.
 
+## Contract disputes
+
+- `POST /api/contracts/:contractId/dispute` creates a hidden Contract dispute, links remaining contract escrow through `related_dispute_id` / `related_credit_transaction_id`, and freezes release/refund until the case is closed.
+- `GET /api/users/disputes` lists the filer's cases plus visible cases that name them. `GET /api/users/disputes/:id` returns filer-visible notes (`author_and_staff`) while the case is still hidden.
+- `POST /api/accounts/disputes/:id/messages`: the filer may add information while hidden. After staff set `visibility = true`, only the two parties may comment. Guests can read public discussion at `GET /api/accounts/disputes/:id`.
+
 ## Member reports
 
 - Member report POSTs (`/api/jobs/:jobId/report`, `/api/gigs/:id/report`, `/api/assets/:assetId/report`, `/api/accounts/:accountId/report`, `/api/inbox/message/:messageId/report`, `/api/forum/reports/...`, `/api/teams/:teamId/reports`, `/api/team-projects/:id/report`) store `subject_snapshot` on `reports`: `{ kind, title, body, href, extra }`. `description` is the reporter's reason text only.
