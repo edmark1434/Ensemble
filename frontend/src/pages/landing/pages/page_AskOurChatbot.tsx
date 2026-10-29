@@ -433,24 +433,26 @@ const PageAskOurChatbot: React.FC = () => {
               </button>
             </div>
 
-            <div className="ensemble-sidebar-section">
-              <h2><MessageCircleQuestion size={15} /> Popular questions</h2>
-              <div className="ensemble-quick-list">
-                {QUICK_QUESTIONS.map((question) => (
-                  <button key={question} onClick={() => void handleSend(question)} disabled={isSending}>
-                    {question}<ArrowLeft size={14} />
-                  </button>
-                ))}
+            <div className="ensemble-sidebar-scrollable">
+              <div className="ensemble-sidebar-section">
+                <h2><MessageCircleQuestion size={15} /> Popular questions</h2>
+                <div className="ensemble-quick-list">
+                  {QUICK_QUESTIONS.map((question) => (
+                    <button key={question} onClick={() => void handleSend(question)} disabled={isSending}>
+                      {question}<ArrowLeft size={14} />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="ensemble-sidebar-note">
-              <ShieldCheck size={17} />
-              <div><strong>Guest access</strong><span>No login or session is required.</span></div>
-            </div>
-            <div className="ensemble-sidebar-note">
-              <BookOpen size={17} />
-              <div><strong>Verified guidance</strong><span>Page links come from Ensemble documentation.</span></div>
+              <div className="ensemble-sidebar-note">
+                <ShieldCheck size={17} />
+                <div><strong>Guest access</strong><span>No login or session is required.</span></div>
+              </div>
+              <div className="ensemble-sidebar-note">
+                <BookOpen size={17} />
+                <div><strong>Verified guidance</strong><span>Page links come from Ensemble documentation.</span></div>
+              </div>
             </div>
           </aside>
 
@@ -711,12 +713,9 @@ const PageAskOurChatbot: React.FC = () => {
         .ensemble-chat-sidebar {
           display: flex;
           flex-direction: column;
-          gap: 24px;
-          padding: 24px;
           min-height: 0;
           width: 290px;
-          overflow-y: auto;
-          overflow-x: hidden;
+          overflow: hidden;
           border-right: 1px solid ${theme === 'dark' ? "rgba(63, 63, 70, 0.55)" : "#e2e8f0"};
           background: ${theme === 'dark' ? "rgba(15, 15, 17, 0.75)" : "rgba(248, 250, 252, 0.88)"};
           backdrop-filter: blur(16px);
@@ -735,6 +734,36 @@ const PageAskOurChatbot: React.FC = () => {
           align-items: center;
           justify-content: space-between;
           gap: 8px;
+          padding: 18px 16px 18px 20px;
+          flex-shrink: 0;
+          border-bottom: 1px solid ${theme === 'dark' ? "rgba(63, 63, 70, 0.4)" : "#e2e8f0"};
+        }
+
+        .ensemble-sidebar-scrollable {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 20px 14px 24px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          scrollbar-width: thin;
+          scrollbar-color: ${theme === 'dark' ? "rgba(255, 255, 255, 0.16) transparent" : "rgba(0, 0, 0, 0.16) transparent"};
+        }
+        .ensemble-sidebar-scrollable::-webkit-scrollbar {
+          width: 5px;
+        }
+        .ensemble-sidebar-scrollable::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .ensemble-sidebar-scrollable::-webkit-scrollbar-thumb {
+          background: ${theme === 'dark' ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.16)"};
+          border-radius: 9999px;
+          transition: background 0.2s ease;
+        }
+        .ensemble-sidebar-scrollable::-webkit-scrollbar-thumb:hover {
+          background: ${theme === 'dark' ? "rgba(255, 255, 255, 0.32)" : "rgba(0, 0, 0, 0.3)"};
         }
         .ensemble-sidebar-collapse-btn {
           display: flex;
@@ -968,7 +997,22 @@ const PageAskOurChatbot: React.FC = () => {
           min-height: 0;
           padding: 28px;
           overflow-y: auto;
-          scrollbar-color: ${theme === 'dark' ? "#27272a transparent" : "#cbd5e1 transparent"};
+          scrollbar-width: thin;
+          scrollbar-color: ${theme === 'dark' ? "rgba(255, 255, 255, 0.16) transparent" : "rgba(0, 0, 0, 0.16) transparent"};
+        }
+        .ensemble-message-log::-webkit-scrollbar {
+          width: 5px;
+        }
+        .ensemble-message-log::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .ensemble-message-log::-webkit-scrollbar-thumb {
+          background: ${theme === 'dark' ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.16)"};
+          border-radius: 9999px;
+          transition: background 0.2s ease;
+        }
+        .ensemble-message-log::-webkit-scrollbar-thumb:hover {
+          background: ${theme === 'dark' ? "rgba(255, 255, 255, 0.32)" : "rgba(0, 0, 0, 0.3)"};
         }
         .ensemble-message-row {
           display: flex;
@@ -1254,11 +1298,18 @@ const PageAskOurChatbot: React.FC = () => {
             display: none;
           }
           .ensemble-chat-sidebar {
-            gap: 16px;
-            padding: 18px;
+            gap: 0;
+            padding: 0;
             width: 100%;
             border-right: 0;
             border-bottom: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"};
+          }
+          .ensemble-sidebar-top-bar {
+            padding: 14px 18px;
+          }
+          .ensemble-sidebar-scrollable {
+            padding: 0 18px 16px;
+            gap: 12px;
           }
           .ensemble-sidebar-section { order: 3; }
           .ensemble-quick-list { display: flex; overflow-x: auto; padding-bottom: 2px; }

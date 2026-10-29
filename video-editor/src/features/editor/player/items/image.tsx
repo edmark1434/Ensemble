@@ -1,3 +1,4 @@
+import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
 import { IImage } from "@designcombo/types";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
 import { BoxAnim, ContentAnim, MaskAnim } from "@designcombo/animations";
@@ -5,6 +6,11 @@ import { calculateContainerStyles, calculateMediaStyles } from "../styles";
 import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
 import { Img } from "remotion";
+
+function MarketImage({ item, ...props }: { item: IImage } & Omit<React.ComponentProps<typeof Img>, "src">) {
+  const src = useMarketAssetSource(item);
+  return <Img {...props} src={src} />;
+}
 
 export default function Image({
   item,
@@ -54,9 +60,9 @@ export default function Image({
             id={`${item.id}-reveal-mask`}
             style={calculateMediaStyles(details, crop)}
           >
-            <Img
+            <MarketImage
+              item={item}
               data-id={item.id}
-              src={details.src}
               style={{
                 position: "absolute",
                 top: 0,

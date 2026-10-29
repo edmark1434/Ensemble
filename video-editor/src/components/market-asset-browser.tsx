@@ -143,6 +143,17 @@ export function BundleIndicator() {
   return <Tooltip><TooltipTrigger asChild><span tabIndex={0} className="flex size-7 items-center justify-center rounded-full bg-secondary/90 text-secondary-foreground" aria-label="Bundle: all included assets for one price"><PackageOpen className="size-4" /></span></TooltipTrigger><TooltipContent>Asset bundle: all included assets for one price</TooltipContent></Tooltip>;
 }
 
+function getBundleAssetCountLabel(assets: MarketAssetContent[]) {
+  const counts = assets.reduce<Record<MarketAssetType, number>>((result, asset) => {
+    result[asset.type] += 1;
+    return result;
+  }, { image: 0, video: 0, audio: 0 });
+  return (Object.entries(counts) as [MarketAssetType, number][])
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => `${count} ${type}${count === 1 ? "" : "s"}`)
+    .join(" · ");
+}
+
 export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
   bundle: MarketAssetBundle;
   onOpen: (bundle: MarketAssetBundle) => void;
@@ -154,6 +165,7 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
     ? bundle.showcases.map((showcase) => showcase.preview || showcase.details.src)
     : bundle.preview ? [bundle.preview] : [];
   const isBundle = bundle.assets.length > 1;
+  const assetCountLabel = getBundleAssetCountLabel(bundle.assets);
   const unavailable = !isBundle && (bundle.assets[0]?.proxyStatus !== "ready" || !bundle.assets[0]?.details?.src);
   useEffect(() => {
     if (!isHovering || slides.length < 2) return;
@@ -165,7 +177,7 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
   if (layout === "list") return <div className="group flex w-full items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-800/50">
     <button type="button" onClick={() => onOpen(bundle)} className="flex min-w-0 flex-1 items-center gap-3 rounded text-left focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Open ${bundle.name}`}>
       <span className="relative size-10 shrink-0 overflow-hidden rounded-md bg-zinc-800"><MarketPreview src={slides[0]} type={bundle.type} /></span>
-      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{bundle.name}</span><span className="block text-xs text-muted-foreground">{bundle.assets.length} {bundle.assets.length === 1 ? "asset" : "assets"} · {bundle.metadata.author}</span></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{bundle.name}</span><span className="block truncate text-xs text-muted-foreground">{assetCountLabel}{bundle.metadata.author ? ` · ${bundle.metadata.author}` : ""}</span></span>
     </button>
     <MarketPriceBadge credits={bundle.price_credits} className="shrink-0" />
     {isBundle && <BundleIndicator />}
@@ -176,7 +188,7 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
     <button type="button" disabled={unavailable} onClick={() => onOpen(bundle)} className="size-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed" aria-label={isBundle ? `Open ${bundle.name} bundle` : unavailable ? `${bundle.name}: preview unavailable` : `Add ${bundle.name} to the timeline`}>
       <MarketPreview src={slides[activeShowcaseIndex]} type={bundle.type} className="size-full object-contain transition-transform duration-300 group-hover:scale-[1.03]" />
       <MarketPriceBadge credits={bundle.price_credits} className="absolute left-2 top-2" />
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/50 p-2.5 text-xs font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">{bundle.name}</span>
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/50 p-2.5 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"><span className="block truncate text-xs font-semibold">{bundle.name}</span>{isBundle && <span className="mt-0.5 block truncate text-[10px]">{assetCountLabel}</span>}</span>
     </button>
     <div className="absolute right-1 top-1 flex gap-1">{isBundle && <BundleIndicator />}<MarketAssetActions bundle={bundle} menuOnly /></div>
   </div>;
@@ -244,14 +256,7 @@ export function MarketAssetDetails({ bundle, onBack, onAddAsset }: {
   onBack: () => void;
   onAddAsset: (asset: MarketAssetContent) => void;
 }) {
-  const assetCounts = bundle.assets.reduce<Record<MarketAssetType, number>>((counts, asset) => {
-    counts[asset.type] += 1;
-    return counts;
-  }, { image: 0, video: 0, audio: 0 });
-  const assetCountLabel = (Object.entries(assetCounts) as [MarketAssetType, number][])
-    .filter(([, count]) => count > 0)
-    .map(([type, count]) => `${count} ${type}${count === 1 ? "" : "s"}`)
-    .join(" · ");
+  const assetCountLabel = getBundleAssetCountLabel(bundle.assets);
   const isBundle = bundle.assets.length > 1;
 
   return <div className="h-full min-h-0 w-full overflow-hidden">

@@ -59,7 +59,7 @@ const PagePricing: React.FC = () => {
     {
       name: "Premium",
       tagline: "Premium monthly membership",
-      price: "₱59,900",
+      price: "₱599",
       suffix: "/mo",
       icon: "/icons/subscription/premium.png",
       popular: true,
@@ -80,7 +80,7 @@ const PagePricing: React.FC = () => {
     {
       name: "Business",
       tagline: "Business monthly membership",
-      price: "₱350,000",
+      price: "₱3,500",
       suffix: "/mo",
       icon: "/icons/subscription/studio.png",
       popular: false,

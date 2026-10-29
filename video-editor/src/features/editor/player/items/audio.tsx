@@ -1,3 +1,4 @@
+import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
 import { IAudio } from "@designcombo/types";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
 import { Audio as RemotionAudio } from "@remotion/media";
@@ -10,6 +11,7 @@ const AudioMedia = ({ item, fps }: { item: IAudio; fps: number }) => {
   const { isRendering } = useRemotionEnvironment();
 
   const { details } = item;
+  const src = useMarketAssetSource(item);
   const playbackRate = item.playbackRate || 1;
   const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
   const trimBefore = ((item.trim?.from ?? 0) / 1000) * fps;
@@ -33,7 +35,7 @@ const AudioMedia = ({ item, fps }: { item: IAudio; fps: number }) => {
       trimBefore={trimBefore}
       trimAfter={trimAfter}
       playbackRate={playbackRate}
-      src={details.src}
+      src={src}
       volume={volume}
     />
   );

@@ -1,13 +1,10 @@
-# Active Task: Admin-owned warning duration and point thresholds
+# Active Task: Apply new landing page Value Ecosystem feature images
 
 ## Implementation Objective
 
-Admin sets how long each named warning lasts when creating it. Staff cannot pick a duration at issue time. Admin also CRUD-creates warning-point thresholds that drive automatic product limits and auto-suspend.
+Update the landing page Value Ecosystem accordion gallery (`section_Features.tsx`) to use the newly added `.png` images in `/gallery_images/new/`.
 
 ## Acceptance Criteria
 
-- [x] `warning_defs.duration_days` is set by admin (1–365). Issued warnings copy that clock.
-- [x] Staff warn payloads cannot shorten or lengthen duration.
-- [x] Admin-only CRUD for `warning_thresholds` (min points, effect, suspend days).
-- [x] Live band and auto-suspend follow those rows, with the current ladder as fallback/seed.
-- [ ] Apply migration `1826600000000_warning-duration-and-thresholds` when Postgres is reachable
+- [x] `ALL_FEATURES` in `frontend/src/pages/landing/section_Features.tsx` points to the new images under `/gallery_images/new/` (`captioning.png`, `collab.png`, `deadair.png`, `asset.png`, `videochat.png`, `track.png`).
+- [x] Frontend build (`cd frontend && npm run build`) succeeds.

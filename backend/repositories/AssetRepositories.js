@@ -872,10 +872,12 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
   }
 }
 
-async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = null, projectId = null) {
+async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = null, projectId = null, allowProjectViewers = false) {
   const { rows } = await pool.query(
     `SELECT media.media_asset_id, link.position,
             original.path, original.name, original.mime_type, original.size_bytes,
+            media.type AS media_type, media.original_file_id, media.proxy_file_id,
+            proxy.path AS proxy_path, proxy.name AS proxy_name, proxy.mime_type AS proxy_mime_type,
             (owner.account_id = $2) AS is_owner,
             EXISTS (
               SELECT 1
@@ -890,7 +892,7 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
                       JOIN projects project ON project.project_id = member.project_id
                       WHERE member.project_id = $4 AND collaborator.account_id = $2
                         AND member.deleted_at IS NULL AND project.deleted_at IS NULL
-                        AND member.role IN ('Owner', 'Manager', 'Editor')
+                        AND ($5::boolean OR member.role IN ('Owner', 'Manager', 'Editor'))
                     ))
                 AND owned_asset.status = 'active'
                 AND owned_asset.deleted_at IS NULL
@@ -899,6 +901,7 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
      JOIN market_media_assets link ON link.market_asset_id = ma.market_asset_id
      JOIN media_assets media ON media.media_asset_id = link.media_asset_id
      JOIN files original ON original.file_id = media.original_file_id
+     LEFT JOIN files proxy ON proxy.file_id = media.proxy_file_id AND proxy.deleted_at IS NULL
      JOIN users owner_user ON owner_user.user_id = media.owner_user_id
      JOIN accounts owner ON owner.account_id = owner_user.account_id
      WHERE ma.market_asset_id = $1
@@ -907,12 +910,36 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
        AND ($3::uuid IS NULL OR media.media_asset_id = $3)
      ORDER BY link.position, media.media_asset_id
      LIMIT 1`,
-    [assetId, accountId, mediaAssetId, projectId]
+    [assetId, accountId, mediaAssetId, projectId, allowProjectViewers]
   );
   return rows[0] || null;
 }
 
-async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT) {
+async function getEditorAssetPurchaseContextRepository(assetId, accountId, projectId, client = pool, lock = false) {
+  const { rows: [context] } = await client.query(
+    `SELECT project.status AS project_status, member.role,
+            wallet.balance_credits,
+            (SELECT license.market_asset_license_id FROM market_asset_licenses license
+             WHERE license.project_id = project.project_id AND license.market_asset_id = $3
+               AND license.status = 'active' AND license.deleted_at IS NULL) AS project_license_id,
+            (SELECT license.market_asset_license_id FROM market_asset_licenses license
+             WHERE license.buyer_user_id = buyer.user_id AND license.market_asset_id = $3
+               AND license.project_id IS NULL AND license.status = 'active'
+               AND license.deleted_at IS NULL) AS available_license_id
+     FROM projects project
+     JOIN project_members member ON member.project_id = project.project_id AND member.deleted_at IS NULL
+     JOIN users buyer ON buyer.user_id = member.user_id
+     LEFT JOIN account_wallets account_wallet ON account_wallet.account_id = buyer.account_id
+     LEFT JOIN wallets wallet ON wallet.wallet_id = account_wallet.wallet_id AND wallet.type = 'account wallets'
+     WHERE project.project_id = $1 AND project.deleted_at IS NULL AND buyer.account_id = $2
+     ${lock ? 'FOR SHARE OF project, member' : ''}`,
+    [projectId, accountId, assetId]
+  );
+  return context || null;
+}
+
+async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT, { projectId = null, expectedPrice = null, expectedCharge = null, freeOnly = false } = {}) {
+  if (freeOnly && !projectId) throw repoError('ASSET_LICENSE_PROJECT_FORBIDDEN');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -920,6 +947,19 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
       [buyerAccountId, assetId]
     );
+
+    let projectContext = null;
+    if (projectId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [projectId, assetId]);
+      projectContext = await getEditorAssetPurchaseContextRepository(assetId, buyerAccountId, projectId, client, true);
+      if (!projectContext || !['Owner', 'Manager', 'Editor'].includes(projectContext.role)) throw repoError('ASSET_LICENSE_PROJECT_FORBIDDEN');
+      if (String(projectContext.project_status).toLowerCase() === 'frozen') throw repoError('ASSET_LICENSE_PROJECT_FROZEN');
+      if (projectContext.project_license_id) {
+        const { rows: [license] } = await client.query('SELECT * FROM market_asset_licenses WHERE market_asset_license_id = $1', [projectContext.project_license_id]);
+        await client.query('COMMIT');
+        return { alreadyPurchased: true, license, buyerBalanceCredits: Number(projectContext.balance_credits || 0), notifications: [] };
+      }
+    }
 
     const assetResult = await client.query(
       `SELECT ma.market_asset_id, ma.name, ma.price_credits, ma.status,
@@ -967,11 +1007,21 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       error.code = 'ASSET_NOT_PUBLISHED';
       throw error;
     }
-    if (String(asset.owner_account_id) === String(buyerAccountId)) {
-      const error = new Error('ASSET_SELF_PURCHASE');
-      error.code = 'ASSET_SELF_PURCHASE';
-      throw error;
+    // The automatic path must never turn a stale free listing or owner discount
+    // into permission for a currently paid asset.
+    if (freeOnly && Number(asset.price_credits) !== 0) throw repoError('ASSET_PRICE_CHANGED');
+    const isCreator = String(asset.owner_account_id) === String(buyerAccountId);
+    if (freeOnly || (isCreator && projectId)) {
+      if (expectedCharge !== 0) throw repoError('ASSET_LICENSE_COST_CHANGED');
+      const { rows: [license] } = await client.query(
+        `INSERT INTO market_asset_licenses (buyer_user_id, market_asset_id, project_id, price_credits, assigned_at)
+         VALUES ($1, $2, $3, 0, CURRENT_TIMESTAMP) RETURNING *`,
+        [asset.buyer_user_id, assetId, projectId]
+      );
+      await client.query('COMMIT');
+      return { alreadyPurchased: false, license, buyerBalanceCredits: projectContext.balance_credits == null ? null : Number(projectContext.balance_credits), notifications: [] };
     }
+    if (isCreator) throw repoError('ASSET_SELF_PURCHASE');
 
     const priceCredits = Number(asset.price_credits);
     if (!Number.isSafeInteger(priceCredits) || priceCredits < 0) {
@@ -979,6 +1029,8 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       error.code = 'ASSET_PRICE_INVALID';
       throw error;
     }
+    if (projectId && !projectContext.available_license_id && expectedPrice !== priceCredits) throw repoError('ASSET_PRICE_CHANGED');
+    if (projectId && expectedCharge !== (projectContext.available_license_id ? 0 : priceCredits)) throw repoError('ASSET_LICENSE_COST_CHANGED');
     const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
     const creatorNetCredits = priceCredits - transactionFeeCredits;
 
@@ -1029,6 +1081,14 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     }
 
     if (existingPurchase.rowCount) {
+      if (projectId) {
+        const assigned = await client.query(
+          `UPDATE market_asset_licenses SET project_id = $2, assigned_at = CURRENT_TIMESTAMP
+           WHERE market_asset_license_id = $1 RETURNING *`,
+          [existingPurchase.rows[0].market_asset_license_id, projectId]
+        );
+        existingPurchase.rows[0] = assigned.rows[0];
+      }
       await client.query('COMMIT');
       return {
         alreadyPurchased: true,
@@ -1101,10 +1161,10 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     const transaction = transactionResult.rows[0];
     const licenseResult = await client.query(
       `INSERT INTO market_asset_licenses
-         (buyer_user_id, market_asset_id, price_credits, credit_transaction_id)
-       VALUES ($1, $2, $3, $4)
+         (buyer_user_id, market_asset_id, price_credits, credit_transaction_id, project_id, assigned_at)
+       VALUES ($1, $2, $3, $4, $5, CASE WHEN $5::uuid IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END)
        RETURNING *`,
-      [asset.buyer_user_id, assetId, priceCredits, transaction.credit_transaction_id]
+      [asset.buyer_user_id, assetId, priceCredits, transaction.credit_transaction_id, projectId]
     );
     const purchaseLabel = priceCredits === 0 ? 'claimed' : 'purchased';
     const buyerMessage = priceCredits === 0
@@ -1954,6 +2014,7 @@ async function validateAssetRefundEligibility(marketAssetId, buyerAccountId, lic
 }
 
 module.exports = {
+  getEditorAssetPurchaseContextRepository,
   listAssetLicensesRepository,
   assignAssetLicenseRepository,
   getAssetPostingEligibilityRepository,

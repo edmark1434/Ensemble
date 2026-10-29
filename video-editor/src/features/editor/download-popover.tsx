@@ -9,7 +9,7 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Check, ChevronDown, Download, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateId } from "@designcombo/timeline";
 import type { IDesign } from "@designcombo/types";
@@ -29,6 +29,10 @@ import {
   getResolutionOptions, getDefaultVideoBitrateKbps, GIF_MAXIMUM_DURATION_MS
 } from "./constants/download-options";
 import { DraggablePanel } from "@/components/draggable-panel";
+import { useMarketLicenses } from "./store/use-market-licenses";
+import { loadMarketLicenses } from "./utils/load-market-licenses";
+import { collectMarketExportAssetIds } from "./utils/market-export-assets";
+import { MarketExportPurchaseModal } from "./modals/market-export-purchase-modal";
 import { getSafeCurrentFrame } from "@/features/editor/utils/time";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
@@ -50,11 +54,41 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   } =
     useDownloadState();
 
-  const { duration, trackItemIds, size, projectName, background, activeSceneBlockId } = useStore();
+  const { duration, trackItemIds, size, projectName, background, activeSceneBlockId, trackItemsMap, projectId } = useStore();
   const inScene = !!activeSceneBlockId;
   const isEmpty = trackItemIds.length === 0;
 
   const [open, setOpen] = useState(false);
+  const [assetStepScope, setAssetStepScope] = useState<string | null>(null);
+  const assets = useMarketLicenses(state => state.assets);
+  const licenseProjectId = useMarketLicenses(state => state.projectId);
+  const assetIdsKey = useMemo(() => collectMarketExportAssetIds({ trackItemIds, trackItemsMap }).join(","), [trackItemIds, trackItemsMap]);
+  const scopeKey = `${projectId}:${activeSceneBlockId || "project"}:${assetIdsKey}`;
+  const [checkedScope, setCheckedScope] = useState("");
+  const [checkError, setCheckError] = useState("");
+  const [checkRetry, setCheckRetry] = useState(0);
+  const [purchaseIds, setPurchaseIds] = useState<string[] | null>(null);
+  const licensesReady = !assetIdsKey || checkedScope === scopeKey;
+  const showAssetStep = assetStepScope === scopeKey;
+  const unpaidIds = assetIdsKey.split(",").filter(id => id && licenseProjectId === projectId && assets[id] && !assets[id].licensed && assets[id].priceCredits > 0);
+  useEffect(() => {
+    if (!open || !assetIdsKey) return;
+    const controller = new AbortController();
+    setCheckedScope(""); setCheckError("");
+    const check = async () => {
+      const ids = assetIdsKey.split(",");
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        const result = await loadMarketLicenses(projectId, batch, controller.signal);
+        if (result.length !== batch.length) throw new Error("Some assets are unavailable. Review your timeline before exporting.");
+        if (!controller.signal.aborted) useMarketLicenses.getState().update(projectId, result);
+      }
+      if (!controller.signal.aborted) setCheckedScope(scopeKey);
+    };
+    void check().catch(error => { if (!controller.signal.aborted) setCheckError(error instanceof Error ? error.message : "Unable to check asset licenses."); });
+    return () => controller.abort();
+  }, [open, assetIdsKey, projectId, scopeKey, checkRetry]);
+
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragStateRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
 
@@ -128,7 +162,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
           ? "Export scene"
           : "Export project";
 
-  const handleExport = () => {
+  const handleExport = (marketDraft = false) => {
     const {
       playerRef,
       fps: timelineFps,
@@ -149,6 +183,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       id: generateId(),
       duration,
       projectName: exportName,
+      projectId,
+      marketDraft,
       background,
       size,
       type,
@@ -175,6 +211,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       return;
     }
 
+    setAssetStepScope(null);
     setOpen(nextOpen);
   };
 
@@ -183,6 +220,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   const showBitrate = (type === "video" || type === "audio") && !(format === "gif" || format === "mov");
 
   return (
+    <>
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         {isEmpty && !isCompleted && !isFailed ? (
@@ -230,7 +268,17 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
         align="end"
         className="pointer-events-none z-[250] w-auto border-none bg-transparent p-0 shadow-none"
       >
-        <DraggablePanel title="Export" onClose={() => setOpen(false)} className="w-72">
+        <DraggablePanel title="Export" onClose={() => { setOpen(false); setAssetStepScope(null); }} onBack={showAssetStep ? () => setAssetStepScope(null) : undefined} className="w-72">
+          {showAssetStep ? <>
+            <h3 className="text-sm font-semibold">This {inScene ? "scene" : "project"} contains paid assets</h3>
+            {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : !licensesReady ? <Button disabled>Checking asset licenses…</Button> : unpaidIds.length > 0 ? <>
+              <p className="text-xs leading-relaxed text-muted-foreground">This {inScene ? "scene" : "project"} contains paid assets that haven’t been licensed. Pay to remove their watermarks, or export a watermarked draft.</p>
+              <div className="space-y-3">
+                <Button className="h-auto min-h-9 w-full whitespace-normal py-2" onClick={() => { setPurchaseIds(unpaidIds); setOpen(false); }}>Pay for assets in the {inScene ? "scene" : "project"}</Button>
+                <Button variant="outline" className="w-full" onClick={() => handleExport(true)}>Get watermarked draft</Button>
+              </div>
+            </> : <><p className="text-xs text-muted-foreground">All assets in this {inScene ? "scene" : "project"} are licensed.</p><Button onClick={() => handleExport()}>Export {inScene ? "scene" : "project"}</Button></>}
+          </> : <>
           <div className="flex flex-col gap-3">
             <SelectField
               label="Type"
@@ -277,14 +325,15 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
             )}
           </div>
 
-          <div>
-            <Button onClick={handleExport} className="w-full">
-              Export
-            </Button>
+          <div className="space-y-3">
+            {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" className="w-full" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : <Button disabled={!licensesReady} onClick={() => { if (unpaidIds.length) setAssetStepScope(scopeKey); else handleExport(); }} className="w-full">{licensesReady ? `Export ${inScene ? "scene" : "project"}` : "Checking asset licenses…"}</Button>}
           </div>
+          </>}
         </DraggablePanel>
       </PopoverContent>
     </Popover>
+    {purchaseIds && <MarketExportPurchaseModal key={`${projectId}:${purchaseIds.join(",")}`} assetIds={purchaseIds} projectId={projectId} scope={inScene ? "scene" : "project"} onClose={() => { setPurchaseIds(null); setOpen(true); }} onComplete={() => { setPurchaseIds(null); setAssetStepScope(null); setOpen(true); }} />}
+    </>
   );
 };
 

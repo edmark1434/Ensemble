@@ -126,6 +126,12 @@ async function main() {
     console.log('PASS assignment: buyer + editable membership, repeat assignment, no transfer, no lossy rollback');
     const access = async (account, project = null) => (await repo.getAssetDownloadRepository(assetId, account, mediaId, project)).is_purchased;
     assert.equal(await access(collaborator.account_id, projectIds[0]), true);
+    await query("UPDATE project_members SET role='Viewer' WHERE project_id=$1 AND user_id=$2", [projectIds[0], collaborator.user_id]);
+    assert.equal(await access(collaborator.account_id, projectIds[0]), false, 'Library download keeps editable-role requirement');
+    assert.equal((await repo.getAssetDownloadRepository(assetId, collaborator.account_id, mediaId, projectIds[0], true)).is_purchased, true, 'Licensed project viewers can play original media');
+    assert.equal((await repo.getAssetDownloadRepository(assetId, outsider.account_id, mediaId, projectIds[0], true)).is_purchased, false, 'Playback still excludes nonmembers');
+    await query("UPDATE project_members SET role='Editor' WHERE project_id=$1 AND user_id=$2", [projectIds[0], collaborator.user_id]);
+
     assert.equal(await access(collaborator.account_id, projectIds[1]), false);
     assert.equal(await access(outsider.account_id, projectIds[0]), false);
     assert.equal(await access(buyer.account_id, projectIds[1]), false);
@@ -172,6 +178,88 @@ async function main() {
     assert.equal(free.license.price_credits, 0);
     assert.ok(free.license.credit_transaction_id);
     console.log('PASS constraints, insufficient-funds rollback, and free license claims');
+
+    await query('UPDATE market_assets SET price_credits=100 WHERE market_asset_id=$1', [assetId]);
+    await assert.rejects(repo.purchaseAssetRepository(assetId, buyer.account_id, 10,
+      { projectId: projectIds[2], expectedPrice: 99, expectedCharge: 99 }), { code: 'ASSET_PRICE_CHANGED' });
+    await assert.rejects(repo.purchaseAssetRepository(assetId, buyer.account_id, 10,
+      { projectId: projectIds[2], expectedPrice: 100, expectedCharge: 0 }), { code: 'ASSET_LICENSE_COST_CHANGED' });
+    await assert.rejects(repo.purchaseAssetRepository(assetId, outsider.account_id, 10,
+      { projectId: projectIds[2], expectedPrice: 100, expectedCharge: 100 }), { code: 'ASSET_LICENSE_PROJECT_FORBIDDEN' });
+    const checkout = await repo.purchaseAssetRepository(assetId, buyer.account_id, 10,
+      { projectId: projectIds[2], expectedPrice: 100, expectedCharge: 100 });
+    assert.equal(checkout.license.project_id, projectIds[2]);
+    assert.equal(checkout.buyerBalanceCredits, 9700);
+    assert.equal(checkout.alreadyPurchased, false);
+    const sharedRetry = await repo.purchaseAssetRepository(assetId, collaborator.account_id, 10,
+      { projectId: projectIds[2], expectedPrice: 100, expectedCharge: 100 });
+    assert.equal(sharedRetry.alreadyPurchased, true);
+    assert.equal(sharedRetry.license.market_asset_license_id, checkout.license.market_asset_license_id);
+    assert.equal(sharedRetry.buyerBalanceCredits, 9900);
+    const reuse = await repo.purchaseAssetRepository(assetId, collaborator.account_id, 10,
+      { projectId: projectIds[0], expectedPrice: 100, expectedCharge: 0 });
+    assert.equal(reuse.alreadyPurchased, true);
+    assert.equal(reuse.license.market_asset_license_id, collaboratorPurchase.license.market_asset_license_id);
+    assert.equal(reuse.license.project_id, projectIds[0]);
+    assert.equal(reuse.buyerBalanceCredits, 9900);
+    const extraProject = randomUUID();
+    await query("INSERT INTO projects(project_id,name,status) VALUES ($1,'Checkout regression','active')", [extraProject]);
+    await query("INSERT INTO project_members(project_id,user_id,role,cursor_color) VALUES ($1,$2,'Owner','#123456')", [extraProject, collaborator.user_id]);
+    await assert.rejects(repo.purchaseAssetRepository(assetId, collaborator.account_id, 10,
+      { projectId: extraProject, expectedPrice: 100, expectedCharge: 0 }), { code: 'ASSET_LICENSE_COST_CHANGED' });
+    const context = await repo.getEditorAssetPurchaseContextRepository(assetId, collaborator.account_id, projectIds[0]);
+    assert.equal(context.project_license_id, reuse.license.market_asset_license_id);
+    assert.equal(context.available_license_id, null);
+    console.log('PASS editor checkout: atomic assignment, cross-buyer retry without charge, license reuse, price/total consent guards, project membership');
+    const creatorProject = randomUUID();
+    await query("INSERT INTO projects(project_id,name,status) VALUES ($1,'Creator confirmation regression','active')", [creatorProject]);
+    await query("INSERT INTO project_members(project_id,user_id,role,cursor_color) VALUES ($1,$2,'Owner','#123456'),($1,$3,'Editor','#123456')", [creatorProject, creator.user_id, collaborator.user_id]);
+    const balancesBefore = (await query('SELECT wallet_id,balance_credits FROM wallets ORDER BY wallet_id')).rows;
+    const ledgerBefore = (await query('SELECT count(*) FROM credit_transactions')).rows;
+    assert.equal((await repo.getEditorAssetPurchaseContextRepository(assetId, creator.account_id, creatorProject)).project_license_id, null);
+    assert.equal((await repo.getAssetDownloadRepository(assetId, creator.account_id, mediaId, creatorProject, true)).is_purchased, false);
+    await assert.rejects(repo.purchaseAssetRepository(assetId, creator.account_id, 10, { projectId: creatorProject, expectedPrice: 100, expectedCharge: 100 }), { code: 'ASSET_LICENSE_COST_CHANGED' });
+    const own = await repo.purchaseAssetRepository(assetId, creator.account_id, 10, { projectId: creatorProject, expectedPrice: 100, expectedCharge: 0 });
+    assert.equal(own.license.project_id, creatorProject);
+    assert.equal(own.license.price_credits, 0);
+    assert.equal(own.license.credit_transaction_id, null);
+    const ownRetry = await repo.purchaseAssetRepository(assetId, creator.account_id, 10, { projectId: creatorProject, expectedPrice: 100, expectedCharge: 0 });
+    assert.equal(ownRetry.license.market_asset_license_id, own.license.market_asset_license_id);
+    assert.equal(await access(collaborator.account_id, creatorProject), true);
+    assert.equal(await access(outsider.account_id, creatorProject), false);
+    assert.deepEqual((await query('SELECT wallet_id,balance_credits FROM wallets ORDER BY wallet_id')).rows, balancesBefore);
+    assert.deepEqual((await query('SELECT count(*) FROM credit_transactions')).rows, ledgerBefore);
+    console.log('PASS creator confirmation: no implicit project license, explicit free grant, idempotency, collaborators, no ledger or balance changes');
+    const freeProject = randomUUID();
+    await query("INSERT INTO projects(project_id,name,status) VALUES ($1,'Lasting free use regression','active')", [freeProject]);
+    await query("INSERT INTO project_members(project_id,user_id,role,cursor_color) VALUES ($1,$2,'Owner','#123456'),($1,$3,'Editor','#123456')", [freeProject, outsider.user_id, collaborator.user_id]);
+    const autoUse = (account, project) => repo.purchaseAssetRepository(assetId, account, 10, { projectId: project, expectedPrice: 0, expectedCharge: 0, freeOnly: true });
+    await assert.rejects(autoUse(outsider.account_id, freeProject), { code: 'ASSET_PRICE_CHANGED' });
+    await query('UPDATE market_assets SET price_credits=0 WHERE market_asset_id=$1', [assetId]);
+    await query("UPDATE projects SET status='frozen' WHERE project_id=$1", [freeProject]);
+    await assert.rejects(autoUse(outsider.account_id, freeProject), { code: 'ASSET_LICENSE_PROJECT_FROZEN' });
+    await query("UPDATE projects SET status='active' WHERE project_id=$1", [freeProject]);
+    await query("UPDATE project_members SET role='Viewer' WHERE project_id=$1 AND user_id=$2", [freeProject, collaborator.user_id]);
+    await assert.rejects(autoUse(collaborator.account_id, freeProject), { code: 'ASSET_LICENSE_PROJECT_FORBIDDEN' });
+    await query("UPDATE project_members SET role='Editor' WHERE project_id=$1 AND user_id=$2", [freeProject, collaborator.user_id]);
+    const freeUse = await autoUse(outsider.account_id, freeProject);
+    assert.equal(freeUse.license.price_credits, 0);
+    assert.equal(freeUse.license.credit_transaction_id, null);
+    assert.equal(freeUse.buyerBalanceCredits, 0, 'Free use works with an empty wallet');
+    assert.equal((await repo.getEditorAssetPurchaseContextRepository(assetId, outsider.account_id, freeProject)).available_license_id, free.license.market_asset_license_id, 'Free use does not consume an available library license');
+    await query('UPDATE market_assets SET price_credits=500 WHERE market_asset_id=$1', [assetId]);
+    assert.equal((await autoUse(outsider.account_id, freeProject)).license.market_asset_license_id, freeUse.license.market_asset_license_id);
+    assert.equal(await access(collaborator.account_id, freeProject), true, 'Collaborators retain original access after price increase');
+    assert.equal((await repo.getAssetDownloadRepository(assetId, outsider.account_id, mediaId, extraProject, true)).is_purchased, false);
+    await assert.rejects(autoUse(collaborator.account_id, extraProject), { code: 'ASSET_PRICE_CHANGED' });
+    await query("INSERT INTO project_members(project_id,user_id,role,cursor_color) VALUES ($1,$2,'Editor','#123456')", [extraProject, creator.user_id]);
+    await assert.rejects(autoUse(creator.account_id, extraProject), { code: 'ASSET_PRICE_CHANGED' });
+    assert.deepEqual((await query('SELECT wallet_id,balance_credits FROM wallets ORDER BY wallet_id')).rows, balancesBefore);
+    assert.deepEqual((await query('SELECT count(*) FROM credit_transactions')).rows, ledgerBefore);
+    console.log('PASS lasting free use: server price check, no payment, no license consumption, frozen/viewer gates, access after price increase, new-project and owner-discount safeguards');
+
+
+
   } finally {
     await query('ROLLBACK');
     pool.connect = realConnect;

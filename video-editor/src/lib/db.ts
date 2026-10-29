@@ -254,7 +254,17 @@ interface AssetEngagementTable {
   deleted_at: Date | null;
 }
 
+interface MarketAssetLicensesTable {
+  market_asset_license_id: Generated<string>;
+  buyer_user_id: string;
+  market_asset_id: string;
+  project_id: string | null;
+  status: string;
+  deleted_at: Date | null;
+}
+
 interface Database {
+  market_asset_licenses: MarketAssetLicensesTable;
   asset_likes: AssetEngagementTable;
   asset_saves: AssetEngagementTable;
   files: FilesTable;

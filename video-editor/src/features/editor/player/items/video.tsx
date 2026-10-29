@@ -1,3 +1,4 @@
+import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
 import { IVideo } from "@designcombo/types";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
 import { BoxAnim, ContentAnim, MaskAnim } from "@designcombo/animations";
@@ -14,6 +15,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
   const { isRendering } = useRemotionEnvironment();
 
   const { details } = item;
+  const src = useMarketAssetSource(item);
   const playbackRate = item.playbackRate || 1;
   const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
   const trimBefore = ((item.trim?.from ?? 0) / 1000) * fps;
@@ -37,7 +39,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
       trimBefore={trimBefore}
       trimAfter={trimAfter}
       playbackRate={playbackRate}
-      src={details.src}
+      src={src}
       volume={volume}
     />
   );
