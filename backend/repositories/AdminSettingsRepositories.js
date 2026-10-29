@@ -176,6 +176,14 @@ async function updateSettingsSection(sectionKey, values) {
     deepMergeSettings(DEFAULT_SETTINGS[sectionKey], current, values)
   );
 
+  if (sectionKey === 'platform') {
+    delete merged.sessionTimeoutMinutes;
+    await pool.query(
+      'DELETE FROM configuration WHERE configuration_key = $1',
+      ['platform.sessionTimeoutMinutes']
+    );
+  }
+
   if (sectionKey === 'security' && Array.isArray(merged.allowedAdminIps)) {
     merged.allowedAdminIps = merged.allowedAdminIps
       .map((ip) => String(ip || '').trim())

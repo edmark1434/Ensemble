@@ -260,27 +260,28 @@ async function runTests() {
       const redisClient = require('../lib/Redis');
       const { createSessionId } = require('../services/UserServices');
       const origSession = await pool.query(
-        `SELECT current_value_literal FROM configuration WHERE configuration_key = 'platform.sessionTimeoutMinutes'`
+        `SELECT current_value_literal FROM configuration WHERE configuration_key = 'platform.sessionTimeoutDays'`
       );
-      const origLiteral = origSession.rows[0]?.current_value_literal ?? '60';
+      const origLiteral = origSession.rows[0]?.current_value_literal ?? '30';
 
       try {
         await pool.query(
-          `UPDATE configuration SET current_value_literal = '45' WHERE configuration_key = 'platform.sessionTimeoutMinutes'`
+          `UPDATE configuration SET current_value_literal = '2' WHERE configuration_key = 'platform.sessionTimeoutDays'`
         );
         const testSessionId = await createSessionId({ username: 'test_session_user', role: 'client' });
         const ttl = await redisClient.ttl(`session:${testSessionId}`);
         await redisClient.del(`session:${testSessionId}`);
 
-        const ok = ttl > 0 && ttl <= 45 * 60 && ttl >= 44 * 60;
+        const expectedSeconds = 2 * 86400;
+        const ok = ttl > 0 && ttl <= expectedSeconds && ttl >= (expectedSeconds - 60);
         record(
-          'Dynamic session timeout (platform.sessionTimeoutMinutes = 45m)',
+          'Dynamic session timeout (platform.sessionTimeoutDays = 2d)',
           ok,
-          `Redis session key TTL: ${ttl}s (expected ~2700s)`
+          `Redis session key TTL: ${ttl}s (expected ~${expectedSeconds}s)`
         );
       } finally {
         await pool.query(
-          `UPDATE configuration SET current_value_literal = $1 WHERE configuration_key = 'platform.sessionTimeoutMinutes'`,
+          `UPDATE configuration SET current_value_literal = $1 WHERE configuration_key = 'platform.sessionTimeoutDays'`,
           [origLiteral]
         );
       }

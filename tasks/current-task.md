@@ -1,12 +1,15 @@
-# Active Task: Store ticket answers on the ticket
+# Active Task: Change Session Timeout to Day Basis
 
 ## Implementation Objective
 
-Keep each ticket type's answers in `tickets.form_answers`, and keep the submit-time account snapshot in `tickets.submission_context`.
+Update the platform session timeout setting from minutes to days across frontend and backend, accepting and saving days instead of minutes.
 
 ## Acceptance Criteria
 
-- [x] New tickets write both JSON columns in the same insert as the ticket.
-- [x] Existing `ticket_form_values` rows are copied, then the table is dropped.
-- [x] Picker answers store the member's record id and the name shown at submit time.
-- [x] Staff ticket detail shows answers and the submit snapshot separately.
+- [x] `frontend/src/pages/admin/systemSettings/SystemSettingsPage.tsx` accepts and saves session timeout in days.
+- [x] `frontend/src/pages/admin/systemSettings/settingsTypes.ts` includes `sessionTimeoutDays: number`.
+- [x] `backend/lib/PlatformConfiguration.js` supports `platform.sessionTimeoutDays` (default 30 days) with backward-compatibility for minutes.
+- [x] `backend/middleware/CheckSession.js` and `backend/services/UserServices.js` use day-based timeout for Redis session expiration.
+- [x] Database migration `1827700000000_session-timeout-days.js` migrates `platform.sessionTimeoutMinutes` to `platform.sessionTimeoutDays` with both `up` and `down` handlers.
+- [x] `npm run build` passes in `frontend/`.
+- [x] Dynamic configuration tests pass in `backend/`.

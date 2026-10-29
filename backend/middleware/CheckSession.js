@@ -25,8 +25,8 @@ async function checkSession(req,res,next){
         // Refresh session expiration asynchronously
         getSectionValue('platform')
             .then((platform) => {
-                const minutes = Number(platform?.sessionTimeoutMinutes);
-                const seconds = Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes * 60) : 3600;
+                const days = Number(platform?.sessionTimeoutDays ?? (platform?.sessionTimeoutMinutes ? platform.sessionTimeoutMinutes / 1440 : 30));
+                const seconds = Number.isFinite(days) && days > 0 ? Math.floor(days * 86400) : 30 * 86400;
                 return redisClient.expire(`session:${sessionId}`, seconds);
             })
             .catch(() => {});

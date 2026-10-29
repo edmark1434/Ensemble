@@ -224,7 +224,11 @@ export default function SystemSettingsPage() {
 
   const applyData = (d: SettingsOverview) => {
     setData(d);
-    setPlatform({ ...d.sections.platform.value });
+    const plat = { ...d.sections.platform.value };
+    if (plat.sessionTimeoutDays == null && plat.sessionTimeoutMinutes != null) {
+      plat.sessionTimeoutDays = Math.max(1, Math.round(plat.sessionTimeoutMinutes / 1440));
+    }
+    setPlatform(plat);
     setModeration({ ...d.sections.moderation.value });
     setEconomy(JSON.parse(JSON.stringify(d.sections.economy.value)));
     setNotifications({ ...d.sections.notifications.value });
@@ -306,7 +310,13 @@ export default function SystemSettingsPage() {
 
   const discardSection = (section: TabId) => {
     if (!data) return;
-    if (section === 'platform') setPlatform({ ...data.sections.platform.value });
+    if (section === 'platform') {
+      const plat = { ...data.sections.platform.value };
+      if (plat.sessionTimeoutDays == null && plat.sessionTimeoutMinutes != null) {
+        plat.sessionTimeoutDays = Math.max(1, Math.round(plat.sessionTimeoutMinutes / 1440));
+      }
+      setPlatform(plat);
+    }
     if (section === 'moderation') setModeration({ ...data.sections.moderation.value });
     if (section === 'economy') setEconomy(JSON.parse(JSON.stringify(data.sections.economy.value)));
     if (section === 'notifications') setNotifications({ ...data.sections.notifications.value });
@@ -433,7 +443,13 @@ export default function SystemSettingsPage() {
               <TextField label="Tagline" value={platform.tagline} onChange={(v) => setPlatform({ ...platform, tagline: v })} />
               <TextField label="Support email" value={platform.supportEmail} onChange={(v) => setPlatform({ ...platform, supportEmail: v })} />
               <NumberField label="Max upload (MB)" value={platform.maxUploadMb} onChange={(v) => setPlatform({ ...platform, maxUploadMb: v })} min={1} max={500} />
-              <NumberField label="Session timeout (min)" value={platform.sessionTimeoutMinutes} onChange={(v) => setPlatform({ ...platform, sessionTimeoutMinutes: v })} min={5} max={480} />
+              <NumberField
+                label="Session timeout (days)"
+                value={platform.sessionTimeoutDays ?? (platform.sessionTimeoutMinutes ? Math.max(1, Math.round(platform.sessionTimeoutMinutes / 1440)) : 30)}
+                onChange={(v) => setPlatform({ ...platform, sessionTimeoutDays: v })}
+                min={1}
+                max={365}
+              />
             </div>
             <Toggle
               label="Maintenance mode"

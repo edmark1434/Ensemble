@@ -12,7 +12,8 @@ export type PlatformSettings = {
   registrationEnabled: boolean;
   supportEmail: string;
   maxUploadMb: number;
-  sessionTimeoutMinutes: number;
+  sessionTimeoutDays: number;
+  sessionTimeoutMinutes?: number;
 };
 
 export type ModerationSettings = {
