@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image, Clapperboard, AudioLines, PanelsRightBottom, ShoppingCart, AlertTriangle, PackageOpen } from "lucide-react";
+import { Heart, Star, Pencil, Trash2, CheckCircle2, BadgeCheck, Bookmark, Clock, Image, Clapperboard, AudioLines, PanelsRightBottom, ShoppingCart, AlertTriangle, PackageOpen } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -69,9 +69,14 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           </span>
         </div>
         <div className="absolute left-2 bottom-2 flex flex-wrap items-center gap-1.5 z-10">
-          {asset.is_purchased && !asset.is_owner && (
+          {asset.is_purchased && !asset.is_owner && asset.available_license_count > 0 && (
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-600 text-[10px] font-semibold uppercase text-white shadow-sm border border-emerald-500">
-              <CheckCircle2 className="h-3 w-3" /> Licensed
+              <BadgeCheck className="h-3 w-3" /> License available
+            </span>
+          )}
+          {view === "purchased" && asset.is_purchased && !asset.is_owner && asset.available_license_count === 0 && asset.used_license_count > 0 && (
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-700 text-[10px] font-semibold uppercase text-white shadow-sm border border-sky-600">
+              <BadgeCheck className="h-3 w-3" /> License used
             </span>
           )}
           {view === "mine" && asset.is_owner && (
@@ -151,7 +156,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           </div>
           <span className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-zinc-400">
             <ShoppingCart className="h-3.5 w-3.5" /> 
-            {asset.purchase_count} {asset.purchase_count === 1 ? 'Sale' : 'Sales'}
+            {asset.purchase_count}
           </span>
         </div>
 

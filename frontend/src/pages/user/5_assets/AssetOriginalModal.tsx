@@ -30,7 +30,7 @@ function AssetPreview({ asset, mediaAsset, onClose }: Omit<AssetOriginalModalPro
         <div className="flex shrink-0 items-start justify-between border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
             <h2 id="asset-preview-title" className="truncate text-lg font-bold text-white">{mediaAsset.name}</h2>
-            <p className="mt-1 text-xs text-zinc-400">Watermarked preview{!asset.is_owner && !asset.is_purchased ? ` · purchase the ${asset.media_asset_count > 1 ? "bundle" : "asset"} to use and download the full ${mediaAsset.type}` : ""}</p>
+            <p className="mt-1 text-xs text-zinc-400">Watermarked preview{!asset.is_owner && !asset.is_purchased ? ` · purchase the ${asset.media_asset_count > 1 ? "bundle" : "asset"} to use the full ${mediaAsset.type}` : ""}</p>
           </div>
           <button type="button" onClick={onClose} className="ml-4 rounded-lg p-2 text-zinc-400 transition hover:bg-white/5 hover:text-white" aria-label="Close preview"><X className="h-5 w-5" /></button>
         </div>

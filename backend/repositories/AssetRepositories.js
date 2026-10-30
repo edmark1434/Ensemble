@@ -404,6 +404,8 @@ const ASSET_SELECT = `
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
          purchase_access.available_license_count,
+         purchase_access.used_license_count,
+         purchase_access.used_license_project_id,
          ((owner.account_id = $1) OR purchase_access.is_purchased) AS can_download,
          (purchase_access.is_purchased AND owner.account_id <> $1) AS can_review,
          EXISTS (
@@ -610,7 +612,21 @@ const ASSET_SELECT = `
      JOIN users buyer ON buyer.user_id = available.buyer_user_id
      WHERE available.market_asset_id = ma.market_asset_id AND buyer.account_id = $1
        AND available.project_id IS NULL AND available.status = 'active'
-       AND available.deleted_at IS NULL) AS available_license_count
+       AND available.deleted_at IS NULL) AS available_license_count,
+    (SELECT COUNT(*)::int FROM market_asset_licenses used
+     JOIN users buyer ON buyer.user_id = used.buyer_user_id
+     WHERE used.market_asset_id = ma.market_asset_id AND buyer.account_id = $1
+       AND used.project_id IS NOT NULL AND used.status = 'active'
+       AND used.deleted_at IS NULL) AS used_license_count,
+    (SELECT used.project_id FROM market_asset_licenses used
+     JOIN users buyer ON buyer.user_id = used.buyer_user_id
+     JOIN projects used_project ON used_project.project_id = used.project_id
+       AND used_project.deleted_at IS NULL
+     WHERE used.market_asset_id = ma.market_asset_id AND buyer.account_id = $1
+       AND used.project_id IS NOT NULL AND used.status = 'active'
+       AND used.deleted_at IS NULL
+     ORDER BY used.assigned_at DESC NULLS LAST, used.purchased_at DESC
+     LIMIT 1) AS used_license_project_id
   ) purchase_access ON TRUE
   LEFT JOIN LATERAL (
     SELECT ml.status, ml.rejection_reason
@@ -669,7 +685,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
     : view === 'creator'
       ? `owner.account_id = $7 AND ma.status = 'published'`
       : view === 'purchased'
-        ? 'purchase_access.is_purchased'
+        ? 'purchase_access.is_purchased AND owner.account_id <> $1'
         : view === 'saved'
           ? `ma.status = 'published' AND EXISTS (
               SELECT 1 FROM asset_saves saved_asset

@@ -69,7 +69,6 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
   const [retainedMediaAssetIds, setRetainedMediaAssetIds] = useState<string[]>([]);
   const [showcaseOrder, setShowcaseOrder] = useState<string[]>([]);
-  const [mediaSelectionDirty, setMediaSelectionDirty] = useState(false);
   const [thumbnailSelectionDirty, setThumbnailSelectionDirty] = useState(false);
   const [originalPreviewUrls, setOriginalPreviewUrls] = useState<string[]>([]);
   const [thumbnailPreviewUrls, setThumbnailPreviewUrls] = useState<string[]>([]);
@@ -97,7 +96,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
       .map((item) => item.media_asset_id));
     setShowcaseOrder((asset?.thumbnails || []).map((item) =>
       `${contentIds.has(item.media_asset_id) && imageContentIds.has(item.media_asset_id) ? "media" : "retained"}:${item.media_asset_id}`));
-    setMediaSelectionDirty(false); setThumbnailSelectionDirty(false);
+    setThumbnailSelectionDirty(false);
 
     setYdocSnapshotId("");
     setTags(asset?.tags || []); setTagInput(""); setError("");
@@ -137,9 +136,14 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
   const retainedThumbnailIds = showcaseOrder.filter((key) => key.startsWith("retained:")).map((key) => key.slice("retained:".length));
   const selectedShowcaseMediaIds = showcaseOrder.filter((key) => key.startsWith("media:")).map((key) => key.slice("media:".length));
   const selectedShowcaseFileKeys = showcaseOrder.filter((key) => key.startsWith("asset:")).map((key) => key.slice("asset:".length));
-  const hasAvailableExistingShowcaseImages = Boolean(asset && asset.thumbnails.some((item) =>
+  const availableMediaShowcaseItems = asset?.media_assets.filter((mediaFile) =>
+    listingType !== "audio"
+    && (mediaFile.type === "image" || mediaFile.type === "video")
+    && !showcaseOrder.includes(`media:${mediaFile.media_asset_id}`)) || [];
+  const availableThumbnailShowcaseItems = asset?.thumbnails.filter((item) =>
     !asset.media_assets.some((mediaFile) => mediaFile.media_asset_id === item.media_asset_id)
-    && !showcaseOrder.includes(`retained:${item.media_asset_id}`)));
+    && !showcaseOrder.includes(`retained:${item.media_asset_id}`)) || [];
+  const hasAvailableExistingShowcaseImages = availableMediaShowcaseItems.length > 0 || availableThumbnailShowcaseItems.length > 0;
 
   const changeListingType = (nextType: AssetType) => {
     setListingType(nextType);
@@ -268,7 +272,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
     // Proxies and preview thumbnails are made by the server (a worker for video/audio),
     // so only asset files and uploaded showcase images are uploaded.
     if (asset) {
-      const replaceMedia = !isTemplate && (files.length > 0 || mediaSelectionDirty);
+      const replaceMedia = false;
       const replaceYdoc = isTemplate && snapshotId !== "";
       const finalMediaCount = retainedMediaAssetIds.length + files.length;
       const hasShowcase = isTemplate || finalMediaCount > 1;
@@ -371,54 +375,38 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="asset-editor-title">
       <div className="scroll-thin max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131e]">
-          <div><h2 id="asset-editor-title" className="text-lg font-bold">{asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update listing details, showcase images, and asset files." : "Create a protected asset package."}</p></div>
+          <div><h2 id="asset-editor-title" className="text-lg font-bold">{asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update listing details and showcase images." : "Create a protected asset package."}</p></div>
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/5" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={submit} className="space-y-5 p-5">
-          <div className="space-y-5">
+          {(!asset || showShowcaseControls || showcaseOrder.length > 0) && <div className="space-y-5">
             {!asset && <div><p className="mb-2 text-sm font-semibold">Asset type</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(["image", "video", "audio"] as AssetType[]).map((type) => { const Icon = type === "image" ? Image : type === "video" ? Clapperboard : AudioLines; return <button key={type} type="button" onClick={() => changeListingType(type)} aria-pressed={listingType === type} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${listingType === type ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:border-blue-400 dark:border-white/10"}`}><Icon className="h-4 w-4" />{type}</button>; })}</div></div>}
-            {asset && <div className="rounded-xl border border-gray-200 p-4 dark:border-white/10">
-              <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-bold">Current asset content</h3><p className="mt-1 text-xs text-gray-500">Keep selected files in the package. Add image or video files to the showcase, then order them below.</p></div><span className="rounded-lg bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-600">{asset.type}</span></div>
-              <div className={`mt-4 grid gap-4 ${showShowcaseControls && hasAvailableExistingShowcaseImages ? "sm:grid-cols-2" : "grid-cols-1"}`}>
-                <div>
-                  <p className="mb-2 text-xs font-semibold">Current asset files</p>
-                  {asset.media_assets?.length ? <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">{asset.media_assets.map((mediaFile) => {
-                    const retained = retainedMediaAssetIds.includes(mediaFile.media_asset_id);
-                    const canShowcase = showShowcaseControls && listingType !== "audio"
-                      && (mediaFile.type === "image" || mediaFile.type === "video");
-                    const showcaseKey = `media:${mediaFile.media_asset_id}`;
-                    const isShowcased = showcaseOrder.includes(showcaseKey);
-                    const Icon = mediaFile.type === "image" ? Image : mediaFile.type === "video" ? Clapperboard : AudioLines;
-                    return <div key={mediaFile.media_asset_id} className={`flex items-center gap-2 rounded-lg border p-2 transition ${retained ? "border-blue-500/50 bg-blue-500/5" : "border-gray-200 bg-gray-50 opacity-50 dark:border-white/10 dark:bg-white/[0.025]"}`}>
-                      {mediaFile.thumbnail_path ? <img src={mediaUrl(mediaFile.thumbnail_path)} alt="" className="h-10 w-10 rounded object-cover" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-500"><Icon className="h-4 w-4" /></span>}
-                      <span className="min-w-0 flex-1 truncate text-xs">{mediaFile.name}</span>
-                      <button type="button" aria-pressed={retained} aria-label={retained ? `Remove ${mediaFile.name}` : `Restore ${mediaFile.name}`} onClick={() => {
-                        setRetainedMediaAssetIds((current) => retained ? current.filter((id) => id !== mediaFile.media_asset_id) : [...current, mediaFile.media_asset_id]);
-                        if (retained) setShowcaseOrder((current) => current.filter((key) => key !== showcaseKey));
-                        setMediaSelectionDirty(true);
-                      }} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold ${retained ? "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300" : "bg-blue-600 text-white"}`}>{retained ? "Remove" : "Restore"}</button>
-                      {canShowcase && <button type="button" aria-pressed={isShowcased} disabled={!retained || (!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType))} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}
-                    </div>;
-                  })}</div> : <p className="text-xs text-gray-500">No uploaded files.</p>}
-                </div>
-                {showShowcaseControls && hasAvailableExistingShowcaseImages && <div>
-                  <p className="mb-2 text-xs font-semibold">Available showcase images</p>
-                  <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">{asset.thumbnails.filter((item) => !asset.media_assets.some((mediaFile) => mediaFile.media_asset_id === item.media_asset_id)
-                    && !showcaseOrder.includes(`retained:${item.media_asset_id}`)).map((item) => <div key={item.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-white/10 dark:bg-white/[0.025]">
-                    <img src={mediaUrl(item.path)} alt="" className="h-10 w-10 rounded object-cover" />
-                    <span className="min-w-0 flex-1 truncate text-xs">Showcase image</span>
-                    <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`retained:${item.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
-                  </div>)}</div>
-                </div>}
+            {asset && showShowcaseControls && hasAvailableExistingShowcaseImages && <div className="rounded-xl border border-gray-200 p-4 dark:border-white/10">
+              <p className="mb-3 text-sm font-bold">Available showcase images</p>
+              <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">
+                {availableMediaShowcaseItems.map((mediaFile) => {
+                  const Icon = mediaFile.type === "image" ? Image : Clapperboard;
+                  return <div key={mediaFile.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-white/10 dark:bg-white/[0.025]">
+                    {mediaFile.thumbnail_path ? <img src={mediaUrl(mediaFile.thumbnail_path)} alt="" className="h-10 w-10 rounded object-cover" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-500"><Icon className="h-4 w-4" /></span>}
+                    <span className="min-w-0 flex-1 truncate text-xs">{mediaFile.name}</span>
+                    <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`media:${mediaFile.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
+                  </div>;
+                })}
+                {availableThumbnailShowcaseItems.map((item) => <div key={item.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-white/10 dark:bg-white/[0.025]">
+                  <img src={mediaUrl(item.path)} alt="" className="h-10 w-10 rounded object-cover" />
+                  <span className="min-w-0 flex-1 truncate text-xs">Showcase image</span>
+                  <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`retained:${item.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
+                </div>)}
               </div>
             </div>}
-            <div className={`grid gap-4 ${showShowcaseControls ? "sm:grid-cols-2" : "grid-cols-1"}`}>
-              {isTemplate ? (
-                <div><label htmlFor="asset-ydoc-snapshot" className="mb-2 block text-sm font-semibold">{asset ? "Replace project snapshot ID" : "Project snapshot ID"} {!asset && <span className="text-red-500">*</span>}</label><input id="asset-ydoc-snapshot" inputMode="numeric" value={ydocSnapshotId} onChange={(event) => setYdocSnapshotId(event.target.value)} className={inputClass} placeholder={asset ? (asset.has_ydoc ? "Leave empty to keep the current snapshot" : "Snapshot ID") : "Snapshot ID"} /><p className="mt-1 text-xs text-gray-500">A template links to one snapshot of a project.</p></div>
-              ) : (<div><label className="mb-2 block text-sm font-semibold">{asset ? "Add asset files" : "Asset files"} {!asset && <span className="text-red-500">*</span>}</label><input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500">{primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}</span><span><span className="block text-sm font-semibold">{files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : asset ? "Add files to the selected set" : "Choose asset files"}</span><span className="mt-1 block text-xs text-gray-500">Up to 20 files, 1GB each.</span></span></button></div>)}
+            {(!asset || showShowcaseControls) && <div className={`grid gap-4 ${showShowcaseControls && !asset ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+              {!asset && isTemplate && (
+                <div><label htmlFor="asset-ydoc-snapshot" className="mb-2 block text-sm font-semibold">Project snapshot ID <span className="text-red-500">*</span></label><input id="asset-ydoc-snapshot" inputMode="numeric" value={ydocSnapshotId} onChange={(event) => setYdocSnapshotId(event.target.value)} className={inputClass} placeholder="Snapshot ID" /><p className="mt-1 text-xs text-gray-500">A template links to one snapshot of a project.</p></div>
+              )}
+              {!asset && !isTemplate && <div><label className="mb-2 block text-sm font-semibold">Asset files <span className="text-red-500">*</span></label><input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500">{primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}</span><span><span className="block text-sm font-semibold">{files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : "Choose asset files"}</span><span className="mt-1 block text-xs text-gray-500">Up to 20 files, 1GB each.</span></span></button></div>}
               {showShowcaseControls && <div><label className="mb-2 block text-sm font-semibold">Showcase images <span className="font-normal text-gray-400">({isTemplate ? "required" : "optional"})</span></label><input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]">{thumbnailPreviewUrls[0] ? <img src={thumbnailPreviewUrls[0]} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500"><Upload className="h-5 w-5" /></span>}<span><span className="block text-sm font-semibold">Choose showcase images</span><span className="mt-1 block text-xs text-gray-500">{showcaseOrder.length} of {maxShowcaseImages(listingType)} selected · {maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB total</span></span></button></div>}
-            </div>
-            {files.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><p className="mb-3 text-xs font-semibold">Asset files ({files.length})</p><div className="scroll-thin max-h-56 space-y-2 overflow-y-auto pr-1">{files.map((file, index) => { const kind = sourceKind(file); const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : FileAudio; const fileKey = fileIdentity(file); const showcaseKey = `asset:${fileKey}`; const isShowcased = showcaseOrder.includes(showcaseKey); return <div key={fileKey} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">{kind === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" /> : <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><Icon className="h-5 w-5" /></span>}<div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="text-[10px] uppercase text-gray-500">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p></div>{showShowcaseControls && (kind === "image" || kind === "video") && <button type="button" aria-pressed={isShowcased} disabled={!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}<button type="button" onClick={() => removeAssetFile(index, fileKey)} className="rounded p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>; })}</div></div>}
+            </div>}
+            {!asset && files.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><p className="mb-3 text-xs font-semibold">Asset files ({files.length})</p><div className="scroll-thin max-h-56 space-y-2 overflow-y-auto pr-1">{files.map((file, index) => { const kind = sourceKind(file); const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : FileAudio; const fileKey = fileIdentity(file); const showcaseKey = `asset:${fileKey}`; const isShowcased = showcaseOrder.includes(showcaseKey); return <div key={fileKey} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">{kind === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" /> : <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><Icon className="h-5 w-5" /></span>}<div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="text-[10px] uppercase text-gray-500">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p></div>{showShowcaseControls && (kind === "image" || kind === "video") && <button type="button" aria-pressed={isShowcased} disabled={!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}<button type="button" onClick={() => removeAssetFile(index, fileKey)} className="rounded p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>; })}</div></div>}
             {showShowcaseControls && showcaseOrder.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><div className="mb-3 flex justify-between"><p className="text-xs font-semibold">Showcase image order</p><p className="text-[10px] text-gray-500">First is the cover · use arrows to reorder</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{showcaseOrder.map((key, index) => {
               const separator = key.indexOf(":");
               const kind = key.slice(0, separator);
@@ -440,7 +428,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
                 <div className="flex items-center gap-2 p-2"><span className="min-w-0 flex-1 truncate text-[10px] font-semibold">{label}</span><button type="button" aria-label={`Move ${label} up`} onClick={() => moveShowcaseEntry(index, -1)} disabled={index === 0} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/10"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" aria-label={`Move ${label} down`} onClick={() => moveShowcaseEntry(index, 1)} disabled={index === showcaseOrder.length - 1} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/10"><ArrowDown className="h-3.5 w-3.5" /></button><button type="button" aria-label={`Remove ${label} from showcase`} onClick={() => removeShowcaseEntry(key)} className="rounded p-1 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>
               </div>;
             })}</div></div>}
-          </div>
+          </div>}
           <label className="block"><span className="mb-2 block text-sm font-semibold">Title</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} className={inputClass} placeholder="Name your asset" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={5000} rows={5} className={inputClass} placeholder="Describe what this asset contains" /></label>
           <div><label htmlFor="asset-tags" className="mb-2 block text-sm font-semibold">Tags <span className="font-normal text-gray-400">(optional)</span></label><div className="min-h-12 rounded-xl border border-gray-300 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0b0e17]"><div className="flex flex-wrap items-center gap-2">{tags.map((tag) => <span key={tag.toLowerCase()} className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs font-semibold text-blue-600">#{tag}<button type="button" onClick={() => setTags((current) => current.filter((item) => item !== tag))}><X className="h-3 w-3" /></button></span>)}<input id="asset-tags" value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={handleTagKeyDown} onBlur={() => addTag(tagInput)} maxLength={50} className="min-w-36 flex-1 bg-transparent px-1 py-1.5 text-sm outline-none" placeholder="Type a tag and press Enter" /></div></div></div>

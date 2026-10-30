@@ -2,6 +2,33 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadMarketLicenses } from "./load-market-licenses";
 
+test("existing licenses are published before unrelated free claims finish", async t => {
+  let finishClaim!: (response: Response) => void;
+  let startedClaim!: () => void;
+  const started = new Promise<void>(resolve => { startedClaim = resolve; });
+  t.mock.method(globalThis, "fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      startedClaim();
+      return new Promise<Response>(resolve => { finishClaim = resolve; });
+    }
+    return Response.json({ assets: [
+      { assetId: "paid", licensed: true, priceCredits: 100, imageSources: { media: "https://storage.example/image" } },
+      { assetId: "free", licensed: false, priceCredits: 0 },
+    ] });
+  });
+  const published: string[] = [];
+  const loading = loadMarketLicenses("independent-project", ["paid", "free"], undefined, assets => {
+    published.push(...assets.map(asset => asset.assetId));
+  });
+  await started;
+  assert.deepEqual(published, ["paid"]);
+  finishClaim(Response.json({}));
+  const result = await loading;
+  assert.deepEqual(published, ["paid", "free"]);
+  assert.equal(result[0].imageSources?.media, "https://storage.example/image");
+  assert.equal(result[1].licensed, true);
+});
+
 test("free use persists across price changes without auto-buying paid assets", async () => {
   const originalFetch = globalThis.fetch;
   let price = 0;

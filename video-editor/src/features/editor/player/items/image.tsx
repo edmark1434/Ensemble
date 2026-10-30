@@ -9,6 +9,7 @@ import { Img } from "remotion";
 
 function MarketImage({ item, ...props }: { item: IImage } & Omit<React.ComponentProps<typeof Img>, "src">) {
   const src = useMarketAssetSource(item);
+  if (!src) return null;
   return <Img {...props} src={src} />;
 }
 

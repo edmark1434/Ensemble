@@ -1,15 +1,17 @@
-# Active Task: Change Session Timeout to Day Basis
+# Active Task: Reduce Marketplace Image Startup Latency
 
 ## Implementation Objective
 
-Update the platform session timeout setting from minutes to days across frontend and backend, accepting and saving days instead of minutes.
+Remove redundant authorization requests and unnecessary image downloads from editor startup. Verify licenses in a batch, return authorized image URLs with that response, then download and decode each visible image independently while keeping the canvas visible and usable.
 
 ## Acceptance Criteria
 
-- [x] `frontend/src/pages/admin/systemSettings/SystemSettingsPage.tsx` accepts and saves session timeout in days.
-- [x] `frontend/src/pages/admin/systemSettings/settingsTypes.ts` includes `sessionTimeoutDays: number`.
-- [x] `backend/lib/PlatformConfiguration.js` supports `platform.sessionTimeoutDays` (default 30 days) with backward-compatibility for minutes.
-- [x] `backend/middleware/CheckSession.js` and `backend/services/UserServices.js` use day-based timeout for Redis session expiration.
-- [x] Database migration `1827700000000_session-timeout-days.js` migrates `platform.sessionTimeoutMinutes` to `platform.sessionTimeoutDays` with both `up` and `down` handlers.
-- [x] `npm run build` passes in `frontend/`.
-- [x] Dynamic configuration tests pass in `backend/`.
+- [x] Licensed images normally use the batch response's storage URL without another per-image authorization hop.
+- [x] Media components consume batch license state instead of repeating license requests.
+- [x] Already-licensed assets do not wait for unrelated first-use free-license claims.
+- [x] Only mounted image layers initiate image downloads; refreshed signed URLs reuse prepared image bytes.
+- [x] Canvas stays mounted, unknown licenses never flash watermarks, and each image appears fully decoded.
+- [x] Videos/audio stream independently; ordinary media and server-rendered exports retain existing behavior.
+- [x] Server checks session, active project membership, active project license and linked image files before signing URLs; signed URLs remain transient and short-lived.
+- [x] Editor typecheck, 20 focused playback/authorization/cache regressions, and frontend production build pass. Frontend build retains existing chunk-size/dynamic-import warnings.
+- Live browser timing against the user's project remains unmeasured; Server-Timing now separates license database work from URL signing.

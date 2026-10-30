@@ -1,5 +1,31 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Edit3, Eye, AudioLines, Image, Clapperboard, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, PanelsRightBottom, User } from "lucide-react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Bookmark,
+  Calendar,
+  CheckCircle2,
+  Clock3,
+  CornerDownRight,
+  Edit3,
+  Eye,
+  AudioLines,
+  Image,
+  Clapperboard,
+  Heart,
+  Loader2,
+  MessageSquare,
+  PackageOpen,
+  Pencil,
+  Ruler,
+  Send,
+  ShoppingCart,
+  Star,
+  Trash2,
+  PanelsRightBottom,
+  User,
+  ArrowUpRight, ArrowRight
+} from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -431,8 +457,8 @@ export default function AssetDetails() {
 
           <section className="lg:w-[55%] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none p-5 md:p-7">
             <div className="flex flex-col h-full">
-              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                <div className="min-w-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="relative overflow-hidden flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10 uppercase tracking-wider">
                       <span className="relative z-10 flex items-center gap-1.5">
@@ -444,7 +470,7 @@ export default function AssetDetails() {
                     </span>
                     <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10 uppercase tracking-wider">
                       <ShoppingCart className="h-3 w-3" />
-                      {asset.purchase_count || 0} Sales
+                      {asset.purchase_count || 0}
                     </span>
                     <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white uppercase tracking-wider">
                       <Star className={`h-3 w-3 ${asset.average_rating > 0 ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
@@ -452,13 +478,18 @@ export default function AssetDetails() {
                         {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "N/A"}
                       </span>
                     </span>
-                    {asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Licensed</span>}
+                    {asset.is_purchased && !asset.is_owner && asset.available_license_count > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><BadgeCheck className="h-3 w-3" /> License available</span>}
+                    {asset.is_purchased && !asset.is_owner && asset.available_license_count === 0 && asset.used_license_count > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-sky-600 dark:text-sky-300"><BadgeCheck className="h-3 w-3" /> License used</span>}
                   </div>
                   <div className="mt-4 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-xl font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-6 w-6" /> {asset.price_credits.toLocaleString()} credits</span>
+                    <span className="inline-flex items-center gap-1.5 text-xl font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-6 w-6" /> {asset.price_credits > 0 ? `${asset.price_credits.toLocaleString()} credits` : "Free"}</span>
                   </div>
                   <h1 className="mt-3 break-words text-2xl font-bold md:text-3xl">{asset.name}</h1>
                 </div>
+                {asset.is_owner && <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button>
+                  <button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button>
+                </div>}
               </div>
 
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-gray-700 dark:text-zinc-300 flex-1">{asset.description}</p>
@@ -472,32 +503,41 @@ export default function AssetDetails() {
               )}
 
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5 dark:border-white/5">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="order-2 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => void updateEngagement("like")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_liked}><Heart className={`h-4 w-4 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.like_count}</button>
                   <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
                   {!asset.is_owner && <AssetReportButton asset={asset} isGuest={isGuestView} onGuest={() => setIsGuestLoginOpen(true)} />}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {asset.can_download && !asset.is_purchased ? (
-                    <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                      <PackageOpen className="h-4 w-4" /> View contents
-                    </button>
-                  ) : null}
-                  {asset.is_purchased && (
-                    <button type="button" onClick={() => navigate("/projects")} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500">
-                      <CheckCircle2 className="h-4 w-4" /> Use in a project
-                    </button>
+                <div className="order-1 flex flex-wrap items-center gap-2">
+                  {asset.is_owner && (
+                      <button type="button" onClick={() => navigate("/projects")} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-left text-white transition hover:bg-emerald-500">
+                        <BadgeCheck className="h-4 w-4 shrink-0" />
+                        <span className="whitespace-nowrap text-sm font-bold">Use in a project</span>
+                        <span className="text-xs font-medium text-emerald-100">You own this asset</span>
+                      </button>
+                  )}
+                  {!asset.is_owner && asset.is_purchased && asset.available_license_count > 0 && (
+                      <button type="button" onClick={() => navigate("/projects")} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-left text-white transition hover:bg-emerald-500">
+                        <BadgeCheck className="h-4 w-4 shrink-0" />
+                        <span className="whitespace-nowrap text-sm font-bold">Use in a project</span>
+                        <span className="text-xs font-medium text-emerald-100">{asset.available_license_count} {asset.available_license_count === 1 ? "license" : "licenses"} available</span>
+                      </button>
+                  )}
+                  {!asset.is_owner && asset.is_purchased && asset.available_license_count === 0 && (
+                      <button type="button" onClick={requestPurchase} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-blue-600 px-3.5 py-2.5 text-left text-white transition hover:bg-blue-500">
+                        <ShoppingCart className="h-4 w-4 shrink-0" />
+                        <span className="whitespace-nowrap text-sm font-bold">Purchase asset</span>
+                      </button>
                   )}
                   {!asset.is_owner && !asset.is_purchased && asset.available_license_count === 0 && asset.status === "published" && (
                     <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
                       <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
                     </button>
                   )}
-                  {asset.is_owner && <><button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button><button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button></>}
                 </div>
               </div>
 
-              {asset.is_owner && (
+              {asset.is_owner && asset.price_credits > 0 && (
                 <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
                   <div className="flex items-start gap-3">
                     <CreditIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
@@ -510,6 +550,20 @@ export default function AssetDetails() {
                         <div><dt className="text-xs text-gray-500 dark:text-zinc-500">You receive</dt><dd className="mt-1 font-bold text-emerald-600 dark:text-emerald-300">{asset.owner_net_credits.toLocaleString()} credits</dd></div>
                       </dl>
                     </div>
+                  </div>
+                </div>
+              )}
+              {!asset.is_owner && asset.is_purchased && asset.available_license_count === 0 && asset.used_license_count > 0 && (
+                <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-gray-900 dark:text-white">Purchased license used in a project</h2>
+                        <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-zinc-400">Asset purchases give one-time licenses to use them in a project indefinitely. To use this asset in another project, purchase it again above.</p>
+                      </div>
+                    </div>
+                    {asset.used_license_project_id && <button type="button" onClick={() => navigate(`/projects/open/${asset.used_license_project_id}`)} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"><ArrowRight className="h-4 w-4" /> Open project</button>}
                   </div>
                 </div>
               )}
@@ -544,7 +598,7 @@ export default function AssetDetails() {
               <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
                   <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                     <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{packageMediaLabels(asset.media_assets, true)}</p></div>
-                    <span className="max-w-lg text-xs leading-5 text-gray-500 dark:text-zinc-400">Previews are watermarked. Purchase the {asset.media_asset_count > 1 ? "bundle" : "asset"} to use and download full {packageMediaLabels(asset.media_assets, false)}.</span>
+                    <span className="max-w-lg text-xs leading-5 text-gray-500 dark:text-zinc-400">Previews are watermarked. Purchase the {asset.media_asset_count > 1 ? "bundle" : "asset"} to use the full {packageMediaLabels(asset.media_assets, false)}.</span>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {asset.media_assets.map((mediaAsset) => (

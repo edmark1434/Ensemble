@@ -61,6 +61,8 @@ export interface AssetRecord {
   is_owner: boolean;
   is_purchased: boolean;
   available_license_count: number;
+  used_license_count: number;
+  used_license_project_id: string | null;
   can_download?: boolean;
   can_review: boolean;
   is_liked: boolean;

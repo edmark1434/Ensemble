@@ -34,6 +34,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
     );
   }
 
+  if (!src) return null;
   return (
     <RemotionVideo
       trimBefore={trimBefore}

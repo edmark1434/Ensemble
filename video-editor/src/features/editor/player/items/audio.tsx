@@ -30,6 +30,7 @@ const AudioMedia = ({ item, fps }: { item: IAudio; fps: number }) => {
     );
   }
 
+  if (!src) return null;
   return (
     <RemotionAudio
       trimBefore={trimBefore}

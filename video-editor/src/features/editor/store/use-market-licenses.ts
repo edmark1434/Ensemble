@@ -7,6 +7,8 @@ export interface MarketLicenseStatus {
   priceCredits: number;
   licensed: boolean;
   isOwner?: boolean;
+  // Temporary delivery URLs live only in this store, never in saved project items.
+  imageSources?: Record<string, string>;
 }
 interface MarketLicenseStore {
   projectId: string;
