@@ -7,7 +7,7 @@ export async function readProjectMarketLicenses(projectId: string, userId: strin
     .where("pm.deleted_at", "is", null).where("p.deleted_at", "is", null)
     .select("pm.role").executeTakeFirst();
   if (!member) return null;
-  if (!ids.length) return { assets: [], images: [] };
+  if (!ids.length) return { assets: [], images: [], media: [] };
   const assets = await db.selectFrom("market_assets as ma")
     .where("ma.market_asset_id", "in", ids).where("ma.deleted_at", "is", null)
     .select(["ma.market_asset_id as assetId", "ma.name", "ma.price_credits as priceCredits"])
@@ -20,14 +20,14 @@ export async function readProjectMarketLicenses(projectId: string, userId: strin
         .where("media.owner_user_id", "=", userId).where("media.deleted_at", "is", null)).as("isOwner"),
     ]).execute();
   const licensedIds = assets.filter(asset => asset.licensed).map(asset => asset.assetId);
-  const images = licensedIds.length ? await db.selectFrom("market_media_assets as link")
+  const media = licensedIds.length ? await db.selectFrom("market_media_assets as link")
     .innerJoin("media_assets as media", "media.media_asset_id", "link.media_asset_id")
     .innerJoin("files as original", "original.file_id", "media.original_file_id")
     .where("link.market_asset_id", "in", licensedIds)
-    .where("media.type", "=", "image").where("media.deleted_at", "is", null)
+    .where("media.type", "in", ["image", "video", "audio"]).where("media.deleted_at", "is", null)
     .where("original.deleted_at", "is", null)
     .select(["link.market_asset_id as assetId", "media.media_asset_id as mediaAssetId",
-      "original.path", "original.mime_type as mimeType"])
+      "media.type", "original.path", "original.mime_type as mimeType"])
     .execute() : [];
-  return { assets, images };
+  return { assets, images: media.filter(file => file.type === "image"), media };
 }

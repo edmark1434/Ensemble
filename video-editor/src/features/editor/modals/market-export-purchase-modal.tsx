@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CreditIcon } from "@/components/credit-icon";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useMarketLicenses } from "../store/use-market-licenses";
 
 interface Quote {
   assetId: string;
@@ -64,7 +63,7 @@ export function MarketExportPurchaseModal({ assetIds, projectId, scope, onClose,
           if (!response.ok) throw new Error(data.error || "Unable to purchase an asset.");
           completed++;
         }
-        useMarketLicenses.getState().update(projectId, [{ assetId: quote.assetId, name: quote.asset.name, priceCredits: quote.asset.price_credits, isOwner: quote.asset.is_owner, licensed: true }]);
+        // Playback refresh resolves the license and direct media URLs together.
       }
       toast.success(`All assets in this ${scope} are licensed for the project.`);
       onComplete();

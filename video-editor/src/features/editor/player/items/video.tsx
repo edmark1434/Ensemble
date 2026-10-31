@@ -5,8 +5,7 @@ import { BoxAnim, ContentAnim, MaskAnim } from "@designcombo/animations";
 import { calculateContainerStyles, calculateMediaStyles } from "../styles";
 import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
-import { Video as RemotionVideo } from "@remotion/media";
-import { OffthreadVideo, useRemotionEnvironment } from "remotion";
+import { Html5Video, OffthreadVideo, useRemotionEnvironment } from "remotion";
 
 // Real component, so the hook lives in its own fiber. Video() below is called
 // as a plain function from renderVisibleItems, so it must not call hooks.
@@ -36,12 +35,15 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
 
   if (!src) return null;
   return (
-    <RemotionVideo
+    <Html5Video
       trimBefore={trimBefore}
       trimAfter={trimAfter}
       playbackRate={playbackRate}
       src={src}
       volume={volume}
+      preload="auto"
+      pauseWhenBuffering={false}
+      style={{ width: "100%", height: "100%", objectFit: "contain" }}
     />
   );
 };

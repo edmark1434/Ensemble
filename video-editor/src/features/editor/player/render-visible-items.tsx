@@ -2,7 +2,7 @@ import { ITrackItemsMap, ItransitionsMap, ISize } from "@designcombo/types";
 import { TransitionSeries, Transitions } from "@designcombo/transitions";
 import { groupTrackItems } from "../utils/track-items";
 import { SequenceItem } from "./sequence-item";
-import { isSceneItem } from "../types/ensemble-scene";
+import { isSceneItem, type ISceneDetails } from "../types/ensemble-scene";
 
 export interface RenderVisibleItemsOptions {
   trackItemIds: string[];
@@ -47,6 +47,23 @@ export function renderVisibleItems({
   handleTextChange, onTextBlur, editableTextId, nested = false,
 }: RenderVisibleItemsOptions) {
   const groupedItems = groupTrackItems({ trackItemIds, transitionsMap, trackItemsMap });
+  const timelineFrames = Math.max(1, ...trackItemIds.map(id => {
+    const end = trackItemsMap[id]?.display.to;
+    return Number.isFinite(end) ? Math.ceil(end * fps / 1000) : 0;
+  }));
+  const containsVideo = (id: string) => {
+    const item = trackItemsMap[id];
+    if (!item || item.details?.hidden) return false;
+    if (item.type === "video") return true;
+    if (!nested && isSceneItem(item.type)) {
+      const content = (item.details as unknown as ISceneDetails).content;
+      return content?.trackItemIds.some(innerId => {
+        const inner = content.trackItemsMap[innerId];
+        return !!inner && !inner.details?.hidden && inner.type === "video";
+      }) ?? false;
+    }
+    return false;
+  };
 
   const isRenderable = (g: GroupEntry) => {
     if (g.type === "transition") return !!transitionsMap[g.id];
@@ -70,6 +87,7 @@ export function renderVisibleItems({
     const item = trackItemsMap[id];
     return SequenceItem[item.type](item, {
       fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition, nested,
+      keepMountedFor: containsVideo(id) ? timelineFrames : undefined,
     });
   };
 
@@ -105,7 +123,9 @@ export function renderVisibleItems({
     });
 
     return (
-      <TransitionSeries from={from} key={index}>
+      <TransitionSeries from={from} key={index}
+        premountFor={group.some(g => containsVideo(g.id)) ? timelineFrames : undefined}
+        postmountFor={group.some(g => containsVideo(g.id)) ? timelineFrames : undefined}>
         {children.filter(Boolean)}
       </TransitionSeries>
     );

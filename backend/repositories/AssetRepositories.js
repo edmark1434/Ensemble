@@ -539,7 +539,7 @@ const ASSET_SELECT = `
                AND item_proxy.deleted_at IS NULL
              LEFT JOIN files item_thumbnail ON item_thumbnail.file_id = item.thumbnail_file_id
                AND item_thumbnail.deleted_at IS NULL
-               AND item_thumbnail.mime_type LIKE 'image/%'
+               AND (item_thumbnail.mime_type LIKE 'image/%' OR (item.type = 'video' AND item_thumbnail.mime_type = 'video/mp4'))
              LEFT JOIN media_asset_jobs item_job ON item_job.media_asset_id = item.media_asset_id
              WHERE item_link.market_asset_id = ma.market_asset_id
                AND item.deleted_at IS NULL
@@ -587,7 +587,7 @@ const ASSET_SELECT = `
       JOIN files original ON original.file_id = m.original_file_id
       LEFT JOIN files proxy ON proxy.file_id = m.proxy_file_id AND proxy.deleted_at IS NULL
       LEFT JOIN files poster ON poster.file_id = m.thumbnail_file_id AND poster.deleted_at IS NULL
-        AND poster.mime_type LIKE 'image/%'
+        AND (poster.mime_type LIKE 'image/%' OR (m.type = 'video' AND poster.mime_type = 'video/mp4'))
       WHERE content_link.market_asset_id = ma.market_asset_id
         AND m.deleted_at IS NULL
         AND original.deleted_at IS NULL

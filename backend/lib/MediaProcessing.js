@@ -133,12 +133,16 @@ async function createVideoProxy({ inputPath, workDir, createWatermarkSvg, create
   };
 }
 
-async function createVideoThumbnail({ inputPath, workDir, createImageThumbnail, duration }) {
-  const framePath = path.join(workDir, 'frame.jpg');
-  // Very short clips may have no frame after the midpoint (audio can outlast video).
-  const seek = (duration ?? (await probe(inputPath)).duration) < 2 ? 0 : 1;
-  await run(ffmpegBinary(), ['-y', '-v', 'error', '-ss', String(seek), '-i', inputPath, '-frames:v', '1', '-q:v', '2', framePath]);
-  return createImageThumbnail(await fs.promises.readFile(framePath));
+async function createVideoThumbnail({ inputPath, workDir }) {
+  const previewPath = path.join(workDir, 'preview-5s-320px.mp4');
+  const info = await probe(inputPath);
+  const scale = Math.min(1, 320 / Math.max(info.width, info.height));
+  await run(ffmpegBinary(), ['-y', '-v', 'error', '-i', inputPath,
+    '-map', '0:v:0', '-t', '5', '-an', '-map_metadata', '-1',
+    '-vf', `scale=${even(info.width * scale)}:${even(info.height * scale)},setsar=1,fps=15`,
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '25', '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart', previewPath]);
+  return fs.promises.readFile(previewPath);
 }
 
 // A separate, untagged menu preview; shorter sources keep their original length.

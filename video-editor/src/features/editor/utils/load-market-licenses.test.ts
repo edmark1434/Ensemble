@@ -5,11 +5,16 @@ import { loadMarketLicenses } from "./load-market-licenses";
 test("existing licenses are published before unrelated free claims finish", async t => {
   let finishClaim!: (response: Response) => void;
   let startedClaim!: () => void;
+  let claimed = false;
   const started = new Promise<void>(resolve => { startedClaim = resolve; });
-  t.mock.method(globalThis, "fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === "POST") {
       startedClaim();
       return new Promise<Response>(resolve => { finishClaim = resolve; });
+    }
+    if (claimed && new URL(String(input), "http://localhost").searchParams.get("ids") === "free") {
+      return Response.json({ assets: [{ assetId: "free", licensed: true, priceCredits: 0,
+        playbackSources: { video: { url: "https://storage.example/free.mp4", expiresAt: Date.now() + 3600000 } } }] });
     }
     return Response.json({ assets: [
       { assetId: "paid", licensed: true, priceCredits: 100, imageSources: { media: "https://storage.example/image" } },
@@ -22,11 +27,13 @@ test("existing licenses are published before unrelated free claims finish", asyn
   });
   await started;
   assert.deepEqual(published, ["paid"]);
+  claimed = true;
   finishClaim(Response.json({}));
   const result = await loading;
   assert.deepEqual(published, ["paid", "free"]);
   assert.equal(result[0].imageSources?.media, "https://storage.example/image");
   assert.equal(result[1].licensed, true);
+  assert.equal(result[1].playbackSources?.video.url, "https://storage.example/free.mp4");
 });
 
 test("free use persists across price changes without auto-buying paid assets", async () => {

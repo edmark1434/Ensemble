@@ -7,7 +7,7 @@ export async function loadMarketLicenses(projectId: string, ids: string[], signa
   onResolved?: (assets: MarketLicenseStatus[]) => void): Promise<MarketLicenseStatus[]> {
   const params = new URLSearchParams({ projectId, ids: ids.join(",") });
   const response = await fetch(`/api/market-assets/licenses?${params}`, { signal, cache: "no-store" });
-  if (!response.ok) throw new Error("Unable to load asset licenses.");
+  if (!response.ok) throw Object.assign(new Error("Unable to load asset licenses."), { status: response.status });
   const data = await response.json() as { assets: MarketLicenseStatus[] };
   // Paid/previously licensed assets can start loading while first-use free claims run.
   if (!signal?.aborted) onResolved?.(data.assets.filter(asset => asset.licensed || asset.priceCredits !== 0));
@@ -22,7 +22,16 @@ export async function loadMarketLicenses(projectId: string, ids: string[], signa
       }).then(response => response.ok).catch(() => false).finally(() => freeClaims.delete(key));
       freeClaims.set(key, claim);
     }
-    const resolved = await claim ? { ...asset, licensed: true } : asset;
+    let resolved = asset;
+    if (await claim && !signal?.aborted) {
+      // Resolve the committed license and direct source together, avoiding a
+      // temporary redirect URL that would restart the player on the next poll.
+      const refreshed = await fetch(`/api/market-assets/licenses?${new URLSearchParams({ projectId, ids: asset.assetId })}`,
+        { signal, cache: "no-store" });
+      if (!refreshed.ok) throw Object.assign(new Error("Unable to load asset licenses."), { status: refreshed.status });
+      const current = await refreshed.json() as { assets: MarketLicenseStatus[] };
+      resolved = current.assets.find(value => value.assetId === asset.assetId) ?? asset;
+    }
     if (!signal?.aborted) onResolved?.([resolved]);
     return resolved;
   }));

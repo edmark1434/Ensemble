@@ -85,12 +85,12 @@ async function runMediaJob(job) {
       const proxyKey = `assets/proxies/${randomName()}.mp4`;
       const proxySize = await uploadFile(result.proxyPath, proxyKey, 'video/mp4', { publicCache: true });
       uploaded.push(proxyKey);
-      const thumbnailKey = `assets/thumbnails/320/${randomName()}.webp`;
+      const thumbnailKey = `assets/thumbnails/video-5s-320/${randomName()}.mp4`;
       await s3.send(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: thumbnailKey,
         Body: result.thumbnail,
-        ContentType: 'image/webp',
+        ContentType: 'video/mp4',
         CacheControl: 'public, max-age=31536000, immutable',
       }));
       uploaded.push(thumbnailKey);
@@ -99,7 +99,7 @@ async function runMediaJob(job) {
         height: result.height,
         durationSeconds: result.durationSeconds,
         proxy: { name: `${base}-proxy-ensemble.mp4`, path: proxyKey, mimeType: 'video/mp4', sizeBytes: proxySize },
-        thumbnail: { name: `${base}-thumbnail-320px.webp`, path: thumbnailKey, mimeType: 'image/webp', sizeBytes: result.thumbnail.length },
+        thumbnail: { name: `${base}-preview-5s-320px.mp4`, path: thumbnailKey, mimeType: 'video/mp4', sizeBytes: result.thumbnail.length },
       };
       if (result.cappedOriginalPath) {
         // stays under the protected prefix: it is still the downloadable original

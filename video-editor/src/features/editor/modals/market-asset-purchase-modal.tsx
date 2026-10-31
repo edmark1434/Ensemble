@@ -56,7 +56,7 @@ function PurchaseModal({ assetId, projectId }: { assetId: string; projectId: str
         if (["ASSET_PRICE_CHANGED", "ASSET_LICENSE_COST_CHANGED"].includes(data.code)) { setLoading(true); setReload(value => value + 1); }
         throw new Error(data.error || "Unable to purchase this asset.");
       }
-      useMarketLicenses.getState().update(projectId, [{ assetId, name: details.asset.name, priceCredits: details.asset.price_credits, licensed: true, isOwner: details.asset.is_owner }]);
+      // The refresh publishes the license together with its direct media URLs.
       window.dispatchEvent(new Event("market-license-updated"));
       toast.success("Watermarks removed. This project is licensed to use the asset.");
       close();

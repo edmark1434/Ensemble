@@ -1,5 +1,7 @@
 import { generateId } from "@designcombo/timeline";
 import type { ITrack, ITrackItem, ITransition } from "@designcombo/types";
+import type StateManager from "@designcombo/state";
+import { isSceneItem } from "../types/ensemble-scene";
 
 // Deep-clones plain state data (items/transitions/tracks) without
 // structuredClone — track items can carry a function value on
@@ -494,4 +496,127 @@ export function splitItemsAtTime(
     tracks,
     newIds,
   };
+}
+
+// ---------------------------------------------------------------------
+// Playhead edits: extend / move / delete left / delete right, all
+// relative to the playhead time. getPlayheadEdit returns the edited copy
+// of the item, or null when there is nothing to do (the header uses that
+// to hide the extend button, the shortcuts use it to no-op).
+// ---------------------------------------------------------------------
+
+export type PlayheadAction = "extend" | "move" | "deleteLeft" | "deleteRight";
+
+const isMediaItem = (item: ITrackItem) => item.type === "audio" || item.type === "video";
+
+// Which side of the item the playhead is on (past the midpoint counts as right).
+export function getPlayheadSide(item: ITrackItem, timeMs: number): "left" | "right" {
+  return timeMs < (item.display.from + item.display.to) / 2 ? "left" : "right";
+}
+
+// The free gap around an item on its own track, so edits stop at neighbours.
+function getFreeRange(
+  item: ITrackItem,
+  state: { trackItemsMap: Record<string, ITrackItem>; tracks: ITrack[] }
+) {
+  let min = 0;
+  let max = Infinity;
+  const track = state.tracks.find((t) => t.items.includes(item.id));
+  track?.items.forEach((id) => {
+    const other = state.trackItemsMap[id];
+    if (!other || id === item.id) return;
+    if (other.display.to <= item.display.from) min = Math.max(min, other.display.to);
+    else if (other.display.from >= item.display.to) max = Math.min(max, other.display.from);
+  });
+  return { min, max };
+}
+
+export function getPlayheadEdit(
+  action: PlayheadAction,
+  item: ITrackItem,
+  timeMs: number,
+  state: { trackItemsMap: Record<string, ITrackItem>; tracks: ITrack[] }
+): ITrackItem | null {
+  const { from, to } = item.display;
+
+  // delete left / right = split at the playhead and drop one half
+  if (action === "deleteLeft" || action === "deleteRight") {
+    if (timeMs <= from || timeMs >= to) return null;
+    const keepRight = action === "deleteLeft";
+    const next: ITrackItem = {
+      ...item,
+      display: keepRight ? { from: timeMs, to } : { from, to: timeMs },
+    };
+    if (item.trim) {
+      const cut = item.trim.from + (timeMs - from);
+      next.trim = keepRight ? { from: cut, to: item.trim.to } : { from: item.trim.from, to: cut };
+    }
+    return next;
+  }
+
+  const { min, max } = getFreeRange(item, state);
+
+  // move: playhead left of centre -> start lands on it, otherwise end lands on it
+  if (action === "move") {
+    const length = to - from;
+    const wanted = getPlayheadSide(item, timeMs) === "left" ? timeMs : timeMs - length;
+    const newFrom = Math.min(Math.max(wanted, min), max - length);
+    if (Math.abs(newFrom - from) < 1) return null;
+    return { ...item, display: { from: newFrom, to: newFrom + length } };
+  }
+
+  // extend: only when the playhead is outside the item
+  if (timeMs >= from && timeMs <= to) return null;
+  const media = isMediaItem(item);
+  // assumes audio/video items carry their source length as `duration`
+  const sourceDuration = (item as any).duration as number | undefined;
+
+  if (timeMs > to) {
+    let newTo = Math.min(timeMs, max);
+    if (media) {
+      if (!item.trim || sourceDuration == null) return null;
+      newTo = Math.min(newTo, to + (sourceDuration - item.trim.to));
+    }
+    if (newTo - to < 1) return null;
+    const next: ITrackItem = { ...item, display: { from, to: newTo } };
+    if (media && item.trim) next.trim = { from: item.trim.from, to: item.trim.to + (newTo - to) };
+    return next;
+  }
+
+  let newFrom = Math.max(timeMs, min);
+  if (media) {
+    if (!item.trim) return null;
+    newFrom = Math.max(newFrom, from - item.trim.from);
+  }
+  if (from - newFrom < 1) return null;
+  const next: ITrackItem = { ...item, display: { from: newFrom, to } };
+  if (media && item.trim) next.trim = { from: item.trim.from - (from - newFrom), to: item.trim.to };
+  return next;
+}
+
+export function applyPlayheadAction(
+  stateManager: StateManager,
+  action: PlayheadAction,
+  timeMs: number,
+  state: {
+    activeIds: string[];
+    trackItemsMap: Record<string, ITrackItem>;
+    tracks: ITrack[];
+    duration: number;
+  }
+) {
+  if (state.activeIds.length !== 1) return;
+  const item = state.trackItemsMap[state.activeIds[0]];
+  if (!item || item.details?.locked || isSceneItem(item.type)) return;
+
+  const next = getPlayheadEdit(action, item, timeMs, state);
+  if (!next) return;
+
+  stateManager.updateState(
+    {
+      trackItemsMap: { ...state.trackItemsMap, [next.id]: next },
+      duration: Math.max(state.duration, next.display.to),
+    },
+    { updateHistory: true, kind: "update" }
+  );
 }

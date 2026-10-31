@@ -7,9 +7,10 @@ const { createImageThumbnail } = require('./AssetPreviewServices');
 const { createVideoThumbnail, createAudioThumbnail, makeWorkDir, removeWorkDir, randomName } = require('../lib/MediaProcessing');
 const { listMediaThumbnailCandidatesRepository, replaceMediaThumbnailRepository } = require('../repositories/MediaThumbnailRepositories');
 
-async function backfillMediaThumbnailsServices({ limit = 1000, dryRun = false } = {}) {
+async function backfillMediaThumbnailsServices({ limit = 1000, dryRun = false, type = null } = {}) {
   const safeLimit = Math.min(5000, Math.max(1, Number.parseInt(limit, 10) || 1000));
-  const candidates = await listMediaThumbnailCandidatesRepository(safeLimit);
+  if (type !== null && !['image', 'video', 'audio'].includes(type)) throw new Error('Invalid media type');
+  const candidates = await listMediaThumbnailCandidatesRepository(safeLimit, type);
   const result = { candidates: candidates.length, updated: 0, skipped: 0, failed: [] };
   if (dryRun) return result;
   if (!process.env.AWS_BUCKET_NAME) throw new Error('AWS_BUCKET_NAME is required');
@@ -27,6 +28,7 @@ async function backfillMediaThumbnailsServices({ limit = 1000, dryRun = false } 
       if (!source.Body) throw new Error('The original returned no content');
       await pipeline(source.Body, fs.createWriteStream(inputPath));
       const isAudio = candidate.type === 'audio';
+      const isVideo = candidate.type === 'video';
       let bytes;
       if (isAudio) {
         bytes = await fs.promises.readFile(await createAudioThumbnail({ inputPath, workDir }));
@@ -35,11 +37,11 @@ async function backfillMediaThumbnailsServices({ limit = 1000, dryRun = false } 
       } else {
         bytes = await createImageThumbnail(await fs.promises.readFile(inputPath));
       }
-      const suffix = isAudio ? 'preview-30s.mp3' : 'thumbnail-320px.webp';
+      const suffix = isAudio ? 'preview-30s.mp3' : isVideo ? 'preview-5s-320px.mp4' : 'thumbnail-320px.webp';
       const thumbnail = {
         name: `${candidate.original_name.replace(/\.[^.]+$/, '')}-${suffix}`,
-        path: `assets/thumbnails/${isAudio ? 'audio-30s' : '320'}/${randomName()}.${isAudio ? 'mp3' : 'webp'}`,
-        mimeType: isAudio ? 'audio/mpeg' : 'image/webp', sizeBytes: bytes.length,
+        path: `assets/thumbnails/${isAudio ? 'audio-30s' : isVideo ? 'video-5s-320' : '320'}/${randomName()}.${isAudio ? 'mp3' : isVideo ? 'mp4' : 'webp'}`,
+        mimeType: isAudio ? 'audio/mpeg' : isVideo ? 'video/mp4' : 'image/webp', sizeBytes: bytes.length,
       };
       await s3.send(new PutObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: thumbnail.path,
         Body: bytes, ContentType: thumbnail.mimeType, CacheControl: 'public, max-age=31536000, immutable' }),

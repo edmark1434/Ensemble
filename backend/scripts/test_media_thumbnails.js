@@ -6,9 +6,34 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const sharp = require('sharp');
 const { createImageThumbnail } = require('../services/AssetPreviewServices');
-const { createAudioThumbnail, processAudio, probe, makeWorkDir, removeWorkDir } = require('../lib/MediaProcessing');
+const { createVideoThumbnail, createAudioThumbnail, processAudio, probe, makeWorkDir, removeWorkDir } = require('../lib/MediaProcessing');
 const execute = promisify(execFile);
 const ffmpeg = process.env.FFMPEG_PATH || require('ffmpeg-static');
+
+test('video previews are silent unwatermarked MP4s, capped at five seconds and 320px without upscaling', async () => {
+  const workDir = await makeWorkDir();
+  try {
+    for (const [width, height, duration, expected] of [[640, 360, 7, [320, 180]], [360, 640, 2, [180, 320]], [160, 90, 1, [160, 90]]]) {
+      const inputPath = path.join(workDir, 'input.mp4');
+      await execute(ffmpeg, ['-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=gray:s=${width}x${height}:r=15`,
+        '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', String(duration), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', inputPath], { windowsHide: true });
+      const original = await fs.readFile(inputPath);
+      const bytes = await createVideoThumbnail({ inputPath, workDir });
+      const previewPath = path.join(workDir, 'result.mp4');
+      await fs.writeFile(previewPath, bytes);
+      const info = await probe(previewPath);
+      assert.deepEqual([info.width, info.height], expected);
+      assert.equal(info.hasAudio, false);
+      assert.equal(info.videoCodec, 'h264');
+      assert.ok(Math.abs(info.duration - Math.min(5, duration)) < 0.1);
+      const framePath = path.join(workDir, 'frame.png');
+      await execute(ffmpeg, ['-y', '-v', 'error', '-i', previewPath, '-frames:v', '1', framePath], { windowsHide: true });
+      const stats = await sharp(framePath).stats();
+      assert.ok(stats.channels.every(channel => channel.stdev < 1), 'uniform original stays unwatermarked');
+      assert.deepEqual(await fs.readFile(inputPath), original);
+    }
+  } finally { await removeWorkDir(workDir); }
+});
 
 test('menu thumbnails fit 320px, preserve aspect ratio and remain unwatermarked', async () => {
   for (const [width, height, expected] of [[1600, 900, [320, 180]], [900, 1600, [180, 320]],

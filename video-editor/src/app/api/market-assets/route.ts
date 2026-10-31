@@ -246,7 +246,9 @@ export async function GET(request: NextRequest) {
           row.proxy_path, row.proxy_mime_type
         );
         const proxyUrl = ready ? buildPublicUrl(row.proxy_path!) : "";
-        const thumbnailUrl = row.thumbnail_path && row.thumbnail_mime_type?.startsWith("image/")
+        const thumbnailUrl = row.thumbnail_path && (row.thumbnail_mime_type?.startsWith("image/")
+          || (row.type === "video" && row.thumbnail_mime_type === "video/mp4"
+            && row.thumbnail_path.startsWith("assets/thumbnails/video-5s-320/")))
           ? buildPublicUrl(row.thumbnail_path) : undefined;
         const audioPreview = row.type === "audio" && row.thumbnail_mime_type?.startsWith("audio/")
           && row.thumbnail_path?.startsWith("assets/thumbnails/audio-30s/")

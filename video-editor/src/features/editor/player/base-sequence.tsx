@@ -14,6 +14,8 @@ export interface SequenceItemOptions {
   size?: ISize;
   frame?: number;
   isTransition?: boolean;
+  // Keep video elements alive across the entire editor timeline, including replay.
+  keepMountedFor?: number;
   // true only for items rendered inside a Scene's nested content layer —
   // a read-only snapshot that must never be individually selectable/
   // draggable in the player
@@ -31,7 +33,7 @@ export const BaseSequence = ({
 }) => {
   const { details } = item as ITrackItem;
 
-  const { fps, isTransition, nested } = options;
+  const { fps, isTransition, nested, keepMountedFor } = options;
   const { from, durationInFrames } = calculateFrames(
     {
       from: item.display.from,
@@ -61,6 +63,8 @@ export const BaseSequence = ({
     return (
       <TransitionSeries.Sequence
         key={item.id}
+        premountFor={keepMountedFor}
+        postmountFor={keepMountedFor}
         durationInFrames={durationInFrames}
         style={{ pointerEvents: "none" }}
       >
@@ -84,6 +88,8 @@ export const BaseSequence = ({
   return (
     <Sequence
       key={item.id}
+      premountFor={keepMountedFor}
+      postmountFor={keepMountedFor}
       from={from}
       durationInFrames={durationInFrames}
       style={{ pointerEvents: "none" }}

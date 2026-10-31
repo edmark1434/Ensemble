@@ -1,6 +1,51 @@
 import React from "react";
 import useStore from "../store/use-store";
 
+// last "normal" height, remembered whenever we leave it for max / min
+let defaultHeight = 0;
+
+const getFallbackHeight = () => Math.round(window.innerHeight * 0.4);
+
+// "min" = just the header row (plus the 1px top border)
+const getMinHeight = () => (document.getElementById("timeline-header")?.offsetHeight || 50) + 1;
+
+const getHeightMode = (height: number) => {
+  if (height <= getMinHeight()) return "min";
+  if (height >= window.innerHeight) return "max";
+  return "default";
+};
+
+const applyTimelineHeight = (height: number) => {
+  const container = document.getElementById("timeline-container");
+  if (!container) return;
+
+  container.style.height = `${height}px`;
+  const containerHeight = Math.max(
+    0,
+    (document.getElementById("playhead")?.clientHeight || 0) -
+    (document.getElementById("playhead-handle")?.clientHeight || 0) - 26
+  );
+
+  const { timeline, setTimelineHeight } = useStore.getState();
+  timeline?.resize({ height: containerHeight }, { force: true });
+  setTimelineHeight(height);
+};
+
+// backtick + header button: max -> default -> min (header only) -> max
+export const cycleTimelineHeight = () => {
+  const { timelineHeight } = useStore.getState();
+  const mode = getHeightMode(timelineHeight);
+
+  if (mode === "max") {
+    applyTimelineHeight(defaultHeight || getFallbackHeight());
+  } else if (mode === "default") {
+    defaultHeight = timelineHeight;
+    applyTimelineHeight(getMinHeight());
+  } else {
+    applyTimelineHeight(window.innerHeight);
+  }
+};
+
 export const useResizbleTimeline = () => {
   const [isResizing, setIsResizing] = React.useState(false);
   const timelineContainerRef = React.useRef<HTMLDivElement>(null);
@@ -8,8 +53,7 @@ export const useResizbleTimeline = () => {
     timeline,
     timelineHeight,
     setTimelineHeight,
-    setTimelineContainerRef,
-    toggleTimelineFullHeight
+    setTimelineContainerRef
   } = useStore();
 
   React.useEffect(() => {
@@ -86,6 +130,6 @@ export const useResizbleTimeline = () => {
     onMouseMove,
     onMouseOut,
     timelineHeight,
-    toggleFullHeight: toggleTimelineFullHeight
+    toggleFullHeight: cycleTimelineHeight
   };
 };

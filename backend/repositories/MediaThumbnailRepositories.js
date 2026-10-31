@@ -1,6 +1,6 @@
 const { pool } = require('../lib/Database');
 
-async function listMediaThumbnailCandidatesRepository(limit) {
+async function listMediaThumbnailCandidatesRepository(limit, type = null) {
   const { rows } = await pool.query(
     `SELECT m.media_asset_id, m.type, m.original_file_id, m.thumbnail_file_id,
             original.path AS original_path, original.name AS original_name
@@ -8,6 +8,7 @@ async function listMediaThumbnailCandidatesRepository(limit) {
      JOIN files original ON original.file_id = m.original_file_id AND original.deleted_at IS NULL
      LEFT JOIN files thumbnail ON thumbnail.file_id = m.thumbnail_file_id AND thumbnail.deleted_at IS NULL
      WHERE m.deleted_at IS NULL
+       AND ($2::text IS NULL OR m.type::text = $2)
        AND (EXISTS (SELECT 1 FROM market_media_assets link WHERE link.media_asset_id = m.media_asset_id)
          OR EXISTS (SELECT 1 FROM market_asset_thumbnails link WHERE link.media_asset_id = m.media_asset_id))
        AND original.mime_type LIKE m.type || '/%'
@@ -16,8 +17,9 @@ async function listMediaThumbnailCandidatesRepository(limit) {
                        AND job.status IN ('pending', 'running'))
        AND NOT COALESCE(CASE WHEN m.type = 'audio'
          THEN thumbnail.path LIKE 'assets/thumbnails/audio-30s/%' AND thumbnail.mime_type = 'audio/mpeg'
+         WHEN m.type = 'video' THEN thumbnail.path LIKE 'assets/thumbnails/video-5s-320/%' AND thumbnail.mime_type = 'video/mp4'
          ELSE thumbnail.path LIKE 'assets/thumbnails/320/%' AND thumbnail.mime_type = 'image/webp' END, FALSE)
-     ORDER BY m.created_at, m.media_asset_id LIMIT $1`, [limit]
+     ORDER BY m.created_at, m.media_asset_id LIMIT $1`, [limit, type]
   );
   return rows;
 }

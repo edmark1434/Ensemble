@@ -115,7 +115,7 @@ class Video extends Trimmable {
     this.borderOpacityWhenMoving = 1;
     this.metadata = props.metadata;
 
-    this.aspectRatio = props.aspectRatio;
+    this.aspectRatio = Number.isFinite(props.aspectRatio) && props.aspectRatio > 0 ? props.aspectRatio : 16 / 9;
 
     this.src = props.src;
     this.strokeWidth = 0;
@@ -161,6 +161,20 @@ class Video extends Trimmable {
   }
 
   public async initialize() {
+    // Older saved items contain the former still URL. Resolve their current
+    // generated preview without rewriting project history or fetching originals.
+    if (this.metadata?.market && !this.hasVideoPreview()) {
+      const meta = this.metadata as Record<string, unknown>;
+      if (typeof meta.market_asset_id === "string" && typeof meta.media_asset_id === "string") {
+        try {
+          const response = await fetch(`/api/market-assets/${encodeURIComponent(meta.market_asset_id)}/thumbnail?mediaAssetId=${encodeURIComponent(meta.media_asset_id)}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (typeof data.url === "string") this.previewUrl = data.url;
+          }
+        } catch { /* Keep the saved still if the preview is temporarily unavailable. */ }
+      }
+    }
     await this.loadFallbackThumbnail();
 
     this.initDimensions();
@@ -169,19 +183,34 @@ class Video extends Trimmable {
     this.canvas?.requestRenderAll();
 
     this.createFallbackPattern();
-    await this.prepareAssets();
+    await this.prepareAssets().catch(() => { this.clip = null; });
+
+    if (this.metadata?.market && this.clip) {
+      // MP4 previews do not go through the still-image onload handler that
+      // previously supplied dimensions and the fallback tile.
+      const { width, height } = this.clip.meta;
+      if (width > 0 && height > 0) this.aspectRatio = width / height;
+      this.initDimensions();
+      try {
+        const frames = await this.clip.thumbnailsList(Math.round(this.thumbnailWidth), { timestamps: [0] });
+        await this.loadThumbnailBatch(frames.map((frame: { img: Blob }) => ({ ts: 0, img: frame.img })));
+        const firstFrame = this.thumbnailCache.getThumbnail(0);
+        if (firstFrame) this.thumbnailCache.setThumbnail("fallback", firstFrame);
+        this.createFallbackPattern();
+      } catch { /* The regular filmstrip request can still load later frames. */ }
+    }
 
     this.isLoading = false;
     this.stopLoadingAnimation();
     this.canvas?.requestRenderAll();
 
-    this.onScrollChange({ scrollLeft: 0 });
+    this.onScale();
   }
 
   public async prepareAssets() {
-    // Market timeline tiles use their small still; playback uses src separately.
-    if (this.metadata?.market) return;
-    const file = await getFileFromUrl(this.src);
+    // Never download the full market proxy/original just to draw timeline tiles.
+    if (this.metadata?.market && !this.hasVideoPreview()) return;
+    const file = await getFileFromUrl(this.metadata?.market ? this.previewUrl : this.src);
     const stream = file.stream();
 
     // Dynamically import MP4Clip only on the client side
@@ -189,6 +218,7 @@ class Video extends Trimmable {
       try {
         const { MP4Clip } = await import("@designcombo/frames");
         this.clip = new MP4Clip(stream);
+        await this.clip.ready;
       } catch (error) {
         console.warn("Failed to load MP4Clip:", error);
         this.clip = null;
@@ -240,7 +270,7 @@ class Video extends Trimmable {
   // load fallback thumbnail, resize it and cache it
   private async loadFallbackThumbnail() {
     const fallbackThumbnail = this.previewUrl;
-    if (!fallbackThumbnail) return;
+    if (!fallbackThumbnail || this.hasVideoPreview()) return;
 
     return new Promise<void>((resolve) => {
       const img = new Image();
@@ -277,6 +307,10 @@ class Video extends Trimmable {
         resolve();
       };
     });
+  }
+
+  private hasVideoPreview() {
+    return /\/thumbnails\/video-5s-320\/[^?#]+\.mp4(?:[?#]|$)/.test(this.previewUrl || "");
   }
 
   private generateTimestamps(startTime: number, count: number): number[] {
@@ -353,11 +387,25 @@ class Video extends Trimmable {
     const timestamps = this.generateTimestamps(startTime, thumbnailsCount);
 
     // Match and prepare thumbnails
-    const thumbnailsArr = await this.clip.thumbnailsList(this.thumbnailWidth, {
-      timestamps: timestamps.map((timestamp) => timestamp * 1e6)
-    });
+    const previewDuration = this.clip.meta.duration;
+    const requestedTimes = timestamps.map(timestamp => this.metadata?.market
+      ? Math.round(Math.min(1, timestamp / Math.max(1, this.duration / 1000)) * Math.max(0, previewDuration - 100_000))
+      : timestamp * 1e6);
+    let thumbnailsArr: { ts: number; img: Blob }[];
+    try {
+      thumbnailsArr = await this.clip.thumbnailsList(Math.round(this.thumbnailWidth), {
+        timestamps: [...new Set(requestedTimes)].sort((a, b) => a - b)
+      });
+    } catch {
+      this.isFetchingThumbnails = false;
+      return;
+    }
 
-    const updatedThumbnails = thumbnailsArr.map(
+    const updatedThumbnails = this.metadata?.market ? timestamps.flatMap((timestamp, index) => {
+      const nearest = thumbnailsArr.reduce<typeof thumbnailsArr[number] | undefined>((best, frame) =>
+        !best || Math.abs(frame.ts - requestedTimes[index]) < Math.abs(best.ts - requestedTimes[index]) ? frame : best, undefined);
+      return nearest ? [{ ts: timestamp, img: nearest.img }] : [];
+    }) : thumbnailsArr.map(
       (thumbnail: { ts: number; img: Blob }) => {
         return {
           ts: Math.round(thumbnail.ts / 1e6),
@@ -390,6 +438,10 @@ class Video extends Trimmable {
         img.onload = () => {
           URL.revokeObjectURL(img.src); // Clean up the blob URL after image loads
           this.thumbnailCache.setThumbnail(thumbnail.ts, img);
+          resolve();
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(img.src);
           resolve();
         };
       });
@@ -580,8 +632,8 @@ class Video extends Trimmable {
         const xPosition = i * thumbnailWidth + offset - trimFromSize;
 
         ctx.drawImage(img, xPosition, 0, thumbnailWidth, thumbnailHeight);
-        timeInFilmstripe += timePerThumbnail;
       }
+      timeInFilmstripe += timePerThumbnail;
     }
 
     this.isDirty = false;

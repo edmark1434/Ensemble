@@ -34,8 +34,12 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
   if ((compact || thumbnailOnly) && src) {
     return (
       <div className={`relative ${common} select-none overflow-hidden bg-gray-100 dark:bg-black/30`} onContextMenu={(event) => event.preventDefault()}>
-        <img src={src} alt={`${asset.name} thumbnail`} onError={() => setFailedSrc(src)} loading={compact ? "lazy" : "eager"} draggable={false} className="h-full w-full pointer-events-none object-contain" />
-        <div className="absolute inset-0" aria-hidden="true" />
+        {/\/thumbnails\/video-5s-320\//.test(src) ? <video src={src} muted loop playsInline preload="metadata"
+          onError={() => setFailedSrc(src)} className="h-full w-full object-contain"
+          onMouseEnter={event => { void event.currentTarget.play().catch(() => {}); }}
+          onMouseLeave={event => { event.currentTarget.pause(); event.currentTarget.currentTime = 0; }} />
+          : <img src={src} alt={`${asset.name} thumbnail`} onError={() => setFailedSrc(src)} loading={compact ? "lazy" : "eager"} draggable={false} className="h-full w-full pointer-events-none object-contain" />}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true" />
       </div>
     );
   }

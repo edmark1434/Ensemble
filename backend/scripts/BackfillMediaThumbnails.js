@@ -3,7 +3,8 @@ const { pool } = require('../lib/Database');
 const { backfillMediaThumbnailsServices } = require('../services/MediaThumbnailServices');
 
 const limit = process.argv.find((arg) => arg.startsWith('--limit='))?.slice('--limit='.length) || 1000;
-backfillMediaThumbnailsServices({ limit, dryRun: process.argv.includes('--dry-run') })
+const type = process.argv.find((arg) => arg.startsWith('--type='))?.slice('--type='.length) || null;
+backfillMediaThumbnailsServices({ limit, type, dryRun: process.argv.includes('--dry-run') })
   .then((result) => {
     console.log('Media thumbnail backfill:', { candidates: result.candidates, updated: result.updated,
       skipped: result.skipped, failed: result.failed.length });

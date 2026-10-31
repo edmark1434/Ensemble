@@ -38,7 +38,18 @@ export function MarketAssetLicensing({ children }: { children: ReactNode }) {
           }));
         }
         await Promise.all(batches);
-      } catch { /* Keep the last confirmed state during a temporary network failure. */ }
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if ((status === 401 || status === 403) && !controller.signal.aborted && useMarketLicenses.getState().projectId === projectId) {
+          // Ignore other batches from the same denied refresh, even if they
+          // resolve later. The next interval may retry with a new request ID.
+          requestId++;
+          refreshing = false;
+          useMarketLicenses.setState({ assets: {} });
+        }
+        // Temporary network failures keep the last confirmed state. An explicit
+        // access denial clears originals immediately in this editor session.
+      }
       finally {
         if (currentRequest === requestId) refreshing = false;
         if (refreshAfterPurchase && !controller.signal.aborted) {
@@ -70,7 +81,7 @@ export function MarketAssetLicensing({ children }: { children: ReactNode }) {
     const status = licenses.assets[getMarketAssetId(item)!];
     const source = marketPlaybackSource(item, projectId, status);
     const mediaId = (item.metadata as { media_asset_id?: string } | undefined)?.media_asset_id;
-    return [source, status.licensed && mediaId ? status.imageSources?.[mediaId] || source : source];
+    return [source, status.licensed && mediaId ? status.playbackSources?.[mediaId]?.url || status.imageSources?.[mediaId] || source : source];
   }).sort(([a], [b]) => a.localeCompare(b))));
   return <>
     <MarketAssetPurchaseModal />

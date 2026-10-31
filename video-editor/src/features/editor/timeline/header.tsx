@@ -8,21 +8,32 @@ import StateManager, {
   EDIT_OBJECT,
   LAYER_SELECT,
 } from "@designcombo/state";
-import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
+import {
+  buildSelectionSnapshot,
+  cloneIntoNewTracks,
+  setClipboard,
+  getClipboard,
+  applyPlayheadAction,
+  getPlayheadEdit,
+  getPlayheadSide,
+} from "../utils/item-actions";
 import { frameToTimeString, getCurrentTime, timeToString } from "../utils/time";
 import useStore from "../store/use-store";
 import {
-  ChevronDown, ChevronUp,
+  ChevronsUpDown,
   Copy, CopyPlus,
   Lock,
   Fullscreen,
-  SquareSplitHorizontal,
   Trash,
   ZoomIn,
   ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste,
   Component, ArrowLeft,
   MessageSquare,
-  MessageSquareShare
+  MessageSquareShare,
+  ArrowLeftFromLine,
+  ArrowRightFromLine,
+  ArrowLeftToLine,
+  ArrowRightToLine
 } from "lucide-react";
 import {
   getFitZoomLevel,
@@ -86,6 +97,34 @@ const IconRemoveMarker = ({ size }: { size: number }) => (
   </svg>
 );
 
+const IconSplit = ({ size }: { size: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+       className="lucide lucide-square-split-horizontal">
+    <path d="M12 2v20" />
+    <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" />
+    <path d="M8 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" />
+  </svg>
+);
+const IconDeleteLeft = ({ size }: { size: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+       className="lucide lucide-square-split-horizontal">
+    <path d="M12 2v20" />
+    <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" />
+    <path d="M8 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" strokeDasharray="2 4" />
+  </svg>
+);
+const IconDeleteRight = ({ size }: { size: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+       className="lucide lucide-square-split-horizontal">
+    <path d="M12 2v20" />
+    <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" strokeDasharray="2 4" />
+    <path d="M8 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" />
+  </svg>
+);
+
 const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
   toggleFullHeight: () => void;
   timelineHeight: number;
@@ -100,6 +139,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
     activeIds,
     timeline,
     trackItemsMap,
+    tracks,
     markers,
     addMarker,
     removeMarker,
@@ -326,6 +366,35 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
 
   const isTransitionSelected = activeIds.length > 0 && activeItems.length === 0;
 
+  // single, unlocked, non-scene item -> extend / move to playhead buttons
+  const playheadItem =
+    activeIds.length === 1 &&
+    !isLocked &&
+    !isTransitionSelected &&
+    !activeItems.some((item) => isSceneItem(item.type))
+      ? activeItems[0]
+      : null;
+  const playheadSide = playheadItem ? getPlayheadSide(playheadItem, currentTimeMs) : "right";
+  const canExtendToPlayhead =
+    !!playheadItem &&
+    !!getPlayheadEdit("extend", playheadItem, currentTimeMs, { trackItemsMap, tracks });
+
+  const doExtendToPlayhead = () => {
+    applyPlayheadAction(stateManager, "extend", getCurrentTime(), useStore.getState());
+  };
+
+  const doMoveToPlayhead = () => {
+    applyPlayheadAction(stateManager, "move", getCurrentTime(), useStore.getState());
+  };
+
+  const doDeleteLeft = () => {
+    applyPlayheadAction(stateManager, "deleteLeft", getCurrentTime(), useStore.getState());
+  };
+
+  const doDeleteRight = () => {
+    applyPlayheadAction(stateManager, "deleteRight", getCurrentTime(), useStore.getState());
+  };
+
   const doAddScene = () => {
     const { trackItemsMap, trackItemIds, tracks, duration, projectId, size } = useStore.getState();
     const time = getCurrentTime();
@@ -446,308 +515,404 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
             alignItems: "center"
           }}
         >
-          <div className="flex px-2 pr-4 gap-1 items-center">
+          <div className="flex px-2 pr-4 items-center divide-x-2 divide-border">
             {activeSceneBlockId && (
-              <Tooltip delayDuration={10}>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={!isSaving ? goHome : undefined}
-                    variant={"ghost"}
-                    size={"icon"}
-                    className={isSaving ? "opacity-50 cursor-default" : undefined}
+              <div className="flex items-center gap-1 px-2 first:pl-0 last:pr-0 h-5">
+                <Tooltip delayDuration={10}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={!isSaving ? goHome : undefined}
+                      variant={"ghost"}
+                      size={"icon"}
+                      className={isSaving ? "opacity-50 cursor-default" : undefined}
+                    >
+                      <ArrowLeft size={16} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                    className={"flex gap-2 items-center"}
                   >
-                    <ArrowLeft size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                  className={"flex gap-2 items-center"}
-                >
-                  {isSaving ? "Saving…" : (<>Go back <Kbd>H</Kbd></>)}
-                </TooltipContent>
-              </Tooltip>
+                    {isSaving ? "Saving…" : (<>Go back <Kbd>H</Kbd></>)}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             )}
 
             {!viewOnly && (
               <>
                 {activeIds.length > 0 && !isTransitionSelected && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        disabled={!activeIds.length}
-                        onClick={toggleItemLock}
-                        variant={isLocked ? "secondary" : "ghost"}
-                        size={"icon"}
-                        className={`disabled:opacity-0 disabled:pointer-events-none ${isLocked ? "text-primary hover:text-primary" : ""}`}
-                      >
-                        {isLocked ? <Lock size={16} /> : <LockOpen size={16} />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                      {isLocked ? "Unlock" : "Lock"}
-                    </TooltipContent>
-                  </Tooltip>
+                  <div className="flex items-center gap-1 px-2 first:pl-0 last:pr-0 h-5">
+                    {activeIds.length > 0 && !isTransitionSelected && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            disabled={!activeIds.length}
+                            onClick={toggleItemLock}
+                            variant={isLocked ? "secondary" : "ghost"}
+                            size={"icon"}
+                            className={`disabled:opacity-0 disabled:pointer-events-none ${isLocked ? "text-primary hover:text-primary" : ""}`}
+                          >
+                            {isLocked ? <Lock size={16} /> : <LockOpen size={16} />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                          {isLocked ? "Unlock" : "Lock"}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {activeItems.some(item => item.type !== "audio") && !isLocked && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            disabled={!activeIds.length || isLocked}
+                            onClick={toggleItemHide}
+                            variant={isHidden ? "secondary" : "ghost"}
+                            size={"icon"}
+                            className={`disabled:opacity-0 disabled:pointer-events-none ${isHidden ? "text-primary hover:text-primary" : ""}`}
+                          >
+                            {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                          {isHidden ? "Show" : "Hide"}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {activeItems.some(item =>
+                        item.type === "audio" ||
+                        item.type === "video" ||
+                        isSceneItem(item.type))
+                      && !isLocked && (
+                        <Tooltip delayDuration={10}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              disabled={!activeIds.length || isLocked}
+                              onClick={toggleItemMute}
+                              variant={isMuted ? "secondary" : "ghost"}
+                              size={"icon"}
+                              className={`disabled:opacity-0 disabled:pointer-events-none ${isMuted ? "text-primary hover:text-primary" : ""}`}
+                            >
+                              {isMuted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                            {isMuted ? "Unmute" : "Mute"}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                  </div>
                 )}
 
-                {activeItems.some(item => item.type !== "audio") && !isLocked && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={toggleItemHide}
-                        variant={isHidden ? "secondary" : "ghost"}
-                        size={"icon"}
-                        className={`disabled:opacity-0 disabled:pointer-events-none ${isHidden ? "text-primary hover:text-primary" : ""}`}
-                      >
-                        {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                      {isHidden ? "Show" : "Hide"}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                {playheadItem && (
+                  <div className="flex items-center gap-1 px-2 first:pl-0 last:pr-0 h-5">
+                    {activeIds.length === 1 && !isLocked
+                      && !isTransitionSelected
+                      && !activeItems.some(item => isSceneItem(item.type))
+                      && (
+                        <Tooltip delayDuration={10}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              disabled={!activeIds.length || isLocked}
+                              onClick={doActiveSplit}
+                              variant={"ghost"}
+                              size={"icon"}
+                              className="disabled:opacity-0 disabled:pointer-events-none"
+                            >
+                              <IconSplit size={16} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                            className={"flex gap-2 items-center"}
+                          >
+                            Split
+                            <KbdGroup>
+                              <Kbd>Ctrl</Kbd>
+                              <span>+</span>
+                              <Kbd>B</Kbd>
+                            </KbdGroup>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
 
-                {activeItems.some(item =>
-                    item.type === "audio" ||
-                    item.type === "video" ||
-                    isSceneItem(item.type))
-                  && !isLocked && (
-                    <Tooltip delayDuration={10}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          disabled={!activeIds.length || isLocked}
-                          onClick={toggleItemMute}
-                          variant={isMuted ? "secondary" : "ghost"}
-                          size={"icon"}
-                          className={`disabled:opacity-0 disabled:pointer-events-none ${isMuted ? "text-primary hover:text-primary" : ""}`}
+                    {playheadItem && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button onClick={doDeleteLeft} variant={"ghost"} size={"icon"}>
+                            <IconDeleteLeft size={16} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                          className={"flex gap-2 items-center"}
                         >
-                          {isMuted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                        {isMuted ? "Unmute" : "Mute"}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                          Delete left <Kbd>Q</Kbd>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
 
-                {activeIds.length === 1 && !isLocked
-                  && !isTransitionSelected
-                  && !activeItems.some(item => isSceneItem(item.type))
-                  && (
+                    {playheadItem && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button onClick={doDeleteRight} variant={"ghost"} size={"icon"}>
+                            <IconDeleteRight size={16} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                          className={"flex gap-2 items-center"}
+                        >
+                          Delete right <Kbd>W</Kbd>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {playheadItem && canExtendToPlayhead && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button onClick={doExtendToPlayhead} variant={"ghost"} size={"icon"}>
+                            {playheadSide === "left" ? <ArrowLeftFromLine size={16} /> : <ArrowRightFromLine size={16} />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                          className={"flex gap-2 items-center"}
+                        >
+                          Extend to playhead
+                          <KbdGroup>
+                            <Kbd>Shift</Kbd>
+                            <span>+</span>
+                            <Kbd>E</Kbd>
+                          </KbdGroup>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {playheadItem && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button onClick={doMoveToPlayhead} variant={"ghost"} size={"icon"}>
+                            {playheadSide === "left" ? <ArrowLeftToLine size={16} /> : <ArrowRightToLine size={16} />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                          className={"flex gap-2 items-center"}
+                        >
+                          Move to playhead
+                          <KbdGroup>
+                            <Kbd>Ctrl</Kbd>
+                            <span>+</span>
+                            <Kbd>Shift</Kbd>
+                            <span>+</span>
+                            <Kbd>E</Kbd>
+                          </KbdGroup>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1 px-2 first:pl-0 last:pr-0 h-5">
+                  {activeIds.length > 0 && !isTransitionSelected && (
                     <Tooltip delayDuration={10}>
                       <TooltipTrigger asChild>
                         <Button
-                          disabled={!activeIds.length || isLocked}
-                          onClick={doActiveSplit}
+                          disabled={!activeIds.length}
+                          onClick={doActiveCopy}
                           variant={"ghost"}
                           size={"icon"}
                           className="disabled:opacity-0 disabled:pointer-events-none"
                         >
-                          <SquareSplitHorizontal size={16} />
+                          <Copy size={16} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent
                         side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
                         className={"flex gap-2 items-center"}
                       >
-                        Split
+                        Copy
                         <KbdGroup>
                           <Kbd>Ctrl</Kbd>
                           <span>+</span>
-                          <Kbd>B</Kbd>
+                          <Kbd>C</Kbd>
                         </KbdGroup>
                       </TooltipContent>
                     </Tooltip>
                   )}
 
-                {activeIds.length > 0 && !isTransitionSelected && (
+                  {activeIds.length > 0 && !isTransitionSelected && (
+                    <Tooltip delayDuration={10}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          disabled={!activeIds.length}
+                          onClick={doActiveDuplicate}
+                          variant={"ghost"}
+                          size={"icon"}
+                          className="disabled:opacity-0 disabled:pointer-events-none"
+                        >
+                          <CopyPlus size={16} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                        className={"flex gap-2 items-center"}
+                      >
+                        Duplicate
+                        <KbdGroup>
+                          <Kbd>Ctrl</Kbd>
+                          <span>+</span>
+                          <Kbd>D</Kbd>
+                        </KbdGroup>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+
+                  {activeIds.length > 0 && !isLocked && !isTransitionSelected && (
+                    <Tooltip delayDuration={10}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          disabled={!activeIds.length || isLocked}
+                          onClick={doActiveCut}
+                          variant={"ghost"}
+                          size={"icon"}
+                          className="disabled:opacity-0 disabled:pointer-events-none"
+                        >
+                          <Scissors size={16} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                        className={"flex gap-2 items-center"}
+                      >
+                        Cut
+                        <KbdGroup>
+                          <Kbd>Ctrl</Kbd>
+                          <span>+</span>
+                          <Kbd>X</Kbd>
+                        </KbdGroup>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+
                   <Tooltip delayDuration={10}>
                     <TooltipTrigger asChild>
                       <Button
-                        disabled={!activeIds.length}
-                        onClick={doActiveCopy}
+                        onClick={doActivePaste}
                         variant={"ghost"}
                         size={"icon"}
                         className="disabled:opacity-0 disabled:pointer-events-none"
                       >
-                        <Copy size={16} />
+                        <ClipboardPaste size={16} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent
                       side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
                       className={"flex gap-2 items-center"}
                     >
-                      Copy
+                      Paste
                       <KbdGroup>
                         <Kbd>Ctrl</Kbd>
                         <span>+</span>
-                        <Kbd>C</Kbd>
+                        <Kbd>V</Kbd>
                       </KbdGroup>
                     </TooltipContent>
                   </Tooltip>
-                )}
 
-                {activeIds.length > 0 && !isTransitionSelected && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        disabled={!activeIds.length}
-                        onClick={doActiveDuplicate}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className="disabled:opacity-0 disabled:pointer-events-none"
+                  {activeIds.length > 0 && !isLocked && (
+                    <Tooltip delayDuration={10}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          disabled={!activeIds.length || isLocked}
+                          onClick={!hasProtectedSceneItem ? doActiveDelete : undefined}
+                          variant={"ghost"}
+                          size={"icon"}
+                          className={cn(
+                            "disabled:opacity-0 disabled:pointer-events-none",
+                            hasProtectedSceneItem && "opacity-50 cursor-default"
+                          )}
+                        >
+                          <Trash size={16} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                        className={"flex gap-2 items-center"}
                       >
-                        <CopyPlus size={16} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                      className={"flex gap-2 items-center"}
-                    >
-                      Duplicate
-                      <KbdGroup>
-                        <Kbd>Ctrl</Kbd>
-                        <span>+</span>
-                        <Kbd>D</Kbd>
-                      </KbdGroup>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {activeIds.length > 0 && !isLocked && !isTransitionSelected && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={doActiveCut}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className="disabled:opacity-0 disabled:pointer-events-none"
-                      >
-                        <Scissors size={16} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                      className={"flex gap-2 items-center"}
-                    >
-                      Cut
-                      <KbdGroup>
-                        <Kbd>Ctrl</Kbd>
-                        <span>+</span>
-                        <Kbd>X</Kbd>
-                      </KbdGroup>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={doActivePaste}
-                      variant={"ghost"}
-                      size={"icon"}
-                      className="disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <ClipboardPaste size={16} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                    className={"flex gap-2 items-center"}
-                  >
-                    Paste
-                    <KbdGroup>
-                      <Kbd>Ctrl</Kbd>
-                      <span>+</span>
-                      <Kbd>V</Kbd>
-                    </KbdGroup>
-                  </TooltipContent>
-                </Tooltip>
-
-                {activeIds.length > 0 && !isLocked && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={!hasProtectedSceneItem ? doActiveDelete : undefined}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className={cn(
-                          "disabled:opacity-0 disabled:pointer-events-none",
-                          hasProtectedSceneItem && "opacity-50 cursor-default"
-                        )}
-                      >
-                        <Trash size={16} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                      className={"flex gap-2 items-center"}
-                    >
-                      {hasProtectedSceneItem ? "Someone's working inside" : (<>Delete <Kbd>Del</Kbd></>)}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {!activeSceneBlockId && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>
-                        <Component size={16} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                      className={"flex gap-2 items-center"}
-                    >
-                      Add scene <Kbd>S</Kbd>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={toggleMarker}
-                      variant={"ghost"}
-                      size={"icon"}
-                      className="disabled:opacity-0 disabled:pointer-events-none"
-                      style={isMarkerActive ? { color: "#f43f5e" } : undefined}
-                    >
-                      {isMarkerActive ? <IconRemoveMarker size={16} /> : <IconAddMarker size={16} />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                    className={"flex gap-2 items-center"}
-                  >
-                    {isMarkerActive ? "Remove marker" : "Add marker"} <Kbd>M</Kbd>
-                  </TooltipContent>
-                </Tooltip>
+                        {hasProtectedSceneItem ? "Someone's working inside" : (<>Delete <KbdGroup><Kbd>Backspace</Kbd><span>/</span><Kbd>Del</Kbd></KbdGroup></>)}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               </>
             )}
 
-            {canComment && (
-              <Tooltip delayDuration={10}>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={isCommentActive ? openActiveComment : startComment}
-                    variant={"ghost"}
-                    size={"icon"}
-                    className={isCommentActive ? "text-primary hover:text-primary" : ""}
-                  >
-                    {isCommentActive ? <MessageSquareShare size={16} /> : <MessageSquare size={16} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                  className={"flex gap-2 items-center"}
-                >
-                  {isCommentActive ? "Open comments" : <>Add comment <Kbd>C</Kbd></>}
-                </TooltipContent>
-              </Tooltip>
+            {(!viewOnly || canComment) && (
+              <div className="flex items-center gap-1 px-2 first:pl-0 last:pr-0 h-5">
+                {!viewOnly && (
+                  <>
+                    {!activeSceneBlockId && (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>
+                            <Component size={16} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                          className={"flex gap-2 items-center"}
+                        >
+                          Add scene <Kbd>S</Kbd>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    <Tooltip delayDuration={10}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={toggleMarker}
+                          variant={"ghost"}
+                          size={"icon"}
+                          className="disabled:opacity-0 disabled:pointer-events-none"
+                          style={isMarkerActive ? { color: "#f43f5e" } : undefined}
+                        >
+                          {isMarkerActive ? <IconRemoveMarker size={16} /> : <IconAddMarker size={16} />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                        className={"flex gap-2 items-center"}
+                      >
+                        {isMarkerActive ? "Remove marker" : "Add marker"} <Kbd>M</Kbd>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+
+                {canComment && (
+                  <Tooltip delayDuration={10}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={isCommentActive ? openActiveComment : startComment}
+                        variant={"ghost"}
+                        size={"icon"}
+                        className={isCommentActive ? "text-primary hover:text-primary" : ""}
+                      >
+                        {isCommentActive ? <MessageSquareShare size={16} /> : <MessageSquare size={16} />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                      className={"flex gap-2 items-center"}
+                    >
+                      {isCommentActive ? "Open comments" : <>Add comment <Kbd>C</Kbd></>}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             )}
           </div>
 
@@ -807,17 +972,19 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
               selectionDuration={selectionDuration}
             />
 
+            <div className="h-5 w-px mx-1 bg-border" />
+
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>
                 <Button size={"icon"} variant={"ghost"} onClick={toggleFullHeight}>
-                  {isFull ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                  <ChevronsUpDown size={16} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent
                 side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
                 className={"flex gap-2 items-center"}
               >
-                {isFull ? "Minimize" : "Maximize"} <Kbd>`</Kbd>
+                Toggle timeline height <Kbd>`</Kbd>
               </TooltipContent>
             </Tooltip>
           </div>

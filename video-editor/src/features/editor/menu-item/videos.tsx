@@ -271,6 +271,16 @@ const VideoItem = ({
   marketListing?: MarketAssetBundle;
   shouldDisplayPreview: boolean;
 }) => {
+  const hoverVideoSrc = useMemo(() => {
+    const metadata = video.metadata as { pexels_id?: number; video_files?: Array<{
+      file_type: string; link: string; width: number; height: number;
+    }> } | undefined;
+    if (!metadata?.pexels_id) return undefined;
+    // Hover playback uses the smallest available rendition; insertion still
+    // uses the original selected quality in video.details.src.
+    return metadata.video_files?.filter(file => file.file_type === "video/mp4" && file.link && file.width > 0 && file.height > 0)
+      .sort((a, b) => a.width * a.height - b.width * b.height)[0]?.link || video.details?.src;
+  }, [video]);
   const normalizedVideo = useMemo(
     () => buildNormalizedVideoPayload({
       ...video,
@@ -301,7 +311,7 @@ const VideoItem = ({
   return (
     <Draggable
       data={normalizedVideo}
-      renderCustomPreview={<div style={style} className="draggable" />}
+      renderCustomPreview={<div style={{ ...style, backgroundImage: "none" }} className="draggable overflow-hidden"><MarketPreview src={video.preview} type="video" /></div>}
       shouldDisplayPreview={shouldDisplayPreview}
     >
       <div
@@ -316,7 +326,7 @@ const VideoItem = ({
         }
         className="relative flex w-full h-full items-center justify-center overflow-hidden group cursor-pointer rounded-md"
       >
-        <MarketPreview src={video.preview} type="video" />
+        <MarketPreview src={video.preview} type="video" hoverVideoSrc={hoverVideoSrc} />
         {marketListing && <div className="absolute right-1 top-1 z-10"><MarketAssetActions bundle={marketListing} menuOnly /></div>}
         {/* Play button overlay */}
         <div

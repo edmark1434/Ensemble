@@ -132,10 +132,43 @@ function AssetTypeIcon({ type, className = "size-5" }: { type: MarketAssetType; 
   return <AudioLines className={className} />;
 }
 
-export function MarketPreview({ src, type, className = "size-full object-cover" }: { src?: string; type: MarketAssetType; className?: string }) {
+export function MarketPreview({ src, type, hoverVideoSrc, className = "size-full object-cover" }: {
+  src?: string; type: MarketAssetType; hoverVideoSrc?: string; className?: string;
+}) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [failedVideoSrc, setFailedVideoSrc] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const isHoverVideo = !!hoverVideoSrc && failedVideoSrc !== hoverVideoSrc;
+  const isVideo = isHoverVideo || (!!src && /\/thumbnails\/video-5s-320\/[^?#]+\.mp4(?:[?#]|$)/.test(src));
+  useEffect(() => {
+    const video = videoRef.current;
+    const target = video?.closest(".group") ?? video?.parentElement;
+    if (!video || !target) return;
+    const play = () => {
+      // Pexels cards keep their poster and make no video request until hovered.
+      if (hoverVideoSrc && !video.getAttribute("src")) video.src = hoverVideoSrc;
+      void video.play().catch(() => {});
+    };
+    const stop = () => { video.pause(); video.currentTime = 0; };
+    target.addEventListener("mouseenter", play);
+    target.addEventListener("mouseleave", stop);
+    target.addEventListener("focusin", play);
+    target.addEventListener("focusout", stop);
+    return () => {
+      video.pause();
+      target.removeEventListener("mouseenter", play);
+      target.removeEventListener("mouseleave", stop);
+      target.removeEventListener("focusin", play);
+      target.removeEventListener("focusout", stop);
+    };
+  }, [src, hoverVideoSrc, isVideo, failedSrc]);
   return src && failedSrc !== src
-    ? <img src={src} alt="" draggable={false} onError={() => setFailedSrc(src)} className={className} />
+    ? isVideo
+      ? <video key={hoverVideoSrc || src} ref={videoRef} src={isHoverVideo ? undefined : src}
+          poster={isHoverVideo ? src : undefined} muted loop playsInline preload={isHoverVideo ? "none" : "metadata"}
+          onTimeUpdate={event => { if (isHoverVideo && event.currentTarget.currentTime >= 5) event.currentTarget.currentTime = 0; }}
+          onError={() => { if (hoverVideoSrc) setFailedVideoSrc(hoverVideoSrc); else setFailedSrc(src); }} className={className} />
+      : <img src={src} alt="" draggable={false} onError={() => setFailedSrc(src)} className={className} />
     : <span className="flex size-full items-center justify-center bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><AssetTypeIcon type={type} className="size-8" /></span>;
 }
 

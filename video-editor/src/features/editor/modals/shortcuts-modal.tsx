@@ -19,6 +19,7 @@ interface ShortcutsModalProps {
 interface ShortcutItem {
   label: string;
   keys: string[];
+  alt?: string[];
   disabled?: boolean;
 }
 
@@ -40,7 +41,7 @@ const SHORTCUTS: ShortcutCategory[] = [
       { label: "Cut", keys: ["Ctrl", "X"] },
       { label: "Paste", keys: ["Ctrl", "V"] },
 
-      { label: "Delete", keys: ["Del"] },
+      { label: "Delete", keys: ["Backspace"], alt: ["Del"] },
 
       { label: "Undo", keys: ["Ctrl", "Z"] },
       { label: "Redo", keys: ["Ctrl", "Shift", "Z"] },
@@ -49,35 +50,31 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Timeline",
     items: [
-      { label: "Maximize or minimize", keys: ["`"] },
+      { label: "Toggle timeline height", keys: ["`"] },
 
       { label: "Zoom in", keys: ["Ctrl", "+"] },
       { label: "Zoom out", keys: ["Ctrl", "-"] },
       { label: "Zoom to fit", keys: ["Shift", "Z"] },
 
-      { label: "Jump to last frame", keys: ["Ctrl", "🡠"] },
-      { label: "Jump to next frame", keys: ["Ctrl", "🡢"] },
+      { label: "Go to last frame", keys: ["Ctrl", "🡠"] },
+      { label: "Go to next frame", keys: ["Ctrl", "🡢"] },
 
       { label: "Jump 1s back", keys: ["Ctrl", "Shift", "🡠"] },
-      { label: "Skip 1s ahead", keys: ["Ctrl", "Shift", "🡢"] },
-
-      { label: "Jump to start", keys: ["Home"] },
-      { label: "Jump to end", keys: ["End"] },
+      { label: "Jump 1s ahead", keys: ["Ctrl", "Shift", "🡢"] },
     ]
   },
   {
     title: "Timeline",
     items: [
-      { label: "Add or remove markers", keys: ["M"] },
-      { label: "Jump to last marker", keys: ["M", "🡠"] },
-      { label: "Jump to next marker", keys: ["M", "🡢"] },
+      { label: "Jump to start", keys: ["Home"] },
+      { label: "Jump to end", keys: ["End"] },
 
       { label: "Split", keys: ["Ctrl", "B"] },
-      { label: "Delete left", keys: ["Q"], disabled: true },
-      { label: "Delete right", keys: ["W"], disabled: true },
+      { label: "Delete left", keys: ["Q"] },
+      { label: "Delete right", keys: ["W"] },
 
-      { label: "Extend to playhead", keys: ["Shift", "E"], disabled: true },
-      { label: "Move to playhead", keys: ["Ctrl", "Shift", "E"], disabled: true },
+      { label: "Extend to playhead", keys: ["Shift", "E"] },
+      { label: "Move to playhead", keys: ["Ctrl", "Shift", "E"] },
     ]
   },
   {
@@ -85,6 +82,10 @@ const SHORTCUTS: ShortcutCategory[] = [
     items: [
       { label: "Add scene", keys: ["S"] },
       { label: "Go back from scene", keys: ["H"] },
+
+      { label: "Add or remove markers", keys: ["M"] },
+      { label: "Go to last marker", keys: ["M", "🡠"] },
+      { label: "Go to next marker", keys: ["M", "🡢"] },
 
       { label: "Add comment", keys: ["C"] },
       { label: "Jump to last comment", keys: ["C", "🡠"] },
@@ -94,8 +95,8 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Canvas",
     items: [
-      { label: "Toggle fullscreen", keys: ["F"], disabled: true },
-      { label: "Mute preview", keys: ["Ctrl", "M"], disabled: true },
+      { label: "Toggle fullscreen", keys: ["F"] },
+      { label: "Mute preview", keys: ["Ctrl", "M"] },
 
       { label: "Move up 1 px", keys: ["🡡"] },
       { label: "Move down 1 px", keys: ["🡣"] },
@@ -106,6 +107,19 @@ const SHORTCUTS: ShortcutCategory[] = [
     ]
   }
 ];
+
+const KeyCombo = ({ keys }: { keys: string[] }) => (
+  <KbdGroup>
+    {keys.map((key, i) => (
+      <React.Fragment key={i}>
+        <Kbd className="bg-zinc-800 border-zinc-700 text-zinc-300 min-w-6">
+          {key}
+        </Kbd>
+        {i < keys.length - 1 && <span>+</span>}
+      </React.Fragment>
+    ))}
+  </KbdGroup>
+);
 
 export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
   return (
@@ -152,17 +166,14 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
                       )}
                     >
                       <span className="text-zinc-300">{item.label}</span>
-                      <div className="flex gap-5">
-                        <KbdGroup>
-                          {item.keys.map((key, i) => (
-                            <React.Fragment key={i}>
-                              <Kbd className="bg-zinc-800 border-zinc-700 text-zinc-300 min-w-6">
-                                {key}
-                              </Kbd>
-                              {i < item.keys.length - 1 && <span>+</span>}
-                            </React.Fragment>
-                          ))}
-                        </KbdGroup>
+                      <div className="flex items-center gap-1.5">
+                        <KeyCombo keys={item.keys} />
+                        {item.alt && (
+                          <>
+                            <span>/</span>
+                            <KeyCombo keys={item.alt} />
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}

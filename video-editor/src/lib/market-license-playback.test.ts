@@ -58,6 +58,8 @@ test("license service returns only playback fields and never signs without proje
           { assetId: "licensed", mediaAssetId: "broken", path: "invalid", mimeType: "image/png" },
         ],
       } : null },
+      "./market-cloudfront-url": { signMarketCloudFrontSource: () => null },
+      "./market-stream-url": { signMarketStream: () => { throw new Error("Unexpected stream"); } },
       "./market-image-url": { signMarketImage: async (key: string) => {
         signed++;
         if (key === "invalid") throw new Error("Invalid market image.");
@@ -100,4 +102,70 @@ test("batch route rejects anonymous/nonmembers and keeps signed responses privat
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.equal(response.headers.get("server-timing"), "license_db;dur=1");
   assert.equal((await response.json()).assets[0].imageSources.media, "https://storage.example/image");
+});
+
+test("licensed streams use direct S3 without CDN configuration; CDN replaces it when enabled", async () => {
+  let permitted = false;
+  let cdn = false;
+  const signed: string[] = [];
+  const media = [
+    { assetId: "licensed", mediaAssetId: "video", type: "video", path: "asset-originals/video.mp4", mimeType: "video/mp4" },
+    { assetId: "licensed", mediaAssetId: "audio", type: "audio", path: "asset-originals/audio.mp3", mimeType: "audio/mpeg" },
+    { assetId: "licensed", mediaAssetId: "image", type: "image", path: "asset-originals/image.png", mimeType: "image/png" },
+    { assetId: "unlicensed", mediaAssetId: "other", type: "video", path: "asset-originals/other.mp4", mimeType: "video/mp4" },
+  ];
+  const { getProjectMarketLicenses } = load<{ getProjectMarketLicenses: (project: string, user: string, ids: string[]) => Promise<any> }>(
+    "src/lib/market-license-service.ts", {
+      "./market-license-repository": { readProjectMarketLicenses: async () => permitted ? {
+        assets: [{ assetId: "licensed", licensed: true }, { assetId: "unlicensed", licensed: false }],
+        media, images: media.filter(file => file.type === "image"),
+      } : null },
+      "./market-cloudfront-url": { signMarketCloudFrontSource: (path: string) => {
+        if (!cdn) return null;
+        signed.push(path);
+        return { url: `https://cdn.example/${path}`, expiresAt: 9999999999999 };
+      } },
+      "./market-stream-url": { signMarketStream: async (path: string) => {
+        signed.push(path);
+        return { url: `https://storage.example/${path}`, expiresAt: 9999999999999 };
+      } },
+      "./market-image-url": { signMarketImage: async () => "https://storage.example/image.png" },
+    });
+  assert.equal(await getProjectMarketLicenses("p", "u", []), null);
+  assert.equal(signed.length, 0);
+  permitted = true;
+  const storage = await getProjectMarketLicenses("p", "u", []);
+  assert.equal(storage.assets[0].playbackSources.video.url, "https://storage.example/asset-originals/video.mp4");
+  assert.equal(storage.assets[0].playbackSources.audio.url, "https://storage.example/asset-originals/audio.mp3");
+  assert.equal(Object.keys(storage.assets[1].playbackSources).length, 0);
+  assert.equal(signed.includes("asset-originals/other.mp4"), false);
+  signed.length = 0;
+  cdn = true;
+  const delivery = await getProjectMarketLicenses("p", "u", []);
+  assert.equal(delivery.assets[0].playbackSources.video.url, "https://cdn.example/asset-originals/video.mp4");
+  assert.equal(delivery.assets[0].imageSources.image, "https://cdn.example/asset-originals/image.png");
+  assert.equal(signed.length, 3, "CDN sources never additionally sign S3 URLs");
+});
+
+test("direct S3 streams permit ranges, private caching and stable hour-long grants", async () => {
+  const client = new S3Client({ region: "us-east-1", credentials: { accessKeyId: "test", secretAccessKey: "test" } });
+  const { signMarketStream } = load<{ signMarketStream: (path: string, mime: string, now: number) => Promise<{ url: string; expiresAt: number }> }>(
+    "src/lib/market-stream-url.ts", {
+      "@aws-sdk/client-s3": { GetObjectCommand }, "@aws-sdk/s3-request-presigner": { getSignedUrl },
+      "@/lib/s3": { s3Client: client, S3_BUCKET_NAME: "test-bucket" },
+    });
+  try {
+    const now = Date.parse("2026-10-31T00:01:00Z");
+    const source = await signMarketStream("asset-originals/video.mp4", "video/mp4", now);
+    assert.equal((await signMarketStream("asset-originals/video.mp4", "video/mp4", now + 15000)).url, source.url);
+    assert.equal(source.expiresAt, Date.parse("2026-10-31T01:00:00Z"));
+    const url = new URL(source.url);
+    assert.equal(url.searchParams.get("X-Amz-Expires"), "3600");
+    assert.equal(url.searchParams.get("response-cache-control"), "private, max-age=300");
+    assert.equal(url.searchParams.get("X-Amz-SignedHeaders"), "host", "Range is not tied to a specific byte interval");
+    for (const key of ["uploads/secret", "asset-originals/../secret", "asset-originals/\\secret"]) {
+      await assert.rejects(signMarketStream(key, "video/mp4", now), /Invalid market stream/);
+    }
+    await assert.rejects(signMarketStream("asset-originals/image.png", "image/png", now), /Invalid market stream/);
+  } finally { client.destroy(); }
 });

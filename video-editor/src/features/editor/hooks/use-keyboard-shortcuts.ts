@@ -7,7 +7,14 @@ import StateManager, {
   HISTORY_UNDO,
   HISTORY_REDO, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
 } from "@designcombo/state";
-import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
+import {
+  buildSelectionSnapshot,
+  cloneIntoNewTracks,
+  setClipboard,
+  getClipboard,
+  applyPlayheadAction,
+} from "../utils/item-actions";
+import { cycleTimelineHeight } from "./use-resizable-timeline";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
 import { timeMsToUnits } from "@designcombo/timeline";
@@ -114,7 +121,8 @@ export function useKeyboardShortcuts(
       }
 
       // delete
-      if (!viewOnlyRef.current && e.code === "Delete") {
+      if (!viewOnlyRef.current && (e.code === "Delete" || e.code === "Backspace")) {
+        e.preventDefault();
         if (!activeIds.length) return;
         const { trackItemsMap, workingInsideByItemId } = useStore.getState();
         const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
@@ -223,6 +231,23 @@ export function useKeyboardShortcuts(
         //   dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
         // });
         // dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
+      }
+
+      // delete left (Q) / delete right (W) of the playhead
+      if (!viewOnlyRef.current && !mod && !e.shiftKey && !e.altKey && (e.code === "KeyQ" || e.code === "KeyW")) {
+        e.preventDefault();
+        applyPlayheadAction(
+          stateManager,
+          e.code === "KeyQ" ? "deleteLeft" : "deleteRight",
+          getCurrentTime(),
+          useStore.getState()
+        );
+      }
+
+      // extend to playhead (Shift+E) / move to playhead (Ctrl+Shift+E)
+      if (!viewOnlyRef.current && e.shiftKey && !e.altKey && e.code === "KeyE") {
+        e.preventDefault();
+        applyPlayheadAction(stateManager, mod ? "move" : "extend", getCurrentTime(), useStore.getState());
       }
 
       // select all
@@ -357,10 +382,10 @@ export function useKeyboardShortcuts(
         });
       }
 
-      // toggle timeline maximize / minimize
+      // cycle timeline height: max -> default -> zero
       if (!viewOnlyRef.current && e.code === "Backquote") {
         e.preventDefault();
-        useStore.getState().toggleTimelineFullHeight();
+        cycleTimelineHeight();
       }
 
       // previous frame / previous second

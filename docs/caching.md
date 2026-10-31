@@ -31,3 +31,9 @@
 - Reconciliation scans should be bounded, paginated, rate-limited, and safe to repeat.
 - Use provider IDs appropriate to the environment; do not continuously retry records that the provider never accepted.
 - Apply backoff and record failure details without leaking credentials or personal data.
+
+## Editor market video playback
+
+- Interactive videos use native `Html5Video` with `preload="auto"` and `pauseWhenBuffering={false}`. Video sequences, their transition groups, and scenes containing videos stay mounted across the timeline. The browser owns streaming and buffering; there is no headless retention player, video blob cache, or video readiness gate. Browser preload remains a hint, not a guaranteed full-file download.
+- Images keep their project-scoped decode cache; audio retains `@remotion/media`. Exports keep `OffthreadVideo`. Eager video loading is intentional; lazy loading is deferred.
+- Batch-authorized originals use stable exact-file signed S3 URLs by default, or CloudFront when explicitly configured. Stream grants last 55–60 minutes, remain stable across routine checks, and renew in the last minute. They live only in runtime license state. Browser caching is private for five minutes; access denial clears active sources, but previously issued bearer URLs remain usable until expiry.

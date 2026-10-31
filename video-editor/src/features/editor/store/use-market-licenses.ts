@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ITrackItem } from "@designcombo/types";
+import { mergeMarketLicense } from "../utils/merge-market-license";
 
 export interface MarketLicenseStatus {
   assetId: string;
@@ -9,6 +10,7 @@ export interface MarketLicenseStatus {
   isOwner?: boolean;
   // Temporary delivery URLs live only in this store, never in saved project items.
   imageSources?: Record<string, string>;
+  playbackSources?: Record<string, { url: string; expiresAt: number }>;
 }
 interface MarketLicenseStore {
   projectId: string;
@@ -23,7 +25,7 @@ export const useMarketLicenses = create<MarketLicenseStore>((set) => ({
   openPurchase: (purchaseAssetId) => set({ purchaseAssetId }),
   closePurchase: () => set({ purchaseAssetId: null }),
   update: (projectId, assets) => set(state => state.projectId !== projectId ? state : ({
-    assets: { ...state.assets, ...Object.fromEntries(assets.map(asset => [asset.assetId, asset])) },
+    assets: { ...state.assets, ...Object.fromEntries(assets.map(asset => [asset.assetId, mergeMarketLicense(state.assets[asset.assetId], asset)])) },
   })),
 }));
 
