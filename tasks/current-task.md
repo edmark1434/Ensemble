@@ -1,16 +1,17 @@
-# Active Task: Fix IDE SQL inspection errors in upload trash and asset queries
+# Active Task: Prevent canvas selection of inactive video clips
 
 ## Objective
 
-Replace raw Kysely expression fragments with typed query-builder expressions, preserving database time and 30-day retention behavior. Verify the trash columns and address the IDE's stale schema warning.
+Keep eagerly loaded videos mounted while excluding clips outside the playhead's time range from canvas selection, pointer events, selection controls, and purchase-badge targeting.
 
 ## Acceptance criteria
 
-- [x] Verified public.media_assets.trashed_at and public.projects.trashed_at exist in the configured database.
-- [x] Trash timestamps, cutoff, remaining-day calculation, and showcase predicate use Kysely expressions instead of SQL fragments.
-- [x] Suppress the stale SqlResolve warning only on the verified retention query, with migration reference.
+- [x] Sequence wrappers expose their active time-range state without unmounting video elements.
+- [x] Inactive wrappers and descendants do not intercept canvas clicks.
+- [x] Click and box selection recheck the live playhead; end time is exclusive.
+- [x] Selection controls and purchase badges exclude inactive DOM targets.
 - [x] Editor TypeScript check passes.
 
 ## Verification
 
-Read-only database schema check, editor TypeScript check, and diff whitespace check passed. No test suites or database mutations.
+Editor TypeScript and diff whitespace checks passed. No test suites or live project mutations, following the user's preference. Browser selection/playback behavior has not been exercised here.

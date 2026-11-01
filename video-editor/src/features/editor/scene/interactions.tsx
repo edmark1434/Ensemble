@@ -1,7 +1,7 @@
 import { MarketWatermarkBadge } from "./market-watermark-badge";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Selection, Moveable } from "@interactify/toolkit";
-import { getIdFromClassName } from "../utils/scene";
+import { getIdFromClassName, isCanvasItemAtTime } from "../utils/scene";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import {
@@ -177,8 +177,7 @@ export function SceneInteractions({
 
     const inFrame = (id: string) => {
       const item = currentTrackItemsMap[id];
-      if (!item || item.type === "audio") return false;
-      return item.display.from <= currentTime && item.display.to >= currentTime;
+      return isCanvasItemAtTime(item, currentTime);
     };
 
     const remoteOccupied = new Map<string, RemoteActiveEditor>(
@@ -323,14 +322,10 @@ export function SceneInteractions({
         ? (playerRef.current.getCurrentFrame() / fps) * 1000
         : 0);
       const targetIds = activeIds.filter((id) => {
-        return (
-          trackItemsMap[id]?.display.from <= currentTime &&
-          trackItemsMap[id]?.display.to >= currentTime
-        );
+        return isCanvasItemAtTime(trackItemsMap[id], currentTime);
       });
-      const targets = targetIds.map(
-        (id) => getTargetById(id) as HTMLDivElement
-      );
+      const targets = targetIds.map((id) => getTargetById(id))
+        .filter((target): target is HTMLElement => target !== null);
       selection?.setSelectedTargets(targets);
       const selInfo = getSelectionByIds(targetIds);
       const isLocalLocked = targetIds.length === 1 &&
@@ -381,11 +376,17 @@ export function SceneInteractions({
   useEffect(() => {
     if (viewOnly) return;
 
+    const isSelectableNow = (id: string) => {
+      const { playerRef, fps, trackItemsMap } = useStore.getState();
+      const time = playerRef?.current ? playerRef.current.getCurrentFrame() / fps * 1000 : 0;
+      return isCanvasItemAtTime(trackItemsMap[id], time);
+    };
+
     const selection = new Selection({
       container: containerRef.current,
       boundContainer: true,
       hitRate: 0,
-      selectableTargets: [".designcombo-scene-item"],
+      selectableTargets: ['.designcombo-scene-item:not([data-canvas-active="false"])'],
       selectFromInside: false,
       selectByClick: true,
       toggleContinueSelect: "shift"
@@ -396,6 +397,7 @@ export function SceneInteractions({
         const filteredSelected = e.selected.filter((el) => {
           if (el.className.includes("designcombo-scene-item-type-audio")) return false;
           const id = getIdFromClassName(el.className);
+          if (!isSelectableNow(id)) return false;
           if (remoteActiveEditorsRef.current.has(id)) return false;
           if (isClick) return true;
           return !trackItemsMapRef.current[id]?.details?.locked;
@@ -465,6 +467,7 @@ export function SceneInteractions({
           const filteredSelected = e.selected.filter((el) => {
             if (el.className.includes("designcombo-scene-item-type-audio")) return false;
             const id = getIdFromClassName(el.className);
+            if (!isSelectableNow(id)) return false;
             if (remoteActiveEditorsRef.current.has(id)) return false;
             return !trackItemsMapRef.current[id]?.details?.locked;
           }) as HTMLDivElement[];

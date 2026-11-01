@@ -628,3 +628,9 @@ html, body {
     height: 100%;
     overflow: hidden;
 }
+
+/* Premounted video descendants may set pointer-events:auto themselves. */
+.designcombo-scene-item[data-canvas-active="false"],
+.designcombo-scene-item[data-canvas-active="false"] * {
+    pointer-events: none !important;
+}

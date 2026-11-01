@@ -3,6 +3,7 @@ import { AbsoluteFill, Sequence } from "remotion";
 import { calculateFrames } from "../utils/frames";
 import { calculateContainerStyles } from "./styles";
 import { TransitionSeries } from "@designcombo/transitions";
+import { isCanvasItemAtTime } from "../utils/scene";
 
 export interface SequenceItemOptions {
   handleTextChange?: (id: string, text: string) => void;
@@ -34,6 +35,7 @@ export const BaseSequence = ({
   const { details } = item as ITrackItem;
 
   const { fps, isTransition, nested, keepMountedFor } = options;
+  const canvasActive = !nested && isCanvasItemAtTime(item, ((options.frame ?? 0) / fps) * 1000);
   const { from, durationInFrames } = calculateFrames(
     {
       from: item.display.from,
@@ -71,8 +73,9 @@ export const BaseSequence = ({
         <AbsoluteFill
           id={item.id}
           data-track-item="transition-element"
+          data-canvas-active={canvasActive}
           className={className}
-          style={calculateContainerStyles(details, crop, { background, pointerEvents: nested ? "none" : "auto" })}
+          style={calculateContainerStyles(details, crop, { background, pointerEvents: canvasActive ? "auto" : "none" })}
         >
           {children}
         </AbsoluteFill>
@@ -97,13 +100,14 @@ export const BaseSequence = ({
       <AbsoluteFill
         id={item.id}
         data-track-item="transition-element"
+        data-canvas-active={canvasActive}
         className={className}
         style={calculateContainerStyles(
           details,
           crop,
           {
             background,
-            pointerEvents: nested ? "none" : (item.type === "audio" ? "none" : "auto"),
+            pointerEvents: canvasActive ? "auto" : "none",
             overflow:
               item.type !== "caption" && item.type !== "text"
                 ? "hidden"

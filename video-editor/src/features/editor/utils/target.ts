@@ -129,7 +129,7 @@ export const getSelectionByIds = (ids: string[]): SelectionInfo => {
     .map((id) => {
       if (!id) return null;
       const element = document.querySelector<HTMLElement>(
-        `.designcombo-scene-item.id-${id}`
+        `.designcombo-scene-item.id-${id}:not([data-canvas-active="false"])`
       );
       return element;
     })
@@ -158,7 +158,7 @@ export const getSelectionByIds = (ids: string[]): SelectionInfo => {
 
 export const getTargetById = (id: string): HTMLElement | null => {
   const element = document.querySelector<HTMLElement>(
-    `.designcombo-scene-item.id-${id}`
+    `.designcombo-scene-item.id-${id}:not([data-canvas-active="false"])`
   );
   return element;
 };
