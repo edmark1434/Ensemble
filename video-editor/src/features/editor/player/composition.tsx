@@ -1,14 +1,11 @@
-import { SequenceItem } from "./sequence-item";
 import { useEffect, useState } from "react";
 import { dispatch, filter, subject } from "@designcombo/events";
 import { EDIT_OBJECT, ENTER_EDIT_MODE } from "@designcombo/state";
-import { groupTrackItems } from "../utils/track-items";
-import { TransitionSeries, Transitions } from "@designcombo/transitions";
 import { calculateTextHeight } from "../utils/text";
 import { getBackgroundFillStyle } from "./styles";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import useStore from "../store/use-store";
-import { renderVisibleItems } from "@/features/editor/player/render-visible-items";
+import { RenderVisibleItems } from "@/features/editor/player/render-visible-items";
 
 const Composition = () => {
   const [editableTextId, setEditableTextId] = useState<string | null>(null);
@@ -24,23 +21,6 @@ const Composition = () => {
     activeIds
   } = useStore();
   const frame = useCurrentFrame();
-
-  const groupedItems = groupTrackItems({
-    trackItemIds,
-    transitionsMap,
-    trackItemsMap: trackItemsMap
-  });
-
-  const visibleGroupedItems = groupedItems.map(group =>
-    group.filter(item => {
-      if (item.type === "transition") return true;
-      return !trackItemsMap[item.id]?.details?.hidden;
-    })
-  ).filter(group => group.length > 0);
-
-  const mediaItems = Object.values(trackItemsMap).filter((item) => {
-    return item.type === "video" || item.type === "audio";
-  });
 
   const handleTextChange = (id: string, _: string) => {
     const elRef = document.querySelector(`.id-${id}`) as HTMLDivElement;
@@ -218,17 +198,17 @@ const Composition = () => {
   return (
     <>
       <AbsoluteFill style={getBackgroundFillStyle(background.value)} />
-      {renderVisibleItems({
-        trackItemIds,
-        trackItemsMap,
-        transitionsMap,
-        fps,
-        size,
-        frame,
-        handleTextChange,
-        onTextBlur,
-        editableTextId,
-      })}
+      <RenderVisibleItems
+        trackItemIds={trackItemIds}
+        trackItemsMap={trackItemsMap}
+        transitionsMap={transitionsMap}
+        fps={fps}
+        size={size}
+        frame={frame}
+        handleTextChange={handleTextChange}
+        onTextBlur={onTextBlur}
+        editableTextId={editableTextId}
+      />
     </>
   );
 };

@@ -1,3 +1,4 @@
+import { renderServerHeaders } from "@/lib/render-server";
 // app/api/render/[id]/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
@@ -27,7 +28,7 @@ export async function GET(
     try {
       response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
         cache: "no-store",
-        headers: userId ? { "x-user-id": userId } : undefined,
+        headers: await renderServerHeaders(userId),
       });
     } catch {
       // Render server isn't reachable — nothing to report, not a bug
@@ -57,6 +58,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   try {
     const { id } = await params;
     const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
@@ -75,7 +77,7 @@ export async function DELETE(
     try {
       response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
         method: "DELETE",
-        headers: userId ? { "x-user-id": userId } : undefined,
+        headers: await renderServerHeaders(userId),
       });
     } catch {
       return NextResponse.json({ error: "Render server unavailable" }, { status: 503 });

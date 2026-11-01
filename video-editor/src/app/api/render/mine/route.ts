@@ -1,3 +1,4 @@
+import { renderServerHeaders } from "@/lib/render-server";
 // app/api/render/mine/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     try {
       response = await fetch(`${RENDER_SERVER_URL}/renders/mine`, {
         cache: "no-store",
-        headers: userId ? { "x-user-id": userId } : undefined,
+        headers: await renderServerHeaders(userId),
       });
     } catch {
       // Render server isn't reachable — client already treats non-ok as "no job"

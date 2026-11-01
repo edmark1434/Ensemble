@@ -1,6 +1,6 @@
 // features/editor/player/items/ensemble-scene.tsx
 
-import React from "react";
+import React, { useMemo } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { BoxAnim, ContentAnim } from "@designcombo/animations";
 import {
@@ -11,7 +11,7 @@ import {
 } from "../../types/ensemble-scene";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
 import { getBackgroundFillStyle } from "../styles";
-import { renderVisibleItems } from "../render-visible-items";
+import { RenderVisibleItems } from "../render-visible-items";
 import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
 
@@ -94,6 +94,7 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
             {content && !details.hidden && (
               <SceneContentLayer
                 content={content}
+                visualsActive={options.visualsActive}
                 fps={fps}
                 volume={details.volume}
                 outerWidth={details.width}
@@ -117,12 +118,14 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
 
 const SceneContentLayer = ({
   content,
+  visualsActive,
   fps,
   volume,
   outerWidth,
   outerHeight
 }: {
   content: SceneRenderContent;
+  visualsActive?: boolean;
   fps: number;
   volume?: number;
   outerWidth?: number;
@@ -139,7 +142,7 @@ const SceneContentLayer = ({
   // Scene volume is a multiplier over each inner item's own volume, not a
   // standalone level — same 0-100 scale everything else uses.
   const sceneVolumeMultiplier = (volume ?? 100) / 100;
-  const trackItemsMap =
+  const trackItemsMap = useMemo(() =>
     sceneVolumeMultiplier === 1
       ? content.trackItemsMap
       : Object.fromEntries(
@@ -150,7 +153,7 @@ const SceneContentLayer = ({
             { ...it, details: { ...it.details, volume: innerVolume * sceneVolumeMultiplier } },
           ];
         }),
-      );
+      ), [content.trackItemsMap, sceneVolumeMultiplier]);
 
   return (
     <div
@@ -166,15 +169,16 @@ const SceneContentLayer = ({
       }}
     >
       {content.background && <AbsoluteFill style={getBackgroundFillStyle(content.background.value)} />}
-      {renderVisibleItems({
-        trackItemIds: content.trackItemIds,
-        trackItemsMap,
-        transitionsMap: content.transitionsMap,
-        fps,
-        size: content.size!,
-        frame,
-        nested: true,
-      })}
+      <RenderVisibleItems
+        trackItemIds={content.trackItemIds}
+        trackItemsMap={trackItemsMap}
+        transitionsMap={content.transitionsMap}
+        fps={fps}
+        size={content.size!}
+        frame={frame}
+        nested={true}
+        visualsActive={visualsActive}
+      />
     </div>
   );
 };

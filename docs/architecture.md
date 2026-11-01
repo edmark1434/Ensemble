@@ -33,6 +33,13 @@
 
 Do not introduce reverse dependencies, SQL in React/controller files, or Express response objects in repositories.
 
+## Editor exports and frame rendering
+
+- Editor export routes verify the signed editor session. The server-only render bridge sends `INTERNAL_API_SECRET` and the verified user ID; render creation also sends the current subscription tier from the database (Premium maps to the renderer's `pro` tier).
+- The render service rejects unauthenticated requests and checks job ownership for progress and cancellation. Local output downloads use expiring signed links. Resolution/FPS limits and queue routing remain plan-based; export duration has no plan limit.
+- Editor and render-server compositions cache timeline grouping and a frame-range index. Image/text/caption content is built only when its sequence is active, including transition and nested-scene content. Editor videos retain eager mounting.
+- Local rendering bundles the current renderer source on startup unless `REMOTION_SERVE_URL` is configured. Lambda uses the separately deployed bundle at `REMOTION_LAMBDA_SERVE_URL`; renderer source changes require redeploying that bundle.
+
 ## Realtime behavior
 
 Socket.IO is initialized once in `backend/lib/WebSocket.js`. Persist authoritative state before emitting. Events should contain stable IDs, timestamps, and enough normalized data for clients to update without guessing. Reconnects must recover state through an API query rather than depending solely on missed events.

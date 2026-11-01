@@ -13,6 +13,16 @@ export default function Text({
   item: IText;
   options: SequenceItemOptions;
 }) {
+  return BaseSequence({ item, options, children: options.visualsActive === false ? null : <TextContent item={item} options={options} /> });
+}
+
+function TextContent({
+  item,
+  options
+}: {
+  item: IText;
+  options: SequenceItemOptions;
+}) {
   const { handleTextChange, onTextBlur, fps, editableTextId, frame } = options;
   const { id, details, animations } = item as IText;
   const { durationInFrames } = calculateFrames(item.display, fps);
@@ -93,5 +103,5 @@ export default function Text({
       </ContentAnim>
     </BoxAnim>
   );
-  return BaseSequence({ item, options, children });
+  return children;
 }

@@ -1,3 +1,4 @@
+import { renderServerHeaders } from "@/lib/render-server";
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { MARKET_UUID, marketAssetBackend } from "@/lib/market-asset-backend";
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       item.details.src = sources.get(key)!;
     }
     const response = await fetch(`${RENDER_SERVER_URL}/renders`, {
-      method: "POST", headers: { "Content-Type": "application/json", "x-user-id": session.userId },
+      method: "POST", headers: { "Content-Type": "application/json", ...await renderServerHeaders(session.userId, true) },
       body: JSON.stringify(body),
     });
     const data = await response.json();
