@@ -889,8 +889,13 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
 }
 
 async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = null, projectId = null, allowProjectViewers = false) {
+  // Library deletion must not revoke an existing project's license. Only the
+  // membership-checked project grant below can bypass listing/media deletion;
+  // the original file itself must still be available.
   const { rows } = await pool.query(
-    `SELECT media.media_asset_id, link.position,
+    `WITH asset_file AS (
+     SELECT media.media_asset_id, link.position,
+            ma.deleted_at AS asset_deleted_at, media.deleted_at AS media_deleted_at,
             original.path, original.name, original.mime_type, original.size_bytes,
             media.type AS media_type, media.original_file_id, media.proxy_file_id,
             proxy.path AS proxy_path, proxy.name AS proxy_name, proxy.mime_type AS proxy_mime_type,
@@ -921,10 +926,13 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
      JOIN users owner_user ON owner_user.user_id = media.owner_user_id
      JOIN accounts owner ON owner.account_id = owner_user.account_id
      WHERE ma.market_asset_id = $1
-       AND ma.deleted_at IS NULL AND media.deleted_at IS NULL
        AND original.deleted_at IS NULL
        AND ($3::uuid IS NULL OR media.media_asset_id = $3)
-     ORDER BY link.position, media.media_asset_id
+     )
+     SELECT * FROM asset_file
+     WHERE (asset_deleted_at IS NULL AND media_deleted_at IS NULL)
+        OR ($4::uuid IS NOT NULL AND is_purchased)
+     ORDER BY position, media_asset_id
      LIMIT 1`,
     [assetId, accountId, mediaAssetId, projectId, allowProjectViewers]
   );

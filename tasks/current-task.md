@@ -1,22 +1,20 @@
-# Active Task: Authenticate exports and render only active visuals
+# Active Task: Correct caption word timing in exports
 
 ## Objective
 
-Authenticate render-server requests through the verified editor session and trusted server bridge; use the real subscription, remove plan-based duration caps, and defer images, text, and captions until active in the renderer and editor.
+Make caption words advance from upcoming to active to appeared at the actual composition frame rate, in the renderer and editor, while retaining lazy mounting.
 
 ## Acceptance criteria
 
-- [x] Render create/status/cancel require server authentication and enforce user ownership.
-- [x] Export tier comes from the active subscription, never DEBUG_TIER or browser headers.
-- [x] Local export downloads require an expiring signed URL.
-- [x] No plan-based duration cap remains.
-- [x] Inactive images/text/captions skip content creation, font loading, and animation work, including nested scenes and transitions.
-- [x] Timeline grouping/indexing is reused between frames; editor videos retain eager mounting.
-- [x] Both packages pass TypeScript checks; no broad test suites or live export jobs.
+- Caption words use the actual composition FPS rather than a fixed 30 FPS.
+- Active word ranges include their start and exclude their end.
+- Word timing retains the parent-supplied frame and timestamp offset for moved captions and nested scenes.
+- Verify timing at multiple frame rates; both packages compile and the renderer bundle builds.
 
-## Verification and rollout
+## Finding
 
-- Editor and renderer TypeScript checks pass. Renderer production bundle builds successfully.
-- Focused in-memory checks passed for authenticated identity, forged/expired download rejection, long exports on all tiers, and overlapping/exclusive-end frame queries. No test suites, user projects, or paid render jobs were run.
-- Existing editor/render-server INTERNAL_API_SECRET values are configured and match; values were not displayed or changed.
-- Restart the render service to load its updated routes/local composition. Lambda uses a separately deployed composition bundle; that deployment has not been changed by this task. Browser playback has not been manually exercised.
+Both CaptionWord implementations hardcoded 30 FPS for timestamp conversion while receiving frames at the project's/export's actual FPS. At 60 FPS, later captions could already classify all their words as appeared when mounted.
+
+## Verification
+
+Rendered CaptionWord markup correctly changed upcoming/active/appeared colors at 24, 30, and 60 FPS, including nonzero timestamp offsets and backward seeks. Both TypeScript checks and the renderer bundle build passed. No paid exports or deployments were run; Lambda still requires deploying the updated bundle.

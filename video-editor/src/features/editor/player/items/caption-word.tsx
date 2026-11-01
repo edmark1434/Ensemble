@@ -1,3 +1,4 @@
+import { useVideoConfig } from "remotion";
 import React, { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { css, keyframes } from "@emotion/react";
@@ -163,13 +164,13 @@ export const CaptionWord: React.FC<CaptionWordProps> = ({
   textDecoration,
   frame
 }) => {
-  const fps = 30;
+  const { fps } = useVideoConfig();
   const currentFrame = frame;
   const { start, end } = word;
   const startAtFrame = ((start + offsetFrom) / 1000) * fps;
   const endAtFrame = ((end + offsetFrom) / 1000) * fps;
-  const isActive = currentFrame > startAtFrame && currentFrame < endAtFrame;
-  const isAppeared = currentFrame > startAtFrame;
+  const isActive = currentFrame >= startAtFrame && currentFrame < endAtFrame;
+  const isAppeared = currentFrame >= startAtFrame;
 
   // Measure the pill's own rendered size so the radius formula matches the
   // background box: min(width, height) * pct / 100. This is what keeps the
