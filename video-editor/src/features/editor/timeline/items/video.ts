@@ -310,7 +310,7 @@ class Video extends Trimmable {
   }
 
   private hasVideoPreview() {
-    return /\/thumbnails\/video-5s-320\/[^?#]+\.mp4(?:[?#]|$)/.test(this.previewUrl || "");
+    return /\/thumbnails\/video-5s-(?:320|480)\/[^?#]+\.mp4(?:[?#]|$)/.test(this.previewUrl || "");
   }
 
   private generateTimestamps(startTime: number, count: number): number[] {

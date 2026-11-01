@@ -186,7 +186,12 @@ export async function GET(request: NextRequest) {
         .selectFrom("market_asset_thumbnails as mat")
         .innerJoin("media_assets as m", "m.media_asset_id", "mat.media_asset_id")
         .innerJoin("files as thumb", "thumb.file_id", "m.thumbnail_file_id")
-        .whereRef("thumb.file_id", "!=", "m.original_file_id")
+        .where(eb => eb.or([
+          eb("thumb.file_id", "!=", eb.ref("m.original_file_id")),
+          eb.not(eb.exists(eb.selectFrom("market_media_assets as content_link")
+            .select("content_link.media_asset_id")
+            .whereRef("content_link.media_asset_id", "=", "m.media_asset_id"))),
+        ]))
         .where("mat.market_asset_id", "in", marketAssetIds)
         .where("m.deleted_at", "is", null)
         .where("thumb.deleted_at", "is", null)
@@ -248,7 +253,7 @@ export async function GET(request: NextRequest) {
         const proxyUrl = ready ? buildPublicUrl(row.proxy_path!) : "";
         const thumbnailUrl = row.thumbnail_path && (row.thumbnail_mime_type?.startsWith("image/")
           || (row.type === "video" && row.thumbnail_mime_type === "video/mp4"
-            && row.thumbnail_path.startsWith("assets/thumbnails/video-5s-320/")))
+            && /^assets\/thumbnails\/video-5s-(?:320|480)\//.test(row.thumbnail_path)))
           ? buildPublicUrl(row.thumbnail_path) : undefined;
         const audioPreview = row.type === "audio" && row.thumbnail_mime_type?.startsWith("audio/")
           && row.thumbnail_path?.startsWith("assets/thumbnails/audio-30s/")

@@ -13,6 +13,8 @@ import { prepareVideoUpload, discardVideoUpload } from "@/lib/video-upload";
 import { probeAudioVideoDuration, probeImageDimensions } from "@/utils/media-probe";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 import { MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
+import { authorizeMediaUpload } from "@/lib/auth/upload-session";
+import { assertMediaStorageCapacity, StorageLimitError } from "@/lib/db/upload-policy";
 
 interface UrlEntry {
   url: string;
@@ -98,7 +100,10 @@ export async function POST(request: NextRequest) {
 
     // userId/projectId are already the real user_id / project_id UUIDs —
     // no more public_id -> internal id resolution.
+    const denied = await authorizeMediaUpload(request, userId, projectId);
+    if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status });
     const ownerUserId = userId;
+    await assertMediaStorageCapacity(ownerUserId, 0);
     const resolvedProjectId = projectId;
 
     const reservedInBatch = new Set<string>();
@@ -124,6 +129,7 @@ export async function POST(request: NextRequest) {
 
         let contentType = resolveContentType(response.headers.get("content-type"), sourceUrl);
         const buffer = await readBufferWithLimit(response, MAX_FILE_SIZE_BYTES);
+        await assertMediaStorageCapacity(ownerUserId, buffer.byteLength);
 
         const fileId = nanoid();
         let filePath = buildS3Key(userId, fileId, fileName);
@@ -165,7 +171,7 @@ export async function POST(request: NextRequest) {
             width: resolvedWidth, height: resolvedHeight, durationSeconds: resolvedDuration
           });
         } catch (error) {
-          if (preparedVideo) await discardVideoUpload(preparedVideo.filePath).catch(() => undefined);
+          await discardVideoUpload(filePath).catch(() => undefined);
           throw error;
         }
 
@@ -205,6 +211,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, uploads, failed });
   } catch (error) {
+    if (error instanceof StorageLimitError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error in upload URL route:", error);
     return NextResponse.json(
       {

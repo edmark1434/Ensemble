@@ -6,7 +6,6 @@ const { spawn } = require('child_process');
 const sharp = require('sharp');
 
 const MAX_SHORT_SIDE = 1080;
-const MAX_LONG_SIDE = 1920;
 const TAG_FIRST_DELAY_SECONDS = 3;
 const TAG_INTERVAL_SECONDS = [12, 18];
 const MAX_TAGS = 30;
@@ -55,9 +54,11 @@ async function probe(inputPath) {
 
 const even = (value) => Math.max(2, Math.floor(value / 2) * 2);
 
-// Fit Full HD in either orientation without enlarging smaller sources.
-function cappedDimensions(width, height) {
-  const scale = Math.min(1, MAX_SHORT_SIDE / Math.min(width, height), MAX_LONG_SIDE / Math.max(width, height));
+// Fit the uploader's resolution limit in either orientation without upscaling.
+function cappedDimensions(width, height, maxShortSide = MAX_SHORT_SIDE) {
+  if (![720, 1080, 2160].includes(maxShortSide)) throw new Error('Invalid video resolution limit');
+  const maxLongSide = maxShortSide * 16 / 9;
+  const scale = Math.min(1, maxShortSide / Math.min(width, height), maxLongSide / Math.max(width, height));
   const targetWidth = even(width * scale);
   const targetHeight = even(height * scale);
   return { width: targetWidth, height: targetHeight, capped: targetWidth !== width || targetHeight !== height };
@@ -77,17 +78,17 @@ async function removeWorkDir(dir) {
 }
 
 // The upload policy belongs to the original, never to the watermarked derivative.
-async function normalizeVideoOriginal({ inputPath, workDir }) {
+async function normalizeVideoOriginal({ inputPath, workDir, maxShortSide = MAX_SHORT_SIDE }) {
   const info = await probe(inputPath);
   if (!info.hasVideo || !info.width || !info.height || !info.duration) throw new Error('The file has no readable video stream');
   const [sarWidth, sarHeight] = String(info.sampleAspectRatio || '1:1').split(':').map(Number);
   const sar = sarWidth > 0 && sarHeight > 0 ? sarWidth / sarHeight : 1;
   const rotated = info.rotation === 90 || info.rotation === 270;
-  const target = cappedDimensions(info.width * (rotated ? 1 : sar), info.height * (rotated ? sar : 1));
+  const target = cappedDimensions(info.width * (rotated ? 1 : sar), info.height * (rotated ? sar : 1), maxShortSide);
   const needsNormalization = target.capped || info.rotation !== 0
     || (info.sampleAspectRatio && !['1:1', '0:1', 'N/A'].includes(info.sampleAspectRatio));
   if (!needsNormalization) return { ...info, originalPath: inputPath, changed: false };
-  const originalPath = path.join(workDir, 'original-1080p.mp4');
+  const originalPath = path.join(workDir, `original-${maxShortSide}p.mp4`);
   await run(ffmpegBinary(), [
     '-y', '-v', 'error', '-i', inputPath,
     '-map', '0:v:0', '-map', '0:a:0?',
@@ -134,9 +135,9 @@ async function createVideoProxy({ inputPath, workDir, createWatermarkSvg, create
 }
 
 async function createVideoThumbnail({ inputPath, workDir }) {
-  const previewPath = path.join(workDir, 'preview-5s-320px.mp4');
+  const previewPath = path.join(workDir, 'preview-5s-480px.mp4');
   const info = await probe(inputPath);
-  const scale = Math.min(1, 320 / Math.max(info.width, info.height));
+  const scale = Math.min(1, 480 / Math.max(info.width, info.height));
   await run(ffmpegBinary(), ['-y', '-v', 'error', '-i', inputPath,
     '-map', '0:v:0', '-t', '5', '-an', '-map_metadata', '-1',
     '-vf', `scale=${even(info.width * scale)}:${even(info.height * scale)},setsar=1,fps=15`,

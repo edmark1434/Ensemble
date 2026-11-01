@@ -1,15 +1,16 @@
-# Active Task: Restore market video timeline thumbnails
+# Active Task: Fix IDE SQL inspection errors in upload trash and asset queries
 
-## Implementation Objective
+## Objective
 
-Restore timeline filmstrips from the five-second market video previews. The user confirmed native eager video playback no longer stutters; preserve that playback behavior. No new test suites at the user's request.
+Replace raw Kysely expression fragments with typed query-builder expressions, preserving database time and 30-day retention behavior. Verify the trash columns and address the IDE's stale schema warning.
 
-## Acceptance Criteria
+## Acceptance criteria
 
-- [x] Initialize tile dimensions from decoded MP4 metadata rather than the removed still-image loader.
-- [x] Seed a fallback tile from the preview's first frame and redraw the filmstrip after preparation.
-- [x] Missing frames do not prevent drawing subsequent tiles; failed image decoding releases the pending batch.
-- [x] Only short market previews supply thumbnails; originals and playback remain unchanged.
-- [x] Editor TypeScript compile check passed. Timeline appearance awaits confirmation in the running editor.
+- [x] Verified public.media_assets.trashed_at and public.projects.trashed_at exist in the configured database.
+- [x] Trash timestamps, cutoff, remaining-day calculation, and showcase predicate use Kysely expressions instead of SQL fragments.
+- [x] Suppress the stale SqlResolve warning only on the verified retention query, with migration reference.
+- [x] Editor TypeScript check passes.
 
-CloudFront delivery is implemented but disabled pending AWS configuration. It is not required for native direct S3 playback. No AWS configuration was changed. Earlier code checks passed; do not run further test suites for this task at the user's request.
+## Verification
+
+Read-only database schema check, editor TypeScript check, and diff whitespace check passed. No test suites or database mutations.

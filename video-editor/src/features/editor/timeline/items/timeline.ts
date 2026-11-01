@@ -1,4 +1,5 @@
-import TimelineBase, { Rect, timeMsToUnits } from "@designcombo/timeline";
+import TimelineBase, { Rect, timeMsToUnits, TIMELINE_BOUNDING_CHANGED } from "@designcombo/timeline";
+import { dispatch } from "@designcombo/events";
 import Video from "./video";
 import { throttle } from "lodash";
 import Audio from "./audio";
@@ -140,6 +141,29 @@ class Timeline extends TimelineBase {
       useStore.getState().setState({ playheadSnapped: false });
     }
   };
+
+  public calcBounding(): void {
+    if (this.getTrackItems().length) {
+      super.calcBounding();
+      return;
+    }
+
+    // The library's shrink/scroll calculation dereferences the rightmost
+    // clip even when there are none. Deletion and undo both pass through
+    // this empty canvas before the next set of clip objects is rendered.
+    const staticRects = this.getObjects("Track")
+      .filter((track) => (track as any).static)
+      .map((track) => track.getBoundingRect());
+    const bounding = {
+      left: 0,
+      top: staticRects.length ? Math.min(...staticRects.map(rect => rect.top)) : 0,
+      width: this.width,
+      height: staticRects.reduce((bottom, rect) => Math.max(bottom, rect.top + rect.height), 0),
+    };
+    this.bounding = bounding;
+    super.setViewportPos(this.spacing.left, 0);
+    dispatch(TIMELINE_BOUNDING_CHANGED, { payload: { bounding } });
+  }
 
   public purge(): void {
     super.purge();

@@ -55,6 +55,13 @@
 - Paginate growing histories with deterministic ordering and a tie-breaker.
 - Treat schema errors as migration/version mismatches before adding query workarounds.
 
+## Uploaded media trash
+
+- `media_assets.trashed_at` is nullable: Delete sets it to the current database timestamp. Active upload lists require both `trashed_at` and `deleted_at` to be null.
+- Recently deleted uploads have a non-null `trashed_at` and a null `deleted_at`, ordered by the trash date descending. The retention period is 30 days from `trashed_at`.
+- Delete forever and retention cleanup set `deleted_at`; they retain the media record and file objects. `trashed_at` remains as history.
+- `projects` also has nullable `trashed_at`, available for project trash behavior.
+
 ## Badge catalog
 
 - Unlock rules live on `badges`: `trigger_event_code`, `condition_type` (`boolean` or `count`), and `condition_value`.

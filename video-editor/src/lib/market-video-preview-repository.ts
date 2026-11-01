@@ -10,6 +10,6 @@ export async function getMarketVideoPreview(assetId: string, mediaId: string) {
     .where("asset.deleted_at", "is", null).where("media.deleted_at", "is", null)
     .where("preview.deleted_at", "is", null).where("media.type", "=", "video")
     .where("preview.mime_type", "=", "video/mp4").select("preview.path").executeTakeFirst();
-  if (!file?.path.startsWith("assets/thumbnails/video-5s-320/") || file.path.includes("..") || file.path.includes("\\")) return null;
+  if (!file || !/^assets\/thumbnails\/video-5s-(?:320|480)\//.test(file.path) || file.path.includes("..") || file.path.includes("\\")) return null;
   return file.path;
 }

@@ -27,6 +27,13 @@
 - Pagination responses should include items and sufficient paging metadata.
 - Search, status, and date filters must be validated and parameterized.
 
+## Video upload policy
+
+- Main site `GET /api/files/video-upload-policy` and editor `GET /api/uploads/policy` return the signed-in uploader's effective plan, resolution bounds, display label and whether to show the notice. Responses are private/no-store. Editor also returns the main site's upgrade URL.
+- New market video originals and editor file/URL video uploads enforce Free 720p, Premium 1080p, Business 2160p during server-side normalization. Bounds rotate for portrait; smaller videos are not upscaled. Business notices are hidden; image originals are unaffected.
+- Editor presign/finalize/URL-import endpoints verify the signed editor session matches the upload owner. Finalize/import also require editable project membership. The cap is queried at finalization, never supplied by the client.
+- Editor upload controls compare personal media storage against Free 5 GB, Premium 100 GB, or Business 1 TB, including queued and selected transfers. Presign/import reject uploads exceeding capacity; finalization checks actual stored size under a per-owner transaction lock. Only distinct original files belonging to non-deleted media assets count; trashed uploads still count until permanently deleted. Proxies, thumbnails, and project documents are excluded.
+
 ## External providers
 
 - Set authentication and idempotency headers server-side.

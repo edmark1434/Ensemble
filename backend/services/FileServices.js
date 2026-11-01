@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 const { normalizeVideoOriginal, makeWorkDir, removeWorkDir } = require('../lib/MediaProcessing');
+const { getVideoUploadPolicy } = require('./UploadPolicyServices');
 const { PutObjectCommand, HeadObjectCommand, CopyObjectCommand, DeleteObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const s3 = require('../lib/AmazonS3');
@@ -368,7 +369,8 @@ async function finalizeUploadService(accountId, uploadIntentId) {
             const inputPath = path.join(workDir, 'uploaded-video');
             const source = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.staging_key, IfMatch: head.ETag }));
             await pipeline(source.Body, fs.createWriteStream(inputPath));
-            normalized = await normalizeVideoOriginal({ inputPath, workDir });
+            const policy = await getVideoUploadPolicy(accountId);
+            normalized = await normalizeVideoOriginal({ inputPath, workDir, maxShortSide: policy.maxHeight });
         }
         if (normalized?.changed) {
             finalKey = `asset-originals/${accountId}/${crypto.randomUUID()}.mp4`;

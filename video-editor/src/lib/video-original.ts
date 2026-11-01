@@ -21,21 +21,22 @@ export async function readVideoMetadata(filePath: string) {
 }
 
 // Policy applies to the original at upload completion. Proxy creation must never
-// choose a different resolution. Higher plan limits can be added here later.
-export async function normalizeVideoOriginal(inputPath: string, workDir: string) {
+// choose a different resolution. The upload service supplies the verified plan cap.
+export async function normalizeVideoOriginal(inputPath: string, workDir: string, maxShortSide = 1080) {
+  if (![720, 1080, 2160].includes(maxShortSide)) throw new Error("Invalid video resolution limit");
   const metadata = await readVideoMetadata(inputPath);
   const [sarWidth, sarHeight] = (metadata.sampleAspectRatio || '1:1').split(':').map(Number);
   const sar = sarWidth > 0 && sarHeight > 0 ? sarWidth / sarHeight : 1;
   const rotated = metadata.rotation === 90 || metadata.rotation === 270;
   const displayWidth = metadata.width * (rotated ? 1 : sar);
   const displayHeight = metadata.height * (rotated ? sar : 1);
-  const scale = Math.min(1, 1080 / Math.min(displayWidth, displayHeight), 1920 / Math.max(displayWidth, displayHeight));
+  const scale = Math.min(1, maxShortSide / Math.min(displayWidth, displayHeight), (maxShortSide * 16 / 9) / Math.max(displayWidth, displayHeight));
   const width = Math.max(2, Math.floor(displayWidth * scale / 2) * 2);
   const height = Math.max(2, Math.floor(displayHeight * scale / 2) * 2);
   const changed = width !== metadata.width || height !== metadata.height || metadata.rotation !== 0
     || Boolean(metadata.sampleAspectRatio && !["1:1", "0:1", "N/A"].includes(metadata.sampleAspectRatio));
   if (!changed) return { ...metadata, originalPath: inputPath, changed: false };
-  const originalPath = path.join(workDir, "original-1080p.mp4");
+  const originalPath = path.join(workDir, `original-${maxShortSide}p.mp4`);
   await execute(process.env.FFMPEG_PATH || "ffmpeg", [
     "-y", "-v", "error", "-i", inputPath,
     "-map", "0:v:0", "-map", "0:a:0?",

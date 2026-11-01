@@ -4,6 +4,7 @@ import useUploadStore from "@/features/editor/store/use-upload-store";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
+import { useMediaStorage } from "./use-media-storage";
 
 export const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
@@ -24,6 +25,7 @@ export function useFileDropUpload() {
   const { addPendingUploads, processUploads } = useUploadStore();
   const { setActiveMenuItem, setShowMenuItem, setDrawerOpen } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
+  const { uploadsDisabled, checkCapacity } = useMediaStorage();
 
   const openUploadsMenu = useCallback(() => {
     setActiveMenuItem("uploads");
@@ -44,7 +46,7 @@ export function useFileDropUpload() {
   // SceneEmpty's onFilesDropped={startUpload}. Filtering here means both
   // paths get the size check without DroppableArea needing to know about it.
   const startUpload = useCallback(
-    (files: File[]) => {
+    async (files: File[]) => {
       if (files.length === 0) return;
 
       const oversized = files.filter((f) => f.size > MAX_FILE_SIZE_BYTES);
@@ -59,6 +61,8 @@ export function useFileDropUpload() {
       }
 
       if (validFiles.length === 0) return;
+      const storageError = await checkCapacity(validFiles.reduce((sum, file) => sum + file.size, 0));
+      if (storageError) { flashDragError(storageError); return; }
 
       const fileUploads = validFiles.map((file) => ({
         id: crypto.randomUUID(),
@@ -75,20 +79,22 @@ export function useFileDropUpload() {
         processUploads();
       }, 0);
     },
-    [addPendingUploads, processUploads, openUploadsMenu, flashDragError]
+    [addPendingUploads, processUploads, openUploadsMenu, flashDragError, checkCapacity]
   );
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     dragCounterRef.current += 1;
     if (e.dataTransfer.types.includes("Files")) {
-      setIsDragOver(true);
+      e.dataTransfer.dropEffect = uploadsDisabled ? "none" : "copy";
+      setIsDragOver(!uploadsDisabled);
     }
-  }, []);
+  }, [uploadsDisabled]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-  }, []);
+    if (e.dataTransfer.types.includes("Files")) e.dataTransfer.dropEffect = uploadsDisabled ? "none" : "copy";
+  }, [uploadsDisabled]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -119,7 +125,8 @@ export function useFileDropUpload() {
     handleDragOver,
     handleDragLeave,
     handleDrop,
-    startUpload
+    startUpload,
+    uploadsDisabled
   };
 }
 

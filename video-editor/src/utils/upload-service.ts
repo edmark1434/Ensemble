@@ -105,7 +105,8 @@ export async function processFileUpload(
         "/api/uploads/presign",
         {
           userId: userId,
-          fileNames: [file.name]
+          fileNames: [file.name],
+          fileSizes: [file.size]
         },
         {
           headers: { "Content-Type": "application/json" }
@@ -166,7 +167,7 @@ export async function processFileUpload(
     callbacks.onStatus(uploadId, "uploaded");
     return uploadData;
   } catch (error) {
-    callbacks.onStatus(uploadId, "failed", (error as Error).message);
+    callbacks.onStatus(uploadId, "failed", axios.isAxiosError(error) ? error.response?.data?.error || error.message : (error as Error).message);
     throw error;
   }
 }

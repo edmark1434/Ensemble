@@ -6,6 +6,7 @@ import { mediaUrl, type AssetRecord, type AssetType } from "./assetTypes";
 import { prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
 import { enqueueAssetUpload } from "./assetUploadStore";
 import useGlobalState from "@/lib/global_state";
+import VideoUploadNotice from "./VideoUploadNotice";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 
 type SourceKind = Exclude<AssetType, "template">;
@@ -399,6 +400,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
                 </div>)}
               </div>
             </div>}
+            {!asset && listingType === "video" && <VideoUploadNotice />}
             {(!asset || showShowcaseControls) && <div className={`grid gap-4 ${showShowcaseControls && !asset ? "sm:grid-cols-2" : "grid-cols-1"}`}>
               {!asset && isTemplate && (
                 <div><label htmlFor="asset-ydoc-snapshot" className="mb-2 block text-sm font-semibold">Project snapshot ID <span className="text-red-500">*</span></label><input id="asset-ydoc-snapshot" inputMode="numeric" value={ydocSnapshotId} onChange={(event) => setYdocSnapshotId(event.target.value)} className={inputClass} placeholder="Snapshot ID" /><p className="mt-1 text-xs text-gray-500">A template links to one snapshot of a project.</p></div>

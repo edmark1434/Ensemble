@@ -88,7 +88,8 @@ async function completeMediaAssetJobRepository(job, outputs) {
     )).rows[0].file_id;
 
     const proxyFileId = outputs.proxy ? await insertFile(outputs.proxy) : null;
-    const thumbnailFileId = outputs.thumbnail ? await insertFile(outputs.thumbnail) : null;
+    const thumbnailFileId = outputs.useOriginalThumbnail && job.is_content === false
+      ? media.original_file_id : outputs.thumbnail ? await insertFile(outputs.thumbnail) : null;
     const originalFileId = outputs.cappedOriginal ? await insertFile(outputs.cappedOriginal) : null;
     await client.query(
       `UPDATE media_assets

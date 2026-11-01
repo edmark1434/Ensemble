@@ -280,7 +280,7 @@ const MediaSection = ({
         <SelectTrigger className="w-full truncate overflow-hidden">
           <SelectValue placeholder="Select media" />
         </SelectTrigger>
-        <SelectContent className="z-[200]">
+        <SelectContent className="z-[200] w-[var(--radix-select-trigger-width)] [&_[data-slot=select-viewport]]:min-w-0">
           {selectMediaItems.map((item) => (
             <SelectItem value={item.value} key={item.value}>
               {item.label}

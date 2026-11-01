@@ -4,6 +4,17 @@ const {
     generateUploadUrl,
     finalizeUploadService
 } = require('../services/FileServices');
+const { getVideoUploadPolicy } = require('../services/UploadPolicyServices');
+
+async function getVideoUploadPolicyController(req, res) {
+    if (!req.user?.account_id) return res.status(401).json({ message: 'Sign in to continue.' });
+    try {
+        res.set('Cache-Control', 'private, no-store');
+        return res.json(await getVideoUploadPolicy(req.user.account_id));
+    } catch {
+        return res.status(500).json({ message: 'Unable to load upload limits.' });
+    }
+}
 
 async function getAllProfileFilesController(req, res) {
     try {
@@ -164,6 +175,7 @@ async function registerFileController(req, res) {
 }
 
 module.exports = {
+    getVideoUploadPolicyController,
     getAllProfileFilesController,
     generateUploadUrlController,
     registerFileController

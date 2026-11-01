@@ -4,6 +4,8 @@ import { connection, NextRequest, NextResponse } from "next/server";
 import { buildPublicUrl } from "@/lib/s3";
 import { createMediaUpload } from "@/lib/db/media-uploads";
 import { prepareVideoUpload, discardVideoUpload, readUploadedFile } from "@/lib/video-upload";
+import { authorizeMediaUpload } from "@/lib/auth/upload-session";
+import { assertMediaStorageCapacity, StorageLimitError } from "@/lib/db/upload-policy";
 
 export async function POST(request: NextRequest) {
   await connection();
@@ -18,9 +20,12 @@ export async function POST(request: NextRequest) {
       height,
       durationSeconds
     } = await request.json();
+    const denied = await authorizeMediaUpload(request, userId, projectId || "");
+    if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status });
 
     // Route by stored metadata, not a client-supplied type that could skip normalization.
     const { contentType, fileSize } = await readUploadedFile(userId, filePath);
+    await assertMediaStorageCapacity(userId, fileSize);
     const isVideo = contentType.startsWith("video/");
     const upload = isVideo
       ? await prepareVideoUpload({ userId, filePath, fileName, contentType })
@@ -44,6 +49,7 @@ export async function POST(request: NextRequest) {
       upload: { ...upload, mediaAssetId: mediaAsset.media_asset_id }
     });
   } catch (error) {
+    if (error instanceof StorageLimitError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error completing upload:", error);
     return NextResponse.json(
       {

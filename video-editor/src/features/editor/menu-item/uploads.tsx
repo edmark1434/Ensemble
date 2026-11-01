@@ -35,6 +35,9 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { UploadActions, DeletedUploads } from "../components/upload-actions";
+import { MarketedAssetIndicator, MarketPreview } from "@/components/market-asset-browser";
+import { useMediaStorage } from "../hooks/use-media-storage";
 import { millisecondsToHHMMSS } from "@/features/editor/utils/format";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
@@ -304,8 +307,20 @@ const UploadImageItem = ({
   const resolvedSrc = item.metadata?.uploadedUrl || item.url;
   const localPreviewUrl = useObjectUrl(item.file);
   const previewSrc =
-    item.preview || (isReady ? resolvedSrc || localPreviewUrl : localPreviewUrl || resolvedSrc);
+    item.thumbnailUrl || item.preview || (isReady ? resolvedSrc || localPreviewUrl : localPreviewUrl || resolvedSrc);
   const displayName = item.fileName || item.file?.name || item.name || "Untitled";
+
+  useEffect(() => {
+    if (!item.thumbnailUrl || (dbWidth && dbHeight) || !resolvedSrc) return;
+    const image = new window.Image();
+    image.onload = () => {
+      if (image.naturalWidth && image.naturalHeight) {
+        setProbedDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+      }
+    };
+    image.src = resolvedSrc;
+    return () => { image.onload = null; };
+  }, [item.thumbnailUrl, dbWidth, dbHeight, resolvedSrc]);
 
   const enrichedItem = useMemo(
     () => ({
@@ -336,7 +351,7 @@ const UploadImageItem = ({
             draggable={false}
             src={previewSrc}
             onLoad={(e) => {
-              if (dbWidth && dbHeight) return;
+              if ((dbWidth && dbHeight) || item.thumbnailUrl) return;
               const img = e.currentTarget;
               if (img.naturalWidth && img.naturalHeight) {
                 setProbedDimensions({ width: img.naturalWidth, height: img.naturalHeight });
@@ -394,6 +409,7 @@ const UploadImageItem = ({
         className="relative flex w-full h-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >
         {thumbnail}
+        {(item.isMarketed || item.canDelete) && <div className="absolute right-1 top-1 z-20 flex items-center gap-1">{item.isMarketed && <MarketedAssetIndicator />}{item.canDelete && !item.isMarketed && <UploadActions item={item} />}</div>}
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
@@ -438,19 +454,18 @@ const UploadVideoItem = ({
   const videoSrc = resolvedSrc || localPreviewUrl;
   const displayName = item.fileName || item.file?.name || item.name || "Untitled";
 
-  // Static first-frame thumbnail - this is the only visual representation
-  // now, no hover-to-play. Generated once per src.
+  // Keep a still for drag previews; cards play the short preview on hover.
   const [posterDataUrl, setPosterDataUrl] = useState("");
   useEffect(() => {
     if (!videoSrc) return;
     let cancelled = false;
-    extractVideoThumbnailFromUrl(videoSrc).then((url) => {
+    extractVideoThumbnailFromUrl(item.videoPreviewUrl || videoSrc).then((url) => {
       if (!cancelled && url) setPosterDataUrl(url);
     });
     return () => {
       cancelled = true;
     };
-  }, [videoSrc]);
+  }, [videoSrc, item.videoPreviewUrl]);
 
   // Fallback width/height/duration probe for assets the DB doesn't have yet,
   // done on a detached video element since we no longer render one visibly.
@@ -482,7 +497,7 @@ const UploadVideoItem = ({
       metadata: {
         ...item.metadata,
         name: displayName,
-        previewUrl: posterDataUrl || undefined
+        previewUrl: item.videoPreviewUrl || posterDataUrl || undefined
       },
       details: {
         ...item.details,
@@ -501,13 +516,9 @@ const UploadVideoItem = ({
   const thumbnail = (
     <div className="relative w-full h-full rounded-md overflow-hidden bg-zinc-800">
       <div className={`w-full h-full ${!isReady ? "opacity-50" : ""}`}>
-        {posterDataUrl ? (
-          <img
-            draggable={false}
-            src={posterDataUrl}
-            className="w-full h-full rounded-md object-cover"
-            alt={displayName}
-          />
+        {item.videoPreviewUrl || posterDataUrl ? (
+          <MarketPreview src={item.videoPreviewUrl || posterDataUrl} type="video"
+            hoverVideoSrc={item.videoPreviewUrl ? undefined : videoSrc} />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -529,7 +540,7 @@ const UploadVideoItem = ({
         ))}
       {isReady && meta?.duration ? (
         <div
-          className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
+          className="absolute bottom-2 right-2 rounded-md bg-secondary/90 px-2 py-0.5 text-xs text-secondary-foreground/90">
           {formatDuration(meta.duration)}
         </div>
       ) : null}
@@ -563,6 +574,7 @@ const UploadVideoItem = ({
         className="relative flex w-full h-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >
         {thumbnail}
+        {(item.isMarketed || item.canDelete) && <div className="absolute right-1 top-1 z-20 flex items-center gap-1">{item.isMarketed && <MarketedAssetIndicator />}{item.canDelete && !item.isMarketed && <UploadActions item={item} />}</div>}
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
@@ -601,17 +613,17 @@ const UploadAudioItem = ({
   const isPlaying = playingId === item.id;
   const resolvedSrc = item.metadata?.uploadedUrl || item.url;
   const localPreviewUrl = useObjectUrl(item.file);
-  const audioSrc = resolvedSrc || localPreviewUrl;
+  const audioSrc = item.audioPreviewUrl || resolvedSrc || localPreviewUrl;
   const displayName = item.fileName || item.file?.name || item.name || "Untitled";
 
   useEffect(() => {
     if (isPlaying) {
-      audioRef.current?.play();
+      void audioRef.current?.play().catch(() => setPlayingId(null));
     } else {
       audioRef.current?.pause();
       if (audioRef.current) audioRef.current.currentTime = 0;
     }
-  }, [isPlaying]);
+  }, [isPlaying, audioSrc, setPlayingId]);
 
   const togglePlay = () => {
     if (!isReady) return;
@@ -619,7 +631,7 @@ const UploadAudioItem = ({
   };
 
   const handleLoadedMetadata = () => {
-    if (dbDuration != null) return;
+    if (dbDuration != null || item.audioPreviewUrl) return;
     if (audioRef.current && Number.isFinite(audioRef.current.duration)) {
       setProbedDurationSeconds(audioRef.current.duration);
     }
@@ -698,6 +710,7 @@ const UploadAudioItem = ({
         )}
       </div>
 
+      {isReady && (item.isMarketed || item.canDelete) && <div className="flex shrink-0 items-center gap-1">{item.isMarketed && <MarketedAssetIndicator />}{item.canDelete && !item.isMarketed && <UploadActions item={item} />}</div>}
       {isReady && isPlaying && (
         <div className="flex items-end gap-[2px] h-4 shrink-0">
           {[...Array(5)].map((_, i) => (
@@ -871,7 +884,7 @@ export const Uploads = () => {
   const seenUploadIdsRef = useRef<Set<string>>(new Set());
 
   const { projectId, userId } = useStore();
-  const [scope, setScope] = useState<"mine" | "project" | "mine-in-project">("mine");
+  const [scope, setScope] = useState<"mine" | "project" | "mine-in-project" | "deleted">("mine");
 
   const { data = [], isLoading, isError } = useQuery({
     queryKey: ["media-assets", projectId, scope, scope === "project" ? null : userId],
@@ -880,8 +893,11 @@ export const Uploads = () => {
       if (scope !== "project") params.set("userId", userId);
       return axios.get(`/api/media-assets?${params}`).then((r) => r.data.uploads);
     },
-    enabled: !!projectId && (scope === "project" || !!userId)
+    enabled: !!projectId && !!userId,
+    refetchInterval: scope === "deleted" ? 60_000 : false,
   });
+
+  const { data: storage, uploadsDisabled } = useMediaStorage();
 
   // Whenever a new upload lands in pending/active (i.e. its loading state
   // starts showing up in the grid below), jump to the tab matching its
@@ -969,6 +985,7 @@ export const Uploads = () => {
   useEffect(() => {
     if (uploads.length === 0) return;
     queryClient.invalidateQueries({ queryKey: ["media-assets", projectId] });
+    queryClient.invalidateQueries({ queryKey: ["media-storage-usage"] });
     setUploads([]);
   }, [uploads, queryClient, projectId, setUploads]);
 
@@ -1063,22 +1080,6 @@ export const Uploads = () => {
     [data, ephemeralByKind.audio, ephemeralNames]
   );
 
-  if (isLoading) {
-    return (
-      <div className="w-full h-full flex items-center justify-center py-10 text-muted-foreground">
-        <Loader2 className="w-8 h-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="w-full h-full flex items-center justify-center py-10 text-sm text-red-500">
-        Failed to load uploads
-      </div>
-    );
-  }
-
   const handleAddVideo = (video: any) => {
     if (video.__status && video.__status !== "ready") return;
     const clean = stripEphemeralFields(video);
@@ -1161,6 +1162,13 @@ export const Uploads = () => {
   };
 
   const noUploads = images.length === 0 && videos.length === 0 && audios.length === 0;
+  const storageUsedLabel = storage
+    ? storage.usedBytes < 1024 ** 3
+      ? `${(storage.usedBytes / 1024 ** 2).toFixed(1)} MB`
+      : `${(storage.usedBytes / 1024 ** 3).toFixed(2)} GB`
+    : null;
+  const storageLimitGb = storage ? (storage.limitBytes / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 0 }) : null;
+  const storagePercent = storage ? Math.min(100, (storage.usedBytes / storage.limitBytes) * 100) : 0;
 
   return (
     <div
@@ -1190,6 +1198,7 @@ export const Uploads = () => {
         <Button
           className="w-full cursor-pointer"
           onClick={() => setShowUploadModal(true)}
+          disabled={uploadsDisabled}
           variant={"default"}
         >
           Upload files
@@ -1199,16 +1208,17 @@ export const Uploads = () => {
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="w-[var(--radix-select-trigger-width)] [&_[data-slot=select-viewport]]:min-w-0">
             <SelectItem value="mine">Your uploads</SelectItem>
             <SelectItem value="project">Uploads in this project</SelectItem>
             <SelectItem value="mine-in-project">Your uploads in this project</SelectItem>
+            <SelectItem value="deleted">Your recently deleted uploads</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {noUploads ? (
-        <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+      {isLoading ? <div className="flex min-h-0 flex-1 items-center justify-center"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div> : isError ? <p className="flex-1 p-4 text-sm text-destructive">Failed to load uploads</p> : scope === "deleted" ? <DeletedUploads items={data} /> : noUploads ? (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
           <Upload size={32} className="opacity-50" />
           <span className="text-sm">No uploads yet</span>
         </div>
@@ -1264,6 +1274,20 @@ export const Uploads = () => {
             )}
           </TabsContent>
         </Tabs>
+      )}
+
+      {storage && (
+        <div className="flex shrink-0 items-center gap-4 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Media storage used" aria-valuemin={0} aria-valuemax={storage.limitBytes} aria-valuenow={Math.min(storage.usedBytes, storage.limitBytes)}>
+              <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${storagePercent}%` }} />
+            </div>
+            <p className="mt-1 text-xs leading-none text-muted-foreground">{storageUsedLabel} of {storageLimitGb} GB used</p>
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" asChild>
+            <a href={storage.upgradeUrl} target="_blank" rel="noopener noreferrer">Get more storage</a>
+          </Button>
+        </div>
       )}
     </div>
   );

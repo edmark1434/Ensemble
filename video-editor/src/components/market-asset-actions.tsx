@@ -56,7 +56,7 @@ export function MarketAssetActions({ bundle, menuOnly = false }: { bundle: Marke
       {!bundle.is_owner && <Button type="button" size="icon" variant="ghost" className="size-7 text-muted-foreground" aria-label="Report asset" onClick={() => setReportOpen(true)}><Flag className="size-4" /></Button>}
     </>}
     {menuOnly && <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button type="button" size="icon" variant="secondary" className="size-7 rounded-full" aria-label={`Actions for ${bundle.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button type="button" size="icon" variant="ghost" className="size-7 rounded-full bg-black/50 text-white hover:bg-black/60 hover:text-white" aria-label={`Actions for ${bundle.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
         <DropdownMenuItem disabled={pending} onSelect={() => void toggle("like")}><Heart className={current.is_liked ? "fill-current text-red-400" : ""} />{current.is_liked ? "Unlike" : "Like"}</DropdownMenuItem>
         <DropdownMenuItem disabled={pending} onSelect={() => void toggle("save")}><Bookmark className={current.is_saved ? "fill-current text-amber-400" : ""} />{current.is_saved ? "Unsave" : "Save"}</DropdownMenuItem>

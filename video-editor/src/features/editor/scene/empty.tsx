@@ -44,7 +44,7 @@ const SceneEmpty = () => {
 
   const { setShowUploadModal } = useUploadStore();
   const isMediumScreen = useIsMediumScreen();
-  const { startUpload, dragError } = useFileDropUpload();
+  const { startUpload, dragError, uploadsDisabled } = useFileDropUpload();
 
   return (
     <div
@@ -57,6 +57,7 @@ const SceneEmpty = () => {
         <DroppableArea
           onDragStateChange={setIsDraggingOver}
           onFilesDropped={startUpload}
+          filesDisabled={uploadsDisabled}
           style={{ width: desiredSize.width, height: desiredSize.height }}
           className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed bg-card text-center transition-colors duration-200 ease-in-out ${
             dragError
@@ -80,6 +81,7 @@ const SceneEmpty = () => {
                   variant="default"
                   size={isMediumScreen ? "sm" : "icon"}
                   onClick={() => setShowUploadModal(true)}
+                  disabled={uploadsDisabled}
                 >
                   <Plus width={16} />
                   <span className="hidden md:block">Upload files</span>

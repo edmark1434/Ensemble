@@ -112,20 +112,22 @@ async function main() {
     const { rows: [showcaseJob] } = await query(`SELECT job.* FROM media_asset_jobs job
       JOIN market_asset_thumbnails link ON link.media_asset_id = job.media_asset_id
       WHERE job.market_asset_id = $1`, [bundleId]);
-    assert.ok(showcaseJob, 'new bundle covers are queued for a 320px thumbnail');
+    assert.ok(showcaseJob, 'new bundle covers are queued for dimension extraction');
     await query("UPDATE media_asset_jobs SET status='running',attempts=1 WHERE media_asset_job_id=$1", [showcaseJob.media_asset_job_id]);
     const beforeShowcase = stored.size;
     assert.equal(await runMediaJob({ ...showcaseJob, attempts: 1, is_content: false,
       original_file_id: bundleFiles[2].id, original_name: 'cover.png', original_path: bundleFiles[2].originalPath,
       original_size_bytes: image.length }), 'done');
-    assert.equal(stored.size, beforeShowcase + 1, 'only one small thumbnail uploaded');
-    const { rows: [showcase] } = await query(`SELECT m.original_file_id, m.proxy_file_id, m.thumbnail_file_id, f.path
+    assert.equal(stored.size, beforeShowcase, 'showcase originals are reused without recompression');
+    const { rows: [showcase] } = await query(`SELECT m.original_file_id, m.proxy_file_id, m.thumbnail_file_id, m.width, m.height, f.path
       FROM media_assets m JOIN files f ON f.file_id = m.thumbnail_file_id WHERE m.media_asset_id=$1`, [showcaseJob.media_asset_id]);
     assert.equal(showcase.original_file_id, bundleFiles[2].id);
     assert.equal(showcase.proxy_file_id, bundleFiles[2].id);
-    assert.notEqual(showcase.thumbnail_file_id, bundleFiles[2].id);
-    assert.ok(showcase.path.startsWith('assets/thumbnails/320/'));
-    console.log('PASS: new bundle covers get a thumbnail without replacing their full preview');
+    assert.equal(showcase.thumbnail_file_id, bundleFiles[2].id);
+    assert.equal(showcase.path, bundleFiles[2].originalPath);
+    assert.equal(showcase.width, 320);
+    assert.equal(showcase.height, 240);
+    console.log('PASS: new bundle covers retain original quality and store dimensions');
   } finally {
     pool.connect = realConnect;
     pool.query = realQuery;

@@ -1,4 +1,6 @@
 import { db } from "@/lib/db";
+import { sql } from "kysely";
+import { assertMediaStorageCapacity } from "./upload-policy";
 
 export async function createMediaUpload(input: {
   userId: string; projectId: string; fileName: string; filePath: string;
@@ -6,6 +8,9 @@ export async function createMediaUpload(input: {
   width?: number | null; height?: number | null; durationSeconds?: number | null;
 }) {
   return db.transaction().execute(async (transaction) => {
+    // Serialize finalization per account so simultaneous uploads cannot overspend storage.
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.userId}, 0))`.execute(transaction);
+    await assertMediaStorageCapacity(input.userId, input.fileSize, transaction);
     const file = await transaction.insertInto("files").values({
       name: input.fileName, path: input.filePath, mime_type: input.contentType, size_bytes: input.fileSize
     }).returning("file_id").executeTakeFirstOrThrow();

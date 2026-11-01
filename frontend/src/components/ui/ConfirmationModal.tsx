@@ -24,7 +24,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
   return (
     /* Shifted coordinate mapping base offset to match your user menu dashboard alignment precisely */
-    <div className="fixed top-0 bottom-0 right-0 left-0 md:left-64 z- flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed top-0 bottom-0 right-0 left-0 md:left-64 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-red-500/5 blur-[60px]" />
       </div>

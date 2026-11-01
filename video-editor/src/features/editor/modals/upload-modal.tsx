@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { MAX_FILE_COUNT, MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { formatFileSize } from "@/features/editor/hooks/use-file-drop-upload";
+import { VideoUploadNotice } from "../components/video-upload-notice";
+import { useMediaStorage } from "../hooks/use-media-storage";
 
 type ModalUploadProps = {
   type?: string;
@@ -206,8 +208,19 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragError, setDragError] = useState<string | null>(null);
+  const { data: storage, isError: storageFailed, availableBytes, uploadsDisabled, checkCapacity } = useMediaStorage();
+  const selectedBytes = files.reduce((sum, item) => sum + (item.file?.size ?? 0), 0)
+    + urlEntries.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0);
+  const exceedsStorage = !!storage && selectedBytes > availableBytes;
+  const additionsDisabled = uploadsDisabled || (!!storage && selectedBytes >= availableBytes);
+  const storageMessage = !storage
+    ? storageFailed ? "Unable to check storage. Please try again." : "Checking storage…"
+    : uploadsDisabled
+    ? "Your storage is full. Get more storage to upload files."
+    : exceedsStorage ? "Selected files exceed your available storage. Remove some files or get more storage." : null;
 
   const triggerFileInput = () => {
+    if (additionsDisabled) return;
     fileInputRef.current?.click();
   };
 
@@ -215,6 +228,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
     typeof bytes === "number" && bytes > MAX_FILE_SIZE_BYTES;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (additionsDisabled) return;
     if (!e.target.files?.length) return;
 
     const selectedFiles = Array.from(e.target.files);
@@ -248,7 +262,9 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(true);
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = additionsDisabled ? "none" : "copy";
+    setIsDragOver(!additionsDisabled);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -258,7 +274,9 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
+    if (additionsDisabled) return;
 
     if (e.dataTransfer.files) {
       const droppedFiles = Array.from(e.dataTransfer.files);
@@ -284,6 +302,10 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
         .slice(0, remainingSlots)
         .map((f) => ({ id: crypto.randomUUID(), file: f }));
       if (newFiles.length === 0) return;
+      if (selectedBytes + newFiles.reduce((sum, item) => sum + item.file.size, 0) > availableBytes) {
+        setDragError("These files exceed your available storage. Remove some files or get more storage.");
+        return;
+      }
 
       setFiles((prev) => [...newFiles, ...prev]);
       const videoThumbnailsData = await Promise.all(
@@ -310,6 +332,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   };
 
   const addUrlToList = () => {
+    if (additionsDisabled) return;
     const trimmed = videoUrl.trim();
     setVideoUrl("");
     if (!trimmed) return;
@@ -393,6 +416,10 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   const isLargeScreen = useIsLargeScreen();
 
   const handleUpload = async () => {
+    if (uploadsDisabled || exceedsStorage || isUploading) return;
+    setIsUploading(true);
+    const storageError = await checkCapacity(selectedBytes);
+    if (storageError) { setDragError(storageError); setIsUploading(false); return; }
     const fileUploads = files
       .filter((f) => f.file?.type && !isOverSizeLimit(f.file?.size))
       .map((f) => ({
@@ -418,7 +445,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
       }));
 
     const combinedUploads = [...fileUploads, ...urlUploads];
-    if (combinedUploads.length === 0) return;
+    if (combinedUploads.length === 0) { setIsUploading(false); return; }
 
     addPendingUploads(combinedUploads);
 
@@ -435,6 +462,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
       setUrlEntries([]);
       setShowUploadModal(false);
       setVideoUrl("");
+      setIsUploading(false);
     }, 0);
   };
 
@@ -454,6 +482,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   useEffect(() => {
     setFiles([]);
     setUrlEntries([]);
+    setDragError(null);
   }, [showUploadModal]);
 
   const isMediumScreen = useIsMediumScreen();
@@ -536,8 +565,11 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
     <div>
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
         <DialogContent
+          onDragEnter={event => event.stopPropagation()}
+          onDragOver={event => event.stopPropagation()}
+          onDrop={event => { event.preventDefault(); event.stopPropagation(); }}
           className={cn(
-            "z-[300] border bg-card px-2 py-8 gap-6 overflow-hidden",
+            "z-[300] max-h-[calc(100dvh-2rem)] border bg-card px-2 py-8 gap-6 overflow-y-auto",
             hasItems ? "sm:max-w-6xl" : "sm:max-w-lg"
           )}
         >
@@ -546,18 +578,21 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
           </DialogHeader>
           <div className="flex w-full">
             <div className="space-y-6 px-6 flex-1">
+              {(type === "all" || type === "video") && <VideoUploadNotice />}
               <label className="flex flex-col gap-2">
                 <input
                   type="file"
                   accept={getAcceptType()}
                   onChange={handleFileChange}
                   multiple
+                  disabled={additionsDisabled}
                   ref={fileInputRef}
                   style={{ display: "none" }}
                 />
 
                 <div
-                  className={`h-72 flex items-center justify-center gap-4 border-dashed rounded-md p-4 transition-colors ${
+                  aria-disabled={additionsDisabled}
+                  className={`h-72 flex items-center justify-center gap-4 border-dashed rounded-md p-4 transition-colors ${additionsDisabled ? "opacity-50 cursor-not-allowed" : ""} ${
                     dragError
                       ? "border border-red-500 bg-red-500/10"
                       : isDragOver
@@ -574,7 +609,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
                       variant="default"
                       size={isMediumScreen ? "sm" : "icon"}
                       onClick={triggerFileInput}
-                      disabled={allItems.filter(item => !item.isOverLimit).length === MAX_FILE_COUNT}
+                      disabled={additionsDisabled || allItems.filter(item => !item.isOverLimit).length === MAX_FILE_COUNT}
                     >
                       <span className="hidden md:block">Browse files</span>
                     </Button>
@@ -588,7 +623,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
                         allItems.filter(item => !item.isOverLimit).length === MAX_FILE_COUNT ? "opacity-50" : ""
                       )}
                     >
-                      {dragError ?? "or drag and drop files here"}
+                      {storageMessage ?? dragError ?? "or drag and drop files here"}
                     </p>
                   </div>
                 </div>
@@ -600,7 +635,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
                 <span className="text-sm text-muted-foreground">
                   Selected items ({allItems.filter(item => !item.isOverLimit).length}/{MAX_FILE_COUNT}):
                 </span>
-                <ScrollArea className="max-h-63">
+                <ScrollArea className="h-[26.25rem]">
                   <AnimatePresence initial={false}>
                     <div className="flex flex-col gap-3">
                       {allItems.map((item) => (
@@ -673,7 +708,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
                 type="text"
                 placeholder="https://..."
                 value={videoUrl}
-                disabled={allItems.filter(item => !item.isOverLimit).length === MAX_FILE_COUNT}
+                disabled={additionsDisabled || allItems.filter(item => !item.isOverLimit).length === MAX_FILE_COUNT}
                 onChange={(e) => setVideoUrl(e.target.value)}
                 onKeyDown={handleUrlKeyDown}
                 // onBlur={handleUrlBlur}
@@ -686,7 +721,7 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
               </Button>
               <Button
                 onClick={handleUpload}
-                disabled={!hasItems || isUploading || urlEntries.some((e) => e.probing)}
+                disabled={!hasItems || uploadsDisabled || exceedsStorage || isUploading || urlEntries.some((e) => e.probing)}
               >
                 Upload
               </Button>

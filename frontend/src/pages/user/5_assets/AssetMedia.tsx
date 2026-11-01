@@ -34,7 +34,7 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
   if ((compact || thumbnailOnly) && src) {
     return (
       <div className={`relative ${common} select-none overflow-hidden bg-gray-100 dark:bg-black/30`} onContextMenu={(event) => event.preventDefault()}>
-        {/\/thumbnails\/video-5s-320\//.test(src) ? <video src={src} muted loop playsInline preload="metadata"
+        {/\/thumbnails\/video-5s-(?:320|480)\//.test(src) ? <video src={src} muted loop playsInline preload="metadata"
           onError={() => setFailedSrc(src)} className="h-full w-full object-contain"
           onMouseEnter={event => { void event.currentTarget.play().catch(() => {}); }}
           onMouseLeave={event => { event.currentTarget.pause(); event.currentTarget.currentTime = 0; }} />

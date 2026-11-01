@@ -26,6 +26,7 @@ interface MediaAssetsTable {
   is_marketed: Generated<boolean>;
   created_at: Generated<Date>;
   deleted_at: Date | null;
+  trashed_at: Date | null;
 }
 
 interface AccountsTable {
@@ -53,6 +54,7 @@ interface ProjectsTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
+  trashed_at: Date | null;
 }
 
 interface ProjectMembersTable {

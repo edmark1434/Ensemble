@@ -18,7 +18,7 @@ const {
 } = require('../repositories/AssetPreviewRepositories');
 
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
-const THUMBNAIL_SIZE = 320;
+const THUMBNAIL_SIZE = 640;
 const THUMBNAIL_QUALITY = 70;
 const PROXY_SHORT_SIDE = 1080;
 const PROXY_LONG_SIDE = 1920;
@@ -163,9 +163,15 @@ async function readImageOriginal(file) {
   return buffer;
 }
 
-async function generateShowcaseThumbnail(file) {
-  const bytes = await createImageThumbnail(await readImageOriginal(file));
-  return { thumbnail: await putDerivative('assets/thumbnails/320', safeBaseName(file.name), 'thumbnail-320px', bytes) };
+async function prepareShowcaseImage(file) {
+  const metadata = await sharp(await readImageOriginal(file), INPUT_OPTIONS).metadata();
+  if (!metadata.width || !metadata.height) throw derivativeError('ASSET_IMAGE_UNPROCESSABLE', 'Invalid showcase image dimensions');
+  const swapsAxes = Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
+  return {
+    useOriginalThumbnail: true,
+    width: swapsAxes ? metadata.height : metadata.width,
+    height: swapsAxes ? metadata.width : metadata.height,
+  };
 }
 
 // file: { file_id, name, path, size_bytes } of a protected original image
@@ -194,7 +200,7 @@ async function generateImageDerivatives(file) {
   const uploaded = [];
   try {
     const results = await Promise.allSettled([
-      putDerivative('assets/thumbnails/320', baseName, 'thumbnail-320px', thumbnailBytes),
+      putDerivative('assets/thumbnails/640', baseName, 'thumbnail-640px', thumbnailBytes),
       putDerivative('assets/proxies/v2', baseName, 'proxy-ensemble-1080p', proxyBytes),
     ]);
     for (const result of results) {
@@ -288,7 +294,7 @@ module.exports = {
   createImageThumbnail,
   createWatermarkedProxy,
   generateImageDerivatives,
-  generateShowcaseThumbnail,
+  prepareShowcaseImage,
   prepareImageDerivatives,
   discardImageDerivatives,
   backfillAssetDerivativesServices,

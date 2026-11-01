@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Image, Clapperboard, AudioLines, PackageOpen } from "lucide-react";
+import { Image, Clapperboard, AudioLines, PackageOpen, BadgeDollarSign } from "lucide-react";
 import { AudioPreviewButton } from "./audio-preview-button";
 import { MarketBrowserHeader } from "./market-browser-header";
 import { MarketAssetActions } from "./market-asset-actions";
@@ -139,7 +139,7 @@ export function MarketPreview({ src, type, hoverVideoSrc, className = "size-full
   const [failedVideoSrc, setFailedVideoSrc] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isHoverVideo = !!hoverVideoSrc && failedVideoSrc !== hoverVideoSrc;
-  const isVideo = isHoverVideo || (!!src && /\/thumbnails\/video-5s-320\/[^?#]+\.mp4(?:[?#]|$)/.test(src));
+  const isVideo = isHoverVideo || (!!src && /\/thumbnails\/video-5s-(?:320|480)\/[^?#]+\.mp4(?:[?#]|$)/.test(src));
   useEffect(() => {
     const video = videoRef.current;
     const target = video?.closest(".group") ?? video?.parentElement;
@@ -173,7 +173,12 @@ export function MarketPreview({ src, type, hoverVideoSrc, className = "size-full
 }
 
 export function BundleIndicator() {
-  return <Tooltip><TooltipTrigger asChild><span tabIndex={0} className="flex size-7 items-center justify-center rounded-full bg-secondary/90 text-secondary-foreground" aria-label="Bundle: all included assets for one price"><PackageOpen className="size-4" /></span></TooltipTrigger><TooltipContent>Asset bundle: all included assets for one price</TooltipContent></Tooltip>;
+  return <Tooltip><TooltipTrigger asChild><span tabIndex={0} className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white" aria-label="Bundle: all included assets for one price"><PackageOpen className="size-4" /></span></TooltipTrigger><TooltipContent>Asset bundle: all included assets for one price</TooltipContent></Tooltip>;
+}
+
+export function MarketedAssetIndicator() {
+  const label = "Asset for sale in the Asset Library, actions must be taken there";
+  return <Tooltip><TooltipTrigger asChild><span tabIndex={0} className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white" aria-label={label}><BadgeDollarSign className="size-4" /></span></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>;
 }
 
 function getBundleAssetCountLabel(assets: MarketAssetContent[]) {

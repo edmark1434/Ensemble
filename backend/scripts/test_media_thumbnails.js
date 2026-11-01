@@ -10,10 +10,10 @@ const { createVideoThumbnail, createAudioThumbnail, processAudio, probe, makeWor
 const execute = promisify(execFile);
 const ffmpeg = process.env.FFMPEG_PATH || require('ffmpeg-static');
 
-test('video previews are silent unwatermarked MP4s, capped at five seconds and 320px without upscaling', async () => {
+test('video previews are silent unwatermarked MP4s, capped at five seconds and 480px without upscaling', async () => {
   const workDir = await makeWorkDir();
   try {
-    for (const [width, height, duration, expected] of [[640, 360, 7, [320, 180]], [360, 640, 2, [180, 320]], [160, 90, 1, [160, 90]]]) {
+    for (const [width, height, duration, expected] of [[640, 360, 7, [480, 270]], [360, 640, 2, [270, 480]], [160, 90, 1, [160, 90]]]) {
       const inputPath = path.join(workDir, 'input.mp4');
       await execute(ffmpeg, ['-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=gray:s=${width}x${height}:r=15`,
         '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', String(duration), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', inputPath], { windowsHide: true });
@@ -35,9 +35,9 @@ test('video previews are silent unwatermarked MP4s, capped at five seconds and 3
   } finally { await removeWorkDir(workDir); }
 });
 
-test('menu thumbnails fit 320px, preserve aspect ratio and remain unwatermarked', async () => {
-  for (const [width, height, expected] of [[1600, 900, [320, 180]], [900, 1600, [180, 320]],
-    [2400, 600, [320, 80]], [90, 60, [90, 60]]]) {
+test('menu thumbnails fit 640px, preserve aspect ratio and remain unwatermarked', async () => {
+  for (const [width, height, expected] of [[1600, 900, [640, 360]], [900, 1600, [360, 640]],
+    [2400, 600, [640, 160]], [90, 60, [90, 60]]]) {
     const source = await sharp({ create: { width, height, channels: 3, background: '#555555' } }).png().toBuffer();
     const thumbnail = await createImageThumbnail(source);
     const metadata = await sharp(thumbnail).metadata();

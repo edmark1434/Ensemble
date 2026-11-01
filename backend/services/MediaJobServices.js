@@ -14,7 +14,7 @@ const {
   removeWorkDir,
   randomName,
 } = require('../lib/MediaProcessing');
-const { createWatermarkSvg, createImageThumbnail, generateImageDerivatives, generateShowcaseThumbnail } = require('./AssetPreviewServices');
+const { createWatermarkSvg, createImageThumbnail, generateImageDerivatives, prepareShowcaseImage } = require('./AssetPreviewServices');
 const {
   claimMediaAssetJobRepository,
   failMediaAssetJobRepository,
@@ -74,18 +74,18 @@ async function runMediaJob(job) {
     let outputs;
 
     if (job.kind === 'image') {
-      const generate = job.is_content === false ? generateShowcaseThumbnail : generateImageDerivatives;
+      const generate = job.is_content === false ? prepareShowcaseImage : generateImageDerivatives;
       outputs = await generate({
         file_id: job.original_file_id, name: job.original_name,
         path: job.original_path, size_bytes: job.original_size_bytes,
       });
-      uploaded.push(outputs.thumbnail.path, outputs.proxy?.path);
+      uploaded.push(outputs.thumbnail?.path, outputs.proxy?.path);
     } else if (job.kind === 'video') {
       const result = await processVideo({ inputPath, workDir, createWatermarkSvg, createImageThumbnail });
       const proxyKey = `assets/proxies/${randomName()}.mp4`;
       const proxySize = await uploadFile(result.proxyPath, proxyKey, 'video/mp4', { publicCache: true });
       uploaded.push(proxyKey);
-      const thumbnailKey = `assets/thumbnails/video-5s-320/${randomName()}.mp4`;
+      const thumbnailKey = `assets/thumbnails/video-5s-480/${randomName()}.mp4`;
       await s3.send(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: thumbnailKey,
@@ -99,7 +99,7 @@ async function runMediaJob(job) {
         height: result.height,
         durationSeconds: result.durationSeconds,
         proxy: { name: `${base}-proxy-ensemble.mp4`, path: proxyKey, mimeType: 'video/mp4', sizeBytes: proxySize },
-        thumbnail: { name: `${base}-preview-5s-320px.mp4`, path: thumbnailKey, mimeType: 'video/mp4', sizeBytes: result.thumbnail.length },
+        thumbnail: { name: `${base}-preview-5s-480px.mp4`, path: thumbnailKey, mimeType: 'video/mp4', sizeBytes: result.thumbnail.length },
       };
       if (result.cappedOriginalPath) {
         // stays under the protected prefix: it is still the downloadable original

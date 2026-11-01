@@ -24,6 +24,7 @@ interface DroppableAreaProps {
   style?: React.CSSProperties;
   onDragStateChange?: (isDragging: boolean) => void;
   onFilesDropped?: (files: File[]) => void;
+  filesDisabled?: boolean;
   id?: string;
 }
 
@@ -36,7 +37,8 @@ const isNativeFileDrag = (e: React.DragEvent<HTMLDivElement>): boolean =>
 
 const useDragAndDrop = (
   onDragStateChange?: (isDragging: boolean) => void,
-  onFilesDropped?: (files: File[]) => void
+  onFilesDropped?: (files: File[]) => void,
+  filesDisabled = false
 ) => {
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -84,6 +86,7 @@ const useDragAndDrop = (
       e.preventDefault();
 
       if (isNativeFileDrag(e)) {
+        if (filesDisabled) { e.dataTransfer.dropEffect = "none"; return; }
         setIsDraggingOver(true);
         setIsPointerInside(true);
         onDragStateChange?.(true);
@@ -104,24 +107,26 @@ const useDragAndDrop = (
         console.error("Error parsing dragged data:", error);
       }
     },
-    [onDragStateChange]
+    [onDragStateChange, filesDisabled]
   );
 
   const onDragOver = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      if (isNativeFileDrag(e) && filesDisabled) { e.dataTransfer.dropEffect = "none"; return; }
       if (isPointerInside) {
         setIsDraggingOver(true);
         onDragStateChange?.(true);
       }
     },
-    [isPointerInside, onDragStateChange]
+    [isPointerInside, onDragStateChange, filesDisabled]
   );
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
-      if (!isDraggingOver) return;
       e.preventDefault();
+      if (isNativeFileDrag(e) && filesDisabled) return;
+      if (!isDraggingOver) return;
       setIsDraggingOver(false);
       onDragStateChange?.(false);
 
@@ -143,7 +148,7 @@ const useDragAndDrop = (
         console.error("Error parsing dropped data:", error);
       }
     },
-    [isDraggingOver, onDragStateChange, handleDrop, onFilesDropped]
+    [isDraggingOver, onDragStateChange, handleDrop, onFilesDropped, filesDisabled]
   );
 
   const onDragLeave = useCallback(
@@ -167,10 +172,11 @@ export const DroppableArea: React.FC<DroppableAreaProps> = ({
   style,
   onDragStateChange,
   onFilesDropped,
+  filesDisabled,
   id
 }) => {
   const { onDragEnter, onDragOver, onDrop, onDragLeave } =
-    useDragAndDrop(onDragStateChange, onFilesDropped);
+    useDragAndDrop(onDragStateChange, onFilesDropped, filesDisabled);
 
   return (
     <div
