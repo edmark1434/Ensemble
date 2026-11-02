@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Eye,
@@ -9,11 +9,74 @@ import {
   X,
 } from "lucide-react";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { DisputeCaseTransaction, DisputeDetail } from "./moderatorTypes";
+import type { TicketMessage } from "@/pages/admin/ticketManagement/ticketTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
+
+type DisputeSocketMessage = {
+  id?: string;
+  _id?: string;
+  conversationId?: string;
+  conversation_id?: string;
+  authorType?: string;
+  author_type?: string;
+  authorName?: string;
+  author_name?: string;
+  authorRole?: string | null;
+  author_role?: string | null;
+  senderAccountId?: string | null;
+  sender_id?: string | null;
+  body?: string;
+  message_content?: string;
+  isInternal?: boolean;
+  is_internal?: boolean;
+  audience?: string;
+  publishedAt?: string | null;
+  published_at?: string | null;
+  createdAt?: string | null;
+  created_at?: string | null;
+};
+
+function mapDisputeSocketMessage(raw: DisputeSocketMessage | null | undefined): TicketMessage | null {
+  if (!raw) return null;
+  const id = raw.id || raw._id;
+  if (!id) return null;
+  const audience =
+    raw.audience ||
+    (raw.is_internal || raw.isInternal ? "author_and_staff" : "parties");
+  return {
+    id: String(id),
+    senderId: raw.senderAccountId || raw.sender_id ? String(raw.senderAccountId || raw.sender_id) : null,
+    authorType: String(raw.authorType || raw.author_type || "staff"),
+    authorName: String(raw.authorName || raw.author_name || "Unknown"),
+    authorRole: raw.authorRole ?? raw.author_role ?? null,
+    body: String(raw.body || raw.message_content || ""),
+    isInternal: Boolean(
+      raw.isInternal ||
+        raw.is_internal ||
+        audience === "staff" ||
+        audience === "author_and_staff"
+    ),
+    audience,
+    publishedAt: raw.publishedAt || raw.published_at || null,
+    createdAt: String(raw.createdAt || raw.created_at || new Date().toISOString()),
+  };
+}
+
+function mergeDisputeMessage(list: TicketMessage[], next: TicketMessage, replaceId?: string) {
+  const withoutPending = replaceId
+    ? list.filter((item) => String(item.id) !== String(replaceId))
+    : list;
+  const idx = withoutPending.findIndex((item) => String(item.id) === String(next.id));
+  if (idx === -1) return [...withoutPending, next];
+  const copy = [...withoutPending];
+  copy[idx] = { ...copy[idx], ...next };
+  return copy;
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
@@ -37,10 +100,71 @@ function toApiToken(value: string) {
     .replace(/\s+/g, "_");
 }
 
+type DisputeAudience = "staff" | "disputer" | "disputee" | "parties" | "public" | "author_and_staff";
+
+const REPLY_AUDIENCE_OPTIONS: {
+  value: DisputeAudience;
+  label: string;
+  hint: string;
+  className: string;
+  activeClassName: string;
+}[] = [
+  {
+    value: "staff",
+    label: "Staff",
+    hint: "Staff only",
+    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    activeClassName: "border-amber-500/40 bg-amber-500/15 text-amber-100",
+  },
+  {
+    value: "disputer",
+    label: "Disputer",
+    hint: "Staff + disputer",
+    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    activeClassName: "border-sky-500/40 bg-sky-500/15 text-sky-100",
+  },
+  {
+    value: "disputee",
+    label: "Disputee",
+    hint: "Staff + disputee",
+    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    activeClassName: "border-cyan-500/40 bg-cyan-500/15 text-cyan-100",
+  },
+  {
+    value: "parties",
+    label: "Parties",
+    hint: "Both parties",
+    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    activeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-100",
+  },
+  {
+    value: "public",
+    label: "Public page",
+    hint: "Shown on the public dispute page",
+    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    activeClassName: "border-violet-500/40 bg-violet-500/15 text-violet-100",
+  },
+];
+
+function normalizeAudience(audience?: string, isInternal?: boolean): DisputeAudience {
+  const a = String(audience || "").toLowerCase();
+  if (a === "staff" || a === "disputer" || a === "disputee" || a === "parties" || a === "public") {
+    return a;
+  }
+  if (a === "author_and_staff") return "author_and_staff";
+  return isInternal ? "staff" : "parties";
+}
+
 function audienceBadge(audience?: string, isInternal?: boolean) {
-  const a = audience || (isInternal ? "staff" : "parties");
-  if (a === "staff" || isInternal) {
+  const a = normalizeAudience(audience, isInternal);
+  if (a === "staff") {
     return { label: "Staff only", className: "border-amber-500/30 bg-amber-500/10 text-amber-200" };
+  }
+  if (a === "disputer") {
+    return { label: "Visible to disputer", className: "border-sky-500/30 bg-sky-500/10 text-sky-200" };
+  }
+  if (a === "disputee") {
+    return { label: "Visible to disputee", className: "border-cyan-500/30 bg-cyan-500/10 text-cyan-200" };
   }
   if (a === "author_and_staff") {
     return { label: "Private (author + staff)", className: "border-sky-500/30 bg-sky-500/10 text-sky-200" };
@@ -49,6 +173,30 @@ function audienceBadge(audience?: string, isInternal?: boolean) {
     return { label: "Visible to the public", className: "border-violet-500/30 bg-violet-500/10 text-violet-200" };
   }
   return { label: "Visible to parties", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" };
+}
+
+function audienceShellClass(audience?: string) {
+  const a = normalizeAudience(audience);
+  if (a === "public") return "border-violet-500/20 bg-violet-500/5";
+  if (a === "parties") return "border-emerald-500/20 bg-emerald-500/5";
+  if (a === "disputer") return "border-sky-500/20 bg-sky-500/5";
+  if (a === "disputee") return "border-cyan-500/20 bg-cyan-500/5";
+  if (a === "staff") return "border-amber-500/20 bg-amber-500/5";
+  return "border-sky-500/20 bg-sky-500/5";
+}
+
+function audienceSuccessLabel(audience: string) {
+  if (audience === "public") return "Comment is now public";
+  if (audience === "parties") return "Comment is visible to both parties";
+  if (audience === "disputer") return "Comment is visible to the disputer";
+  if (audience === "disputee") return "Comment is visible to the disputee";
+  if (audience === "staff") return "Comment is staff only";
+  return "Comment visibility updated";
+}
+
+function isPrivateAudience(audience?: string) {
+  const a = normalizeAudience(audience);
+  return a === "staff" || a === "author_and_staff" || a === "disputer" || a === "disputee";
 }
 
 const ACCENT_BTN: Record<Accent, string> = {
@@ -125,7 +273,9 @@ export default function ModeratorDisputeDetailModal({
   const [detail, setDetail] = useState<DisputeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
+  const [replyAudience, setReplyAudience] = useState<DisputeAudience>("staff");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
@@ -141,23 +291,28 @@ export default function ModeratorDisputeDetailModal({
   const [reverseTxn, setReverseTxn] = useState<DisputeCaseTransaction | null>(null);
   const [reverseAmount, setReverseAmount] = useState("");
   const [reverseNotes, setReverseNotes] = useState("");
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  const applyDetail = (d: DisputeDetail, { syncForm = true }: { syncForm?: boolean } = {}) => {
+    setDetail(d);
+    if (!syncForm) return;
+    setStatus(toApiToken(d.dispute.status));
+    setPriority(toApiToken(d.dispute.priority));
+    setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
+    setResolutionNotes(d.dispute.resolutionNotes || "");
+  };
+
+  const load = async ({ soft = false }: { soft?: boolean } = {}) => {
+    if (!soft) setLoading(true);
     try {
       const res = await api.get(`${endpointBase}/${disputeId}`);
       if (res.data?.success) {
-        const d = res.data.data as DisputeDetail;
-        setDetail(d);
-        setStatus(toApiToken(d.dispute.status));
-        setPriority(toApiToken(d.dispute.priority));
-        setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
-        setResolutionNotes(d.dispute.resolutionNotes || "");
+        applyDetail(res.data.data as DisputeDetail);
       }
     } catch {
-      showErrorToast("Failed to load dispute");
+      if (!soft) showErrorToast("Failed to load dispute");
     } finally {
-      setLoading(false);
+      if (!soft) setLoading(false);
     }
   };
 
@@ -165,6 +320,47 @@ export default function ModeratorDisputeDetailModal({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeId]);
+
+  useEffect(() => {
+    const chatId = detail?.chatId;
+    if (!chatId) return;
+
+    const matchesRoom = (payload: DisputeSocketMessage) => {
+      const room = payload?.conversationId || payload?.conversation_id;
+      return !room || String(room) === String(chatId);
+    };
+
+    const upsertLiveMessage = (payload: DisputeSocketMessage) => {
+      if (!matchesRoom(payload)) return;
+      const mapped = mapDisputeSocketMessage(payload);
+      if (!mapped) return;
+      setDetail((current) => {
+        if (!current) return current;
+        return { ...current, messages: mergeDisputeMessage(current.messages || [], mapped) };
+      });
+    };
+
+    const joinDisputeRoom = () => {
+      socket.emit("joinRoom", { conversation_id: String(chatId) });
+    };
+
+    if (!socket.connected) socket.connect();
+    joinDisputeRoom();
+    socket.on("connect", joinDisputeRoom);
+    socket.on("disputeMessage", upsertLiveMessage);
+    socket.on("disputeMessageUpdated", upsertLiveMessage);
+
+    return () => {
+      socket.off("connect", joinDisputeRoom);
+      socket.off("disputeMessage", upsertLiveMessage);
+      socket.off("disputeMessageUpdated", upsertLiveMessage);
+      socket.emit("leaveRoom", { conversation_id: String(chatId) });
+    };
+  }, [detail?.chatId]);
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [detail?.messages?.length]);
 
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : "";
@@ -192,9 +388,8 @@ export default function ModeratorDisputeDetailModal({
   const canAssignMyself = adminMode
     ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign))
     : false;
-  const canRelease = adminMode
-    ? Boolean(perms?.canRelease || alreadyAssignedToMe || (perms?.isAdmin && Boolean(assigneeStaffId)))
-    : false;
+  // Only the current handler releases their own claim. Admins reassign via the dropdown.
+  const canRelease = adminMode ? Boolean(alreadyAssignedToMe && (perms?.canRelease || perms?.isAssignee)) : false;
   const viewOnly = adminMode && !canAct;
   const canDecide = Boolean(perms?.canAct);
   const assigneeLocked =
@@ -202,6 +397,11 @@ export default function ModeratorDisputeDetailModal({
   /** Handler dropdown: unlocked while unassigned, or Admin override */
   const canEditHandler =
     !adminMode || canAssignOthers || canSelfAssign || canAssignMyself || !assigneeLocked;
+  const replyAudienceOptions = REPLY_AUDIENCE_OPTIONS.filter((option) => {
+    if (option.value !== "public") return true;
+    // Public-page replies only make sense after the dispute itself is visible.
+    return Boolean(detail?.dispute?.visibility);
+  });
 
   const runAction = async (body: Record<string, unknown>, successMsg: string) => {
     setSaving(true);
@@ -370,44 +570,96 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const sendMessage = async () => {
-    if (!message.trim()) return;
-    setSaving(true);
+    const text = message.trim();
+    if (!text || sending) return;
+    const audience = canAct ? replyAudience : "staff";
+    const pendingId = `pending-${Date.now()}`;
+    const optimistic: TicketMessage = {
+      id: pendingId,
+      authorType: "staff",
+      authorName: "You",
+      authorRole: "staff",
+      body: text,
+      isInternal: isPrivateAudience(audience),
+      audience,
+      createdAt: new Date().toISOString(),
+    };
+    setDetail((current) =>
+      current ? { ...current, messages: [...(current.messages || []), optimistic] } : current
+    );
+    setMessage("");
+    setSending(true);
     try {
-      const audience = "staff";
-      await api.post(`${endpointBase}/${disputeId}/messages`, {
-        body: message.trim(),
-        isInternal: true,
-        visibleToParties: false,
-        visibleToPublic: false,
+      const res = await api.post(`${endpointBase}/${disputeId}/messages`, {
+        body: text,
+        isInternal: isPrivateAudience(audience),
+        visibleToParties: audience === "parties",
+        visibleToPublic: audience === "public",
         audience,
-        audiences: ["staff"],
+        audiences: [audience],
       });
-      setMessage("");
-      showSuccessToast("Comment sent. It stays private until you make it public.");
-      await load();
-      onUpdated();
+      if (res.data?.success && res.data.data) {
+        applyDetail(res.data.data as DisputeDetail, { syncForm: false });
+      } else {
+        setDetail((current) =>
+          current
+            ? {
+                ...current,
+                messages: (current.messages || []).filter((item) => String(item.id) !== pendingId),
+              }
+            : current
+        );
+      }
+      showSuccessToast(audienceSuccessLabel(audience));
     } catch (err: unknown) {
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              messages: (current.messages || []).filter((item) => String(item.id) !== pendingId),
+            }
+          : current
+      );
+      setMessage(text);
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         "Failed to send message";
       showErrorToast(msg);
     } finally {
-      setSaving(false);
+      setSending(false);
     }
   };
 
-  const setMessageAudience = async (messageId: string | number, audience: string) => {
+  const setMessageAudience = async (messageId: string | number, audience: DisputeAudience) => {
+    if (!canAct) {
+      showErrorToast("Assign yourself to this dispute before changing message visibility.");
+      return;
+    }
     setSaving(true);
+    const previous = detail?.messages || [];
+    setDetail((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        messages: (current.messages || []).map((item) =>
+          String(item.id) === String(messageId)
+            ? {
+                ...item,
+                audience,
+                isInternal: isPrivateAudience(audience),
+              }
+            : item
+        ),
+      };
+    });
     try {
-      await api.patch(`${endpointBase}/${disputeId}/messages/${messageId}`, { audience });
-      const label =
-        audience === "public"
-          ? "Comment is now public"
-          : "Comment is private again";
-      showSuccessToast(label);
-      await load();
-      onUpdated();
+      const res = await api.patch(`${endpointBase}/${disputeId}/messages/${messageId}`, { audience });
+      if (res.data?.success && res.data.data) {
+        applyDetail(res.data.data as DisputeDetail, { syncForm: false });
+      }
+      showSuccessToast(audienceSuccessLabel(audience));
     } catch (err: unknown) {
+      setDetail((current) => (current ? { ...current, messages: previous } : current));
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         "Failed to update comment";
@@ -472,7 +724,7 @@ export default function ModeratorDisputeDetailModal({
                   Status: {titleCaseLabel(dispute.status)}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-                  Visibility: {dispute.visibility ? "Visible" : "Hidden"}
+                  Case: {dispute.visibility ? "Visible to parties" : "Hidden from disputee"}
                 </span>
                 {dispute.creditHold && (
                   <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
@@ -504,7 +756,7 @@ export default function ModeratorDisputeDetailModal({
                         ? "This dispute needs a Support Moderator (or Admin). Click Assign myself to claim it."
                         : canAssignOthers
                           ? "You’re not the handler yet. Pick a Support Moderator in Designated handler, or Assign myself."
-                          : "Only Support Moderators or Admin can claim and handle disputes. You can still post staff-only replies."}
+                          : "Only Support Moderators or Admin can claim and handle disputes. You can still post private replies (staff + you)."}
                   </p>
                 </div>
               </div>
@@ -530,22 +782,22 @@ export default function ModeratorDisputeDetailModal({
                     onClick={() =>
                       void runAction(
                         { action: "release" },
-                        "Case released — another Support Moderator can claim it"
+                        "You released this case — another Support Moderator can claim it"
                       )
                     }
                     className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
                   >
-                    Release case
+                    Release my claim
                   </button>
                 )}
                 {canAct && !dispute.visibility && !isDisputeClosed(toApiToken(dispute.status)) && (
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() => void runAction({ action: "approve" }, "Dispute is now public")}
+                    onClick={() => void runAction({ action: "approve" }, "Dispute is now visible to parties")}
                     className={`rounded-xl px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
                   >
-                    Open to the public
+                    Make dispute visible
                   </button>
                 )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
@@ -612,8 +864,16 @@ export default function ModeratorDisputeDetailModal({
                       if (!myStaffId) return true;
                       const isMe =
                         String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
-                      // Keep current handler visible while locked; otherwise use Assign myself.
-                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                      // Admins / claim-eligible staff must see themselves in this list.
+                      if (isMe) {
+                        return (
+                          canAssignOthers ||
+                          canAssignMyself ||
+                          canSelfAssign ||
+                          alreadyAssignedToMe
+                        );
+                      }
+                      return true;
                     })
                     .map((s) => (
                     <option key={s.staffId} value={String(s.staffId)}>
@@ -627,13 +887,13 @@ export default function ModeratorDisputeDetailModal({
                 </select>
                 {assigneeLocked && (
                   <span className="text-[11px] text-zinc-500">
-                    Handler is locked. The assigned Support Moderator must release the case before
-                    someone else can claim it.
+                    Handler is locked. The assigned Support Moderator must release their claim before
+                    someone else can take it.
                   </span>
                 )}
                 {!assigneeLocked && assigneeStaffId && canAssignOthers && (
                   <span className="text-[11px] text-violet-300/80">
-                    Admin override: you can reassign this dispute without a release.
+                    Admin override: pick any Support Moderator or Admin here, including yourself.
                   </span>
                 )}
                 {!canEditHandler && !assigneeLocked && (
@@ -643,9 +903,9 @@ export default function ModeratorDisputeDetailModal({
                       : "You can’t change the handler on this dispute."}
                   </span>
                 )}
-                {canAssignMyself && !canAct && (
+                {canAssignMyself && (
                   <span className="text-[11px] text-sky-200/70">
-                    Click Assign myself above to become the handler — no need to hunt yourself in the list.
+                    Use Assign myself above, or choose yourself ({deskLabel || "Admin"} / Support) in this list.
                   </span>
                 )}
               </label>
@@ -781,18 +1041,13 @@ export default function ModeratorDisputeDetailModal({
                 </p>
               )}
               {detail.messages.map((m) => {
-                const badge = audienceBadge(m.audience, m.isInternal);
+                const currentAudience = normalizeAudience(m.audience, m.isInternal);
+                const badge = audienceBadge(currentAudience, m.isInternal);
                 const canChangeAudience = adminMode && canAct;
                 return (
                   <div
                     key={m.id}
-                    className={`rounded-xl border px-4 py-3 ${
-                      m.isInternal || m.audience === "staff"
-                        ? "border-amber-500/20 bg-amber-500/5"
-                        : m.audience === "public"
-                          ? "border-violet-500/20 bg-violet-500/5"
-                          : "border-white/10 bg-white/[0.02]"
-                    }`}
+                    className={`rounded-xl border px-4 py-3 ${audienceShellClass(currentAudience)}`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
                       <span>
@@ -805,29 +1060,28 @@ export default function ModeratorDisputeDetailModal({
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] ${badge.className}`}>
                         {badge.label}
                       </span>
-                      {canChangeAudience && m.audience !== "public" && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void setMessageAudience(m.id, "public")}
-                          className="text-[11px] text-violet-300 hover:underline disabled:opacity-50"
-                        >
-                          Make public
-                        </button>
-                      )}
-                      {canChangeAudience && m.audience === "public" && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() =>
-                            void setMessageAudience(m.id, "staff")
-                          }
-                          className="text-[11px] text-sky-300 hover:underline disabled:opacity-50"
-                        >
-                          Unpublish
-                        </button>
-                      )}
                     </div>
+                    {canChangeAudience && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {replyAudienceOptions.map((option) => {
+                          const active = currentAudience === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              title={option.hint}
+                              disabled={saving || active}
+                              onClick={() => void setMessageAudience(m.id, option.value)}
+                              className={`rounded-lg border px-2 py-1 text-[10px] font-medium disabled:opacity-60 ${
+                                active ? option.activeClassName : option.className
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <p className="mt-2 text-sm text-zinc-200">{m.body}</p>
                   </div>
                 );
@@ -835,14 +1089,47 @@ export default function ModeratorDisputeDetailModal({
               {detail.messages.length === 0 && detail.chatAvailable !== false && (
                 <p className="text-sm text-zinc-500">No discussion yet — start the chat below.</p>
               )}
+              <div ref={threadEndRef} />
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#14151c] p-4">
               {viewOnly && canReply && (
                 <p className="mb-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
-                  View &amp; reply mode — you can post staff-only replies. Only Support Moderators
-                  or Admin can claim, change status, or publish messages to parties / public.
+                  View &amp; reply mode — replies stay staff-only until a Support Moderator or Admin claims the dispute
+                  and changes visibility.
                 </p>
+              )}
+              {canReply && canAct && (
+                <div className="mb-3 space-y-1.5">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                    Reply visibility
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {replyAudienceOptions.map((option) => {
+                      const active = replyAudience === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          title={option.hint}
+                          disabled={sending}
+                          onClick={() => setReplyAudience(option.value)}
+                          className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium disabled:opacity-50 ${
+                            active ? option.activeClassName : option.className
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    {replyAudienceOptions.find((option) => option.value === replyAudience)?.hint
+                      || (!detail.dispute.visibility
+                        ? "Make the dispute visible first if you need a public-page reply."
+                        : null)}
+                  </p>
+                </div>
               )}
               <textarea
                 value={message}
@@ -851,22 +1138,32 @@ export default function ModeratorDisputeDetailModal({
                 placeholder={
                   !canReply
                     ? "You cannot reply on this dispute…"
-                    : "Write a comment. It stays private until you press Make public."
+                    : canAct
+                      ? "Write a reply…"
+                      : "Write a staff-only reply…"
                 }
-                disabled={detail.chatAvailable === false || !canReply}
+                disabled={detail.chatAvailable === false || !canReply || sending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendMessage();
+                  }
+                }}
                 className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-zinc-500">
-                  New comments stay private. Use Make public on a comment to show it in the discussion.
+                  {canAct
+                    ? "Choose who can see this reply, then send. You can change it later on each message."
+                    : "Staff-only until a handler publishes the reply."}
                 </p>
                 <button
                   type="button"
                   onClick={() => void sendMessage()}
-                  disabled={saving || !message.trim() || detail.chatAvailable === false || !canReply}
+                  disabled={sending || !message.trim() || detail.chatAvailable === false || !canReply}
                   className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-50"
                 >
-                  Send
+                  {sending ? "Sending…" : "Send"}
                 </button>
               </div>
             </div>

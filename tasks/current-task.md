@@ -1,15 +1,13 @@
-# Active Task: Dispute financial resolution
+# Active Task: Public dispute forum on profiles
 
 ## Objective
 
-Let Admin / assigned Support settle frozen escrow or reverse a linked completed credit transaction from the dispute desk, with fail-hard clawback and auto-close.
+Show staff-made-public disputes on both the disputer and disputee profiles, and let anyone view/reply to that discussion like a forum thread.
 
 ## Acceptance Criteria
 
-1. Admin/assigned Support can settle remaining dispute escrow as refund, release, or split; dispute auto-closes.
-2. Admin/assigned Support can reverse a linked completed txn; original becomes `Reversed`; compensating row links via `reverses_credit_transaction_id`; dispute auto-closes.
-3. Insufficient destination balance returns 409 and changes nothing.
-4. Double submit / second reverse is blocked by unique constraint / status checks.
-5. Non-`canAct` staff cannot call the endpoint (403).
-6. Frontend exposes settle/reverse only when permitted and eligible.
-7. `cd frontend && npm run build` passes.
+1. Profile payloads list visible disputes for accounts that are either filer or respondent.
+2. Profile Performance UI shows a Public disputes entry for owners and visitors when any exist.
+3. `/disputes/:id` loads the public discussion (parties + public messages) with live updates.
+4. Any signed-in member can reply while the dispute is open and public; guests can read only.
+5. `cd frontend && npm run build` passes.

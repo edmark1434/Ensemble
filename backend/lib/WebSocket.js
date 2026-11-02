@@ -260,6 +260,16 @@ async function initSocket(httpServer) {
       rooms.forEach((room) => socket.leave(room));
     });
 
+    socket.on('joinDisputeDiscussion', ({ disputeId } = {}) => {
+      if (!disputeId) return;
+      socket.join(`dispute:public:${disputeId}`);
+    });
+
+    socket.on('leaveDisputeDiscussion', ({ disputeId } = {}) => {
+      if (!disputeId) return;
+      socket.leave(`dispute:public:${disputeId}`);
+    });
+
     const handleSendMessage = async (messagePayload = {}, callback) => {
       try {
         const message = await createMessageServices(messagePayload, accountId, {

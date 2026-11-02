@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertCircle, Loader2, Scale } from "lucide-react";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import toast from "react-hot-toast";
 
@@ -10,6 +11,7 @@ type DisputeMessage = {
   authorName?: string;
   body?: string;
   createdAt?: string | null;
+  conversationId?: string;
 };
 
 type DisputeRow = {
@@ -23,7 +25,16 @@ type DisputeRow = {
   filedByMe?: boolean;
   canAddInformation?: boolean;
   updatedAt?: string;
+  chatId?: string | null;
 };
+
+function upsertNote(list: DisputeMessage[], next: DisputeMessage) {
+  const idx = list.findIndex((item) => String(item.id) === String(next.id));
+  if (idx === -1) return [...list, next];
+  const copy = [...list];
+  copy[idx] = { ...copy[idx], ...next };
+  return copy;
+}
 
 function isTransactionDispute(row: DisputeRow) {
   const type = String(row.type || "").toLowerCase();
@@ -51,6 +62,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const open = isOpen(dispute);
   const publicDiscussion = Boolean(dispute.visibility);
   const [notes, setNotes] = useState<DisputeMessage[]>([]);
+  const [chatId, setChatId] = useState<string | null>(dispute.chatId || null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(Boolean(dispute.canAddInformation));
@@ -60,7 +72,9 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
     let cancelled = false;
     api.get(`/api/users/disputes/${dispute.id}`)
       .then((res) => {
-        if (!cancelled) setNotes(Array.isArray(res.data?.data?.messages) ? res.data.data.messages : []);
+        if (cancelled) return;
+        setNotes(Array.isArray(res.data?.data?.messages) ? res.data.data.messages : []);
+        if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
       })
       .catch(() => {
         if (!cancelled) setNotes([]);
@@ -73,16 +87,83 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
     };
   }, [dispute.canAddInformation, dispute.id]);
 
+  useEffect(() => {
+    if (!chatId || !dispute.canAddInformation) return;
+
+    const onLive = (payload: DisputeMessage & {
+      conversation_id?: string;
+      _id?: string;
+      author_name?: string;
+      message_content?: string;
+      created_at?: string;
+      audience?: string;
+    }) => {
+      const room = payload?.conversationId || payload?.conversation_id;
+      if (room && String(room) !== String(chatId)) return;
+      const id = payload?.id || payload?._id;
+      if (!id) return;
+      const audience = String(payload.audience || "").toLowerCase();
+      // Staff-only notes never appear in the party's notes panel.
+      if (audience === "staff") return;
+      setNotes((current) =>
+        upsertNote(current, {
+          id: String(id),
+          authorName: payload.authorName || payload.author_name || "Staff",
+          body: payload.body || payload.message_content || "",
+          createdAt: payload.createdAt || payload.created_at || new Date().toISOString(),
+        })
+      );
+    };
+
+    const join = () => socket.emit("joinRoom", { conversation_id: String(chatId) });
+    if (!socket.connected) socket.connect();
+    join();
+    socket.on("connect", join);
+    socket.on("disputeMessage", onLive);
+    socket.on("disputeMessageUpdated", onLive);
+    return () => {
+      socket.off("connect", join);
+      socket.off("disputeMessage", onLive);
+      socket.off("disputeMessageUpdated", onLive);
+      socket.emit("leaveRoom", { conversation_id: String(chatId) });
+    };
+  }, [chatId, dispute.canAddInformation]);
+
   const sendMoreInformation = async () => {
-    if (!draft.trim() || sending) return;
+    const text = draft.trim();
+    if (!text || sending) return;
+    const pendingId = `pending-${Date.now()}`;
+    setNotes((current) => [
+      ...current,
+      { id: pendingId, authorName: "You", body: text, createdAt: new Date().toISOString() },
+    ]);
+    setDraft("");
     setSending(true);
     try {
-      await api.post(`/api/accounts/disputes/${dispute.id}/messages`, { body: draft.trim() });
-      setDraft("");
-      toast.success("Sent to staff. The other party cannot see this yet.");
-      const res = await api.get(`/api/users/disputes/${dispute.id}`);
-      setNotes(Array.isArray(res.data?.data?.messages) ? res.data.data.messages : []);
+      const res = await api.post(`/api/accounts/disputes/${dispute.id}/messages`, { body: text });
+      toast.success(res.data?.message || "Sent to staff. The other party cannot see this yet.");
+      const saved = res.data?.data?.message as DisputeMessage | undefined;
+      if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
+      if (saved?.id) {
+        setNotes((current) =>
+          upsertNote(
+            current.filter((item) => String(item.id) !== pendingId),
+            {
+              id: String(saved.id),
+              authorName: saved.authorName || "You",
+              body: saved.body || text,
+              createdAt: saved.createdAt || new Date().toISOString(),
+            }
+          )
+        );
+      } else {
+        const refresh = await api.get(`/api/users/disputes/${dispute.id}`);
+        setNotes(Array.isArray(refresh.data?.data?.messages) ? refresh.data.data.messages : []);
+        if (refresh.data?.data?.chatId) setChatId(String(refresh.data.data.chatId));
+      }
     } catch (err: any) {
+      setNotes((current) => current.filter((item) => String(item.id) !== pendingId));
+      setDraft(text);
       toast.error(err?.response?.data?.message || "Could not send that information.");
     } finally {
       setSending(false);

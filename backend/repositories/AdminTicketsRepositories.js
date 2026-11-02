@@ -31,6 +31,7 @@ const {
   listDisputeMessages,
   createDisputeMessage,
   updateDisputeMessageAudience,
+  ensureStaffMemberOnChat,
   notifyDisputeParties,
 } = require('./DisputeChatRepositories');
 const {
@@ -3910,6 +3911,10 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   try {
     chatId = await getDisputeChatId(disputeId);
     if (chatId && chatAvailable) {
+      const viewerAccountId = sessionAccountId(staffSession);
+      if (viewerAccountId) {
+        await ensureStaffMemberOnChat(chatId, viewerAccountId);
+      }
       messages = await listDisputeMessages(chatId);
     }
   } catch (err) {
@@ -3948,50 +3953,112 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     throw new Error('You do not have permission to reply on this dispute.');
   }
 
-  // Non-handlers may only post staff-visible replies; designated handler publishes.
+  // Non-handlers may only post private staff/author replies; designated handler chooses audience.
   const mayPublish = Boolean(perms.canAct);
-  let isInternal = Boolean(options.isInternal);
+  let isInternal = options.isInternal !== false;
   let audience =
     options.audience ||
-    (isInternal
-      ? 'staff'
-      : options.visibleToPublic
-        ? 'public'
-        : options.visibleToParties
-          ? 'parties'
-          : 'staff');
+    (options.visibleToPublic
+      ? 'public'
+      : options.visibleToParties
+        ? 'parties'
+        : 'staff');
 
   if (!mayPublish) {
     audience = 'staff';
     isInternal = true;
   }
 
+  const normalizedAudience = String(audience || 'staff').toLowerCase();
   const chatId = await ensureDisputeChat(disputeId, row);
   const audiences = mayPublish && Array.isArray(options.audiences)
     ? options.audiences.map((a) => String(a).toLowerCase())
-    : ['staff'];
+    : [normalizedAudience];
+  const actorAccountId = sessionAccountId(staffSession);
+  const partyNotifyIds =
+    normalizedAudience === 'public' || (normalizedAudience === 'parties' && row.visibility)
+      ? [row.by_account_id, row.for_account_id]
+      : normalizedAudience === 'disputer'
+        ? [row.by_account_id]
+        : normalizedAudience === 'disputee'
+          ? [row.for_account_id]
+          : [];
   await createDisputeMessage({
     chatId,
     body,
-    senderId: sessionAccountId(staffSession),
+    senderId: actorAccountId,
     authorName: sessionDisplayName(staffSession) || 'Staff',
     authorType: 'staff',
     authorRole: 'staff',
-    audience,
+    audience: normalizedAudience,
     audiences,
-    isInternal,
+    isInternal:
+      isInternal || !['parties', 'public'].includes(normalizedAudience),
+    notifyAccountIds: partyNotifyIds.filter(
+      (id) => id && String(id) !== String(actorAccountId || '')
+    ),
+    disputeId,
   });
 
   const number = row.dispute_number || 'Dispute';
-  const visible = Boolean(row.visibility) && audience === 'public';
-  await notifyDisputeParties(row, {
-    message: visible
-      ? `New reply on dispute ${number}.`
-      : `New reply on dispute ${number}. It shows in the discussion after staff publish it.`,
-    path: visible ? `/disputes/${disputeId}` : '/contracts/disputes',
-    excludeAccountId: sessionAccountId(staffSession),
-    onlyFiler: !row.visibility,
-  });
+  if (
+    normalizedAudience === 'public' ||
+    normalizedAudience === 'parties' ||
+    normalizedAudience === 'disputer' ||
+    normalizedAudience === 'disputee'
+  ) {
+    const path =
+      normalizedAudience === 'public' || row.visibility
+        ? `/disputes/${disputeId}`
+        : '/contracts/disputes';
+    const message =
+      normalizedAudience === 'public'
+        ? `New reply on dispute ${number}.`
+        : normalizedAudience === 'parties'
+          ? `New reply on dispute ${number} for both parties.`
+          : normalizedAudience === 'disputer'
+            ? `Staff shared a reply on dispute ${number} with you.`
+            : `Staff shared a reply on dispute ${number} with you.`;
+    if (normalizedAudience === 'public' || normalizedAudience === 'parties') {
+      await notifyDisputeParties(row, {
+        message,
+        path,
+        excludeAccountId: actorAccountId,
+      });
+    } else if (normalizedAudience === 'disputer') {
+      await notifyDisputeParties(row, {
+        message,
+        path,
+        excludeAccountId: actorAccountId,
+        onlyFiler: true,
+      });
+    } else if (normalizedAudience === 'disputee' && row.for_account_id) {
+      const NotificationRepositories = require('./NotificationRepositories');
+      let io = null;
+      try {
+        io = require('../lib/WebSocket').getIo();
+      } catch {
+        io = null;
+      }
+      if (String(row.for_account_id) !== String(actorAccountId || '')) {
+        try {
+          const notification = await NotificationRepositories.createNotification({
+            account_id: row.for_account_id,
+            message,
+            reference_table: 'disputes',
+            reference_prefix: 'DIS',
+            reference_path: path,
+            reference_id: disputeId,
+          });
+          if (io && notification) {
+            io.to(String(row.for_account_id)).emit('notification', notification);
+          }
+        } catch (err) {
+          console.warn('Dispute disputee notification skipped:', err.message);
+        }
+      }
+    }
+  }
 
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
   return getDisputeDetail(disputeId, staffSession);
@@ -4016,14 +4083,61 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   const chatId = await getDisputeChatId(disputeId);
   if (!chatId) throw new Error('Dispute chat not found.');
 
-  await updateDisputeMessageAudience(chatId, messageId, audience);
+  const nextAudience = String(audience || '').toLowerCase();
+  const partyNotifyIds =
+    nextAudience === 'public' || (nextAudience === 'parties' && row.visibility)
+      ? [row.by_account_id, row.for_account_id]
+      : nextAudience === 'disputer'
+        ? [row.by_account_id]
+        : nextAudience === 'disputee'
+          ? [row.for_account_id]
+          : [];
+  await updateDisputeMessageAudience(chatId, messageId, audience, {
+    notifyAccountIds: partyNotifyIds,
+    disputeId,
+  });
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
-  if (String(audience).toLowerCase() === 'public') {
+  if (nextAudience === 'public' || nextAudience === 'parties' || nextAudience === 'disputer' || nextAudience === 'disputee') {
     const number = row.dispute_number || 'Dispute';
-    await notifyDisputeParties(row, {
-      message: `A reply on dispute ${number} is now public.`,
-      path: `/disputes/${disputeId}`,
-    });
+    const path =
+      nextAudience === 'public' || row.visibility
+        ? `/disputes/${disputeId}`
+        : '/contracts/disputes';
+    const message =
+      nextAudience === 'public'
+        ? `A reply on dispute ${number} is now public.`
+        : nextAudience === 'parties'
+          ? `A reply on dispute ${number} is now visible to both parties.`
+          : nextAudience === 'disputer'
+            ? `Staff shared a reply on dispute ${number} with the disputer.`
+            : `Staff shared a reply on dispute ${number} with the disputee.`;
+    if (nextAudience === 'public' || nextAudience === 'parties') {
+      await notifyDisputeParties(row, { message, path });
+    } else if (nextAudience === 'disputer' && row.by_account_id) {
+      await notifyDisputeParties(row, { message, path, onlyFiler: true });
+    } else if (nextAudience === 'disputee' && row.for_account_id) {
+      // notifyDisputeParties only supports onlyFiler; notify respondent directly
+      const NotificationRepositories = require('./NotificationRepositories');
+      let io = null;
+      try {
+        io = require('../lib/WebSocket').getIo();
+      } catch {
+        io = null;
+      }
+      try {
+        const notification = await NotificationRepositories.createNotification({
+          account_id: row.for_account_id,
+          message,
+          reference_table: 'disputes',
+          reference_prefix: 'DIS',
+          reference_path: path,
+          reference_id: disputeId,
+        });
+        if (io && notification) io.to(String(row.for_account_id)).emit('notification', notification);
+      } catch (err) {
+        console.warn('Dispute disputee notification skipped:', err.message);
+      }
+    }
   }
   return getDisputeDetail(disputeId, staffSession);
 }
@@ -4056,6 +4170,7 @@ async function postDisputeDecisionMessage(row, staffSession, body) {
     audience: 'public',
     audiences: ['public', 'parties'],
     isInternal: false,
+    disputeId: row.dispute_id,
   });
   const number = row.dispute_number || 'Dispute';
   await notifyDisputeParties(row, {

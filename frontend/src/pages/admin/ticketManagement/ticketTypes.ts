@@ -109,7 +109,7 @@ export type TicketMessage = {
   isUnsent?: boolean;
   messageType?: string;
   replyToId?: string | null;
-  audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
+  audience?: 'staff' | 'author_and_staff' | 'disputer' | 'disputee' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
 };
