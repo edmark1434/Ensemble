@@ -6,27 +6,47 @@ import useGlobalState from "@/lib/global_state";
 
 type FooterLinks = Record<string, string[]>;
 
-// Added interface props to support global audio control
 interface FooterProps {
   isMuted?: boolean;
 }
 
 const T_FOOT = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
-  fontBody:    "'Plus Jakarta Sans', sans-serif",
+  fontBody: "'Plus Jakarta Sans', sans-serif",
 } as const;
 
 const FOOTER_LINKS: FooterLinks = {
-  Product:   ["Features", "Use Cases", "Pricing"],
-  Company:   ["About Us"],
+  Product: ["Features", "Use Cases", "Pricing"],
+  Company: ["About Us"],
   Resources: ["How To Hire", "How to Work", "Community", "Support Us"],
-  Legal:     ["Privacy", "Terms"],
+  Legal: ["Privacy", "Terms"],
 };
 
-const Logo: FC<{ size?: number; theme?: 'light' | 'dark' }> = ({ size = 22, theme = 'dark' }) => (
+const Logo: FC<{ size?: number; theme?: "light" | "dark" }> = ({
+  size = 22,
+  theme = "dark",
+}) => (
   <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
-    <img src="/ensemble_lg.svg" alt="Ensemble Logo" style={{ width: size + 6, height: size + 6, display: "block", filter: theme === 'light' ? "invert(1)" : "invert(0)" }} />
-    <span style={{ fontSize: size, fontWeight: 700, fontFamily: T_FOOT.fontDisplay, letterSpacing: .5, color: theme === 'dark' ? "#fff" : "#111827", transition: "color 0.3s ease" }}>
+    <img
+      src="/ensemble_lg.svg"
+      alt="Ensemble Logo"
+      style={{
+        width: size + 6,
+        height: size + 6,
+        display: "block",
+        filter: theme === "light" ? "invert(1)" : "invert(0)",
+      }}
+    />
+    <span
+      style={{
+        fontSize: size,
+        fontWeight: 800,
+        fontFamily: T_FOOT.fontDisplay,
+        letterSpacing: "-0.02em",
+        color: theme === "dark" ? "#fff" : "#0f172a",
+        transition: "color 0.3s ease",
+      }}
+    >
       Ensemble
     </span>
   </div>
@@ -35,30 +55,31 @@ const Logo: FC<{ size?: number; theme?: 'light' | 'dark' }> = ({ size = 22, them
 const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
   const navigate = useNavigate();
   const theme = useGlobalState((state) => state.theme);
+  const isDark = theme === "dark";
   const minimalHoverAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Initialize the micro audio effect file
     minimalHoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
     minimalHoverAudioRef.current.volume = 0.25;
   }, []);
 
   const playMinimalHover = () => {
     if (isMuted || !minimalHoverAudioRef.current) return;
-    minimalHoverAudioRef.current.currentTime = 0; // Rewind for crisp, snappier navigation overrides
+    minimalHoverAudioRef.current.currentTime = 0;
     minimalHoverAudioRef.current.play().catch(() => {});
   };
 
   const handleLinkClick = (link: string) => {
     const routeMap: Record<string, string> = {
-      "Pricing": "/landing/Pricing",
+      Pricing: "/landing/Pricing",
       "About Us": "/landing/AboutUs",
       "How To Hire": "/landing/HowToHire",
       "How to Work": "/landing/HowToWork",
       "Support Us": "/landing/SupportUs",
-      "Privacy": "/landing/PrivacyPolicy",
-      "Terms": "/landing/TermsOfService",
-      "Community": "/forums"
+      Privacy: "/landing/PrivacyPolicy",
+      Terms: "/landing/TermsOfService",
+      Community: "/forums",
+      "Use Cases": "/landing/usecase/client",
     };
 
     if (routeMap[link]) {
@@ -68,137 +89,221 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
     }
   };
 
+  const borderLine = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.15)";
+  const bgSection = isDark ? "#121214" : "#ffffff";
+  const bgFrame = isDark ? "#121214" : "#ffffff";
+  const textPrimary = isDark ? "#ffffff" : "#111827";
+  const textSecondary = isDark ? "#a1a1aa" : "#4b5563";
+  const textMeta = isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(17, 24, 39, 0.45)";
+
   return (
-    <footer style={{
-      borderTop: theme === 'dark' ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.05)",
-      padding: "80px 60px 40px",
-      background: theme === 'dark' ? "#121214" : "#f9fafb",
-      position: "relative",
-      overflow: "hidden",
-      transition: "background 0.3s ease, border-color 0.3s ease"
-    }}>
-      <div style={{
-        position: "absolute",
-        bottom: "-10%",
-        right: "5%",
-        width: "400px",
-        height: "400px",
-        background: theme === 'dark' ? "rgba(74, 111, 165, 0.05)" : "rgba(59, 130, 246, 0.05)",
-        filter: "blur(100px)",
-        borderRadius: "50%",
-        pointerEvents: "none"
-      }} />
+    <footer
+      style={{
+        background: bgSection,
+        borderTop: `1px solid ${borderLine}`,
+        marginTop: -1,
+        position: "relative",
+        overflow: "hidden",
+        transition: "background 0.3s ease",
+        fontFamily: T_FOOT.fontDisplay,
+      }}
+    >
+      <style>{`
+        .footer-blueprint-grid {
+          display: grid;
+          grid-template-columns: 2fr repeat(4, 1fr);
+          width: 100%;
+        }
+        .footer-blueprint-col {
+          border-right: 1px solid ${borderLine};
+          padding: 56px 36px;
+        }
+        .footer-blueprint-col:last-child {
+          border-right: none;
+        }
+        @media (max-width: 960px) {
+          .footer-blueprint-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+          .footer-blueprint-col:nth-child(1) {
+            grid-column: 1 / -1;
+            border-right: none;
+            border-bottom: 1px solid ${borderLine};
+          }
+          .footer-blueprint-col:nth-child(2n) {
+            border-right: 1px solid ${borderLine};
+          }
+          .footer-blueprint-col:nth-child(2n+1) {
+            border-right: none;
+          }
+          .footer-blueprint-col {
+            border-bottom: 1px solid ${borderLine};
+            padding: 36px 24px;
+          }
+        }
+        @media (max-width: 640px) {
+          .footer-blueprint-col {
+            padding: 20px 16px !important;
+          }
+          .footer-brand-desc {
+            font-size: 12px !important;
+            line-height: 1.5 !important;
+            margin-top: 12px !important;
+          }
+          .footer-brand-meta {
+            margin-top: 14px !important;
+            font-size: 9px !important;
+          }
+          .footer-col-header {
+            font-size: 9.5px !important;
+            margin-bottom: 12px !important;
+          }
+          .footer-col-link {
+            font-size: 11.5px !important;
+            margin-bottom: 8px !important;
+          }
+          .footer-bottom-bar {
+            padding: 16px !important;
+          }
+          .footer-bottom-text {
+            font-size: 10.5px !important;
+          }
+        }
+      `}</style>
 
-      <FadeInScroll distance={40} duration={0.8} style={{ width: "100%", position: "relative", zIndex: 2 }}>
-        <div style={{
-          maxWidth: 1400,
+      <div
+        style={{
+          maxWidth: 1320,
           margin: "0 auto",
-          display: "grid",
-          gridTemplateColumns: "2fr repeat(4, 1fr)",
-          gap: 60,
-          marginBottom: 64,
+          borderLeft: `1px solid ${borderLine}`,
+          borderRight: `1px solid ${borderLine}`,
+          background: bgFrame,
           position: "relative",
-          zIndex: 2
-        }}>
-          <div>
-            <Logo size={22} theme={theme} />
-            <p style={{
-              color: theme === 'dark' ? "#a1a1aa" : "#6b7280",
-              fontSize: 14,
-              lineHeight: 1.7,
-              marginTop: 20,
-              maxWidth: 280,
-              fontFamily: T_FOOT.fontBody,
-              transition: "color 0.3s ease"
-            }}>
-              The parallel workflow platform for modern film production teams and creative professionals.
-            </p>
-          </div>
-
-          {Object.entries(FOOTER_LINKS).map(([col, links]) => (
-            <div key={col}>
-              <div style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: theme === 'dark' ? "#fff" : "#111827",
-                letterSpacing: 1.5,
-                textTransform: "uppercase",
-                marginBottom: 24,
-                fontFamily: T_FOOT.fontDisplay,
-                transition: "color 0.3s ease"
-              }}>
-                {col}
+        }}
+      >
+        <FadeInScroll distance={24} duration={0.7}>
+          <div className="footer-blueprint-grid">
+            {/* Brand Column */}
+            <div className="footer-blueprint-col">
+              <Logo size={22} theme={theme} />
+              <p
+                className="footer-brand-desc"
+                style={{
+                  color: textSecondary,
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  marginTop: 20,
+                  maxWidth: 290,
+                  fontFamily: T_FOOT.fontBody,
+                }}
+              >
+                The parallel workflow platform for modern film production teams, video
+                editors, and creative professionals.
+              </p>
+              <div
+                className="footer-brand-meta"
+                style={{
+                  marginTop: 28,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: textMeta,
+                }}
+              >
+                RAVENLABS DEV • STUDIO SUITE
               </div>
-              {links.map((l) => (
+            </div>
+
+            {/* Directory Link Columns */}
+            {Object.entries(FOOTER_LINKS).map(([col, links]) => (
+              <div key={col} className="footer-blueprint-col">
                 <div
-                  key={l}
-                  onClick={() => handleLinkClick(l)}
-                  onMouseEnter={(e) => {
-                    playMinimalHover(); // Fires your custom hover variant sound asset
-                    e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827";
-                  }}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = theme === 'dark' ? "#a1a1aa" : "#6b7280")}
+                  className="footer-col-header"
                   style={{
-                    color: theme === 'dark' ? "#a1a1aa" : "#6b7280",
-                    fontSize: 14,
-                    marginBottom: 12,
-                    cursor: "pointer",
-                    transition: "color .15s",
-                    fontFamily: T_FOOT.fontBody
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: textMeta,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    marginBottom: 24,
+                    fontFamily: T_FOOT.fontDisplay,
                   }}
                 >
-                  {l}
+                  {col}
                 </div>
+                {links.map((l) => (
+                  <div
+                    key={l}
+                    className="footer-col-link"
+                    onClick={() => handleLinkClick(l)}
+                    onMouseEnter={(e) => {
+                      playMinimalHover();
+                      e.currentTarget.style.color = textPrimary;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = textSecondary;
+                    }}
+                    style={{
+                      color: textSecondary,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      marginBottom: 14,
+                      cursor: "pointer",
+                      transition: "color 0.15s ease",
+                      fontFamily: T_FOOT.fontBody,
+                    }}
+                  >
+                    {l}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Bottom Copyright Bar */}
+          <div
+            className="footer-bottom-bar"
+            style={{
+              borderTop: `1px solid ${borderLine}`,
+              padding: "24px clamp(20px, 4vw, 40px)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <span className="footer-bottom-text" style={{ color: textMeta, fontSize: 12, fontWeight: 600 }}>
+              © 2026 Ensemble, RavenLabs Dev. All rights reserved.
+            </span>
+            <div style={{ display: "flex", gap: 20 }}>
+              {["Twitter", "GitHub", "Discord"].map((social) => (
+                <span
+                  key={social}
+                  className="footer-bottom-text"
+                  style={{
+                    color: textMeta,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "color 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    playMinimalHover();
+                    e.currentTarget.style.color = textPrimary;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = textMeta;
+                  }}
+                >
+                  {social}
+                </span>
               ))}
             </div>
-          ))}
-        </div>
-
-        <div style={{
-          borderTop: theme === 'dark' ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.05)",
-          paddingTop: 32,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          maxWidth: 1400,
-          margin: "0 auto",
-          flexWrap: "wrap",
-          gap: 12,
-          position: "relative",
-          zIndex: 2,
-          transition: "border-color 0.3s ease"
-        }}>
-          <span style={{ color: theme === 'dark' ? "#71717a" : "#9ca3af", fontSize: 13, transition: "color 0.3s ease" }}>
-            © 2026 Ensemble, RavenLabs Dev. All rights reserved.
-          </span>
-          <div style={{ display: "flex", gap: 24 }}>
-            <span
-              className="footer-social-link"
-              style={{ color: theme === 'dark' ? "#52525b" : "#9ca3af", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; }}
-              onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#52525b" : "#9ca3af"}
-            >
-              Twitter
-            </span>
-            <span
-              className="footer-social-link"
-              style={{ color: theme === 'dark' ? "#52525b" : "#9ca3af", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; }}
-              onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#52525b" : "#9ca3af"}
-            >
-              GitHub
-            </span>
-            <span
-              className="footer-social-link"
-              style={{ color: theme === 'dark' ? "#52525b" : "#9ca3af", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; }}
-              onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#52525b" : "#9ca3af"}
-            >
-              Discord
-            </span>
           </div>
-        </div>
-      </FadeInScroll>
+        </FadeInScroll>
+      </div>
     </footer>
   );
 };
