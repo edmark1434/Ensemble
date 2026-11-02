@@ -6,7 +6,6 @@ import {
   Plus,
   Minus,
   ChevronDown,
-  Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header.tsx";
@@ -538,36 +537,20 @@ const CreditShop: React.FC = () => {
           </p>
         </div>
 
-        {/* Current & Escrow Balance Card */}
+        {/* Current Balance Card */}
         <div data-tour="credits-balance-card" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl backdrop-blur-xl">
-          <div className="flex items-start sm:items-center gap-4">
-            <WalletIcon className="h-12 w-12 shrink-0 mt-0.5 sm:mt-0" />
-            <div className="space-y-2">
-              <div>
-                <p className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                  Current Balance
+          <div className="flex items-center gap-4">
+            <WalletIcon className="h-12 w-12 shrink-0" />
+            <div>
+              <p className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+                Current Balance
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
+                <p className="text-2xl font-black text-gray-900 dark:text-white leading-none tracking-tight">
+                  {currentBalance.toLocaleString()}{" "}
+                  <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
                 </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
-                  <p className="text-2xl font-black text-gray-900 dark:text-white leading-none tracking-tight">
-                    {currentBalance.toLocaleString()}{" "}
-                    <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Escrowed Wallet Balance */}
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
-                <span className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                  Escrowed Wallet Balance:
-                </span>
-                <span className="inline-flex items-center gap-1 font-bold text-xs text-amber-600 dark:text-amber-400">
-                  <Lock className="h-3 w-3 shrink-0" />
-                  <span>{escrowBalance.toLocaleString()} Credits</span>
-                </span>
-                <span className="text-[10px] text-gray-400 dark:text-zinc-500 hidden sm:inline">
-                  (Locked in platform escrow)
-                </span>
               </div>
             </div>
           </div>
