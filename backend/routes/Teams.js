@@ -19,6 +19,7 @@ r.post('/', check, auth, c.create);
 r.get('/:teamId', optionalSession, c.detail);
 r.get('/:teamId/members', optionalSession, c.members);
 r.get('/:teamId/reviews', optionalSession, c.reviews);
+r.get('/:teamId/marketplace-posts', optionalSession, c.marketplacePosts);
 
 // 4. Authenticated parameterized routes
 r.use(check, auth);
@@ -31,7 +32,6 @@ r.delete('/:teamId/tasks/:taskId', c.deleteTask);
 r.get('/:teamId/video-projects', c.videoProjects);
 r.post('/:teamId/video-projects', c.createVideoProject);
 r.delete('/:teamId/video-projects/:projectId', c.deleteVideoProject);
-r.get('/:teamId/marketplace-posts', c.marketplacePosts);
 r.get('/:teamId/task-workspaces', tasks.list);
 r.get('/:teamId/task-workspaces/:contractId', tasks.detail);
 r.post('/:teamId/task-workspaces/:contractId/members', tasks.addMembers);
