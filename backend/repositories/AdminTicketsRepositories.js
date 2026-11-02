@@ -149,7 +149,7 @@ async function fetchAssignableStaffForQueue(queueKey, { includeStaffId = null } 
     INNER JOIN accounts a ON a.account_id = s.account_id
     WHERE a.deleted_at IS NULL
       AND (
-        LOWER(s.role) = ANY($1)
+        LOWER(s.role::text) = ANY($1::text[])
         ${includeSql}
       )
     ORDER BY s.role, name
@@ -584,17 +584,17 @@ async function getTicketsOverview(staffSession = null) {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'pending_review')::int AS pending_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_only,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'closed')::int AS closed,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'pending_review')::int AS pending_review,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'open')::int AS open_only,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'awaiting_response')::int AS awaiting_response,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'under_review')::int AS under_review,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'closed')::int AS closed,
         COUNT(*) FILTER (
-          WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
+          WHERE LOWER(status::text) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
         )::int AS open_count,
         COALESCE(
           SUM(credit_amount_involved) FILTER (
-            WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
+            WHERE LOWER(status::text) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
           ),
           0
         )::int AS credits_at_risk
@@ -881,7 +881,7 @@ async function fetchStaffWorkload() {
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.handled_by_staff_id = s.staff_id
-          AND LOWER(d.status) <> 'closed') AS open_disputes,
+          AND LOWER(d.status::text) <> 'closed') AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
     FROM staff s

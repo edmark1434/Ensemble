@@ -1,10 +1,11 @@
-# Current Task: Landing Page Gallery Showcase & Hero Looping Videos
+# Active Task: Fix admin dispute detail 500
 
 ## Objective
-1. Add a Gallery section (`02.1 / GALLERY`) under `What's inside.` (`Highlights`) in `frontend/src/pages/landing/section_ScrollText.tsx` displaying the Video Editor Collaboration screenshot (`/gallery_images/new/gallery/collab.png`).
-2. Cycle the Hero section background video in `frontend/src/pages/landing/section_Hero.tsx` through the original video (`/clip/hero_vid.mp4`), `/gallery_images/new/vids/herovid_1.mp4`, and `/gallery_images/new/vids/herovid_2.mp4` every 4 seconds in a continuous loop.
+
+Restore `GET /api/admin/disputes/:id` after PostgreSQL enum migrations broke `LOWER()` on `staff.role` / dispute columns.
 
 ## Acceptance Criteria
-- [x] `What's inside.` section includes a `02.1 / GALLERY` showcase block with `/gallery_images/new/gallery/collab.png`.
-- [x] `SectionHero` starts with `/clip/hero_vid.mp4`, transitions to `/gallery_images/new/vids/herovid_1.mp4` after 4s, then `/gallery_images/new/vids/herovid_2.mp4` after 4s, and loops back to `/clip/hero_vid.mp4`.
-- [x] `cd frontend && npm run build` passes without errors.
+
+1. Opening an admin dispute detail no longer returns 500.
+2. Assignable staff query casts `staff.role` to text before `LOWER()`.
+3. Related dispute list/count queries cast `dispute_status` / `dispute_type` / `dispute_priority` / `staff_role` to text where `LOWER()` is used.
