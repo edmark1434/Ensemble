@@ -1,59 +1,123 @@
-﻿import useGlobalState from "@/lib/global_state";
-import React, { useState, useRef, useCallback } from "react";
+import useGlobalState from "@/lib/global_state";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ArrowLeft, HelpCircle } from "lucide-react";
+import { ChevronDown, ArrowLeft, ArrowRight, HelpCircle, MessageSquare } from "lucide-react";
 
-const FAQ_ITEMS = [
+const T = {
+  fontDisplay: "'Plus Jakarta Sans', sans-serif",
+  fontMono: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+} as const;
+
+interface FaqItem {
+  code: string;
+  category: string;
+  q: string;
+  a: string;
+}
+
+const FAQ_ITEMS: FaqItem[] = [
   {
-    q: "Is it free to post a project listing?",
-    a: "Yes, posting structural job requests in the creative marketplace is completely free. You only fund contract milestones when you select a freelancer."
+    code: "FAQ-01",
+    category: "UNIFIED ACCOUNT & KYC",
+    q: "Can a single account be used as both a Client and a Freelancer?",
+    a: "Yes. Every Ensemble account is unified—you can switch seamlessly between hiring talent as a Client, selling services or submitting job proposals as a Freelancer, and uploading media as an Asset Creator. Before engaging in any financial or contractual transactions, you simply complete a one-time Identity Verification (KYC).",
   },
   {
-    q: "How do parallel real-time editing workflows work?",
-    a: "Ensemble routes asset configurations instantly. Multiple team members can apply caption markers or configure edit structures concurrently without rendering large source video chunks locally."
+    code: "FAQ-02",
+    category: "HIRING WORKFLOW",
+    q: "What are the 2 ways a Client can hire a Freelancer on Ensemble?",
+    a: "You can hire a Freelancer in two ways: (1) Post a Job on the platform—Freelancers submit their individual or team proposals, and you shortlist and approve one, then offer them a contract to hire them; or (2) Browse the Discovery page or Gigs / Services to find a service that matches your work and order a service—once the Freelancer accepts your order, you offer the contract and they are hired.",
   },
   {
-    q: "What fee percentage does the marketplace process?",
-    a: "Ensemble maintains a competitive platform commission structure designed to optimize payouts for freelance creators while guaranteeing reliable escrow protection infrastructure for corporate clients."
+    code: "FAQ-03",
+    category: "JOB POSTINGS",
+    q: "Is it free to post a job or browse Discovery / Gigs & Services?",
+    a: "Yes. Posting jobs and browsing Freelancer portfolios on Discovery or Gigs / Services is completely free. You only deposit credits into escrow when you offer and fund a contract.",
   },
   {
-    q: "How does the contract escrow system protect my funds?",
-    a: "When a client signs a project agreement, the milestone budget is securely deposited into an independent platform escrow hold. Funds are only transferred to the creative professional once the client explicitly reviews and approves the completed deliverable."
+    code: "FAQ-04",
+    category: "ESCROW PROTECTION",
+    q: "How does the contract escrow system protect both Clients and Freelancers?",
+    a: "When a contract is established, milestone credits are locked in an independent platform escrow hold. Clients know funds are never released until deliverables are reviewed and approved, and Freelancers can edit with confidence knowing the budget is already secured upfront.",
   },
   {
-    q: "What happens if a client does not respond to a milestone submission?",
-    a: "Clients have 5 calendar days for Job Contracts (3 days for Gig Contracts) to review submitted deliverables. If no approval, revision request, or dispute is opened within this window, the platform automatically approves the milestone and safely releases held escrow credits to the freelancer."
+    code: "FAQ-05",
+    category: "MILESTONE WINDOWS",
+    q: "What happens if a Client does not respond to a submitted milestone?",
+    a: "Clients have 5 calendar days for Job Contracts (3 days for Gig Contracts) to review submitted deliverables. If no approval, revision request, or dispute is opened within that window, the platform automatically approves the milestone and releases the escrow credits to the Freelancer.",
   },
   {
-    q: "What happens if a freelancer misses a milestone deadline?",
-    a: "If a deadline passes without a submission, the milestone enters Overdue status and both parties are notified. The system does not surprise-cancel; instead, the client has the option to grant a deadline extension or cancel the milestone to receive a 100% refund of the milestone escrow credits back to their account wallet."
+    code: "FAQ-06",
+    category: "OVERDUE DELIVERABLES",
+    q: "What happens if a Freelancer misses a milestone deadline?",
+    a: "If a deadline passes without a submission, the milestone enters Overdue status and both parties are notified. The Client can either grant a deadline extension or cancel the overdue milestone to receive an immediate 100% credit refund to their wallet.",
   },
   {
-    q: "Are my high-resolution raw video assets stored securely?",
-    a: "Absolutely. All media content is completely isolated within encrypted, secure cloud containers using enterprise-grade AES-256 protocols at rest. Your creative intellectual property belongs entirely to you and remains safe from unauthorized access."
+    code: "FAQ-07",
+    category: "ASSET MARKETPLACE",
+    q: "What digital items can I buy or sell on the Asset Marketplace / Asset Library?",
+    a: "Creators can buy and sell Template Videos, multi-asset Bundles, Images, Videos, and Audios on the Asset Marketplace. Purchased items are added directly to your Asset Library so you can import them into your browser video editor timeline in one click.",
   },
   {
-    q: "Will the AI caption tool train its models using my private footage?",
-    a: "No. Your security is fundamental to our architecture. Ensemble strictly processes your project audio strings locally and dynamically to power timeline scrubbing and clip searching — we never use your video assets for public data model training."
+    code: "FAQ-08",
+    category: "BROWSER STUDIO & AI",
+    q: "How do real-time collaboration, AI Auto Captioning, and Auto Dead-Air Cleanup work?",
+    a: "Ensemble's web video editor syncs timeline edits across team members in real time, includes integrated chat and embedded video calls, lets you search spoken dialogue across clips with AI Auto Captioning, and removes silent pauses in a single click with Auto Dead-Air Cleanup.",
   },
   {
-    q: "What video formats and resolution export tiers are supported?",
-    a: "The ecosystem handles all professional standards natively. Free users can execute 720p outputs, while upgrading to Premium opens up high-bitrate 1080p, and Business accounts unlock absolute 2K to 4K ProRes deliverables."
+    code: "FAQ-09",
+    category: "DATA & SECURITY",
+    q: "Are my raw video files secure, and does AI train on my private footage?",
+    a: "All project media is isolated inside encrypted cloud storage. Ensemble processes your audio and video strictly to power your workspace features—we never use your private footage to train public AI models.",
   },
   {
-    q: "How do payouts work for creative asset sales and custom gigs?",
-    a: "Whenever another user downloads an active marketplace preset or completes a milestone payout, the capital routes directly onto your dashboard wallet balance. You can pull earnings to your verified external banking accounts reliably at any time."
-  }
+    code: "FAQ-10",
+    category: "WALLET & CASHOUTS",
+    q: "How do payouts work for completed contracts and Asset Marketplace sales?",
+    a: "Approved contract milestones and Asset Marketplace downloads credit your Ensemble wallet balance immediately. Verified users can withdraw earned credits through supported cashout channels at any time.",
+  },
 ];
+
+const Crosshair: React.FC<{
+  top?: boolean;
+  bottom?: boolean;
+  left?: boolean;
+  right?: boolean;
+  color: string;
+}> = ({ top, bottom, left, right, color }) => (
+  <span
+    aria-hidden="true"
+    style={{
+      position: "absolute",
+      top: top ? -6 : undefined,
+      bottom: bottom ? -6 : undefined,
+      left: left ? -5 : undefined,
+      right: right ? -5 : undefined,
+      fontFamily: T.fontMono,
+      fontSize: 12,
+      lineHeight: 1,
+      color,
+      pointerEvents: "none",
+      userSelect: "none",
+      zIndex: 5,
+    }}
+  >
+    +
+  </span>
+);
 
 const PageFAQ: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
-
+  const isDark = theme === "dark";
   const navigate = useNavigate();
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
+  const [openIdx, setOpenIdx] = useState<number | null>(0);
 
   const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
   const softClickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const initAudio = () => {
     if (!hoverAudioRef.current) {
@@ -82,88 +146,494 @@ const PageFAQ: React.FC = () => {
     }
   }, []);
 
-  return (
-    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
+  const pageBg = isDark ? "#121214" : "#ffffff";
+  const cellHoverBg = isDark ? "#18181b" : "#f8fafc";
+  const borderLine = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.14)";
+  const textPrimary = isDark ? "#ffffff" : "#09090b";
+  const textSecondary = isDark ? "#d4d4d8" : "#27272a";
+  const textMeta = isDark ? "#a1a1aa" : "#52525b";
+  const crosshairColor = isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.45)";
+  const accentColor = "#3b82f6";
 
-      {/* Component Micro-Styles */}
+  return (
+    <div
+      style={{
+        background: pageBg,
+        minHeight: "100vh",
+        color: textPrimary,
+        fontFamily: T.fontDisplay,
+        padding: "48px 0 96px",
+        position: "relative",
+      }}
+    >
       <style>{`
-        .faq-card {
-          background: ${theme === 'dark' ? "#18181b" : "#ffffff"};
-          border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"};
-          borderRadius: 16px;
-          overflow: hidden;
-          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        .bp-faq-shell {
+          max-width: 1320px;
+          margin: 0 auto;
+          padding: 0 24px;
         }
-        .faq-card.active {
-          border-color: #3b82f6;
-          background: ${theme === 'dark' ? 'rgba(24, 24, 27, 0.8)' : 'rgba(255, 255, 255, 0.8)'};
-          box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.1);
+        .bp-faq-frame {
+          position: relative;
+          border: 1px solid ${borderLine};
+          background: ${pageBg};
         }
-        @keyframes faqSlideIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
+        .bp-faq-layout {
+          display: grid;
+          grid-template-columns: 320px 1fr;
         }
-        .faq-answer {
-          padding: 0 32px 24px 32px;
-          color: ${theme === 'dark' ? "#7a8499" : "#6b7280"};
+        .bp-faq-sidebar {
+          border-right: 1px solid ${borderLine};
+          background: ${isDark ? "#151518" : "#f8fafc"};
+          padding: 28px 24px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 24px;
+        }
+        .bp-faq-item {
+          border-bottom: 1px solid ${borderLine};
+          background: ${pageBg};
+          transition: background 0.18s ease;
+        }
+        .bp-faq-item:last-child {
+          border-bottom: none;
+        }
+        .bp-faq-item:hover {
+          background: ${cellHoverBg};
+        }
+        .bp-faq-item.is-open {
+          background: ${isDark ? "#16171b" : "#f8fafc"};
+        }
+        .bp-faq-trigger {
+          width: 100%;
+          appearance: none;
+          background: transparent;
+          border: none;
+          padding: 22px 28px;
+          text-align: left;
+          cursor: pointer;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .bp-faq-answer {
+          padding: 0 28px 24px 28px;
+          border-top: 1px dashed ${borderLine};
+          padding-top: 16px;
+          font-family: ${T.fontDisplay};
           font-size: 15px;
-          line-height: 1.6;
-          animation: faqSlideIn 0.2s ease forwards;
+          font-weight: 500;
+          line-height: 1.7;
+          color: ${textSecondary};
+        }
+        @media (max-width: 960px) {
+          .bp-faq-layout {
+            grid-template-columns: 1fr;
+          }
+          .bp-faq-sidebar {
+            border-right: none;
+            border-bottom: 1px solid ${borderLine};
+            padding: 22px 20px;
+          }
+          .bp-faq-trigger {
+            padding: 18px 20px;
+          }
+          .bp-faq-answer {
+            padding: 14px 20px 20px 20px;
+          }
+        }
+        @media (max-width: 640px) {
+          .bp-faq-shell {
+            padding: 0 14px;
+          }
         }
       `}</style>
 
-      {/* Decorative Ambient Background Blur */}
-      <div style={{ position: "absolute", width: "500px", height: "500px", background: "rgba(59, 130, 246, 0.03)", filter: "blur(140px)", top: "15%", left: "50%", transform: "translateX(-50%)", pointerEvents: "none" }} />
+      <div className="bp-faq-shell">
+        <div className="bp-faq-frame">
+          <Crosshair top left color={crosshairColor} />
+          <Crosshair top right color={crosshairColor} />
+          <Crosshair bottom left color={crosshairColor} />
+          <Crosshair bottom right color={crosshairColor} />
 
-      <div style={{ maxWidth: 800, margin: "0 auto", position: "relative", zIndex: 2 }}>
+          {/* Top Blueprint Navigation Bar */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 24px",
+              borderBottom: `1px solid ${borderLine}`,
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <button
+              onClick={() => {
+                playSoftClick();
+                navigate("/");
+              }}
+              onMouseEnter={playHover}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: textPrimary,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                fontFamily: T.fontMono,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                padding: 0,
+              }}
+            >
+              <ArrowLeft size={14} /> BACK TO LANDING
+            </button>
 
-        {/* Navigation Action */}
-        <button
-          onClick={() => { playSoftClick(); navigate(-1); }}
-          style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { playHover(); e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'; }}
-          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"; }}
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
+            <span
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: textMeta,
+              }}
+            >
+              SUPPORT // FREQUENTLY ASKED QUESTIONS
+            </span>
 
-        {/* Section Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 48, flexWrap: "wrap" }}>
-          <div style={{ background: "rgba(59, 130, 246, 0.1)", padding: 10, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <HelpCircle size={32} color="#3b82f6" />
+            <button
+              onClick={() => {
+                playSoftClick();
+                navigate("/landing/AskOurChatbot");
+              }}
+              onMouseEnter={playHover}
+              style={{
+                background: accentColor,
+                border: "none",
+                color: "#ffffff",
+                padding: "6px 14px",
+                fontFamily: T.fontMono,
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              ASK ENSEMBLE AI <ArrowRight size={13} />
+            </button>
           </div>
-          <div>
-            <h1 style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Frequently Asked Questions</h1>
-            <p style={{ color: "#475569", margin: "6px 0 0 0", fontSize: 14, fontWeight: 600 }}>Everything you need to know about the Ensemble ecosystem</p>
-          </div>
-        </div>
 
-        {/* Accordion List Content Feed */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {FAQ_ITEMS.map((item, idx) => {
-            const isOpen = openIdx === idx;
-            return (
-              <div key={idx} className={`faq-card ${isOpen ? "active" : ""}`}>
-                <button
-                  onClick={() => { playSoftClick(); setOpenIdx(isOpen ? null : idx); }}
-                  onMouseEnter={playHover}
-                  style={{ width: "100%", background: "none", border: "none", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left" }}
-                >
-                  <span style={{ fontSize: 16, fontWeight: 600, color: isOpen ? theme === 'dark' ? '#ffffff' : '#111827' : theme === 'dark' ? "#cbd5e1" : "#4b5563", transition: "color 0.2s", paddingRight: 16 }}>
-                    {item.q}
-                  </span>
-                  <ChevronDown size={18} color={isOpen ? "#3b82f6" : theme === 'dark' ? "#7a8499" : "#6b7280"} style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.25s", flexShrink: 0 }} />
-                </button>
-                {isOpen && (
-                  <div className="faq-answer">
-                    {item.a}
-                  </div>
-                )}
+          {/* Hero Title Block */}
+          <div
+            style={{
+              padding: "clamp(28px, 5vw, 48px) clamp(20px, 4vw, 48px)",
+              borderBottom: `1px solid ${borderLine}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 20,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+              <div
+                style={{
+                  width: 54,
+                  height: 54,
+                  border: `1px solid ${accentColor}`,
+                  background: isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(59, 130, 246, 0.06)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: accentColor,
+                  flexShrink: 0,
+                }}
+              >
+                <HelpCircle size={26} />
               </div>
-            );
-          })}
-        </div>
+              <div>
+                <div
+                  style={{
+                    fontFamily: T.fontMono,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: accentColor,
+                    marginBottom: 6,
+                  }}
+                >
+                  KNOWLEDGE BASE // 10 CORE ANSWERS
+                </div>
+                <h1
+                  style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: "clamp(26px, 4vw, 44px)",
+                    fontWeight: 800,
+                    letterSpacing: "-0.03em",
+                    lineHeight: 1.1,
+                    color: textPrimary,
+                    margin: 0,
+                  }}
+                >
+                  Frequently Asked Questions
+                </h1>
+              </div>
+            </div>
 
+            <p
+              style={{
+                fontFamily: T.fontDisplay,
+                fontSize: 15,
+                lineHeight: 1.6,
+                fontWeight: 500,
+                color: textSecondary,
+                maxWidth: 440,
+                margin: 0,
+              }}
+            >
+              Everything you need to know about unified Client &amp; Freelancer accounts, KYC verification, 2-way hiring, escrow contracts, and the Asset Marketplace.
+            </p>
+          </div>
+
+          {/* 2-Column Blueprint Body */}
+          <div className="bp-faq-layout">
+            {/* Left Info Rail */}
+            <aside className="bp-faq-sidebar">
+              <div>
+                <div
+                  style={{
+                    fontFamily: T.fontMono,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: accentColor,
+                    marginBottom: 10,
+                  }}
+                >
+                  QUICK GUIDES
+                </div>
+                <h3
+                  style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: textPrimary,
+                    marginBottom: 8,
+                  }}
+                >
+                  Explore Platform Workflows
+                </h3>
+                <p
+                  style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: 13.5,
+                    lineHeight: 1.6,
+                    fontWeight: 500,
+                    color: textSecondary,
+                    marginBottom: 18,
+                  }}
+                >
+                  Need step-by-step instructions on hiring editors, accepting service orders, or selling assets?
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { label: "How to Hire Guide", path: "/landing/HowToHire" },
+                    { label: "How to Work Guide", path: "/landing/HowToWork" },
+                    { label: "Client & Freelancers Use Case", path: "/landing/usecase/client" },
+                    { label: "Asset Creators Use Case", path: "/landing/usecase/asset-creator" },
+                  ].map((item) => (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        playSoftClick();
+                        navigate(item.path);
+                      }}
+                      onMouseEnter={playHover}
+                      style={{
+                        background: pageBg,
+                        border: `1px solid ${borderLine}`,
+                        padding: "10px 14px",
+                        fontFamily: T.fontMono,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: textPrimary,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <ArrowRight size={13} color={accentColor} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: `1px solid ${borderLine}`,
+                  background: pageBg,
+                  padding: "18px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontFamily: T.fontMono,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: accentColor,
+                    marginBottom: 6,
+                  }}
+                >
+                  <MessageSquare size={14} /> STILL HAVE QUESTIONS?
+                </div>
+                <p
+                  style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: 13,
+                    lineHeight: 1.55,
+                    color: textSecondary,
+                    marginBottom: 12,
+                  }}
+                >
+                  Ask our AI assistant or submit a support ticket for direct help from our team.
+                </p>
+                <button
+                  onClick={() => {
+                    playSoftClick();
+                    navigate("/landing/AskOurChatbot");
+                  }}
+                  onMouseEnter={playHover}
+                  style={{
+                    width: "100%",
+                    background: accentColor,
+                    color: "#ffffff",
+                    border: "none",
+                    padding: "10px 14px",
+                    fontFamily: T.fontMono,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  OPEN AI ASSISTANT →
+                </button>
+              </div>
+            </aside>
+
+            {/* Right Accordion Feed */}
+            <div>
+              {FAQ_ITEMS.map((item, idx) => {
+                const isOpen = openIdx === idx;
+                return (
+                  <div
+                    key={item.code}
+                    className={`bp-faq-item ${isOpen ? "is-open" : ""}`}
+                  >
+                    <button
+                      className="bp-faq-trigger"
+                      onClick={() => {
+                        playSoftClick();
+                        setOpenIdx(isOpen ? null : idx);
+                      }}
+                      onMouseEnter={playHover}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: T.fontMono,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: "0.14em",
+                              color: accentColor,
+                            }}
+                          >
+                            {item.code}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: T.fontMono,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: "0.12em",
+                              color: textMeta,
+                            }}
+                          >
+                            // {item.category}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: T.fontDisplay,
+                            fontSize: "clamp(16px, 1.8vw, 18px)",
+                            fontWeight: 800,
+                            letterSpacing: "-0.015em",
+                            color: textPrimary,
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          {item.q}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          border: `1px solid ${isOpen ? accentColor : borderLine}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: isOpen ? accentColor : textMeta,
+                          flexShrink: 0,
+                          marginTop: 2,
+                        }}
+                      >
+                        <ChevronDown
+                          size={16}
+                          style={{
+                            transform: isOpen ? "rotate(180deg)" : "none",
+                            transition: "transform 0.22s ease",
+                          }}
+                        />
+                      </div>
+                    </button>
+
+                    {isOpen && <div className="bp-faq-answer">{item.a}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
