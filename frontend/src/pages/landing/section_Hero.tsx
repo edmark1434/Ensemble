@@ -16,12 +16,20 @@ import api from "@/lib/axios";
 
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
+const HERO_VIDEOS = [
+  "/clip/hero_vid.mp4",
+  "/gallery_images/new/vids/herovid_1.mp4",
+  "/gallery_images/new/vids/herovid_2.mp4",
+] as const;
+
 const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
   const navigate = useNavigate();
   const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
   const theme = useGlobalState((state) => state.theme);
 
   const [mounted, setMounted] = useState<boolean>(false);
+  const [activeVideoIdx, setActiveVideoIdx] = useState<number>(0);
+  const heroVideoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const [isMobile, setIsMobile] = useState<boolean>(
     typeof window !== "undefined" ? window.innerWidth <= 640 : false
   );
@@ -39,6 +47,21 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
     mq.addEventListener("change", updateMobile);
     return () => mq.removeEventListener("change", updateMobile);
   }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setActiveVideoIdx((prev) => (prev + 1) % HERO_VIDEOS.length);
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const activeVideo = heroVideoRefs.current[activeVideoIdx];
+    if (activeVideo) {
+      activeVideo.currentTime = 0;
+      activeVideo.play().catch(() => {});
+    }
+  }, [activeVideoIdx]);
 
   useEffect(() => {
     const fetchTopCategories = async () => {
@@ -348,23 +371,32 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
           overflow: "hidden",
         }}
       >
-        {/* Base Video - Always visible */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            zIndex: 1,
-          }}
-        >
-          <source src="/clip/hero_vid.mp4" type="video/mp4" />
-        </video>
+        {/* Looping Background Videos (original -> herovid_1 -> herovid_2 -> original every 4s) */}
+        {HERO_VIDEOS.map((src, idx) => (
+          <video
+            key={src}
+            ref={(el) => {
+              heroVideoRefs.current[idx] = el;
+            }}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              zIndex: 1,
+              opacity: activeVideoIdx === idx ? 1 : 0,
+              transition: "opacity 0.9s ease-in-out",
+            }}
+          >
+            <source src={src} type="video/mp4" />
+          </video>
+        ))}
 
         {/* Theme Overlay */}
         <div

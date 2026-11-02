@@ -973,13 +973,163 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
           </div>
         </div>
 
+        {/* ─── ROW 5: What's Inside Gallery Showcase (Video Editor Collaboration) ─── */}
+        <div
+          id="highlights-gallery"
+          style={{
+            borderBottom: `1px solid ${borderLine}`,
+            background: bgSurface,
+            position: "relative",
+          }}
+        >
+          {/* Gallery Telemetry Micro-Header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px clamp(18px, 4vw, 40px)",
+              borderBottom: `1px solid ${borderLine}`,
+              fontFamily: T.fontDisplay,
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: textMeta,
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <span>02.1 / GALLERY</span>
+            <span>VIDEO EDITOR COLLABORATION</span>
+          </div>
+
+          {/* Gallery Title & Description Bar */}
+          <FadeInScroll distance={20} duration={0.6}>
+            <div
+              style={{
+                padding: "clamp(24px, 4vw, 40px) clamp(18px, 4vw, 40px)",
+                borderBottom: `1px solid ${borderLine}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <h3
+                  style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: "clamp(22px, 3vw, 32px)",
+                    fontWeight: 800,
+                    letterSpacing: "-0.025em",
+                    lineHeight: 1.15,
+                    color: textPrimary,
+                    margin: 0,
+                  }}
+                >
+                  Inside the <span style={{ color: "#3b82f6" }}>Collaborative Video Editor</span>.
+                </h3>
+                <span
+                  style={{
+                    fontFamily: T.fontMono,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    color: "#3b82f6",
+                    padding: "4px 10px",
+                    border: `1px solid ${borderLine}`,
+                    background: isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(59, 130, 246, 0.06)",
+                  }}
+                >
+                  MULTI-USER TIMELINE • 01 / 01
+                </span>
+              </div>
+
+              <p
+                style={{
+                  fontFamily: T.fontDisplay,
+                  fontSize: "clamp(13px, 1.3vw, 15.5px)",
+                  lineHeight: 1.55,
+                  fontWeight: 500,
+                  color: textSecondary,
+                  maxWidth: 820,
+                  margin: 0,
+                }}
+              >
+                Multiple editors working simultaneously on the same multi-track timeline—complete with live presence cursors, real-time clip locking, licensed project assets, and instant canvas layout controls.
+              </p>
+            </div>
+          </FadeInScroll>
+
+          {/* Framed Full-Width Collaboration Screenshot */}
+          <div
+            onMouseEnter={playMinimalHover}
+            style={{
+              padding: "clamp(14px, 2.5vw, 28px) clamp(18px, 4vw, 40px)",
+              background: isDark ? "#0d0d10" : "#f8fafc",
+            }}
+          >
+            <div
+              style={{
+                border: `1px solid ${borderLine}`,
+                background: "#09090b",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              {/* Browser/Editor Window Top Telemetry Strip */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 14px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: "#121214",
+                  fontFamily: T.fontMono,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.1em",
+                  color: "rgba(255, 255, 255, 0.55)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 7, height: 7, background: "#3b82f6", display: "inline-block" }} />
+                  <span>ENSEMBLE STUDIO // OUR COLLABORATED VIDEO</span>
+                </div>
+                <span>LIVE PRESENCE: 3 EDITORS ACTIVE</span>
+              </div>
+
+              <img
+                src="/gallery_images/new/gallery/collab.png"
+                alt="Ensemble Real-Time Video Editor Collaboration"
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  display: "block",
+                  objectFit: "cover",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* ─── Scrolling Text Marquee Framed Directly Above 03 / WORKFLOW ─── */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 40px",
+            padding: "12px clamp(18px, 4vw, 40px)",
             borderBottom: `1px solid ${borderLine}`,
             fontFamily: T.fontDisplay,
             fontSize: 10.5,
