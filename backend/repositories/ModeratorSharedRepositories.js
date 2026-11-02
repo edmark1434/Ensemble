@@ -158,6 +158,16 @@ function mapDisputeRow(row) {
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
     isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
+    financialResolution: row.financial_resolution_at
+      ? {
+          at: row.financial_resolution_at,
+          kind: row.financial_resolution_kind || null,
+          staffId: row.financial_resolution_staff_id || null,
+          clientCredits: Number(row.financial_client_credits || 0),
+          freelancerCredits: Number(row.financial_freelancer_credits || 0),
+          reversedTransactionId: row.financial_reversed_transaction_id || null,
+        }
+      : null,
   };
 }
 

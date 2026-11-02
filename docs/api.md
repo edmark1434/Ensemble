@@ -76,6 +76,10 @@
 - `POST /api/contracts/:contractId/dispute` creates a hidden Contract dispute, links remaining contract escrow through `related_dispute_id` / `related_credit_transaction_id`, and freezes release/refund until the case is closed.
 - `GET /api/users/disputes` lists the filer's cases plus visible cases that name them. `GET /api/users/disputes/:id` returns filer-visible notes (`author_and_staff`) while the case is still hidden.
 - `POST /api/accounts/disputes/:id/messages`: the filer may add information while hidden. After staff set `visibility = true`, only the two parties may comment. Guests can read public discussion at `GET /api/accounts/disputes/:id`.
+- Staff money actions (Admin or assigned Support with `canAct`): `POST /api/admin/disputes/:id/financial-resolution` and `POST /api/moderator/support/disputes/:id/financial-resolution`.
+  - `action: "settle_escrow"` with `clientCredits`, `freelancerCredits`, `resolutionNotes` (min 8 chars). Splits remaining frozen escrow; auto-closes the dispute.
+  - `action: "reverse_transaction"` with `creditTransactionId`, optional `amount`, `resolutionNotes`. Reverses a linked completed transaction; fails with 409 if the destination wallet lacks balance; auto-closes the dispute.
+  - A dispute accepts only one financial resolution. Non-handlers receive 403.
 
 ## Member reports
 

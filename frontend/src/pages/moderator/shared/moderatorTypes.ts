@@ -55,6 +55,9 @@ export type DisputeCaseTransaction = {
   destinationHandle: string | null;
   destinationWallet: string;
   tiedToThisDispute: boolean;
+  reversesTransactionId?: string | null;
+  reversedByTransactionId?: string | null;
+  reversible?: boolean;
 };
 
 export type DisputeCaseRelated = {

@@ -503,6 +503,16 @@ function mapDisputeRow(row) {
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
     isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
+    financialResolution: row.financial_resolution_at
+      ? {
+          at: row.financial_resolution_at,
+          kind: row.financial_resolution_kind || null,
+          staffId: row.financial_resolution_staff_id || null,
+          clientCredits: Number(row.financial_client_credits || 0),
+          freelancerCredits: Number(row.financial_freelancer_credits || 0),
+          reversedTransactionId: row.financial_reversed_transaction_id || null,
+        }
+      : null,
   };
 }
 
@@ -3703,6 +3713,8 @@ async function loadDisputeCaseFile(row) {
       ct.reference_table,
       ct.reference_id,
       ct.related_dispute_id,
+      ct.reverses_credit_transaction_id,
+      rev.credit_transaction_id AS reversed_by_transaction_id,
       src_w.type AS source_wallet_type,
       dst_w.type AS destination_wallet_type,
       COALESCE(src_a.display_name, src_u.first_name || ' ' || src_u.last_name, 'Platform') AS source_name,
@@ -3712,6 +3724,9 @@ async function loadDisputeCaseFile(row) {
     FROM credit_transactions ct
     JOIN wallets src_w ON src_w.wallet_id = ct.source_wallet_id
     JOIN wallets dst_w ON dst_w.wallet_id = ct.destination_wallet_id
+    LEFT JOIN credit_transactions rev
+      ON rev.reverses_credit_transaction_id = ct.credit_transaction_id
+     AND rev.status IN ('Completed', 'Pending')
     LEFT JOIN account_wallets src_aw ON src_aw.wallet_id = src_w.wallet_id
     LEFT JOIN accounts src_a ON src_a.account_id = src_aw.account_id
     LEFT JOIN users src_u ON src_u.account_id = src_a.account_id
@@ -3722,6 +3737,13 @@ async function loadDisputeCaseFile(row) {
       OR ($2::uuid IS NOT NULL AND ct.credit_transaction_id = $2::uuid)
       OR (ct.reference_table = 'contracts' AND ct.reference_id = ANY($3::uuid[]))
       OR (ct.reference_table = 'contract_milestones' AND ct.reference_id = ANY($4::uuid[]))
+      OR ct.reverses_credit_transaction_id IN (
+           SELECT credit_transaction_id FROM credit_transactions
+           WHERE related_dispute_id = $1
+              OR ($2::uuid IS NOT NULL AND credit_transaction_id = $2::uuid)
+              OR (reference_table = 'contracts' AND reference_id = ANY($3::uuid[]))
+              OR (reference_table = 'contract_milestones' AND reference_id = ANY($4::uuid[]))
+         )
     ORDER BY ct.created_at ASC
     LIMIT 80
     `,
@@ -3809,27 +3831,40 @@ async function loadDisputeCaseFile(row) {
       freelancerHandle: contract.freelancer_handle || '—',
       milestones: milestonesByContract.get(contract.contract_id) || [],
     })),
-    transactions: transactionResult.rows.map((tx) => ({
-      id: tx.credit_transaction_id,
-      type: tx.type,
-      amount: Number(tx.amount_credits || 0),
-      status: tx.status,
-      createdAt: tx.created_at,
-      referenceTable: tx.reference_table || null,
-      referenceLabel: tx.reference_table === 'contracts'
-        ? contractTitleById.get(tx.reference_id) || 'Contract'
-        : tx.reference_table === 'contract_milestones'
-          ? milestoneNameById.get(tx.reference_id) || 'Milestone'
-          : tx.reference_table || null,
-      sourceName: tx.source_name,
-      sourceHandle: tx.source_handle || null,
-      sourceWallet: walletLabel(tx.source_wallet_type),
-      destinationName: tx.destination_name,
-      destinationHandle: tx.destination_handle || null,
-      destinationWallet: walletLabel(tx.destination_wallet_type),
-      tiedToThisDispute: String(tx.related_dispute_id || '') === String(row.dispute_id)
-        || String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || ''),
-    })),
+    transactions: transactionResult.rows.map((tx) => {
+      const status = String(tx.status || '');
+      const alreadyReversed = Boolean(tx.reversed_by_transaction_id) || status === 'Reversed';
+      const tiedToThisDispute =
+        String(tx.related_dispute_id || '') === String(row.dispute_id) ||
+        String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || '');
+      return {
+        id: tx.credit_transaction_id,
+        type: tx.type,
+        amount: Number(tx.amount_credits || 0),
+        status: tx.status,
+        createdAt: tx.created_at,
+        referenceTable: tx.reference_table || null,
+        referenceLabel: tx.reference_table === 'contracts'
+          ? contractTitleById.get(tx.reference_id) || 'Contract'
+          : tx.reference_table === 'contract_milestones'
+            ? milestoneNameById.get(tx.reference_id) || 'Milestone'
+            : tx.reference_table || null,
+        sourceName: tx.source_name,
+        sourceHandle: tx.source_handle || null,
+        sourceWallet: walletLabel(tx.source_wallet_type),
+        destinationName: tx.destination_name,
+        destinationHandle: tx.destination_handle || null,
+        destinationWallet: walletLabel(tx.destination_wallet_type),
+        tiedToThisDispute,
+        reversesTransactionId: tx.reverses_credit_transaction_id || null,
+        reversedByTransactionId: tx.reversed_by_transaction_id || null,
+        reversible:
+          status === 'Completed' &&
+          !alreadyReversed &&
+          !tx.reverses_credit_transaction_id &&
+          !row.financial_resolution_at,
+      };
+    }),
     relatedDisputes: relatedResult.rows.map((dispute) => ({
       id: dispute.dispute_id,
       number: dispute.dispute_number || null,
@@ -4940,4 +4975,8 @@ module.exports = {
   updateReport,
   getReportDetail,
   fetchStaffWorkload,
+  resolveDisputeStaffId,
+  buildDisputePermissions,
+  loadDisputeRow,
+  mapDisputeRow,
 };

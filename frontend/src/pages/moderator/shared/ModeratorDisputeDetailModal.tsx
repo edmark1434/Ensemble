@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import type { DisputeDetail } from "./moderatorTypes";
+import type { DisputeCaseTransaction, DisputeDetail } from "./moderatorTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
@@ -133,6 +133,14 @@ export default function ModeratorDisputeDetailModal({
   const [banPromptOpen, setBanPromptOpen] = useState(false);
   const [banReason, setBanReason] = useState("");
   const [reopenPromptOpen, setReopenPromptOpen] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [settleClientCredits, setSettleClientCredits] = useState("0");
+  const [settleFreelancerCredits, setSettleFreelancerCredits] = useState("0");
+  const [settleNotes, setSettleNotes] = useState("");
+  const [reverseOpen, setReverseOpen] = useState(false);
+  const [reverseTxn, setReverseTxn] = useState<DisputeCaseTransaction | null>(null);
+  const [reverseAmount, setReverseAmount] = useState("");
+  const [reverseNotes, setReverseNotes] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -209,6 +217,88 @@ export default function ModeratorDisputeDetailModal({
         "Failed to update dispute";
       showErrorToast(msg);
       return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openSettle = () => {
+    const remaining = Number(detail?.dispute?.creditAmount || 0);
+    setSettleClientCredits(String(remaining));
+    setSettleFreelancerCredits("0");
+    setSettleNotes(resolutionNotes || "");
+    setSettleOpen(true);
+  };
+
+  const openReverse = (tx: DisputeCaseTransaction) => {
+    setReverseTxn(tx);
+    setReverseAmount(String(tx.amount || 0));
+    setReverseNotes(resolutionNotes || "");
+    setReverseOpen(true);
+  };
+
+  const confirmSettleEscrow = async () => {
+    const clientCredits = Number(settleClientCredits);
+    const freelancerCredits = Number(settleFreelancerCredits);
+    if (!Number.isInteger(clientCredits) || clientCredits < 0 || !Number.isInteger(freelancerCredits) || freelancerCredits < 0) {
+      showErrorToast("Settlement amounts must be non-negative integers.");
+      return;
+    }
+    if (settleNotes.trim().length < 8) {
+      showErrorToast("Resolution notes must be at least 8 characters.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post(`${endpointBase}/${disputeId}/financial-resolution`, {
+        action: "settle_escrow",
+        clientCredits,
+        freelancerCredits,
+        resolutionNotes: settleNotes.trim(),
+      });
+      showSuccessToast("Escrow settled and dispute closed");
+      setSettleOpen(false);
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to settle escrow";
+      showErrorToast(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmReverseTransaction = async () => {
+    if (!reverseTxn) return;
+    const amount = Number(reverseAmount);
+    if (!Number.isInteger(amount) || amount < 1) {
+      showErrorToast("Reverse amount must be an integer of at least 1.");
+      return;
+    }
+    if (reverseNotes.trim().length < 8) {
+      showErrorToast("Resolution notes must be at least 8 characters.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post(`${endpointBase}/${disputeId}/financial-resolution`, {
+        action: "reverse_transaction",
+        creditTransactionId: reverseTxn.id,
+        amount,
+        resolutionNotes: reverseNotes.trim(),
+      });
+      showSuccessToast("Transaction reversed and dispute closed");
+      setReverseOpen(false);
+      setReverseTxn(null);
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to reverse transaction";
+      showErrorToast(msg);
     } finally {
       setSaving(false);
     }
@@ -396,6 +486,10 @@ export default function ModeratorDisputeDetailModal({
               dispute={dispute}
               caseFile={detail.caseFile}
               onOpenDispute={onOpenDispute}
+              canAct={canDecide}
+              saving={saving}
+              onSettleEscrow={openSettle}
+              onReverseTransaction={openReverse}
             />
 
             {adminMode && viewOnly && (
@@ -845,6 +939,126 @@ export default function ModeratorDisputeDetailModal({
                 className="rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
                 {saving ? "Reopening…" : "Reopen case"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settleOpen && dispute && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
+            <h3 className="text-sm font-semibold text-white">Settle frozen escrow</h3>
+            <p className="text-xs leading-relaxed text-zinc-400">
+              Split up to {Number(dispute.creditAmount || 0).toLocaleString()} remaining escrow credits.
+              Refund goes to the client, release goes to the freelancer. This closes the dispute.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs text-zinc-500">
+                Client refund
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={settleClientCredits}
+                  onChange={(event) => setSettleClientCredits(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                />
+              </label>
+              <label className="block text-xs text-zinc-500">
+                Freelancer release
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={settleFreelancerCredits}
+                  onChange={(event) => setSettleFreelancerCredits(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                />
+              </label>
+            </div>
+            <label className="block text-xs text-zinc-500">
+              Resolution notes
+              <textarea
+                value={settleNotes}
+                onChange={(event) => setSettleNotes(event.target.value)}
+                rows={3}
+                placeholder="Why this split is correct"
+                className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setSettleOpen(false)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || settleNotes.trim().length < 8}
+                onClick={() => void confirmSettleEscrow()}
+                className="rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-100 disabled:opacity-50"
+              >
+                {saving ? "Settling…" : "Settle and close"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reverseOpen && reverseTxn && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
+            <h3 className="text-sm font-semibold text-white">Reverse transaction</h3>
+            <p className="text-xs leading-relaxed text-zinc-400">
+              Reverse {reverseTxn.type} of {reverseTxn.amount.toLocaleString()} credits. If the
+              recipient no longer has enough spendable credits, this fails and nothing moves. This
+              closes the dispute.
+            </p>
+            <label className="block text-xs text-zinc-500">
+              Amount
+              <input
+                type="number"
+                min={1}
+                max={reverseTxn.amount}
+                step={1}
+                value={reverseAmount}
+                onChange={(event) => setReverseAmount(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Resolution notes
+              <textarea
+                value={reverseNotes}
+                onChange={(event) => setReverseNotes(event.target.value)}
+                rows={3}
+                placeholder="Why this reverse is correct"
+                className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setReverseOpen(false);
+                  setReverseTxn(null);
+                }}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || reverseNotes.trim().length < 8}
+                onClick={() => void confirmReverseTransaction()}
+                className="rounded-lg border border-rose-500/40 bg-rose-500/20 px-3 py-2 text-sm font-medium text-rose-100 disabled:opacity-50"
+              >
+                {saving ? "Reversing…" : "Reverse and close"}
               </button>
             </div>
           </div>

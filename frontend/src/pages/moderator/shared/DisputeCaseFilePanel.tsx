@@ -1,4 +1,4 @@
-import type { Dispute, DisputeCaseFile } from "./moderatorTypes";
+import type { Dispute, DisputeCaseFile, DisputeCaseTransaction } from "./moderatorTypes";
 
 function when(value?: string | null) {
   if (!value) return "—";
@@ -26,14 +26,29 @@ export default function DisputeCaseFilePanel({
   dispute,
   caseFile,
   onOpenDispute,
+  canAct = false,
+  saving = false,
+  onSettleEscrow,
+  onReverseTransaction,
 }: {
   dispute: Dispute;
   caseFile?: DisputeCaseFile;
   onOpenDispute?: (disputeId: string) => void;
+  canAct?: boolean;
+  saving?: boolean;
+  onSettleEscrow?: () => void;
+  onReverseTransaction?: (tx: DisputeCaseTransaction) => void;
 }) {
   const contracts = caseFile?.contracts || [];
   const transactions = caseFile?.transactions || [];
   const related = caseFile?.relatedDisputes || [];
+  const financial = dispute.financialResolution;
+  const showSettle =
+    canAct &&
+    !dispute.isClosed &&
+    !financial &&
+    Number(dispute.creditAmount || 0) > 0 &&
+    Boolean(onSettleEscrow);
 
   return (
     <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
@@ -70,6 +85,38 @@ export default function DisputeCaseFilePanel({
           <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Resolution. </span>
           {dispute.resolutionNotes}
         </p>
+      ) : null}
+
+      {financial ? (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-3 text-sm text-emerald-100">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300/80">Financial resolution</p>
+          <p className="mt-1">
+            {financial.kind === "escrow_settle"
+              ? `Escrow settled — client ${financial.clientCredits.toLocaleString()} · freelancer ${financial.freelancerCredits.toLocaleString()}`
+              : financial.kind === "transaction_reverse"
+                ? "Linked transaction reversed"
+                : titleCase(financial.kind || "Resolved")}
+          </p>
+          <p className="mt-1 text-xs text-emerald-200/70">{when(financial.at)}</p>
+        </div>
+      ) : null}
+
+      {showSettle ? (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">Frozen escrow</p>
+          <p className="mt-1 text-sm text-zinc-300">
+            {dispute.creditAmount.toLocaleString()} credits remain frozen on this case. Settle as a
+            refund, release, or split. This closes the dispute.
+          </p>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onSettleEscrow}
+            className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
+          >
+            Settle escrow
+          </button>
+        </div>
       ) : null}
 
       <div className="space-y-3">
@@ -152,7 +199,19 @@ export default function DisputeCaseFilePanel({
                   {titleCase(tx.status)}
                   {tx.referenceLabel ? ` · ${tx.referenceLabel}` : ""}
                   {tx.tiedToThisDispute ? " · Tied to this dispute" : ""}
+                  {tx.reversesTransactionId ? " · Compensating reverse" : ""}
+                  {tx.reversedByTransactionId ? " · Already reversed" : ""}
                 </p>
+                {canAct && tx.reversible && onReverseTransaction && !financial ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => onReverseTransaction(tx)}
+                    className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-100 hover:bg-rose-500/20 disabled:opacity-50"
+                  >
+                    Reverse transaction
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
