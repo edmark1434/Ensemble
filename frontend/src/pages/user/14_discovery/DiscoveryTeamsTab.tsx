@@ -101,7 +101,8 @@ function computeTeamDiscoveryScore(
 
 export const DiscoveryTeamsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { userInfo } = useGlobalState();
+  const userInfo = useGlobalState((state) => state.user);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [teams, setTeams] = useState<DiscoveryTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -241,7 +242,7 @@ export const DiscoveryTeamsTab: React.FC = () => {
               <span>Shuffle</span>
             </button>
 
-            {userInfo && (
+            {userInfo && !isGuestMode && (
               <button
                 type="button"
                 onClick={() => navigate("/teams")}
@@ -374,7 +375,7 @@ export const DiscoveryTeamsTab: React.FC = () => {
             return (
               <div
                 key={team.team_id}
-                onClick={() => navigate(`/teams/${team.team_id}`, { state: { from: "/discovery?tab=teams" } })}
+                onClick={() => navigate(`/teams/${team.team_id}`, { state: { from: "/discovery/teams" } })}
                 className="group relative rounded-2xl border border-zinc-200/80 dark:border-white/10 bg-white dark:bg-zinc-900/60 overflow-hidden shadow-xs hover:shadow-md hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-200 flex flex-col cursor-pointer"
               >
                 {/* 1. Header Banner: Team thumbnail as the banner */}

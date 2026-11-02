@@ -55,6 +55,7 @@ import BusinessVerificationEligibilityModal from "./team_modals/BusinessVerifica
 import { AddTeamFundsModal } from "./team_modals/AddTeamFundsModal";
 import { InviteTeamModal } from "./team_modals/InviteTeamModal";
 import TeamTaskDashboard from "./team_tasks/TeamTaskDashboard";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 type PermissionSet = Record<string, boolean>;
 type Membership = { role: string; status: string; permissions: PermissionSet };
@@ -158,7 +159,7 @@ export default function SelectedTeam() {
     } else if (window.history.state && window.history.state.idx > 0) {
       navigate(-1);
     } else {
-      navigate("/teams");
+      navigate(isGuest ? "/discovery/teams" : "/teams");
     }
   };
   const [team, setTeam] = useState<Team | null>(null);
@@ -203,7 +204,9 @@ export default function SelectedTeam() {
   const [showDistribution, setShowDistribution] = useState(false);
   const [distributionRecipientId, setDistributionRecipientId] = useState('');
   const [distributionAmount, setDistributionAmount] = useState('');
-  const { user } = useGlobalState();
+  const { user, isGuestMode } = useGlobalState();
+  const isGuest = Boolean(isGuestMode || !user || user?.role === "guest");
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const theme = useGlobalState((state) => state.theme);
   const [isInitializingTeam, setIsInitializingTeam] = useState(true);
 
@@ -284,6 +287,10 @@ export default function SelectedTeam() {
 
   const requestToJoin = async () => {
     if (saving) return;
+    if (isGuest) {
+      setIsGuestModalOpen(true);
+      return;
+    }
     const verified = await continueIfAccountVerified(
       () => {},
       false,
@@ -787,7 +794,14 @@ export default function SelectedTeam() {
                   </button>
                 )}
                 <button
-                  onClick={() => { setShowMenu(false); setShowReport(true); }}
+                  onClick={() => {
+                    setShowMenu(false);
+                    if (isGuest) {
+                      setIsGuestModalOpen(true);
+                      return;
+                    }
+                    setShowReport(true);
+                  }}
                   className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
                 >
                   <Flag className="h-4 w-4" />
@@ -935,9 +949,20 @@ export default function SelectedTeam() {
           onTransactionSearch={setTransactionSearch}
           onTransactionDate={setTransactionDate}
           onLoadTransactions={loadTransactions}
-          onReview={() => setShowReviewModal(true)}
+          onReview={() => {
+            if (isGuest) {
+              setIsGuestModalOpen(true);
+              return;
+            }
+            setShowReviewModal(true);
+          }}
         />
       </main>
+
+      <GuestLoginModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+      />
 
       <AddTeamFundsModal
         isOpen={showAddFunds}

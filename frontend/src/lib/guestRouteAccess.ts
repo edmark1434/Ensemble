@@ -4,21 +4,31 @@ const GUEST_EXACT_PATHS = new Set([
   "/assets",
   "/jobs",
   "/jobs/postings",
+  "/jobs/info",
+  "/jobs/proposals/flow",
   "/gigs",
   "/gigs/services",
+  "/gigs/info",
+  "/gigs/orders/flow",
+  "/gigs/orders/info",
   "/discovery",
+  "/discovery/creators",
+  "/discovery/teams",
   "/discovery/gallery",
+  "/discovery/info",
   "/projects",
 ]);
 
 const GUEST_DETAIL_PATHS = [
   /^\/forums\/(?:group|discussion)\/[^/]+$/,
   /^\/assets\/[^/]+$/,
-  /^\/jobs\/postings\/[^/]+$/,
+  /^\/jobs\/postings\/[^/]+(?:\/page)?$/,
+  /^\/jobs\/[^/]+\/page$/,
   /^\/gigs\/services\/[^/]+(?:\/page)?$/,
   /^\/profile\/[^/]+$/,
   /^\/disputes\/[^/]+$/,
   /^\/teams\/(?:invite|join)\/[^/]+$/,
+  /^\/teams\/[^/]+$/,
 ];
 
 function normalizePath(pathname: string): string {
