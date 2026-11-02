@@ -13,8 +13,14 @@ async function getCreditTransactionsController(req, res) {
     }
 
     try {
-        const transactions = await getCreditTransactionsService(accountId);
-        return res.status(200).json({ success: true, transactions });
+        const result = await getCreditTransactionsService(accountId);
+        const transactions = Array.isArray(result) ? result : (result?.transactions || []);
+        const walletSummary = Array.isArray(result) ? null : (result?.walletSummary || null);
+        return res.status(200).json({
+            success: true,
+            transactions,
+            walletSummary,
+        });
     } catch (error) {
         console.error('Error fetching credit transactions:', error);
         return res.status(error.statusCode || 500).json({
