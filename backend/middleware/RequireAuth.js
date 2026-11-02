@@ -3,6 +3,10 @@ const jwt = require('jsonwebtoken');
 const { rejectRestrictedAccount, rejectSuspendedWrite, rejectForumTimeout } = require('../lib/AccountRestriction');
 // Extract token from HttpOnly access token cookie.
 function extractAccessToken(req) {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7).trim();
+    }
     return req.cookies?.accessToken || null;
 }
 //this middleware checks for the presence of a valid JWT token in the Authorization header or cookies and verifies it. If valid, it attaches the decoded user info to req.user and calls next(), otherwise it returns a 401 Unauthorized response.
