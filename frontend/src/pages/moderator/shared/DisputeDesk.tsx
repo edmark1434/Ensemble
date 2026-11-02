@@ -72,7 +72,7 @@ function priorityClass(priority: string) {
 
 function visibilityClass(visibility: boolean) {
   return visibility
-    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+    ? 'bg-violet-500/10 text-violet-200 border-violet-500/30'
     : 'bg-zinc-500/10 text-zinc-400 border-white/10';
 }
 
@@ -581,8 +581,8 @@ export default function DisputeDesk({
                     className={selectCls}
                   >
                     <option value="all">All visibility</option>
-                    <option value="visible">Visible</option>
-                    <option value="hidden">Hidden</option>
+                    <option value="visible">Public</option>
+                    <option value="hidden">Private</option>
                   </select>
                 </FilterField>
 
@@ -723,7 +723,7 @@ export default function DisputeDesk({
                       <span
                         className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(Boolean(d.visibility))}`}
                       >
-                        {d.visibility ? 'Visible' : 'Hidden'}
+                        {d.visibility ? 'Public' : 'Private'}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-300">

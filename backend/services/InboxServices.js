@@ -274,6 +274,20 @@ async function normalizeLinkedConversations(inboxes, viewerAccountIds = []) {
 
     const viewerSet = new Set((viewerAccountIds || []).map(String).filter(Boolean));
 
+    const staffViewerResult = viewerSet.size
+
+        ? await pool.query(
+
+            `SELECT account_id::text AS account_id FROM staff WHERE account_id::text = ANY($1::text[])`,
+
+            [[...viewerSet]]
+
+        )
+
+        : { rows: [] };
+
+    const staffViewerIds = new Set(staffViewerResult.rows.map((row) => String(row.account_id)));
+
     return Promise.all(
 
         withTickets.map(async (inbox) => {
@@ -292,7 +306,11 @@ async function normalizeLinkedConversations(inboxes, viewerAccountIds = []) {
 
             const viewerRole = String(viewerMember?.role || 'member').toLowerCase();
 
-            const viewerIsStaff = ['admin', 'staff', 'moderator'].includes(viewerRole);
+            const viewerIsStaff =
+
+                ['admin', 'staff', 'moderator'].includes(viewerRole)
+
+                && staffViewerIds.has(String(viewerMember?.account_id || ''));
 
             let next = {
 
@@ -1936,15 +1954,50 @@ async function assertMemberCanReplyOnDispute(inbox, accountId) {
 
         }
 
-        return;
-
-    }
-
-    if (!isFiler && !isRespondent) {
+    } else if (!isFiler && !isRespondent) {
 
         throw new ChatServiceError('Only the people on this dispute can comment.', 403);
 
     }
+
+    return {
+
+        disputeId: String(disputeId),
+
+        visible: Boolean(row.visibility),
+
+        isFiler,
+
+        isRespondent,
+
+    };
+
+}
+
+
+
+/** Audience fields for a party message written through the inbox. Hidden cases keep it staff + sender. */
+function disputeMessageFields(dispute, now) {
+
+    if (!dispute) return {};
+
+    const audience = dispute.visible ? 'parties' : 'author_and_staff';
+
+    return {
+
+        dispute_id: dispute.disputeId,
+
+        author_role: dispute.isFiler ? 'disputer' : dispute.isRespondent ? 'disputee' : 'member',
+
+        audience,
+
+        audiences: [audience],
+
+        is_internal: !dispute.visible,
+
+        published_at: dispute.visible ? now : null,
+
+    };
 
 }
 
@@ -1986,7 +2039,7 @@ async function buildMessage(payload, accountId) {
 
     await assertMemberCanReplyOnTicket(inbox);
 
-    await assertMemberCanReplyOnDispute(inbox, personalSenderId);
+    const dispute = await assertMemberCanReplyOnDispute(inbox, personalSenderId);
 
 
 
@@ -1997,6 +2050,8 @@ async function buildMessage(payload, accountId) {
     return {
 
         inbox,
+
+        privateDisputeNote: Boolean(dispute && !dispute.visible),
 
         document: {
 
@@ -2032,6 +2087,8 @@ async function buildMessage(payload, accountId) {
 
             updated_at: now,
 
+            ...disputeMessageFields(dispute, now),
+
         },
 
     };
@@ -2042,13 +2099,13 @@ async function buildMessage(payload, accountId) {
 
 async function createMessageServices(payload, accountId, options = {}) {
 
-    const { inbox, document } = await buildMessage(payload, accountId);
+    const { inbox, document, privateDisputeNote } = await buildMessage(payload, accountId);
 
     const insertedId = await createMessageRepositories(document);
 
     const message = await getMessageByIdRepositories(insertedId);
 
-    if (!options.suppressNotifications) {
+    if (!options.suppressNotifications && !privateDisputeNote) {
 
         await persistChatNotifications({
 
@@ -2105,6 +2162,8 @@ async function replyMessageServices(parentMessageId, payload, accountId, options
     );
 
     const reply = await getMessageByIdRepositories(insertedId);
+
+    if (built.privateDisputeNote) return reply;
 
     await persistChatNotifications({
 
@@ -2349,6 +2408,12 @@ async function editMessageServices(messageId, messageContent, accountId) {
     if (String(inbox?.conversation_type || '').toLowerCase() === 'ticket') {
 
         throw new ChatServiceError('Ticket messages cannot be edited. Use an internal note instead.', 403);
+
+    }
+
+    if (String(inbox?.conversation_type || '').toLowerCase() === 'dispute' || inbox?.dispute_id) {
+
+        throw new ChatServiceError('Dispute messages cannot be edited. Send a new message instead.', 403);
 
     }
 
@@ -2898,13 +2963,18 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
 
     const viewerRole = String(viewerMember?.role || '').toLowerCase();
 
-    const canReadInternal = ['admin', 'staff', 'moderator'].includes(viewerRole);
-
     const isDisputeThread =
 
         String(memberInbox?.conversation_type || conversation?.Inbox?.conversation_type || '').toLowerCase() === 'dispute'
 
         || Boolean(memberInbox?.dispute_id || conversation?.Inbox?.dispute_id);
+
+    // Dispute chats require a real staff account; an admin-role member alone is not enough.
+    const canReadInternal = isDisputeThread
+
+        ? staffViewer
+
+        : ['admin', 'staff', 'moderator'].includes(viewerRole);
 
     let disputeVisibility = true;
 
@@ -2950,7 +3020,13 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
 
     }
 
-    const { canViewerSeeMessage } = require('../repositories/DisputeChatRepositories');
+    const {
+
+        canViewerSeeMessage,
+
+        resolveDisputeMessageAudience,
+
+    } = require('../repositories/DisputeChatRepositories');
 
     conversation.Messages = (conversation.Messages || []).flatMap((message) => {
 
@@ -2962,11 +3038,7 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
 
         if (isDisputeThread && !canReadInternal) {
 
-            const audience =
-
-                message.audience
-
-                || (message.is_internal ? 'staff' : 'parties');
+            const audience = resolveDisputeMessageAudience(message);
 
             const mapped = {
 

@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   Eye,
+  EyeOff,
+  FileText,
+  Globe,
   Hand,
   Loader2,
   MessageSquare,
+  Send,
   ShieldAlert,
   X,
 } from "lucide-react";
@@ -80,7 +84,15 @@ function mergeDisputeMessage(list: TicketMessage[], next: TicketMessage, replace
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
-  return new Date(value).toLocaleString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function titleCaseLabel(value: string) {
@@ -106,42 +118,36 @@ const REPLY_AUDIENCE_OPTIONS: {
   value: DisputeAudience;
   label: string;
   hint: string;
-  className: string;
   activeClassName: string;
 }[] = [
   {
     value: "staff",
     label: "Staff",
-    hint: "Staff only",
-    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    hint: "Only staff can see this reply.",
     activeClassName: "border-amber-500/40 bg-amber-500/15 text-amber-100",
   },
   {
     value: "disputer",
     label: "Disputer",
-    hint: "Staff + disputer",
-    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    hint: "Staff and the person who filed the dispute.",
     activeClassName: "border-sky-500/40 bg-sky-500/15 text-sky-100",
   },
   {
     value: "disputee",
     label: "Disputee",
-    hint: "Staff + disputee",
-    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    hint: "Staff and the person named in the dispute.",
     activeClassName: "border-cyan-500/40 bg-cyan-500/15 text-cyan-100",
   },
   {
     value: "parties",
-    label: "Parties",
-    hint: "Both parties",
-    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    label: "Both parties",
+    hint: "Staff, the disputer, and the disputee.",
     activeClassName: "border-emerald-500/40 bg-emerald-500/15 text-emerald-100",
   },
   {
     value: "public",
-    label: "Public page",
-    hint: "Shown on the public dispute page",
-    className: "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+    label: "Public",
+    hint: "Everyone viewing the public dispute page.",
     activeClassName: "border-violet-500/40 bg-violet-500/15 text-violet-100",
   },
 ];
@@ -157,32 +163,21 @@ function normalizeAudience(audience?: string, isInternal?: boolean): DisputeAudi
 
 function audienceBadge(audience?: string, isInternal?: boolean) {
   const a = normalizeAudience(audience, isInternal);
-  if (a === "staff") {
-    return { label: "Staff only", className: "border-amber-500/30 bg-amber-500/10 text-amber-200" };
-  }
-  if (a === "disputer") {
-    return { label: "Visible to disputer", className: "border-sky-500/30 bg-sky-500/10 text-sky-200" };
-  }
-  if (a === "disputee") {
-    return { label: "Visible to disputee", className: "border-cyan-500/30 bg-cyan-500/10 text-cyan-200" };
-  }
-  if (a === "author_and_staff") {
-    return { label: "Private (author + staff)", className: "border-sky-500/30 bg-sky-500/10 text-sky-200" };
-  }
-  if (a === "public") {
-    return { label: "Visible to the public", className: "border-violet-500/30 bg-violet-500/10 text-violet-200" };
-  }
-  return { label: "Visible to parties", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" };
+  if (a === "staff") return { label: "Staff only", className: "border-amber-500/30 bg-amber-500/10 text-amber-200" };
+  if (a === "disputer") return { label: "Disputer + staff", className: "border-sky-500/30 bg-sky-500/10 text-sky-200" };
+  if (a === "disputee") return { label: "Disputee + staff", className: "border-cyan-500/30 bg-cyan-500/10 text-cyan-200" };
+  if (a === "author_and_staff") return { label: "Author + staff", className: "border-sky-500/30 bg-sky-500/10 text-sky-200" };
+  if (a === "public") return { label: "Public", className: "border-violet-500/30 bg-violet-500/10 text-violet-200" };
+  return { label: "Both parties", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" };
 }
 
-function audienceShellClass(audience?: string) {
+function audienceAccentClass(audience?: string) {
   const a = normalizeAudience(audience);
-  if (a === "public") return "border-violet-500/20 bg-violet-500/5";
-  if (a === "parties") return "border-emerald-500/20 bg-emerald-500/5";
-  if (a === "disputer") return "border-sky-500/20 bg-sky-500/5";
-  if (a === "disputee") return "border-cyan-500/20 bg-cyan-500/5";
-  if (a === "staff") return "border-amber-500/20 bg-amber-500/5";
-  return "border-sky-500/20 bg-sky-500/5";
+  if (a === "public") return "border-l-violet-400/60";
+  if (a === "parties") return "border-l-emerald-400/60";
+  if (a === "disputee") return "border-l-cyan-400/60";
+  if (a === "staff") return "border-l-amber-400/60";
+  return "border-l-sky-400/60";
 }
 
 function audienceSuccessLabel(audience: string) {
@@ -199,6 +194,16 @@ function isPrivateAudience(audience?: string) {
   return a === "staff" || a === "author_and_staff" || a === "disputer" || a === "disputee";
 }
 
+function authorRoleLabel(message: TicketMessage) {
+  const role = String(message.authorRole || message.authorType || "").toLowerCase();
+  if (role === "staff") return "Staff";
+  if (role === "disputer") return "Disputer";
+  if (role === "disputee") return "Disputee";
+  if (role === "community" || role === "public") return "Community";
+  if (role === "user" || role === "member") return "Member";
+  return role ? titleCaseLabel(role) : null;
+}
+
 const ACCENT_BTN: Record<Accent, string> = {
   sky: "bg-sky-500/90 hover:bg-sky-500",
   violet: "bg-violet-500/90 hover:bg-violet-500",
@@ -206,15 +211,17 @@ const ACCENT_BTN: Record<Accent, string> = {
   rose: "bg-rose-500/90 hover:bg-rose-500",
 };
 
-/** Shared chrome for assign actions (same icon + layout everywhere). */
-const HANDLER_ACTION_BTN =
-  "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm disabled:opacity-50";
-const HANDLER_ACTION_ICON = "h-4 w-4 shrink-0";
-const HANDLER_TONES = {
-  claim: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
-  release: "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20",
-  cancel: "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10",
+const BTN_BASE =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
+const BTN = {
+  neutral: `${BTN_BASE} border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10`,
+  claim: `${BTN_BASE} border-sky-500/30 bg-sky-500/10 text-sky-100 hover:bg-sky-500/20`,
+  warn: `${BTN_BASE} border-amber-500/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20`,
+  danger: `${BTN_BASE} border-red-500/30 bg-red-500/10 text-red-100 hover:bg-red-500/20`,
+  success: `${BTN_BASE} border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20`,
 } as const;
+const FIELD =
+  "w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-50";
 
 const STATUS_OPTIONS = [
   "pending_review",
@@ -243,6 +250,79 @@ function statusButtonClass(label: string, active: boolean) {
   if (s === "under review") return "border-amber-500/40 bg-amber-500/20 text-amber-200";
   if (s === "closed") return "border-zinc-500/40 bg-zinc-500/25 text-zinc-200";
   return "border-white/25 bg-white/10 text-white";
+}
+
+function priorityPillClass(priority: string) {
+  const p = String(priority || "").toLowerCase();
+  if (p === "high") return "border-red-500/30 bg-red-500/10 text-red-200";
+  if (p === "medium") return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+  return "border-white/10 bg-white/5 text-zinc-300";
+}
+
+function Pill({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-white/[0.08] bg-[#14151c] p-4">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
+      <div className="mt-3 space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  description,
+  children,
+  confirmLabel,
+  busyLabel,
+  busy,
+  confirmDisabled,
+  confirmClassName,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  description: ReactNode;
+  children?: ReactNode;
+  confirmLabel: string;
+  busyLabel: string;
+  busy: boolean;
+  confirmDisabled?: boolean;
+  confirmClassName: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md space-y-4 rounded-2xl border border-white/10 bg-[#14151c] p-5 shadow-2xl">
+        <div>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-400">{description}</p>
+        </div>
+        {children}
+        <div className="flex justify-end gap-2">
+          <button type="button" disabled={busy} onClick={onCancel} className={BTN.neutral}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy || confirmDisabled}
+            onClick={onConfirm}
+            className={confirmClassName}
+          >
+            {busy ? busyLabel : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -274,6 +354,7 @@ export default function ModeratorDisputeDetailModal({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [tab, setTab] = useState<"discussion" | "case">("discussion");
   const [message, setMessage] = useState("");
   const [replyAudience, setReplyAudience] = useState<DisputeAudience>("staff");
   const [status, setStatus] = useState("");
@@ -317,6 +398,7 @@ export default function ModeratorDisputeDetailModal({
   };
 
   useEffect(() => {
+    setTab("discussion");
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeId]);
@@ -359,8 +441,9 @@ export default function ModeratorDisputeDetailModal({
   }, [detail?.chatId]);
 
   useEffect(() => {
+    if (tab !== "discussion") return;
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [detail?.messages?.length]);
+  }, [detail?.messages?.length, tab]);
 
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : "";
@@ -388,15 +471,14 @@ export default function ModeratorDisputeDetailModal({
   const canAssignMyself = adminMode
     ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign))
     : false;
-  // Only the current handler releases their own claim. Admins reassign via the dropdown.
+  // Only the current handler releases their own claim. Admins reassign via the picker.
   const canRelease = adminMode ? Boolean(alreadyAssignedToMe && (perms?.canRelease || perms?.isAssignee)) : false;
   const viewOnly = adminMode && !canAct;
   const canDecide = Boolean(perms?.canAct);
   const assigneeLocked =
     Boolean(assigneeStaffId) && !(canAssignOthers || Boolean(perms?.isAdmin));
-  /** Handler dropdown: unlocked while unassigned, or Admin override */
-  const canEditHandler =
-    !adminMode || canAssignOthers || canSelfAssign || canAssignMyself || !assigneeLocked;
+  const canPickHandler =
+    adminMode && !assigneeLocked && (canAssignOthers || canAssignMyself || canSelfAssign);
   const replyAudienceOptions = REPLY_AUDIENCE_OPTIONS.filter((option) => {
     if (option.value !== "public") return true;
     // Public-page replies only make sense after the dispute itself is visible.
@@ -529,43 +611,16 @@ export default function ModeratorDisputeDetailModal({
     }
   };
 
+  // Handler changes save immediately from the handler picker; this only saves case fields.
   const saveChanges = async (overrideStatus?: string) => {
-    if (
-      adminMode &&
-      viewOnly &&
-      (canSelfAssign || canAssignMyself) &&
-      assigneeId &&
-      myStaffId &&
-      assigneeId.toLowerCase() === myStaffId.toLowerCase()
-    ) {
-      await runAction({ action: "self_assign" }, "You are now assigned");
-      return;
-    }
-    if (adminMode && viewOnly && canAssignOthers && !assigneeLocked) {
-      await runAction(
-        { handled_by_staff_id: assigneeId ? assigneeId : null },
-        "Assignment updated"
-      );
-      return;
-    }
     const nextStatus = overrideStatus || status;
-    const payload: Record<string, unknown> = {
-      status: nextStatus,
-      priority,
-      resolution_notes: resolutionNotes || null,
-    };
-    if (adminMode) {
-      // Admin may change handler anytime; others use Release / Assign myself while locked.
-      if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
-        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
-      } else if (canAssignOthers) {
-        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
-      }
-    }
-    const closing = isDisputeClosed(nextStatus);
     await runAction(
-      payload,
-      closing ? "Dispute closed" : "Dispute updated"
+      {
+        status: nextStatus,
+        priority,
+        resolution_notes: resolutionNotes || null,
+      },
+      isDisputeClosed(nextStatus) ? "Dispute closed" : "Dispute updated"
     );
   };
 
@@ -688,407 +743,224 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const dispute = detail?.dispute;
+  const closed = dispute ? isDisputeClosed(toApiToken(dispute.status)) || Boolean(dispute.isClosed) : false;
+  const banned = String(dispute?.sanctionType || "").toLowerCase() === "ban";
+  const canSettle = Boolean(
+    dispute && canDecide && !closed && !dispute.financialResolution && Number(dispute.creditAmount || 0) > 0
+  );
+  const selectedAudience = replyAudienceOptions.find((option) => option.value === replyAudience);
+
+  const viewOnlyMessage = !perms?.staffId
+    ? "Your login isn’t linked to a staff profile. Sign in again as Admin or Support Moderator."
+    : canAssignMyself || canSelfAssign
+      ? "View only. Assign yourself to handle this case."
+      : canAssignOthers
+        ? "View only. Pick a handler or assign yourself."
+        : "View only. You can still post staff-only replies.";
+
+  const composerHint = !canReply
+    ? "You cannot reply on this dispute."
+    : !canAct
+      ? "Replies stay staff-only until a handler claims this case."
+      : `${selectedAudience?.hint || ""}${
+          !dispute?.visibility ? " Make the dispute public to reply on the public page." : ""
+        }`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <div>
+      <div className="relative flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
+          <div className="min-w-0">
             <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentSpinner(accent)}`}>
-              Dispute detail{adminMode ? ` · ${deskLabel || "Staff"}` : ""}
+              Dispute{adminMode ? ` · ${deskLabel || "Staff"}` : ""}
+              {dispute?.number ? ` · ${dispute.number}` : ""}
             </p>
-            <h2 className="text-lg font-bold text-white">{dispute?.number || "Dispute"}</h2>
+            <h2 className="mt-1 truncate text-lg font-semibold text-white">
+              {dispute?.title || dispute?.number || "Dispute"}
+            </h2>
+            {dispute && (
+              <>
+                <p className="mt-1 text-xs text-zinc-500">
+                  @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
+                  {dispute.creditAmount.toLocaleString()} credits · Opened {formatDateTime(dispute.openedAt)}
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <Pill className={statusButtonClass(dispute.status, true)}>{titleCaseLabel(dispute.status)}</Pill>
+                  <Pill className={priorityPillClass(dispute.priority)}>{titleCaseLabel(dispute.priority)} priority</Pill>
+                  <Pill
+                    className={
+                      dispute.visibility
+                        ? "border-violet-500/30 bg-violet-500/10 text-violet-200"
+                        : "border-white/10 bg-white/5 text-zinc-300"
+                    }
+                  >
+                    {dispute.visibility ? <Globe className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                    {dispute.visibility ? "Public" : "Private"}
+                  </Pill>
+                  <Pill
+                    className={
+                      dispute.assignee
+                        ? "border-white/10 bg-white/5 text-zinc-300"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                    }
+                  >
+                    {dispute.assignee ? `Handler: ${dispute.assignee.name}` : "Unassigned"}
+                  </Pill>
+                  {dispute.creditHold && (
+                    <Pill className="border-amber-500/30 bg-amber-500/10 text-amber-200">
+                      Hold {dispute.creditHold.amount.toLocaleString()} · {titleCaseLabel(dispute.creditHold.status)}
+                    </Pill>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"
+          >
             <X className="h-5 w-5" />
           </button>
-        </div>
+        </header>
 
         {loading ? (
-          <div className="flex flex-1 items-center justify-center py-20">
+          <div className="flex flex-1 items-center justify-center">
             <Loader2 className={`h-8 w-8 animate-spin ${accentSpinner(accent)}`} />
           </div>
         ) : detail && dispute ? (
-          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <div>
-              <h3 className="text-xl font-semibold text-white">{dispute.title}</h3>
-              <p className="mt-1 text-sm text-zinc-500">
-                @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
-                {dispute.creditAmount.toLocaleString()} credits · opened {formatDateTime(dispute.openedAt)}
-              </p>
-              {dispute.description && (
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-400">{dispute.description}</p>
-              )}
-              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-                  Status: {titleCaseLabel(dispute.status)}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-                  Case: {dispute.visibility ? "Public" : "Private"}
-                </span>
-                {dispute.creditHold && (
-                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
-                    Hold: {dispute.creditHold.amount.toLocaleString()} ({dispute.creditHold.status})
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <DisputeCaseFilePanel
-              dispute={dispute}
-              caseFile={detail.caseFile}
-              onOpenDispute={onOpenDispute}
-              canAct={canDecide}
-              saving={saving}
-              onSettleEscrow={openSettle}
-              onReverseTransaction={openReverse}
-            />
-
-            {adminMode && viewOnly && (
-              <div className="flex items-start gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-sm text-sky-100">
-                <Eye className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-medium">View only</p>
-                  <p className="text-xs text-sky-200/80">
-                    {!perms?.staffId
-                      ? "Your login isn’t linked to a staff profile, so assignment is blocked. Re-login as Admin or Support Moderator."
-                      : canAssignMyself || canSelfAssign
-                        ? "This dispute needs a Support Moderator (or Admin). Click Assign myself to claim it."
-                        : canAssignOthers
-                          ? "You’re not the handler yet. Pick a Support Moderator in Designated handler, or Assign myself."
-                          : "Only Support Moderators or Admin can claim and handle disputes. You can still post private replies (staff + you)."}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {adminMode && (
-              <div className="flex flex-wrap gap-2">
-                {canAssignMyself && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "self_assign" }, "You are now assigned")}
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.claim}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Assign myself
-                  </button>
-                )}
-                {canRelease && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() =>
-                      void runAction(
-                        { action: "release" },
-                        "You released this case — another Support Moderator can claim it"
-                      )
-                    }
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
-                  >
-                    Release my claim
-                  </button>
-                )}
-                {canAct && !dispute.visibility && !isDisputeClosed(toApiToken(dispute.status)) && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "approve" }, "Dispute is now public")}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
-                  >
-                    Make dispute public
-                  </button>
-                )}
-                {canAct && dispute.visibility && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() =>
-                      void runAction(
-                        { action: "hide" },
-                        "Dispute is private again — removed from profiles and public discussion"
-                      )
-                    }
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
-                  >
-                    Make dispute private
-                  </button>
-                )}
-                {canAct && toApiToken(dispute.status) === "pending_review" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "dismiss" }, "Dispute dismissed")}
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.cancel}`}
-                  >
-                    <ShieldAlert className={HANDLER_ACTION_ICON} />
-                    Dismiss
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="flex flex-col gap-1.5 text-xs text-zinc-500 sm:col-span-3">
-                Status
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dispute status">
-                  {STATUS_OPTIONS.map((s) => {
-                    const active = toApiToken(status) === s;
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        disabled={viewOnly}
-                        aria-pressed={active}
-                        onClick={() => setStatus(s)}
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
-                      >
-                        {titleCaseLabel(s)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                Priority
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  disabled={viewOnly}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {["low", "medium", "high"].map((p) => (
-                    <option key={p} value={p}>
-                      {titleCaseLabel(p)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-500 sm:col-span-2">
-                Designated handler
-                <select
-                  value={assigneeId}
-                  onChange={(e) => void onHandlerChange(e.target.value)}
-                  disabled={!canEditHandler || saving || assigneeLocked}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="">Unassigned</option>
-                  {detail.assignableStaff
-                    .filter((s) => {
-                      if (!myStaffId) return true;
-                      const isMe =
-                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
-                      // Admins / claim-eligible staff must see themselves in this list.
-                      if (isMe) {
-                        return (
-                          canAssignOthers ||
-                          canAssignMyself ||
-                          canSelfAssign ||
-                          alreadyAssignedToMe
-                        );
-                      }
-                      return true;
-                    })
-                    .map((s) => (
-                    <option key={s.staffId} value={String(s.staffId)}>
-                      {s.name}
-                      {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                        ? " (you)"
-                        : ""}{" "}
-                      ({s.role})
-                    </option>
-                  ))}
-                </select>
-                {assigneeLocked && (
-                  <span className="text-[11px] text-zinc-500">
-                    Handler is locked. The assigned Support Moderator must release their claim before
-                    someone else can take it.
-                  </span>
-                )}
-                {!assigneeLocked && assigneeStaffId && canAssignOthers && (
-                  <span className="text-[11px] text-violet-300/80">
-                    Admin override: pick any Support Moderator or Admin here, including yourself.
-                  </span>
-                )}
-                {!canEditHandler && !assigneeLocked && (
-                  <span className="text-[11px] text-amber-200/80">
-                    {!perms?.staffId
-                      ? "Your session isn’t linked to a staff profile — re-login as Admin or Support Moderator."
-                      : "You can’t change the handler on this dispute."}
-                  </span>
-                )}
-                {canAssignMyself && (
-                  <span className="text-[11px] text-sky-200/70">
-                    Use Assign myself above, or choose yourself ({deskLabel || "Admin"} / Support) in this list.
-                  </span>
-                )}
-              </label>
-            </div>
-
-            {canDecide && (
-              <div className="space-y-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-                <p className="text-xs font-medium text-red-100">Final decision</p>
-                {String(dispute.sanctionType || "").toLowerCase() === "ban" &&
-                !isDisputeClosed(toApiToken(dispute.status)) ? (
-                  <p className="text-xs leading-relaxed text-zinc-400">
-                    @{dispute.respondent.username} is permanently banned from this dispute. The ban stays until you lift it on the account.
-                  </p>
-                ) : isDisputeClosed(toApiToken(dispute.status)) ? (
-                  <>
-                    <p className="text-xs leading-relaxed text-zinc-400">
-                      {String(dispute.sanctionType || "").toLowerCase() === "ban"
-                        ? `This case closed with a permanent ban on @${dispute.respondent.username}. Reopen it if they appeal. Reopening does not lift the ban.`
-                        : "This case is closed. Reopen it if you need to review an appeal."}
-                    </p>
+          <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
+            {/* Main column: discussion or case file */}
+            <div className="flex min-h-[60vh] flex-col border-white/10 lg:min-h-0 lg:border-r">
+              <nav className="flex gap-1 border-b border-white/10 px-4" aria-label="Dispute sections">
+                {(
+                  [
+                    { id: "discussion", label: `Discussion (${detail.messages.length})`, icon: MessageSquare },
+                    { id: "case", label: "Case file", icon: FileText },
+                  ] as const
+                ).map((item) => {
+                  const active = tab === item.id;
+                  const Icon = item.icon;
+                  return (
                     <button
+                      key={item.id}
                       type="button"
-                      disabled={saving}
-                      onClick={() => setReopenPromptOpen(true)}
-                      className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-50"
+                      onClick={() => setTab(item.id)}
+                      aria-pressed={active}
+                      className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium transition ${
+                        active
+                          ? "border-white text-white"
+                          : "border-transparent text-zinc-500 hover:text-zinc-200"
+                      }`}
                     >
-                      Reopen case
+                      <Icon className="h-4 w-4" />
+                      {item.label}
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs leading-relaxed text-zinc-400">
-                      If the person who filed this is right, permanently ban @{dispute.respondent.username}. You will be asked for a reason. That reason is posted in the discussion, the case becomes visible, and the account is banned until staff lift it.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => setBanPromptOpen(true)}
-                      className="rounded-xl border border-red-500/40 bg-red-500/15 px-3 py-2 text-sm font-medium text-red-100 hover:bg-red-500/25 disabled:opacity-50"
-                    >
-                      Permanent ban
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+                  );
+                })}
+              </nav>
 
-            {adminMode && (
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                Resolution notes
-                <textarea
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  rows={2}
-                  disabled={viewOnly}
-                  placeholder="How was (or will) this dispute be settled?"
-                  className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
-                />
-              </label>
-            )}
+              {tab === "discussion" ? (
+                <>
+                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                    {detail.chatAvailable === false && (
+                      <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+                        MongoDB is not connected, so the discussion is unavailable. Case updates still work.
+                      </p>
+                    )}
 
-            {!adminMode && (
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                Resolution notes
-                <textarea
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  rows={2}
-                  disabled={viewOnly}
-                  placeholder="How was (or will) this dispute be settled?"
-                  className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
-                />
-              </label>
-            )}
+                    {dispute.description && (
+                      <article className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                          Complaint from @{dispute.initiator.username}
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                          {dispute.description}
+                        </p>
+                      </article>
+                    )}
 
-            <div className="flex flex-wrap gap-2">
-              {(canAct ||
-                canAssignOthers ||
-                (canAssignMyself &&
-                  assigneeId &&
-                  myStaffId &&
-                  assigneeId.toLowerCase() === myStaffId.toLowerCase())) && (
-                <button
-                  type="button"
-                  onClick={() => void saveChanges()}
-                  disabled={
-                    saving ||
-                    (viewOnly &&
-                      !canAssignOthers &&
-                      !(
-                        canAssignMyself &&
-                        assigneeId &&
-                        myStaffId &&
-                        assigneeId.toLowerCase() === myStaffId.toLowerCase()
-                      ))
-                  }
-                  className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
-                >
-                  {viewOnly &&
-                  canAssignMyself &&
-                  assigneeId &&
-                  myStaffId &&
-                  assigneeId.toLowerCase() === myStaffId.toLowerCase() &&
-                  !canAssignOthers
-                    ? "Confirm assign myself"
-                    : viewOnly && canAssignOthers
-                      ? "Save assignment"
-                      : "Save dispute changes"}
-                </button>
-              )}
-              {canAct && !isDisputeClosed(toApiToken(dispute.status)) && (
-                <button
-                  type="button"
-                  onClick={() => void saveChanges(CLOSED_STATUS)}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Resolve dispute
-                </button>
-              )}
-            </div>
+                    {detail.messages.map((m) => {
+                      const currentAudience = normalizeAudience(m.audience, m.isInternal);
+                      const badge = audienceBadge(currentAudience, m.isInternal);
+                      const role = authorRoleLabel(m);
+                      const pending = String(m.id).startsWith("pending-");
+                      const canChangeAudience = adminMode && canAct && !pending;
+                      const listed = replyAudienceOptions.some((option) => option.value === currentAudience);
+                      return (
+                        <article
+                          key={m.id}
+                          className={`rounded-xl border border-l-2 border-white/[0.08] bg-white/[0.02] px-4 py-3 ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""}`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+                              <span className="font-medium text-zinc-100">{m.authorName}</span>
+                              {role && (
+                                <span className="rounded border border-white/10 px-1.5 py-px text-[10px] text-zinc-400">
+                                  {role}
+                                </span>
+                              )}
+                              <span className="text-zinc-500">{pending ? "Sending…" : formatDateTime(m.createdAt)}</span>
+                            </div>
+                            {canChangeAudience ? (
+                              <label className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                                Visible to
+                                <select
+                                  value={currentAudience}
+                                  disabled={saving}
+                                  onChange={(e) => void setMessageAudience(m.id, e.target.value as DisputeAudience)}
+                                  className={`rounded-md border bg-[#0f1016] px-2 py-1 text-[11px] outline-none disabled:opacity-50 ${badge.className}`}
+                                >
+                                  {!listed && (
+                                    <option value={currentAudience} disabled>
+                                      {badge.label}
+                                    </option>
+                                  )}
+                                  {replyAudienceOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {audienceBadge(option.value).label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : (
+                              <span className={`rounded-full border px-2 py-0.5 text-[10px] ${badge.className}`}>
+                                {badge.label}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{m.body}</p>
+                        </article>
+                      );
+                    })}
 
-            <div className="space-y-3">
-              <p className="flex items-center gap-2 text-sm font-semibold text-white">
-                <MessageSquare className={`h-4 w-4 ${accentSpinner(accent)}`} />
-                Discussion ({detail.messages.length})
-              </p>
-              {detail.chatAvailable === false && (
-                <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-                  MongoDB is not connected — dispute chats are unavailable until MONGODB_URI is set. Dispute status updates
-                  still work.
-                </p>
-              )}
-              {detail.messages.map((m) => {
-                const currentAudience = normalizeAudience(m.audience, m.isInternal);
-                const badge = audienceBadge(currentAudience, m.isInternal);
-                const canChangeAudience = adminMode && canAct;
-                return (
-                  <div
-                    key={m.id}
-                    className={`rounded-xl border px-4 py-3 ${audienceShellClass(currentAudience)}`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-                      <span>
-                        {m.authorName} · {m.authorType}
-                        {m.authorRole ? ` · ${m.authorRole}` : ""}
-                      </span>
-                      <span>{formatDateTime(m.createdAt)}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${badge.className}`}>
-                        {badge.label}
-                      </span>
-                    </div>
-                    {canChangeAudience && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                    {detail.messages.length === 0 && detail.chatAvailable !== false && (
+                      <div className="rounded-xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-zinc-500">
+                        No replies yet. Start the discussion below.
+                      </div>
+                    )}
+                    <div ref={threadEndRef} />
+                  </div>
+
+                  <div className="border-t border-white/10 bg-[#0f1016] px-5 py-3">
+                    {canReply && canAct && (
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Reply visibility">
+                        <span className="mr-1 text-[11px] text-zinc-500">Visible to</span>
                         {replyAudienceOptions.map((option) => {
-                          const active = currentAudience === option.value;
+                          const active = replyAudience === option.value;
                           return (
                             <button
                               key={option.value}
                               type="button"
                               title={option.hint}
-                              disabled={saving || active}
-                              onClick={() => void setMessageAudience(m.id, option.value)}
-                              className={`rounded-lg border px-2 py-1 text-[10px] font-medium disabled:opacity-60 ${
-                                active ? option.activeClassName : option.className
+                              disabled={sending}
+                              aria-pressed={active}
+                              onClick={() => setReplyAudience(option.value)}
+                              className={`rounded-md border px-2 py-1 text-[11px] font-medium transition disabled:opacity-50 ${
+                                active
+                                  ? option.activeClassName
+                                  : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
                               }`}
                             >
                               {option.label}
@@ -1097,241 +969,437 @@ export default function ModeratorDisputeDetailModal({
                         })}
                       </div>
                     )}
-                    <p className="mt-2 text-sm text-zinc-200">{m.body}</p>
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        rows={2}
+                        placeholder={
+                          !canReply
+                            ? "You cannot reply on this dispute"
+                            : canAct
+                              ? "Write a reply"
+                              : "Write a staff-only reply"
+                        }
+                        disabled={detail.chatAvailable === false || !canReply || sending}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendMessage();
+                          }
+                        }}
+                        className={`${FIELD} resize-none`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void sendMessage()}
+                        disabled={sending || !message.trim() || detail.chatAvailable === false || !canReply}
+                        className={`${BTN_BASE} h-[58px] border-transparent px-4 text-white ${ACCENT_BTN[accent]}`}
+                      >
+                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Send
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-zinc-500">
+                      {composerHint}
+                      {canReply ? " Enter to send, Shift+Enter for a new line." : ""}
+                    </p>
                   </div>
-                );
-              })}
-              {detail.messages.length === 0 && detail.chatAvailable !== false && (
-                <p className="text-sm text-zinc-500">No discussion yet — start the chat below.</p>
+                </>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                  <DisputeCaseFilePanel
+                    dispute={dispute}
+                    caseFile={detail.caseFile}
+                    onOpenDispute={onOpenDispute}
+                    canAct={canDecide}
+                    saving={saving}
+                    onReverseTransaction={openReverse}
+                  />
+                </div>
               )}
-              <div ref={threadEndRef} />
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-[#14151c] p-4">
-              {viewOnly && canReply && (
-                <p className="mb-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
-                  View &amp; reply mode — replies stay staff-only until a Support Moderator or Admin claims the dispute
-                  and changes visibility.
-                </p>
+            {/* Sidebar: handling and decisions */}
+            <aside className="min-h-0 space-y-3 border-t border-white/10 bg-black/10 p-4 lg:overflow-y-auto lg:border-t-0">
+              {adminMode && (
+                <SidebarSection title="Handler">
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    {dispute.assignee ? (
+                      <div className="min-w-0">
+                        <p className="truncate text-white">
+                          {dispute.assignee.name}
+                          {alreadyAssignedToMe ? <span className="text-zinc-500"> (you)</span> : null}
+                        </p>
+                        <p className="text-xs text-zinc-500">{dispute.assignee.role}</p>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-amber-200">
+                        <Hand className="h-4 w-4" />
+                        Unassigned
+                      </span>
+                    )}
+                  </div>
+
+                  {viewOnly && (
+                    <p className="flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-100">
+                      <Eye className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {viewOnlyMessage}
+                    </p>
+                  )}
+
+                  {canPickHandler && (
+                    <label className="block space-y-1 text-[11px] text-zinc-500">
+                      <span>{canAssignOthers ? "Assign handler" : "Claim this case"}</span>
+                      <select
+                        value={assigneeId}
+                        onChange={(e) => void onHandlerChange(e.target.value)}
+                        disabled={saving}
+                        className={FIELD}
+                      >
+                        <option value="">Unassigned</option>
+                        {detail.assignableStaff
+                          .filter((s) => {
+                            if (!myStaffId) return true;
+                            const isMe = String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                            if (isMe) {
+                              return canAssignOthers || canAssignMyself || canSelfAssign || alreadyAssignedToMe;
+                            }
+                            return true;
+                          })
+                          .map((s) => (
+                            <option key={s.staffId} value={String(s.staffId)}>
+                              {s.name}
+                              {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase() ? " (you)" : ""} ·{" "}
+                              {s.role}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+
+                  {assigneeLocked && (
+                    <p className="text-[11px] text-zinc-500">
+                      Locked to the current handler until they release it.
+                    </p>
+                  )}
+
+                  {(canAssignMyself || canRelease) && (
+                    <div className="flex flex-wrap gap-2">
+                      {canAssignMyself && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void runAction({ action: "self_assign" }, "You are now assigned")}
+                          className={BTN.claim}
+                        >
+                          <Hand className="h-3.5 w-3.5" />
+                          Assign myself
+                        </button>
+                      )}
+                      {canRelease && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            void runAction(
+                              { action: "release" },
+                              "You released this case. Another Support Moderator can claim it."
+                            )
+                          }
+                          className={BTN.warn}
+                        >
+                          Release my claim
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </SidebarSection>
               )}
-              {canReply && canAct && (
-                <div className="mb-3 space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-                    Reply visibility
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {replyAudienceOptions.map((option) => {
-                      const active = replyAudience === option.value;
+
+              <SidebarSection title="Case">
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-zinc-500">Status</p>
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dispute status">
+                    {STATUS_OPTIONS.map((s) => {
+                      const active = toApiToken(status) === s;
                       return (
                         <button
-                          key={option.value}
+                          key={s}
                           type="button"
-                          title={option.hint}
-                          disabled={sending}
-                          onClick={() => setReplyAudience(option.value)}
-                          className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium disabled:opacity-50 ${
-                            active ? option.activeClassName : option.className
-                          }`}
+                          disabled={viewOnly}
+                          aria-pressed={active}
+                          onClick={() => setStatus(s)}
+                          className={`rounded-md border px-2 py-1 text-[11px] font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
                         >
-                          {option.label}
+                          {titleCaseLabel(s)}
                         </button>
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-zinc-500">
-                    {replyAudienceOptions.find((option) => option.value === replyAudience)?.hint
-                      || (!detail.dispute.visibility
-                        ? "Make the dispute public first if you need a public-page reply."
-                        : null)}
-                  </p>
                 </div>
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Priority</span>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    disabled={viewOnly}
+                    className={FIELD}
+                  >
+                    {["low", "medium", "high"].map((p) => (
+                      <option key={p} value={p}>
+                        {titleCaseLabel(p)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Resolution notes</span>
+                  <textarea
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    rows={3}
+                    disabled={viewOnly}
+                    placeholder="How was (or will) this dispute be settled?"
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+                {canAct && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveChanges()}
+                      disabled={saving}
+                      className={`${BTN_BASE} border-transparent text-white ${ACCENT_BTN[accent]}`}
+                    >
+                      Save changes
+                    </button>
+                    {!closed && (
+                      <button
+                        type="button"
+                        onClick={() => void saveChanges(CLOSED_STATUS)}
+                        disabled={saving}
+                        className={BTN.success}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Resolve
+                      </button>
+                    )}
+                  </div>
+                )}
+              </SidebarSection>
+
+              {adminMode && (
+                <SidebarSection title="Visibility">
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    {dispute.visibility
+                      ? "Public. Shown on both profiles and the public dispute page, where anyone signed in can reply."
+                      : "Private. Only staff and the disputer can see it. The disputee can't reply yet."}
+                  </p>
+                  {canAct && !dispute.visibility && !closed && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void runAction({ action: "approve" }, "Dispute is now public")}
+                      className={`${BTN_BASE} border-transparent text-white ${ACCENT_BTN[accent]}`}
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      Make public
+                    </button>
+                  )}
+                  {canAct && dispute.visibility && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        void runAction(
+                          { action: "hide" },
+                          "Dispute is private again. It's off profiles and the public page."
+                        )
+                      }
+                      className={BTN.warn}
+                    >
+                      <EyeOff className="h-3.5 w-3.5" />
+                      Make private
+                    </button>
+                  )}
+                </SidebarSection>
               )}
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={3}
-                placeholder={
-                  !canReply
-                    ? "You cannot reply on this dispute…"
-                    : canAct
-                      ? "Write a reply…"
-                      : "Write a staff-only reply…"
-                }
-                disabled={detail.chatAvailable === false || !canReply || sending}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void sendMessage();
-                  }
-                }}
-                className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
-              />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-zinc-500">
-                  {canAct
-                    ? "Choose who can see this reply, then send. You can change it later on each message."
-                    : "Staff-only until a handler publishes the reply."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void sendMessage()}
-                  disabled={sending || !message.trim() || detail.chatAvailable === false || !canReply}
-                  className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-50"
-                >
-                  {sending ? "Sending…" : "Send"}
-                </button>
-              </div>
-            </div>
+
+              {canDecide && (
+                <SidebarSection title="Decision">
+                  {canSettle && (
+                    <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+                      <p className="text-xs text-amber-100">
+                        {dispute.creditAmount.toLocaleString()} credits are frozen in escrow.
+                      </p>
+                      <button type="button" disabled={saving} onClick={openSettle} className={BTN.warn}>
+                        Settle escrow
+                      </button>
+                    </div>
+                  )}
+
+                  {adminMode && toApiToken(dispute.status) === "pending_review" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void runAction({ action: "dismiss" }, "Dispute dismissed")}
+                      className={BTN.neutral}
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Dismiss dispute
+                    </button>
+                  )}
+
+                  {closed ? (
+                    <>
+                      <p className="text-xs leading-relaxed text-zinc-400">
+                        {banned
+                          ? `Closed with a permanent ban on @${dispute.respondent.username}. Reopening does not lift the ban.`
+                          : "This case is closed. Reopen it to review an appeal."}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setReopenPromptOpen(true)}
+                        className={BTN.neutral}
+                      >
+                        Reopen case
+                      </button>
+                    </>
+                  ) : banned ? (
+                    <p className="text-xs leading-relaxed text-zinc-400">
+                      @{dispute.respondent.username} is permanently banned from this dispute until staff lift it on the account.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs leading-relaxed text-zinc-400">
+                        If the disputer is right, permanently ban @{dispute.respondent.username}. The reason is posted in
+                        the discussion and the case becomes public.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setBanPromptOpen(true)}
+                        className={BTN.danger}
+                      >
+                        Permanent ban
+                      </button>
+                    </>
+                  )}
+                </SidebarSection>
+              )}
+            </aside>
           </div>
         ) : (
-          <p className="py-12 text-center text-zinc-500">Dispute not found.</p>
+          <p className="flex flex-1 items-center justify-center text-zinc-500">Dispute not found.</p>
         )}
-      </div>
 
-      {banPromptOpen && dispute && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
-            <h3 className="text-sm font-semibold text-white">Permanent ban</h3>
-            <p className="text-xs leading-relaxed text-zinc-400">
-              This bans @{dispute.respondent.username} permanently, posts the reason in the discussion, and closes the case.
-            </p>
-            <label className="block text-xs text-zinc-500">
-              Reason
+        {banPromptOpen && dispute && (
+          <ConfirmDialog
+            title="Permanent ban"
+            description={`This bans @${dispute.respondent.username} permanently, posts the reason in the discussion, and closes the case.`}
+            confirmLabel="Ban permanently"
+            busyLabel="Banning…"
+            busy={saving}
+            confirmDisabled={!banReason.trim()}
+            confirmClassName={BTN.danger}
+            onCancel={() => setBanPromptOpen(false)}
+            onConfirm={() => void confirmBan()}
+          >
+            <label className="block space-y-1 text-[11px] text-zinc-500">
+              <span>Reason</span>
               <textarea
                 value={banReason}
                 onChange={(event) => setBanReason(event.target.value)}
                 rows={4}
                 required
                 placeholder="Why this ban is being applied"
-                className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                className={`${FIELD} resize-none`}
               />
             </label>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => setBanPromptOpen(false)}
-                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={saving || !banReason.trim()}
-                onClick={() => void confirmBan()}
-                className="rounded-lg border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm font-medium text-red-100 disabled:opacity-50"
-              >
-                {saving ? "Banning…" : "Ban permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </ConfirmDialog>
+        )}
 
-      {reopenPromptOpen && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
-            <h3 className="text-sm font-semibold text-white">Reopen this case</h3>
-            <p className="text-xs leading-relaxed text-zinc-400">
-              The dispute goes back to under review so you can hear an appeal. A permanent ban stays until you lift it from the account.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => setReopenPromptOpen(false)}
-                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void confirmReopen()}
-                className="rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {saving ? "Reopening…" : "Reopen case"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        {reopenPromptOpen && (
+          <ConfirmDialog
+            title="Reopen this case"
+            description="The dispute goes back to under review so you can hear an appeal. A permanent ban stays until you lift it from the account."
+            confirmLabel="Reopen case"
+            busyLabel="Reopening…"
+            busy={saving}
+            confirmClassName={BTN.neutral}
+            onCancel={() => setReopenPromptOpen(false)}
+            onConfirm={() => void confirmReopen()}
+          />
+        )}
 
-      {settleOpen && dispute && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
-            <h3 className="text-sm font-semibold text-white">Settle frozen escrow</h3>
-            <p className="text-xs leading-relaxed text-zinc-400">
-              Split up to {Number(dispute.creditAmount || 0).toLocaleString()} remaining escrow credits.
-              Refund goes to the client, release goes to the freelancer. This closes the dispute.
-            </p>
+        {settleOpen && dispute && (
+          <ConfirmDialog
+            title="Settle frozen escrow"
+            description={`Split up to ${Number(dispute.creditAmount || 0).toLocaleString()} remaining escrow credits. The refund goes to the client and the release goes to the freelancer. This closes the dispute.`}
+            confirmLabel="Settle and close"
+            busyLabel="Settling…"
+            busy={saving}
+            confirmDisabled={settleNotes.trim().length < 8}
+            confirmClassName={BTN.warn}
+            onCancel={() => setSettleOpen(false)}
+            onConfirm={() => void confirmSettleEscrow()}
+          >
             <div className="grid grid-cols-2 gap-2">
-              <label className="block text-xs text-zinc-500">
-                Client refund
+              <label className="block space-y-1 text-[11px] text-zinc-500">
+                <span>Client refund</span>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={settleClientCredits}
                   onChange={(event) => setSettleClientCredits(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                  className={FIELD}
                 />
               </label>
-              <label className="block text-xs text-zinc-500">
-                Freelancer release
+              <label className="block space-y-1 text-[11px] text-zinc-500">
+                <span>Freelancer release</span>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={settleFreelancerCredits}
                   onChange={(event) => setSettleFreelancerCredits(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                  className={FIELD}
                 />
               </label>
             </div>
-            <label className="block text-xs text-zinc-500">
-              Resolution notes
+            <label className="block space-y-1 text-[11px] text-zinc-500">
+              <span>Resolution notes (at least 8 characters)</span>
               <textarea
                 value={settleNotes}
                 onChange={(event) => setSettleNotes(event.target.value)}
                 rows={3}
                 placeholder="Why this split is correct"
-                className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                className={`${FIELD} resize-none`}
               />
             </label>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => setSettleOpen(false)}
-                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={saving || settleNotes.trim().length < 8}
-                onClick={() => void confirmSettleEscrow()}
-                className="rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-100 disabled:opacity-50"
-              >
-                {saving ? "Settling…" : "Settle and close"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </ConfirmDialog>
+        )}
 
-      {reverseOpen && reverseTxn && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
-            <h3 className="text-sm font-semibold text-white">Reverse transaction</h3>
-            <p className="text-xs leading-relaxed text-zinc-400">
-              Reverse {reverseTxn.type} of {reverseTxn.amount.toLocaleString()} credits. If the
-              recipient no longer has enough spendable credits, this fails and nothing moves. This
-              closes the dispute.
-            </p>
-            <label className="block text-xs text-zinc-500">
-              Amount
+        {reverseOpen && reverseTxn && (
+          <ConfirmDialog
+            title="Reverse transaction"
+            description={`Reverse ${reverseTxn.type} of ${reverseTxn.amount.toLocaleString()} credits. If the recipient no longer has enough spendable credits, this fails and nothing moves. This closes the dispute.`}
+            confirmLabel="Reverse and close"
+            busyLabel="Reversing…"
+            busy={saving}
+            confirmDisabled={reverseNotes.trim().length < 8}
+            confirmClassName={BTN.danger}
+            onCancel={() => {
+              setReverseOpen(false);
+              setReverseTxn(null);
+            }}
+            onConfirm={() => void confirmReverseTransaction()}
+          >
+            <label className="block space-y-1 text-[11px] text-zinc-500">
+              <span>Amount</span>
               <input
                 type="number"
                 min={1}
@@ -1339,43 +1407,22 @@ export default function ModeratorDisputeDetailModal({
                 step={1}
                 value={reverseAmount}
                 onChange={(event) => setReverseAmount(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                className={FIELD}
               />
             </label>
-            <label className="block text-xs text-zinc-500">
-              Resolution notes
+            <label className="block space-y-1 text-[11px] text-zinc-500">
+              <span>Resolution notes (at least 8 characters)</span>
               <textarea
                 value={reverseNotes}
                 onChange={(event) => setReverseNotes(event.target.value)}
                 rows={3}
                 placeholder="Why this reverse is correct"
-                className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                className={`${FIELD} resize-none`}
               />
             </label>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => {
-                  setReverseOpen(false);
-                  setReverseTxn(null);
-                }}
-                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={saving || reverseNotes.trim().length < 8}
-                onClick={() => void confirmReverseTransaction()}
-                className="rounded-lg border border-rose-500/40 bg-rose-500/20 px-3 py-2 text-sm font-medium text-rose-100 disabled:opacity-50"
-              >
-                {saving ? "Reversing…" : "Reverse and close"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </ConfirmDialog>
+        )}
+      </div>
     </div>
   );
 }

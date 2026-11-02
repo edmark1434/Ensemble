@@ -22,7 +22,7 @@ const {
     checkInboxByTwoAccountIdsServices,
     getInboxByTwoAccountIdsServices,
 } = require('../services/InboxServices');
-const { getIo } = require('../lib/WebSocket');
+const { getIo, emitConversationMessage } = require('../lib/WebSocket');
 
 function accountId(req) {
     return req.session.account_id;
@@ -115,7 +115,7 @@ async function createMessageController(req, res) {
             },
         });
         if (io && result?.conversation_id) {
-            io.to(String(result.conversation_id)).emit('newMessage', result);
+            await emitConversationMessage(io, 'newMessage', result);
         }
         return res.status(201).json(result);
     } catch (error) {
@@ -146,7 +146,7 @@ async function replyMessageController(req, res) {
             }
         );
         if (io && result?.conversation_id) {
-            io.to(String(result.conversation_id)).emit('messageReplied', result);
+            await emitConversationMessage(io, 'messageReplied', result);
         }
         return res.status(201).json(result);
     } catch (error) {

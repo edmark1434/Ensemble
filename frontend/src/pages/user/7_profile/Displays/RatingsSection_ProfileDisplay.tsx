@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AccountRecordSection } from "./AccountStanding";
 import { Star, ShieldCheck, Trophy, Briefcase, Package, AlertCircle, X, ShieldAlert, User, Users } from "lucide-react";
 import { DEFAULT_MERIT, meritBandLabel, meritColor } from "@/lib/merit";
+import { RoleChip, StatusPill } from "@/pages/user/disputes/disputeUi";
 
 
 export interface RatingTierInfo {
@@ -699,17 +700,17 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
                         {dispute.title || dispute.number || "Dispute"}
                       </p>
                       <p className="mt-0.5 text-[11px] text-gray-500 dark:text-zinc-500">
-                        {dispute.number || "Dispute"} · {dispute.type || "General"} ·{" "}
-                        {dispute.role === "filed" ? "Filed by this account" : "Named as disputee"}
+                        {dispute.number || "Dispute"} · {disputeStatusLabel(dispute.type || "General")}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded border border-gray-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
-                      {disputeStatusLabel(dispute.status)}
-                    </span>
+                    <StatusPill status={dispute.status} />
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-500">
-                    <span>Updated {disputeWhen(dispute.updatedAt)}</span>
-                    <span className="font-semibold text-blue-600 dark:text-blue-400">View discussion</span>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-500">
+                    <span className="flex items-center gap-2">
+                      <RoleChip role={dispute.role === "filed" ? "disputer" : "disputee"} />
+                      Updated {disputeWhen(dispute.updatedAt)}
+                    </span>
+                    <span className="font-semibold text-gray-700 dark:text-zinc-200">View discussion →</span>
                   </div>
                 </Link>
               ))}

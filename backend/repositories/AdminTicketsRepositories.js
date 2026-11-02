@@ -3521,6 +3521,14 @@ async function updateDispute(disputeId, patch, staffSession) {
       metadata: { visibility: false, status: refreshed.status },
     });
     try {
+      require('../lib/WebSocket')
+        .getIo()
+        ?.to(`dispute:public:${disputeId}`)
+        .emit('disputeVisibilityChanged', { disputeId: String(disputeId), visibility: false });
+    } catch (err) {
+      console.warn('Dispute visibility broadcast skipped:', err.message);
+    }
+    try {
       const number = refreshed.dispute_number || 'Dispute';
       await notifyDisputeParties(refreshed, {
         message: `Dispute ${number} is private again. The public discussion is closed.`,
@@ -3642,6 +3650,14 @@ async function updateDispute(disputeId, patch, staffSession) {
       path: `/disputes/${disputeId}`,
     });
   } else if (normalized.visibility === false && Boolean(refreshed.visibility)) {
+    try {
+      require('../lib/WebSocket')
+        .getIo()
+        ?.to(`dispute:public:${disputeId}`)
+        .emit('disputeVisibilityChanged', { disputeId: String(disputeId), visibility: false });
+    } catch (err) {
+      console.warn('Dispute visibility broadcast skipped:', err.message);
+    }
     const number = refreshed.dispute_number || 'Dispute';
     await notifyDisputeParties(refreshed, {
       message: `Dispute ${number} is private again. The public discussion is closed.`,
