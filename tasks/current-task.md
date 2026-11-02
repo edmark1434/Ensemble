@@ -1,13 +1,12 @@
-# Active Task: Public dispute forum on profiles
+# Active Task: Make dispute private again
 
 ## Objective
 
-Show staff-made-public disputes on both the disputer and disputee profiles, and let anyone view/reply to that discussion like a forum thread.
+Let the assigned dispute handler set a public dispute back to private so it leaves profiles and the public forum.
 
 ## Acceptance Criteria
 
-1. Profile payloads list visible disputes for accounts that are either filer or respondent.
-2. Profile Performance UI shows a Public disputes entry for owners and visitors when any exist.
-3. `/disputes/:id` loads the public discussion (parties + public messages) with live updates.
-4. Any signed-in member can reply while the dispute is open and public; guests can read only.
-5. `cd frontend && npm run build` passes.
+1. Staff PATCH supports `action: "hide"` / `"make_private"` (and `visibility: false`) for the assigned handler.
+2. Dispute detail UI shows **Make dispute private** when the case is public.
+3. Private cases drop from public profiles and `GET /api/accounts/disputes/:id` returns unavailable.
+4. Docs updated; frontend build passes.

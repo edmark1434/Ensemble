@@ -724,7 +724,7 @@ export default function ModeratorDisputeDetailModal({
                   Status: {titleCaseLabel(dispute.status)}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-                  Case: {dispute.visibility ? "Visible to parties" : "Hidden from disputee"}
+                  Case: {dispute.visibility ? "Public" : "Private"}
                 </span>
                 {dispute.creditHold && (
                   <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
@@ -794,10 +794,25 @@ export default function ModeratorDisputeDetailModal({
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() => void runAction({ action: "approve" }, "Dispute is now visible to parties")}
+                    onClick={() => void runAction({ action: "approve" }, "Dispute is now public")}
                     className={`rounded-xl px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
                   >
-                    Make dispute visible
+                    Make dispute public
+                  </button>
+                )}
+                {canAct && dispute.visibility && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void runAction(
+                        { action: "hide" },
+                        "Dispute is private again — removed from profiles and public discussion"
+                      )
+                    }
+                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
+                  >
+                    Make dispute private
                   </button>
                 )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
@@ -1126,7 +1141,7 @@ export default function ModeratorDisputeDetailModal({
                   <p className="text-[11px] text-zinc-500">
                     {replyAudienceOptions.find((option) => option.value === replyAudience)?.hint
                       || (!detail.dispute.visibility
-                        ? "Make the dispute visible first if you need a public-page reply."
+                        ? "Make the dispute public first if you need a public-page reply."
                         : null)}
                   </p>
                 </div>

@@ -3496,6 +3496,43 @@ async function updateDispute(disputeId, patch, staffSession) {
     return getDisputeDetail(disputeId, staffSession);
   }
 
+  if (action === 'hide' || action === 'make_private') {
+    if (!actPerms.canAct) {
+      throw new Error('Assign yourself to this dispute before making it private.');
+    }
+    if (!Boolean(refreshed.visibility)) {
+      return getDisputeDetail(disputeId, staffSession);
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET visibility = FALSE,
+           updated_at = NOW()
+       WHERE dispute_id = $1`,
+      [disputeId]
+    );
+    await recordAccountActivity({
+      accountId: refreshed.by_account_id || refreshed.for_account_id,
+      action: `Dispute ${refreshed.dispute_number || disputeId} set private`,
+      eventCode: 'DISPUTE_HIDDEN',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: { visibility: false, status: refreshed.status },
+    });
+    try {
+      const number = refreshed.dispute_number || 'Dispute';
+      await notifyDisputeParties(refreshed, {
+        message: `Dispute ${number} is private again. The public discussion is closed.`,
+        path: '/contracts/disputes',
+        onlyFiler: true,
+      });
+    } catch (err) {
+      console.warn('Dispute private notice skipped:', err.message);
+    }
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
   if (action === 'dismiss') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     await pool.query(
@@ -3603,6 +3640,13 @@ async function updateDispute(disputeId, patch, staffSession) {
     await notifyDisputeParties(refreshed, {
       message: `Dispute ${number} is now open.`,
       path: `/disputes/${disputeId}`,
+    });
+  } else if (normalized.visibility === false && Boolean(refreshed.visibility)) {
+    const number = refreshed.dispute_number || 'Dispute';
+    await notifyDisputeParties(refreshed, {
+      message: `Dispute ${number} is private again. The public discussion is closed.`,
+      path: '/contracts/disputes',
+      onlyFiler: true,
     });
   }
   return getDisputeDetail(disputeId, staffSession);
