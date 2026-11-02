@@ -42,6 +42,7 @@ interface SubcontractProposalModalProps {
   contractTitle?: string;
   milestones?: Array<{
     job_milestone_id?: string;
+    contract_milestone_id?: string;
     id?: string;
     milestone_title?: string;
     name?: string;
@@ -124,7 +125,7 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
 
   const handleAddCandidate = (user: any) => {
     const defaultMilestoneId =
-      milestones[0]?.job_milestone_id || milestones[0]?.id || '';
+      milestones[0]?.job_milestone_id || milestones[0]?.contract_milestone_id || milestones[0]?.id || '';
 
     const newCandidate: CandidateDraft = {
       candidate_account_id: user.account_id,
@@ -411,7 +412,8 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                         >
                           <option value="">Full Contract Scope (All Milestones)</option>
                           {milestones.map((m, mIdx) => {
-                            const mId = m.job_milestone_id || m.id || String(mIdx);
+                            const mId = m.job_milestone_id || m.contract_milestone_id || m.id;
+                            if (!mId) return null;
                             const mName =
                               m.milestone_title || m.name || `Milestone ${mIdx + 1}`;
                             return (

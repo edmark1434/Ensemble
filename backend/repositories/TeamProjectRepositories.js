@@ -757,10 +757,25 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
            COALESCE(jm.order_index, cm.index) as milestone_order,
            COALESCE(jm.budget_credits, cm.credits) as milestone_budget,
            COALESCE(cm.status, 'pending') as milestone_status,
-           assignee_acc.account_id as assignee_account_id,
-           assignee_acc.display_name as assignee_name,
-           assignee_acc.handle as assignee_handle,
-           assignee_f.path as assignee_avatar_path
+           (
+             SELECT COALESCE(
+               json_agg(json_build_object(
+                 'account_id', a.account_id,
+                 'display_name', a.display_name,
+                 'handle', a.handle,
+                 'avatar_path', f.path
+               ) ORDER BY a.display_name),
+               '[]'::json
+             )
+             FROM team_workspace_task_assignees twta2
+             JOIN accounts a ON a.account_id = twta2.account_id
+             LEFT JOIN files f ON f.file_id = a.avatar_file_id
+             WHERE twta2.task_id = twt.task_id
+           ) as assignees,
+           primary_assignee.account_id as assignee_account_id,
+           primary_assignee.display_name as assignee_name,
+           primary_assignee.handle as assignee_handle,
+           primary_assignee.avatar_path as assignee_avatar_path
       FROM team_contract_workspaces tcw
       JOIN teams t ON t.team_id = tcw.team_id
       LEFT JOIN jobs j ON j.job_id = t.job_id
@@ -769,14 +784,20 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
       JOIN team_workspace_tasks twt ON twt.workspace_id = tcw.workspace_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = twt.job_milestone_id
       LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = twt.contract_milestone_id
-      LEFT JOIN team_workspace_task_assignees twta ON twta.task_id = twt.task_id
-      LEFT JOIN accounts assignee_acc ON assignee_acc.account_id = twta.account_id
-      LEFT JOIN files assignee_f ON assignee_f.file_id = assignee_acc.avatar_file_id
+      LEFT JOIN LATERAL (
+        SELECT a.account_id, a.display_name, a.handle, f.path as avatar_path
+          FROM team_workspace_task_assignees twta
+          JOIN accounts a ON a.account_id = twta.account_id
+          LEFT JOIN files f ON f.file_id = a.avatar_file_id
+         WHERE twta.task_id = twt.task_id
+         ORDER BY (twta.account_id = $2) DESC, a.display_name ASC
+         LIMIT 1
+      ) primary_assignee ON true
      WHERE tcw.team_id = $1
        AND twt.deleted_at IS NULL
      ORDER BY COALESCE(jm.order_index, cm.index, 0) ASC, twt.sort_order ASC, twt.created_at ASC
   `;
-  const res = await pool.query(query, [teamId]);
+  const res = await pool.query(query, [teamId, viewerAccountId]);
   return res.rows;
 }
 
@@ -788,10 +809,14 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id,
            COALESCE(j.client_account_id, gr.client_account_id) as client_account_id,
-           twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id,
+           twt.is_locked, twt.created_by_account_id,
            twt.job_milestone_id, twt.contract_milestone_id,
            COALESCE(cm.status, 'pending') as milestone_status,
-           COALESCE(cm.index, jm.order_index) as milestone_order
+           COALESCE(cm.index, jm.order_index) as milestone_order,
+           EXISTS (
+             SELECT 1 FROM team_workspace_task_assignees twta
+              WHERE twta.task_id = twt.task_id AND twta.account_id = $3
+           ) as is_assignee
       FROM team_workspace_tasks twt
       JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
       JOIN teams t ON t.team_id = tcw.team_id
@@ -800,9 +825,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
       LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
       LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = twt.contract_milestone_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = twt.job_milestone_id
-      LEFT JOIN team_workspace_task_assignees twta ON twta.task_id = twt.task_id
      WHERE tcw.team_id = $1 AND twt.task_id = $2 AND twt.deleted_at IS NULL
-  `, [teamId, taskId]);
+  `, [teamId, taskId, viewerAccountId]);
 
   if (permRes.rows.length === 0) {
     throw new Error('Task not found in this team project.');
@@ -820,7 +844,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   } = permRes.rows[0];
 
   const effectiveMilestoneId = contract_milestone_id || job_milestone_id;
-  const isAssignee = String(viewerAccountId) === String(assignee_account_id);
+  const isAssignee = Boolean(permRes.rows[0].is_assignee);
   const isClient = String(viewerAccountId) === String(client_account_id);
   const isContractTask = String(created_by_account_id) === String(client_account_id);
 
@@ -1405,6 +1429,7 @@ async function getProjectHistory(teamId) {
              SELECT tcw2.contract_id FROM team_contract_workspaces tcw2 WHERE tcw2.team_id = t.team_id
            )
       LEFT JOIN job_milestones cs_jm ON cs_jm.job_milestone_id = cs.assigned_milestone_id
+      LEFT JOIN contract_milestones cs_cm ON cs_cm.contract_milestone_id = cs.assigned_milestone_id
       LEFT JOIN jobs j ON j.job_id = t.job_id
       LEFT JOIN accounts owner_acc ON owner_acc.account_id = j.client_account_id
      WHERE t.team_id = $1
@@ -1604,7 +1629,7 @@ async function getProjectMembers(teamId) {
            lead_acc.handle as parent_contractor_handle,
            lead_f.path as parent_contractor_avatar_path,
            COALESCE(p.job_milestone_id, cs.assigned_milestone_id) as assigned_milestone_id,
-           COALESCE(jm.title, cs_jm.title) as assigned_milestone_title,
+           COALESCE(jm.title, cs_jm.title, cs_cm.name) as assigned_milestone_title,
            cs.permissions as subcontractor_permissions
       FROM teams t
       JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
@@ -1622,8 +1647,9 @@ async function getProjectMembers(teamId) {
       LEFT JOIN accounts lead_acc ON lead_acc.account_id = cs.parent_contractor_account_id
       LEFT JOIN files lead_f ON lead_f.file_id = lead_acc.avatar_file_id
       LEFT JOIN job_milestones cs_jm ON cs_jm.job_milestone_id = cs.assigned_milestone_id
+      LEFT JOIN contract_milestones cs_cm ON cs_cm.contract_milestone_id = cs.assigned_milestone_id
      WHERE t.team_id = $1
-     ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, cs_jm.order_index, 0) ASC
+     ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, cs_jm.order_index, cs_cm.index, 0) ASC
   `;
   const res = await pool.query(query, [teamId]);
   return res.rows;
@@ -1910,12 +1936,13 @@ async function getSubcontractProposals(teamId, viewerAccountId) {
            cand_acc.display_name as candidate_name,
            cand_acc.handle as candidate_handle,
            cand_f.path as candidate_avatar_path,
-           jm.title as milestone_title,
-           jm.order_index as milestone_order
+           COALESCE(jm.title, cm.name) as milestone_title,
+           COALESCE(jm.order_index, cm.index) as milestone_order
       FROM team_subcontract_proposal_members pm
       JOIN accounts cand_acc ON cand_acc.account_id = pm.candidate_account_id
       LEFT JOIN files cand_f ON cand_f.file_id = cand_acc.avatar_file_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = pm.assigned_milestone_id
+      LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = pm.assigned_milestone_id
      WHERE pm.proposal_id = ANY($1::uuid[])
      ORDER BY pm.created_at ASC
   `, [proposalIds]);
@@ -1937,15 +1964,21 @@ async function getSubcontractProposals(teamId, viewerAccountId) {
 async function createSubcontractProposal(teamId, viewerAccountId, { contract_id, members, proposal_notes, terms_accepted }) {
   // 1. Verify contract belongs to team and viewer is the primary freelancer
   const contractRes = await pool.query(`
-    SELECT c.contract_id, p.freelancer_account_id, j.client_account_id,
+    SELECT c.contract_id,
+           COALESCE(p.freelancer_account_id, g.freelancer_account_id) as freelancer_account_id,
+           COALESCE(j.client_account_id, gr.client_account_id) as client_account_id,
            lead_acc.display_name as lead_name, lead_acc.handle as lead_handle
       FROM team_contract_workspaces tcw
       JOIN contracts c ON c.contract_id = tcw.contract_id
-      JOIN job_contracts jc ON jc.contract_id = c.contract_id
-      JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+      LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+      LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+      LEFT JOIN gigs g ON g.gig_id = gt.gig_id
       JOIN teams t ON t.team_id = tcw.team_id
-      JOIN jobs j ON j.job_id = t.job_id
-      JOIN accounts lead_acc ON lead_acc.account_id = p.freelancer_account_id
+      LEFT JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN accounts lead_acc ON lead_acc.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
      WHERE tcw.team_id = $1 AND c.contract_id = $2
      LIMIT 1
   `, [teamId, contract_id]);
@@ -2023,6 +2056,10 @@ async function createSubcontractProposal(teamId, viewerAccountId, { contract_id,
 
     for (const m of members) {
       const candId = m.candidate_account_id || m.account_id;
+      const rawMilestoneId = m.assigned_milestone_id ? String(m.assigned_milestone_id).trim() : null;
+      const isUuid = rawMilestoneId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawMilestoneId);
+      const assignedMilestoneId = isUuid ? rawMilestoneId : null;
+
       const memRes = await client.query(`
         INSERT INTO team_subcontract_proposal_members (
           proposal_id, contract_id, candidate_account_id, role_title,
@@ -2034,7 +2071,7 @@ async function createSubcontractProposal(teamId, viewerAccountId, { contract_id,
         contract_id,
         candId,
         m.role_title?.trim() || 'Video Editor',
-        m.assigned_milestone_id || null,
+        assignedMilestoneId,
         m.agreed_credits ? Number(m.agreed_credits) : null,
         JSON.stringify(m.permissions || {
           can_view_tasks: true,
@@ -2083,12 +2120,16 @@ async function createSubcontractProposal(teamId, viewerAccountId, { contract_id,
 async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, { decision, member_decisions, client_feedback }) {
   // 1. Fetch proposal & verify client
   const propRes = await pool.query(`
-    SELECT p.*, j.client_account_id, tcw.workspace_id,
+    SELECT p.*,
+           COALESCE(j.client_account_id, gr.client_account_id) as client_account_id,
+           tcw.workspace_id,
            lead_acc.display_name as lead_name, lead_acc.handle as lead_handle
       FROM team_subcontract_proposals p
       JOIN teams t ON t.team_id = p.team_id
-      JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN jobs j ON j.job_id = t.job_id
       LEFT JOIN team_contract_workspaces tcw ON tcw.team_id = t.team_id
+      LEFT JOIN gig_contracts gc ON gc.contract_id = tcw.contract_id
+      LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
       JOIN accounts lead_acc ON lead_acc.account_id = p.lead_account_id
      WHERE p.proposal_id = $1 AND p.team_id = $2
      LIMIT 1
@@ -2194,7 +2235,9 @@ async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, { 
               INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
               SELECT twt.task_id, $1, $2
                 FROM team_workspace_tasks twt
-               WHERE twt.workspace_id = $3 AND twt.job_milestone_id = $4 AND twt.deleted_at IS NULL
+               WHERE twt.workspace_id = $3
+                 AND (twt.job_milestone_id = $4 OR twt.contract_milestone_id = $4)
+                 AND twt.deleted_at IS NULL
               ON CONFLICT (task_id, account_id) DO NOTHING
             `, [
               member.candidate_account_id,
