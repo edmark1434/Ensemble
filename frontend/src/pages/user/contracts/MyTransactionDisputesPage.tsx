@@ -156,7 +156,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
             maxLength={2000}
             rows={3}
             placeholder="Add evidence, dates, or anything else staff should know"
-            className="w-full resize-none rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm outline-none dark:border-rose-500/30 dark:bg-dark-base/60"
+            className="w-full resize-none rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-500 dark:border-rose-500/30 dark:bg-dark-base/60 dark:text-white dark:placeholder:text-zinc-300"
           />
           <button
             type="button"
