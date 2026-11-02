@@ -63,6 +63,12 @@ export interface TaskItem {
   due_at?: string;
   milestone_title?: string;
   milestone_order?: number;
+  assignees?: Array<{
+    account_id: string;
+    display_name: string;
+    handle: string;
+    avatar_path?: string;
+  }>;
   assignee_account_id?: string;
   assignee_name?: string;
   assignee_handle?: string;
@@ -737,8 +743,12 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       return true;
     }
 
-    // Direct assignee
-    if (task.assignee_account_id && String(task.assignee_account_id).trim() === String(currentUserAccountId).trim()) {
+    // Direct assignee (supports single or multi-assignee)
+    const isDirectAssignee =
+      (task.assignee_account_id && String(task.assignee_account_id).trim() === String(currentUserAccountId).trim()) ||
+      (Array.isArray(task.assignees) && task.assignees.some((a) => String(a.account_id).trim() === String(currentUserAccountId).trim()));
+
+    if (isDirectAssignee) {
       return true;
     }
 
@@ -1021,9 +1031,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const filteredTasks = useMemo(() => {
     return localTasks.filter((t) => {
       if (filterAssignee === 'me') {
-        if (String(t.assignee_account_id) !== String(currentUserAccountId)) return false;
+        const match =
+          String(t.assignee_account_id) === String(currentUserAccountId) ||
+          t.assignees?.some((a) => String(a.account_id) === String(currentUserAccountId));
+        if (!match) return false;
       } else if (filterAssignee !== 'all') {
-        if (String(t.assignee_account_id) !== filterAssignee) return false;
+        const match =
+          String(t.assignee_account_id) === filterAssignee ||
+          t.assignees?.some((a) => String(a.account_id) === filterAssignee);
+        if (!match) return false;
       }
 
       if (searchQuery.trim()) {
@@ -1995,22 +2011,54 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 )}
                               </div>
 
-                              {/* Assignee Avatar */}
+                              {/* Assignee Avatar Stack */}
                               <div
-                                className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300"
-                                title={task.assignee_name ? `Assigned: ${task.assignee_name}` : 'Unassigned'}
+                                className="flex items-center -space-x-1.5 overflow-hidden shrink-0"
+                                title={
+                                  Array.isArray(task.assignees) && task.assignees.length > 0
+                                    ? `Assigned: ${task.assignees.map((a) => a.display_name).join(', ')}`
+                                    : task.assignee_name
+                                    ? `Assigned: ${task.assignee_name}`
+                                    : 'Unassigned'
+                                }
                               >
-                                {task.assignee_avatar_path ? (
-                                  <img
-                                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                    alt={task.assignee_name || 'Assignee'}
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                    }}
-                                    className="w-full h-full object-cover block shrink-0"
-                                  />
+                                {Array.isArray(task.assignees) && task.assignees.length > 1 ? (
+                                  task.assignees.slice(0, 3).map((a, aIdx) => (
+                                    <div
+                                      key={a.account_id || aIdx}
+                                      className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-300 ring-1 ring-white dark:ring-zinc-900"
+                                    >
+                                      {a.avatar_path ? (
+                                        <img
+                                          src={constructAvatarUrl(a.avatar_path, a.display_name || 'User')}
+                                          alt={a.display_name || 'Assignee'}
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).src = getFallbackAvatarUrl(a.display_name);
+                                          }}
+                                          className="w-full h-full object-cover block shrink-0"
+                                        />
+                                      ) : (
+                                        <span>{getInitials(a.display_name)}</span>
+                                      )}
+                                    </div>
+                                  ))
                                 ) : (
-                                  <span>{getInitials(task.assignee_name)}</span>
+                                  <div
+                                    className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300"
+                                  >
+                                    {task.assignee_avatar_path ? (
+                                      <img
+                                        src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                                        alt={task.assignee_name || 'Assignee'}
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                                        }}
+                                        className="w-full h-full object-cover block shrink-0"
+                                      />
+                                    ) : (
+                                      <span>{getInitials(task.assignee_name)}</span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
