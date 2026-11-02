@@ -23,7 +23,8 @@ import {
   RotateCcw,
   PartyPopper,
   Upload,
-  Plus
+  Plus,
+  ArrowLeftRight
 } from "lucide-react";
 
 export interface SetupStep {
@@ -116,6 +117,21 @@ export const ProfileSetupWidget: React.FC<ProfileSetupWidgetProps> = ({
   const [justCompletedStepId, setJustCompletedStepId] = useState<string | null>(null);
   const [justCompletedLabel, setJustCompletedLabel] = useState<string | null>(null);
   const [isGuideMinimized, setIsGuideMinimized] = useState(false);
+  const [guideSide, setGuideSide] = useState<"right" | "left">(() => {
+    try {
+      return (localStorage.getItem("ensemble_walkthrough_side") as "right" | "left") || "right";
+    } catch {
+      return "right";
+    }
+  });
+
+  const toggleGuideSide = () => {
+    const nextSide = guideSide === "right" ? "left" : "right";
+    setGuideSide(nextSide);
+    try {
+      localStorage.setItem("ensemble_walkthrough_side", nextSide);
+    } catch {}
+  };
 
   // References to track previous state of steps for automatic save-and-advance
   const prevStepsRef = useRef<Record<string, boolean>>({});
@@ -703,8 +719,12 @@ export const ProfileSetupWidget: React.FC<ProfileSetupWidgetProps> = ({
             />
           )}
 
-          {/* Floating Guided Tour Controller Card (z-[300000] to sit above all modals) */}
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300000] w-[94vw] max-w-xl animate-in slide-in-from-bottom-4 duration-300 font-['Plus_Jakarta_Sans',sans-serif]">
+          {/* Floating Guided Tour Controller Card (docked to bottom-right or bottom-left so modal dialogs in the center stay unblocked) */}
+          <div className={`fixed bottom-6 z-[300000] w-[92vw] sm:w-[420px] transition-all duration-300 font-['Plus_Jakarta_Sans',sans-serif] ${
+            guideSide === "left"
+              ? "left-4 sm:left-6 animate-in slide-in-from-left-4"
+              : "right-4 sm:right-6 animate-in slide-in-from-right-4"
+          }`}>
             {isGuideMinimized ? (
               /* Minimized Floating Bar (compact, never blocks modal buttons) */
               <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-full border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-xl shadow-2xl text-xs font-bold text-gray-900 dark:text-white">
@@ -715,6 +735,15 @@ export const ProfileSetupWidget: React.FC<ProfileSetupWidgetProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleGuideSide}
+                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 hover:text-gray-800 dark:hover:text-white transition cursor-pointer flex items-center gap-1 text-[11px]"
+                    title={guideSide === "right" ? "Move walkthrough to left" : "Move walkthrough to right"}
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{guideSide === "right" ? "Move Left" : "Move Right"}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setIsGuideMinimized(false)}
@@ -753,6 +782,15 @@ export const ProfileSetupWidget: React.FC<ProfileSetupWidgetProps> = ({
                   )}
 
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={toggleGuideSide}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition text-xs flex items-center gap-1 cursor-pointer"
+                      title={guideSide === "right" ? "Dock walkthrough on the left" : "Dock walkthrough on the right"}
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{guideSide === "right" ? "Dock Left" : "Dock Right"}</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setIsGuideMinimized(true)}
