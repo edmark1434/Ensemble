@@ -3,9 +3,10 @@ import { useState, useEffect, type FC } from "react";
 interface ScrollToTopProps {
   threshold?: number; // How many pixels to scroll before showing the button
   bottom?: string | number;
+  right?: string | number;
 }
 
-const ScrollToTop: FC<ScrollToTopProps> = ({ threshold = 300, bottom = "30px" }) => {
+const ScrollToTop: FC<ScrollToTopProps> = ({ threshold = 300, bottom = "30px", right = "30px" }) => {
   const [isVisible, setIsVisible] = useState<boolean>(false);
 
   useEffect(() => {
@@ -36,7 +37,7 @@ const ScrollToTop: FC<ScrollToTopProps> = ({ threshold = 300, bottom = "30px" })
           style={{
             position: "fixed",
             bottom: typeof bottom === "number" ? `${bottom}px` : bottom,
-            right: "30px",
+            right: typeof right === "number" ? `${right}px` : right,
             width: "48px",
             height: "48px",
             borderRadius: "50%",
@@ -68,7 +69,7 @@ const ScrollToTop: FC<ScrollToTopProps> = ({ threshold = 300, bottom = "30px" })
             height="24"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#080a12"
+            stroke="#121214"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
