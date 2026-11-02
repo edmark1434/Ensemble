@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ShieldCheck, ChevronDown, HelpCircle, CheckCircle2 } from 'lucide-react';
+import useGlobalState from '@/lib/global_state';
+import { GuestLoginModal } from '@/components/ui/GuestLoginModal';
 
 export const JobProposalsFlowGuide: React.FC = () => {
     const navigate = useNavigate();
+    const isGuestMode = useGlobalState((state) => state.isGuestMode);
+    const user = useGlobalState((state) => state.user);
+    const isGuest = Boolean(isGuestMode || !user || user?.role === 'guest');
+    const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
     const [openFaq, setOpenFaq] = useState<number | null>(null);
 
     const toggleFaq = (idx: number) => {
@@ -448,13 +454,24 @@ export const JobProposalsFlowGuide: React.FC = () => {
                 </div>
                 <button
                     type="button"
-                    onClick={() => navigate('/jobs/proposals')}
+                    onClick={() => {
+                        if (isGuest) {
+                            setIsGuestModalOpen(true);
+                            return;
+                        }
+                        navigate('/jobs/proposals');
+                    }}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shrink-0 shadow-xs active:scale-98 cursor-pointer"
                 >
                     <span>View Incoming Proposals</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                 </button>
             </div>
+
+            <GuestLoginModal
+                isOpen={isGuestModalOpen}
+                onClose={() => setIsGuestModalOpen(false)}
+            />
         </div>
     );
 };

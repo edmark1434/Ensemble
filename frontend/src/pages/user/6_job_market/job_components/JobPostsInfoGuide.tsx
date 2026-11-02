@@ -12,10 +12,14 @@ import {
 } from "lucide-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 export const JobPostsInfoGuide: React.FC = () => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const user = useGlobalState((state) => state.user);
+  const isGuest = Boolean(isGuestMode || !user || user?.role === "guest");
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
 
   const rankingPillars = [
@@ -182,8 +186,8 @@ export const JobPostsInfoGuide: React.FC = () => {
 
   const handleCreateJob = async () => {
     if (isCheckingAccess) return;
-    if (isGuestMode) {
-      navigate("/login");
+    if (isGuest) {
+      setIsGuestModalOpen(true);
       return;
     }
     setIsCheckingAccess(true);
@@ -486,6 +490,11 @@ export const JobPostsInfoGuide: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <GuestLoginModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+      />
     </div>
   );
 };
