@@ -13,16 +13,18 @@ import GradientBlinds from "@/components/ui/GradientBlinds";
 import TechText from "@/components/ui/TechText";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
-import { APP_VERSION } from "@/version.tsx";
 
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
-const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
+const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
   const navigate = useNavigate();
   const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
   const theme = useGlobalState((state) => state.theme);
 
   const [mounted, setMounted] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(
+    typeof window !== "undefined" ? window.innerWidth <= 640 : false
+  );
   const [intent, setIntent] = useState<"hire" | "work" | "edit">("hire");
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
@@ -31,32 +33,63 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
   const [topGigCategories, setTopGigCategories] = useState<string[]>([]);
 
   useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const updateMobile = (e: MediaQueryListEvent | MediaQueryList) => setIsMobile(e.matches);
+    updateMobile(mq);
+    mq.addEventListener("change", updateMobile);
+    return () => mq.removeEventListener("change", updateMobile);
+  }, []);
+
+  useEffect(() => {
     const fetchTopCategories = async () => {
       try {
         const [jobsRes, gigsRes] = await Promise.all([
-          api.get('/api/jobs'),
-          api.get('/api/gigs')
+          api.get("/api/jobs"),
+          api.get("/api/gigs"),
         ]);
-        
+
         const jobCounts: Record<string, number> = {};
         jobsRes.data?.data?.forEach((job: any) => {
           if (job.category) jobCounts[job.category] = (jobCounts[job.category] || 0) + 1;
         });
-        const sortedJobs = Object.entries(jobCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
-        
+        const sortedJobs = Object.entries(jobCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map((e) => e[0]);
+
         const gigCounts: Record<string, number> = {};
         gigsRes.data?.data?.forEach((gig: any) => {
           if (gig.category) gigCounts[gig.category] = (gigCounts[gig.category] || 0) + 1;
         });
-        const sortedGigs = Object.entries(gigCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+        const sortedGigs = Object.entries(gigCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map((e) => e[0]);
 
-        // Fallback to defaults if no data
-        setTopJobCategories(sortedJobs.length > 0 ? sortedJobs : ["Short Form Reels", "Logo Animation", "Cinematic Grading", "Vlog Editing"]);
-        setTopGigCategories(sortedGigs.length > 0 ? sortedGigs : ["Wedding Video", "AI Development", "YouTube Intro", "Color Grading"]);
+        setTopJobCategories(
+          sortedJobs.length > 0
+            ? sortedJobs
+            : ["Short Form Reels", "Logo Animation", "Cinematic Grading", "Vlog Editing"]
+        );
+        setTopGigCategories(
+          sortedGigs.length > 0
+            ? sortedGigs
+            : ["Wedding Video", "AI Development", "YouTube Intro", "Color Grading"]
+        );
       } catch (err) {
         console.error("Failed to fetch top categories", err);
-        setTopJobCategories(["Short Form Reels", "Logo Animation", "Cinematic Grading", "Vlog Editing"]);
-        setTopGigCategories(["Wedding Video", "AI Development", "YouTube Intro", "Color Grading"]);
+        setTopJobCategories([
+          "Short Form Reels",
+          "Logo Animation",
+          "Cinematic Grading",
+          "Vlog Editing",
+        ]);
+        setTopGigCategories([
+          "Wedding Video",
+          "AI Development",
+          "YouTube Intro",
+          "Color Grading",
+        ]);
       }
     };
     fetchTopCategories();
@@ -69,7 +102,6 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
   useEffect(() => {
     setMounted(true);
 
-    // Initializing interface sound effects
     hoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
     clickAudioRef.current = new Audio("/sounds/softclick.mp3");
 
@@ -101,7 +133,42 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
       .hero-bottom-fade { background: linear-gradient(to top, #ffffff, transparent); }
       .dark .hero-bottom-fade { background: linear-gradient(to top, #121214, transparent); }
 
-      .hero-btn { background: transparent; color: #4b5563; }
+      .hero-section-shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 120px 60px 68px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-intent-bar {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border-radius: 12px;
+        width: fit-content;
+        max-width: 100%;
+        margin-bottom: 24px;
+        backdrop-filter: blur(12px);
+        border-width: 1px;
+        border-style: solid;
+      }
+
+      .hero-btn {
+        background: transparent;
+        color: #4b5563;
+        padding: 8px 20px;
+        border-radius: 8px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        text-align: center;
+      }
       .dark .hero-btn { color: #7a8499; }
       .hero-btn:hover { background: rgba(0,0,0,0.05); color: #111827; }
       .dark .hero-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
@@ -127,9 +194,90 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
       .dark .hero-tag:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); color: #fff; }
       .hero-tag:disabled { background: #f3f4f6; border-color: #e5e7eb; color: #9ca3af; cursor: default; }
       .dark .hero-tag:disabled { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.05); color: rgba(255,255,255,0.4); cursor: default; }
+
+      @media (max-width: 960px) {
+        .hero-section-shell {
+          padding: 100px 32px 76px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .hero-section-shell {
+          min-height: 100svh;
+          padding: 76px 20px 76px;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .hero-content-col {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          margin: 0 auto;
+          width: 100%;
+        }
+        .hero-eyebrow-pill {
+          padding: 5px 11px !important;
+          margin: 0 auto 12px !important;
+          max-width: 100%;
+        }
+        .hero-eyebrow-text {
+          font-size: 9px !important;
+          letter-spacing: 0.03em !important;
+        }
+        .hero-headline-text {
+          margin-bottom: 18px !important;
+          text-align: center;
+        }
+        .hero-desc-text {
+          display: none !important;
+        }
+        .hero-tags-label {
+          display: none !important;
+        }
+        .hero-intent-bar {
+          width: 100% !important;
+          display: grid !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          margin-bottom: 18px !important;
+        }
+        .hero-btn {
+          padding: 9px 6px !important;
+          font-size: 12px !important;
+        }
+        .hero-search-wrap {
+          width: 100% !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+        .hero-search {
+          padding: 5px 5px 5px 14px !important;
+        }
+        .hero-search input {
+          font-size: 13px !important;
+          padding-right: 8px !important;
+        }
+        .hero-search-btn {
+          padding: 9px 18px !important;
+          font-size: 12.5px !important;
+          flex-shrink: 0;
+        }
+        .hero-action-btn {
+          width: 100%;
+          justify-content: center;
+          padding: 15px 28px !important;
+          font-size: 15px !important;
+        }
+        .hero-tags-row {
+          justify-content: center !important;
+          width: 100%;
+        }
+      }
     `;
     document.head.appendChild(styleEl);
-    return () => { document.head.removeChild(styleEl); };
+    return () => {
+      document.head.removeChild(styleEl);
+    };
   }, []);
 
   const playHoverSound = () => {
@@ -175,7 +323,10 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
   const dynamicTags = useMemo(() => {
     if (intent === "hire") return { title: "Popular Services:", items: topGigCategories };
     if (intent === "work") return { title: "Popular Jobs:", items: topJobCategories };
-    return { title: "Video Editing Features:", items: ["Real-time Sync", "Auto Dead-Air Clean", "AI Caption Nav", "Multi-cam Edit"] };
+    return {
+      title: "Video Editing Features:",
+      items: ["Real-time Sync", "Auto Dead-Air Clean", "AI Caption Nav", "Multi-cam Edit"],
+    };
   }, [intent, topJobCategories, topGigCategories]);
 
   const animLoad = (delay = 0): CSSProperties => ({
@@ -185,35 +336,53 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
   });
 
   return (
-    <section id="hero" className="bg-white dark:bg-[#121214]" style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      padding: "120px 60px 60px",
-      position: "relative",
-      overflow: "hidden",
-    }}>
-
+    <section id="hero" className="hero-section-shell bg-white dark:bg-[#121214]">
       {/* Background Layer */}
-      <div style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 1, overflow: "hidden" }}>
-        
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 1,
+          overflow: "hidden",
+        }}
+      >
         {/* Base Video - Always visible */}
-        <video autoPlay muted loop playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }}>
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            zIndex: 1,
+          }}
+        >
           <source src="/clip/hero_vid.mp4" type="video/mp4" />
         </video>
 
-        {/* Theme Overlay - Handles white mist for light mode, dark mist for dark mode */}
-        <div className="hero-overlay" style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 2
-        }} />
+        {/* Theme Overlay */}
+        <div
+          className="hero-overlay"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+          }}
+        />
 
-        {/* Light Mode: Interactive Gradient Blinds projected onto the white mist */}
-        <div className="block dark:hidden" style={{ position: "absolute", inset: 0, zIndex: 3, opacity: 0.35 }}>
+        {/* Light Mode: Interactive Gradient Blinds */}
+        <div
+          className="block dark:hidden"
+          style={{ position: "absolute", inset: 0, zIndex: 3, opacity: 0.35 }}
+        >
           <GradientBlinds
-            gradientColors={['#60a5fa', '#fde047', '#d8b4fe', '#60a5fa']}
+            gradientColors={["#60a5fa", "#fde047", "#d8b4fe", "#60a5fa"]}
             angle={45}
             noise={0.3}
             blindCount={12}
@@ -227,24 +396,58 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
             mixBlendMode="screen"
           />
         </div>
-        
-        {/* Bottom Fade to blend seamlessly with the SectionScrollText below */}
-        <div className="hero-bottom-fade" style={{
-          position: "absolute",
-          bottom: 0, left: 0, right: 0,
-          height: "160px",
-          zIndex: 4,
-          pointerEvents: "none"
-        }} />
+
+        {/* Bottom Fade to blend seamlessly with SectionScrollText below */}
+        <div
+          className="hero-bottom-fade"
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: "160px",
+            zIndex: 4,
+            pointerEvents: "none",
+          }}
+        />
       </div>
 
-      <div style={{ maxWidth: "1400px", width: "100%", margin: "0 auto", position: "relative", zIndex: 3 }}>
-        <div style={{ maxWidth: "800px" }}>
-
+      <div
+        style={{
+          maxWidth: "1400px",
+          width: "100%",
+          margin: "0 auto",
+          position: "relative",
+          zIndex: 3,
+        }}
+      >
+        <div className="hero-content-col" style={{ maxWidth: "800px" }}>
           {/* 1. EYEBROW BADGE */}
-          <div className="bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/[0.08]" style={{ ...animLoad(0), display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: "100px", marginBottom: "20px", backdropFilter: "blur(8px)", borderWidth: "1px", borderStyle: "solid" }}>
-            <div className="text-gray-500 dark:text-[#a1a1aa]" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
-              <TrueFocus 
+          <div
+            className="hero-eyebrow-pill bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/[0.08]"
+            style={{
+              ...animLoad(0),
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 14px",
+              borderRadius: "100px",
+              marginBottom: "20px",
+              backdropFilter: "blur(8px)",
+              borderWidth: "1px",
+              borderStyle: "solid",
+            }}
+          >
+            <div
+              className="hero-eyebrow-text text-gray-500 dark:text-[#a1a1aa]"
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              <TrueFocus
                 sentence="COLLABORATIVE VIDEO EDITING|& CREATIVE MARKETPLACE"
                 separator="|"
                 manualMode={false}
@@ -258,17 +461,19 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
           </div>
 
           {/* 2. INTERACTIVE TECH TEXT BRAND TITLE */}
-          <div 
-            role="heading" 
+          <div
+            role="heading"
             aria-level={1}
-            style={{ 
-              ...animLoad(0.06), 
-              marginBottom: "16px",
-              marginLeft: "-24px",
+            style={{
+              ...animLoad(0.06),
+              marginBottom: "12px",
+              marginLeft: isMobile ? 0 : "-5%",
               position: "relative",
-              zIndex: 10
-            }} 
-            className="w-[calc(100%+32px)] max-w-[850px] h-[95px] sm:h-[125px] md:h-[150px] text-gray-900 dark:text-white"
+              zIndex: 10,
+            }}
+            className={`${
+              isMobile ? "w-full" : "w-[105%]"
+            } max-w-[850px] h-[82px] sm:h-[125px] md:h-[150px] text-gray-900 dark:text-white`}
           >
             <TechText
               text="Ensemble"
@@ -276,9 +481,9 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
               fontWeight={900}
               fontSize={130}
               letterSpacing={-0.04}
-              align="left"
-              color={theme === 'dark' ? '#ffffff' : '#000000'}
-              accentColor={theme === 'dark' ? '#ffffff' : '#000000'}
+              align={isMobile ? "center" : "left"}
+              color={theme === "dark" ? "#ffffff" : "#000000"}
+              accentColor={theme === "dark" ? "#ffffff" : "#000000"}
               draggable={true}
               clickKick={true}
               sweep={true}
@@ -292,37 +497,59 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
           </div>
 
           {/* 3. DYNAMIC INTENT TAGLINE & DESCRIPTION */}
-          <div key={`text-${intent}`} className={isSwitching ? "opacity-0" : (slideDirection === "right" ? "slide-from-right" : "slide-from-left")}>
-            <h2 className="text-gray-900 dark:text-white" style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, lineHeight: 1.25, letterSpacing: "-0.025em", marginBottom: "12px" }}>
+          <div
+            key={`text-${intent}`}
+            className={
+              isSwitching
+                ? "opacity-0"
+                : slideDirection === "right"
+                ? "slide-from-right"
+                : "slide-from-left"
+            }
+          >
+            <h2
+              className="hero-headline-text text-gray-900 dark:text-white"
+              style={{
+                fontSize: "clamp(22px, 3vw, 36px)",
+                fontWeight: 700,
+                lineHeight: 1.22,
+                letterSpacing: "-0.025em",
+                marginBottom: "10px",
+              }}
+            >
               {intent === "hire" && "Work at the speed of your ambition"}
               {intent === "work" && "Find the freedom to secure top tier gigs"}
               {intent === "edit" && "Create high-impact edits in real-time"}
             </h2>
 
-            <p className="text-gray-600 dark:text-[#a1a1aa]" style={{ fontSize: 16, marginBottom: "28px", lineHeight: 1.6, maxWidth: "580px" }}>
-              {intent === "hire" && "Hire specialized filmmakers and editors who use cutting-edge AI pipelines to transform complex production workflows into high impact outcomes."}
-              {intent === "work" && "Gain access to premium global project creators, scale your remote freelance career, and automate empty dead-air cleanups synchronously."}
-              {intent === "edit" && "Edit directly in your browser with zero rendering delay. Leverage automated caption markers and audio-syncing with team members simultaneously."}
+            <p
+              className="hero-desc-text text-gray-600 dark:text-[#a1a1aa]"
+              style={{
+                fontSize: "clamp(14.5px, 1.6vw, 16px)",
+                marginBottom: "22px",
+                lineHeight: 1.6,
+                maxWidth: "580px",
+              }}
+            >
+              {intent === "hire" &&
+                "Hire specialized filmmakers and editors who use cutting-edge AI pipelines to transform complex production workflows into high impact outcomes."}
+              {intent === "work" &&
+                "Gain access to premium global project creators, scale your remote freelance career, and automate empty dead-air cleanups synchronously."}
+              {intent === "edit" &&
+                "Edit directly in your browser with zero rendering delay. Leverage automated caption markers and audio-syncing with team members simultaneously."}
             </p>
           </div>
 
           {/* FADING BUTTONS */}
-          <div className="bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/10" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, width: "fit-content", marginBottom: "24px", backdropFilter: "blur(12px)", borderWidth: "1px", borderStyle: "solid" }}>
+          <div className="hero-intent-bar bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/10">
             {(["hire", "work", "edit"] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleIntentTransition(mode)}
                 onMouseEnter={playHoverSound}
-                className={`hero-btn ${intent === mode ? "active" : ""} ${!isSwitching && intent === mode ? "fade-only" : ""}`}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: 8,
-                  border: "none",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "all 0.2s ease"
-                }}
+                className={`hero-btn ${intent === mode ? "active" : ""} ${
+                  !isSwitching && intent === mode ? "fade-only" : ""
+                }`}
               >
                 I want to {mode}
               </button>
@@ -330,26 +557,69 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
           </div>
 
           {/* SLIDING SEARCH / ACTION AREA */}
-          <div key={`action-${intent}`} className={isSwitching ? "opacity-0" : (slideDirection === "right" ? "slide-from-right" : "slide-from-left")} style={{ maxWidth: "580px", marginBottom: "24px" }}>
+          <div
+            key={`action-${intent}`}
+            className={`hero-search-wrap ${
+              isSwitching
+                ? "opacity-0"
+                : slideDirection === "right"
+                ? "slide-from-right"
+                : "slide-from-left"
+            }`}
+            style={{ maxWidth: "580px", marginBottom: "22px" }}
+          >
             {intent !== "edit" ? (
-              <div className="hero-search" style={{ display: "flex", alignItems: "center", borderRadius: "100px", padding: "6px 6px 6px 18px", backdropFilter: "blur(16px)", borderWidth: "1px", borderStyle: "solid" }}>
-                <Search className="text-gray-400 dark:text-white/40" style={{ width: 18, height: 18, marginRight: 12, flexShrink: 0 }} />
+              <div
+                className="hero-search"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: "100px",
+                  padding: "6px 6px 6px 18px",
+                  backdropFilter: "blur(16px)",
+                  borderWidth: "1px",
+                  borderStyle: "solid",
+                }}
+              >
+                <Search
+                  className="text-gray-400 dark:text-white/40"
+                  style={{ width: 18, height: 18, marginRight: 10, flexShrink: 0 }}
+                />
                 <input
                   type="text"
-                  placeholder={intent === "hire" ? "Describe what you need to hire for..." : "Search for available asset listings or jobs..."}
+                  placeholder={
+                    intent === "hire"
+                      ? "Describe what you need to hire for..."
+                      : "Search for available asset listings or jobs..."
+                  }
                   value={searchVal}
                   onChange={(e) => setSearchVal(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSearchAction();
+                    if (e.key === "Enter") handleSearchAction();
                   }}
                   className="text-gray-900 placeholder-gray-500 dark:text-white dark:placeholder-gray-400"
-                  style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: 14, paddingRight: 12 }}
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontSize: 14,
+                    paddingRight: 12,
+                  }}
                 />
                 <button
                   onClick={handleSearchAction}
                   onMouseEnter={playHoverSound}
                   className="hero-search-btn"
-                  style={{ border: "none", fontWeight: 700, fontSize: 13, padding: "10px 24px", borderRadius: "100px", cursor: "pointer", transition: "all 0.2s" }}
+                  style={{
+                    border: "none",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    padding: "10px 24px",
+                    borderRadius: "100px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                  }}
                 >
                   Search
                 </button>
@@ -369,19 +639,51 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
                   transition: "all 0.2s ease",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "8px"
+                  gap: "8px",
                 }}
               >
                 Get Started
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
               </button>
             )}
           </div>
 
           {/* SLIDING TAGS */}
-          <div key={`tags-${intent}`} className={isSwitching ? "opacity-0" : (slideDirection === "right" ? "slide-from-right" : "slide-from-left")} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-            <span className="text-gray-500 dark:text-white/40" style={{ fontSize: 12, fontWeight: 500 }}>{dynamicTags.title}</span>
-            {dynamicTags.items.map(tag => (
+          <div
+            key={`tags-${intent}`}
+            className={`hero-tags-row ${
+              isSwitching
+                ? "opacity-0"
+                : slideDirection === "right"
+                ? "slide-from-right"
+                : "slide-from-left"
+            }`}
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span
+              className="hero-tags-label text-gray-500 dark:text-white/40"
+              style={{ fontSize: 12, fontWeight: 500 }}
+            >
+              {dynamicTags.title}
+            </span>
+            {dynamicTags.items.map((tag) => (
               <button
                 key={tag}
                 onClick={() => {
@@ -409,27 +711,13 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
                   transition: "all 0.15s",
                   backdropFilter: "blur(4px)",
                   borderWidth: "1px",
-                  borderStyle: "solid"
+                  borderStyle: "solid",
                 }}
               >
                 {tag}
               </button>
             ))}
           </div>
-
-          {/* APP VERSION */}
-          <div style={{ marginTop: "18px" }}>
-            <span
-              className="text-[10px] sm:text-xs font-mono font-medium tracking-[0.18em] text-gray-400 dark:text-zinc-500 whitespace-nowrap select-none"
-              style={{
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                lineHeight: 1,
-              }}
-            >
-              {APP_VERSION}
-            </span>
-          </div>
-
         </div>
       </div>
     </section>
