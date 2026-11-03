@@ -1167,7 +1167,11 @@ export const Uploads = () => {
       ? `${(storage.usedBytes / 1024 ** 2).toFixed(1)} MB`
       : `${(storage.usedBytes / 1024 ** 3).toFixed(2)} GB`
     : null;
-  const storageLimitGb = storage ? (storage.limitBytes / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 0 }) : null;
+  const storageLimitLabel = storage
+    ? storage.plan.trim().toLowerCase() === "business"
+      ? "1 TB"
+      : `${(storage.limitBytes / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 0 })} GB`
+    : null;
   const storagePercent = storage ? Math.min(100, (storage.usedBytes / storage.limitBytes) * 100) : 0;
 
   return (
@@ -1282,11 +1286,13 @@ export const Uploads = () => {
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Media storage used" aria-valuemin={0} aria-valuemax={storage.limitBytes} aria-valuenow={Math.min(storage.usedBytes, storage.limitBytes)}>
               <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${storagePercent}%` }} />
             </div>
-            <p className="mt-1 text-xs leading-none text-muted-foreground">{storageUsedLabel} of {storageLimitGb} GB used</p>
+            <p className="mt-1 text-xs leading-none text-muted-foreground">{storageUsedLabel} of {storageLimitLabel} used</p>
           </div>
-          <Button variant="outline" size="sm" className="shrink-0" asChild>
-            <a href={storage.upgradeUrl} target="_blank" rel="noopener noreferrer">Get more storage</a>
-          </Button>
+          {storage.plan.trim().toLowerCase() !== "business" && (
+            <Button variant="outline" size="sm" className="shrink-0" asChild>
+              <a href={storage.upgradeUrl} target="_blank" rel="noopener noreferrer">Get more storage</a>
+            </Button>
+          )}
         </div>
       )}
     </div>

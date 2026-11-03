@@ -14,10 +14,11 @@ function useZoom(containerRef: React.RefObject<HTMLDivElement>, size: ISize) {
     const containerWidth = container.clientWidth - PADDING;
     const { width, height } = size;
 
-    const desiredZoom = Math.min(
+    const fitZoom = Math.min(
       containerWidth / width,
       containerHeight / height
     );
+    const desiredZoom = fitZoom * 0.9;
     currentZoomRef.current = desiredZoom;
     setZoom(desiredZoom);
   }, [containerRef, size]);

@@ -1,3 +1,4 @@
+import { useMissingMedia } from "../store/use-missing-media";
 import { TimelineMarketPriceBadges } from "./market-price-badges";
 import { useEffect, useRef, useState } from "react";
 import Header from "./header";
@@ -177,6 +178,11 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<CanvasTimeline | null>(null);
+  useEffect(() => useMissingMedia.subscribe(() => {
+    const canvas = canvasRef.current;
+    canvas?.getObjects().forEach(object => { object.dirty = true; });
+    canvas?.requestRenderAll();
+  }), []);
   const horizontalScrollbarVpRef = useRef<HTMLDivElement>(null);
   const {
     scale,

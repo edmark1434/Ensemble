@@ -1,4 +1,6 @@
 "use client";
+import { useUploadAvailability } from "../hooks/use-upload-availability";
+import { UploadDeletionDialog } from "../modals/upload-deletion-dialog";
 
 import { useEffect, useMemo, type ReactNode } from "react";
 import useStore from "../store/use-store";
@@ -10,6 +12,7 @@ import { marketPlaybackSource } from "../utils/market-playback-source";
 import { PrepareMarketImages } from "./prepared-market-images";
 
 export function MarketAssetLicensing({ children }: { children: ReactNode }) {
+  useUploadAvailability();
   const projectId = useStore(state => state.projectId);
   const items = useStore(state => state.trackItemsMap);
   const trackItemIds = useStore(state => state.trackItemIds);
@@ -84,6 +87,7 @@ export function MarketAssetLicensing({ children }: { children: ReactNode }) {
     return [source, status.licensed && mediaId ? status.playbackSources?.[mediaId]?.url || status.imageSources?.[mediaId] || source : source];
   }).sort(([a], [b]) => a.localeCompare(b))));
   return <>
+    <UploadDeletionDialog />
     <MarketAssetPurchaseModal />
     <PrepareMarketImages key={projectId} sourcesKey={sourcesKey} downloadUrlsKey={downloadUrlsKey}>{children}</PrepareMarketImages>
   </>;

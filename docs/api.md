@@ -29,6 +29,9 @@
 
 ## Video upload policy
 
+- Editor `GET /api/media-assets/:id/usage` requires ownership of a trashed upload and reconstructs saved/live project and scene documents to list affected locations. Names of projects the uploader no longer belongs to are redacted. Delete forever opens a confirmation dialog and disables confirmation until this check succeeds.
+- Editor `POST /api/media-assets/status` requires current project membership and accepts up to 100 source URLs. It reports permanently deleted original uploads, excluding recoverable trash. The editor refreshes on deletion, focus and every ten seconds, showing missing-media placeholders without changing clip timing or saved history. Export submission rejects visible permanently deleted uploads with 422. Delete forever and trash expiry directly delete unshared S3 objects before marking the media record deleted; database metadata remains. No storage-cleanup columns, migration or separate worker are required.
+
 - Main site `GET /api/files/video-upload-policy` and editor `GET /api/uploads/policy` return the signed-in uploader's effective plan, resolution bounds, display label and whether to show the notice. Responses are private/no-store. Editor also returns the main site's upgrade URL.
 - New market video originals and editor file/URL video uploads enforce Free 720p, Premium 1080p, Business 2160p during server-side normalization. Bounds rotate for portrait; smaller videos are not upscaled. Business notices are hidden; image originals are unaffected.
 - Editor presign/finalize/URL-import endpoints verify the signed editor session matches the upload owner. Finalize/import also require editable project membership. The cap is queried at finalization, never supplied by the client.
@@ -119,3 +122,4 @@
 
 - `GET /api/market-assets?view=licensed&projectId=...&type=image|video|audio` lists assets with active, non-deleted licenses assigned to the current project. A signed session and active membership in a non-deleted project are required. The collection includes collaborator/free licenses and licensed unpublished listings; it excludes unassigned and other-project licenses. Existing search, bundle pagination and media counts apply.
 - Export settings now use a separate asset-payment step when Export project/scene finds unpaid assets. Back restores settings; cancelling checkout returns to the asset step, while completing it returns to settings.
+- Export dropdowns gate FPS at 30 for Free and 60 for Premium/Business, matching authenticated render-tier limits. MP4/MKV target bitrate is capped in the UI, download state and editor export endpoint at five times the existing resolution/FPS/aspect-ratio recommendation, up to 96,000 kbps. The endpoint validates finite positive dimensions/FPS/resolution and a numeric bitrate before preparing marketplace sources; audio, GIF and ProRes retain their existing handling.

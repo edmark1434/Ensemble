@@ -1,3 +1,4 @@
+import { drawMissingMedia } from "./missing-media";
 import {
   Resizable,
   ResizableProps,
@@ -52,19 +53,28 @@ class Image extends Resizable {
   }
 
   public _render(ctx: CanvasRenderingContext2D) {
+    if (drawMissingMedia(ctx, this)) {
+      ctx.save();
+      ctx.globalAlpha *= 0.4;
+      this.drawTextIdentity(ctx, true);
+      ctx.restore();
+      this.updateSelected(ctx);
+      return;
+    }
     super._render(ctx);
     this.drawTextIdentity(ctx);
     this.updateSelected(ctx);
   }
 
-  public drawTextIdentity(ctx: CanvasRenderingContext2D) {
+  public drawTextIdentity(ctx: CanvasRenderingContext2D, missing = false) {
+    const isLoading = !missing && this.isLoading;
     // dim overlay
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
     ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
     ctx.restore();
 
-    const iconCount = (this.isLoading ? 1 : 0) + (this.hidden ? 1 : 0);
+    const iconCount = (isLoading ? 1 : 0) + (this.hidden ? 1 : 0);
     const textX = 12 + iconCount * 24;
 
     ctx.save();
@@ -73,7 +83,7 @@ class Image extends Resizable {
     ctx.rect(0, 0, this.width, this.height);
     ctx.clip();
 
-    if (this.isLoading || this.hidden) this.drawStatusIcons(ctx);
+    if (isLoading || this.hidden) this.drawStatusIcons(ctx, missing);
 
     ctx.font = `400 12px ${getUIFont()}`;
     ctx.textAlign = "left";
@@ -81,15 +91,15 @@ class Image extends Resizable {
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 4;
 
-    if (this.isLoading) {
+    if (isLoading) {
       ctx.globalAlpha = 0.4;
     }
-    ctx.fillText(this.name, textX, 22);
+    ctx.fillText(missing ? `Missing media · ${this.name}` : this.name, textX, 22);
 
     ctx.restore();
   }
 
-  public drawStatusIcons(ctx: CanvasRenderingContext2D) {
+  public drawStatusIcons(ctx: CanvasRenderingContext2D, missing = false) {
     // dim overlay
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
@@ -98,7 +108,7 @@ class Image extends Resizable {
 
     let iconX = 12;
 
-    if (this.isLoading) {
+    if (this.isLoading && !missing) {
       ctx.save();
       ctx.globalAlpha = 0.4;
       this.drawLoader(ctx, iconX);

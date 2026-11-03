@@ -1,3 +1,4 @@
+import { drawMissingMedia } from "./missing-media";
 import {
   Control,
   Pattern,
@@ -451,6 +452,14 @@ class Video extends Trimmable {
   }
 
   public _render(ctx: CanvasRenderingContext2D) {
+    if (drawMissingMedia(ctx, this)) {
+      ctx.save();
+      ctx.globalAlpha *= 0.4;
+      this.drawTextIdentity(ctx, true);
+      ctx.restore();
+      this.updateSelected(ctx);
+      return;
+    }
     super._render(ctx);
 
     ctx.save();
@@ -477,7 +486,8 @@ class Video extends Trimmable {
     this.updateSelected(ctx);
   }
 
-  public drawTextIdentity(ctx: CanvasRenderingContext2D) {
+  public drawTextIdentity(ctx: CanvasRenderingContext2D, missing = false) {
+    const isLoading = !missing && this.isLoading;
     // dim overlay
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
@@ -485,7 +495,7 @@ class Video extends Trimmable {
     ctx.restore();
 
     const iconCount =
-      (this.isLoading ? 1 : 0) + (this.hidden ? 1 : 0) + (this.volume === 0 ? 1 : 0);
+      (isLoading ? 1 : 0) + (this.hidden ? 1 : 0) + (this.volume === 0 ? 1 : 0);
     const textX = 12 + iconCount * 24;
 
     ctx.save();
@@ -494,8 +504,8 @@ class Video extends Trimmable {
     ctx.rect(0, 0, this.width, this.height);
     ctx.clip();
 
-    if (this.isLoading || this.hidden || this.volume === 0) {
-      this.drawStatusIcons(ctx);
+    if (isLoading || this.hidden || this.volume === 0) {
+      this.drawStatusIcons(ctx, missing);
     }
 
     ctx.font = `400 12px ${getUIFont()}`;
@@ -504,20 +514,21 @@ class Video extends Trimmable {
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 4;
 
-    if (this.isLoading) {
+    if (isLoading) {
       ctx.globalAlpha = 0.4;
     }
-    ctx.fillText(this.name, textX, 22);
+    ctx.fillText(missing ? `Missing media · ${this.name}` : this.name, textX, 22);
 
     ctx.restore();
   }
 
-  public drawStatusIcons(ctx: CanvasRenderingContext2D) {
+  public drawStatusIcons(ctx: CanvasRenderingContext2D, missing = false) {
+    const isLoading = !missing && this.isLoading;
     const theme = (this.canvas as any)?.theme ?? "dark";
     const overlayColor = theme === "dark" ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.6)";
     const iconColor = theme === "dark" ? "rgba(255,255,255,1)" : "rgba(0,0,0,0.8)";
 
-    if (this.hidden || this.isLoading) {
+    if (this.hidden || isLoading) {
       ctx.save();
       ctx.fillStyle = overlayColor;
       ctx.fillRect(0, 0, this.width, this.height);
@@ -526,7 +537,7 @@ class Video extends Trimmable {
 
     let iconX = 12;
 
-    if (this.isLoading) {
+    if (isLoading) {
       ctx.save();
       ctx.globalAlpha = 0.4;
       this.drawLoader(ctx, iconX);

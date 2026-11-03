@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { MARKET_UUID, marketAssetBackend } from "@/lib/market-asset-backend";
 import { collectMarketExportItems } from "@/features/editor/utils/market-export-assets";
+import { getVideoExportBitrateError } from "@/lib/export-bitrate";
+import { missingUploadSources } from "@/lib/db/upload-usage";
+import { mediaSources } from "@/features/editor/utils/media-sources";
 
 const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL || "http://localhost:3001";
 
@@ -14,6 +17,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     if (!Array.isArray(body?.trackItemIds) || !body?.trackItemsMap) return NextResponse.json({ message: "Invalid export." }, { status: 400 });
+    const bitrateError = getVideoExportBitrateError(body);
+    if ((await missingUploadSources(mediaSources(body, 0, false))).length) return NextResponse.json({ message: "This export contains missing media. Replace or remove the deleted uploads before exporting." }, { status: 422 });
+    if (bitrateError) return NextResponse.json({ message: bitrateError }, { status: 400 });
     const items = collectMarketExportItems(body);
     if (items.length && (!MARKET_UUID.test(body.projectId || "") || typeof body.marketDraft !== "boolean")) return NextResponse.json({ message: "Project and export mode are required." }, { status: 400 });
     const sources = new Map<string, string>();

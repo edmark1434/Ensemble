@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useMasonryRows } from "../hooks/use-masonry-rows";
 import { millisecondsToHHMMSS } from "@/features/editor/utils/format";
 import { MarketPreview } from "@/components/market-asset-browser";
+import { useUploadDeletion } from "../store/use-upload-deletion";
 
 type Upload = {
   id: string;
@@ -34,16 +35,19 @@ export function UploadActions({ item, permanent = false }: { item: Upload; perma
       await Promise.all([
         client.invalidateQueries({ queryKey: ["media-assets"] }),
         client.invalidateQueries({ queryKey: ["media-storage-usage"] }),
+        client.invalidateQueries({ queryKey: ["upload-availability"] }),
       ]);
     } catch { toast.error(`Unable to ${action} this upload. Please try again.`); }
     finally { setPending(false); }
   };
   return <div onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild><Button type="button" size="icon" variant="ghost" disabled={pending} aria-label={`Options for ${item.fileName}`} className="size-7 rounded-full bg-black/50 text-white hover:bg-black/60 hover:text-white"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="z-[200]">
+      <DropdownMenuContent align="end" className="z-[200]" onCloseAutoFocus={event => {
+        if (useUploadDeletion.getState().open) event.preventDefault();
+      }}>
         {permanent && <DropdownMenuItem disabled={pending} onSelect={() => void update("restore")}><RotateCcw />Restore</DropdownMenuItem>}
-        <DropdownMenuItem variant="destructive" disabled={pending} onSelect={() => void update("delete")}><Trash2 />{permanent ? "Delete forever" : "Delete"}</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" disabled={pending} onSelect={() => { if (permanent) useUploadDeletion.setState({ upload: item, open: true }); else void update("delete"); }}><Trash2 />{permanent ? "Delete forever" : "Delete"}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   </div>;
@@ -72,7 +76,7 @@ export function DeletedUploads({ items }: { items: Upload[] }) {
   });
 
   return <div className="flex min-h-0 flex-1 flex-col">
-    <p className="px-4 pb-4 text-sm leading-relaxed text-muted-foreground text-pretty text-center">Recently deleted uploads are kept for 30 days before being permanently deleted</p>
+    <p className="px-4 pb-4 text-xs leading-relaxed text-muted-foreground text-pretty text-center">Recently deleted uploads are kept for 30 days before being permanently deleted</p>
     <ScrollArea className="min-h-0 flex-1 px-4">
       <div ref={containerRef} className="flex w-full min-w-0 flex-col gap-2 pb-4">
         {items.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No recently deleted uploads</p>}

@@ -32,7 +32,17 @@ import useLayoutStore from "./store/use-layout-store";
 import ControlItemHorizontal from "./control-item-horizontal";
 import { design } from "./mock";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeftToLine, ArrowRightToLine, Loader2, Maximize, Minimize, Volume2, VolumeOff } from "lucide-react";
+import {
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  Loader2,
+  Maximize,
+  Minimize,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeOff
+} from "lucide-react";
 import { frameToTimeString, timeToString } from "./utils/time";
 import { useCurrentPlayerFrame } from "@/features/editor/hooks/use-current-frame";
 import { Button } from "@/components/ui/button";
@@ -236,7 +246,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
                 disabled={trackItemIds.length === 0 || currentFrame === 0}
                 variant={"ghost"}
                 size={"icon"}>
-                <ArrowLeftToLine size={14} />
+                <SkipBack size={14} />
               </Button>
             </TooltipTrigger>
             <TooltipContent
@@ -286,7 +296,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
                 disabled={trackItemIds.length === 0 || currentFrame >= durationFrames}
                 variant={"ghost"}
                 size={"icon"}>
-                <ArrowRightToLine size={14} />
+                <SkipForward size={14} />
               </Button>
             </TooltipTrigger>
             <TooltipContent

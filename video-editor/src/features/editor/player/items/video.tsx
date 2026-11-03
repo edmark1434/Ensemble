@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { MediaPlaceholder } from "../../components/media-placeholder";
+import { useMissingMedia } from "../../store/use-missing-media";
+import useStore from "../../store/use-store";
 import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
 import { IVideo } from "@designcombo/types";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
@@ -15,6 +19,10 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
 
   const { details } = item;
   const src = useMarketAssetSource(item);
+  const projectId = useStore(state => state.projectId);
+  const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const playbackRate = item.playbackRate || 1;
   const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
   const trimBefore = ((item.trim?.from ?? 0) / 1000) * fps;
@@ -33,19 +41,26 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
     );
   }
 
-  if (!src) return null;
-  return (
-    <Html5Video
+  if (missing) return <MediaPlaceholder missing />;
+  if (!src) return <MediaPlaceholder />;
+  return (<>
+    {failed !== src && <Html5Video
       trimBefore={trimBefore}
       trimAfter={trimAfter}
       playbackRate={playbackRate}
       src={src}
       volume={volume}
+      onLoadedData={() => setLoaded(src)}
+      onWaiting={() => setLoaded(null)}
+      onPlaying={() => setLoaded(src)}
+      onCanPlay={() => setLoaded(src)}
+      onError={() => setFailed(src)}
       preload="auto"
       pauseWhenBuffering={false}
       style={{ width: "100%", height: "100%", objectFit: "contain" }}
-    />
-  );
+    />}
+    {(loaded !== src || failed === src) && <MediaPlaceholder failed={failed === src} />}
+  </>);
 };
 
 export const Video = ({

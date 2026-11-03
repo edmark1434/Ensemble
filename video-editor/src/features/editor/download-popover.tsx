@@ -26,7 +26,7 @@ import {
   FRAME_RATE_OPTIONS,
   SelectOption,
   VIDEO_BITRATE_RANGE_KBPS,
-  getResolutionOptions, getDefaultVideoBitrateKbps, GIF_MAXIMUM_DURATION_MS
+  getResolutionOptions, getDefaultVideoBitrateKbps, getMaxVideoBitrateKbps, GIF_MAXIMUM_DURATION_MS
 } from "./constants/download-options";
 import { DraggablePanel } from "@/components/draggable-panel";
 import { useMarketLicenses } from "./store/use-market-licenses";
@@ -34,9 +34,13 @@ import { loadMarketLicenses } from "./utils/load-market-licenses";
 import { collectMarketExportAssetIds } from "./utils/market-export-assets";
 import { MarketExportPurchaseModal } from "./modals/market-export-purchase-modal";
 import { getSafeCurrentFrame } from "@/features/editor/utils/time";
+import { useEditorPlan } from "./hooks/use-editor-plan";
+import { PlanIcon } from "./components/plan-icon";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
+  const { data: policy, isError: planError, refetch: refetchPlan } = useEditorPlan();
+  const maxFps = policy?.plan === "Free" ? 30 : 60;
   const {
     actions,
     type,
@@ -132,6 +136,16 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
     actions.setBackground(background);
   }, [background.type, background.value]);
 
+  useEffect(() => {
+    if (policy && type !== "audio" && resolution > policy.maxHeight) {
+      actions.setResolution(policy.maxHeight);
+    }
+  }, [policy, type, resolution, actions]);
+
+  useEffect(() => {
+    if (policy && fps > maxFps) actions.setFps(maxFps);
+  }, [policy, fps, maxFps, actions]);
+
   const isCompleted = !!output;
   const isFailed = !!error;
 
@@ -163,6 +177,11 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
           : "Export project";
 
   const handleExport = (marketDraft = false) => {
+    if (!policy) return;
+    if ((type !== "audio" && resolution > policy.maxHeight) || fps > maxFps) {
+      window.open(policy.upgradeUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     const {
       playerRef,
       fps: timelineFps,
@@ -300,6 +319,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
                 value={resolution}
                 options={getResolutionOptions(format)}
                 onChange={actions.setResolution}
+                getRequiredPlan={(value) => value > 1080 ? "Business" : value > 720 ? "Premium" : undefined}
+                isLocked={(value) => !policy || value > policy.maxHeight}
+                onLockedClick={() => { if (policy) window.open(policy.upgradeUrl, "_blank", "noopener,noreferrer"); }}
               />
             )}
 
@@ -309,6 +331,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
                 value={fps}
                 options={FRAME_RATE_OPTIONS}
                 onChange={actions.setFps}
+                getRequiredPlan={(value) => value > 30 ? "Premium" : undefined}
+                isLocked={(value) => !policy || value > maxFps}
+                onLockedClick={() => { if (policy) window.open(policy.upgradeUrl, "_blank", "noopener,noreferrer"); }}
               />
             )}
 
@@ -326,7 +351,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
           </div>
 
           <div className="space-y-3">
-            {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" className="w-full" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : <Button disabled={!licensesReady} onClick={() => { if (unpaidIds.length) setAssetStepScope(scopeKey); else handleExport(); }} className="w-full">{licensesReady ? `Export ${inScene ? "scene" : "project"}` : "Checking asset licenses…"}</Button>}
+            {planError && <p role="alert" className="text-xs text-red-500">Unable to load your plan. <button type="button" className="underline" onClick={() => void refetchPlan()}>Try again</button></p>}
+            {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" className="w-full" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : <Button disabled={!licensesReady || !policy} onClick={() => { if (unpaidIds.length) setAssetStepScope(scopeKey); else handleExport(); }} className="w-full">{!policy ? "Loading your plan…" : licensesReady ? `Export ${inScene ? "scene" : "project"}` : "Checking asset licenses…"}</Button>}
           </div>
           </>}
         </DraggablePanel>
@@ -341,12 +367,18 @@ const SelectField = <T extends string | number, >({
   label,
   value,
   options,
-  onChange
+  onChange,
+  getRequiredPlan,
+  isLocked,
+  onLockedClick
 }: {
   label: string;
   value: T;
   options: SelectOption<T>[];
   onChange: (value: T) => void;
+  getRequiredPlan?: (value: T) => "Premium" | "Business" | undefined;
+  isLocked?: (value: T) => boolean;
+  onLockedClick?: () => void;
 }) => {
   const [open, setOpen] = useState(false);
   const current = options.find((option) => option.value === value);
@@ -365,21 +397,32 @@ const SelectField = <T extends string | number, >({
           className="z-[251] p-0"
           style={{ width: "var(--radix-popover-trigger-width)" }}
         >
-          {options.map((option) => (
-            <div
+          {options.map((option) => {
+            const locked = isLocked?.(option.value) ?? false;
+            const requiredPlan = getRequiredPlan?.(option.value);
+            return <button
+              type="button"
               key={String(option.value)}
+              aria-disabled={locked}
+              aria-label={locked && requiredPlan ? `${option.label} — ${requiredPlan} required. Upgrade plan` : option.label}
               onClick={() => {
-                onChange(option.value);
+                if (locked) onLockedClick?.();
+                else onChange(option.value);
                 setOpen(false);
               }}
-              className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+              className={cn("flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", locked ? "text-muted-foreground" : "text-zinc-200")}
             >
-              {option.label}
-              {option.value === value && (
-                <Check size={14} className="text-muted-foreground" />
-              )}
-            </div>
-          ))}
+              <span className="flex items-center gap-2">
+                {option.label}
+                {requiredPlan && <PlanIcon plan={requiredPlan} />}
+              </span>
+              <span className="ml-3 flex w-3.5 shrink-0 items-center justify-center">
+                {option.value === value && !locked && (
+                  <Check size={14} className="text-muted-foreground" />
+                )}
+              </span>
+            </button>;
+          })}
         </PopoverContent>
       </Popover>
     </div>
@@ -404,11 +447,13 @@ const BitrateSlider = ({
   fps: number;
 }) => {
   const isAudio = type === "audio";
+  const recommended = getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps);
   const min = isAudio ? AUDIO_BITRATE_RANGE_KBPS.min : VIDEO_BITRATE_RANGE_KBPS.min;
-  const max = isAudio ? AUDIO_BITRATE_RANGE_KBPS.max : VIDEO_BITRATE_RANGE_KBPS.max;
-  const step = isAudio ? 1 : 100;
+  const max = isAudio ? AUDIO_BITRATE_RANGE_KBPS.max
+    : getMaxVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps);
+  const step = isAudio ? 1 : 5;
 
-  const canonicalValue = isAudio ? String(value) : (value / 1000).toFixed(1);
+  const canonicalValue = isAudio ? String(value) : (value / 1000).toFixed(2);
   const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
@@ -416,7 +461,9 @@ const BitrateSlider = ({
   }, [canonicalValue]);
 
   const commit = (kbps: number) => {
+    if (!Number.isFinite(kbps)) return;
     const clamped = Math.min(max, Math.max(min, Math.round(kbps)));
+    setLocalValue(String(isAudio ? clamped : clamped / 1000));
     onChange(clamped);
   };
 
@@ -439,13 +486,13 @@ const BitrateSlider = ({
       </div>
       <div className="flex gap-2 items-center">
         <Input
-          className="w-18 text-center text-sm"
+          className="w-20 text-center text-sm"
           type="text"
           inputMode="decimal"
           value={localValue}
           onChange={(e) => {
             const raw = e.target.value;
-            if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+            if (raw === "" || /^\d*(?:\.\d{0,2})?$/.test(raw)) {
               setLocalValue(raw);
             }
           }}
@@ -465,8 +512,7 @@ const BitrateSlider = ({
         <Label className="text-xs text-muted-foreground">
           {`Recommended: ${isAudio
             ? "320 kbps"
-            : Math.round(getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps) / 100) / 10
-            + " Mbps"}
+            : `${(recommended / 1000).toFixed(2)} Mbps`}
           `}
         </Label>
       </div>

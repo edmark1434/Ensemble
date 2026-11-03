@@ -1,16 +1,30 @@
-import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
+import { useState } from "react";
+import { MediaPlaceholder } from "../../components/media-placeholder";
+import { useMissingMedia } from "../../store/use-missing-media";
+import useStore from "../../store/use-store";
+import { useMarketAssetSource, useMarketImageFailed } from "../../hooks/use-market-asset-source";
 import { IImage } from "@designcombo/types";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
 import { BoxAnim, ContentAnim, MaskAnim } from "@designcombo/animations";
 import { calculateContainerStyles, calculateMediaStyles } from "../styles";
 import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
-import { Img } from "remotion";
+import { Img, useRemotionEnvironment } from "remotion";
 
 function MarketImage({ item, ...props }: { item: IImage } & Omit<React.ComponentProps<typeof Img>, "src">) {
   const src = useMarketAssetSource(item);
-  if (!src) return null;
-  return <Img {...props} src={src} />;
+  const preparationFailed = useMarketImageFailed(item);
+  const { isRendering } = useRemotionEnvironment();
+  const projectId = useStore(state => state.projectId);
+  const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  if (isRendering) return <Img {...props} src={item.details.src} />;
+  if (missing) return <MediaPlaceholder missing />;
+  return <>
+    {src && failed !== src && <Img {...props} src={src} onLoad={() => setLoaded(src)} onError={() => setFailed(src)} />}
+    {(!src || loaded !== src || failed === src) && <MediaPlaceholder failed={preparationFailed || (!!src && failed === src)} />}
+  </>;
 }
 
 export default function Image({

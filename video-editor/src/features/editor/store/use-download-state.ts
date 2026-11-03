@@ -13,6 +13,9 @@ import {
   FORMATS_BY_TYPE,
   getDefaultResolution,
   getDefaultVideoBitrateKbps,
+  getMaxVideoBitrateKbps,
+  VIDEO_BITRATE_RANGE_KBPS,
+  AUDIO_BITRATE_RANGE_KBPS,
   getResolutionOptions
 } from "../constants/download-options";
 import useStore, { IBackground } from "@/features/editor/store/use-store";
@@ -155,7 +158,14 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           : get().bitrate;
       set({ fps, bitrate });
     },
-    setBitrate: (bitrate) => set({ bitrate }),
+    setBitrate: (bitrate) => {
+      if (!Number.isFinite(bitrate)) return;
+      const { type, compositionWidth, compositionHeight, resolution, fps } = get();
+      const min = type === "audio" ? AUDIO_BITRATE_RANGE_KBPS.min : VIDEO_BITRATE_RANGE_KBPS.min;
+      const max = type === "audio" ? AUDIO_BITRATE_RANGE_KBPS.max
+        : getMaxVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps);
+      set({ bitrate: Math.min(max, Math.max(min, Math.round(bitrate))) });
+    },
     setCompositionSize: (width, height) => {
       const { type, resolution, fps } = get();
       const bitrate =

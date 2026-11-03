@@ -145,6 +145,16 @@ export const getDefaultVideoBitrateKbps = (
   );
 };
 
+export const getMaxVideoBitrateKbps = (
+  compositionWidth: number,
+  compositionHeight: number,
+  resolution: number,
+  fps: number
+): number => Math.min(
+  VIDEO_BITRATE_RANGE_KBPS.max,
+  5 * getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps)
+);
+
 export const DEFAULT_EXPORT_TYPE: ExportType = "video";
 export const DEFAULT_EXPORT_FORMAT: ExportFormat = "mp4";
 export const DEFAULT_RESOLUTION = 720;

@@ -1,9 +1,17 @@
 // app/api/transcribe/route.ts
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { getVideoUploadPolicy } from "@/lib/upload-policy";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
+  const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
+  const session = token ? await verifyEditorSession(token) : null;
+  if (!session) return NextResponse.json({ message: "Sign in to generate captions." }, { status: 401 });
   try {
+    const policy = await getVideoUploadPolicy(session.userId);
+    if (policy.plan === "Free") return NextResponse.json({ message: "Upgrade to Premium or Business to generate captions.", upgradeUrl: policy.upgradeUrl }, { status: 403 });
     const { url } = await request.json();
     const submitRes = await fetch("https://api.assemblyai.com/v2/transcript", {
       method: "POST",

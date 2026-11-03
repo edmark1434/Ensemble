@@ -3,6 +3,7 @@ import useLayoutStore from "./store/use-layout-store";
 import { Icons } from "@/components/shared/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { PlanIcon } from "./components/plan-icon";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import {
   Tooltip,
@@ -57,7 +58,10 @@ const MenuButton = memo<{
     >
       <Tooltip delayDuration={10}>
         <TooltipTrigger asChild>
-          <IconComponent size={18} />
+          <span className="relative inline-flex">
+            <IconComponent size={18} />
+            {item.id === "captions" && <PlanIcon plan="Premium" className="absolute -right-2 -top-2 size-3.5" />}
+          </span>
         </TooltipTrigger>
         <TooltipContent side="right" align="center" sideOffset={8}>
           {item.label}

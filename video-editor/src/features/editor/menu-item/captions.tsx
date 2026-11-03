@@ -23,6 +23,8 @@ import { ChevronDown, ChevronUp, Loader2, Search, X } from "lucide-react";
 import { seedDefaultFont } from "@/features/editor/utils/seed-default-font";
 import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
 import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset";
+import { useEditorPlan } from "../hooks/use-editor-plan";
+import { PlanIcon } from "../components/plan-icon";
 
 // seek + scroll the timeline to the caption if it's off screen,
 // same as jumping to a marker
@@ -40,6 +42,19 @@ const useSeekToCaption = () => {
 };
 
 export const Captions = () => {
+  const { data: policy, isError, refetch } = useEditorPlan();
+  if (!policy) return <output className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center text-sm text-muted-foreground">
+    {isError ? <>Unable to load your plan.<Button variant="outline" onClick={() => void refetch()}>Try again</Button></> : "Loading your plan…"}
+  </output>;
+  if (policy.plan === "Free") return <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+    <PlanIcon plan="Premium" className="size-10" />
+    <p className="text-sm leading-relaxed text-muted-foreground text-pretty">Upgrade to Premium or Business to generate captions from videos and audios in your project.</p>
+    <Button asChild><a href={policy.upgradeUrl} target="_blank" rel="noopener noreferrer">Upgrade plan</a></Button>
+  </div>;
+  return <PaidCaptions />;
+};
+
+const PaidCaptions = () => {
   const { trackItemsMap, size } = useStore();
   const [selectMediaItems, setSelectMediaItems] = useState<
     { label: string; value: string }[]

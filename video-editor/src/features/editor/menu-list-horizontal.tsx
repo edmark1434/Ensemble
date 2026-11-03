@@ -13,6 +13,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { MenuItem } from "./menu-item/menu-item";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { Button } from "@/components/ui/button";
+import { PlanIcon } from "./components/plan-icon";
 
 // Define menu item data structure
 interface MenuItemData {
@@ -70,6 +71,10 @@ function MenuButton({ item, isActive, onClick }: MenuButtonProps) {
       size={"sm"}
       className="text-muted-foreground"
     >
+      {item.id === "captions" && <span className="relative inline-flex">
+        <item.icon width={18} />
+        <PlanIcon plan="Premium" className="absolute -right-2 -top-2 size-3.5" />
+      </span>}
       {item.label}
     </Button>
   );

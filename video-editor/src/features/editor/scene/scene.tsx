@@ -7,6 +7,7 @@ import Board from "./board";
 import useZoom from "../hooks/use-zoom";
 import { SceneInteractions } from "./interactions";
 import { SceneRef } from "./scene.types";
+import { CanvasPreviewZoomContext } from "../components/media-placeholder";
 
 const Scene = forwardRef<
   SceneRef,
@@ -76,16 +77,18 @@ const Scene = forwardRef<
             boxShadow: "0 0 0 5000px var(--card)"
           }}
         />
-        <Board size={size}>
-          <Player />
-          <SceneInteractions
-            stateManager={stateManager}
-            containerRef={containerRef as React.RefObject<HTMLDivElement>}
-            zoom={zoom}
-            size={size}
-            viewOnly={viewOnly}
-          />
-        </Board>
+        <CanvasPreviewZoomContext.Provider value={zoom}>
+          <Board size={size}>
+            <Player />
+            <SceneInteractions
+              stateManager={stateManager}
+              containerRef={containerRef as React.RefObject<HTMLDivElement>}
+              zoom={zoom}
+              size={size}
+              viewOnly={viewOnly}
+            />
+          </Board>
+        </CanvasPreviewZoomContext.Provider>
       </div>
     </div>
   );

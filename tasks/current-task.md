@@ -1,20 +1,26 @@
-# Active Task: Correct caption word timing in exports
+# Active Task: Direct S3 deletion for permanently deleted uploads
 
 ## Objective
 
-Make caption words advance from upcoming to active to appeared at the actual composition frame rate, in the renderer and editor, while retaining lazy mounting.
+Delete upload files directly in S3 on Delete forever and existing 30-day trash expiry, keeping the existing database soft delete. Remove the unrequested cleanup schema and worker.
 
 ## Acceptance criteria
 
-- Caption words use the actual composition FPS rather than a fixed 30 FPS.
-- Active word ranges include their start and exclude their end.
-- Word timing retains the parent-supplied frame and timestamp offset for moved captions and nested scenes.
-- Verify timing at multiple frame rates; both packages compile and the renderer bundle builds.
+- No new database columns, migration, cleanup status or additional scheduled worker.
+- Delete forever sends a direct S3 delete for distinct original/proxy/thumbnail keys before marking the upload deleted.
+- Existing trash expiry removes the same S3 keys before setting deleted_at; storage failures remain eligible for the next existing retention pass.
+- Preserve ownership checks, recoverable trash, database records and missing-media behavior.
+- Retain keys still referenced by another non-deleted media asset and restrict deletions to the owner's upload prefix.
+- Use existing AWS credentials. Keep S3 versioning configuration unchanged.
 
-## Finding
+## Implementation
 
-Both CaptionWord implementations hardcoded 30 FPS for timestamp conversion while receiving frames at the project's/export's actual FPS. At 60 FPS, later captions could already classify all their words as appeared when mounted.
+- Removed the unexecuted upload-storage-cleanup migration, schema fields, new scheduler and cleanup job.
+- Editor upload-trash service deletes S3 objects directly inside the existing permanent-deletion workflow.
+- Existing backend UploadTrashRetentionJob delegates direct S3 removal to UploadStorageServices with SQL in UploadStorageRepositories.
+- Restored the existing upload key format; no unrelated upload naming changes.
+- Ordinary S3 DeleteObjects behavior applies: versioned buckets retain older versions unless a bucket lifecycle rule removes them. No automatic sweep of previously deleted uploads.
 
 ## Verification
 
-Rendered CaptionWord markup correctly changed upcoming/active/appeared colors at 24, 30, and 60 FPS, including nonzero timestamp offsets and backward seeks. Both TypeScript checks and the renderer bundle build passed. No paid exports or deployments were run; Lambda still requires deploying the updated bundle.
+No tests, builds, migrations, automated checks or live S3 deletions run, per user instruction.
