@@ -407,8 +407,8 @@ export function ReportCaseDetailModal({
                       if (!myStaffId) return true;
                       const isMe =
                         String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
-                      // Keep current handler visible while locked; otherwise use Assign myself.
-                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                      // Hide yourself unless you already handle it; claiming goes through Assign myself.
+                      return !isMe || alreadyAssignedToMe;
                     })
                     .map((s) => (
                       <option key={String(s.staffId)} value={String(s.staffId)}>

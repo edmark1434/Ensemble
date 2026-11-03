@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ClipboardList, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
+import { ClipboardList, Copy, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
@@ -64,10 +64,28 @@ function submissionContextEntries(context?: TicketDetail['submissionContext']) {
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 }
 
-function shortId(value: string | number | null | undefined) {
-  if (value == null || value === '') return '—';
-  const s = String(value);
-  return s.length > 12 ? `${s.slice(0, 10)}…` : s;
+function CopyableId({ value }: { value: string | number | null | undefined }) {
+  if (value == null || value === '') return <>—</>;
+  const text = String(value);
+  return (
+    <span className="flex items-start gap-2">
+      <span className="min-w-0 flex-1 select-all break-all">{text}</span>
+      <button
+        type="button"
+        onClick={() =>
+          void navigator.clipboard.writeText(text).then(
+            () => showSuccessToast('Copied to clipboard'),
+            () => showErrorToast('Could not copy')
+          )
+        }
+        className="shrink-0 rounded p-0.5 text-zinc-500 transition hover:bg-white/5 hover:text-white"
+        aria-label="Copy"
+        title="Copy"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+    </span>
+  );
 }
 
 function titleCaseLabel(value: string | null | undefined) {
@@ -1133,12 +1151,19 @@ export default function TicketDetailModalShell({
   );
   const isAppeal = Boolean(t && ticketTypeOf(t) === 'Appeal an account penalty');
   const peopleCount = involvedGroups.staff.length + involvedGroups.users.length;
-  const assignableOptions = (detail?.assignableStaff || []).filter((s) => {
-    if (!myStaffId) return true;
-    const isMe = String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
-    // Keep current handler visible while locked; otherwise use Assign myself.
-    return !isMe || (assigneeLocked && alreadyAssignedToMe);
-  });
+  const assignableOptions = (() => {
+    const options = (detail?.assignableStaff || []).filter((s) => {
+      if (!myStaffId) return true;
+      const isMe = String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+      // Hide yourself unless you already handle it; claiming goes through Assign myself.
+      return !isMe || alreadyAssignedToMe;
+    });
+    const current = t?.assignee;
+    const listed = current && options.some((s) => String(s.staffId).toLowerCase() === String(current.staffId).toLowerCase());
+    return current && !listed
+      ? [{ staffId: current.staffId, name: current.name, role: current.role }, ...options]
+      : options;
+  })();
   const replyGuides = (() => {
     const thread = (detail?.messages || []).filter(
       (message) =>
@@ -1452,13 +1477,13 @@ export default function TicketDetailModalShell({
               ) : (
                 <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
                   <PanelSection title="Requester">
-                    <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    <dl className="grid gap-2 sm:grid-cols-2">
                       <Fact label="Name" value={t.requester.name || '—'} />
                       <Fact label="Handle" value={t.requester.username ? `@${t.requester.username}` : '—'} />
                       <Fact label="Email" value={t.requester.email || '—'} />
-                      <Fact label="Account ID" value={shortId(t.requester.accountId)} mono />
-                      <Fact label="User ID" value={shortId(t.requester.userId)} mono />
                       <Fact label="Last message" value={formatDateTime(t.lastMessageAt)} />
+                      <Fact label="Account ID" value={<CopyableId value={t.requester.accountId} />} mono />
+                      <Fact label="User ID" value={<CopyableId value={t.requester.userId} />} mono />
                     </dl>
                   </PanelSection>
 
