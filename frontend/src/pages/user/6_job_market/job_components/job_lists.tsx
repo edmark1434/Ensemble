@@ -1,6 +1,6 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp, Check } from "lucide-react";
+import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp, Check, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
@@ -61,6 +61,9 @@ export interface Job {
   screeningQuestions?: string[];
   shortlistedCount?: number;
   clientHireRate?: number;
+  clientMerit?: number;
+  hasCustomThumbnail?: boolean;
+  discoveryOrderKey?: number;
   clientLastActive?: string;
   applicationDeadline?: string;
   isUrgent?: boolean;
@@ -68,6 +71,8 @@ export interface Job {
   freeExtensionCount?: number;
   applicationExtendedAt?: string;
   postingFeeCredits?: number;
+  clientSubscriptionPlan?: "Free" | "Premium" | "Business" | string;
+  clientProfileVisibility?: number;
 }
 
 interface JobListProps {
@@ -145,6 +150,7 @@ const JobList: React.FC<JobListProps> = ({
 }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 9;
 
@@ -210,7 +216,7 @@ const JobList: React.FC<JobListProps> = ({
                 : "flex flex-col gap-4"
             }`}
           >
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence>
         {paginatedJobs.map((job, index) => {
           const isActive = activeJobId === job.id;
           const rankInfo = computeJobRankingBreakdown(job);
@@ -220,11 +226,10 @@ const JobList: React.FC<JobListProps> = ({
             return (
               <motion.div
                 key={job.id}
-                layout="position"
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
                 data-tour={index === 0 ? "job-card-first" : undefined}
                 onClick={() => navigate(`${baseRoute}/${job.id}`)}
                 className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
@@ -241,6 +246,39 @@ const JobList: React.FC<JobListProps> = ({
                       className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                    {isDevModeOpen && (
+                      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                        <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                          Algo Score
+                        </span>
+                        <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                          {rankInfo.totalScore.toFixed(1)}
+                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                          {typeof job.discoveryOrderKey === "number" && (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                              Roll: {job.discoveryOrderKey.toFixed(1)}
+                            </span>
+                          )}
+                          {rankInfo.subscriptionBoost > 0 ? (
+                            <span
+                              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                                rankInfo.subscriptionPlan === "Business"
+                                  ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                                  : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                              }`}
+                            >
+                              <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                              <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                              Free (+0.0)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                       
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
@@ -410,11 +448,10 @@ const JobList: React.FC<JobListProps> = ({
           return (
             <motion.div
               key={job.id}
-              layout="position"
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
               data-tour={index === 0 ? "job-card-first" : undefined}
               onClick={() => navigate(`${baseRoute}/${job.id}`)}
               className={`group flex flex-col md:flex-row gap-5 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
@@ -430,6 +467,39 @@ const JobList: React.FC<JobListProps> = ({
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                {isDevModeOpen && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                    <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                      Algo Score
+                    </span>
+                    <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                      {rankInfo.totalScore.toFixed(1)}
+                    </span>
+                    <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                      {typeof job.discoveryOrderKey === "number" && (
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                          Roll: {job.discoveryOrderKey.toFixed(1)}
+                        </span>
+                      )}
+                      {rankInfo.subscriptionBoost > 0 ? (
+                        <span
+                          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                            rankInfo.subscriptionPlan === "Business"
+                              ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                              : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                          }`}
+                        >
+                          <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                          <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                          Free (+0.0)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                   {!job.isOwnPost && !isGuestMode && (
