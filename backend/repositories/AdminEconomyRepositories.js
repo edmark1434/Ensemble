@@ -224,7 +224,7 @@ async function loadEconomySettings() {
 }
 
 async function getEconomyOverview() {
-  const [userWalletsResult, staffWalletsResult, teamWalletsResult, txStats, _accountCount, economySettings] =
+  const [userWalletsResult, staffWalletsResult, teamWalletsResult, txStats, auditResult, economySettings] =
     await Promise.all([
       pool.query(`
         SELECT
@@ -344,9 +344,27 @@ async function getEconomyOverview() {
         FROM credit_transactions
       `),
       pool.query(`
-        SELECT COUNT(*)::int AS account_count
-        FROM accounts
-        WHERE deleted_at IS NULL
+      SELECT
+        ct.credit_transaction_id,
+        ct.type,
+        ct.amount_credits,
+        ct.status,
+        ct.created_at,
+        ct.source_wallet_id,
+        ct.destination_wallet_id,
+        COALESCE(da.handle, sa.handle) AS username,
+        COALESCE(da.display_name, sa.display_name, da.handle, sa.handle, 'Unknown') AS name,
+        COALESCE(da.type, sa.type, 'User') AS account_type,
+        COALESCE(dw.wallet_id, sw.wallet_id) AS wallet_id
+      FROM credit_transactions ct
+      LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+      LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+      LEFT JOIN accounts da ON da.account_id = daw.account_id
+      LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+      LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+      LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+      ORDER BY ct.created_at DESC
+      LIMIT 100
       `),
       loadEconomySettings(),
     ]);
@@ -361,30 +379,6 @@ async function getEconomyOverview() {
   for (const wallet of allWallets) {
     wallet.transactions = txByWallet.get(wallet.walletId) || [];
   }
-
-  const auditResult = await pool.query(`
-    SELECT
-      ct.credit_transaction_id,
-      ct.type,
-      ct.amount_credits,
-      ct.status,
-      ct.created_at,
-      ct.source_wallet_id,
-      ct.destination_wallet_id,
-      COALESCE(da.handle, sa.handle) AS username,
-      COALESCE(da.display_name, sa.display_name, da.handle, sa.handle, 'Unknown') AS name,
-      COALESCE(da.type, sa.type, 'User') AS account_type,
-      COALESCE(dw.wallet_id, sw.wallet_id) AS wallet_id
-    FROM credit_transactions ct
-    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-    LEFT JOIN accounts da ON da.account_id = daw.account_id
-    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-    ORDER BY ct.created_at DESC
-    LIMIT 100
-  `);
 
   const auditLog = auditResult.rows.map((row) => {
     const status = row.status || 'Completed';

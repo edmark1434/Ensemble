@@ -36,13 +36,10 @@ export default function ModeratorReportsPage({
 
   const load = async () => {
     setLoading(true);
-    try {
-      const res = await api.get(endpointBase);
-      if (res.data?.success) setReports(res.data.data || []);
-
-      const overviewPath = endpointBase.replace(/\/reports\/?$/, '/overview');
-      try {
-        const overview = await api.get(overviewPath);
+    const overviewPath = endpointBase.replace(/\/reports\/?$/, '/overview');
+    const handlersRequest = api
+      .get(overviewPath)
+      .then((overview) => {
         const workload = overview.data?.data?.staffWorkload || [];
         if (Array.isArray(workload) && workload.length) {
           setHandlers(
@@ -53,12 +50,17 @@ export default function ModeratorReportsPage({
             }))
           );
         }
-      } catch {
+      })
+      .catch(() => {
         // Overview may not expose workload; assignees still derived from report rows.
-      }
+      });
+    try {
+      const res = await api.get(endpointBase);
+      if (res.data?.success) setReports(res.data.data || []);
     } finally {
       setLoading(false);
     }
+    await handlersRequest;
   };
 
   useEffect(() => {

@@ -83,6 +83,53 @@ import PublicDisputePage from '@/pages/user/disputes/PublicDisputePage'
 
 import './App.css'
 import OpenInEditor from "@/pages/user/2_projects/OpenInEditor.tsx";
+import {
+  AdminLayout,
+  AdminDashboard,
+  AdminFeedbacksPage,
+  AdminBadgesPage,
+  AdminWarningsPage,
+  UserTeamPage,
+  CreditEconomyPage,
+  ModerationPage,
+  AnalyticsPage,
+  TicketManagementPage,
+  SystemSettingsPage,
+  StaffPortalLayout,
+  StaffDashboard,
+  StaffPlatformPreviewPage,
+  ForumModeratorLayout,
+  ForumModeratorDashboard,
+  ForumDiscussion,
+  ForumTicketManagement,
+  ForumReports,
+  ForumUserTeam,
+  ForumDisputes,
+  ForumRestrictions,
+  MarketplaceModeratorLayout,
+  MarketplaceModeratorDashboard,
+  MarketplaceControl,
+  MarketplaceTicketManagement,
+  MarketplaceReports,
+  MarketplaceUserTeam,
+  MarketplaceDisputes,
+  MarketplaceRestrictions,
+  SupportModeratorLayout,
+  SupportModeratorDashboard,
+  SupportTicketManagement,
+  SupportDisputes,
+  SupportUserTeam,
+  SupportReports,
+  SupportRestrictions,
+  JobsModeratorLayout,
+  JobsModeratorDashboard,
+  JobsGigsControl,
+  JobsTicketManagement,
+  JobsDisputes,
+  JobsReports,
+  JobsUserTeam,
+  JobsRestrictions,
+} from '@/pages/staff/staffPages';
 
 const lazyPage = (loader: () => Promise<{ default: ComponentType<any> }>) => lazy(loader);
 
@@ -97,54 +144,9 @@ const TeamProjectWorkspace = lazyPage(() => import('@/pages/user/3_teams/team_pr
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage.tsx'));
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage.tsx'));
 const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/notifications_page.tsx'));
-const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
-const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
-const AdminFeedbacksPage = lazyPage(() => import('./pages/admin/feedbacks/AdminFeedbacksPage'));
-const AdminBadgesPage = lazyPage(() => import('./pages/admin/badges/AdminBadgesPage'));
-const AdminWarningsPage = lazyPage(() => import('./pages/admin/warnings/AdminWarningsPage'));
-const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
-const CreditEconomyPage = lazyPage(() => import('./pages/admin/creditEconomy/CreditEconomyPage'));
-const ModerationPage = lazyPage(() => import('./pages/admin/moderation/ModerationPage'));
-const AnalyticsPage = lazyPage(() => import('./pages/admin/analytics/AnalyticsPage'));
-const TicketManagementPage = lazyPage(() => import('./pages/admin/ticketManagement/TicketManagementPage'));
-const SystemSettingsPage = lazyPage(() => import('./pages/admin/systemSettings/SystemSettingsPage'));
-const StaffPortalLayout = lazyPage(() => import('./pages/staff/StaffPortalLayout'));
-const StaffDashboard = lazyPage(() => import('./pages/staff/StaffDashboard'));
-const StaffPlatformPreviewPage = lazyPage(() => import('./pages/staff/StaffPlatformPreviewPage'));
 const VerifyEmail = lazyPage(() => import('@/pages/setup_account/00_VerifyEmail.tsx'));
 const UploadImage = lazyPage(() => import('@/pages/setup_account/02_UploadImage.tsx'));
 const Survey = lazyPage(() => import('@/pages/setup_account/04_Survey.tsx'));
-const ForumModeratorLayout = lazyPage(() => import('./pages/moderator/forum-moderator/Layout'));
-const ForumModeratorDashboard = lazyPage(() => import('./pages/moderator/forum-moderator/Dashboard'));
-const ForumDiscussion = lazyPage(() => import('./pages/moderator/forum-moderator/ForumDiscussion'));
-const ForumTicketManagement = lazyPage(() => import('./pages/moderator/forum-moderator/TicketManagement'));
-const ForumReports = lazyPage(() => import('./pages/moderator/forum-moderator/Reports'));
-const ForumUserTeam = lazyPage(() => import('./pages/moderator/forum-moderator/UserTeam'));
-const ForumDisputes = lazyPage(() => import('./pages/moderator/forum-moderator/Disputes'));
-const ForumRestrictions = lazyPage(() => import('./pages/moderator/forum-moderator/Restrictions'));
-const MarketplaceModeratorLayout = lazyPage(() => import('./pages/moderator/marketplace-moderator/Layout'));
-const MarketplaceModeratorDashboard = lazyPage(() => import('./pages/moderator/marketplace-moderator/Dashboard'));
-const MarketplaceControl = lazyPage(() => import('./pages/moderator/marketplace-moderator/MarketplaceControl'));
-const MarketplaceTicketManagement = lazyPage(() => import('./pages/moderator/marketplace-moderator/TicketManagement'));
-const MarketplaceReports = lazyPage(() => import('./pages/moderator/marketplace-moderator/Reports'));
-const MarketplaceUserTeam = lazyPage(() => import('./pages/moderator/marketplace-moderator/UserTeam'));
-const MarketplaceDisputes = lazyPage(() => import('./pages/moderator/marketplace-moderator/Disputes'));
-const MarketplaceRestrictions = lazyPage(() => import('./pages/moderator/marketplace-moderator/Restrictions'));
-const SupportModeratorLayout = lazyPage(() => import('./pages/moderator/support-moderator/Layout'));
-const SupportModeratorDashboard = lazyPage(() => import('./pages/moderator/support-moderator/Dashboard'));
-const SupportTicketManagement = lazyPage(() => import('./pages/moderator/support-moderator/TicketManagement'));
-const SupportDisputes = lazyPage(() => import('./pages/moderator/support-moderator/Disputes'));
-const SupportUserTeam = lazyPage(() => import('./pages/moderator/support-moderator/UserTeam'));
-const SupportReports = lazyPage(() => import('./pages/moderator/support-moderator/Reports'));
-const SupportRestrictions = lazyPage(() => import('./pages/moderator/support-moderator/Restrictions'));
-const JobsModeratorLayout = lazyPage(() => import('./pages/moderator/jobs-moderator/Layout'));
-const JobsModeratorDashboard = lazyPage(() => import('./pages/moderator/jobs-moderator/Dashboard'));
-const JobsGigsControl = lazyPage(() => import('./pages/moderator/jobs-moderator/JobsGigsControl'));
-const JobsTicketManagement = lazyPage(() => import('./pages/moderator/jobs-moderator/TicketManagement'));
-const JobsDisputes = lazyPage(() => import('./pages/moderator/jobs-moderator/Disputes'));
-const JobsReports = lazyPage(() => import('./pages/moderator/jobs-moderator/Reports'));
-const JobsUserTeam = lazyPage(() => import('./pages/moderator/jobs-moderator/UserTeam'));
-const JobsRestrictions = lazyPage(() => import('./pages/moderator/jobs-moderator/Restrictions'));
 const PageAboutUs = lazyPage(() => import('@/pages/landing/pages/page_AboutUs.tsx'));
 const PageAskOurChatbot = lazyPage(() => import('./pages/landing/pages/page_AskOurChatbot'));
 const PageFAQ = lazyPage(() => import('./pages/landing/pages/page_FAQ'));

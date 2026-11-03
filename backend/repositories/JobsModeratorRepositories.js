@@ -694,7 +694,8 @@ function buildAlerts(tc, dc, reportBreakdown, postingCounts, pipelineCounts) {
 
 async function getJobsReportBreakdown(targetTypesIn) {
   const params = [targetTypesIn];
-  const result = await pool.query(
+  const [result, typeResult] = await Promise.all([
+  pool.query(
     `
     SELECT
       COUNT(*)::int AS total,
@@ -715,8 +716,8 @@ async function getJobsReportBreakdown(targetTypesIn) {
       AND LOWER(COALESCE(target_type, type)) = ANY($1)
     `,
     params
-  );
-  const typeResult = await pool.query(
+  ),
+  pool.query(
     `
     SELECT LOWER(COALESCE(target_type, type)) AS target_type, COUNT(*)::int AS count
     FROM reports
@@ -726,7 +727,8 @@ async function getJobsReportBreakdown(targetTypesIn) {
     ORDER BY count DESC
     `,
     params
-  );
+  ),
+  ]);
   const c = result.rows[0] || {};
   return {
     counts: {

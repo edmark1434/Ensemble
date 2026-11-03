@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import StaffOutlet from '@/pages/staff/StaffOutlet';
 import AdminNavbar from './AdminNavbar';
 
 const AdminLayout = () => {
@@ -17,7 +17,7 @@ const AdminLayout = () => {
       </div>
 
       <AdminNavbar />
-      <Outlet />
+      <StaffOutlet consoleId="admin" />
     </div>
   );
 };

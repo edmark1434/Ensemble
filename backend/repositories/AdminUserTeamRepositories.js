@@ -325,7 +325,28 @@ function buildVerificationDetail(row) {
   };
 }
 
-async function markExpiredVerificationsForReverification() {
+/**
+ * Table-wide sweep that every user/team list awaits. Concurrent callers share one run,
+ * and repeat sweeps are skipped for EXPIRY_SWEEP_INTERVAL_MS.
+ */
+const EXPIRY_SWEEP_INTERVAL_MS = 30 * 1000;
+let expirySweepInFlight = null;
+let lastExpirySweepAt = 0;
+
+function markExpiredVerificationsForReverification() {
+  if (expirySweepInFlight) return expirySweepInFlight;
+  if (Date.now() - lastExpirySweepAt < EXPIRY_SWEEP_INTERVAL_MS) return Promise.resolve();
+  expirySweepInFlight = sweepExpiredVerifications()
+    .then(() => {
+      lastExpirySweepAt = Date.now();
+    })
+    .finally(() => {
+      expirySweepInFlight = null;
+    });
+  return expirySweepInFlight;
+}
+
+async function sweepExpiredVerifications() {
   await pool.query(`
     UPDATE verification_sessions
     SET verification_status = 'reverification_required',

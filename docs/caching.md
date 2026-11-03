@@ -20,6 +20,17 @@
 - On cache failure, serve authoritative data where safe rather than corrupting state.
 - Prevent stampedes for expensive shared reads with bounded TTLs/locking where needed.
 
+## Platform settings
+
+- `getSectionValue` (`backend/repositories/AdminSettingsRepositories.js`) caches each `configuration` section in process memory for 15 seconds (`SETTINGS_CACHE_TTL_MS`; `0` disables it). Concurrent readers share one query, and callers receive a clone.
+- `updateSettingsSection` reads the section uncached and clears the cache after writing. Other processes and raw SQL edits are picked up within the TTL.
+- Request paths seed default configuration rows once per process. `lib/Seed.js` still calls `ensureDefaultSettings` directly.
+
+## Request-path sweeps
+
+- Dispute auto-assign reconciliation on staff dispute lists runs at most once every 30 seconds per process, and concurrent callers share the in-flight run. The five-minute cron job is unchanged.
+- The verification-expiry sweep behind admin user/team lists follows the same 30-second, shared-run rule.
+
 ## Presence and realtime state
 
 - Presence requires heartbeat timestamps and expiration; disconnect events alone are unreliable.

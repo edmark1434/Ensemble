@@ -91,7 +91,8 @@ const ACCOUNT_DESK_SELECT = `
 `;
 
 async function getViolationsAndRestrictions() {
-  const result = await pool.query(`
+  const [result, restrictedResult, recentActivity] = await Promise.all([
+    pool.query(`
     SELECT
       v.*,
       ${ACCOUNT_DESK_SELECT},
@@ -109,9 +110,8 @@ async function getViolationsAndRestrictions() {
     LEFT JOIN accounts sa ON sa.account_id = s.account_id
     ORDER BY v.created_at DESC
     LIMIT 50
-  `);
-
-  const restrictedResult = await pool.query(`
+  `),
+    pool.query(`
     SELECT ${ACCOUNT_DESK_SELECT}
     FROM accounts a
     LEFT JOIN LATERAL (
@@ -130,9 +130,9 @@ async function getViolationsAndRestrictions() {
         )
       )
     ORDER BY a.display_name
-  `);
-
-  const recentActivity = await listRecentAccountActivity({ limit: 40 });
+  `),
+    listRecentAccountActivity({ limit: 40 }),
+  ]);
 
   return {
     violations: result.rows.map(mapViolationRow),

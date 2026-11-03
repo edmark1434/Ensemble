@@ -544,8 +544,9 @@ function computeModeratorPerformance(staff, activities) {
 }
 
 async function getModerationOverview(staffSession = null) {
-  const currentStaffId = await resolveSessionStaffId(staffSession);
   const [
+    currentStaffId,
+    [
     usersResult,
     staffResult,
     accountStats,
@@ -556,24 +557,15 @@ async function getModerationOverview(staffSession = null) {
     listingStats,
     violationStats,
     moderationSettings,
+    ],
+    [pendingCases, recentActivity, identityReviewCount, disputes, reports],
   ] = await Promise.all([
+    resolveSessionStaffId(staffSession),
+    Promise.all([
     pool.query(`
-      SELECT
-        u.user_id,
-        u.account_id,
-        u.first_name,
-        u.last_name,
-        u.email_address,
-        u.firebase_user_uuid,
-        u.customer_id,
-        a.handle,
-        a.display_name,
-        a.status,
-        a.created_at,
-        a.deleted_at
+      SELECT COUNT(*)::int AS user_count
       FROM users u
       INNER JOIN accounts a ON a.account_id = u.account_id
-      ORDER BY a.created_at DESC
     `),
     pool.query(`
       SELECT
@@ -642,19 +634,18 @@ async function getModerationOverview(staffSession = null) {
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),
     getSectionValue('moderation').catch(() => DEFAULT_SETTINGS.moderation),
+    ]),
+    Promise.all([
+      fetchPendingCasesFromDb(),
+      fetchRecentModerationActivity(),
+      countOpenIdentityReviews(),
+      fetchDisputesList().catch(() => []),
+      fetchReportsList().catch(() => []),
+    ]),
   ]);
 
-  const users = usersResult.rows;
   const staff = staffResult.rows;
   const stats = accountStats.rows[0];
-
-  const [pendingCases, recentActivity, identityReviewCount, disputes, reports] = await Promise.all([
-    fetchPendingCasesFromDb(),
-    fetchRecentModerationActivity(),
-    countOpenIdentityReviews(),
-    fetchDisputesList().catch(() => []),
-    fetchReportsList().catch(() => []),
-  ]);
 
   const moderatorPerformance = computeModeratorPerformance(staff, recentActivity);
   const moderatorsOnly = moderatorPerformance.filter((m) => m.role !== 'Admin');
@@ -687,7 +678,7 @@ async function getModerationOverview(staffSession = null) {
           'verifications',,
         ],
         accountCount: stats.total_accounts,
-        userCount: users.length,
+        userCount: Number(usersResult.rows[0]?.user_count || 0),
         staffCount: staff.length,
       },
       mongo: {

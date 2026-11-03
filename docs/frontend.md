@@ -8,6 +8,11 @@
 - Shared Socket.IO client: `frontend/src/lib/socket.ts`.
 - Shared global state exists in `frontend/src/lib/global_state.ts`; feature-local state may use Zustand or existing component patterns.
 
+## Staff consoles
+
+- Admin, moderator, and staff portal pages are registered in `frontend/src/pages/staff/staffPages.ts` with `lazyWithPreload`. Add new console pages there and to the matching console list, not as `lazyPage` entries in `App.tsx`.
+- Console layouts render `StaffOutlet`. It keeps the sidebar mounted behind a content-area loader and preloads the console's other pages once the browser is idle.
+
 ## Component practices
 
 - Admin warning catalog, standing punishments, and point thresholds live at `/admin/warnings` (`AdminWarningsPage`). Staff warn pickers load `/api/admin/warning-catalog` (or `/api/moderator/warning-catalog`) instead of a hardcoded list. Warning duration is displayed read-only; staff cannot set it.

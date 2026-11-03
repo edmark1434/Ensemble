@@ -564,6 +564,7 @@ async function getTicketsOverview(staffSession = null) {
     recentActivity,
     typeBreakdown,
     priorityBreakdown,
+    staff,
   ] = await Promise.all([
     pool.query(`
       SELECT
@@ -641,6 +642,7 @@ async function getTicketsOverview(staffSession = null) {
       GROUP BY priority
       ORDER BY count DESC
     `),
+    staffSession ? resolveDisputeStaffId(staffSession) : null,
   ]);
 
   const tc = ticketCounts.rows[0];
@@ -681,7 +683,6 @@ async function getTicketsOverview(staffSession = null) {
 
   const types = catalog.types.length ? catalog.types : typeLabels;
 
-  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const currentStaffId = staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(staffSession);
 
   return {

@@ -39,6 +39,29 @@ async function ensureDefaultSettings() {
   }
 }
 
+/** Defaults only change with a deploy, so request paths seed them once per process. */
+let defaultsSeeded = null;
+function ensureDefaultSettingsOnce() {
+  if (!defaultsSeeded) {
+    defaultsSeeded = ensureDefaultSettings().catch((err) => {
+      defaultsSeeded = null;
+      throw err;
+    });
+  }
+  return defaultsSeeded;
+}
+
+/**
+ * Per-process section cache. Saves through updateSettingsSection clear it at once;
+ * other processes and raw SQL edits are picked up within the TTL.
+ */
+const SECTION_CACHE_TTL_MS = Math.max(0, Number(process.env.SETTINGS_CACHE_TTL_MS ?? 15000) || 0);
+const sectionCache = new Map();
+
+function clearSettingsCache() {
+  sectionCache.clear();
+}
+
 async function readSectionRows(sectionKey) {
   const result = await pool.query(
     `SELECT configuration_key, name, description, current_value_literal, default_value_literal, updated_at
@@ -50,19 +73,35 @@ async function readSectionRows(sectionKey) {
   return result.rows;
 }
 
-async function getSectionValue(key) {
-  const defaults = DEFAULT_SETTINGS[key];
-  if (!defaults) return null;
+async function loadSectionValue(key, defaults) {
   const rows = await readSectionRows(key);
   if (!rows.length) return structuredClone(defaults);
   return assembleSection(key, defaults, rows);
 }
 
-async function getSettingsOverview() {
-  await ensureDefaultSettings();
+async function getSectionValue(key) {
+  const defaults = DEFAULT_SETTINGS[key];
+  if (!defaults) return null;
+  if (!SECTION_CACHE_TTL_MS) return loadSectionValue(key, defaults);
 
-  const loaded = await Promise.all(
-    SECTION_KEYS.map(async (key) => {
+  const now = Date.now();
+  let entry = sectionCache.get(key);
+  if (!entry || entry.expiresAt <= now) {
+    const promise = loadSectionValue(key, defaults);
+    entry = { promise, expiresAt: now + SECTION_CACHE_TTL_MS };
+    sectionCache.set(key, entry);
+    promise.catch(() => {
+      if (sectionCache.get(key) === entry) sectionCache.delete(key);
+    });
+  }
+  return structuredClone(await entry.promise);
+}
+
+async function getSettingsOverview() {
+  await ensureDefaultSettingsOnce();
+
+  const [loaded, staffResult, historyResult] = await Promise.all([
+    Promise.all(SECTION_KEYS.map(async (key) => {
       const rows = await readSectionRows(key);
       const defaults = DEFAULT_SETTINGS[key];
       const value = rows.length
@@ -77,10 +116,7 @@ async function getSettingsOverview() {
         !rows.length ||
         rows.every((row) => row.current_value_literal === row.default_value_literal);
       return { key, value, updatedAt, isDefault };
-    })
-  );
-
-  const [staffResult, historyResult] = await Promise.all([
+    })),
     pool.query(`
       SELECT s.staff_id, s.role,
         COALESCE(a.display_name, NULLIF(TRIM(s.first_name || ' ' || s.last_name), ''), s.email_address) AS name
@@ -169,47 +205,51 @@ async function updateSettingsSection(sectionKey, values) {
     throw new Error(`Unknown settings section: ${sectionKey}`);
   }
 
-  await ensureDefaultSettings();
+  await ensureDefaultSettingsOnce();
 
-  const current = await getSectionValue(sectionKey);
+  const current = await loadSectionValue(sectionKey, DEFAULT_SETTINGS[sectionKey]);
   const merged = stripMeta(
     deepMergeSettings(DEFAULT_SETTINGS[sectionKey], current, values)
   );
 
-  if (sectionKey === 'platform') {
-    delete merged.sessionTimeoutMinutes;
-    await pool.query(
-      'DELETE FROM configuration WHERE configuration_key = $1',
-      ['platform.sessionTimeoutMinutes']
-    );
-  }
+  try {
+    if (sectionKey === 'platform') {
+      delete merged.sessionTimeoutMinutes;
+      await pool.query(
+        'DELETE FROM configuration WHERE configuration_key = $1',
+        ['platform.sessionTimeoutMinutes']
+      );
+    }
 
-  if (sectionKey === 'security' && Array.isArray(merged.allowedAdminIps)) {
-    merged.allowedAdminIps = merged.allowedAdminIps
-      .map((ip) => String(ip || '').trim())
-      .filter(Boolean);
-  }
+    if (sectionKey === 'security' && Array.isArray(merged.allowedAdminIps)) {
+      merged.allowedAdminIps = merged.allowedAdminIps
+        .map((ip) => String(ip || '').trim())
+        .filter(Boolean);
+    }
 
-  const rows = flattenSection(sectionKey, merged, DEFAULT_SETTINGS[sectionKey]);
-  for (const row of rows) {
-    await pool.query(
-      `INSERT INTO configuration (
-         configuration_key, name, description, current_value_literal, default_value_literal, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-       ON CONFLICT (configuration_key) DO UPDATE SET
-         name = EXCLUDED.name,
-         description = EXCLUDED.description,
-         current_value_literal = EXCLUDED.current_value_literal,
-         default_value_literal = EXCLUDED.default_value_literal,
-         updated_at = CURRENT_TIMESTAMP`,
-      [
-        row.configuration_key,
-        row.name,
-        row.description,
-        row.current_value_literal,
-        row.default_value_literal,
-      ]
-    );
+    const rows = flattenSection(sectionKey, merged, DEFAULT_SETTINGS[sectionKey]);
+    for (const row of rows) {
+      await pool.query(
+        `INSERT INTO configuration (
+           configuration_key, name, description, current_value_literal, default_value_literal, updated_at
+         ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         ON CONFLICT (configuration_key) DO UPDATE SET
+           name = EXCLUDED.name,
+           description = EXCLUDED.description,
+           current_value_literal = EXCLUDED.current_value_literal,
+           default_value_literal = EXCLUDED.default_value_literal,
+           updated_at = CURRENT_TIMESTAMP`,
+        [
+          row.configuration_key,
+          row.name,
+          row.description,
+          row.current_value_literal,
+          row.default_value_literal,
+        ]
+      );
+    }
+  } finally {
+    clearSettingsCache();
   }
 
   return getSettingsOverview();
@@ -220,6 +260,7 @@ module.exports = {
   updateSettingsSection,
   ensureDefaultSettings,
   getSectionValue,
+  clearSettingsCache,
   deepMergeSettings,
   DEFAULT_SETTINGS,
 };

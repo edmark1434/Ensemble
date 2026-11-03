@@ -1,26 +1,20 @@
-# Current task: Clean up the staff/admin ticket UI
+# Current task: Faster, smoother staff and admin consoles
 
 ## Objective
 
-Reorganize the ticket detail view used by the admin desk and every moderator desk so it matches the cleaned-up dispute modal, without changing backend behavior.
+Reduce load time and navigation stalls across the admin console, every moderator desk, and the staff portal without changing what the pages show or what staff can do.
 
 ## Scope
 
-- `frontend/src/pages/admin/ticketManagement/TicketDetailModalShell.tsx` (shared by admin and all moderator desks)
-- `frontend/src/pages/moderator/shared/staffCaseUi.tsx` (shared buttons, pills, sidebar sections, confirm dialog, tabs; also used by the dispute modal)
-- `frontend/src/pages/admin/ticketManagement/ticketTypes.ts` (duplicate `TicketPerson` type split into `TicketParticipant`)
-- Ticket list tables in `TicketManagementPage.tsx`, `support-moderator/TicketManagement.tsx`, `ModeratorTicketDesk.tsx`, `moderator/shared/ui.tsx`
+- Frontend: preload staff console page chunks so sidebar navigation does not freeze, keep the sidebar visible while a page chunk loads, and stop serial request chains on staff pages.
+- Backend: remove serial database round-trips from per-request middleware, cache configuration sections briefly in memory with write-through invalidation, stop repeating idempotent seeding/reconciliation writes on every GET, and run independent queries in parallel in the staff overview/list endpoints.
 
 ## Acceptance criteria
 
-- Header shows number, subject, requester, dates, and status/priority/type/handler/escalated/awaiting pills, plus a Transcript button.
-- Main column has "Conversation" and "Details" tabs; the composer stays pinned and switches between "Reply to member" and "Internal note".
-- Sidebar groups actions into Handler, Ticket (status, priority, closing), Appeal decision, People, Credit change, and Move ticket.
-- One Save button, enabled only when status, priority, or handler changed.
-- All confirmations (remove, add, schedule close, move, escalate to Admin, appeal) use the shared dialog.
-- No gradients; existing dark staff theme.
-- `npx tsc --noEmit -p tsconfig.app.json` reports no errors in the files above, and `npm run build` passes.
-
-## Note
-
-`npm run build` runs `tsc --noEmit` against `tsconfig.json`, which has `"files": []`, so it type-checks nothing. Use `tsconfig.app.json` for a real check (about 845 pre-existing errors elsewhere).
+- Clicking any staff sidebar item after the console has loaded switches pages without waiting for a chunk download.
+- While a page chunk does load (cold start), the sidebar stays visible and only the content area shows a loader.
+- `getAccountAccess` returns the same result as before, with independent queries batched.
+- Configuration reads are cached at most 15 seconds per process; saving settings invalidates the cache immediately.
+- `ensureDefaultSettings` runs once per process instead of on every settings GET; dispute auto-assign reconciliation runs at most once every 30 seconds per process and never concurrently with itself.
+- No API response shape changes. No new migrations.
+- `npm run build` passes in `frontend/`; changed backend modules load with `node -e "require(...)"`.
