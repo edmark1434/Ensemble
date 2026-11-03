@@ -9,6 +9,7 @@ import type { CollabTarget } from "@/features/editor/collab/collab-target";
 
 export function CommentsSync() {
   const projectId = useStore((s) => s.projectId);
+  const userId = useStore((s) => s.userId);
   const blockId = useStore((s) => s.activeSceneBlockId);
   const canComment = useCanComment();
   const sync = useCommentsStore((s) => s.sync);
@@ -23,7 +24,7 @@ export function CommentsSync() {
     [canComment, blockId, projectId],
   );
 
-  const { data, error, post, remove, upload, setStatus } = useComments(target);
+  const { data, error, post, remove, upload, setStatus } = useComments(target, userId);
 
   useEffect(() => {
     sync({ data, error, post, remove, upload, setStatus });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollabTarget } from "@/features/editor/collab/collab-target";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
+import { useCommentNotifications } from "../store/use-comment-notifications";
 import type {
   CommentAttachment,
   CommentStatus,
@@ -9,34 +10,41 @@ import type {
 
 const REJECTED_CLOSE_CODES = new Set([4000, 4001, 4003, 4004]);
 
-export function useComments(target: CollabTarget | null) {
+export function useComments(target: CollabTarget | null, userId: string) {
   const [data, setData] = useState<CommentsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const kind = target?.kind;
   const id = target?.id;
-  const base = kind && id ? `/api/comments/${kind}s/${id}` : null;
+  const base = kind && id && userId ? `/api/comments/${kind}s/${id}` : null;
+  const scope = base ? `${userId}:${kind}:${id}` : null;
 
   const baseRef = useRef(base);
   baseRef.current = base;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const latestLoad = useRef(0);
 
   const load = useCallback(async () => {
-    if (!base) return;
+    if (!base || !scope || baseRef.current !== base || scopeRef.current !== scope) return;
+    const request = ++latestLoad.current;
     try {
       const res = await fetch(base, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const json = (await res.json()) as CommentsPayload;
-      if (baseRef.current !== base) return; // target changed while in flight
+      if (scopeRef.current !== scope || request !== latestLoad.current) return;
+      useCommentNotifications.getState().ingest(scope, json, userId);
       setData(json);
       setError(null);
     } catch {
-      if (baseRef.current === base) setError("Couldn't load comments");
+      if (scopeRef.current === scope && request === latestLoad.current) setError("Couldn't load comments");
     }
-  }, [base]);
+  }, [base, scope, userId]);
 
   useEffect(() => {
     setData(null);
     setError(null);
+    useCommentNotifications.getState().activate(scope);
     if (!base || !kind || !id) return;
 
     let cancelled = false;
@@ -72,10 +80,12 @@ export function useComments(target: CollabTarget | null) {
     return () => {
       offAccess();
       cancelled = true;
+      latestLoad.current++;
       if (timer) clearTimeout(timer);
       ws?.close();
+      useCommentNotifications.getState().activate(null);
     };
-  }, [base, kind, id, load]);
+  }, [base, kind, id, load, scope]);
 
   const post = useCallback(
     async (

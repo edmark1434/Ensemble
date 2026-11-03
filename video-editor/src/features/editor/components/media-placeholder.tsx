@@ -9,6 +9,7 @@ export function MediaPlaceholder({
   missing = false,
   failed = false,
 }: { missing?: boolean; failed?: boolean }) {
+  const loading = !missing && !failed;
   const ref = useRef<HTMLOutputElement>(null);
   const [scale, setScale] = useState(1);
   const previewZoom = useContext(CanvasPreviewZoomContext);
@@ -47,18 +48,18 @@ export function MediaPlaceholder({
         alignItems: "center",
         justifyContent: "center",
         gap: 8 / scale,
-        backgroundColor: "#27272a",
-        backgroundImage: SCENE_PATTERN,
+        backgroundColor: loading ? "#2E1D12" : "#27272a",
+        backgroundImage: loading ? "none" : SCENE_PATTERN,
         backgroundSize: `${12 / scale}px ${12 / scale}px`,
-        boxShadow: "inset 0 0 0 99999px rgba(0,0,0,0.25)",
-        color: "#d4d4d8",
+        boxShadow: loading ? "none" : "inset 0 0 0 99999px rgba(0,0,0,0.25)",
+        color: loading ? "#fdba74" : "#d4d4d8",
         fontFamily: "var(--font-plus-jakarta-sans), sans-serif",
         fontSize: 14 / scale,
         fontWeight: 500,
         pointerEvents: "none",
       }}
     >
-      {!missing && !failed && <Loader2 className="animate-spin" size={16 / scale} style={{ flexShrink: 0 }} />}
+      {loading && <Loader2 className="animate-spin" size={16 / scale} style={{ flexShrink: 0 }} />}
       {missing ? "Missing media" : failed ? "Unable to load media" : "Loading media…"}
     </output>
   );

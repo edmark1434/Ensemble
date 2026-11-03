@@ -30,7 +30,7 @@ export const Avatar = ({
       <img
         src={avatarUrl}
         alt=""
-        className={cn("h-9 w-9 shrink-0 rounded-full object-cover", className)}
+        className={cn("block h-9 w-9 shrink-0 rounded-full object-cover object-center", className)}
         onError={() => setFailed(true)}
       />
     );
@@ -43,7 +43,7 @@ export const Avatar = ({
         className
       )}
     >
-      {getInitials(name)}
+      <span className="block leading-none">{getInitials(name)}</span>
     </div>
   );
 };

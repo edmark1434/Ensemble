@@ -71,7 +71,7 @@ export default function PresenceAvatars({ className }: { className?: string }) {
             className
           )}
         >
-          <div className="flex -space-x-2">
+          <div className="flex items-center -space-x-2">
             {visible.map((user) => {
               const info = directory.get(user.userId);
               return (
@@ -79,20 +79,20 @@ export default function PresenceAvatars({ className }: { className?: string }) {
                 // this person's selection / "inside" borders.
                 <span
                   key={user.userId}
-                  className="flex shrink-0 rounded-full p-[1px] ring-2 ring-background"
-                  style={{ background: user.color }}
+                  className="inline-flex flex-none items-center justify-center overflow-hidden rounded-full border ring-2 ring-background"
+                  style={{ borderColor: user.color, width: 34, height: 34, minWidth: 34, aspectRatio: "1 / 1" }}
                 >
                   <Avatar
                     name={info?.name ?? user.name}
                     avatarUrl={info?.avatarUrl}
-                    className="h-8 w-8 text-[11px]"
+                    className="h-8 w-8 max-w-none text-[11px] leading-none [&>span]:-translate-y-px"
                   />
                 </span>
               );
             })}
             {overflow > 0 && (
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[11px] font-medium text-zinc-200 ring-2 ring-background">
-                +{overflow}
+              <span style={{ width: 34, height: 34, minWidth: 34, aspectRatio: "1 / 1" }} className="grid flex-none place-items-center rounded-full bg-zinc-800 text-center text-[11px] font-medium leading-none tracking-normal text-zinc-200 ring-2 ring-background">
+                <span className="block -translate-y-px leading-none tabular-nums">+{overflow}</span>
               </span>
             )}
           </div>

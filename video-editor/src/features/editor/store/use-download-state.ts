@@ -39,7 +39,7 @@ interface Output {
   projectName: string;
 }
 
-export type DownloadStatus = "idle" | "downloading" | "downloaded" | "expired";
+export type DownloadStatus = "idle" | "downloading" | "requested" | "expired";
 
 interface DownloadState {
   projectId: string;

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
+import { useCommentNotifications } from "@/features/editor/store/use-comment-notifications";
 import {
   Composer,
   Entry,
@@ -15,11 +16,23 @@ import {
 } from "@/features/editor/comments/comments-panel";
 
 export default function CommentThreadControl() {
-  const { setFloatingControl } = useLayoutStore();
+  const { floatingControl, setFloatingControl } = useLayoutStore();
   const { data, post, remove, setStatus, openThreadId } = useCommentsStore();
   const { seek, currentMs } = usePlayheadControls();
 
   const thread = data?.threads.find((t) => t.id === openThreadId);
+  const scope = useCommentNotifications(s => s.scope);
+  const unreadIds = useCommentNotifications(s => s.unreadIds);
+  const markThreadRead = useCommentNotifications(s => s.markThreadRead);
+  const threadId = thread?.id;
+
+  // Reading the list never acknowledges a thread. Opening its floating panel
+  // clears that thread's notifications, including replies received while open.
+  useEffect(() => {
+    if (floatingControl === "comment-thread" && scope && threadId) {
+      markThreadRead(scope, threadId, [threadId, ...(thread?.replies.map(reply => reply.id) ?? [])]);
+    }
+  }, [floatingControl, scope, threadId, thread, unreadIds, markThreadRead]);
 
   // thread got deleted (or the comments target changed): close the window
   useEffect(() => {

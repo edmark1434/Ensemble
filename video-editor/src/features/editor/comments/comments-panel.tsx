@@ -41,6 +41,7 @@ import {
   type CommentSort,
 } from "@/features/editor/store/use-comments-store";
 import { ImagePreview } from "./image-preview";
+import { useCommentNotifications } from "../store/use-comment-notifications";
 import type {
   CommentAttachment,
   CommentPerson,
@@ -871,7 +872,7 @@ export function Composer({
                 f.status === "error" ? "border-red-500" : "border-border",
               )}
             >
-              <img src={f.preview} alt="" className="h-full w-full object-cover" />
+              <img src={f.preview} alt="" className="h-full w-full object-contain" />
               {f.status === "uploading" && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                   <Loader2 size={16} className="animate-spin text-white" />
@@ -970,6 +971,7 @@ export function Entry({
   onSeek?: (ms: number) => void;
 }) {
   const now = useNow();
+  const unread = useCommentNotifications(s => s.unreadIds.includes(item.id));
   const [menuOpen, setMenuOpen] = useState(false);
   const [preview, setPreview] = useState<CommentAttachment | null>(null);
   const attachments = item.attachments ?? [];
@@ -985,6 +987,7 @@ export function Entry({
             <p className="whitespace-nowrap text-xs text-muted-foreground">
               {formatCreatedAt(item.createdAt, now)}
             </p>
+            {unread && <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">New</span>}
           </div>
           {item.canDelete && (
             <Popover open={menuOpen} onOpenChange={setMenuOpen}>
@@ -1027,7 +1030,7 @@ export function Entry({
         {attachments.length > 0 && (
           <div
             className={cn(
-              "mt-3 grid gap-2",
+              "mt-3 grid items-start gap-2",
               attachments.length === 1 ? "grid-cols-1" : "grid-cols-2",
             )}
           >
@@ -1039,15 +1042,12 @@ export function Entry({
                   e.stopPropagation(); // don't open the thread
                   setPreview(a);
                 }}
-                className="block cursor-zoom-in overflow-hidden rounded-md border border-border"
+                className="block w-fit max-w-full cursor-zoom-in overflow-hidden rounded-md border border-border"
               >
                 <img
                   src={a.url}
                   alt={a.name}
-                  className={cn(
-                    "w-full object-cover",
-                    attachments.length === 1 ? "max-h-48" : "aspect-video",
-                  )}
+                  className="block h-auto w-auto max-h-48 max-w-full object-contain"
                 />
               </button>
             ))}
@@ -1079,6 +1079,9 @@ function Thread({
   onDeleteComment: () => void;
 }) {
   const n = thread.replies.length;
+  const unreadReplies = useCommentNotifications(s =>
+    thread.replies.filter(reply => s.unreadIds.includes(reply.id)).length,
+  );
   const images =
     (thread.attachments ?? []).length +
     thread.replies.reduce((sum, r) => sum + (r.attachments ?? []).length, 0);
@@ -1087,6 +1090,11 @@ function Thread({
 
   const parts: ReactNode[] = [];
   if (n > 0) parts.push(`${n} ${n === 1 ? "reply" : "replies"}`);
+  if (unreadReplies > 0) parts.push(
+    <span key="unread" className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
+      {unreadReplies} new
+    </span>,
+  );
   if (images > 0) parts.push(`${images} ${images === 1 ? "image" : "images"}`);
   if (parts.length === 0 && canComment) parts.push("Reply");
   if (mentioned) {

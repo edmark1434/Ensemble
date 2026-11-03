@@ -180,12 +180,14 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
   const [suggestions, setSuggestions] = useState<ProjectPerson[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [settledQuery, setSettledQuery] = useState<string | null>(null);
   const [newUserRole, setNewUserRole] = useState<AssignableProjectRole>("Viewer");
   const [addError, setAddError] = useState<string | null>(null);
 
   const searchWrapperRef = useRef<HTMLDivElement>(null);
 
   const loadSeq = useRef(0);
+  const searchSeq = useRef(0);
 
   const roleOptions = canGrantManager
     ? ASSIGNABLE_PROJECT_ROLES
@@ -229,7 +231,8 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
 
   const searchUsers = useMemo(
     () =>
-      debounce(async (q: string) => {
+      debounce(async (q: string, seq: number) => {
+        if (seq !== searchSeq.current) return;
         if (!q) {
           setSuggestions([]);
           setSearching(false);
@@ -241,19 +244,29 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
           );
           if (!res.ok) throw new Error("search failed");
           const data: { results: ProjectPerson[] } = await res.json();
+          if (seq !== searchSeq.current) return;
           setSuggestions(data.results);
+          setSettledQuery(q);
         } catch {
+          if (seq !== searchSeq.current) return;
           setSuggestions([]);
         } finally {
-          setSearching(false);
+          if (seq === searchSeq.current) setSearching(false);
         }
-      }, 300),
+      }, 500),
     [projectId]
   );
 
   useEffect(() => {
-    return () => searchUsers.cancel();
-  }, [searchUsers]);
+    setQuery("");
+    setSuggestions([]);
+    setSearching(false);
+    setSettledQuery(null);
+    return () => {
+      searchSeq.current++;
+      searchUsers.cancel();
+    };
+  }, [open, searchUsers]);
 
   // Radix Popover portals to document.body, which sits outside the Dialog's
   // own DOM subtree — the Dialog's scroll lock only allows scroll on its
@@ -273,6 +286,10 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
   }, [suggestOpen]);
 
   const handleAdd = async (person: ProjectPerson) => {
+    searchSeq.current++;
+    searchUsers.cancel();
+    setSearching(false);
+    setSettledQuery(null);
     setSuggestOpen(false);
     setQuery("");
     setSuggestions([]);
@@ -308,7 +325,7 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
       ? null
       : !canManage
         ? "Only the project owner and managers can change who has access."
-        : query.trim() && !searching && suggestions.length === 0
+        : query.trim() && settledQuery === query.trim() && !searching && suggestions.length === 0
           ? query.includes("@")
             ? "No user found with that email."
             : "Enter their full email address."
@@ -359,8 +376,12 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                     const v = e.target.value;
                     setQuery(v);
                     setSuggestOpen(true);
-                    if (v.trim()) setSearching(true);
-                    searchUsers(v.trim());
+                    setSettledQuery(null);
+                    setSuggestions([]);
+                    setSearching(!!v.trim());
+                    const seq = ++searchSeq.current;
+                    searchUsers.cancel();
+                    if (v.trim()) searchUsers(v.trim(), seq);
                   }}
                   onFocus={() => setSuggestOpen(true)}
                   onKeyDown={handleQueryKeyDown}

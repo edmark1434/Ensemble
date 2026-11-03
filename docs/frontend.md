@@ -36,6 +36,14 @@
 - Fetch authoritative state on initial load/reconnect.
 - Presence should use heartbeat/connection state with a timeout, not a permanent boolean.
 
+## Editor export and comment feedback
+
+- The export modal displays a minimum of 1% after one second of an active export. This is a presentation-only floor; server progress is unchanged. Queue position, failures, completion and cancellation retain their existing states.
+- Completed exports auto-request a download once after three seconds and keep the Download button available for manual retries. A browser download request is not treated as confirmed saved. Closing the completed-output modal calls the existing render cleanup endpoint and resets export state; output stays available until that dismissal, subject to existing expiration. Closing an active render only hides its progress modal.
+- The active project/scene comments WebSocket invalidates the authenticated comment list. Each successful snapshot is compared by entry ID to detect mentions and replies to the viewer's top-level comments; the server's author-only `canDelete` flag excludes self-notifications. Older overlapping responses are ignored.
+- Navbar counts and entry/thread badges track unread entries. Notifications clear for a thread only when its floating thread panel opens, including replies received while that thread remains open. Viewing the main comments list never acknowledges notifications. Incoming entries show a five-second automatic tooltip and play the main site's `notification.mp3`, subject to browser autoplay permission.
+- Notification checkpoints contain known, unread and acknowledged entry IDs, keyed by user and project/scene in browser localStorage, with an in-memory fallback. They persist until browser storage is cleared; deleted entries are removed from unread counts on refresh, while known/acknowledged IDs remain to prevent repeat alerts after incomplete snapshots. Opening a floating thread acknowledges its individual entries, so reading two replies and later receiving a third contributes only one unread notification. First visits baseline existing comments without announcing them; subsequent snapshots (including reconnect/reload) detect new IDs. Read state is browser-local, not synchronized across devices. No database migration or additional WebSocket is used.
+
 ## Verification
 
 - Run `cd frontend && npm run build` after TypeScript/UI changes.

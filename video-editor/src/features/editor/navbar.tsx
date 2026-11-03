@@ -16,8 +16,7 @@ import {
   ShareIcon,
   CloudCheck,
   CloudOff,
-  Loader2,
-  MessageSquare
+  Loader2
 } from "lucide-react";
 
 import type StateManager from "@designcombo/state";
@@ -55,6 +54,7 @@ import { useProjectRole } from "@/features/editor/hooks/use-project-role";
 import { canManageSharing } from "@/features/editor/types/editor-role";
 import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
+import { CommentsButton } from "@/features/editor/comments/comments-button";
 
 export default function Navbar({
   user,
@@ -79,8 +79,6 @@ export default function Navbar({
   const isSmallScreen = useIsSmallScreen();
   const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName, projectId } = useStore();
   const [isShareModalOpen, setShareModalOpen] = useState(false);
-  const { activeRightItem, setActiveRightItem } = useLayoutStore();
-  const commentsOpen = activeRightItem === "comments";
   const canComment = useCanComment();
   const [title, setTitle] = useState(projectName);
 
@@ -332,23 +330,7 @@ export default function Navbar({
               </TooltipContent>
             </Tooltip>
           )}
-          {canComment && (
-            <Tooltip delayDuration={10}>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => setActiveRightItem(commentsOpen ? "controls" : "comments")}
-                  className={cn("hover:!bg-accent/30", commentsOpen && "bg-accent/30")}
-                  variant="ghost"
-                  size="icon"
-                >
-                  <MessageSquare size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" align="center" sideOffset={1}>
-                {commentsOpen ? "Close comments" : "Comments"}
-              </TooltipContent>
-            </Tooltip>
-          )}
+          {canComment && <CommentsButton />}
           <DownloadPopover stateManager={stateManager} />
 
           {canShare && (

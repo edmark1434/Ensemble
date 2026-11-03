@@ -3,44 +3,54 @@ import { signMarketImage } from "./market-image-url";
 import { signMarketCloudFrontSource } from "./market-cloudfront-url";
 import { signMarketStream } from "./market-stream-url";
 
+type LicensedMedia = { path: string; mimeType: string; type: string };
+
+// Both batch playback and individual source requests use this delivery policy.
+// Only call after membership, license and asset-to-file linkage checks.
+async function signLicensedMedia(file: LicensedMedia) {
+  const cloudFront = signMarketCloudFrontSource(file.path);
+  if (cloudFront) return cloudFront;
+  // Legacy keys are outside the CDN's signature-protected behavior. Do not
+  // turn them into apparently signed URLs served by a public cache behavior.
+  if (file.type === "image") {
+    const now = Date.now();
+    return {
+      url: await signMarketImage(file.path, file.mimeType, now),
+      expiresAt: Math.floor(now / 30_000) * 30_000 + 60_000,
+    };
+  }
+  return signMarketStream(file.path, file.mimeType);
+}
+
+export async function getProjectMarketSource(projectId: string, userId: string, assetId: string, mediaAssetId: string) {
+  const result = await readProjectMarketLicenses(projectId, userId, [assetId]);
+  if (!result) return { status: 403 as const, error: "Project access required." };
+  const asset = result.assets.find(asset => asset.assetId === assetId);
+  if (!asset) return { status: 404 as const, error: "Asset not found." };
+  if (!asset.licensed) return { status: 403 as const, error: "A project license is required." };
+  const file = result.media?.find(file => file.assetId === assetId && file.mediaAssetId === mediaAssetId);
+  if (!file) return { status: 404 as const, error: "Media not found." };
+  return { status: 200 as const, ...await signLicensedMedia(file) };
+}
+
 export async function getProjectMarketLicenses(projectId: string, userId: string, ids: string[]) {
   const start = performance.now();
   const result = await readProjectMarketLicenses(projectId, userId, ids);
   const queried = performance.now();
   if (!result) return null;
-  const delivery = new Map<string, Record<string, { url: string; expiresAt: number }>>();
   const licensedIds = new Set(result.assets.filter(asset => asset.licensed).map(asset => asset.assetId));
-  // Invalid enabled CDN configuration fails the batch instead of silently
-  // bypassing the configured delivery policy. S3 is the unconfigured default.
-  for (const file of result.media ?? []) {
-    if (!licensedIds.has(file.assetId)) continue;
-    const source = signMarketCloudFrontSource(file.path);
-    if (!source) continue;
-    const sources = delivery.get(file.assetId) ?? {};
-    sources[file.mediaAssetId] = source;
-    delivery.set(file.assetId, sources);
-  }
-  await Promise.allSettled((result.media ?? []).filter(file => licensedIds.has(file.assetId)
-    && (file.type === "video" || file.type === "audio") && !delivery.get(file.assetId)?.[file.mediaAssetId])
-    .map(async file => {
-      const source = await signMarketStream(file.path, file.mimeType);
-      const sources = delivery.get(file.assetId) ?? {};
-      sources[file.mediaAssetId] = source;
-      delivery.set(file.assetId, sources);
-    }));
-  const signed = await Promise.allSettled(result.images.filter(image => licensedIds.has(image.assetId)).map(async image => ({
-    assetId: image.assetId, mediaAssetId: image.mediaAssetId,
-    url: delivery.get(image.assetId)?.[image.mediaAssetId]?.url ?? await signMarketImage(image.path, image.mimeType),
-  })));
-  // A broken file must not prevent other assets from resolving their licenses.
-  // Missing URLs keep the existing, individually authorized source fallback.
-  const images = signed.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+  const signed = await Promise.allSettled((result.media ?? []).filter(file => licensedIds.has(file.assetId))
+    .map(async file => ({ ...file, source: await signLicensedMedia(file) })));
+  // A failed file can retry through the individual endpoint, which applies the
+  // same signing policy; it cannot silently switch a protected original to S3.
+  const delivery = signed.flatMap(entry => entry.status === "fulfilled" ? [entry.value] : []);
   return {
     assets: result.assets.map(asset => ({
       ...asset,
-      playbackSources: delivery.get(asset.assetId) ?? {},
-      imageSources: Object.fromEntries(images.filter(image => image.assetId === asset.assetId)
-        .map(image => [image.mediaAssetId, image.url])),
+      playbackSources: Object.fromEntries(delivery.filter(file => file.assetId === asset.assetId)
+        .map(file => [file.mediaAssetId, file.source])),
+      imageSources: Object.fromEntries(delivery.filter(file => file.assetId === asset.assetId && file.type === "image")
+        .map(file => [file.mediaAssetId, file.source.url])),
     })),
     serverTiming: `license_db;dur=${(queried - start).toFixed(1)}, media_signing;dur=${(performance.now() - queried).toFixed(1)}`,
   };
