@@ -32,12 +32,6 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
-function shortId(value: string | number | null | undefined) {
-  if (value == null || value === "") return "—";
-  const s = String(value);
-  return s.length > 10 ? `${s.slice(0, 8)}…` : s;
-}
-
 function SummaryCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] px-4 py-4">
@@ -376,9 +370,6 @@ export default function ModeratorTicketDesk({
                     <td className="px-4 py-3.5">
                       <p className="text-zinc-200">{t.requester.name}</p>
                       <p className="text-xs text-zinc-500">@{t.requester.username || "—"}</p>
-                      <p className="font-mono text-[10px] text-zinc-600">
-                        acc {shortId(t.requester.accountId)}
-                      </p>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-300">{t.type || t.category || "—"}</td>
                     <td className="px-4 py-3.5">

@@ -606,12 +606,6 @@ function TicketsTab({
   desk?: 'admin' | 'support';
   emptyHint?: string;
 }) {
-  const shortId = (value: string | number | null | undefined) => {
-    if (value == null || value === '') return '—';
-    const s = String(value);
-    return s.length > 10 ? `${s.slice(0, 8)}…` : s;
-  };
-
   const quickCounts = useMemo(() => {
     const openOnly = allTickets.filter((t) => t.status !== 'Resolved' && t.status !== 'Closed').length;
     const awaiting = allTickets.filter((t) => t.waitingForResponse).length;
@@ -707,9 +701,6 @@ function TicketsTab({
                   <td className="px-4 py-3.5">
                     <p className="text-zinc-200">{t.requester.name}</p>
                     <p className="text-xs text-zinc-500">@{t.requester.username || '—'}</p>
-                    <p className="font-mono text-[10px] text-zinc-600">
-                      acc {shortId(t.requester.accountId)} · usr {shortId(t.requester.userId)}
-                    </p>
                   </td>
                   <td className="px-4 py-3.5 text-zinc-300">{t.type || t.category || '—'}</td>
                   <td className="px-4 py-3.5">

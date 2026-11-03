@@ -1,46 +1,26 @@
-# Current task: Tailor Platform Walkthrough Tracks & Step Scopes
+# Current task: Clean up the staff/admin ticket UI
 
 ## Objective
 
-Refactor the platform walkthrough steps into 4 distinctly tailored tracks (Freelancer, Client, Asset Creator, Explore All), update dark mode theme styling to neutral dark charcoal, customize perspective instructions, and add the transaction verification & re-entry notice to the completion modal.
+Reorganize the ticket detail view used by the admin desk and every moderator desk so it matches the cleaned-up dispute modal, without changing backend behavior.
 
 ## Scope
 
-- `frontend/src/lib/tour_state.ts` (Track step lists, `roleTexts` customization, `getActiveTourSteps`)
-- `frontend/src/components/tour/TourSpotlightCard.tsx` (Dynamic `roleTexts` renderer, neutral `#121214` styling)
-- `frontend/src/components/tour/TourWelcomeModal.tsx` (Video banner, neutral gray theme, 4 perspective cards)
-- `frontend/src/components/tour/TourGraduationModal.tsx` (Verification reminder & multi-perspective walkthrough hint)
+- `frontend/src/pages/admin/ticketManagement/TicketDetailModalShell.tsx` (shared by admin and all moderator desks)
+- `frontend/src/pages/moderator/shared/staffCaseUi.tsx` (shared buttons, pills, sidebar sections, confirm dialog, tabs; also used by the dispute modal)
+- `frontend/src/pages/admin/ticketManagement/ticketTypes.ts` (duplicate `TicketPerson` type split into `TicketParticipant`)
+- Ticket list tables in `TicketManagementPage.tsx`, `support-moderator/TicketManagement.tsx`, `ModeratorTicketDesk.tsx`, `moderator/shared/ui.tsx`
 
 ## Acceptance criteria
 
-- **Dark Mode Palette**: Completely neutral gray/charcoal (`dark:bg-[#121214]`, `dark:border-zinc-800`), removing blue tinting.
-- **Freelancer Track (35 steps)**: Home (Latest Job Posts, Notifications, Ask AI, Profile Avatar), Profile, Projects, Teams, Job Market (bidding/finding jobs), Gigs (posting services), Credits.
-- **Client Track (39 steps)**: Home (Global Search, Quick Actions, Top Services, Notifications, Ask AI, Profile Avatar), Profile, Projects, Teams, Discovery (scouting talent), Job Market (posting jobs), Gigs (ordering services), Credits.
-- **Asset Creator Track (22 steps)**: Home (Global Search, Quick Actions, Popular Assets, Notifications, Ask AI, Profile Avatar), Profile, Projects, Asset Library (upload -> moderation approval -> earn money), Credits.
-- **Explore All Track (62 steps)**: Full walkthrough of all platform capabilities.
-- **Graduation Modal**: Notifies user of account verification requirement for transactions (with reassurance for already-verified users) and points to other walkthrough tracks.
-- Frontend builds with 0 errors (`npm run build`).
+- Header shows number, subject, requester, dates, and status/priority/type/handler/escalated/awaiting pills, plus a Transcript button.
+- Main column has "Conversation" and "Details" tabs; the composer stays pinned and switches between "Reply to member" and "Internal note".
+- Sidebar groups actions into Handler, Ticket (status, priority, closing), Appeal decision, People, Credit change, and Move ticket.
+- One Save button, enabled only when status, priority, or handler changed.
+- All confirmations (remove, add, schedule close, move, escalate to Admin, appeal) use the shared dialog.
+- No gradients; existing dark staff theme.
+- `npx tsc --noEmit -p tsconfig.app.json` reports no errors in the files above, and `npm run build` passes.
 
-## Concurrent editor task: consistent market-original playback delivery
+## Note
 
-- Objective: use one CloudFront-first signing policy for both the project license batch and individual editor media-source requests.
-- Acceptance: preserve signed-session, current project membership, active license, non-deleted original, and asset/media linkage checks; protect redirects with private/no-store; never downgrade a protected original to S3 after a CloudFront signing failure.
-- Implementation: market-license-service now owns the shared signer and individual source authorization. The individual source route uses it instead of the backend's S3-only original-preview endpoint. Image, video and audio playback share the same choice of delivery provider.
-- Deliberate compatibility: signed S3 remains for disabled CloudFront or legacy files outside asset-originals/, since those paths do not have a signature-enforcing CloudFront behavior. No public-cache signing shortcut or AWS configuration change was made. Standalone marketplace downloads and renderer delivery retain their existing paths.
-- Verification: no tests or builds run, per user instruction. No live AWS operations performed.
-
-## Concurrent editor task: export feedback and comment notifications
-
-- Objective: show at least 1% after one second of an active export, and alert the current editor user to replies to their comments and mentions.
-- Acceptance criteria: real export progress takes over above 1%; failures/cancellation/queued status retain their existing UI. WebSocket-driven comment refreshes produce a navbar unread count, badges on affected entries/threads, a temporary automatic tooltip, and the main site's notification sound. Clear a thread's unread state only when its floating thread panel is open; viewing the main comments list does not clear it. Suppress self-notifications and duplicate alerts, retain unread state per user and project/scene in this browser, and recover missed changes on reconnect.
-- Preserve eager native video playback and the previous CloudFront delivery fixes. No database schema changes.
-- Implemented: presentation-only export floor; scoped browser notification checkpoints driven by existing authenticated comment refreshes; navbar count and automatic tooltip; floating-thread acknowledgements and collapsed-reply badges; copied the exact main-site notification sound into editor public assets. Removed automatic acknowledgement based on list-entry visibility.
-- Follow-up acceptance and implementation: comment unread badges use the same text-xs size as their surrounding labels. Comment/reply attachment previews preserve natural aspect ratios within the existing size bounds, with no forced 16:9 or cover cropping; pending-upload thumbnails also contain the entire image. Repository files schema has no dimension columns, so this uses intrinsic image dimensions without database changes.
-- Navbar positioning: place the unread badge at top-0/right-0, halfway between its original outside offset and the previous inset.
-- Centering follow-up: center badge digits in a grid with a one-pixel optical lift and tabular numbers. Presence avatars use fixed 34px circular border boxes with centered full-size contents; align the overflow circle to the same size and optically center initials/counts.
-- Circle correction: presence frames now enforce explicit 34px width/height and 1:1 aspect ratio with fixed 32px avatar contents, replacing percentage sizing that could stretch the image.
-- Export download follow-up objective and acceptance: retain the automatic download once after completion and keep the Download button reusable after a browser save dialog is cancelled. Treat launching the browser download as requested, not confirmed saved. Invoke existing render-server/S3 cleanup only when closing the completed/expired-output modal (X, Escape, outside dismissal or Close), then reset export state. Closing an active render still only hides its modal. Ignore pending download responses after closing. No tests/builds run.
-- Share-modal follow-up objective and acceptance: show the no-email-match hint only after a 500ms typing pause and a successful search for the current input. Ignore superseded search responses, clear stale suggestions immediately, and cancel pending work on close/project change or selecting a person. Implemented without tests/builds per user instruction.
-- Canvas loading follow-up objective and acceptance: match timeline media items with solid #2E1D12 orange-brown backgrounds, orange loading text/spinner, and no stripes or dim overlay. Implemented in the shared canvas placeholder while preserving zoom-aware sizing and the existing missing/failed media appearance. No tests or builds run.
-- Unread follow-up: persist acknowledgements by individual comment/reply ID when the floating thread opens. Preserve previously known IDs across incomplete refreshes and exclude acknowledged entries from future unread counts. After reading two replies, a third reply in that thread contributes one unread notification.
-- Verification: source review only; no tests or builds, per user instruction.
+`npm run build` runs `tsc --noEmit` against `tsconfig.json`, which has `"files": []`, so it type-checks nothing. Use `tsconfig.app.json` for a real check (about 845 pre-existing errors elsewhere).

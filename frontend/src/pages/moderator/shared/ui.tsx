@@ -130,12 +130,6 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>;
 }
 
-function shortId(value: string | number | null | undefined) {
-  if (value == null || value === "") return "—";
-  const s = String(value);
-  return s.length > 10 ? `${s.slice(0, 8)}…` : s;
-}
-
 export function TicketsTable({
   tickets,
   onSelect,
@@ -168,7 +162,6 @@ export function TicketsTable({
               <td className="min-w-[140px] py-2.5">
                 <p className="text-zinc-300">{t.requester.name}</p>
                 <p className="text-[11px] text-zinc-500">@{t.requester.username || "—"}</p>
-                <p className="font-mono text-[10px] text-zinc-600">acc {shortId(t.requester.accountId)}</p>
               </td>
               <td className="py-2.5 text-zinc-400">{t.type || t.category || "—"}</td>
               <td className="py-2.5">

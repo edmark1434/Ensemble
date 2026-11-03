@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Eye,
@@ -20,6 +20,7 @@ import type { TicketMessage } from "@/pages/admin/ticketManagement/ticketTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
+import { BTN, BTN_BASE, ConfirmDialog, FIELD, Pill, SidebarSection } from "./staffCaseUi";
 
 type DisputeSocketMessage = {
   id?: string;
@@ -211,18 +212,6 @@ const ACCENT_BTN: Record<Accent, string> = {
   rose: "bg-rose-500/90 hover:bg-rose-500",
 };
 
-const BTN_BASE =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
-const BTN = {
-  neutral: `${BTN_BASE} border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10`,
-  claim: `${BTN_BASE} border-sky-500/30 bg-sky-500/10 text-sky-100 hover:bg-sky-500/20`,
-  warn: `${BTN_BASE} border-amber-500/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20`,
-  danger: `${BTN_BASE} border-red-500/30 bg-red-500/10 text-red-100 hover:bg-red-500/20`,
-  success: `${BTN_BASE} border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20`,
-} as const;
-const FIELD =
-  "w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-50";
-
 const STATUS_OPTIONS = [
   "pending_review",
   "open",
@@ -257,72 +246,6 @@ function priorityPillClass(priority: string) {
   if (p === "high") return "border-red-500/30 bg-red-500/10 text-red-200";
   if (p === "medium") return "border-amber-500/30 bg-amber-500/10 text-amber-200";
   return "border-white/10 bg-white/5 text-zinc-300";
-}
-
-function Pill({ className, children }: { className: string; children: ReactNode }) {
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${className}`}>
-      {children}
-    </span>
-  );
-}
-
-function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-xl border border-white/[0.08] bg-[#14151c] p-4">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
-      <div className="mt-3 space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function ConfirmDialog({
-  title,
-  description,
-  children,
-  confirmLabel,
-  busyLabel,
-  busy,
-  confirmDisabled,
-  confirmClassName,
-  onCancel,
-  onConfirm,
-}: {
-  title: string;
-  description: ReactNode;
-  children?: ReactNode;
-  confirmLabel: string;
-  busyLabel: string;
-  busy: boolean;
-  confirmDisabled?: boolean;
-  confirmClassName: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-2xl border border-white/10 bg-[#14151c] p-5 shadow-2xl">
-        <div>
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-400">{description}</p>
-        </div>
-        {children}
-        <div className="flex justify-end gap-2">
-          <button type="button" disabled={busy} onClick={onCancel} className={BTN.neutral}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy || confirmDisabled}
-            onClick={onConfirm}
-            className={confirmClassName}
-          >
-            {busy ? busyLabel : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /**
