@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 
 function extractAccessToken(req) {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7).trim();
+    }
     return req.cookies?.accessToken || null;
 }
 

@@ -158,6 +158,16 @@ function mapDisputeRow(row) {
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
     isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
+    financialResolution: row.financial_resolution_at
+      ? {
+          at: row.financial_resolution_at,
+          kind: row.financial_resolution_kind || null,
+          staffId: row.financial_resolution_staff_id || null,
+          clientCredits: Number(row.financial_client_credits || 0),
+          freelancerCredits: Number(row.financial_freelancer_credits || 0),
+          reversedTransactionId: row.financial_reversed_transaction_id || null,
+        }
+      : null,
   };
 }
 
@@ -415,11 +425,11 @@ async function fetchScopedDisputes({ entityTypesIn, status } = {}) {
   const params = [];
   if (entityTypesIn && entityTypesIn.length) {
     params.push(entityTypesIn);
-    where.push(`LOWER(d.type) = ANY($${params.length})`);
+    where.push(`LOWER(d.type::text) = ANY($${params.length}::text[])`);
   }
   if (status && status !== 'all') {
     params.push(String(status).toLowerCase());
-    where.push(`LOWER(d.status) = $${params.length}`);
+    where.push(`LOWER(d.status::text) = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -454,7 +464,7 @@ async function scopedDisputeCounts({ entityTypesIn } = {}) {
   const params = [];
   if (entityTypesIn && entityTypesIn.length) {
     params.push(entityTypesIn);
-    where.push(`LOWER(type) = ANY($${params.length})`);
+    where.push(`LOWER(type::text) = ANY($${params.length}::text[])`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -462,8 +472,8 @@ async function scopedDisputeCounts({ entityTypesIn } = {}) {
     `
     SELECT
       COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE LOWER(status) IN ('open', 'under_review'))::int AS open_count,
-      COALESCE(SUM(credit_amount_involved) FILTER (WHERE LOWER(status) IN ('open', 'under_review')), 0)::int AS credits_at_risk
+      COUNT(*) FILTER (WHERE LOWER(status::text) IN ('open', 'under_review'))::int AS open_count,
+      COALESCE(SUM(credit_amount_involved) FILTER (WHERE LOWER(status::text) IN ('open', 'under_review')), 0)::int AS credits_at_risk
     FROM disputes
     ${whereSql}
     `,

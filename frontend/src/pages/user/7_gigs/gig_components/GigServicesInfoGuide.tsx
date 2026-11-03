@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   TrendingUp,
@@ -16,10 +16,14 @@ import {
 } from "lucide-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 export const GigServicesInfoGuide: React.FC = () => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const user = useGlobalState((state) => state.user);
+  const isGuest = Boolean(isGuestMode || !user || user?.role === "guest");
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
 
   const rankingPillars = [
     {
@@ -157,8 +161,8 @@ export const GigServicesInfoGuide: React.FC = () => {
   ];
 
   const handleCreateService = () => {
-    if (isGuestMode) {
-      navigate("/login");
+    if (isGuest) {
+      setIsGuestModalOpen(true);
       return;
     }
     continueIfAccountVerified(
@@ -436,6 +440,11 @@ export const GigServicesInfoGuide: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <GuestLoginModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+      />
     </div>
   );
 };

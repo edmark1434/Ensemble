@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Briefcase,
   ExternalLink,
@@ -98,8 +98,20 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   onOpenReportModal,
 }) => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useGlobalState();
   const [subTab, setSubTab] = useState<'contracts' | 'members'>(defaultSubTab);
+
+  useEffect(() => {
+    const paramTab = searchParams.get('tab');
+    if (paramTab === 'members') {
+      setSubTab('members');
+    } else if (paramTab === 'contract') {
+      setSubTab('contracts');
+    } else if (defaultSubTab) {
+      setSubTab(defaultSubTab);
+    }
+  }, [defaultSubTab, searchParams]);
 
   const [proposals, setProposals] = useState<SubcontractProposal[]>([]);
   const [isNominateModalOpen, setIsNominateModalOpen] = useState(false);
@@ -168,7 +180,14 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
         <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl w-fit border border-zinc-200/80 dark:border-zinc-800">
           <button
             type="button"
-            onClick={() => setSubTab('contracts')}
+            onClick={() => {
+              setSubTab('contracts');
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('tab', 'contract');
+                return next;
+              });
+            }}
             className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               subTab === 'contracts'
                 ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs'
@@ -181,7 +200,14 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
 
           <button
             type="button"
-            onClick={() => setSubTab('members')}
+            onClick={() => {
+              setSubTab('members');
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('tab', 'members');
+                return next;
+              });
+            }}
             className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               subTab === 'members'
                 ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs'

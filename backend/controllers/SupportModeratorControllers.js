@@ -16,6 +16,7 @@ const {
   updateReport,
   getReportDetail,
 } = require('../repositories/AdminTicketsRepositories');
+const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
 const {
   getViolationsAndRestrictions,
   issueViolation,
@@ -183,6 +184,23 @@ async function getDispute(req, res) {
   }
 }
 
+async function postFinancialResolution(req, res) {
+  try {
+    const data = await applyFinancialResolution(req.params.id, req.body || {}, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error applying dispute financial resolution:', err);
+    const msg = err.message || 'Failed to apply financial resolution';
+    const statusCode = err.statusCode || (/not found/i.test(msg) ? 404 : /cannot|only admin|invalid|must be|required/i.test(msg) ? 400 : 500);
+    res.status(statusCode).json({
+      success: false,
+      message: msg,
+      code: err.code || undefined,
+    });
+  }
+}
+
 async function patchDispute(req, res) {
   try {
     const data = await updateDispute(req.params.id, req.body, req.session);
@@ -334,6 +352,7 @@ module.exports = {
   patchReport,
   getDisputes,
   getDispute,
+  postFinancialResolution,
   patchDispute,
   postDisputeMessage,
   patchDisputeMessage,

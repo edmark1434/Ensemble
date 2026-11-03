@@ -2,28 +2,26 @@ import { useEffect, useState, useRef, Suspense, lazy } from "react";
 import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
 import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
+import ScrollRulerRail from "@/components/ui/ScrollRulerRail";
+import { APP_VERSION } from "@/version.tsx";
 
 // Modular Split Section Imports
 import NavLanding from "../pages/landing/nav_Landing";
 import SectionHero from "../pages/landing/section_Hero";
 
-// Lazy-loaded components below the fold for better performance
-const SectionGallery = lazy(() => import("@/pages/landing/section_gallery.tsx"));
-const SectionHowItWorks = lazy(() => import("../pages/landing/section_HowItWorks"));
-const SectionFeatures = lazy(() => import("../pages/landing/section_Features"));
-const SectionScrollExpand = lazy(() => import("../pages/landing/section_ScrollExpand"));
+// Lazy-loaded vertical sections below the fold
 const SectionScrollText = lazy(() => import("../pages/landing/section_ScrollText"));
+const SectionHowItWorks = lazy(() => import("../pages/landing/section_HowItWorks"));
+const SectionScrollExpand = lazy(() => import("../pages/landing/section_ScrollExpand"));
 const SectionTestimonials = lazy(() => import("../pages/landing/section_Testimonials"));
 const SectionCallForAction = lazy(() => import("../pages/landing/section_CallForAction"));
 const SectionFooter = lazy(() => import("../pages/landing/section_Footer"));
 
-import HorizontalScrollJacker from "@/components/ui/HorizontalScrollJacker";
-
 // ─── Design tokens (Plus Jakarta Sans) ────────────────────────────────────────
 const T = {
-  bg:          "#080a12",
-  bgCard:      "#0d0f1a",
-  border:      "#1e2130",
+  bg:          "#121214",
+  bgCard:      "#121214",
+  border:      "#27272a",
   text:        "#ffffff",
   muted:       "#7a8499",
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
@@ -49,8 +47,8 @@ const GLOBAL_CSS = `
   /* Precision Floating Ask AI Pill */
   .ensemble-floating-ask-ai {
     position: fixed;
-    bottom: 26px;
-    right: 26px;
+    bottom: 24px;
+    right: 24px;
     z-index: 999;
     display: inline-flex;
     align-items: center;
@@ -159,6 +157,22 @@ const GLOBAL_CSS = `
     border-color: rgba(37, 99, 235, 0.25);
     background: rgba(37, 99, 235, 0.08);
   }
+  @media (max-width: 640px) {
+    .ensemble-floating-ask-ai {
+      bottom: 14px;
+      right: 14px;
+      padding: 6px 11px 6px 7px;
+    }
+    .ensemble-ai-pill-kbd {
+      display: none;
+    }
+    .ensemble-version-badge {
+      bottom: 14px !important;
+      left: 14px !important;
+      padding: 4px 8px !important;
+      font-size: 9.5px !important;
+    }
+  }
 `;
 
 function useGlobalStyle(css: string): void {
@@ -170,11 +184,9 @@ function useGlobalStyle(css: string): void {
   }, []);
 }
 
-
-
 import useGlobalState from "@/lib/global_state";
 
-// ─── Main Landing Page Composition ───────────────────────────────────────────
+// ─── Main Landing Page Composition (Pure Vertical + Blueprint Telemetry) ─────
 const LandingPage: FC = () => {
   useGlobalStyle(GLOBAL_CSS);
   const navigate = useNavigate();
@@ -228,12 +240,9 @@ const LandingPage: FC = () => {
     const audio = audioRef.current;
     if (!audio) return;
     
-    // We have dedicated tracks now, so ensure playback speed is normal
     audio.playbackRate = 1.0;
 
     if (!isBgmMuted) {
-      // Whenever the source changes, we reset volume to 0 to prevent a loud cut,
-      // then seamlessly play and fade it up to the new target volume.
       if (audio.paused) {
         audio.volume = 0;
         audio.play().then(() => {
@@ -246,7 +255,6 @@ const LandingPage: FC = () => {
   }, [audioSrc, targetVolume, isBgmMuted]);
 
   useEffect(() => {
-    // 1. Fire a 0.8-second (800ms) delay timer on page mount
     const timer = setTimeout(() => {
       if (audioRef.current) {
         fadeInAudio(audioRef.current);
@@ -296,11 +304,14 @@ const LandingPage: FC = () => {
   };
 
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", overflowX: "clip" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#ffffff", minHeight: "100vh", overflowX: "clip" }}>
       {/* Background Music Resource Initialization Loop */}
       <audio ref={audioRef} src={audioSrc} loop />
 
-      {/* 1. Header Navigation Module */}
+      {/* Right-Edge Scroll Ruler & Section Telemetry Rail */}
+      <ScrollRulerRail />
+
+      {/* 1. Sticky Header Navigation Module */}
       <NavLanding
         onLogin={() => navigate("/login")}
         onSignup={handleStartAction}
@@ -315,26 +326,18 @@ const LandingPage: FC = () => {
       {/* 2. Full Video Backdrop Hero Module */}
       <SectionHero onStart={handleStartAction} isMuted={isSfxMuted} />
 
-      {/* Lazy-loaded sections to prevent initial lag */}
+      {/* Pure Vertical Sections Below the Fold */}
       <Suspense fallback={<div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.muted }}>Loading...</div>}>
-        {/* 6.5 Isolated Scrolling Text Module */}
+        {/* 3. Scrolling Marquee + "What's inside." 3x4 Bento Grid (Features + Overview + Stats) */}
         <SectionScrollText isMuted={isSfxMuted} />
 
-        <HorizontalScrollJacker numPanels={3}>
-          {/* 4. Interactive WebGL Curvature Showcase */}
-          <SectionGallery isMuted={isSfxMuted} />
+        {/* 4. Multi-Intent 3-Way Workflow Module */}
+        <SectionHowItWorks isMuted={isSfxMuted} />
 
-          {/* 5. Multi-Intent 3-Way Structural Flow Module */}
-          <SectionHowItWorks isMuted={isSfxMuted} />
-
-          {/* 6. Marketplace Value Grid Module */}
-          <SectionFeatures isMuted={isSfxMuted} />
-        </HorizontalScrollJacker>
-
-        {/* 6.1 Scroll Expansion Module */}
+        {/* 5. Scroll Expansion & Categories Ticker Module */}
         <SectionScrollExpand isMuted={isSfxMuted} />
 
-        {/* 6.7 Wall of Love / Testimonials Module */}
+        {/* 6. Wall of Love / Testimonials Module */}
         <SectionTestimonials />
 
         {/* 7. Action Acquisition Strip Module */}
@@ -365,7 +368,33 @@ const LandingPage: FC = () => {
         <kbd className="ensemble-ai-pill-kbd">{isMac ? "⌘K" : "Ctrl K"}</kbd>
       </button>
 
-      <ScrollToTop bottom="76px" />
+      <ScrollToTop bottom="82px" right="24px" />
+
+      {/* Fixed Bottom-Left App Version Telemetry Badge */}
+      <div
+        className="ensemble-version-badge"
+        style={{
+          position: "fixed",
+          bottom: 24,
+          left: 24,
+          zIndex: 999,
+          pointerEvents: "none",
+          padding: "5px 10px",
+          background: theme === "dark" ? "rgba(18, 18, 20, 0.85)" : "rgba(255, 255, 255, 0.88)",
+          border: theme === "dark" ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontSize: 10.5,
+          fontWeight: 600,
+          letterSpacing: "0.16em",
+          color: theme === "dark" ? "rgba(255, 255, 255, 0.55)" : "rgba(17, 24, 39, 0.6)",
+          userSelect: "none",
+          lineHeight: 1,
+        }}
+      >
+        {APP_VERSION}
+      </div>
     </div>
   );
 };

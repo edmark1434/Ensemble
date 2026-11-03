@@ -172,6 +172,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                             clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
                             viewMode="both"
                             isOwner={isOwner}
+                            disputes={userDetails?.disputes || []}
                             onNavigateToReviews={(filter) => {
                               setReviewFilter(filter);
                               setPerformanceTab("reviews");

@@ -11,10 +11,11 @@ import {
   Film,
   TrendingUp,
   Wrench,
+  Sparkles,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { JobRichText } from "./JobRichText";
-import { computeJobRankingBreakdown } from "../job_ranking";
+import { computeJobRankingBreakdown, computeWeightedDiscoveryOrderKey } from "../job_ranking";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
 import { formatDistanceToNow } from "date-fns";
@@ -26,6 +27,7 @@ interface JobsOtherPostsProps {
 export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
   const userInfo = useGlobalState((state) => state.user);
   const [jobs, setJobs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +109,7 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                 timeAgo: j.created_at ? getTimeAgo(new Date(j.created_at)) : "Just now",
                 timeline: `${j.timeline_min || 1}-${j.timeline_max || 7} Days`,
                 thumbnail: mapUrl(j.thumbnail_path || j.thumbnail),
+                hasCustomThumbnail: Boolean(j.thumbnail_path),
                 skills: j.tags || [],
                 isSaved: Boolean(j.is_saved),
                 isOwnPost: Boolean(j.is_own_post || userInfo?.account_id === j.client_account_id),
@@ -118,13 +121,20 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                 portfolioUseAllowed: Boolean(j.portfolio_use_allowed),
                 requireNDA: Boolean(j.require_nda),
                 screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
+                attachments: Array.isArray(j.attachments) ? j.attachments : [],
+                clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
+                clientMerit: j.client_merit !== undefined && j.client_merit !== null ? Number(j.client_merit) : 100,
+                clientSubscriptionPlan: j.client_subscription_plan || "Free",
+                clientProfileVisibility: Number(j.client_profile_visibility) || 0,
+                applicationDeadline: j.application_deadline || undefined,
+                isUrgent: Boolean(j.is_urgent),
               };
             })
-            .sort(
-              (a: any, b: any) =>
-                computeJobRankingBreakdown(b).totalScore -
-                computeJobRankingBreakdown(a).totalScore
-            )
+            .map((jobItem: any) => ({
+              ...jobItem,
+              discoveryOrderKey: computeWeightedDiscoveryOrderKey(jobItem),
+            }))
+            .sort((a: any, b: any) => b.discoveryOrderKey - a.discoveryOrderKey)
             .slice(0, 3);
 
           setJobs(mapped);
@@ -234,6 +244,39 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                         <Film className="h-8 w-8 text-gray-400 dark:text-zinc-600" />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                      {isDevModeOpen && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                          <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                            Algo Score
+                          </span>
+                          <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                            {rankInfo.totalScore.toFixed(1)}
+                          </span>
+                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                            {typeof job.discoveryOrderKey === "number" && (
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                                Roll: {job.discoveryOrderKey.toFixed(1)}
+                              </span>
+                            )}
+                            {rankInfo.subscriptionBoost > 0 ? (
+                              <span
+                                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                                  rankInfo.subscriptionPlan === "Business"
+                                    ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                                    : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                                }`}
+                              >
+                                <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                                <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                                Free (+0.0)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Top-left Proposals count */}
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">

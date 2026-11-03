@@ -62,6 +62,14 @@ export interface Inbox {
     status?: string | null;
     satisfaction_score?: number | null;
   };
+  dispute_details?: {
+    dispute_number?: string | null;
+    title?: string | null;
+    status?: string | null;
+    visibility?: boolean;
+    by_account_id?: string | null;
+    for_account_id?: string | null;
+  };
   listing_type?: "job" | "gig" | "asset" | string;
   listing_title?: string;
   listing_preview?: string;

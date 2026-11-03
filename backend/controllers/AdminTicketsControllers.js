@@ -37,6 +37,7 @@ const { pool } = require('../lib/Database');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 const { createStaffTicketService } = require('../services/TicketServices');
+const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
 
 async function getAdminTicketsOverview(req, res) {
   try {
@@ -212,6 +213,23 @@ async function getAdminDisputeDetail(req, res) {
   } catch (err) {
     console.error('Error fetching dispute detail:', err);
     res.status(500).json({ success: false, message: 'Failed to load dispute' });
+  }
+}
+
+async function postAdminDisputeFinancialResolution(req, res) {
+  try {
+    const data = await applyFinancialResolution(req.params.id, req.body || {}, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error applying dispute financial resolution:', err);
+    const msg = err.message || 'Failed to apply financial resolution';
+    const statusCode = err.statusCode || (/not found/i.test(msg) ? 404 : /cannot|only admin|invalid|must be|required/i.test(msg) ? 400 : 500);
+    res.status(statusCode).json({
+      success: false,
+      message: msg,
+      code: err.code || undefined,
+    });
   }
 }
 
@@ -796,6 +814,7 @@ module.exports = {
   deleteAdminTicketMessage,
   getAdminDisputeDetail,
   patchAdminDispute,
+  postAdminDisputeFinancialResolution,
   postAdminDisputeMessage,
   patchAdminDisputeMessage,
   getAdminReportDetail,

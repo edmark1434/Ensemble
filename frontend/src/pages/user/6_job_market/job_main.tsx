@@ -22,7 +22,7 @@ import api from "@/lib/axios";
 // Datasets & Types
 import { sampleJobs, sampleCategories } from "./job_datasets";
 import type { Job } from "./job_components/job_lists";
-import { computeJobRankingBreakdown } from "./job_ranking";
+import { computeJobRankingBreakdown, computeWeightedDiscoveryOrderKey } from "./job_ranking";
 
 function getTimeAgo(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -106,39 +106,40 @@ const JobMain: React.FC = () => {
   const [loadingUserSkills, setLoadingUserSkills] = useState<boolean>(false);
 
   useEffect(() => {
-    const fetchUserSkills = async () => {
-      if (!userInfo?.account_id) {
-        setUserSkills([]);
-        return;
-      }
+    let isCancelled = false;
+
+    const loadAllMarketData = async () => {
+      setLoading(true);
       setLoadingUserSkills(true);
       try {
-        const res = await api.get(`/api/tags/users/${userInfo.account_id}/tags`);
-        const tags = res.data?.data || [];
-        const skillNames = tags
-          .map((t: any) => t.tag_name || t.name)
-          .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0);
-        setUserSkills(skillNames);
-      } catch (err) {
-        console.error("Failed to fetch user skills for matching:", err);
-      } finally {
-        setLoadingUserSkills(false);
-      }
-    };
+        // Fetch both jobs and user profile skills concurrently so ranking,
+        // skill-matching, and score-weighted discovery rolls are fully computed
+        // and pre-arranged while skeleton loading is actively displayed!
+        const [jobsResult, skillsResult] = await Promise.allSettled([
+          fetchJobs(),
+          userInfo?.account_id
+            ? api.get(`/api/tags/users/${userInfo.account_id}/tags`)
+            : Promise.resolve(null),
+        ]);
 
-    fetchUserSkills();
-  }, [userInfo?.account_id]);
+        let resolvedSkills: string[] = [];
+        if (skillsResult.status === "fulfilled" && skillsResult.value?.data?.data) {
+          const tags = skillsResult.value.data.data;
+          resolvedSkills = tags
+            .map((t: any) => t.tag_name || t.name)
+            .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0);
+        }
 
-  useEffect(() => {
-    const loadJobs = async () => {
-      setLoading(true);
-      try {
-        const fetchedJobs = await fetchJobs();
-        
-        if (!Array.isArray(fetchedJobs)) return;
+        if (!isCancelled) {
+          setUserSkills(resolvedSkills);
+          setLoadingUserSkills(false);
+        }
+
+        const fetchedJobs = jobsResult.status === "fulfilled" ? jobsResult.value : [];
+        if (!Array.isArray(fetchedJobs) || isCancelled) return;
 
         // Backend is_saved handles the saved status per account
-        const mappedJobs = fetchedJobs.map((j: any) => ({
+        const mappedJobs: Job[] = fetchedJobs.map((j: any) => ({
           id: j.job_id,
           title: j.title,
           description: j.description,
@@ -167,6 +168,7 @@ const JobMain: React.FC = () => {
           savesCount: parseInt(j.saves_count) || 0,
           timeline: `${j.timeline_min}-${j.timeline_max} Days`,
           thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
+          hasCustomThumbnail: Boolean(j.thumbnail_path),
           skills: j.tags || [],
           isSaved: j.is_saved || false,
           isOwnPost: Boolean(j.is_own_post),
@@ -184,6 +186,10 @@ const JobMain: React.FC = () => {
           hiring_type: j.hiring_type || (j.posted_as === 'Team' ? "team" : "single"),
           milestones: Array.isArray(j.milestones) ? j.milestones : [],
           deadline: j.rough_deadline ? new Date(j.rough_deadline).toLocaleDateString() : undefined,
+          applicationDeadline: j.application_deadline || undefined,
+          isUrgent: Boolean(j.is_urgent),
+          hardDeadline: j.hard_deadline || undefined,
+          postingFeeCredits: Number(j.posting_fee_credits) || 50,
           requireNDA: j.require_nda || false,
           portfolioUseAllowed: j.portfolio_use_allowed || false,
           portfolioDuration: j.portfolio_use_duration_seconds || null,
@@ -194,16 +200,42 @@ const JobMain: React.FC = () => {
           screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
           shortlistedCount: parseInt(j.shortlisted_count) || 0,
           clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
+          clientMerit: j.client_merit !== undefined && j.client_merit !== null ? Number(j.client_merit) : 100,
+          clientSubscriptionPlan: j.client_subscription_plan || "Free",
+          clientProfileVisibility: Number(j.client_profile_visibility) || 0,
           clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined
+        })).map((mappedJob: Job) => ({
+          ...mappedJob,
+          discoveryOrderKey: computeWeightedDiscoveryOrderKey(mappedJob, resolvedSkills),
         }));
-        setJobsList(mappedJobs);
+
+        // PRE-SORT jobs by discovery order while STILL in skeleton loading!
+        // This ensures the initial order is 100% arranged before any cards render,
+        // preventing cards from flying across positions after skeleton loading ends.
+        mappedJobs.sort((a, b) => {
+          const keyB = typeof b.discoveryOrderKey === "number" ? b.discoveryOrderKey : computeJobRankingBreakdown(b, resolvedSkills).totalScore;
+          const keyA = typeof a.discoveryOrderKey === "number" ? a.discoveryOrderKey : computeJobRankingBreakdown(a, resolvedSkills).totalScore;
+          return keyB - keyA;
+        });
+
+        if (!isCancelled) {
+          setJobsList(mappedJobs);
+        }
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load marketplace jobs and user skills:", err);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+          setLoadingUserSkills(false);
+        }
       }
     };
-    loadJobs();
+
+    loadAllMarketData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [fetchJobs, userInfo?.account_id]);
 
   useEffect(() => {
@@ -359,8 +391,21 @@ const JobMain: React.FC = () => {
       if (priceSort === "dec") return b.minBudget - a.minBudget;
       if (posSort === "inc") return a.positionsNeeded - b.positionsNeeded;
       if (posSort === "dec") return b.positionsNeeded - a.positionsNeeded;
-      if (ratingSort) return b.clientRating - a.clientRating;
-      return computeJobRankingBreakdown(b).totalScore - computeJobRankingBreakdown(a).totalScore;
+      if (ratingSort) {
+        return (
+          computeJobRankingBreakdown(b, userSkills).bayesianRating -
+          computeJobRankingBreakdown(a, userSkills).bayesianRating
+        );
+      }
+      const keyB =
+        typeof b.discoveryOrderKey === "number"
+          ? b.discoveryOrderKey
+          : computeJobRankingBreakdown(b, userSkills).totalScore;
+      const keyA =
+        typeof a.discoveryOrderKey === "number"
+          ? a.discoveryOrderKey
+          : computeJobRankingBreakdown(a, userSkills).totalScore;
+      return keyB - keyA;
     });
 
     return result;

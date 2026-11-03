@@ -336,11 +336,11 @@ async function getEconomyOverview() {
       `),
       pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE LOWER(status) IN ('completed', 'credited', 'success', 'paid'))::int AS completed,
-          COUNT(*) FILTER (WHERE LOWER(status) IN ('cancelled', 'canceled', 'failed'))::int AS cancelled,
-          COUNT(*) FILTER (WHERE LOWER(status) IN ('pending', 'processing', 'open'))::int AS pending,
+          COUNT(*) FILTER (WHERE LOWER(status::text) IN ('completed', 'credited', 'success', 'paid'))::int AS completed,
+          COUNT(*) FILTER (WHERE LOWER(status::text) IN ('cancelled', 'canceled', 'failed'))::int AS cancelled,
+          COUNT(*) FILTER (WHERE LOWER(status::text) IN ('pending', 'processing', 'open'))::int AS pending,
           COUNT(*)::int AS total,
-          COALESCE(SUM(amount_credits) FILTER (WHERE LOWER(status) IN ('completed', 'credited', 'success', 'paid')), 0)::int AS completed_volume
+          COALESCE(SUM(amount_credits) FILTER (WHERE LOWER(status::text) IN ('completed', 'credited', 'success', 'paid')), 0)::int AS completed_volume
         FROM credit_transactions
       `),
       pool.query(`

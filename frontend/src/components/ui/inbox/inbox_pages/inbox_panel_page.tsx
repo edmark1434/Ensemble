@@ -75,6 +75,19 @@ onUpdateGroupName,
   const ticketClosed =
     selectedConversation.conversation_type === "ticket" &&
     (ticketStatus === "Closed" || ticketStatus === "Resolved");
+  const disputeDetails = selectedConversation.dispute_details;
+  const isDisputeThread =
+    selectedConversation.conversation_type === "dispute" ||
+    Boolean(selectedConversation.dispute_id);
+  const disputePublic = Boolean(disputeDetails?.visibility);
+  const isDisputeFiler =
+    Boolean(currentUserId) &&
+    String(disputeDetails?.by_account_id || "") === String(currentUserId);
+  const disputeReplyBlocked =
+    isDisputeThread && !disputePublic && !isDisputeFiler;
+  const disputeClosed =
+    isDisputeThread &&
+    String(disputeDetails?.status || "").toLowerCase() === "closed";
 
   return (
     <div className="flex h-full max-h-full w-full overflow-hidden bg-gray-50 dark:bg-dark-base relative">
@@ -124,6 +137,14 @@ onUpdateGroupName,
           ) : ticketClosed ? (
             <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               This ticket is closed. You cannot reply.
+            </div>
+          ) : disputeClosed ? (
+            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+              This dispute is closed. You cannot reply.
+            </div>
+          ) : disputeReplyBlocked ? (
+            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+              This dispute is not public yet. Only the person who filed it can add information for staff.
             </div>
           ) : (
           <InboxPanelChatbox

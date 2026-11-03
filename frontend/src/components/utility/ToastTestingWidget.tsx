@@ -9,8 +9,7 @@ import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 
 export const ToastTestingWidget: React.FC = () => {
-  const { user, setUser } = useGlobalState();
-  const [isOpen, setIsOpen] = useState(false);
+  const { user, setUser, isDevModeOpen: isOpen, setIsDevModeOpen: setIsOpen } = useGlobalState();
   const [toastText, setToastText] = useState("This is a test notification!");
   const [profileStatus, setProfileStatus] = useState("Pending");
   const [activeTab, setActiveTab] = useState<'toast' | 'profile' | 'membership' | 'rates'>('toast');
@@ -44,13 +43,13 @@ export const ToastTestingWidget: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
-        setIsOpen((prev) => !prev);
+        setIsOpen(!useGlobalState.getState().isDevModeOpen);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [setIsOpen]);
 
   if (!isOpen) return null;
 

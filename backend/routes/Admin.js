@@ -77,6 +77,7 @@ const {
   deleteAdminTicketArticle,
   getAdminDisputeDetail,
   patchAdminDispute,
+  postAdminDisputeFinancialResolution,
   postAdminDisputeMessage,
   patchAdminDisputeMessage,
   getAdminReportDetail,
@@ -146,6 +147,7 @@ router.get('/ticket-articles', [checkSession, requireAdmin], getAdminTicketArtic
 router.post('/ticket-articles', [checkSession, requireAdmin], postAdminTicketArticle);
 router.delete('/ticket-articles/:id', [checkSession, requireAdmin], deleteAdminTicketArticle);
 router.get('/disputes/:id', [checkSession, requireAdmin], getAdminDisputeDetail);
+router.post('/disputes/:id/financial-resolution', [checkSession, requireAdmin], postAdminDisputeFinancialResolution);
 router.post('/disputes/:id/messages', [checkSession, requireAdmin], postAdminDisputeMessage);
 router.patch('/disputes/:id/messages/:messageId', [checkSession, requireAdmin], patchAdminDisputeMessage);
 router.patch('/disputes/:id', [checkSession, requireAdmin], patchAdminDispute);

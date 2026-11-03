@@ -381,7 +381,8 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
 
   // Dynamic titles and instructions when menu items are visible
   let displayTitle = currentStep.targetName;
-  let displayText = currentStep.text;
+  const userRole = useTourStore((state) => state.userRole);
+  let displayText = (currentStep.roleTexts && currentStep.roleTexts[userRole]) || currentStep.text;
 
   if (currentStep.id === 'header_profile_nav') {
     if (isDropdownItemActive) {
@@ -465,7 +466,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="fixed bottom-10 right-6 z-[10002] flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700/60 bg-white dark:bg-[#12141c] px-4 py-2.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 shadow-2xl backdrop-blur-md pointer-events-auto"
+            className="fixed bottom-10 right-6 z-[10002] flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#121214] px-4 py-2.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 shadow-2xl backdrop-blur-md pointer-events-auto"
           >
             <div className="h-3.5 w-3.5 border-2 border-zinc-700 dark:border-zinc-300 border-t-transparent rounded-full animate-spin shrink-0" />
             <span>Loading {currentStep.tabHint || 'page view'}...</span>
@@ -508,7 +509,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
               width: `${CARD_WIDTH}px`,
               zIndex: 10002,
             }}
-            className="pointer-events-auto relative rounded-2xl border border-zinc-200/90 dark:border-zinc-700/60 bg-white dark:bg-[#12141c] text-zinc-900 dark:text-zinc-100 shadow-2xl shadow-black/15 dark:shadow-black/70 p-5"
+            className="pointer-events-auto relative rounded-2xl border border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-[#121214] text-zinc-900 dark:text-zinc-100 shadow-2xl shadow-black/15 dark:shadow-black/70 p-5"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Arrow Pointer: Top (points UP) */}
@@ -518,7 +519,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
                 style={{ left: `${arrowOffset}px`, transform: 'translateX(-50%)' }}
               >
                 <svg width="18" height="10" viewBox="0 0 18 10">
-                  <polygon points="9,0 0,10 18,10" className="fill-white dark:fill-[#12141c]" />
+                  <polygon points="9,0 0,10 18,10" className="fill-white dark:fill-[#121214]" />
                   <polyline
                     points="0,10 9,0 18,10"
                     fill="none"
@@ -537,7 +538,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
                 style={{ left: `${arrowOffset}px`, transform: 'translateX(-50%)' }}
               >
                 <svg width="18" height="10" viewBox="0 0 18 10">
-                  <polygon points="0,0 18,0 9,10" className="fill-white dark:fill-[#12141c]" />
+                  <polygon points="0,0 18,0 9,10" className="fill-white dark:fill-[#121214]" />
                   <polyline
                     points="0,0 9,10 18,0"
                     fill="none"
@@ -556,7 +557,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
                 style={{ top: `${arrowOffset}px`, transform: 'translateY(-50%)' }}
               >
                 <svg width="10" height="18" viewBox="0 0 10 18">
-                  <polygon points="0,0 10,9 0,18" className="fill-white dark:fill-[#12141c]" />
+                  <polygon points="0,0 10,9 0,18" className="fill-white dark:fill-[#121214]" />
                   <polyline
                     points="0,0 10,9 0,18"
                     fill="none"
@@ -575,7 +576,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
                 style={{ top: `${arrowOffset}px`, transform: 'translateY(-50%)' }}
               >
                 <svg width="10" height="18" viewBox="0 0 10 18">
-                  <polygon points="10,0 0,9 10,18" className="fill-white dark:fill-[#12141c]" />
+                  <polygon points="10,0 0,9 10,18" className="fill-white dark:fill-[#121214]" />
                   <polyline
                     points="10,0 0,9 10,18"
                     fill="none"

@@ -31,6 +31,7 @@ const {
   listDisputeMessages,
   createDisputeMessage,
   updateDisputeMessageAudience,
+  ensureStaffMemberOnChat,
   notifyDisputeParties,
 } = require('./DisputeChatRepositories');
 const {
@@ -149,7 +150,7 @@ async function fetchAssignableStaffForQueue(queueKey, { includeStaffId = null } 
     INNER JOIN accounts a ON a.account_id = s.account_id
     WHERE a.deleted_at IS NULL
       AND (
-        LOWER(s.role) = ANY($1)
+        LOWER(s.role::text) = ANY($1::text[])
         ${includeSql}
       )
     ORDER BY s.role, name
@@ -503,6 +504,16 @@ function mapDisputeRow(row) {
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
     isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
+    financialResolution: row.financial_resolution_at
+      ? {
+          at: row.financial_resolution_at,
+          kind: row.financial_resolution_kind || null,
+          staffId: row.financial_resolution_staff_id || null,
+          clientCredits: Number(row.financial_client_credits || 0),
+          freelancerCredits: Number(row.financial_freelancer_credits || 0),
+          reversedTransactionId: row.financial_reversed_transaction_id || null,
+        }
+      : null,
   };
 }
 
@@ -584,17 +595,17 @@ async function getTicketsOverview(staffSession = null) {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'pending_review')::int AS pending_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_only,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'closed')::int AS closed,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'pending_review')::int AS pending_review,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'open')::int AS open_only,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'awaiting_response')::int AS awaiting_response,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'under_review')::int AS under_review,
+        COUNT(*) FILTER (WHERE LOWER(status::text) = 'closed')::int AS closed,
         COUNT(*) FILTER (
-          WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
+          WHERE LOWER(status::text) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
         )::int AS open_count,
         COALESCE(
           SUM(credit_amount_involved) FILTER (
-            WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
+            WHERE LOWER(status::text) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
           ),
           0
         )::int AS credits_at_risk
@@ -881,7 +892,7 @@ async function fetchStaffWorkload() {
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.handled_by_staff_id = s.staff_id
-          AND LOWER(d.status) <> 'closed') AS open_disputes,
+          AND LOWER(d.status::text) <> 'closed') AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
@@ -902,19 +913,19 @@ async function fetchStaffWorkload() {
 async function fetchRecentActivity() {
   const result = await pool.query(`
     (
-      SELECT 'ticket' AS type, ticket_number AS ref, reason AS label, status, updated_at AS at
+      SELECT 'ticket' AS type, ticket_number AS ref, reason AS label, status::text AS status, updated_at AS at
       FROM tickets
       WHERE deleted_at IS NULL
       ORDER BY updated_at DESC LIMIT 8
     )
     UNION ALL
     (
-      SELECT 'dispute' AS type, dispute_number AS ref, title AS label, status, updated_at AS at
+      SELECT 'dispute' AS type, dispute_number AS ref, title AS label, status::text AS status, updated_at AS at
       FROM disputes ORDER BY updated_at DESC LIMIT 6
     )
     UNION ALL
     (
-      SELECT 'report' AS type, report_number AS ref, COALESCE(type, report_number) AS label, status, COALESCE(updated_at, created_at) AS at
+      SELECT 'report' AS type, report_number AS ref, COALESCE(type, report_number) AS label, status::text AS status, COALESCE(updated_at, created_at) AS at
       FROM reports WHERE deleted_at IS NULL ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 6
     )
     ORDER BY at DESC
@@ -3485,6 +3496,51 @@ async function updateDispute(disputeId, patch, staffSession) {
     return getDisputeDetail(disputeId, staffSession);
   }
 
+  if (action === 'hide' || action === 'make_private') {
+    if (!actPerms.canAct) {
+      throw new Error('Assign yourself to this dispute before making it private.');
+    }
+    if (!Boolean(refreshed.visibility)) {
+      return getDisputeDetail(disputeId, staffSession);
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET visibility = FALSE,
+           updated_at = NOW()
+       WHERE dispute_id = $1`,
+      [disputeId]
+    );
+    await recordAccountActivity({
+      accountId: refreshed.by_account_id || refreshed.for_account_id,
+      action: `Dispute ${refreshed.dispute_number || disputeId} set private`,
+      eventCode: 'DISPUTE_HIDDEN',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: { visibility: false, status: refreshed.status },
+    });
+    try {
+      require('../lib/WebSocket')
+        .getIo()
+        ?.to(`dispute:public:${disputeId}`)
+        .emit('disputeVisibilityChanged', { disputeId: String(disputeId), visibility: false });
+    } catch (err) {
+      console.warn('Dispute visibility broadcast skipped:', err.message);
+    }
+    try {
+      const number = refreshed.dispute_number || 'Dispute';
+      await notifyDisputeParties(refreshed, {
+        message: `Dispute ${number} is private again. The public discussion is closed.`,
+        path: '/contracts/disputes',
+        onlyFiler: true,
+      });
+    } catch (err) {
+      console.warn('Dispute private notice skipped:', err.message);
+    }
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
   if (action === 'dismiss') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     await pool.query(
@@ -3592,6 +3648,21 @@ async function updateDispute(disputeId, patch, staffSession) {
     await notifyDisputeParties(refreshed, {
       message: `Dispute ${number} is now open.`,
       path: `/disputes/${disputeId}`,
+    });
+  } else if (normalized.visibility === false && Boolean(refreshed.visibility)) {
+    try {
+      require('../lib/WebSocket')
+        .getIo()
+        ?.to(`dispute:public:${disputeId}`)
+        .emit('disputeVisibilityChanged', { disputeId: String(disputeId), visibility: false });
+    } catch (err) {
+      console.warn('Dispute visibility broadcast skipped:', err.message);
+    }
+    const number = refreshed.dispute_number || 'Dispute';
+    await notifyDisputeParties(refreshed, {
+      message: `Dispute ${number} is private again. The public discussion is closed.`,
+      path: '/contracts/disputes',
+      onlyFiler: true,
     });
   }
   return getDisputeDetail(disputeId, staffSession);
@@ -3703,6 +3774,8 @@ async function loadDisputeCaseFile(row) {
       ct.reference_table,
       ct.reference_id,
       ct.related_dispute_id,
+      ct.reverses_credit_transaction_id,
+      rev.credit_transaction_id AS reversed_by_transaction_id,
       src_w.type AS source_wallet_type,
       dst_w.type AS destination_wallet_type,
       COALESCE(src_a.display_name, src_u.first_name || ' ' || src_u.last_name, 'Platform') AS source_name,
@@ -3712,6 +3785,9 @@ async function loadDisputeCaseFile(row) {
     FROM credit_transactions ct
     JOIN wallets src_w ON src_w.wallet_id = ct.source_wallet_id
     JOIN wallets dst_w ON dst_w.wallet_id = ct.destination_wallet_id
+    LEFT JOIN credit_transactions rev
+      ON rev.reverses_credit_transaction_id = ct.credit_transaction_id
+     AND rev.status IN ('Completed', 'Pending')
     LEFT JOIN account_wallets src_aw ON src_aw.wallet_id = src_w.wallet_id
     LEFT JOIN accounts src_a ON src_a.account_id = src_aw.account_id
     LEFT JOIN users src_u ON src_u.account_id = src_a.account_id
@@ -3722,6 +3798,13 @@ async function loadDisputeCaseFile(row) {
       OR ($2::uuid IS NOT NULL AND ct.credit_transaction_id = $2::uuid)
       OR (ct.reference_table = 'contracts' AND ct.reference_id = ANY($3::uuid[]))
       OR (ct.reference_table = 'contract_milestones' AND ct.reference_id = ANY($4::uuid[]))
+      OR ct.reverses_credit_transaction_id IN (
+           SELECT credit_transaction_id FROM credit_transactions
+           WHERE related_dispute_id = $1
+              OR ($2::uuid IS NOT NULL AND credit_transaction_id = $2::uuid)
+              OR (reference_table = 'contracts' AND reference_id = ANY($3::uuid[]))
+              OR (reference_table = 'contract_milestones' AND reference_id = ANY($4::uuid[]))
+         )
     ORDER BY ct.created_at ASC
     LIMIT 80
     `,
@@ -3809,27 +3892,40 @@ async function loadDisputeCaseFile(row) {
       freelancerHandle: contract.freelancer_handle || '—',
       milestones: milestonesByContract.get(contract.contract_id) || [],
     })),
-    transactions: transactionResult.rows.map((tx) => ({
-      id: tx.credit_transaction_id,
-      type: tx.type,
-      amount: Number(tx.amount_credits || 0),
-      status: tx.status,
-      createdAt: tx.created_at,
-      referenceTable: tx.reference_table || null,
-      referenceLabel: tx.reference_table === 'contracts'
-        ? contractTitleById.get(tx.reference_id) || 'Contract'
-        : tx.reference_table === 'contract_milestones'
-          ? milestoneNameById.get(tx.reference_id) || 'Milestone'
-          : tx.reference_table || null,
-      sourceName: tx.source_name,
-      sourceHandle: tx.source_handle || null,
-      sourceWallet: walletLabel(tx.source_wallet_type),
-      destinationName: tx.destination_name,
-      destinationHandle: tx.destination_handle || null,
-      destinationWallet: walletLabel(tx.destination_wallet_type),
-      tiedToThisDispute: String(tx.related_dispute_id || '') === String(row.dispute_id)
-        || String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || ''),
-    })),
+    transactions: transactionResult.rows.map((tx) => {
+      const status = String(tx.status || '');
+      const alreadyReversed = Boolean(tx.reversed_by_transaction_id) || status === 'Reversed';
+      const tiedToThisDispute =
+        String(tx.related_dispute_id || '') === String(row.dispute_id) ||
+        String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || '');
+      return {
+        id: tx.credit_transaction_id,
+        type: tx.type,
+        amount: Number(tx.amount_credits || 0),
+        status: tx.status,
+        createdAt: tx.created_at,
+        referenceTable: tx.reference_table || null,
+        referenceLabel: tx.reference_table === 'contracts'
+          ? contractTitleById.get(tx.reference_id) || 'Contract'
+          : tx.reference_table === 'contract_milestones'
+            ? milestoneNameById.get(tx.reference_id) || 'Milestone'
+            : tx.reference_table || null,
+        sourceName: tx.source_name,
+        sourceHandle: tx.source_handle || null,
+        sourceWallet: walletLabel(tx.source_wallet_type),
+        destinationName: tx.destination_name,
+        destinationHandle: tx.destination_handle || null,
+        destinationWallet: walletLabel(tx.destination_wallet_type),
+        tiedToThisDispute,
+        reversesTransactionId: tx.reverses_credit_transaction_id || null,
+        reversedByTransactionId: tx.reversed_by_transaction_id || null,
+        reversible:
+          status === 'Completed' &&
+          !alreadyReversed &&
+          !tx.reverses_credit_transaction_id &&
+          !row.financial_resolution_at,
+      };
+    }),
     relatedDisputes: relatedResult.rows.map((dispute) => ({
       id: dispute.dispute_id,
       number: dispute.dispute_number || null,
@@ -3875,6 +3971,10 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   try {
     chatId = await getDisputeChatId(disputeId);
     if (chatId && chatAvailable) {
+      const viewerAccountId = sessionAccountId(staffSession);
+      if (viewerAccountId) {
+        await ensureStaffMemberOnChat(chatId, viewerAccountId);
+      }
       messages = await listDisputeMessages(chatId);
     }
   } catch (err) {
@@ -3913,50 +4013,112 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     throw new Error('You do not have permission to reply on this dispute.');
   }
 
-  // Non-handlers may only post staff-visible replies; designated handler publishes.
+  // Non-handlers may only post private staff/author replies; designated handler chooses audience.
   const mayPublish = Boolean(perms.canAct);
-  let isInternal = Boolean(options.isInternal);
+  let isInternal = options.isInternal !== false;
   let audience =
     options.audience ||
-    (isInternal
-      ? 'staff'
-      : options.visibleToPublic
-        ? 'public'
-        : options.visibleToParties
-          ? 'parties'
-          : 'staff');
+    (options.visibleToPublic
+      ? 'public'
+      : options.visibleToParties
+        ? 'parties'
+        : 'staff');
 
   if (!mayPublish) {
     audience = 'staff';
     isInternal = true;
   }
 
+  const normalizedAudience = String(audience || 'staff').toLowerCase();
   const chatId = await ensureDisputeChat(disputeId, row);
   const audiences = mayPublish && Array.isArray(options.audiences)
     ? options.audiences.map((a) => String(a).toLowerCase())
-    : ['staff'];
+    : [normalizedAudience];
+  const actorAccountId = sessionAccountId(staffSession);
+  const partyNotifyIds =
+    normalizedAudience === 'public' || (normalizedAudience === 'parties' && row.visibility)
+      ? [row.by_account_id, row.for_account_id]
+      : normalizedAudience === 'disputer'
+        ? [row.by_account_id]
+        : normalizedAudience === 'disputee'
+          ? [row.for_account_id]
+          : [];
   await createDisputeMessage({
     chatId,
     body,
-    senderId: sessionAccountId(staffSession),
+    senderId: actorAccountId,
     authorName: sessionDisplayName(staffSession) || 'Staff',
     authorType: 'staff',
     authorRole: 'staff',
-    audience,
+    audience: normalizedAudience,
     audiences,
-    isInternal,
+    isInternal:
+      isInternal || !['parties', 'public'].includes(normalizedAudience),
+    notifyAccountIds: partyNotifyIds.filter(
+      (id) => id && String(id) !== String(actorAccountId || '')
+    ),
+    disputeId,
   });
 
   const number = row.dispute_number || 'Dispute';
-  const visible = Boolean(row.visibility) && audience === 'public';
-  await notifyDisputeParties(row, {
-    message: visible
-      ? `New reply on dispute ${number}.`
-      : `New reply on dispute ${number}. It shows in the discussion after staff publish it.`,
-    path: visible ? `/disputes/${disputeId}` : '/contracts/disputes',
-    excludeAccountId: sessionAccountId(staffSession),
-    onlyFiler: !row.visibility,
-  });
+  if (
+    normalizedAudience === 'public' ||
+    normalizedAudience === 'parties' ||
+    normalizedAudience === 'disputer' ||
+    normalizedAudience === 'disputee'
+  ) {
+    const path =
+      normalizedAudience === 'public' || row.visibility
+        ? `/disputes/${disputeId}`
+        : '/contracts/disputes';
+    const message =
+      normalizedAudience === 'public'
+        ? `New reply on dispute ${number}.`
+        : normalizedAudience === 'parties'
+          ? `New reply on dispute ${number} for both parties.`
+          : normalizedAudience === 'disputer'
+            ? `Staff shared a reply on dispute ${number} with you.`
+            : `Staff shared a reply on dispute ${number} with you.`;
+    if (normalizedAudience === 'public' || normalizedAudience === 'parties') {
+      await notifyDisputeParties(row, {
+        message,
+        path,
+        excludeAccountId: actorAccountId,
+      });
+    } else if (normalizedAudience === 'disputer') {
+      await notifyDisputeParties(row, {
+        message,
+        path,
+        excludeAccountId: actorAccountId,
+        onlyFiler: true,
+      });
+    } else if (normalizedAudience === 'disputee' && row.for_account_id) {
+      const NotificationRepositories = require('./NotificationRepositories');
+      let io = null;
+      try {
+        io = require('../lib/WebSocket').getIo();
+      } catch {
+        io = null;
+      }
+      if (String(row.for_account_id) !== String(actorAccountId || '')) {
+        try {
+          const notification = await NotificationRepositories.createNotification({
+            account_id: row.for_account_id,
+            message,
+            reference_table: 'disputes',
+            reference_prefix: 'DIS',
+            reference_path: path,
+            reference_id: disputeId,
+          });
+          if (io && notification) {
+            io.to(String(row.for_account_id)).emit('notification', notification);
+          }
+        } catch (err) {
+          console.warn('Dispute disputee notification skipped:', err.message);
+        }
+      }
+    }
+  }
 
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
   return getDisputeDetail(disputeId, staffSession);
@@ -3981,14 +4143,61 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   const chatId = await getDisputeChatId(disputeId);
   if (!chatId) throw new Error('Dispute chat not found.');
 
-  await updateDisputeMessageAudience(chatId, messageId, audience);
+  const nextAudience = String(audience || '').toLowerCase();
+  const partyNotifyIds =
+    nextAudience === 'public' || (nextAudience === 'parties' && row.visibility)
+      ? [row.by_account_id, row.for_account_id]
+      : nextAudience === 'disputer'
+        ? [row.by_account_id]
+        : nextAudience === 'disputee'
+          ? [row.for_account_id]
+          : [];
+  await updateDisputeMessageAudience(chatId, messageId, audience, {
+    notifyAccountIds: partyNotifyIds,
+    disputeId,
+  });
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
-  if (String(audience).toLowerCase() === 'public') {
+  if (nextAudience === 'public' || nextAudience === 'parties' || nextAudience === 'disputer' || nextAudience === 'disputee') {
     const number = row.dispute_number || 'Dispute';
-    await notifyDisputeParties(row, {
-      message: `A reply on dispute ${number} is now public.`,
-      path: `/disputes/${disputeId}`,
-    });
+    const path =
+      nextAudience === 'public' || row.visibility
+        ? `/disputes/${disputeId}`
+        : '/contracts/disputes';
+    const message =
+      nextAudience === 'public'
+        ? `A reply on dispute ${number} is now public.`
+        : nextAudience === 'parties'
+          ? `A reply on dispute ${number} is now visible to both parties.`
+          : nextAudience === 'disputer'
+            ? `Staff shared a reply on dispute ${number} with the disputer.`
+            : `Staff shared a reply on dispute ${number} with the disputee.`;
+    if (nextAudience === 'public' || nextAudience === 'parties') {
+      await notifyDisputeParties(row, { message, path });
+    } else if (nextAudience === 'disputer' && row.by_account_id) {
+      await notifyDisputeParties(row, { message, path, onlyFiler: true });
+    } else if (nextAudience === 'disputee' && row.for_account_id) {
+      // notifyDisputeParties only supports onlyFiler; notify respondent directly
+      const NotificationRepositories = require('./NotificationRepositories');
+      let io = null;
+      try {
+        io = require('../lib/WebSocket').getIo();
+      } catch {
+        io = null;
+      }
+      try {
+        const notification = await NotificationRepositories.createNotification({
+          account_id: row.for_account_id,
+          message,
+          reference_table: 'disputes',
+          reference_prefix: 'DIS',
+          reference_path: path,
+          reference_id: disputeId,
+        });
+        if (io && notification) io.to(String(row.for_account_id)).emit('notification', notification);
+      } catch (err) {
+        console.warn('Dispute disputee notification skipped:', err.message);
+      }
+    }
   }
   return getDisputeDetail(disputeId, staffSession);
 }
@@ -4021,6 +4230,7 @@ async function postDisputeDecisionMessage(row, staffSession, body) {
     audience: 'public',
     audiences: ['public', 'parties'],
     isInternal: false,
+    disputeId: row.dispute_id,
   });
   const number = row.dispute_number || 'Dispute';
   await notifyDisputeParties(row, {
@@ -4940,4 +5150,8 @@ module.exports = {
   updateReport,
   getReportDetail,
   fetchStaffWorkload,
+  resolveDisputeStaffId,
+  buildDisputePermissions,
+  loadDisputeRow,
+  mapDisputeRow,
 };

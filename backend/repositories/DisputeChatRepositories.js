@@ -73,16 +73,19 @@ async function ensureDisputeChat(disputeId, disputeRow) {
   return chatId;
 }
 
+/** Audience for a stored dispute message. Legacy member messages without one stay private. */
+function resolveDisputeMessageAudience(m) {
+  if (m?.audience) return String(m.audience).toLowerCase();
+  if (m?.is_internal) return 'author_and_staff';
+  if (m?.published_at) return 'parties';
+  const authorType = String(m?.author_type || '').toLowerCase();
+  const authorRole = String(m?.author_role || '').toLowerCase();
+  if (authorType === 'staff' || authorRole === 'staff') return 'parties';
+  return 'author_and_staff';
+}
+
 function mapMongoDisputeMessage(m) {
-  const audience =
-    m.audience ||
-    (m.is_internal
-      ? 'staff'
-      : m.published_at
-        ? 'parties'
-        : m.author_role && m.author_role !== 'staff'
-          ? 'author_and_staff'
-          : 'parties');
+  const audience = resolveDisputeMessageAudience(m);
   return {
     id: String(m._id),
     authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
@@ -90,27 +93,47 @@ function mapMongoDisputeMessage(m) {
     authorRole: m.author_role || (m.author_type === 'staff' ? 'staff' : null),
     senderAccountId: m.sender_id || m.senderId || null,
     body: m.message_content || m.body || '',
-    isInternal: Boolean(m.is_internal) || audience === 'staff',
+    isInternal: Boolean(m.is_internal) || audience === 'staff' || audience === 'author_and_staff',
     audience,
     publishedAt: m.published_at || null,
     createdAt: m.created_at || m.createdAt || null,
   };
 }
 
-const DISPUTE_MESSAGE_AUDIENCES = ['staff', 'author_and_staff', 'parties', 'public'];
+const DISPUTE_MESSAGE_AUDIENCES = [
+  'staff',
+  'author_and_staff',
+  'disputer',
+  'disputee',
+  'parties',
+  'public',
+];
 
 function isPublishedAudience(audience) {
   return audience === 'parties' || audience === 'public';
 }
 
-function canViewerSeeMessage(message, { accountId, isParty, visibility }) {
-  const audience = message.audience || 'staff';
+function canViewerSeeMessage(
+  message,
+  { accountId, isParty, visibility, isStaff = false, isFiler = false, isRespondent = false } = {}
+) {
+  const audience = message.audience || 'author_and_staff';
   if (audience === 'public') return true;
   if (audience === 'parties') return Boolean(visibility && isParty);
+  if (audience === 'disputer') {
+    if (isStaff) return true;
+    return Boolean(isFiler);
+  }
+  if (audience === 'disputee') {
+    if (isStaff) return true;
+    return Boolean(isRespondent);
+  }
   if (audience === 'author_and_staff') {
+    if (isStaff) return true;
     return Boolean(accountId && String(message.senderAccountId) === String(accountId));
   }
-  return false;
+  // staff-only: staff desk only
+  return Boolean(isStaff);
 }
 
 /** Load all messages for a dispute chat from the Mongo `messages` collection. */
@@ -142,19 +165,169 @@ async function ensureStaffMemberOnChat(chatId, accountId, now = new Date()) {
   );
 }
 
-async function touchDisputeInbox(chatId, lastMessage, now = new Date()) {
+async function touchDisputeInbox(chatId, lastMessage, now = new Date(), { audience = null } = {}) {
   if (!ObjectId.isValid(chatId)) return;
   const db = mongoDb();
   if (!db) return;
+  // Staff-only / author-private notes must not rewrite the shared inbox preview.
+  if (audience && !isPublishedAudience(String(audience).toLowerCase())) {
+    await db.collection('inbox').updateOne(
+      { _id: new ObjectId(chatId) },
+      { $set: { updated_at: now } }
+    );
+    return;
+  }
   await db.collection('inbox').updateOne(
     { _id: new ObjectId(chatId) },
-    { $set: { updated_at: now, last_message: lastMessage, last_message_time: now } }
+    {
+      $set: {
+        updated_at: now,
+        last_message: lastMessage,
+        last_message_time: now,
+        last_message_audience: audience ? String(audience).toLowerCase() : 'parties',
+      },
+    }
   );
+}
+
+/** Latest parties/public preview for a dispute chat (safe for both parties). */
+async function partyVisibleDisputePreview(chatId) {
+  if (!chatId || !isMongoReady()) return null;
+  const db = mongoDb();
+  if (!db) return null;
+  const latest = await db.collection('messages').findOne(
+    {
+      conversation_id: String(chatId),
+      is_deleted: { $ne: true },
+      deleted_at: null,
+      is_internal: { $ne: true },
+      $or: [
+        { audience: { $in: ['parties', 'public'] } },
+        { audience: { $exists: false }, published_at: { $ne: null } },
+        { audience: { $exists: false }, author_type: 'staff' },
+      ],
+    },
+    { sort: { created_at: -1, _id: -1 } }
+  );
+  if (!latest) {
+    return {
+      last_message: null,
+      last_message_id: null,
+      last_message_sender_id: null,
+      last_message_time: null,
+      last_message_audience: null,
+    };
+  }
+  return {
+    last_message: latest.message_content || '',
+    last_message_id: String(latest._id),
+    last_message_sender_id: latest.sender_id || null,
+    last_message_time: latest.created_at || latest.updated_at || null,
+    last_message_audience: latest.audience || 'parties',
+  };
+}
+
+function publicDisputeRoom(disputeId) {
+  return disputeId ? `dispute:public:${disputeId}` : null;
+}
+
+function emitDisputeChat(
+  event,
+  { chatId = null, disputeId = null, payload, accountIds = [], includeChatRoom = false, includePublicRoom = false } = {}
+) {
+  try {
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (!io || !payload) return;
+    const rooms = new Set();
+    if (includeChatRoom && chatId) rooms.add(String(chatId));
+    if (includePublicRoom) {
+      const room = publicDisputeRoom(disputeId);
+      if (room) rooms.add(room);
+    }
+    for (const accountId of accountIds || []) {
+      if (accountId) rooms.add(String(accountId));
+    }
+    // One emit across all rooms so a socket in several of them gets the event once.
+    if (rooms.size) io.to([...rooms]).emit(event, payload);
+  } catch (error) {
+    console.error('Dispute message saved without realtime delivery:', error.message);
+  }
+}
+
+async function listDisputeChatMemberAccountIds(chatId, { roles = null } = {}) {
+  if (!chatId || !ObjectId.isValid(String(chatId))) return [];
+  const db = mongoDb();
+  if (!db) return [];
+  const inbox = await db.collection('inbox').findOne(
+    { _id: new ObjectId(String(chatId)) },
+    { projection: { members: 1 } }
+  );
+  const allowedRoles = Array.isArray(roles) && roles.length
+    ? new Set(roles.map((role) => String(role).toLowerCase()))
+    : null;
+  return (inbox?.members || [])
+    .filter((member) => !['left', 'removed'].includes(String(member.status || '').toLowerCase()))
+    .filter((member) => {
+      if (!allowedRoles) return true;
+      return allowedRoles.has(String(member.role || 'member').toLowerCase());
+    })
+    .map((member) => String(member.account_id))
+    .filter(Boolean);
+}
+
+/** Staff members on a dispute chat. Checked against `staff` so stray admin-role members get nothing private. */
+async function listDisputeChatStaffAccountIds(chatId) {
+  const adminIds = await listDisputeChatMemberAccountIds(chatId, { roles: ['admin'] });
+  if (!adminIds.length) return [];
+  const result = await pool.query(
+    `SELECT account_id::text AS account_id FROM staff WHERE account_id::text = ANY($1::text[])`,
+    [adminIds]
+  );
+  const staffIds = result.rows.map((row) => String(row.account_id));
+  const strays = adminIds.filter((id) => !staffIds.includes(String(id)));
+  if (strays.length && ObjectId.isValid(String(chatId))) {
+    // Members who commented on the public page were once added as admin; they never belong on the chat.
+    try {
+      await mongoDb()?.collection('inbox').updateOne(
+        { _id: new ObjectId(String(chatId)) },
+        { $pull: { members: { account_id: { $in: strays }, role: 'admin' } } }
+      );
+    } catch (error) {
+      console.warn('Dispute chat member cleanup skipped:', error.message);
+    }
+  }
+  return staffIds;
+}
+
+async function resolveDisputeRealtimeTargets(chatId, audience, notifyAccountIds = []) {
+  const staffIds = await listDisputeChatStaffAccountIds(chatId);
+  const published = isPublishedAudience(audience);
+  if (published) {
+    return {
+      includeChatRoom: true,
+      accountIds: [...staffIds, ...(notifyAccountIds || [])],
+    };
+  }
+  if (
+    audience === 'author_and_staff' ||
+    audience === 'disputer' ||
+    audience === 'disputee'
+  ) {
+    return {
+      includeChatRoom: false,
+      accountIds: [...staffIds, ...(notifyAccountIds || [])],
+    };
+  }
+  return {
+    includeChatRoom: false,
+    accountIds: staffIds,
+  };
 }
 
 /**
  * Insert a dispute message into Mongo `messages` and update the inbox preview.
- * @returns {Promise<string>} Mongo message id
+ * @returns {Promise<object>} Mapped dispute message for API / socket clients
  */
 async function createDisputeMessage({
   chatId,
@@ -163,9 +336,11 @@ async function createDisputeMessage({
   authorName,
   authorType = 'staff',
   authorRole = 'staff',
-  audience = 'staff',
+  audience = 'author_and_staff',
   audiences = null,
   isInternal = false,
+  notifyAccountIds = [],
+  disputeId = null,
 }) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot send dispute chat messages');
@@ -173,12 +348,16 @@ async function createDisputeMessage({
 
   const now = new Date();
   const accountId = senderId ? String(senderId) : null;
-  await ensureStaffMemberOnChat(chatId, accountId, now);
+  if (String(authorType).toLowerCase() === 'staff') {
+    await ensureStaffMemberOnChat(chatId, accountId, now);
+  }
 
+  const normalizedAudience = String(audience || 'author_and_staff').toLowerCase();
   const audienceList =
     Array.isArray(audiences) && audiences.length
       ? [...new Set(audiences.map((a) => String(a).toLowerCase()))]
-      : [audience];
+      : [normalizedAudience];
+  const privateToAuthorAndStaff = !isPublishedAudience(normalizedAudience);
 
   const insertedId = await createMessageRepositories({
     conversation_id: String(chatId),
@@ -192,29 +371,66 @@ async function createDisputeMessage({
     read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
     is_edited: false,
     is_deleted: false,
-    is_internal: Boolean(isInternal) || audience === 'staff',
+    is_internal: Boolean(isInternal) || privateToAuthorAndStaff,
     author_type: authorType,
     author_name: authorName || 'Staff',
     author_role: authorRole,
-    audience,
+    audience: normalizedAudience,
     audiences: audienceList,
-    published_at: isPublishedAudience(audience) ? now : null,
+    published_at: isPublishedAudience(normalizedAudience) ? now : null,
     created_at: now,
     updated_at: now,
   });
 
-  await touchDisputeInbox(chatId, body, now);
-  return String(insertedId);
+  await touchDisputeInbox(chatId, body, now, { audience: normalizedAudience });
+
+  const mapped = {
+    id: String(insertedId),
+    conversationId: String(chatId),
+    disputeId: disputeId ? String(disputeId) : null,
+    authorType,
+    authorName: authorName || 'Staff',
+    authorRole,
+    senderAccountId: accountId,
+    body,
+    isInternal: Boolean(isInternal) || privateToAuthorAndStaff,
+    audience: normalizedAudience,
+    publishedAt: isPublishedAudience(normalizedAudience) ? now : null,
+    createdAt: now,
+  };
+
+  const authorNotify =
+    normalizedAudience === 'author_and_staff' && accountId ? [accountId] : [];
+  const targets = await resolveDisputeRealtimeTargets(chatId, normalizedAudience, [
+    ...(notifyAccountIds || []),
+    ...authorNotify,
+  ]);
+  emitDisputeChat('disputeMessage', {
+    chatId,
+    disputeId,
+    payload: mapped,
+    accountIds: targets.accountIds,
+    includeChatRoom: targets.includeChatRoom,
+    includePublicRoom: isPublishedAudience(normalizedAudience) && Boolean(disputeId),
+  });
+  return mapped;
 }
 
-async function updateDisputeMessageAudience(chatId, messageId, audience) {
+async function updateDisputeMessageAudience(
+  chatId,
+  messageId,
+  audience,
+  { notifyAccountIds = [], disputeId = null } = {}
+) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot update dispute messages');
   }
 
   const nextAudience = String(audience || '').toLowerCase();
   if (!DISPUTE_MESSAGE_AUDIENCES.includes(nextAudience)) {
-    throw new Error('Invalid audience. Use staff, author_and_staff, parties, or public.');
+    throw new Error(
+      'Invalid audience. Use staff, author_and_staff, disputer, disputee, parties, or public.'
+    );
   }
 
   const db = mongoDb();
@@ -229,7 +445,7 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
     {
       $set: {
         audience: nextAudience,
-        is_internal: nextAudience === 'staff',
+        is_internal: !isPublishedAudience(nextAudience),
         published_at: isPublishedAudience(nextAudience) ? now : null,
         updated_at: now,
       },
@@ -237,7 +453,84 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
   );
 
   if (!result.matchedCount) throw new Error('Message not found.');
-  return nextAudience;
+
+  const doc = await db.collection('messages').findOne({
+    _id: new ObjectId(String(messageId)),
+    conversation_id: String(chatId),
+  });
+  const mapped = doc
+    ? {
+        ...mapMongoDisputeMessage(doc),
+        conversationId: String(chatId),
+        disputeId: disputeId ? String(disputeId) : null,
+      }
+    : {
+        id: String(messageId),
+        conversationId: String(chatId),
+        disputeId: disputeId ? String(disputeId) : null,
+        audience: nextAudience,
+        isInternal: !isPublishedAudience(nextAudience),
+      };
+
+  if (isPublishedAudience(nextAudience) && mapped.body) {
+    await touchDisputeInbox(chatId, mapped.body, now, { audience: nextAudience });
+  } else if (!isPublishedAudience(nextAudience)) {
+    const safePreview = await partyVisibleDisputePreview(chatId);
+    if (safePreview) {
+      await mongoDb().collection('inbox').updateOne(
+        { _id: new ObjectId(String(chatId)) },
+        { $set: { ...safePreview, updated_at: now } }
+      );
+    }
+  }
+
+  const targets = await resolveDisputeRealtimeTargets(chatId, nextAudience, notifyAccountIds);
+  emitDisputeChat('disputeMessageUpdated', {
+    chatId,
+    disputeId,
+    payload: mapped,
+    accountIds: targets.accountIds,
+    includeChatRoom: targets.includeChatRoom,
+    includePublicRoom: isPublishedAudience(nextAudience) && Boolean(disputeId),
+  });
+  if (!isPublishedAudience(nextAudience) && disputeId) {
+    // Tell public viewers to drop it, without sending the text.
+    emitDisputeChat('disputeMessageUpdated', {
+      disputeId,
+      payload: { id: String(messageId), disputeId: String(disputeId), audience: nextAudience },
+      includePublicRoom: true,
+    });
+  }
+  return mapped;
+}
+
+/**
+ * Realtime fan-out for dispute messages written through the shared inbox.
+ * Private notes reach only the sender and staff; published ones reach the chat room and public page.
+ * @returns {Promise<boolean>} true when the message belonged to a dispute and was handled here
+ */
+async function broadcastInboxDisputeMessage(io, event, message) {
+  if (!io || !message?.dispute_id || !message?.conversation_id) return false;
+  const chatId = String(message.conversation_id);
+  const disputeId = String(message.dispute_id);
+  const audience = resolveDisputeMessageAudience(message);
+  const senderIds = message.sender_id ? [String(message.sender_id)] : [];
+  const targets = await resolveDisputeRealtimeTargets(chatId, audience, senderIds);
+
+  const rooms = new Set(targets.accountIds.map(String));
+  if (targets.includeChatRoom) rooms.add(chatId);
+  if (rooms.size) io.to([...rooms]).emit(event, message);
+
+  if (!['newMessage', 'messageReplied'].includes(event)) return true;
+  emitDisputeChat('disputeMessage', {
+    chatId,
+    disputeId,
+    payload: { ...mapMongoDisputeMessage(message), conversationId: chatId, disputeId },
+    accountIds: targets.accountIds,
+    includeChatRoom: targets.includeChatRoom,
+    includePublicRoom: isPublishedAudience(audience),
+  });
+  return true;
 }
 
 function mapDisputeSummary(row, accountId) {
@@ -311,7 +604,8 @@ async function listVisibleAccountDisputes(accountId) {
 
 /**
  * Public discussion for a visible dispute.
- * Public messages are shown to everyone. Party messages are shown only to the two parties.
+ * Once staff make a dispute visible, party + public replies are shown like a forum thread.
+ * Staff-only / targeted notes stay hidden from the public page.
  */
 async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
   if (!DISPUTE_UUID.test(String(disputeId || ''))) return null;
@@ -350,13 +644,25 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
       || String(row.for_account_id) === String(viewerAccountId))
   );
   const chatId = await getDisputeChatId(disputeId);
-  const messages = (await listDisputeMessages(chatId)).filter((message) =>
-    canViewerSeeMessage(message, {
+  const isFiler = Boolean(
+    viewerAccountId && String(row.by_account_id) === String(viewerAccountId)
+  );
+  const isRespondent = Boolean(
+    viewerAccountId && String(row.for_account_id) === String(viewerAccountId)
+  );
+  const closed = String(row.status || '').toLowerCase() === 'closed';
+  const messages = (await listDisputeMessages(chatId)).filter((message) => {
+    const audience = String(message.audience || '').toLowerCase();
+    // Forum view: everyone sees the open discussion (parties + public).
+    if (audience === 'public' || audience === 'parties') return true;
+    return canViewerSeeMessage(message, {
       accountId: viewerAccountId,
       isParty,
+      isFiler,
+      isRespondent,
       visibility: true,
-    })
-  );
+    });
+  });
 
   return {
     id: row.dispute_id,
@@ -365,9 +671,19 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     type: row.type || 'Contract',
     status: String(row.status || 'open').toLowerCase(),
     description: row.description || null,
-    initiator: { name: row.initiator_name || 'Unknown', handle: row.initiator_handle || null },
-    respondent: { name: row.respondent_name || 'Unknown', handle: row.respondent_handle || null },
-    canComment: isParty,
+    initiator: {
+      accountId: row.by_account_id || null,
+      name: row.initiator_name || 'Unknown',
+      handle: row.initiator_handle || null,
+    },
+    respondent: {
+      accountId: row.for_account_id || null,
+      name: row.respondent_name || 'Unknown',
+      handle: row.respondent_handle || null,
+    },
+    isParty,
+    canComment: Boolean(viewerAccountId) && !closed,
+    chatId,
     messages,
   };
 }
@@ -389,17 +705,20 @@ async function getAccountDispute(disputeId, accountId) {
   const row = result.rows[0];
   if (!row) return null;
   const filer = String(row.by_account_id) === String(accountId);
-  const isParty = filer || String(row.for_account_id) === String(accountId);
+  const isRespondent = String(row.for_account_id) === String(accountId);
+  const isParty = filer || isRespondent;
   if (!row.visibility && !filer) return null;
   const chatId = await getDisputeChatId(disputeId);
   const messages = (await listDisputeMessages(chatId)).filter((message) =>
     canViewerSeeMessage(message, {
       accountId,
       isParty,
+      isFiler: filer,
+      isRespondent,
       visibility: Boolean(row.visibility),
     })
   );
-  return { ...mapDisputeSummary(row, accountId), messages };
+  return { ...mapDisputeSummary(row, accountId), chatId, messages };
 }
 
 async function postPublicDisputeComment(disputeId, accountId, body) {
@@ -442,8 +761,12 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
 
   if (!row.visibility) {
     if (!isFiler) {
-      const error = new Error('This dispute is not public.');
-      error.statusCode = 404;
+      const error = new Error(
+        isRespondent
+          ? 'This dispute is not public yet. You cannot reply until staff open it.'
+          : 'This dispute is not public.'
+      );
+      error.statusCode = isRespondent ? 403 : 404;
       throw error;
     }
     if (closed) {
@@ -451,9 +774,9 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
       error.statusCode = 400;
       throw error;
     }
-  } else if (!isParty) {
-    const error = new Error('Only the people on this dispute can comment.');
-    error.statusCode = 403;
+  } else if (closed) {
+    const error = new Error('This dispute is closed. The discussion is read-only.');
+    error.statusCode = 400;
     throw error;
   }
 
@@ -463,12 +786,18 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
   );
   const profile = account.rows[0] || {};
   const authorName = profile.display_name || profile.handle || 'Member';
-  const authorRole = isFiler ? 'disputer' : isRespondent ? 'disputee' : 'public';
+  const authorRole = isFiler ? 'disputer' : isRespondent ? 'disputee' : 'community';
   const forStaff = !row.visibility && isFiler;
-  const audience = forStaff ? 'author_and_staff' : 'parties';
+  // Hidden filer notes stay private. Once visible, replies join the public forum thread.
+  const audience = forStaff ? 'author_and_staff' : 'public';
 
   const chatId = await ensureDisputeChat(disputeId, row);
-  await createDisputeMessage({
+  const notifyAccountIds = forStaff
+    ? []
+    : [row.by_account_id, row.for_account_id].filter(
+        (id) => id && String(id) !== String(accountId)
+      );
+  const message = await createDisputeMessage({
     chatId,
     body: text,
     senderId: accountId,
@@ -478,6 +807,8 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
     audience,
     audiences: [audience],
     isInternal: forStaff,
+    notifyAccountIds,
+    disputeId,
   });
   if (row.visibility) {
     const number = row.dispute_number || 'Dispute';
@@ -491,6 +822,8 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
     private: forStaff,
     forStaff,
     audience,
+    chatId,
+    message,
   };
 }
 
@@ -548,5 +881,11 @@ module.exports = {
   notifyDisputeParties,
   createDisputeMessage,
   updateDisputeMessageAudience,
+  ensureStaffMemberOnChat,
+  partyVisibleDisputePreview,
+  canViewerSeeMessage,
   mapMongoDisputeMessage,
+  resolveDisputeMessageAudience,
+  broadcastInboxDisputeMessage,
+  isPublishedAudience,
 };

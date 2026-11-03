@@ -39,7 +39,8 @@
 
 - `credit_transactions.type` is PostgreSQL enum `credit_transaction_type`: Fund Transfer, Escrow Hold, Escrow Release, Escrow Refund, Asset Purchase, Asset Refund, Fee, Cashout, Cashout Refund, Job Posting Fee, Job Posting Fee Refund, Proposal Fee, Proposal Fee Refund, Service Posting Fee.
 - `credit_transactions.status` is PostgreSQL enum `credit_transaction_status`: Pending, Completed, Failed, Reversed. Default is Completed.
-- Labels match `backend/lib/CreditTransactionEnums.js`. Migration `1827200000000_credit-transaction-native-enums` converts the old varchar columns and type CHECK constraint. Partial unique indexes on `type` are dropped and recreated with enum casts; Postgres cannot rewrite those predicates during `ALTER COLUMN TYPE`. Do not edit the original `credit_transactions` create-table migration.
+- `credit_transactions.reverses_credit_transaction_id` optionally points at the original row a compensating entry reverses. A unique partial index allows at most one Completed/Pending reverse per original. Dispute desk reverses mark the original `Reversed` and insert the compensating row with this FK.
+- Labels match `backend/lib/CreditTransactionEnums.js`. Migration `1827200000000_credit-transaction-native-enums` converts the old varchar columns and type CHECK constraint. Partial unique indexes on `type` are dropped and recreated with enum casts; Postgres cannot rewrite those predicates during `ALTER COLUMN TYPE`. Migration `1827900000000_dispute-financial-resolution` adds the reverse link. Do not edit the original `credit_transactions` create-table migration.
 
 ## Transactions and money
 
@@ -95,7 +96,8 @@
 - `disputes.priority` is PostgreSQL enum `dispute_priority`: Low, Medium, High. Default is High.
 - `disputes.status` is PostgreSQL enum `dispute_status`: pending_review, open, awaiting_response, under_review, closed.
 - Opening a contract dispute freezes remaining escrow: existing `credit_transactions` for that contract/milestones get `related_dispute_id`, and `disputes.related_credit_transaction_id` / `credit_amount_involved` store the latest hold and remaining credits. Release, refund, and cancellation cannot move those credits until the dispute is closed.
-- Labels match `backend/lib/DisputeEnums.js`. Migration `1827100000000_dispute-native-enums` converts the old varchar columns. `1827500000000_dispute-contract-transaction-types` remaps leftover types and shrinks `dispute_type` to Contract, Transaction. Do not edit the original `disputes` create-table migration.
+- Staff financial resolution (Admin or assigned Support) is one-shot per dispute: `financial_resolution_at`, `financial_resolution_kind` (`escrow_settle` | `transaction_reverse`), `financial_resolution_staff_id`, `financial_client_credits`, `financial_freelancer_credits`, `financial_reversed_transaction_id`. Escrow settle moves remaining escrow as `Escrow Refund` / `Escrow Release`; transaction reverse inserts a compensating ledger row and marks the original `Reversed`. Both auto-close the dispute. Clawback fails hard (409) if the recipient lacks spendable credits.
+- Labels match `backend/lib/DisputeEnums.js`. Migration `1827100000000_dispute-native-enums` converts the old varchar columns. `1827500000000_dispute-contract-transaction-types` remaps leftover types and shrinks `dispute_type` to Contract, Transaction. `1827900000000_dispute-financial-resolution` adds financial outcome columns and the reverse FK. Do not edit the original `disputes` create-table migration.
 
 ## Standing punishment library
 

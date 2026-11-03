@@ -35,7 +35,9 @@ import {
   CheckCircle2,
   XCircle,
   Play,
-  Download
+  Download,
+  Activity,
+  ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobRichText } from "../JobRichText";
@@ -251,7 +253,17 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   }>({ isOpen: false, file: null, url: "", type: "image" });
   const user = useGlobalState((state) => state.user);
   const theme = useGlobalState((state) => state.theme);
+  const globalSubscriptionPlan = useGlobalState((state) => state.subscriptionPlan);
   const isDark = theme === "dark";
+
+  const rawSubscriptionPlan =
+    globalSubscriptionPlan ||
+    user?.subscription_plan ||
+    user?.subscriptionTier ||
+    "Free";
+
+  const clientProfileVisibility =
+    rawSubscriptionPlan === "Business" ? 90 : rawSubscriptionPlan === "Premium" ? 30 : 0;
 
   // Collapsible sections state matching Proposal Review
   const [isSection2Collapsed, setIsSection2Collapsed] = useState(false);
@@ -374,6 +386,10 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       milestones: preScopedMilestones,
       screeningQuestions,
       attachments: briefFiles,
+      clientSubscriptionPlan: rawSubscriptionPlan,
+      clientProfileVisibility,
+      clientMerit: user?.merit_score ?? user?.merit ?? 100,
+      clientHireRate: user?.hire_rate ?? user?.clientHireRate ?? 100,
     };
   }, [
     title,
@@ -399,6 +415,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
     preScopedMilestones,
     screeningQuestions,
     briefFiles,
+    rawSubscriptionPlan,
+    clientProfileVisibility,
   ]);
 
 
@@ -530,8 +548,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
         {/* Left: Real-time Job Card Preview (Exact look on Live Job Board) */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-3 flex flex-col">
-          <div className="flex items-center justify-between">
+        <div className="lg:col-span-7 space-y-3 flex flex-col items-start w-full">
+          <div className="w-full max-w-[720px] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
               <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
@@ -548,10 +566,10 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             </button>
           </div>
 
-          {/* Genuine Marketplace Job Card */}
-          <div className="group flex flex-col sm:flex-row gap-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-sm transition-all relative overflow-hidden flex-1">
+          {/* Genuine Marketplace Job Card (Comfortably Wider) */}
+          <div className="group flex flex-col sm:flex-row gap-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-sm transition-all relative overflow-hidden w-full max-w-[720px] flex-1">
             {/* Thumbnail Column */}
-            <div className="relative h-44 sm:h-auto sm:min-h-[160px] w-full sm:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-white/5">
+            <div className="relative h-48 sm:h-auto sm:min-h-[175px] w-full sm:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-white/5">
               {previewUrl ? (
                 <img src={previewUrl} alt="Job Thumbnail" className="h-full w-full object-cover" />
               ) : (
@@ -679,29 +697,47 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
         </div>
 
         {/* Right: Job Discovery Algorithm & Listing Appeal Widget */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-3 flex flex-col">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
-              Algorithm Discovery Score
-            </span>
+        <div className="lg:col-span-5 space-y-3 flex flex-col w-full">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                Algorithm Discovery Score
+              </span>
+            </div>
+            <Link
+              to="/jobs/info"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
+            >
+              <span>Scoring Guide</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 shadow-sm flex-1 flex flex-col justify-between space-y-3">
-            {/* Header Badge */}
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-2.5">
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 shadow-sm flex-1 flex flex-col justify-between space-y-3.5">
+            {/* Header Status & Boost Badge */}
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-2.5 gap-2">
               <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
-                Feed Appeal Rating
+                Feed Visibility
               </span>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                ranking.totalScore >= 80 
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-                  : ranking.totalScore >= 60
-                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
-                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-              }`}>
-                {ranking.totalScore >= 80 ? "High Visibility" : ranking.totalScore >= 60 ? "Solid Brief" : "Moderate Reach"}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {ranking.subscriptionBoost > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    {ranking.subscriptionPlan === "Business" ? "👑 Business" : "⭐ Premium"} +{ranking.subscriptionBoost.toFixed(1)} pts
+                  </span>
+                )}
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  ranking.totalScore >= 80 
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
+                    : ranking.totalScore >= 60
+                    ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                }`}>
+                  {ranking.totalScore >= 80 ? "High Visibility" : ranking.totalScore >= 60 ? "Solid Reach" : "Moderate Reach"}
+                </span>
+              </div>
             </div>
 
             {/* Score Dial */}
@@ -726,43 +762,132 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1 leading-tight">
-                  Prioritized by Ensemble algorithm for candidate feeds.
+                  {ranking.totalScore >= 80 
+                    ? "Top discovery priority in candidate feeds." 
+                    : ranking.totalScore >= 60 
+                    ? "Good placement in candidate feeds." 
+                    : "Improve details to rank higher in marketplace feeds."}
                 </p>
               </div>
             </div>
 
-            {/* Compact Breakdown Grid */}
+            {/* The 3 Score Basis Categories (Origin Breakdown - Concise & Readable) */}
             <div className="pt-2.5 border-t border-gray-200 dark:border-white/10 space-y-2">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                  <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Brief Completeness</span>
-                  <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                    {Math.round(ranking.completenessScore * 100)}%
-                  </span>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 mb-1">
+                Score Basis Breakdown
+              </div>
+              <div className="space-y-1.5">
+                {/* 1. Job Post Content */}
+                <div className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FileText className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <div className="truncate">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-gray-900 dark:text-white">Post Quality</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                          Editable
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                        Title, scope, budget & cover
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className="font-mono font-bold text-gray-900 dark:text-white text-xs">
+                      {ranking.contentPoints.toFixed(1)}
+                    </span>
+                    <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 25 pts</span>
+                  </div>
                 </div>
-                <div className="p-2 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                  <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Platform Trust</span>
-                  <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                    {ranking.bayesianRating.toFixed(1)} / 5.0
-                  </span>
+
+                {/* 2. Poster Account Standing */}
+                <div className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0" />
+                    <div className="truncate">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-gray-900 dark:text-white">Account Profile</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                          Dynamic
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                        {ranking.bayesianRating.toFixed(1)}★ rating · {ranking.clientMerit} Merit{ranking.subscriptionBoost > 0 ? ` · ${ranking.subscriptionPlan}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className="font-mono font-bold text-gray-900 dark:text-white text-xs">
+                      {(ranking.accountBasePoints + ranking.subscriptionBoost).toFixed(1)}
+                    </span>
+                    <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 35 pts</span>
+                  </div>
+                </div>
+
+                {/* 3. Live Market Signals */}
+                <div className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Activity className="h-4 w-4 text-amber-500 shrink-0" />
+                    <div className="truncate">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-gray-900 dark:text-white">Market Freshness</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                          Dynamic
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                        New launch window · Uncontested seats
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className="font-mono font-bold text-gray-900 dark:text-white text-xs">
+                      {ranking.marketPoints.toFixed(1)}
+                    </span>
+                    <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 40 pts</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Signals */}
-              <div className="flex flex-wrap gap-1 text-[10px]">
-                {skills.length >= 3 && (
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
-                    &#10003; 3+ Skills
+              {/* Actionable Signal Badges */}
+              <div className="pt-2 flex flex-wrap gap-1 text-[10px]">
+                {ranking.isRisingJob && (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 border border-emerald-500/20">
+                    <TrendingUp className="h-2.5 w-2.5" />
+                    Rising Eligible
                   </span>
                 )}
-                {previewUrl && (
+                {ranking.plainScopeLength >= 150 ? (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
+                    ✓ 150+ chars scope
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
+                    ⚠ Short scope ({ranking.plainScopeLength}/150)
+                  </span>
+                )}
+                {skills.length >= 3 ? (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
+                    ✓ {skills.length} skills tagged
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">
+                    ⚠ Needs 3+ skills
+                  </span>
+                )}
+                {ranking.hasCustomVisual ? (
                   <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold">
-                    &#10003; Custom Visual
+                    ✓ Custom cover
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 font-semibold">
+                    Default cover
                   </span>
                 )}
                 {screeningQuestions.length > 0 && (
                   <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold">
-                    &#10003; Screening
+                    ✓ Screening
                   </span>
                 )}
               </div>

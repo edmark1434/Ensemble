@@ -11,6 +11,7 @@ import {
   Film,
   TrendingUp,
   Wrench,
+  Sparkles,
 } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -69,12 +70,19 @@ export interface Job {
   portfolioUseAllowed?: boolean;
   requireNDA?: boolean;
   screeningQuestions?: any[];
+  attachments?: any[];
+  hasCustomThumbnail?: boolean;
+  clientHireRate?: number;
+  clientMerit?: number;
+  applicationDeadline?: string;
+  isUrgent?: boolean;
 }
 
 export const HomeFeaturedJobs: React.FC = () => {
   const navigate = useNavigate();
   const { fetchJobs, toggleJobSave } = useJobs();
   const userInfo = useGlobalState((state) => state.user);
+  const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -129,6 +137,7 @@ export const HomeFeaturedJobs: React.FC = () => {
             savesCount: parseInt(j.saves_count) || 0,
             timeline: `${j.timeline_min}-${j.timeline_max} Days`,
             thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
+            hasCustomThumbnail: Boolean(j.thumbnail_path),
             clientAvatar: getImageUrl(j.client_avatar_path) || undefined,
             skills: j.tags || [],
             isSaved: j.is_saved || false,
@@ -140,6 +149,13 @@ export const HomeFeaturedJobs: React.FC = () => {
             portfolioUseAllowed: Boolean(j.portfolio_use_allowed),
             requireNDA: Boolean(j.require_nda),
             screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
+            attachments: Array.isArray(j.attachments) ? j.attachments : [],
+            clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
+            clientMerit: j.client_merit !== undefined && j.client_merit !== null ? Number(j.client_merit) : 100,
+            clientSubscriptionPlan: j.client_subscription_plan || "Free",
+            clientProfileVisibility: Number(j.client_profile_visibility) || 0,
+            applicationDeadline: j.application_deadline || undefined,
+            isUrgent: Boolean(j.is_urgent),
           };
         });
 
@@ -229,6 +245,34 @@ export const HomeFeaturedJobs: React.FC = () => {
                   <Film className="h-8 w-8 text-gray-400 dark:text-zinc-600" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                {isDevModeOpen && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                    <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                      Algo Score
+                    </span>
+                    <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                      {rankInfo.totalScore.toFixed(1)}
+                    </span>
+                    <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                      {rankInfo.subscriptionBoost > 0 ? (
+                        <span
+                          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                            rankInfo.subscriptionPlan === "Business"
+                              ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                              : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                          }`}
+                        >
+                          <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                          <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                          Free (+0.0)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Top-left Proposals count */}
                 <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">

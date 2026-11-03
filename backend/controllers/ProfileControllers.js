@@ -42,7 +42,8 @@ async function updateTaglineAndDescriptionController(req, res) {
 
 async function updateBudgetCreditsController(req, res) {
     try {
-        const budgetCredits = await updateBudgetCreditsServices(req.session.accountId, req.body?.budget_credits);
+        const accountId = req.session?.account_id || req.session?.accountId || req.user?.account_id || req.user?.accountId;
+        const budgetCredits = await updateBudgetCreditsServices(accountId, req.body?.budget_credits);
         return res.status(200).json({ success: true, data: { budget_credits: budgetCredits } });
     } catch (err) {
         if (err instanceof ProfileBudgetError) {

@@ -21,7 +21,7 @@ const EXCLUDE_ADMIN_TICKETS_SQL = `
   AND (
     t.handled_by_staff_id IS NULL
     OR t.handled_by_staff_id NOT IN (
-      SELECT s.staff_id FROM staff s WHERE LOWER(s.role) IN ('admin', 'administrator')
+      SELECT s.staff_id FROM staff s WHERE LOWER(s.role::text) IN ('admin', 'administrator')
     )
   )
 `;
@@ -155,7 +155,7 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
 
   if (status && status !== 'all') {
     params.push(String(status).toLowerCase());
-    where.push(`LOWER(d.status) = $${params.length}`);
+    where.push(`LOWER(d.status::text) = $${params.length}`);
   }
   if (entityType && entityType !== 'all') {
     params.push(String(entityType).toLowerCase());
@@ -196,7 +196,7 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     WHERE ${where.join(' AND ')}
     ORDER BY
-      CASE LOWER(d.priority) WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+      CASE LOWER(d.priority::text) WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
       COALESCE(d.opened_at, d.created_at) DESC
     LIMIT 200
     `,
@@ -214,7 +214,7 @@ async function getTicketLog() {
         'ticket' AS type,
         t.ticket_number AS ref,
         t.reason AS label,
-        t.status,
+        t.status::text AS status,
         t.updated_at AS at
       FROM tickets t
       WHERE t.deleted_at IS NULL
@@ -228,7 +228,7 @@ async function getTicketLog() {
         'message' AS type,
         t.ticket_number AS ref,
         'Ticket activity on ' || t.ticket_number AS label,
-        t.status,
+        t.status::text AS status,
         t.last_message_at AS at
       FROM tickets t
       WHERE t.last_message_at IS NOT NULL
@@ -243,7 +243,7 @@ async function getTicketLog() {
         'dispute' AS type,
         d.dispute_number AS ref,
         d.title AS label,
-        d.status,
+        d.status::text AS status,
         d.updated_at AS at
       FROM disputes d
       WHERE d.deleted_at IS NULL
@@ -282,16 +282,16 @@ async function getSupportStaffWorkload() {
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.handled_by_staff_id = s.staff_id
           AND d.deleted_at IS NULL
-          AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes
+          AND LOWER(d.status::text) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes
     FROM staff s
     INNER JOIN accounts a ON a.account_id = s.account_id
     WHERE (
-        LOWER(s.role) = 'support moderator'
-        OR LOWER(s.role) LIKE '%forum%'
-        OR LOWER(s.role) LIKE '%marketplace%'
-        OR LOWER(s.role) LIKE '%jobs%'
+        LOWER(s.role::text) = 'support moderator'
+        OR LOWER(s.role::text) LIKE '%forum%'
+        OR LOWER(s.role::text) LIKE '%marketplace%'
+        OR LOWER(s.role::text) LIKE '%jobs%'
       )
-      AND LOWER(s.role) NOT IN ('admin', 'administrator')
+      AND LOWER(s.role::text) NOT IN ('admin', 'administrator')
       AND a.deleted_at IS NULL
     ORDER BY open_tickets DESC, open_disputes DESC
   `);
@@ -452,10 +452,10 @@ async function getSupportOverview(session = null) {
       ORDER BY count DESC
     `),
     pool.query(`
-      SELECT LOWER(status) AS status, COUNT(*)::int AS count
+      SELECT LOWER(status::text) AS status, COUNT(*)::int AS count
       FROM disputes
       WHERE deleted_at IS NULL
-      GROUP BY LOWER(status)
+      GROUP BY LOWER(status::text)
       ORDER BY count DESC
     `),
     pool.query(`

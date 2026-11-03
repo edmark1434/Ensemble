@@ -282,6 +282,58 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                     JOIN proposals p ON j2.job_id = p.job_id
                     WHERE j2.client_account_id = j.client_account_id AND j2.deleted_at IS NULL
                 ) as client_hire_rate,
+                GREATEST(
+                    0,
+                    LEAST(
+                        100,
+                        100 - COALESCE((
+                            SELECT SUM(LEAST(GREATEST(COALESCE(v.points, 1), 1), 10))::int
+                            FROM violations v
+                            WHERE v.account_id = j.client_account_id
+                              AND v.deleted_at IS NULL
+                              AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open', 'pending')
+                              AND (v.expires_at IS NULL OR v.expires_at > NOW())
+                        ), 0)
+                    )
+                ) as client_merit,
+                COALESCE((
+                    SELECT p.name
+                    FROM subscriptions s
+                    JOIN users u ON u.user_id = s.user_id
+                    JOIN plans p ON p.plan_id = s.plan_id
+                    WHERE u.account_id = j.client_account_id
+                      AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
+                      AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+                    ORDER BY
+                      CASE
+                        WHEN LOWER(p.name) = 'business' THEN 1
+                        WHEN LOWER(p.name) = 'premium' THEN 2
+                        ELSE 3
+                      END,
+                      s.updated_at DESC, s.created_at DESC
+                    LIMIT 1
+                ), 'Free') as client_subscription_plan,
+                COALESCE((
+                    SELECT CASE
+                        WHEN LOWER(p.name) = 'business' THEN 90
+                        WHEN LOWER(p.name) = 'premium' THEN 30
+                        ELSE 0
+                    END
+                    FROM subscriptions s
+                    JOIN users u ON u.user_id = s.user_id
+                    JOIN plans p ON p.plan_id = s.plan_id
+                    WHERE u.account_id = j.client_account_id
+                      AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
+                      AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+                    ORDER BY
+                      CASE
+                        WHEN LOWER(p.name) = 'business' THEN 1
+                        WHEN LOWER(p.name) = 'premium' THEN 2
+                        ELSE 3
+                      END,
+                      s.updated_at DESC, s.created_at DESC
+                    LIMIT 1
+                ), 0)::int as client_profile_visibility,
                 COALESCE(j.updated_at, j.created_at) as client_last_active
             FROM jobs j
             LEFT JOIN accounts a ON j.client_account_id = a.account_id

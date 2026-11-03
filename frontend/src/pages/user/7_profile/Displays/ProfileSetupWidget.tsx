@@ -23,7 +23,8 @@ import {
   RotateCcw,
   PartyPopper,
   Upload,
-  Plus
+  Plus,
+  ArrowLeftRight
 } from "lucide-react";
 
 export interface SetupStep {
@@ -116,6 +117,21 @@ export const ProfileSetupWidget: React.FC<ProfileSetupWidgetProps> = ({
   const [justCompletedStepId, setJustCompletedStepId] = useState<string | null>(null);
   const [justCompletedLabel, setJustCompletedLabel] = useState<string | null>(null);
   const [isGuideMinimized, setIsGuideMinimized] = useState(false);
+  const [guideSide, setGuideSide] = useState<"right" | "left">(() => {
+    try {
+      return (localStorage.getItem("ensemble_walkthrough_side") as "right" | "left") || "right";
+    } catch {
+      return "right";
+    }
+  });
+
+  const toggleGuideSide = () => {
+    const nextSide = guideSide === "right" ? "left" : "right";
+    setGuideSide(nextSide);
+    try {
+      localStorage.setItem("ensemble_walkthrough_side", nextSide);
+    } catch {}
+  };
 
   // References to track previous state of steps for automatic save-and-advance
   const prevStepsRef = useRef<Record<string, boolean>>({});
@@ -703,253 +719,257 @@ export const ProfileSetupWidget: React.FC<ProfileSetupWidgetProps> = ({
             />
           )}
 
-          {/* Floating Guided Tour Controller Card (z-[300000] to sit above all modals) */}
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300000] w-[94vw] max-w-xl animate-in slide-in-from-bottom-4 duration-300 font-['Plus_Jakarta_Sans',sans-serif]">
+          {/* Floating Guided Tour Controller Card (compact, docked to bottom-right or bottom-left) */}
+          <div className={`fixed bottom-5 z-[300000] w-[90vw] sm:w-[320px] transition-all duration-200 font-['Plus_Jakarta_Sans',sans-serif] ${
+            guideSide === "left"
+              ? "left-4 sm:left-5 animate-in slide-in-from-left-4"
+              : "right-4 sm:right-5 animate-in slide-in-from-right-4"
+          }`}>
             {isGuideMinimized ? (
-              /* Minimized Floating Bar (compact, never blocks modal buttons) */
-              <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-full border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-xl shadow-2xl text-xs font-bold text-gray-900 dark:text-white">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Sparkles className="w-4 h-4 text-emerald-500 animate-pulse shrink-0" />
-                  <span className="truncate">
-                    Walkthrough: {currentGuidedStep ? `Step ${completedCount + 1} (${currentGuidedStep.label})` : "Finished"}
+              /* Minimized Floating Bar (compact, unobtrusive) */
+              <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md shadow-lg text-xs font-semibold text-zinc-900 dark:text-white">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="truncate text-xs">
+                    {currentGuidedStep ? `Step ${completedCount + 1}: ${currentGuidedStep.label.replace(/^Set\s+/, "")}` : "Setup Complete"}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleGuideSide}
+                    className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer"
+                    title={guideSide === "right" ? "Dock Left" : "Dock Right"}
+                  >
+                    <ArrowLeftRight className="w-3 h-3" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setIsGuideMinimized(false)}
-                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition cursor-pointer flex items-center gap-1 text-[11px]"
-                    title="Expand walkthrough instructions"
+                    className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer"
+                    title="Expand"
                   >
-                    <ChevronUp className="w-3.5 h-3.5" />
-                    <span>Expand</span>
+                    <ChevronUp className="w-3 h-3" />
                   </button>
                   <button
                     type="button"
                     onClick={handleExitWalkthrough}
-                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer"
-                    title="Exit walkthrough"
+                    className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer"
+                    title="Exit"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               </div>
             ) : (
-              /* Expanded Guide Controller Card */
-              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-md p-4 shadow-2xl space-y-3.5 text-gray-900 dark:text-white">
+              /* Expanded Guide Controller Card (Crisp, sleek, compact) */
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md p-3.5 shadow-xl space-y-2.5 text-zinc-900 dark:text-white">
                 
-                {/* Header: Step index pill + minimize & exit guide button */}
-                <div className="flex items-center justify-between">
+                {/* Header: Step counter badge + compact icon controls */}
+                <div className="flex items-center justify-between gap-2">
                   {currentGuidedStep ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 shadow-2xs">
-                      <Sparkles className="w-3 h-3 text-emerald-600 animate-pulse" />
-                      Walkthrough Step: {completedCount + 1} of {completionSteps.length}
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60">
+                      <Sparkles className="w-3 h-3 text-emerald-500" />
+                      <span>Step {completedCount + 1} of {completionSteps.length}</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 shadow-2xs">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      Walkthrough Finished
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      <span>Completed</span>
                     </span>
                   )}
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5 text-zinc-400 dark:text-zinc-500">
+                    <button
+                      type="button"
+                      onClick={toggleGuideSide}
+                      className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer"
+                      title={guideSide === "right" ? "Dock Left" : "Dock Right"}
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setIsGuideMinimized(true)}
-                      className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition text-xs flex items-center gap-1 cursor-pointer"
-                      title="Minimize walkthrough guide"
+                      className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer"
+                      title="Minimize"
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
-                      <span>Minimize</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleExitWalkthrough}
-                      className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition text-xs flex items-center gap-1 cursor-pointer"
-                      title="Exit guided walkthrough"
+                      className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer"
+                      title="Exit"
                     >
                       <X className="w-3.5 h-3.5" />
-                      <span>Exit</span>
                     </button>
                   </div>
                 </div>
 
-              {/* Just Saved Notification Banner */}
-              {justCompletedLabel && (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-bold animate-in fade-in duration-200">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-bounce" />
-                  <span>{justCompletedLabel} saved! Automatically loading next step...</span>
-                </div>
-              )}
-
-              {/* Step info + Instruction prompt */}
-              {currentGuidedStep ? (
-                <>
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 flex items-center justify-center shrink-0">
-                      {getStepIcon(currentGuidedStep.id, false)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                          First we do this
-                        </span>
-                        <span className="text-gray-400 dark:text-zinc-600">•</span>
-                        <span className="text-[10px] text-gray-500 dark:text-zinc-400">
-                          Save to continue
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-                        Set {currentGuidedStep.label.replace(/^Set\s+/, "")}
-                      </h4>
-                      <p className="text-xs text-gray-600 dark:text-zinc-300 mt-0.5 leading-relaxed">
-                        {getStepInstructions(currentGuidedStep.id)}
-                      </p>
-                    </div>
+                {/* Just Saved Notification Banner */}
+                {justCompletedLabel && (
+                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold animate-in fade-in duration-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="truncate">{justCompletedLabel} saved! Next step...</span>
                   </div>
+                )}
 
-                  {/* Inline Quick Budget Input (if current step is budget) */}
-                  {currentGuidedStep.id === "budget" && (
-                    <form onSubmit={handleSaveBudgetInline} className="flex items-center gap-2 pt-1">
-                      <div className="relative flex-1">
+                {/* Step Info + Instruction */}
+                {currentGuidedStep ? (
+                  <>
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700/80 flex items-center justify-center shrink-0 mt-0.5">
+                        {getStepIcon(currentGuidedStep.id, false)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold text-zinc-900 dark:text-white">
+                          {currentGuidedStep.label}
+                        </h4>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">
+                          {getStepInstructions(currentGuidedStep.id)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Inline Quick Budget Input (if current step is budget) */}
+                    {currentGuidedStep.id === "budget" && (
+                      <form onSubmit={handleSaveBudgetInline} className="flex items-center gap-1.5 pt-0.5">
                         <input
                           type="number"
                           min={1}
                           max={100000000}
                           value={budgetDraft}
                           onChange={(e) => setBudgetDraft(e.target.value)}
-                          placeholder="e.g. 5000 Credits"
-                          className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900 text-xs text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
+                          placeholder="Credits (e.g. 5000)"
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-emerald-500 font-mono"
                           autoFocus
                         />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={budgetSaving || !budgetDraft || parseInt(budgetDraft, 10) <= 0}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-                      >
-                        {budgetSaving ? "Saving..." : "Save Budget"}
-                      </button>
-                    </form>
-                  )}
+                        <button
+                          type="submit"
+                          disabled={budgetSaving || !budgetDraft || parseInt(budgetDraft, 10) <= 0}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-lg text-xs font-semibold transition cursor-pointer shrink-0"
+                        >
+                          {budgetSaving ? "Saving..." : "Save"}
+                        </button>
+                      </form>
+                    )}
 
-                  
-                  {/* Quick Portfolio Action Buttons (if current step is portfolio) */}
-                  {currentGuidedStep.id === "portfolio" && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsGuideMinimized(true);
-                          const input = document.getElementById("profile-portfolio-pdf-input");
-                          if (input) input.click();
-                        }}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload CV / Resume (PDF)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsGuideMinimized(true);
-                          const btn = document.querySelector('[data-tour="profile-portfolio-link-btn"]');
-                          if (btn) btn.click();
-                        }}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-bold transition shadow-xs cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Embed Website Link</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Footer Controls: Re-open setup modal / Skip / Save indicator */}
-                  <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-white/5">
-                    <button
-                      type="button"
-                      onClick={handleSkipGuidedStep}
-                      className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white text-xs font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
-                    >
-                      Skip for now
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (shouldAutoMinimize(currentGuidedStep.id)) {
-                          setIsGuideMinimized(true);
-                        } else {
-                          triggerStepAction(currentGuidedStep);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:hover:bg-zinc-100 dark:text-zinc-900 text-xs font-bold transition shadow-xs cursor-pointer"
-                    >
-                      <span>
-                        {shouldAutoMinimize(currentGuidedStep.id) ? "Minimize Guide" : `Open ${currentGuidedStep.label} Tool`}
-                      </span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </>
-              ) : (
-                /* Finished or Skipped steps review state */
-                <div className="space-y-3 py-1">
-                  {completedCount === completionSteps.length ? (
-                    <div className="text-center space-y-2">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 mx-auto flex items-center justify-center text-emerald-600 dark:text-emerald-300 shadow-sm">
-                        <CheckCircle2 className="w-6 h-6" />
-                      </div>
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white">
-                        All 8 Setup Steps Completed!
-                      </h4>
-                      <p className="text-xs text-gray-600 dark:text-zinc-300">
-                        Your profile is 100% complete and your Profile Complete badge is unlocked.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleExitWalkthrough}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer mt-1"
-                      >
-                        Finish Walkthrough
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-center space-y-2">
-                      <p className="text-xs text-gray-600 dark:text-zinc-300">
-                        You have completed this round, with {incompleteSteps.length} step(s) remaining.
-                      </p>
-                      <div className="flex items-center justify-center gap-2">
+                    {/* Quick Portfolio Action Buttons (if current step is portfolio) */}
+                    {currentGuidedStep.id === "portfolio" && (
+                      <div className="flex items-center gap-1.5 pt-0.5">
                         <button
                           type="button"
                           onClick={() => {
-                            setSkippedStepIds([]);
-                            if (incompleteSteps.length > 0) {
-                              activeStepTriggeredRef.current = incompleteSteps[0].id;
-                              triggerStepAction(incompleteSteps[0]);
-                            }
+                            setIsGuideMinimized(true);
+                            const input = document.getElementById("profile-portfolio-pdf-input");
+                            if (input) input.click();
                           }}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:hover:bg-zinc-100 dark:text-zinc-900 text-xs font-bold transition cursor-pointer"
+                          className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition cursor-pointer"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Review Remaining ({incompleteSteps.length})</span>
+                          <Upload className="w-3 h-3" />
+                          <span>Upload PDF</span>
                         </button>
                         <button
                           type="button"
-                          onClick={handleExitWalkthrough}
-                          className="px-3.5 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                          onClick={() => {
+                            setIsGuideMinimized(true);
+                            const btn = document.querySelector('[data-tour="profile-portfolio-link-btn"]');
+                            if (btn) btn.click();
+                          }}
+                          className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-[11px] font-semibold transition cursor-pointer"
                         >
-                          Exit Guide
+                          <Plus className="w-3 h-3" />
+                          <span>Add Link</span>
                         </button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
 
-            </div>
-          )}
-        </div>
+                    {/* Footer Controls */}
+                    <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={handleSkipGuidedStep}
+                        className="text-[11px] font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition cursor-pointer"
+                      >
+                        Skip
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (shouldAutoMinimize(currentGuidedStep.id)) {
+                            setIsGuideMinimized(true);
+                          } else {
+                            triggerStepAction(currentGuidedStep);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:hover:bg-zinc-100 dark:text-zinc-900 text-xs font-semibold transition cursor-pointer shadow-2xs"
+                      >
+                        <span>
+                          {shouldAutoMinimize(currentGuidedStep.id) ? "Minimize" : `Open ${currentGuidedStep.label.replace(/^Set\s+/, "")}`}
+                        </span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  /* Completed State */
+                  <div className="text-center py-2 space-y-2">
+                    {completedCount === completionSteps.length ? (
+                      <>
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 mx-auto flex items-center justify-center text-emerald-600 dark:text-emerald-300">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-xs font-bold text-zinc-900 dark:text-white">
+                          Profile Setup Complete!
+                        </h4>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          All steps completed and badge unlocked.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleExitWalkthrough}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                        >
+                          Finish
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          {incompleteSteps.length} step(s) remaining.
+                        </p>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSkippedStepIds([]);
+                              if (incompleteSteps.length > 0) {
+                                activeStepTriggeredRef.current = incompleteSteps[0].id;
+                                triggerStepAction(incompleteSteps[0]);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 text-[11px] font-semibold transition cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Review Remaining</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleExitWalkthrough}
+                            className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                          >
+                            Exit
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
       </>,
       document.body
     )}

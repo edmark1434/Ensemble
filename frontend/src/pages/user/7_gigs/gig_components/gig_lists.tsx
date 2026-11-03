@@ -19,13 +19,15 @@ const BudgetBadge: React.FC<{ status: GigBudgetStatus; className?: string }> = (
   const Icon = within ? CircleCheck : TrendingUp;
   return (
     <span
-      className={`absolute z-10 flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold text-white shadow-md backdrop-blur-sm border ${
-        within ? "bg-emerald-600/90 border-emerald-400/40" : "bg-amber-600/90 border-amber-400/40"
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-tight transition-colors ${
+        within
+          ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30"
+          : "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30"
       } ${className}`}
       title={within ? "Starting price is within your budget" : "Starting price is slightly above your budget"}
     >
-      <Icon className="h-3 w-3" />
-      {within ? "Within budget" : "Slightly over"}
+      <Icon className="h-3 w-3 shrink-0" />
+      <span>{within ? "Within budget" : "Slightly over"}</span>
     </span>
   );
 };
@@ -225,7 +227,6 @@ export const GigList: React.FC<GigListProps> = ({
 
                       {/* Bottom-right Service Rating Badge */}
                       <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-                        <BudgetBadge status={getBudgetStatus?.(gig) ?? null} />
                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/15 shadow-xs">
                           <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
                           <span className={hasServiceRating ? "text-yellow-400 font-bold" : "text-gray-300 dark:text-zinc-400"}>
@@ -321,10 +322,13 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
 
                     {/* Price & Title */}
-                    <div className="text-amber-500 dark:text-amber-400 text-base font-black mb-1 flex items-center gap-1">
-                      <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                      <span>{Math.min(...(gig.tiers?.map(t => t.price) || [0])).toLocaleString()}</span>
-                      <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Starting at</span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="text-amber-500 dark:text-amber-400 text-base font-black flex items-center gap-1">
+                        <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                        <span>{Math.min(...(gig.tiers?.map(t => t.price) || [0])).toLocaleString()}</span>
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Starting at</span>
+                      </div>
+                      <BudgetBadge status={getBudgetStatus?.(gig) ?? null} />
                     </div>
                     <h3 className="text-sm font-bold leading-tight text-gray-900 dark:text-white mb-1.5 line-clamp-1 hover:text-blue-600 transition-colors">
                       {gig.title}
@@ -426,7 +430,6 @@ export const GigList: React.FC<GigListProps> = ({
 
                   {/* Bottom-right Service Rating Badge */}
                   <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-                    <BudgetBadge status={getBudgetStatus?.(gig) ?? null} />
                     <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/15 shadow-xs">
                       <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
                       <span className={hasServiceRating ? "text-yellow-400 font-bold" : "text-gray-300 dark:text-zinc-400"}>
@@ -523,10 +526,13 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
 
                     <div>
-                      <div className="text-amber-500 dark:text-amber-400 text-lg font-black mb-1 flex items-center gap-1.5">
-                        <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
-                        <span>{Math.min(...(gig.tiers?.map(t => t.price) || [0])).toLocaleString()}</span>
-                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Starting at</span>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="text-amber-500 dark:text-amber-400 text-lg font-black flex items-center gap-1.5">
+                          <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
+                          <span>{Math.min(...(gig.tiers?.map(t => t.price) || [0])).toLocaleString()}</span>
+                          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Starting at</span>
+                        </div>
+                        <BudgetBadge status={getBudgetStatus?.(gig) ?? null} />
                       </div>
                       <h3 className="text-gray-900 dark:text-white text-xl font-bold mb-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {gig.title}

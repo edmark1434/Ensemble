@@ -103,6 +103,7 @@ router.get('/support/reports/:id', [checkSession, supportModerator], SupportMode
 router.patch('/support/reports/:id', [checkSession, supportModerator], SupportModerator.patchReport);
 router.get('/support/disputes', [checkSession, supportModerator], SupportModerator.getDisputes);
 router.get('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.getDispute);
+router.post('/support/disputes/:id/financial-resolution', [checkSession, supportModerator], SupportModerator.postFinancialResolution);
 router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);
 router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
 router.patch('/support/disputes/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchDisputeMessage);

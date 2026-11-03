@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type UserPlatformRole = 'freelancer' | 'client' | 'explorer';
+export type UserPlatformRole = 'all' | 'freelancer' | 'client' | 'creator' | 'explorer';
 
 export interface WalkthroughStep {
   id: string;
@@ -10,6 +10,7 @@ export interface WalkthroughStep {
   tabHint: string;
   targetName: string;
   text: string;
+  roleTexts?: Partial<Record<UserPlatformRole, string>>;
   preferredPlacement?: 'top' | 'bottom' | 'left' | 'right';
   /** 'click' = user must click the highlighted element to advance (Next button is hidden).
    *  'next' = passive observation step (Next button advances). Default: 'next'. */
@@ -29,6 +30,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Search',
     targetName: 'Global Search',
     text: 'Use the **Global Search** bar to quickly find video assets, creator libraries, effects, and templates across the ecosystem.',
+    roleTexts: {
+      client: 'Use **Global Search** to quickly find specific video editors, creative reels, and service packages.',
+      creator: 'Use **Global Search** to explore popular video assets, title presets, and community trends.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Home',
@@ -41,6 +46,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Quick Actions',
     targetName: 'Quick Action Buttons',
     text: 'These **Quick Action buttons** let you quickly start projects, find video services, or post job listings.',
+    roleTexts: {
+      client: 'Use these **Quick Action buttons** to immediately post job openings or order freelance services.',
+      creator: 'Use these **Quick Action buttons** to start project setups or explore creative libraries.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Home',
@@ -53,6 +62,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Latest Jobs',
     targetName: 'Latest Job Posts',
     text: 'Browse **Latest Job Posts** on the homepage to find urgent video editing contracts, client budgets, and hiring openings.',
+    roleTexts: {
+      freelancer: 'Browse **Latest Job Posts** on the homepage to find urgent video editing contracts, client budgets, and open proposals.',
+    },
     preferredPlacement: 'top',
     actionType: 'next',
     section: 'Home',
@@ -65,6 +77,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Top Services',
     targetName: 'Top Services',
     text: 'Explore **Top Services** offered by vetted creators with upfront pricing, turnaround guarantees, and client reviews.',
+    roleTexts: {
+      client: 'Explore **Top Services** offered by vetted creators with upfront deliverables, delivery guarantees, and client ratings.',
+    },
     preferredPlacement: 'top',
     actionType: 'next',
     section: 'Home',
@@ -77,6 +92,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Popular Assets',
     targetName: 'Popular Assets',
     text: 'Preview **Popular Assets** including video stock footage, visual presets, audio packs, and video templates.',
+    roleTexts: {
+      creator: 'Preview **Popular Assets** to see trending video stock footage, visual presets, audio packs, and templates in demand.',
+    },
     preferredPlacement: 'top',
     actionType: 'next',
     section: 'Home',
@@ -297,6 +315,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Discovery Navigation',
     targetName: 'Discovery Tab',
     text: 'Click on **Discovery** in the sidebar navigation to explore featured creators and edits.',
+    roleTexts: {
+      client: 'Click on **Discovery** in the sidebar to scout top video editing talent, review showreels, and find the right creator for your brand.',
+    },
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Discovery',
@@ -309,6 +330,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Discovery',
     targetName: 'Discovery Feed',
     text: 'This is **Discovery**. Browse featured video creators, trending edits, and community talent across Ensemble.',
+    roleTexts: {
+      client: 'This is the **Discovery Feed**. Browse video showreels, filter editors by editing style, and click into creator profiles to hire them directly.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Discovery',
@@ -323,6 +347,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Asset Library Navigation',
     targetName: 'Asset Library Tab',
     text: 'Click on **Asset Library** in the sidebar navigation to browse presets and footage.',
+    roleTexts: {
+      creator: 'Click on **Asset Library** to navigate to the marketplace where you can upload and monetize your creative video assets.',
+    },
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Asset Library',
@@ -335,6 +362,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Asset Library',
     targetName: 'Asset Catalog',
     text: 'This is the **Asset Library**. Browse stock footage, visual presets, audio packs, and templates for your video pipeline.',
+    roleTexts: {
+      creator: 'Here is how asset selling works: **1) Upload** your creative assets (LUTs, SFX packs, templates). **2) Moderator Approval**: Our team reviews your submission for quality and formatting. **3) Earn Credits**: Once approved and published, you earn credits every time another creator downloads your asset!',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Asset Library',
@@ -348,6 +378,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Jobs Navigation',
     targetName: 'Job Market Tab',
     text: 'Click on **Jobs** in the sidebar navigation to enter the client hiring and proposal market.',
+    roleTexts: {
+      freelancer: 'Click on **Jobs** to browse open video editing contracts, client budgets, and hiring opportunities.',
+      client: 'Click on **Jobs** to post hiring listings and manage candidate video editors for your project.',
+    },
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Job Market',
@@ -360,6 +394,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Search Jobs',
     targetName: 'Job Search Bar',
     text: 'Use the **Search Bar** to find jobs matching specific video styles, editing tools, keywords, or client names.',
+    roleTexts: {
+      freelancer: 'Use the **Job Search Bar** and filters to find editing contracts matching your software skills (Premiere, DaVinci, After Effects) and target pay rate.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Job Market',
@@ -372,6 +409,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Post a Job',
     targetName: 'Post a Job Button',
     text: 'Click **Post a Job** to hire creators for video editing, animation, sound design, or full post-production.',
+    roleTexts: {
+      client: 'Click **Post a Job** to launch a new job post: define your editing scope, select required skills, set your escrow budget, and attract qualified video editors.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Job Market',
@@ -418,6 +458,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Send Proposal',
     targetName: 'Send Proposal Button',
     text: 'This is where you apply! Click **Send Proposal** to submit your custom quote, milestone timeline, and pitch to the client.',
+    roleTexts: {
+      freelancer: 'Click **Send Proposal** to submit your pitch, specify your milestone deliverables, and showcase past work to win the client contract.',
+    },
     preferredPlacement: 'left',
     actionType: 'next',
     section: 'Job Market',
@@ -441,6 +484,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Proposals',
     targetName: 'Proposals Tab',
     text: 'Click **Proposals** in the sidebar to track all sent milestone proposals, incoming submissions, and client acceptances.',
+    roleTexts: {
+      freelancer: 'Click on **Proposals** to track all your submitted bids, client interview invitations, and active contract negotiations.',
+      client: 'Click on **Proposals** (or "My Posts") to review incoming editor submissions, evaluate proposals, and award contracts with protected escrow.',
+    },
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Job Market',
@@ -455,6 +502,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Gigs Navigation',
     targetName: 'Gigs & Services Tab',
     text: 'Click on **Gigs** in the sidebar navigation to browse fixed-price editing services.',
+    roleTexts: {
+      freelancer: 'Click on **Gigs** in the sidebar to package and list your video editing services.',
+      client: 'Click on **Gigs** to browse vetted freelancer services with upfront pricing and turnaround guarantees.',
+    },
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Gigs & Services',
@@ -467,6 +518,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Search Services',
     targetName: 'Gigs Search Bar',
     text: 'Search for editing services by category, software proficiencies, turnaround speed, or package price.',
+    roleTexts: {
+      client: 'Search for specific video services—such as YouTube Shorts editing, cinematic color grading, or 3D intros—with instant ordering.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Gigs & Services',
@@ -479,6 +533,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Post a Service',
     targetName: 'Post a Service Button',
     text: 'Click **Post a Service** to package and publish your own tiered editing offers with custom pricing and delivery windows.',
+    roleTexts: {
+      freelancer: 'Click **Post a Service** to list your editing skills into tiered packages (Basic, Standard, Premium) with transparent pricing and turnaround guarantees.',
+    },
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Gigs & Services',
@@ -525,6 +582,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Order Package',
     targetName: 'Package Tiers & Order Button',
     text: 'Here in service details, review deliverables, compare tiers, and click **Order** to start an escrow-protected order.',
+    roleTexts: {
+      client: 'Select your preferred package tier and click **Order** to start the project. Funds are safely held in escrow until you approve the delivered video files.',
+    },
     preferredPlacement: 'left',
     actionType: 'next',
     section: 'Gigs & Services',
@@ -548,6 +608,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     tabHint: 'Orders',
     targetName: 'Orders Tab',
     text: 'Click **Orders** in the sidebar to track active service purchases, countdown timers, draft deliveries, and completed orders.',
+    roleTexts: {
+      freelancer: 'Click **Orders** to track client orders in progress, manage delivery countdowns, upload video revisions, and request milestone releases.',
+      client: 'Click **Orders** to monitor delivery progress, review uploaded video cuts, request revisions, and release escrow upon satisfaction.',
+    },
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Gigs & Services',
@@ -794,15 +858,128 @@ export function resolveUserRole(user: any): UserPlatformRole {
 
   const combined = roleNames.join(' ');
   if (combined.includes('client') || combined.includes('hire')) return 'client';
-  if (combined.includes('enthusiast') || combined.includes('explore') || combined.includes('learn')) return 'explorer';
+  if (combined.includes('creator') || combined.includes('asset') || combined.includes('seller')) return 'creator';
+  if (combined.includes('enthusiast') || combined.includes('explore') || combined.includes('learn')) return 'all';
   return 'freelancer';
 }
 
+export const FREELANCER_STEP_IDS = [
+  'home_featured_jobs',
+  'header_notifications',
+  'header_ask_ai',
+  'header_profile_nav',
+  'profile_avatar',
+  'profile_tabs',
+  'profile_budget',
+  'profile_badges',
+  'profile_skills',
+  'sidenav_projects',
+  'projects_workspace',
+  'projects_create',
+  'projects_format',
+  'sidenav_teams',
+  'teams_workspace',
+  'sidenav_jobs',
+  'jobs_search',
+  'jobs_tabs',
+  'jobs_card_details',
+  'jobs_detail_view_full',
+  'jobs_detail_send_proposal',
+  'jobs_detail_exit',
+  'jobs_proposals',
+  'sidenav_gigs',
+  'gigs_create',
+  'gigs_tabs',
+  'gigs_card_details',
+  'gigs_detail_view_full',
+  'gigs_detail_exit',
+  'gigs_orders',
+  'header_credits',
+  'credits_balance',
+  'credits_topup',
+  'credits_subscription_tab',
+  'credits_subscription_plans',
+];
+
+export const CLIENT_STEP_IDS = [
+  'home_search',
+  'home_quick_actions',
+  'home_featured_gigs',
+  'header_notifications',
+  'header_ask_ai',
+  'header_profile_nav',
+  'profile_avatar',
+  'profile_tabs',
+  'profile_budget',
+  'profile_badges',
+  'profile_skills',
+  'sidenav_projects',
+  'projects_workspace',
+  'projects_create',
+  'projects_format',
+  'sidenav_teams',
+  'teams_workspace',
+  'sidenav_discovery',
+  'discovery_page',
+  'sidenav_jobs',
+  'jobs_create',
+  'jobs_tabs',
+  'jobs_card_details',
+  'jobs_detail_view_full',
+  'jobs_detail_exit',
+  'jobs_proposals',
+  'sidenav_gigs',
+  'gigs_search',
+  'gigs_tabs',
+  'gigs_card_details',
+  'gigs_detail_view_full',
+  'gigs_detail_order',
+  'gigs_detail_exit',
+  'gigs_orders',
+  'header_credits',
+  'credits_balance',
+  'credits_topup',
+  'credits_subscription_tab',
+  'credits_subscription_plans',
+];
+
+export const CREATOR_STEP_IDS = [
+  'home_search',
+  'home_quick_actions',
+  'home_featured_assets',
+  'header_notifications',
+  'header_ask_ai',
+  'header_profile_nav',
+  'profile_avatar',
+  'profile_tabs',
+  'profile_budget',
+  'profile_badges',
+  'profile_skills',
+  'sidenav_projects',
+  'projects_workspace',
+  'projects_create',
+  'projects_format',
+  'sidenav_assets',
+  'assets_catalog',
+  'header_credits',
+  'credits_balance',
+  'credits_topup',
+  'credits_subscription_tab',
+  'credits_subscription_plans',
+];
+
 export function getActiveTourSteps(role?: UserPlatformRole): WalkthroughStep[] {
-  if (!role) return WALKTHROUGH_STEPS;
-  return WALKTHROUGH_STEPS.filter(
-    (step) => !step.roles || step.roles.length === 0 || step.roles.includes(role)
-  );
+  if (!role || role === 'all') return WALKTHROUGH_STEPS;
+  if (role === 'freelancer') {
+    return WALKTHROUGH_STEPS.filter((step) => FREELANCER_STEP_IDS.includes(step.id));
+  }
+  if (role === 'client') {
+    return WALKTHROUGH_STEPS.filter((step) => CLIENT_STEP_IDS.includes(step.id));
+  }
+  if (role === 'creator') {
+    return WALKTHROUGH_STEPS.filter((step) => CREATOR_STEP_IDS.includes(step.id));
+  }
+  return WALKTHROUGH_STEPS;
 }
 
 const STORAGE_KEY_COMPLETED = 'ensemble_platform_walkthrough_completed';
@@ -864,7 +1041,16 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
     }
   },
 
-  openWelcome: () => set({ isWelcomeOpen: true }),
+  openWelcome: () => {
+    const role = get().userRole || 'freelancer';
+    set({
+      isWelcomeOpen: true,
+      isWalkthroughActive: false,
+      isGraduationOpen: false,
+      currentStepIndex: 0,
+      activeSteps: getActiveTourSteps(role),
+    });
+  },
   closeWelcome: () => {
     localStorage.setItem(STORAGE_KEY_DISMISSED, 'true');
     set({ isWelcomeOpen: false });
@@ -884,7 +1070,13 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
     });
   },
 
-  startTour: (role?: UserPlatformRole) => get().startWalkthrough(role),
+  startTour: (role?: UserPlatformRole) => {
+    if (role) {
+      get().startWalkthrough(role);
+    } else {
+      get().openWelcome();
+    }
+  },
 
   nextStep: () => {
     const now = Date.now();

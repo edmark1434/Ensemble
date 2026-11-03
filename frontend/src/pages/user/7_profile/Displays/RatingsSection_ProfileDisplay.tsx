@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AccountRecordSection } from "./AccountStanding";
 import { Star, ShieldCheck, Trophy, Briefcase, Package, AlertCircle, X, ShieldAlert, User, Users } from "lucide-react";
 import { DEFAULT_MERIT, meritBandLabel, meritColor } from "@/lib/merit";
+import { RoleChip, StatusPill } from "@/pages/user/disputes/disputeUi";
 
 
 export interface RatingTierInfo {
@@ -208,37 +209,39 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
             </div>
           </div>
 
-          {isOwner ? (
-            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 dark:border-white/5">
-              <button
-                type="button"
-                onClick={() => setIsRecordModalOpen(true)}
-                className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all shadow-2xs hover:shadow-xs hover:border-gray-300 dark:hover:border-white/20 active:scale-[0.98] cursor-pointer"
-                title="View your account standing and moderation record"
-              >
-                Record
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/contracts/disputes')}
-                className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all shadow-2xs hover:shadow-xs hover:border-gray-300 dark:hover:border-white/20 active:scale-[0.98] cursor-pointer"
-                title="View your dispute history"
-              >
-                Dispute History
-              </button>
-            </div>
-          ) : (
-            publicDisputes.length > 0 && (
+          <div className="space-y-2 pt-3 border-t border-gray-100 dark:border-white/5">
+            {isOwner ? (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRecordModalOpen(true)}
+                  className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all shadow-2xs hover:shadow-xs hover:border-gray-300 dark:hover:border-white/20 active:scale-[0.98] cursor-pointer"
+                  title="View your account standing and moderation record"
+                >
+                  Record
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/contracts/disputes')}
+                  className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all shadow-2xs hover:shadow-xs hover:border-gray-300 dark:hover:border-white/20 active:scale-[0.98] cursor-pointer"
+                  title="View your dispute history"
+                >
+                  Dispute History
+                </button>
+              </div>
+            ) : null}
+            {publicDisputes.length > 0 ? (
               <button
                 type="button"
                 onClick={() => setIsDisputeModalOpen(true)}
                 className="w-full py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                title="Open public dispute discussions linked to this profile"
               >
                 <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                <span>Disputes ({publicDisputes.length})</span>
+                <span>Public disputes ({publicDisputes.length})</span>
               </button>
-            )
-          )}
+            ) : null}
+          </div>
         </div>
         )}
 
@@ -621,37 +624,39 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
             </div>
 
             {viewMode === "ratings" && (
-              isOwner ? (
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsRecordModalOpen(true)}
-                    className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all cursor-pointer"
-                    title="View your account standing and moderation record"
-                  >
-                    Record
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/contracts/disputes')}
-                    className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all cursor-pointer"
-                    title="View your dispute history"
-                  >
-                    Dispute History
-                  </button>
-                </div>
-              ) : (
-                publicDisputes.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {isOwner ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsRecordModalOpen(true)}
+                      className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all cursor-pointer"
+                      title="View your account standing and moderation record"
+                    >
+                      Record
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/contracts/disputes')}
+                      className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all cursor-pointer"
+                      title="View your dispute history"
+                    >
+                      Dispute History
+                    </button>
+                  </div>
+                ) : null}
+                {publicDisputes.length > 0 ? (
                   <button
                     type="button"
                     onClick={() => setIsDisputeModalOpen(true)}
                     className="w-full py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    title="Open public dispute discussions linked to this profile"
                   >
                     <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span>Disputes ({publicDisputes.length})</span>
+                    <span>Public disputes ({publicDisputes.length})</span>
                   </button>
-                )
-              )
+                ) : null}
+              </div>
             )}
 
           </div>        </div>
@@ -664,9 +669,14 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
           <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-5 shadow-2xl space-y-4">
 
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-3">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-amber-500" />
-                <h3 className="text-base font-bold tracking-tight">Public disputes</h3>
+              <div>
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-amber-500" />
+                  <h3 className="text-base font-bold tracking-tight">Public disputes</h3>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">
+                  Open cases anyone can read and reply to in the public discussion.
+                </p>
               </div>
               <button
                 onClick={() => setIsDisputeModalOpen(false)}
@@ -676,40 +686,34 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
               </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-white/5 text-gray-500 dark:text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="pb-2">Ticket ID</th>
-                    <th className="pb-2">Classification</th>
-                    <th className="pb-2">Date</th>
-                    <th className="pb-2 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-white/[0.03] text-gray-700 dark:text-zinc-300 font-mono">
-                  {publicDisputes.map((dispute) => (
-                    <tr key={dispute.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition">
-                      <td className="py-2.5 font-bold text-blue-500 dark:text-blue-400">
-                        <Link to={`/disputes/${dispute.id}`} className="hover:underline">
-                          {dispute.number || "Dispute"}
-                        </Link>
-                      </td>
-                      <td className="py-2.5 font-sans text-gray-600 dark:text-zinc-400">
-                        {dispute.type || "General"}
-                        <span className="mt-0.5 block text-[10px] uppercase tracking-wide text-gray-400">
-                          {dispute.role === "filed" ? "Filed by this account" : "Filed against this account"}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-gray-500 dark:text-zinc-500">{disputeWhen(dispute.updatedAt)}</td>
-                      <td className="py-2.5 text-right font-sans">
-                        <span className="bg-zinc-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium">
-                          {disputeStatusLabel(dispute.status)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+              {publicDisputes.map((dispute) => (
+                <Link
+                  key={dispute.id}
+                  to={`/disputes/${dispute.id}`}
+                  onClick={() => setIsDisputeModalOpen(false)}
+                  className="block rounded-xl border border-gray-200 px-3 py-3 transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.03]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                        {dispute.title || dispute.number || "Dispute"}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-gray-500 dark:text-zinc-500">
+                        {dispute.number || "Dispute"} · {disputeStatusLabel(dispute.type || "General")}
+                      </p>
+                    </div>
+                    <StatusPill status={dispute.status} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-500">
+                    <span className="flex items-center gap-2">
+                      <RoleChip role={dispute.role === "filed" ? "disputer" : "disputee"} />
+                      Updated {disputeWhen(dispute.updatedAt)}
+                    </span>
+                    <span className="font-semibold text-gray-700 dark:text-zinc-200">View discussion →</span>
+                  </div>
+                </Link>
+              ))}
             </div>
 
             <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-white/5">
@@ -717,7 +721,7 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
                 onClick={() => setIsDisputeModalOpen(false)}
                 className="px-4 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white text-xs font-semibold transition"
               >
-                Close Registry
+                Close
               </button>
             </div>
 

@@ -126,6 +126,21 @@ export const TeamProjectWorkspace: React.FC = () => {
       : ((rawTab as TabType) || 'overview');
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
+  useEffect(() => {
+    const raw = searchParams.get('tab');
+    const resolved: TabType =
+      raw === 'info'
+        ? 'info'
+        : raw === 'members' || raw === 'contract'
+        ? 'contract'
+        : raw === 'submissions' || raw === 'submission'
+        ? 'submissions'
+        : raw === 'project' || raw === 'video'
+        ? 'project'
+        : ((raw as TabType) || 'overview');
+    setActiveTab(resolved);
+  }, [searchParams]);
+
   // Hide global floating chat widget when the in-workspace Chat tab is active
   useEffect(() => {
     if (activeTab === 'chat') {
@@ -297,8 +312,18 @@ export const TeamProjectWorkspace: React.FC = () => {
     isMutualComplete: false,
   });
 
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
+  const handleTabChange = (tab: TabType | string) => {
+    if (tab === 'members') {
+      setActiveTab('contract');
+      setSearchParams({ tab: 'members' });
+      return;
+    }
+    if (tab === 'contract') {
+      setActiveTab('contract');
+      setSearchParams({ tab: 'contract' });
+      return;
+    }
+    setActiveTab(tab as TabType);
     setSearchParams({ tab });
   };
 

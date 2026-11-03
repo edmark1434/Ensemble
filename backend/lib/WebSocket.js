@@ -38,6 +38,16 @@ function acknowledge(callback, payload) {
   }
 }
 
+/** Broadcast a chat message to its room; dispute messages are routed by audience instead. */
+async function emitConversationMessage(ioServer, event, message) {
+  if (!ioServer || !message?.conversation_id) return;
+  if (message.dispute_id) {
+    const { broadcastInboxDisputeMessage } = require('../repositories/DisputeChatRepositories');
+    if (await broadcastInboxDisputeMessage(ioServer, event, message)) return;
+  }
+  ioServer.to(String(message.conversation_id)).emit(event, message);
+}
+
 function rejectEvent(socket, eventName, callback, error, context = {}) {
   const payload = { ...context, message: error.message };
   socket.emit(`${eventName}Failed`, payload);
@@ -260,6 +270,16 @@ async function initSocket(httpServer) {
       rooms.forEach((room) => socket.leave(room));
     });
 
+    socket.on('joinDisputeDiscussion', ({ disputeId } = {}) => {
+      if (!disputeId) return;
+      socket.join(`dispute:public:${disputeId}`);
+    });
+
+    socket.on('leaveDisputeDiscussion', ({ disputeId } = {}) => {
+      if (!disputeId) return;
+      socket.leave(`dispute:public:${disputeId}`);
+    });
+
     const handleSendMessage = async (messagePayload = {}, callback) => {
       try {
         const message = await createMessageServices(messagePayload, accountId, {
@@ -273,7 +293,7 @@ async function initSocket(httpServer) {
             }
           },
         });
-        io.to(message.conversation_id).emit('newMessage', message);
+        await emitConversationMessage(io, 'newMessage', message);
         acknowledge(callback, message);
       } catch (error) {
         rejectEvent(socket, 'messageSend', callback, error);
@@ -296,7 +316,7 @@ async function initSocket(httpServer) {
             }
           },
         });
-        io.to(reply.conversation_id).emit('messageReplied', reply);
+        await emitConversationMessage(io, 'messageReplied', reply);
         acknowledge(callback, reply);
       } catch (error) {
         rejectEvent(socket, 'messageReply', callback, error);
@@ -317,7 +337,7 @@ async function initSocket(httpServer) {
                 },
               }
             );
-        io.to(message.conversation_id).emit('messageReactionUpdated', message);
+        await emitConversationMessage(io, 'messageReactionUpdated', message);
         acknowledge(callback, message);
       } catch (error) {
         rejectEvent(socket, 'messageReaction', callback, error);
@@ -778,4 +798,5 @@ module.exports = {
   initSocket,
   getIo,
   emitForumEvent,
+  emitConversationMessage,
 };

@@ -136,7 +136,7 @@ function normalizeLinkedConversation(inbox) {
 
 
 
-async function normalizeLinkedConversations(inboxes) {
+async function normalizeLinkedConversations(inboxes, viewerAccountIds = []) {
 
     await Promise.all(
 
@@ -176,61 +176,201 @@ async function normalizeLinkedConversations(inboxes) {
 
     ];
 
-    if (!ticketIds.length) return normalized;
+    let withTickets = normalized;
 
+    if (ticketIds.length) {
 
+        const ticketResult = await pool.query(
 
-    const ticketResult = await pool.query(
+            `SELECT ticket_id, ticket_number, reason, type, priority, status, satisfaction_score
 
-        `SELECT ticket_id, ticket_number, reason, type, priority, status, satisfaction_score
+             FROM tickets
 
-         FROM tickets
+             WHERE ticket_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
 
-         WHERE ticket_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+            [ticketIds]
 
-        [ticketIds]
+        );
+
+        const ticketsById = new Map(
+
+            ticketResult.rows.map((ticket) => [String(ticket.ticket_id), ticket])
+
+        );
+
+        withTickets = normalized.map((inbox) => {
+
+            const ticketId = String(inbox.ticket_id || inbox.support_ticket_id || '');
+
+            const ticket = ticketsById.get(ticketId);
+
+            if (!ticket) return inbox;
+
+            return {
+
+                ...inbox,
+
+                ticket_details: {
+
+                    ...inbox.ticket_details,
+
+                    ticket_number: ticket.ticket_number,
+
+                    subject: ticket.reason,
+
+                    type: ticket.type,
+
+                    priority: ticket.priority,
+
+                    status: ticket.status,
+
+                    satisfaction_score: ticket.satisfaction_score,
+
+                },
+
+            };
+
+        });
+
+    }
+
+    const disputeIds = [
+
+        ...new Set(
+
+            withTickets
+
+                .map((inbox) => inbox.dispute_id)
+
+                .filter(Boolean)
+
+                .map(String)
+
+        ),
+
+    ];
+
+    if (!disputeIds.length) return withTickets;
+
+    const disputeResult = await pool.query(
+
+        `SELECT dispute_id, dispute_number, title, status, visibility, by_account_id, for_account_id
+
+         FROM disputes
+
+         WHERE dispute_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+
+        [disputeIds]
 
     );
 
-    const ticketsById = new Map(
+    const disputesById = new Map(
 
-        ticketResult.rows.map((ticket) => [String(ticket.ticket_id), ticket])
+        disputeResult.rows.map((dispute) => [String(dispute.dispute_id), dispute])
 
     );
 
-    return normalized.map((inbox) => {
+    const { partyVisibleDisputePreview } = require('../repositories/DisputeChatRepositories');
 
-        const ticketId = String(inbox.ticket_id || inbox.support_ticket_id || '');
+    const viewerSet = new Set((viewerAccountIds || []).map(String).filter(Boolean));
 
-        const ticket = ticketsById.get(ticketId);
+    const staffViewerResult = viewerSet.size
 
-        if (!ticket) return inbox;
+        ? await pool.query(
 
-        return {
+            `SELECT account_id::text AS account_id FROM staff WHERE account_id::text = ANY($1::text[])`,
 
-            ...inbox,
+            [[...viewerSet]]
 
-            ticket_details: {
+        )
 
-                ...inbox.ticket_details,
+        : { rows: [] };
 
-                ticket_number: ticket.ticket_number,
+    const staffViewerIds = new Set(staffViewerResult.rows.map((row) => String(row.account_id)));
 
-                subject: ticket.reason,
+    return Promise.all(
 
-                type: ticket.type,
+        withTickets.map(async (inbox) => {
 
-                priority: ticket.priority,
+            const disputeId = String(inbox.dispute_id || '');
 
-                status: ticket.status,
+            const dispute = disputesById.get(disputeId);
 
-                satisfaction_score: ticket.satisfaction_score,
+            if (!dispute) return inbox;
 
-            },
+            const viewerMember = (inbox.members || []).find((member) =>
 
-        };
+                viewerSet.has(String(member.account_id))
 
-    });
+            );
+
+            const viewerRole = String(viewerMember?.role || 'member').toLowerCase();
+
+            const viewerIsStaff =
+
+                ['admin', 'staff', 'moderator'].includes(viewerRole)
+
+                && staffViewerIds.has(String(viewerMember?.account_id || ''));
+
+            let next = {
+
+                ...inbox,
+
+                dispute_details: {
+
+                    ...inbox.dispute_details,
+
+                    dispute_number: dispute.dispute_number,
+
+                    title: dispute.title,
+
+                    status: dispute.status,
+
+                    visibility: Boolean(dispute.visibility),
+
+                    by_account_id: dispute.by_account_id,
+
+                    for_account_id: dispute.for_account_id,
+
+                },
+
+            };
+
+            // Parties must never see staff-only text in the inbox preview row.
+
+            if (!viewerIsStaff) {
+
+                try {
+
+                    const preview = await partyVisibleDisputePreview(String(inbox._id));
+
+                    if (preview) next = { ...next, ...preview };
+
+                } catch (_) {
+
+                    next = {
+
+                        ...next,
+
+                        last_message: null,
+
+                        last_message_id: null,
+
+                        last_message_sender_id: null,
+
+                        last_message_time: null,
+
+                    };
+
+                }
+
+            }
+
+            return next;
+
+        })
+
+    );
 
 }
 
@@ -1754,6 +1894,115 @@ async function assertMemberCanReplyOnTicket(inbox) {
 
 
 
+async function assertMemberCanReplyOnDispute(inbox, accountId) {
+
+    const type = String(inbox?.conversation_type || '').toLowerCase();
+
+    if (type !== 'dispute' && !inbox?.dispute_id) return;
+
+    const disputeId = inbox.dispute_id;
+
+    if (!disputeId) {
+
+        throw new ChatServiceError('Use the dispute page to reply on this conversation.', 403);
+
+    }
+
+    const result = await pool.query(
+
+        `SELECT visibility, status, by_account_id, for_account_id
+
+         FROM disputes
+
+         WHERE dispute_id = $1 AND deleted_at IS NULL`,
+
+        [disputeId]
+
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+
+        throw new ChatServiceError('This dispute is not available.', 404);
+
+    }
+
+    const isFiler = String(row.by_account_id) === String(accountId);
+
+    const isRespondent = String(row.for_account_id) === String(accountId);
+
+    const closed = String(row.status || '').toLowerCase() === 'closed';
+
+    if (closed) {
+
+        throw new ChatServiceError('This dispute is closed. You cannot reply.', 403);
+
+    }
+
+    if (!row.visibility) {
+
+        if (!isFiler) {
+
+            throw new ChatServiceError(
+
+                'This dispute is not public yet. Only the person who filed it can add information for staff.',
+
+                403
+
+            );
+
+        }
+
+    } else if (!isFiler && !isRespondent) {
+
+        throw new ChatServiceError('Only the people on this dispute can comment.', 403);
+
+    }
+
+    return {
+
+        disputeId: String(disputeId),
+
+        visible: Boolean(row.visibility),
+
+        isFiler,
+
+        isRespondent,
+
+    };
+
+}
+
+
+
+/** Audience fields for a party message written through the inbox. Hidden cases keep it staff + sender. */
+function disputeMessageFields(dispute, now) {
+
+    if (!dispute) return {};
+
+    const audience = dispute.visible ? 'parties' : 'author_and_staff';
+
+    return {
+
+        dispute_id: dispute.disputeId,
+
+        author_role: dispute.isFiler ? 'disputer' : dispute.isRespondent ? 'disputee' : 'member',
+
+        audience,
+
+        audiences: [audience],
+
+        is_internal: !dispute.visible,
+
+        published_at: dispute.visible ? now : null,
+
+    };
+
+}
+
+
+
 async function buildMessage(payload, accountId) {
 
     const personalSenderId = await requireAccount(accountId);
@@ -1790,6 +2039,8 @@ async function buildMessage(payload, accountId) {
 
     await assertMemberCanReplyOnTicket(inbox);
 
+    const dispute = await assertMemberCanReplyOnDispute(inbox, personalSenderId);
+
 
 
     const now = new Date();
@@ -1799,6 +2050,8 @@ async function buildMessage(payload, accountId) {
     return {
 
         inbox,
+
+        privateDisputeNote: Boolean(dispute && !dispute.visible),
 
         document: {
 
@@ -1834,6 +2087,8 @@ async function buildMessage(payload, accountId) {
 
             updated_at: now,
 
+            ...disputeMessageFields(dispute, now),
+
         },
 
     };
@@ -1844,13 +2099,13 @@ async function buildMessage(payload, accountId) {
 
 async function createMessageServices(payload, accountId, options = {}) {
 
-    const { inbox, document } = await buildMessage(payload, accountId);
+    const { inbox, document, privateDisputeNote } = await buildMessage(payload, accountId);
 
     const insertedId = await createMessageRepositories(document);
 
     const message = await getMessageByIdRepositories(insertedId);
 
-    if (!options.suppressNotifications) {
+    if (!options.suppressNotifications && !privateDisputeNote) {
 
         await persistChatNotifications({
 
@@ -1907,6 +2162,8 @@ async function replyMessageServices(parentMessageId, payload, accountId, options
     );
 
     const reply = await getMessageByIdRepositories(insertedId);
+
+    if (built.privateDisputeNote) return reply;
 
     await persistChatNotifications({
 
@@ -2151,6 +2408,12 @@ async function editMessageServices(messageId, messageContent, accountId) {
     if (String(inbox?.conversation_type || '').toLowerCase() === 'ticket') {
 
         throw new ChatServiceError('Ticket messages cannot be edited. Use an internal note instead.', 403);
+
+    }
+
+    if (String(inbox?.conversation_type || '').toLowerCase() === 'dispute' || inbox?.dispute_id) {
+
+        throw new ChatServiceError('Dispute messages cannot be edited. Send a new message instead.', 403);
 
     }
 
@@ -2700,7 +2963,70 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
 
     const viewerRole = String(viewerMember?.role || '').toLowerCase();
 
-    const canReadInternal = ['admin', 'staff', 'moderator'].includes(viewerRole);
+    const isDisputeThread =
+
+        String(memberInbox?.conversation_type || conversation?.Inbox?.conversation_type || '').toLowerCase() === 'dispute'
+
+        || Boolean(memberInbox?.dispute_id || conversation?.Inbox?.dispute_id);
+
+    // Dispute chats require a real staff account; an admin-role member alone is not enough.
+    const canReadInternal = isDisputeThread
+
+        ? staffViewer
+
+        : ['admin', 'staff', 'moderator'].includes(viewerRole);
+
+    let disputeVisibility = true;
+
+    let disputeByAccountId = null;
+
+    let disputeForAccountId = null;
+
+    if (isDisputeThread) {
+
+        const disputeId = memberInbox?.dispute_id || conversation?.Inbox?.dispute_id;
+
+        if (disputeId) {
+
+            try {
+
+                const disputeResult = await pool.query(
+
+                    `SELECT visibility, by_account_id, for_account_id
+
+                     FROM disputes
+
+                     WHERE dispute_id = $1 AND deleted_at IS NULL`,
+
+                    [disputeId]
+
+                );
+
+                const disputeRow = disputeResult.rows[0];
+
+                if (disputeRow) {
+
+                    disputeVisibility = Boolean(disputeRow.visibility);
+
+                    disputeByAccountId = disputeRow.by_account_id;
+
+                    disputeForAccountId = disputeRow.for_account_id;
+
+                }
+
+            } catch (_) {}
+
+        }
+
+    }
+
+    const {
+
+        canViewerSeeMessage,
+
+        resolveDisputeMessageAudience,
+
+    } = require('../repositories/DisputeChatRepositories');
 
     conversation.Messages = (conversation.Messages || []).flatMap((message) => {
 
@@ -2710,17 +3036,63 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
 
         }
 
+        if (isDisputeThread && !canReadInternal) {
+
+            const audience = resolveDisputeMessageAudience(message);
+
+            const mapped = {
+
+                audience,
+
+                senderAccountId: message.sender_id,
+
+            };
+
+            const isFiler = String(viewerAccountId) === String(disputeByAccountId);
+
+            const isRespondent = String(viewerAccountId) === String(disputeForAccountId);
+
+            const isParty = isFiler || isRespondent;
+
+            if (
+
+                !canViewerSeeMessage(mapped, {
+
+                    accountId: viewerAccountId,
+
+                    isParty,
+
+                    isFiler,
+
+                    isRespondent,
+
+                    visibility: disputeVisibility,
+
+                })
+
+            ) {
+
+                return [];
+
+            }
+
+            return [message];
+
+        }
+
         if (!canReadInternal && message.is_internal) return [];
 
         return [message];
 
     });
 
-    const [normalizedInbox] = await normalizeLinkedConversations([
+    const [normalizedInbox] = await normalizeLinkedConversations(
 
-        conversation.Inbox,
+        [conversation.Inbox],
 
-    ]);
+        [viewerAccountId]
+
+    );
 
     const [enrichedInbox] = await enrichInboxesWithMemberProfiles(
 
@@ -3738,7 +4110,7 @@ async function getInboxByAccountIdServices(accountId, conversationType) {
 
     const inboxes = await getInboxByAccountId(actorIds, conversationType);
 
-    const normalizedInboxes = await normalizeLinkedConversations(inboxes);
+    const normalizedInboxes = await normalizeLinkedConversations(inboxes, actorIds);
 
     const enrichedInboxes = await enrichInboxesWithMemberProfiles(
 
@@ -3772,7 +4144,9 @@ async function getAllInboxesByAccountIdServices(accountId) {
 
     const normalizedConversations = await normalizeLinkedConversations(
 
-        conversations.flat()
+        conversations.flat(),
+
+        actorIds
 
     );
 

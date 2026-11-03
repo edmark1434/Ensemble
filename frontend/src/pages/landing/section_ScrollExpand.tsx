@@ -1,20 +1,83 @@
-import React, { useEffect, useRef } from "react";
-import ScrollExpand from "@/components/ui/ScrollExpand";
-import MaskedHeading from "@/components/ui/MaskedHeading";
-import FaultyTerminal from "@/components/ui/FaultyTerminal";
+import React, { useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import FadeInScroll from "@/components/ui/FadeInScroll";
 import useGlobalState from "@/lib/global_state";
-import { 
-  Megaphone, Play, Smartphone, PenTool, 
-  Briefcase, Gamepad2, Plane, Music, 
-  Heart, Calendar, Lightbulb, Film, 
-  Clapperboard, Popcorn, Mic, Trophy, 
-  Scissors, Tv, Theater, BookOpen, 
-  Eye, Zap, Presentation, Camera, Sparkles
+import {
+  Megaphone,
+  Play,
+  Smartphone,
+  PenTool,
+  Briefcase,
+  Gamepad2,
+  Plane,
+  Music,
+  Heart,
+  Calendar,
+  Lightbulb,
+  Film,
+  Clapperboard,
+  Popcorn,
+  Mic,
+  Trophy,
+  Scissors,
+  Tv,
+  Theater,
+  BookOpen,
+  Eye,
+  Zap,
+  Presentation,
+  Camera,
+  Sparkles,
+  ArrowUpRight,
 } from "lucide-react";
 
 interface ScrollExpandSectionProps {
   isMuted?: boolean;
 }
+
+const T = {
+  fontDisplay: "'Plus Jakarta Sans', sans-serif",
+  fontMono: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+} as const;
+
+const USE_CASE_TRACKS = [
+  {
+    id: "01",
+    tag: "CLIENT & FREELANCERS",
+    title: "Hire a Freelancer or Team in 2 Ways",
+    desc: "Post a Job to review proposals, shortlist & approve an individual or team proposal, and offer a contract—or browse Discovery and Gigs / Services, order a service, and once the freelancer accepts your order, offer the contract to hire them.",
+    route: "/landing/usecase/client",
+    cta: "EXPLORE CLIENT USE CASE",
+    bgVideo: "/gallery_images/new/vids/vid_track.mp4",
+  },
+  {
+    id: "02",
+    tag: "FREELANCERS & ARTISTS",
+    title: "Monetize Your Editing, Color & VFX Skills",
+    desc: "Submit individual or team proposals to open Job posts, or publish your own Gigs / Services—once you accept a client's service order or get approved on a proposal, sign the contract and get paid in credits.",
+    route: "/landing/usecase/freelancer",
+    cta: "EXPLORE FREELANCER USE CASE",
+    bgVideo: "/gallery_images/new/vids/vid_collab.mp4",
+  },
+  {
+    id: "03",
+    tag: "ASSET CREATORS",
+    title: "Sell Template Videos, Bundles, Images, Videos & Audios",
+    desc: "Upload and monetize template videos, asset bundles, images, videos, and audio packs on the Asset Marketplace / Asset Library, and earn credits on every download.",
+    route: "/landing/usecase/asset-creator",
+    cta: "EXPLORE ASSET CREATOR USE CASE",
+    bgVideo: "/gallery_images/new/vids/vid_asset.mp4",
+  },
+  {
+    id: "04",
+    tag: "CREATORS & ENTHUSIASTS",
+    title: "Edit in the Browser with AI & Team Sync",
+    desc: "Use AI auto-captioning, single-click dead-air cleanup, and multi-user timeline sync to cut YouTube, TikTok, and short-form content faster.",
+    route: "/landing/usecase/enthusiast",
+    cta: "EXPLORE STUDIO USE CASE",
+    bgVideo: "/gallery_images/new/vids/vid_captioning.mp4",
+  },
+];
 
 const CATEGORIES = [
   { label: "Ads & Social", icon: Megaphone },
@@ -41,55 +104,117 @@ const CATEGORIES = [
   { label: "Animation", icon: Zap },
   { label: "Presentation", icon: Presentation },
   { label: "Cinematic", icon: Camera },
-  { label: "Others", icon: Sparkles }
+  { label: "Others", icon: Sparkles },
 ];
 
 const ROW_1 = CATEGORIES.slice(0, 8);
 const ROW_2 = CATEGORIES.slice(8, 17);
 const ROW_3 = CATEGORIES.slice(17, 25);
 
-const TickerRow = ({ items, direction = "left", theme = "dark" }: { items: typeof CATEGORIES, direction?: "left" | "right", theme?: "light" | "dark" }) => {
-  const duplicatedItems = [...items, ...items, ...items, ...items];
-  const animationClass = direction === "left" ? "marquee-content-left" : "marquee-content-right";
+const Crosshair: React.FC<{
+  top?: boolean;
+  bottom?: boolean;
+  left?: boolean;
+  right?: boolean;
+  color: string;
+}> = ({ top, bottom, left, right, color }) => (
+  <span
+    aria-hidden="true"
+    style={{
+      position: "absolute",
+      top: top ? -6 : undefined,
+      bottom: bottom ? -6 : undefined,
+      left: left ? -6 : undefined,
+      right: right ? -6 : undefined,
+      width: 11,
+      height: 11,
+      pointerEvents: "none",
+      zIndex: 4,
+    }}
+  >
+    <span
+      style={{
+        position: "absolute",
+        top: 5,
+        left: 0,
+        width: 11,
+        height: 1,
+        background: color,
+      }}
+    />
+    <span
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 5,
+        width: 1,
+        height: 11,
+        background: color,
+      }}
+    />
+  </span>
+);
 
-  const bg = theme === 'dark' ? "rgba(0, 0, 0, 0.7)" : "rgba(255, 255, 255, 0.8)";
-  const border = theme === 'dark' ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.1)";
-  const color = theme === 'dark' ? "#fff" : "#111827";
-  const hoverBg = theme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
+const TickerRow = ({
+  items,
+  direction = "left",
+  isDark = true,
+  borderLine,
+  onSelectCategory,
+  onHover,
+}: {
+  items: typeof CATEGORIES;
+  direction?: "left" | "right";
+  isDark?: boolean;
+  borderLine: string;
+  onSelectCategory: (label: string) => void;
+  onHover: () => void;
+}) => {
+  const duplicatedItems = [...items, ...items, ...items];
+  const animationClass =
+    direction === "left" ? "usecase-marquee-left" : "usecase-marquee-right";
+
+  const bg = isDark ? "#18181b" : "#f9fafb";
+  const color = isDark ? "#e4e4e7" : "#111827";
+  const hoverBg = isDark ? "rgba(59, 130, 246, 0.14)" : "rgba(59, 130, 246, 0.08)";
 
   return (
-    <div className="marquee-container" style={{ margin: "6px 0" }}>
-      <div className={animationClass} style={{ paddingLeft: "16px" }}>
+    <div className="usecase-marquee-container">
+      <div className={animationClass}>
         {duplicatedItems.map(({ label, icon: Icon }, i) => (
           <button
             key={`${label}-${i}`}
+            className="usecase-ticker-btn"
+            onClick={() => onSelectCategory(label)}
             style={{
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
               gap: "10px",
               background: bg,
-              border: border,
+              border: `1px solid ${borderLine}`,
+              borderRadius: 0,
               color: color,
-              fontSize: 15,
-              fontWeight: 600,
-              padding: "14px 22px",
-              borderRadius: "100px",
+              fontFamily: T.fontDisplay,
+              fontSize: 13.5,
+              fontWeight: 700,
+              padding: "12px 20px",
               cursor: "pointer",
-              transition: "all 0.2s",
-              backdropFilter: "blur(12px)",
-              flexShrink: 0
+              transition: "all 0.18s ease",
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = hoverBg;
-              const audio = new Audio("/sounds/minimalhover.mp3");
-              audio.volume = 0.2;
-              audio.play().catch(() => {});
+              onHover();
+              e.currentTarget.style.background = hoverBg;
+              e.currentTarget.style.borderColor = "#3b82f6";
+              e.currentTarget.style.color = isDark ? "#ffffff" : "#1d4ed8";
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = bg;
+              e.currentTarget.style.background = bg;
+              e.currentTarget.style.borderColor = borderLine;
+              e.currentTarget.style.color = color;
             }}
           >
-            <Icon size={16} />
+            <Icon size={15} style={{ color: "#3b82f6" }} />
             {label}
           </button>
         ))}
@@ -99,245 +224,442 @@ const TickerRow = ({ items, direction = "left", theme = "dark" }: { items: typeo
 };
 
 const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = false }) => {
+  const navigate = useNavigate();
+  const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
   const theme = useGlobalState((state) => state.theme);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textMaskRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const scrimRef = useRef<HTMLDivElement>(null);
+  const isDark = theme === "dark";
 
-  const bgColor = theme === 'dark' ? "#121214" : "#ffffff";
-  const scrimBg = theme === 'dark' 
-    ? "radial-gradient(circle at center, rgba(18,18,20,0.3) 0%, rgba(18,18,20,1) 100%)"
-    : "radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, rgba(255,255,255,1) 100%)";
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const container = containerRef.current;
-    const textMask = textMaskRef.current;
-    const content = contentRef.current;
-    const scrim = scrimRef.current;
-    const video = videoRef.current; // Might be null in light mode if terminal is active
+    hoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+    hoverAudioRef.current.volume = 0.2;
 
-    if (!container || !textMask || !content || !scrim) return;
-
-    let raf = 0;
-    
-    const handleScroll = () => {
-      const rect = container.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      
-      const scrollableDistance = rect.height - windowHeight;
-      if (scrollableDistance <= 0) return;
-      
-      let p = -rect.top / scrollableDistance;
-      p = Math.max(0, Math.min(1, p));
-      
-      // PHASE 1: Text Mask Zoom and Fade (0 to 0.5)
-      const p1 = Math.min(p / 0.5, 1);
-      
-      // Moderate zoom effect
-      const scale = 1 + p1 * 1.5; // scales from 1x to 2.5x
-      
-      // Fade out mask smoothly over the scroll to reveal the full video
-      const maskOpacity = 1 - Math.pow(p1, 1.5);
-      
-      textMask.style.transform = `scale(${scale})`;
-      textMask.style.opacity = maskOpacity.toString();
-      textMask.style.pointerEvents = p1 > 0.95 ? "none" : "auto";
-
-      // Video slight zoom out for scroll parallax effect
-      if (video) {
-        const vidScale = 1.2 - (p1 * 0.2);
-        video.style.transform = `scale(${vidScale})`;
-      }
-
-      // PHASE 2: Content Fade In (0.6 to 1.0)
-      const p2 = Math.max(0, (p - 0.6) / 0.4);
-      
-      content.style.opacity = p2.toString();
-      content.style.transform = `translateY(${(1 - p2) * 40}px)`;
-      content.style.pointerEvents = p2 > 0.5 ? "auto" : "none";
-      
-      scrim.style.opacity = (p2 * 0.85).toString();
-    };
-
-    const tick = () => {
-      handleScroll();
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    
-    return () => cancelAnimationFrame(raf);
+    clickAudioRef.current = new Audio("/sounds/softclick.mp3");
+    clickAudioRef.current.volume = 0.35;
   }, []);
 
+  const playHover = () => {
+    if (isMuted || !hoverAudioRef.current) return;
+    hoverAudioRef.current.currentTime = 0;
+    hoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playClick = () => {
+    if (isMuted || !clickAudioRef.current) return;
+    clickAudioRef.current.currentTime = 0;
+    clickAudioRef.current.play().catch(() => {});
+  };
+
+  const handleCategoryClick = (categoryLabel: string) => {
+    playClick();
+    setIsGuestMode(true);
+    navigate("/gigs/services", { state: { searchQuery: categoryLabel } });
+  };
+
+  const borderLine = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.15)";
+  const crosshairColor = isDark ? "rgba(255, 255, 255, 0.55)" : "rgba(0, 0, 0, 0.5)";
+  const bgSection = isDark ? "#121214" : "#ffffff";
+  const bgFrame = isDark ? "#121214" : "#ffffff";
+  const bgCellHover = isDark ? "#18181b" : "#f9fafb";
+  const textPrimary = isDark ? "#ffffff" : "#111827";
+  const textSecondary = isDark ? "#a1a1aa" : "#4b5563";
+  const textMeta = isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(17, 24, 39, 0.45)";
+
   return (
-    <section id="scroll-expand-showcase" ref={containerRef} style={{ position: "relative", zIndex: 5001, height: "400vh", background: bgColor, transition: "background 0.3s ease" }}>
+    <section
+      id="scroll-expand-showcase"
+      style={{
+        position: "relative",
+        background: bgSection,
+        borderTop: `1px solid ${borderLine}`,
+        marginTop: -1,
+        transition: "background 0.3s ease",
+        fontFamily: T.fontDisplay,
+      }}
+    >
       <style>{`
-        @keyframes marquee-left {
+        @keyframes usecase-scroll-left {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          100% { transform: translateX(-33.333%); }
         }
-        @keyframes marquee-right {
-          0% { transform: translateX(-50%); }
+        @keyframes usecase-scroll-right {
+          0% { transform: translateX(-33.333%); }
           100% { transform: translateX(0); }
         }
-        .marquee-container {
+        .usecase-marquee-container {
           display: flex;
           overflow: hidden;
-          width: 100vw;
-          max-width: 100vw;
-          mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
-          -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+          width: 100%;
         }
-        .marquee-content-left {
+        .usecase-marquee-left {
           display: flex;
-          gap: 16px;
-          min-width: 200%;
-          animation: marquee-left 45s linear infinite;
+          gap: 10px;
+          width: max-content;
+          animation: usecase-scroll-left 38s linear infinite;
         }
-        .marquee-content-right {
+        .usecase-marquee-right {
           display: flex;
-          gap: 16px;
-          min-width: 200%;
-          animation: marquee-right 45s linear infinite;
+          gap: 10px;
+          width: max-content;
+          animation: usecase-scroll-right 38s linear infinite;
         }
-        .marquee-content-left:hover, .marquee-content-right:hover {
+        .usecase-marquee-left:hover,
+        .usecase-marquee-right:hover {
           animation-play-state: paused;
+        }
+        .usecase-tracks-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          width: 100%;
+          border-bottom: 1px solid ${borderLine};
+        }
+        .usecase-track-cell {
+          border-right: 1px solid ${borderLine};
+          padding: 36px 32px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 28px;
+          cursor: pointer;
+          transition: background 0.2s ease;
+          position: relative;
+          overflow: hidden;
+        }
+        .usecase-track-cell:last-child {
+          border-right: none;
+        }
+        .usecase-track-cell:hover {
+          background: ${bgCellHover};
+        }
+        .usecase-cell-bg-vid {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          opacity: ${isDark ? 0.22 : 0.14};
+          transition: opacity 0.3s ease, transform 0.5s ease;
+          pointer-events: none;
+          z-index: 0;
+        }
+        .usecase-track-cell:hover .usecase-cell-bg-vid {
+          opacity: ${isDark ? 0.34 : 0.22};
+          transform: scale(1.04);
+        }
+        @media (max-width: 1080px) {
+          .usecase-tracks-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .usecase-track-cell:nth-child(2n+1) {
+            border-right: 1px solid ${borderLine} !important;
+          }
+          .usecase-track-cell:nth-child(2n) {
+            border-right: none !important;
+          }
+          .usecase-track-cell:nth-child(1),
+          .usecase-track-cell:nth-child(2) {
+            border-bottom: 1px solid ${borderLine};
+          }
+        }
+        @media (max-width: 640px) {
+          .usecase-tracks-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .usecase-track-cell {
+            padding: 14px 12px !important;
+            gap: 14px !important;
+          }
+          .usecase-lead-copy {
+            font-size: 12.5px !important;
+            line-height: 1.45 !important;
+          }
+          .usecase-cell-top {
+            margin-bottom: 8px !important;
+          }
+          .usecase-cell-tag {
+            font-size: 7.5px !important;
+            letter-spacing: 0.08em !important;
+          }
+          .usecase-cell-id {
+            font-size: 8px !important;
+          }
+          .usecase-cell-title {
+            font-size: 12.5px !important;
+            margin-bottom: 5px !important;
+            line-height: 1.22 !important;
+          }
+          .usecase-cell-desc {
+            font-size: 10.5px !important;
+            line-height: 1.38 !important;
+          }
+          .usecase-cell-cta {
+            font-size: 8px !important;
+            padding-top: 10px !important;
+            letter-spacing: 0.06em !important;
+          }
+          .usecase-ticker-btn {
+            padding: 8px 12px !important;
+            font-size: 11px !important;
+            gap: 6px !important;
+          }
+          .usecase-ticker-meta {
+            font-size: 9px !important;
+            letter-spacing: 0.1em !important;
+          }
         }
       `}</style>
 
-      <div style={{ position: "sticky", top: 0, height: "100vh", overflow: "hidden", width: "100%" }}>
-        
-        {/* Layer 1: Background Layer */}
-        <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: bgColor, transition: "background 0.3s ease" }}>
-          {theme === 'dark' ? (
-            <video 
-              ref={videoRef}
-              src="/landing/clip-1.mp4" 
-              autoPlay 
-              muted 
-              loop 
-              playsInline
-              preload="none"
-              style={{ width: "100%", height: "100%", objectFit: "cover", transformOrigin: "center", willChange: "transform" }}
-            />
-          ) : (
-            <FaultyTerminal 
-              theme="light" 
-              mouseReact={false} 
-              scale={1.5}
-              gridMul={[2, 1]}
-              digitSize={1.2}
-              timeScale={1}
-              scanlineIntensity={1}
-              glitchAmount={1}
-              flickerAmount={1}
-              noiseAmp={1}
-              chromaticAberration={0}
-              dither={0}
-              curvature={0}
-              pageLoadAnimation={false}
-              brightness={0.2}
-            />
-          )}
-        </div>
+      <div
+        style={{
+          maxWidth: 1320,
+          margin: "0 auto",
+          borderLeft: `1px solid ${borderLine}`,
+          borderRight: `1px solid ${borderLine}`,
+          borderBottom: `1px solid ${borderLine}`,
+          background: bgFrame,
+          position: "relative",
+        }}
+      >
+        <Crosshair bottom left color={crosshairColor} />
+        <Crosshair bottom right color={crosshairColor} />
 
-        {/* Layer 2: Masked Heading Text Layer */}
-        <div 
-          ref={textMaskRef}
-          style={{ 
-            position: "absolute", 
-            inset: -50, // Bleed to prevent edge tearing during scale
-            backgroundColor: bgColor, // Dynamic background color for text mask
-            display: "flex", 
-            alignItems: "center", 
-            justifyContent: "center",
-            transformOrigin: "center",
-            willChange: "transform, opacity",
-            pointerEvents: "none", // Let users interact with potential underlying elements later
-            transition: "background-color 0.3s ease"
+        {/* Telemetry Header Strip */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px clamp(18px, 4vw, 40px)",
+            borderBottom: `1px solid ${borderLine}`,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: textMeta,
+            flexWrap: "wrap",
+            gap: 8,
           }}
         >
-          <MaskedHeading 
-            text="Ensemble" 
-            mediaType="video" 
-            src="/landing/clip-1.mp4" 
-            reveal="none" 
-            parallax={20}
-            fillScale={1.1}
-            className="whitespace-nowrap"
-            style={{ 
-              fontSize: "clamp(20px, 4vw, 50px)", 
-              fontFamily: "Inter, sans-serif",
-              letterSpacing: "-0.04em"
+          <span>04 / USE CASES</span>
+          <span>SPECIALIZED PRODUCTION CATEGORIES</span>
+        </div>
+
+        <FadeInScroll distance={24} duration={0.7}>
+          {/* Section Header Row */}
+          <div
+            style={{
+              padding: "clamp(36px, 5vw, 56px) clamp(18px, 4vw, 40px)",
+              borderBottom: `1px solid ${borderLine}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
             }}
-          />
-        </div>
-
-        {/* Layer 3: Darkening Scrim (Fades in later) */}
-        <div 
-          ref={scrimRef}
-          style={{ 
-            position: "absolute", 
-            inset: 0, 
-            background: theme === 'dark'
-              ? "radial-gradient(circle at center, rgba(18,18,20,0.3) 0%, rgba(18,18,20,1) 100%)"
-              : "radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, rgba(255,255,255,1) 100%)", 
-            opacity: 0, 
-            pointerEvents: "none", 
-            willChange: "opacity",
-            transition: "background 0.3s ease"
-          }}
-        />
-
-        {/* Bottom Fade Mask to smoothly blend into the next section */}
-        <div style={{
-          position: "absolute",
-          bottom: 0, left: 0, right: 0, height: "15vh",
-          background: theme === 'dark' ? "linear-gradient(to top, #121214 0%, transparent 100%)" : "linear-gradient(to top, #f9fafb 0%, transparent 100%)",
-          zIndex: 5,
-          pointerEvents: "none"
-        }} />
-
-        {/* Layer 4: Expanded Marquee Content (Fades in last) */}
-        <div 
-          ref={contentRef}
-          style={{ 
-            position: "absolute", 
-            inset: 0, 
-            zIndex: 10, 
-            display: "flex", 
-            flexDirection: "column", 
-            alignItems: "center", 
-            justifyContent: "center",
-            opacity: 0,
-            willChange: "transform, opacity"
-          }}
-        >
-          <div style={{ position: "relative", zIndex: 1, textAlign: "center", width: "100%", padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", overflow: "hidden" }}>
-            <p style={{ 
-              fontSize: "clamp(16px, 2.2vw, 20px)", // Slightly larger
-              fontWeight: 600, 
-              color: theme === 'dark' ? "#fff" : "#111827", 
-              lineHeight: 1.6, 
-              letterSpacing: 0.5, 
-              marginBottom: "40px", 
-              maxWidth: "600px",
-              padding: "0 20px",
-              textShadow: theme === 'dark' ? "0 2px 12px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,1)" : "none",
-              transition: "all 0.3s ease"
-            }}>
-              Discover the perfect creative partner for your next masterpiece. Select a category below to explore top-tier talent and specialized workflows.
+          >
+            <h2
+              style={{
+                fontSize: "clamp(34px, 4.5vw, 54px)",
+                fontWeight: 800,
+                color: textPrimary,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.08,
+                margin: 0,
+              }}
+            >
+              Built for every <span style={{ color: "#3b82f6" }}>creative</span> use case.
+            </h2>
+            <p
+              className="usecase-lead-copy"
+              style={{
+                fontSize: "clamp(15px, 1.5vw, 18px)",
+                lineHeight: 1.6,
+                fontWeight: 500,
+                color: textSecondary,
+                maxWidth: 780,
+                margin: 0,
+              }}
+            >
+              Discover the right workflow for your next production. Explore role-based tracks
+              or pick a video category below to browse verified editors, creators, and assets.
             </p>
-            
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "2px" }}>
-              <TickerRow items={ROW_1} direction="left" theme={theme} />
-              <TickerRow items={ROW_2} direction="right" theme={theme} />
-              <TickerRow items={ROW_3} direction="left" theme={theme} />
-            </div>
           </div>
-        </div>
 
+          {/* 4-Column Role Use Case Grid (Matching Reference Image 2 "THE FAMILY" Cells) */}
+          <div className="usecase-tracks-grid">
+            {USE_CASE_TRACKS.map((track) => (
+              <div
+                key={track.id}
+                className="usecase-track-cell group"
+                onClick={() => {
+                  playClick();
+                  navigate(track.route);
+                }}
+                onMouseEnter={playHover}
+              >
+                <video
+                  src={track.bgVideo}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="usecase-cell-bg-vid"
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: isDark
+                      ? "linear-gradient(180deg, rgba(18,18,20,0.84) 0%, rgba(18,18,20,0.68) 55%, rgba(18,18,20,0.88) 100%)"
+                      : "linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.75) 55%, rgba(255,255,255,0.92) 100%)",
+                    pointerEvents: "none",
+                    zIndex: 1,
+                  }}
+                />
+                <div style={{ position: "relative", zIndex: 2 }}>
+                  <div
+                    className="usecase-cell-top"
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <span
+                      className="usecase-cell-tag"
+                      style={{
+                        fontFamily: T.fontMono,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        letterSpacing: "0.14em",
+                        color: "#3b82f6",
+                      }}
+                    >
+                      {track.tag}
+                    </span>
+                    <span
+                      className="usecase-cell-id"
+                      style={{
+                        fontFamily: T.fontMono,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: textMeta,
+                      }}
+                    >
+                      {track.id}
+                    </span>
+                  </div>
+
+                  <h3
+                    className="usecase-cell-title"
+                    style={{
+                      fontSize: 19,
+                      fontWeight: 800,
+                      color: textPrimary,
+                      letterSpacing: "-0.02em",
+                      lineHeight: 1.3,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {track.title}
+                  </h3>
+
+                  <p
+                    className="usecase-cell-desc"
+                    style={{
+                      fontSize: 13.5,
+                      lineHeight: 1.65,
+                      color: textSecondary,
+                      fontWeight: 500,
+                      margin: 0,
+                    }}
+                  >
+                    {track.desc}
+                  </p>
+                </div>
+
+                <div
+                  className="usecase-cell-cta"
+                  style={{
+                    position: "relative",
+                    zIndex: 2,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: T.fontMono,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    color: textPrimary,
+                    paddingTop: 16,
+                    borderTop: `1px solid ${borderLine}`,
+                  }}
+                >
+                  <span>{track.cta}</span>
+                  <ArrowUpRight size={13} style={{ color: "#3b82f6", flexShrink: 0 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Instant 3-Row Categories Ticker Strip Framed Inside Blueprint */}
+          <div
+            style={{
+              padding: "28px 0",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              overflow: "hidden",
+              background: isDark ? "#121214" : "#ffffff",
+            }}
+          >
+            <div
+              className="usecase-ticker-meta"
+              style={{
+                padding: "0 clamp(18px, 4vw, 40px) 14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: textMeta,
+              }}
+            >
+              <span>POPULAR PRODUCTION CATEGORIES (25)</span>
+              <span>CLICK ANY CATEGORY TO EXPLORE MARKETPLACE</span>
+            </div>
+
+            <TickerRow
+              items={ROW_1}
+              direction="left"
+              isDark={isDark}
+              borderLine={borderLine}
+              onSelectCategory={handleCategoryClick}
+              onHover={playHover}
+            />
+            <TickerRow
+              items={ROW_2}
+              direction="right"
+              isDark={isDark}
+              borderLine={borderLine}
+              onSelectCategory={handleCategoryClick}
+              onHover={playHover}
+            />
+            <TickerRow
+              items={ROW_3}
+              direction="left"
+              isDark={isDark}
+              borderLine={borderLine}
+              onSelectCategory={handleCategoryClick}
+              onHover={playHover}
+            />
+          </div>
+        </FadeInScroll>
       </div>
     </section>
   );

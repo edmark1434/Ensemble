@@ -1,10 +1,17 @@
-import type { Dispute, DisputeCaseFile } from "./moderatorTypes";
+import type { ReactNode } from "react";
+import type { Dispute, DisputeCaseFile, DisputeCaseTransaction } from "./moderatorTypes";
 
 function when(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function titleCase(value?: string | null) {
@@ -22,173 +29,241 @@ function person(name?: string, handle?: string | null) {
   return name || "Unknown";
 }
 
+function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h4 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        {title}
+        {typeof count === "number" && (
+          <span className="rounded-full bg-white/5 px-1.5 py-px text-[10px] font-medium text-zinc-400">{count}</span>
+        )}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-lg border border-dashed border-white/10 px-3 py-3 text-xs text-zinc-500">{children}</p>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+      <dt className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</dt>
+      <dd className="mt-0.5 text-sm text-zinc-200">{value}</dd>
+    </div>
+  );
+}
+
+function Tag({ children, className = "border-white/10 text-zinc-400" }: { children: ReactNode; className?: string }) {
+  return <span className={`rounded border px-1.5 py-px text-[10px] ${className}`}>{children}</span>;
+}
+
 export default function DisputeCaseFilePanel({
   dispute,
   caseFile,
   onOpenDispute,
+  canAct = false,
+  saving = false,
+  onReverseTransaction,
 }: {
   dispute: Dispute;
   caseFile?: DisputeCaseFile;
   onOpenDispute?: (disputeId: string) => void;
+  canAct?: boolean;
+  saving?: boolean;
+  onReverseTransaction?: (tx: DisputeCaseTransaction) => void;
 }) {
   const contracts = caseFile?.contracts || [];
   const transactions = caseFile?.transactions || [];
   const related = caseFile?.relatedDisputes || [];
+  const financial = dispute.financialResolution;
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-white">Case file</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          Parties, contract record, credit movements, and other disputes between these accounts.
-        </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-white/10 px-3 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Disputer</p>
-          <p className="mt-1 text-sm text-white">{person(dispute.initiator.name, dispute.initiator.username)}</p>
-          <p className="text-xs text-zinc-500">Filed this dispute</p>
+    <div className="space-y-6">
+      <Section title="Parties">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">Disputer</p>
+            <p className="mt-1 text-sm text-white">{person(dispute.initiator.name, dispute.initiator.username)}</p>
+            <p className="text-xs text-zinc-500">Filed this dispute</p>
+          </div>
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-300/80">Disputee</p>
+            <p className="mt-1 text-sm text-white">{person(dispute.respondent.name, dispute.respondent.username)}</p>
+            <p className="text-xs text-zinc-500">Named in this dispute</p>
+          </div>
         </div>
-        <div className="rounded-xl border border-white/10 px-3 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Disputee</p>
-          <p className="mt-1 text-sm text-white">{person(dispute.respondent.name, dispute.respondent.username)}</p>
-          <p className="text-xs text-zinc-500">Named in this dispute</p>
-        </div>
-      </div>
+      </Section>
 
-      <dl className="grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
-        <div>Opened {when(dispute.openedAt)}</div>
-        <div>Updated {when(dispute.updatedAt)}</div>
-        <div>Resolved {when(dispute.resolvedAt)}</div>
-        <div>Credits involved {dispute.creditAmount.toLocaleString()}</div>
-        <div>Sanction {dispute.sanctionType ? titleCase(dispute.sanctionType) : "None"}</div>
-        <div>Priority {titleCase(dispute.priority)}</div>
-      </dl>
-      {dispute.resolutionNotes ? (
-        <p className="whitespace-pre-wrap text-sm text-zinc-300">
-          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Resolution. </span>
-          {dispute.resolutionNotes}
-        </p>
-      ) : null}
+      <Section title="Summary">
+        <dl className="grid gap-2 sm:grid-cols-3">
+          <Fact label="Credits involved" value={dispute.creditAmount.toLocaleString()} />
+          <Fact label="Priority" value={titleCase(dispute.priority)} />
+          <Fact label="Sanction" value={dispute.sanctionType ? titleCase(dispute.sanctionType) : "None"} />
+          <Fact label="Opened" value={when(dispute.openedAt)} />
+          <Fact label="Updated" value={when(dispute.updatedAt)} />
+          <Fact label="Resolved" value={when(dispute.resolvedAt)} />
+        </dl>
+        {dispute.resolutionNotes ? (
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Resolution notes</p>
+            <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-300">{dispute.resolutionNotes}</p>
+          </div>
+        ) : null}
+        {financial ? (
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300/80">Financial resolution</p>
+            <p className="mt-0.5">
+              {financial.kind === "escrow_settle"
+                ? `Escrow settled. Client ${financial.clientCredits.toLocaleString()} · freelancer ${financial.freelancerCredits.toLocaleString()}`
+                : financial.kind === "transaction_reverse"
+                  ? "Linked transaction reversed"
+                  : titleCase(financial.kind || "Resolved")}
+            </p>
+            <p className="mt-0.5 text-xs text-emerald-200/70">{when(financial.at)}</p>
+          </div>
+        ) : null}
+      </Section>
 
-      <div className="space-y-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Contracts</h4>
+      <Section title="Contracts" count={contracts.length}>
         {contracts.length === 0 ? (
-          <p className="text-sm text-zinc-500">No contract between these accounts is on file.</p>
+          <Empty>No contract between these accounts is on file.</Empty>
         ) : (
           contracts.map((contract) => (
-            <article key={contract.id} className="space-y-3 rounded-xl border border-white/10 px-3 py-3">
+            <article key={contract.id} className="space-y-2 rounded-xl border border-white/10 px-3 py-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-white">{contract.title}</p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {titleCase(contract.contractType)} · {titleCase(contract.paymentType)} · {contract.status}
-                    {contract.linked ? " · Linked to this dispute" : ""}
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-white">
+                    {contract.title}
+                    {contract.linked && <Tag className="border-rose-500/30 text-rose-200">Linked to this dispute</Tag>}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {titleCase(contract.contractType)} · {titleCase(contract.paymentType)} · {titleCase(contract.status)}
                   </p>
                 </div>
-                <p className="text-sm text-zinc-200">{contract.rateCredits.toLocaleString()} credits</p>
+                <p className="text-sm tabular-nums text-zinc-200">{contract.rateCredits.toLocaleString()} credits</p>
               </div>
               <p className="text-xs text-zinc-400">
                 Client {person(contract.clientName, contract.clientHandle)} · Freelancer{" "}
                 {person(contract.freelancerName, contract.freelancerHandle)}
               </p>
-              <p className="text-xs text-zinc-500">
-                Starts {when(contract.startsAt)} · Deadline {when(contract.deadlineAt)} · Revision price{" "}
+              <p className="text-[11px] text-zinc-500">
+                Starts {when(contract.startsAt)} · Deadline {when(contract.deadlineAt)} · Revision{" "}
                 {contract.revisionPriceCredits.toLocaleString()} credits
               </p>
               {contract.milestones.length === 0 ? (
                 <p className="text-xs text-zinc-500">No milestones recorded.</p>
               ) : (
-                <ul className="space-y-2">
-                  {contract.milestones.map((milestone) => (
-                    <li key={milestone.id} className="rounded-lg border border-white/10 px-3 py-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-200">
-                        <span>
-                          {milestone.index}. {milestone.name}
-                        </span>
-                        <span>
-                          {titleCase(milestone.status)} · {milestone.credits.toLocaleString()} credits
-                        </span>
-                      </div>
-                      {milestone.description ? (
-                        <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-zinc-400">
-                          {milestone.description}
+                <details className="group rounded-lg border border-white/[0.06]">
+                  <summary className="cursor-pointer select-none px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200">
+                    Milestones ({contract.milestones.length})
+                  </summary>
+                  <ul className="space-y-2 border-t border-white/[0.06] p-2">
+                    {contract.milestones.map((milestone) => (
+                      <li key={milestone.id} className="rounded-lg bg-white/[0.02] px-3 py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-200">
+                          <span>
+                            {milestone.index}. {milestone.name}
+                          </span>
+                          <span className="text-xs text-zinc-400">
+                            {titleCase(milestone.status)} · {milestone.credits.toLocaleString()} credits
+                          </span>
+                        </div>
+                        {milestone.description ? (
+                          <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-zinc-400">
+                            {milestone.description}
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-[11px] text-zinc-500">
+                          Started {when(milestone.startedAt)} · Deadline {when(milestone.deadlineAt)} · Revisions{" "}
+                          {milestone.revisions}
                         </p>
-                      ) : null}
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Started {when(milestone.startedAt)} · Deadline {when(milestone.deadlineAt)} · Revisions{" "}
-                        {milestone.revisions}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </article>
           ))
         )}
-      </div>
+      </Section>
 
-      <div className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Transactions</h4>
+      <Section title="Transactions" count={transactions.length}>
         {transactions.length === 0 ? (
-          <p className="text-sm text-zinc-500">No escrow or contract credit transactions are linked.</p>
+          <Empty>No escrow or contract credit transactions are linked.</Empty>
         ) : (
-          <ul className="max-h-80 space-y-2 overflow-y-auto">
+          <ul className="space-y-2">
             {transactions.map((tx) => (
-              <li key={tx.id} className="rounded-lg border border-white/10 px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-zinc-200">
-                  <span>
-                    {tx.type} · {tx.amount.toLocaleString()} credits
+              <li key={tx.id} className="rounded-lg border border-white/10 px-3 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm text-zinc-200">
+                    {titleCase(tx.type)} · <span className="tabular-nums">{tx.amount.toLocaleString()}</span> credits
                   </span>
-                  <span className="text-xs text-zinc-500">{when(tx.createdAt)}</span>
+                  <span className="text-[11px] text-zinc-500">{when(tx.createdAt)}</span>
                 </div>
                 <p className="mt-1 text-xs text-zinc-400">
                   {tx.sourceName}
                   {tx.sourceHandle ? ` (@${tx.sourceHandle})` : ""} · {tx.sourceWallet} → {tx.destinationName}
                   {tx.destinationHandle ? ` (@${tx.destinationHandle})` : ""} · {tx.destinationWallet}
                 </p>
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  {titleCase(tx.status)}
-                  {tx.referenceLabel ? ` · ${tx.referenceLabel}` : ""}
-                  {tx.tiedToThisDispute ? " · Tied to this dispute" : ""}
-                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <Tag>{titleCase(tx.status)}</Tag>
+                  {tx.referenceLabel ? <Tag>{tx.referenceLabel}</Tag> : null}
+                  {tx.tiedToThisDispute ? <Tag className="border-rose-500/30 text-rose-200">This dispute</Tag> : null}
+                  {tx.reversesTransactionId ? <Tag className="border-amber-500/30 text-amber-200">Compensating reverse</Tag> : null}
+                  {tx.reversedByTransactionId ? <Tag className="border-amber-500/30 text-amber-200">Already reversed</Tag> : null}
+                  {canAct && tx.reversible && onReverseTransaction && !financial ? (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => onReverseTransaction(tx)}
+                      className="ml-auto rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-100 hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      Reverse
+                    </button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </Section>
 
-      <div className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Other disputes</h4>
+      <Section title="Other disputes between them" count={related.length}>
         {related.length === 0 ? (
-          <p className="text-sm text-zinc-500">No other dispute between these two accounts.</p>
+          <Empty>No other dispute between these two accounts.</Empty>
         ) : (
           <ul className="space-y-2">
             {related.map((item) => {
               const body = (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm text-white">{item.number || "Dispute"} · {item.title}</span>
-                    <span className="text-xs text-zinc-500">{when(item.openedAt)}</span>
+                    <span className="text-sm text-white">
+                      {item.number || "Dispute"} · {item.title}
+                    </span>
+                    <span className="text-[11px] text-zinc-500">{when(item.openedAt)}</span>
                   </div>
                   <p className="mt-1 text-xs text-zinc-400">
                     {person(item.initiatorName, item.initiatorHandle)} vs {person(item.respondentName, item.respondentHandle)}
-                    {" · "}
-                    {titleCase(item.type)} · {titleCase(item.status)} · {item.creditAmount.toLocaleString()} credits ·{" "}
-                    {item.visibility ? "Public" : "Staff only"}
                   </p>
-                  {item.description ? (
-                    <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-zinc-500">{item.description}</p>
-                  ) : null}
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <Tag>{titleCase(item.type)}</Tag>
+                    <Tag>{titleCase(item.status)}</Tag>
+                    <Tag>{item.creditAmount.toLocaleString()} credits</Tag>
+                    <Tag>{item.visibility ? "Public" : "Private"}</Tag>
+                  </div>
                   {item.resolutionNotes ? (
-                    <p className="mt-1 text-xs text-zinc-400">Resolution: {item.resolutionNotes}</p>
+                    <p className="mt-1.5 line-clamp-2 text-xs text-zinc-500">Resolution: {item.resolutionNotes}</p>
                   ) : null}
                 </>
               );
               if (!onOpenDispute) {
                 return (
-                  <li key={item.id} className="rounded-lg border border-white/10 px-3 py-2">
+                  <li key={item.id} className="rounded-lg border border-white/10 px-3 py-2.5">
                     {body}
                   </li>
                 );
@@ -198,7 +273,7 @@ export default function DisputeCaseFilePanel({
                   <button
                     type="button"
                     onClick={() => onOpenDispute(item.id)}
-                    className="w-full rounded-lg border border-white/10 px-3 py-2 text-left hover:bg-white/[0.04]"
+                    className="w-full rounded-lg border border-white/10 px-3 py-2.5 text-left transition hover:border-white/20 hover:bg-white/[0.03]"
                   >
                     {body}
                   </button>
@@ -207,7 +282,7 @@ export default function DisputeCaseFilePanel({
             })}
           </ul>
         )}
-      </div>
-    </section>
+      </Section>
+    </div>
   );
 }

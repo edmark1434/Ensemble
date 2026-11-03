@@ -109,7 +109,7 @@ export type TicketMessage = {
   isUnsent?: boolean;
   messageType?: string;
   replyToId?: string | null;
-  audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
+  audience?: 'staff' | 'author_and_staff' | 'disputer' | 'disputee' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
 };
@@ -164,6 +164,15 @@ export type TicketPermissions = {
   canEscalate?: boolean;
 };
 
+export type DisputeFinancialResolution = {
+  at: string;
+  kind: string | null;
+  staffId?: string | null;
+  clientCredits: number;
+  freelancerCredits: number;
+  reversedTransactionId?: string | null;
+};
+
 export type Dispute = {
   id: number | string;
   number: string;
@@ -185,6 +194,7 @@ export type Dispute = {
   resolvedAt: string | null;
   resolutionNotes: string | null;
   isClosed?: boolean;
+  financialResolution?: DisputeFinancialResolution | null;
 };
 
 export type UserReport = {

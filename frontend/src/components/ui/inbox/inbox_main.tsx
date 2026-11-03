@@ -696,6 +696,28 @@ const InboxMain = () => {
       setMessageError("This ticket is closed. You cannot reply.");
       return;
     }
+    const disputeDetails = selectedConversation.dispute_details;
+    const isDisputeThread =
+      selectedConversation.conversation_type === "dispute" ||
+      Boolean(selectedConversation.dispute_id);
+    if (isDisputeThread) {
+      const disputeClosed =
+        String(disputeDetails?.status || "").toLowerCase() === "closed";
+      if (disputeClosed) {
+        setMessageError("This dispute is closed. You cannot reply.");
+        return;
+      }
+      const disputePublic = Boolean(disputeDetails?.visibility);
+      const isFiler =
+        Boolean(currentActorId) &&
+        String(disputeDetails?.by_account_id || "") === String(currentActorId);
+      if (!disputePublic && !isFiler) {
+        setMessageError(
+          "This dispute is not public yet. Only the person who filed it can add information for staff."
+        );
+        return;
+      }
+    }
 
     if (editingMessage) {
       setIsSending(true);

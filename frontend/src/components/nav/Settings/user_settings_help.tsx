@@ -5,7 +5,7 @@ import { useTourStore } from "@/lib/tour_state";
 
 export const UserSettingsHelp: React.FC = () => {
   const navigate = useNavigate();
-  const startWalkthrough = useTourStore((state) => state.startWalkthrough);
+  const openWelcome = useTourStore((state) => state.openWelcome);
 
   return (
     <div className="space-y-6">
@@ -18,8 +18,8 @@ export const UserSettingsHelp: React.FC = () => {
         {/* Interactive Platform Walkthrough Trigger Card */}
         <button
           onClick={() => {
-            startWalkthrough();
             navigate('/home');
+            openWelcome();
           }}
           className="sm:col-span-2 p-4 rounded-xl border border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5 text-left hover:border-amber-500/60 dark:hover:bg-amber-500/10 transition-all group shadow-sm"
         >
