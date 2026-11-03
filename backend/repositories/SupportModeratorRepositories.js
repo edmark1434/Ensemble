@@ -214,7 +214,7 @@ async function getTicketLog() {
         'ticket' AS type,
         t.ticket_number AS ref,
         t.reason AS label,
-        t.status,
+        t.status::text AS status,
         t.updated_at AS at
       FROM tickets t
       WHERE t.deleted_at IS NULL
@@ -228,7 +228,7 @@ async function getTicketLog() {
         'message' AS type,
         t.ticket_number AS ref,
         'Ticket activity on ' || t.ticket_number AS label,
-        t.status,
+        t.status::text AS status,
         t.last_message_at AS at
       FROM tickets t
       WHERE t.last_message_at IS NOT NULL
@@ -243,7 +243,7 @@ async function getTicketLog() {
         'dispute' AS type,
         d.dispute_number AS ref,
         d.title AS label,
-        d.status,
+        d.status::text AS status,
         d.updated_at AS at
       FROM disputes d
       WHERE d.deleted_at IS NULL

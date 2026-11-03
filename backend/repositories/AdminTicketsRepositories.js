@@ -913,19 +913,19 @@ async function fetchStaffWorkload() {
 async function fetchRecentActivity() {
   const result = await pool.query(`
     (
-      SELECT 'ticket' AS type, ticket_number AS ref, reason AS label, status, updated_at AS at
+      SELECT 'ticket' AS type, ticket_number AS ref, reason AS label, status::text AS status, updated_at AS at
       FROM tickets
       WHERE deleted_at IS NULL
       ORDER BY updated_at DESC LIMIT 8
     )
     UNION ALL
     (
-      SELECT 'dispute' AS type, dispute_number AS ref, title AS label, status, updated_at AS at
+      SELECT 'dispute' AS type, dispute_number AS ref, title AS label, status::text AS status, updated_at AS at
       FROM disputes ORDER BY updated_at DESC LIMIT 6
     )
     UNION ALL
     (
-      SELECT 'report' AS type, report_number AS ref, COALESCE(type, report_number) AS label, status, COALESCE(updated_at, created_at) AS at
+      SELECT 'report' AS type, report_number AS ref, COALESCE(type, report_number) AS label, status::text AS status, COALESCE(updated_at, created_at) AS at
       FROM reports WHERE deleted_at IS NULL ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 6
     )
     ORDER BY at DESC
