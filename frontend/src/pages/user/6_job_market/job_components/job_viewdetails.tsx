@@ -1,6 +1,6 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState } from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, Loader2, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, Loader2, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown, Sparkles } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
@@ -315,6 +315,20 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                               </div>
                               <CircularProgress percentage={rankInfo.availabilityScore * 100} size={34} strokeWidth={3} />
                             </div>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-white/70 dark:bg-dark-base/60 border border-gray-200/80 dark:border-white/10 text-[11px]">
+                            <div className="flex items-center gap-1.5 text-gray-700 dark:text-zinc-200">
+                              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                              <span>Plan Visibility: <strong>{rankInfo.subscriptionPlan}</strong></span>
+                            </div>
+                            <span className="font-mono font-bold text-gray-900 dark:text-white">
+                              {rankInfo.subscriptionBoost > 0 ? (
+                                <span className="text-emerald-600 dark:text-emerald-400">+{rankInfo.subscriptionBoost.toFixed(1)} pts boost</span>
+                              ) : (
+                                <span className="text-gray-400 dark:text-zinc-500">+0.0 pts (Free)</span>
+                              )}
+                            </span>
                           </div>
 
                           <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-0.5">

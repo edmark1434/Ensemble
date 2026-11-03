@@ -193,6 +193,7 @@ const JobFullPage: React.FC = () => {
             savesCount: parseInt(j.saves_count) || 0,
             timeline: `${j.timeline_min || 0}-${j.timeline_max || 0} Days`,
             thumbnail: mapUrl(j.thumbnail_path || j.thumbnail),
+            hasCustomThumbnail: Boolean(j.thumbnail_path),
             skills: j.tags || [],
             isSaved: Boolean(j.is_saved),
             isOwnPost: Boolean(j.is_own_post),
@@ -220,6 +221,9 @@ const JobFullPage: React.FC = () => {
             screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
             shortlistedCount: parseInt(j.shortlisted_count) || 0,
             clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
+            clientMerit: j.client_merit !== undefined && j.client_merit !== null ? Number(j.client_merit) : 100,
+            clientSubscriptionPlan: j.client_subscription_plan || "Free",
+            clientProfileVisibility: Number(j.client_profile_visibility) || 0,
             clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined,
             applicationDeadline: j.application_deadline,
             isUrgent: Boolean(j.is_urgent),
@@ -1198,6 +1202,20 @@ const JobFullPage: React.FC = () => {
                               </div>
                               <CircularProgress percentage={rankInfo.availabilityScore * 100} size={36} strokeWidth={3.5} />
                             </div>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-white/70 dark:bg-dark-base/60 border border-gray-200/80 dark:border-white/10 text-[11px]">
+                            <div className="flex items-center gap-1.5 text-gray-700 dark:text-zinc-200">
+                              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                              <span>Plan Visibility: <strong>{rankInfo.subscriptionPlan}</strong></span>
+                            </div>
+                            <span className="font-mono font-bold text-gray-900 dark:text-white">
+                              {rankInfo.subscriptionBoost > 0 ? (
+                                <span className="text-emerald-600 dark:text-emerald-400">+{rankInfo.subscriptionBoost.toFixed(1)} pts boost</span>
+                              ) : (
+                                <span className="text-gray-400 dark:text-zinc-500">+0.0 pts (Free)</span>
+                              )}
+                            </span>
                           </div>
 
                           <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-1">
