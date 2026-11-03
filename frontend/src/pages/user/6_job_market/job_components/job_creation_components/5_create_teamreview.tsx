@@ -17,7 +17,10 @@ import {
   CheckSquare, 
   FileText, 
   Check, 
-  AlertCircle 
+  AlertCircle,
+  Activity,
+  ShieldCheck,
+  ExternalLink
 } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -102,6 +105,14 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [agreedToFee, setAgreedToFee] = useState(false);
   const user = useGlobalState((state) => state.user);
+  const globalSubscriptionPlan = useGlobalState((state) => state.subscriptionPlan);
+  const rawSubscriptionPlan =
+    globalSubscriptionPlan ||
+    user?.subscription_plan ||
+    user?.subscriptionTier ||
+    "Free";
+  const clientProfileVisibility =
+    rawSubscriptionPlan === "Business" ? 90 : rawSubscriptionPlan === "Premium" ? 30 : 0;
 
   const [profileAvatar, setProfileAvatar] = useState<string | undefined>(() => {
     const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
@@ -217,6 +228,10 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
       isExistingProject,
       requireNDA,
       milestones,
+      clientSubscriptionPlan: rawSubscriptionPlan,
+      clientProfileVisibility,
+      clientMerit: user?.merit_score ?? user?.merit ?? 100,
+      clientHireRate: user?.hire_rate ?? user?.clientHireRate ?? 100,
     };
   }, [
     title,
@@ -237,6 +252,8 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
     isExistingProject,
     requireNDA,
     milestones,
+    rawSubscriptionPlan,
+    clientProfileVisibility,
   ]);
 
   const ranking = useMemo(() => computeJobRankingBreakdown(previewJob), [previewJob]);
@@ -264,11 +281,11 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
       </div>
 
       {/* SECTION 1: LIVE MARKETPLACE TEAM CARD PREVIEW & ALGORITHM DISCOVERY SCORE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
         {/* Left: Real-time Team Job Card Preview */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="lg:col-span-7 space-y-3 flex flex-col items-start w-full">
+          <div className="w-full max-w-[720px] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
               <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
@@ -285,8 +302,8 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
             </button>
           </div>
 
-          {/* Genuine Marketplace Team Job Card */}
-          <div className="group flex flex-col sm:flex-row gap-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-sm transition-all relative overflow-hidden">
+          {/* Genuine Marketplace Team Job Card (Comfortably Wider) */}
+          <div className="group flex flex-col sm:flex-row gap-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-sm transition-all relative overflow-hidden w-full max-w-[720px] flex-1">
             {/* Thumbnail Column */}
             <div className="relative h-44 sm:h-auto sm:min-h-[160px] w-full sm:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-900 border border-gray-200 dark:border-white/5">
               {previewUrl ? (
@@ -420,23 +437,47 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
         </div>
 
         {/* Right: Team Algorithm Discovery Score Widget */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
-              Team Algorithm Score
-            </span>
+        <div className="lg:col-span-5 space-y-3 flex flex-col w-full">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                Team Algorithm Score
+              </span>
+            </div>
+            <Link
+              to="/jobs/info"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
+            >
+              <span>Scoring Guide</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
           </div>
 
           <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 space-y-4 shadow-sm">
             {/* Header Badge */}
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3 gap-2">
               <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
                 Team Pool Appeal
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10">
-                {ranking.totalScore >= 80 ? "High Discovery" : ranking.totalScore >= 60 ? "Structured Roadmap" : "Moderate Appeal"}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {ranking.subscriptionBoost > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    {ranking.subscriptionPlan === "Business" ? "👑 Business" : "⭐ Premium"} +{ranking.subscriptionBoost.toFixed(1)} pts
+                  </span>
+                )}
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  ranking.totalScore >= 80 
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
+                    : ranking.totalScore >= 60
+                    ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                }`}>
+                  {ranking.totalScore >= 80 ? "High Discovery" : ranking.totalScore >= 60 ? "Structured Roadmap" : "Moderate Appeal"}
+                </span>
+              </div>
             </div>
 
             {/* Score Dial */}
@@ -450,78 +491,119 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between text-xs font-semibold mb-1">
                   <span className="text-gray-700 dark:text-zinc-300">Roadmap Strength</span>
-                  <span className="text-gray-900 dark:text-white">{Math.round(ranking.totalScore)}%</span>
+                  <span className="text-gray-900 dark:text-white font-bold">{Math.round(ranking.totalScore)}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gray-900 dark:bg-zinc-200 transition-all duration-500"
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      ranking.totalScore >= 80 ? "bg-emerald-500" : ranking.totalScore >= 60 ? "bg-blue-500" : "bg-amber-500"
+                    }`}
                     style={{ width: `${Math.min(100, Math.max(10, ranking.totalScore))}%` }}
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1.5 leading-tight">
-                  Evaluated on milestone depth, role task distribution, and platform priority.
+                  Evaluated across Job Content (25%), Account Standing (35%), and Live Market (40%).
                 </p>
               </div>
             </div>
 
-            {/* Factor Grid */}
-            <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-gray-200 dark:border-white/10 text-xs">
-              <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Milestone Depth</span>
-                <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                  {Math.round(ranking.completenessScore * 100)}%
-                </span>
+            {/* The 3 Score Basis Categories */}
+            <div className="pt-2 border-t border-gray-200 dark:border-white/10 space-y-1.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 mb-1">
+                Score Basis Breakdown
               </div>
-              <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Baseline Trust</span>
-                <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                  {ranking.bayesianRating.toFixed(1)} / 5.0
-                </span>
+              {/* 1. Job Post Content */}
+              <div className="p-2 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-gray-800 dark:text-zinc-200">Job Post Content</span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                        Editable Anytime
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">Milestone depth, tasks & visual brief</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                    {ranking.contentPoints.toFixed(1)}
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 25 pts</span>
+                </div>
               </div>
-              <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Team Capacity</span>
-                <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                  {totalSlots} Openings
-                </span>
+
+              {/* 2. Poster Account Standing */}
+              <div className="p-2 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-gray-800 dark:text-zinc-200">Account Profile</span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                        Dynamic
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                      {ranking.bayesianRating.toFixed(1)}★ rating &bull; {ranking.clientMerit} Merit{ranking.subscriptionBoost > 0 ? ` &bull; ${ranking.subscriptionPlan}` : ""}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                    {(ranking.accountBasePoints + ranking.subscriptionBoost).toFixed(1)}
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 35 pts</span>
+                </div>
               </div>
-              <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Spotlight Priority</span>
-                <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                  14-Day Priority
-                </span>
+
+              {/* 3. Live Market Signals */}
+              <div className="p-2 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-gray-800 dark:text-zinc-200">Live Market Signals</span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                        Dynamic
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">{totalSlots} Open team seats</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                    {ranking.marketPoints.toFixed(1)}
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 40 pts</span>
+                </div>
               </div>
             </div>
 
             {/* Positive Optimization Signals - Unified Neutral Studio Chips */}
             <div className="pt-2 border-t border-gray-200 dark:border-white/10 flex flex-wrap gap-1.5 text-[10px]">
               {milestones.length >= 2 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-medium">
-                  <Check className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="h-3 w-3" />
                   <span>{milestones.length} Milestones</span>
                 </span>
               )}
-              {milestones.every(m => m.tasks && m.tasks.length > 0) && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-medium">
-                  <Check className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                  <span>Checklists Configured</span>
-                </span>
-              )}
               {skills.length >= 3 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-medium">
-                  <Check className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                  <span>3+ Skills Tagged</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="h-3 w-3" />
+                  <span>{skills.length} Skills</span>
                 </span>
               )}
               {previewUrl && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-medium">
-                  <Check className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
+                  <Check className="h-3 w-3" />
                   <span>Custom Visual</span>
                 </span>
               )}
             </div>
           </div>
         </div>
-
       </div>
 
       {/* SECTION 2: SPECIFICATIONS SUMMARY & WORKFLOW */}
