@@ -116,9 +116,11 @@ const UserNav: React.FC<UserNavProps> = () => {
         user?.is_verified ||
         user?.isVerified ||
         user?.verification_status === true ||
-        user?.verification_status === "Verified"
+        user?.verification_status === "Verified" ||
+        (typeof window !== "undefined" && localStorage.getItem('ensemble:is_verified') === 'true')
     );
-    const showVerificationAd = !isAccountVerified && !hidePersonalNav;
+    // Never show verify ad while session is resolving (user is null) or if verified/guest/staff
+    const showVerificationAd = Boolean(user) && !isAccountVerified && !hidePersonalNav;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
     const isTourActive = useTourStore((state) => state.isWalkthroughActive);

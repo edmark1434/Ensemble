@@ -25,6 +25,7 @@ interface GlobalState {
   isVerified: boolean
   subscriptionPlan: string | null
   isFloatingChatHidden: boolean
+  isDevModeOpen: boolean
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed: boolean) => void
@@ -40,6 +41,7 @@ interface GlobalState {
   setIsVerificationModalOpen: (isOpen: boolean, message?: string) => void
   setIsVerified: (isVerified: boolean) => void
   setIsFloatingChatHidden: (hidden: boolean) => void
+  setIsDevModeOpen: (isOpen: boolean) => void
 }
 
 // Pass type to create<GlobalState>
@@ -55,17 +57,24 @@ const useGlobalState = create<GlobalState>((set) => ({
   theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'dark',
   isVerificationModalOpen: false,
   verificationModalMessage: undefined,
-  isVerified: false,
+  isVerified: typeof window !== 'undefined' ? localStorage.getItem('ensemble:is_verified') === 'true' : false,
   subscriptionPlan: null,
   isFloatingChatHidden: false,
+  isDevModeOpen: false,
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
   setIsFloatingChatHidden: (hidden) => set({ isFloatingChatHidden: hidden }),
+  setIsDevModeOpen: (isOpen) => set({ isDevModeOpen: isOpen }),
   setSubscriptionPlan: (plan: string) => set({ subscriptionPlan: plan }),
   setUser:            (user) => {
     localStorage.setItem('isGuestMode', 'false');
-    const isVerified = user?.is_verified ?? user?.isVerified;
+    const isVerified = user?.is_verified ?? user?.isVerified ?? (user?.verification_status === true || user?.verification_status === "Verified");
+    if (typeof isVerified === 'boolean') {
+      try {
+        localStorage.setItem('ensemble:is_verified', String(isVerified));
+      } catch (_) {}
+    }
     set({
       user,
       isAuthenticated: true,
@@ -81,6 +90,9 @@ const useGlobalState = create<GlobalState>((set) => ({
   setIsLoading:       (isLoading) => set({ isLoading }),
   clearUser:          () => {
     localStorage.setItem('isGuestMode', 'false');
+    try {
+      localStorage.removeItem('ensemble:is_verified');
+    } catch (_) {}
     set({
       user: null,
       isAuthenticated: false,
@@ -102,7 +114,12 @@ const useGlobalState = create<GlobalState>((set) => ({
     set({ theme });
   },
   setIsVerificationModalOpen: (isOpen, message) => set({ isVerificationModalOpen: isOpen, verificationModalMessage: message }),
-  setIsVerified: (isVerified) => set({ isVerified }),
+  setIsVerified: (isVerified) => {
+    try {
+      localStorage.setItem('ensemble:is_verified', String(isVerified));
+    } catch (_) {}
+    set({ isVerified });
+  },
 }))
 
 const initialTheme = (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
