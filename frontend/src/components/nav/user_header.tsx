@@ -1591,8 +1591,8 @@ useEffect(() => {
                           onMouseEnter={() => handleProfileItemHover(2, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
-                            useTourStore.getState().startTour();
                             navigate("/home");
+                            useTourStore.getState().openWelcome();
                           }}
                           className="relative z-[1] flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
