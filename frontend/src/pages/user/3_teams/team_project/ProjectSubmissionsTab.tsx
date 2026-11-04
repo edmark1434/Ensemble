@@ -853,7 +853,9 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
             const usedRevisions = Math.max(Number(m.revisions_used || 0), recordedRevisionsCount);
             const remainingRevisions = Math.max(0, maxRevisions - usedRevisions);
             const contractForMilestone = contracts.find((c) => c.contract_id === m.contract_id);
-            const additionalRate = Number(m.revision_price_credits || contractForMilestone?.revision_price_credits || 35);
+            const ratePct = Number(m.revision_price_credits || contractForMilestone?.revision_price_credits || 35);
+            const milestoneBudget = Number(m.budget_credits || 0);
+            const additionalRate = milestoneBudget > 0 ? Math.max(1, Math.round((milestoneBudget * ratePct) / 100)) : ratePct;
 
             const isRejectedOrRevisionRequested =
               !isApproved &&
@@ -1166,7 +1168,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                               {remainingRevisions > 0 ? (
                                 <span>Request Revisions ({remainingRevisions} left)</span>
                               ) : (
-                                <span>Request Additional Revision (+{additionalRate} Credits)</span>
+                                <span>Request Additional Revision (+{additionalRate} Credits / +{ratePct}%)</span>
                               )}
                             </button>
 
@@ -1215,11 +1217,11 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                       <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                                       <span>Additional Work Rate Applies</span>
                                       <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-mono">
-                                        +{additionalRate} Credits
+                                        +{additionalRate} Credits (+{ratePct}%)
                                       </span>
                                     </div>
                                     <p className="text-amber-800/90 dark:text-amber-300/80 text-[11px] leading-relaxed font-normal">
-                                      You have used all {maxRevisions} included revisions. Requesting this revision will charge the agreed additional work rate of <strong className="text-amber-950 dark:text-white">{additionalRate} credits</strong> from your wallet into escrow for the contributor.
+                                      You have used all {maxRevisions} included revisions. Requesting this revision will charge the agreed additional work rate (+{ratePct}%) of <strong className="text-amber-950 dark:text-white">{additionalRate} credits</strong> from your wallet into escrow for the contributor.
                                     </p>
                                   </div>
                                 )}
@@ -1258,7 +1260,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                 ) : reviewAction === 'approval' ? (
                                   'Yes, Release Escrow & Approve'
                                 ) : remainingRevisions <= 0 ? (
-                                  `Pay ${additionalRate} Credits & Request Revision`
+                                  `Pay ${additionalRate} Credits & Request Revision (+${ratePct}%)`
                                 ) : (
                                   'Send Revision Request'
                                 )}

@@ -295,7 +295,7 @@ export const Contracts: React.FC = () => {
             ? Number(c.additional_work_rate)
             : (c.revision_price_credits !== null && c.revision_price_credits !== undefined ? Number(c.revision_price_credits) : null);
           if (raw !== null && !isNaN(raw)) {
-            return raw > 0 ? `${raw.toLocaleString()} Credits / Revision` : "0 Credits (Free Revisions)";
+            return raw > 0 ? `+${raw}% / Revision` : "0% (Free Revisions)";
           }
           return "Standard Platform Policy";
         })(),
