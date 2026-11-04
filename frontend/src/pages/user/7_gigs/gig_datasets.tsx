@@ -86,6 +86,8 @@ export interface Gig {
   ordersCount?: number;
   pendingOrdersCount?: number;
   freelancerAccountId?: string;
+  freelancerSubscriptionPlan?: string;
+  discoveryOrderKey?: number;
   team_id?: string | null;
   teamId?: string | null;
   team_visibility?: "Public" | "Private" | string | null;
