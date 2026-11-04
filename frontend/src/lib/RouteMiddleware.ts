@@ -126,9 +126,14 @@ export default function RouteMiddleware() {
         (location.pathname.startsWith('/landing/') && !isTicketFormRoute) ||
         location.search.includes('preview=true');
     const ticketLoginPath = `/login?redirect=${encodeURIComponent('/support/ticket')}`;
+    const isProjectHandoff = /^\/projects\/open\/[^/]+$/.test(location.pathname);
+    const isTemplateHandoff = location.pathname === '/assets/owned' && new URLSearchParams(location.search).has('templateSnapshot');
+    const handoffLoginPath = (isProjectHandoff || isTemplateHandoff)
+        ? `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`
+        : null;
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
 
-    const isGuestAllowedRoute = isGuestAllowedPath(location.pathname);
+    const isGuestAllowedRoute = !handoffLoginPath && isGuestAllowedPath(location.pathname);
     const isGuestAccessBlocked = !resolvedUser
         && isGuestMode
         && !isPublicRoute
@@ -142,13 +147,13 @@ export default function RouteMiddleware() {
 
     useEffect(() => {
         if (isCheckingSession || !isGuestAccessBlocked) return;
-        if (isTicketFormRoute) {
-            navigate(ticketLoginPath, { replace: true });
+        if (isTicketFormRoute || handoffLoginPath) {
+            navigate(handoffLoginPath || ticketLoginPath, { replace: true });
             return;
         }
         setIsGuestLoginOpen(true);
         navigate('/home', { replace: true });
-    }, [isCheckingSession, isGuestAccessBlocked, isTicketFormRoute, ticketLoginPath, navigate]);
+    }, [isCheckingSession, isGuestAccessBlocked, isTicketFormRoute, ticketLoginPath, handoffLoginPath, navigate]);
 
     useEffect(() => {
         if (resolvedUser) setIsGuestLoginOpen(false);
@@ -312,8 +317,11 @@ export default function RouteMiddleware() {
             return null;
         }
 
-        return onboardingPath || getRedirectPath(resolvedUser);
-    }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath]);
+        const requested = new URLSearchParams(location.search).get('redirect');
+        const handoff = requested && (/^\/projects\/open\/[^/?]+(?:\?|$)/.test(requested)
+            || requested.startsWith('/assets/owned?templateSnapshot=')) ? requested : null;
+        return onboardingPath || (resolvedUser?.type === 'User' && handoff) || getRedirectPath(resolvedUser);
+    }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath, location.search]);
 
     const shouldAutoRedirect = useMemo(() => {
         return basePublicRoutes.includes(location.pathname);
@@ -343,8 +351,8 @@ export default function RouteMiddleware() {
             return;
         }
 
-        navigate(isTicketFormRoute ? ticketLoginPath : '/', { replace: true });
-    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, isTicketFormRoute, ticketLoginPath, navigate]);
+        navigate(handoffLoginPath || (isTicketFormRoute ? ticketLoginPath : '/'), { replace: true });
+    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, isTicketFormRoute, ticketLoginPath, handoffLoginPath, navigate]);
 
     useEffect(() => {
         if (isCheckingSession || !isBannedMember(resolvedUser)) return;

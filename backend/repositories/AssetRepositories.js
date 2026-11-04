@@ -104,22 +104,30 @@ async function loadValidatedUploads(client, accountId, content) {
   return { originals, thumbnails };
 }
 
-async function assertYdocSnapshot(client, snapshotId) {
+async function assertYdocSnapshot(client, snapshotId, ownerUserId) {
   const { rowCount } = await client.query(
     `SELECT 1
      FROM yjs_snapshots snapshot
      WHERE snapshot.yjs_snapshot_id = $1::bigint
+       AND EXISTS (
+         SELECT 1 FROM project_yjs_snapshots source
+         JOIN projects project ON project.project_id = source.project_id AND project.deleted_at IS NULL
+         JOIN project_members member ON member.project_id = project.project_id
+         WHERE source.yjs_snapshot_id = snapshot.yjs_snapshot_id
+           AND member.user_id = $2 AND member.deleted_at IS NULL
+           AND member.role IN ('Owner', 'Manager')
+       )
        AND NOT EXISTS (
          SELECT 1 FROM market_ydoc_assets used
          WHERE used.yjs_snapshot_id = snapshot.yjs_snapshot_id
        )`,
-    [snapshotId]
+    [snapshotId, ownerUserId]
   );
   if (!rowCount) throw repoError('ASSET_YDOC_INVALID');
 }
 
-async function setMarketYdoc(client, marketAssetId, snapshotId) {
-  await assertYdocSnapshot(client, snapshotId);
+async function setMarketYdoc(client, marketAssetId, snapshotId, ownerUserId) {
+  await assertYdocSnapshot(client, snapshotId, ownerUserId);
   await client.query(
     `INSERT INTO market_ydoc_assets (market_asset_id, yjs_snapshot_id)
      VALUES ($1, $2::bigint)
@@ -785,7 +793,7 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
       });
       const orderedShowcaseIds = await resolveShowcaseOrder(client, marketAssetId, data.showcaseOrder);
       await repositionLinks(client, 'market_asset_thumbnails', marketAssetId, orderedShowcaseIds);
-      await setMarketYdoc(client, marketAssetId, data.ydocSnapshotId);
+      await setMarketYdoc(client, marketAssetId, data.ydocSnapshotId, ownerUser.user_id);
     } else {
       if (originals.length < 1 || originals.length > MAX_CONTENT_FILES) {
         throw repoError('ASSET_CONTENT_REQUIRED');
@@ -1482,7 +1490,7 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
   }
 
   if (content.replaceYdoc) {
-    await setMarketYdoc(client, assetId, content.ydocSnapshotId);
+    await setMarketYdoc(client, assetId, content.ydocSnapshotId, ownedAsset.owner_user_id);
   }
 
   // A pending video can use the selected showcase as a temporary poster.

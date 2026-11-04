@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowDown, ArrowUp, AudioLines, Clapperboard, Image, Loader2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, AudioLines, Clapperboard, Eye, Image, Loader2, Upload, X } from "lucide-react";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { mediaUrl, type AssetRecord, type AssetType } from "./assetTypes";
@@ -52,18 +52,27 @@ function errorCode(error: unknown) {
     : undefined;
 }
 
-interface AssetEditorModalProps {
+export interface AssetEditorModalProps {
   open: boolean;
   asset?: AssetRecord | null;
   onClose: () => void;
   onSaved: (asset: AssetRecord) => void;
   onQueued?: () => void;
+  checkingEligibility?: boolean;
 }
-export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueued }: AssetEditorModalProps) {
+export interface TemplateDraft { snapshotId: string; name: string; previewToken?: string }
+
+export default function AssetEditorModal(props: AssetEditorModalProps) {
+  return <AssetListingModal {...props} />;
+}
+
+// The two modal entry points share listing fields and upload handling, while
+// the template entry point has no media selector or manual snapshot-ID input.
+export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, template, checkingEligibility = false }: AssetEditorModalProps & { template?: TemplateDraft }) {
   const originalInputRef = useRef<HTMLInputElement>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
-  const [listingType, setListingType] = useState<AssetType>("image");
-  const [name, setName] = useState("");
+  const [listingType, setListingType] = useState<AssetType>(asset?.type || (template ? "template" : "image"));
+  const [name, setName] = useState(asset?.name || template?.name || "");
   const [description, setDescription] = useState("");
   const [priceCredits, setPriceCredits] = useState("0");
   const [files, setFiles] = useState<File[]>([]);
@@ -81,12 +90,33 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [openingPreview, setOpeningPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const previewSnapshot = async () => {
+    if (!template?.previewToken || openingPreview) return;
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    setOpeningPreview(true);
+    setError("");
+    try {
+      const { data } = await api.get('/api/editor/handoff-token');
+      const editorUrl = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
+      const url = `${editorUrl}/preview/${encodeURIComponent(template.previewToken)}?${new URLSearchParams({ token: data.handoffToken })}`;
+      if (tab && !tab.closed) tab.location.replace(url);
+      else setPreviewUrl(url);
+    } catch {
+      tab?.close();
+      setError("Unable to open the snapshot preview. Please try again.");
+    } finally { setOpeningPreview(false); }
+  };
 
   useEffect(() => {
     if (!open) return;
     setSaving(false);
-    setListingType(asset?.type || "image");
-    setName(asset?.name || "");
+    setPreviewUrl(null);
+    setListingType(asset?.type || (template ? "template" : "image"));
+    setName(asset?.name || template?.name || "");
     setDescription(asset?.description || "");
     setPriceCredits(String(asset?.price_credits ?? 0));
     setFiles([]); setThumbnailFiles([]);
@@ -99,9 +129,9 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
       `${contentIds.has(item.media_asset_id) && imageContentIds.has(item.media_asset_id) ? "media" : "retained"}:${item.media_asset_id}`));
     setThumbnailSelectionDirty(false);
 
-    setYdocSnapshotId("");
+    setYdocSnapshotId(template?.snapshotId || "");
     setTags(asset?.tags || []); setTagInput(""); setError("");
-  }, [asset, open]);
+  }, [asset, open, template?.snapshotId, template?.name]);
 
 
   useEffect(() => {
@@ -254,6 +284,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (checkingEligibility) return;
     if (saving) return;
     setError("");
     const cleanName = name.trim();
@@ -357,7 +388,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
     if (isTemplate && (showcaseCount < 1 || showcaseCount > showcaseLimit)) return setError(`Templates need 1–${showcaseLimit} showcase images.`);
     if (!isTemplate && files.length === 1 && showcaseCount > 0) return setError("A single asset file does not use showcase images.");
     if (!isTemplate && showcaseCount > showcaseLimit) return setError(`Choose no more than ${showcaseLimit} showcase images.`);
-    if (isTemplate && !snapshotId) return setError("Enter the project snapshot ID for this template.");
+    if (isTemplate && !snapshotId) return setError("Open this form from your project's Share menu to attach a template.");
     if (!isTemplate && (!primaryFile || primaryKind !== listingType)) return setError(`The primary asset file must be a ${listingType} file.`);
     const accountId = useGlobalState.getState().user?.account_id;
     if (!accountId) return setError("Please sign in before uploading an asset.");
@@ -374,14 +405,16 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
   const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#0b0e17] dark:text-white";
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="asset-editor-title">
-      <div className="scroll-thin max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131e]">
-          <div><h2 id="asset-editor-title" className="text-lg font-bold">{asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update listing details and showcase images." : "Create a protected asset package."}</p></div>
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
+        <div className="flex shrink-0 items-start justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131e]">
+          <div><h2 id="asset-editor-title" className="text-lg font-bold">{isTemplate ? (asset ? "Edit template" : "Add template") : asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{isTemplate ? "Add listing details and showcase images for your project template." : asset ? "Update listing details and showcase images." : "Create a protected asset package."}</p></div>
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/5" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
-        <form onSubmit={submit} className="space-y-5 p-5">
+        <form onSubmit={submit} className="scroll-thin min-h-0 overflow-y-auto p-5" aria-busy={checkingEligibility}>
+          {checkingEligibility && <p role="status" className="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" />Checking upload access…</p>}
+          <fieldset disabled={checkingEligibility || saving} className="min-w-0 space-y-5">
           {(!asset || showShowcaseControls || showcaseOrder.length > 0) && <div className="space-y-5">
-            {!asset && <div><p className="mb-2 text-sm font-semibold">Asset type</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(["image", "video", "audio"] as AssetType[]).map((type) => { const Icon = type === "image" ? Image : type === "video" ? Clapperboard : AudioLines; return <button key={type} type="button" onClick={() => changeListingType(type)} aria-pressed={listingType === type} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${listingType === type ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:border-blue-400 dark:border-white/10"}`}><Icon className="h-4 w-4" />{type}</button>; })}</div></div>}
+            {!asset && !isTemplate && <div><p className="mb-2 text-sm font-semibold">Asset type</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(["image", "video", "audio"] as AssetType[]).map((type) => { const Icon = type === "image" ? Image : type === "video" ? Clapperboard : AudioLines; return <button key={type} type="button" onClick={() => changeListingType(type)} aria-pressed={listingType === type} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${listingType === type ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:border-blue-400 dark:border-white/10"}`}><Icon className="h-4 w-4" />{type}</button>; })}</div></div>}
             {asset && showShowcaseControls && hasAvailableExistingShowcaseImages && <div className="rounded-xl border border-gray-200 p-4 dark:border-white/10">
               <p className="mb-3 text-sm font-bold">Available showcase images</p>
               <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">
@@ -403,10 +436,18 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
             {!asset && listingType === "video" && <VideoUploadNotice />}
             {(!asset || showShowcaseControls) && <div className={`grid gap-4 ${showShowcaseControls && !asset ? "sm:grid-cols-2" : "grid-cols-1"}`}>
               {!asset && isTemplate && (
-                <div><label htmlFor="asset-ydoc-snapshot" className="mb-2 block text-sm font-semibold">Project snapshot ID <span className="text-red-500">*</span></label><input id="asset-ydoc-snapshot" inputMode="numeric" value={ydocSnapshotId} onChange={(event) => setYdocSnapshotId(event.target.value)} className={inputClass} placeholder="Snapshot ID" /><p className="mt-1 text-xs text-gray-500">A template links to one snapshot of a project.</p></div>
+                <div className="flex min-w-0 flex-col"><p className="mb-2 text-sm font-semibold">Snapshot</p><div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
+                  <p className="text-sm font-semibold">{template?.name || "Project template"}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Project snapshot attached. Later project edits won't change this listing.</p>
+                  <button type="button" disabled={openingPreview || !template?.previewToken} onClick={() => void previewSnapshot()} className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold transition hover:bg-gray-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+                    {openingPreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}{openingPreview ? "Opening…" : "Preview"}
+                  </button>
+                  {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block text-xs text-blue-600 underline dark:text-blue-400">Open snapshot preview</a>}
+                  {!template?.previewToken && <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Share the template again from the editor to enable its preview.</p>}
+                </div></div>
               )}
               {!asset && !isTemplate && <div><label className="mb-2 block text-sm font-semibold">Asset files <span className="text-red-500">*</span></label><input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500">{primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}</span><span><span className="block text-sm font-semibold">{files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : "Choose asset files"}</span><span className="mt-1 block text-xs text-gray-500">Up to 20 files, 1GB each.</span></span></button></div>}
-              {showShowcaseControls && <div><label className="mb-2 block text-sm font-semibold">Showcase images <span className="font-normal text-gray-400">({isTemplate ? "required" : "optional"})</span></label><input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]">{thumbnailPreviewUrls[0] ? <img src={thumbnailPreviewUrls[0]} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500"><Upload className="h-5 w-5" /></span>}<span><span className="block text-sm font-semibold">Choose showcase images</span><span className="mt-1 block text-xs text-gray-500">{showcaseOrder.length} of {maxShowcaseImages(listingType)} selected · {maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB total</span></span></button></div>}
+              {showShowcaseControls && <div className="flex min-w-0 flex-col"><label className="mb-2 block text-sm font-semibold">Showcase images <span className="font-normal text-gray-400">({isTemplate ? "required" : "optional"})</span></label><input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-28 flex-1 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]">{thumbnailPreviewUrls[0] ? <img src={thumbnailPreviewUrls[0]} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500"><Upload className="h-5 w-5" /></span>}<span><span className="block text-sm font-semibold">Choose showcase images</span><span className="mt-1 block text-xs text-gray-500">{showcaseOrder.length} of {maxShowcaseImages(listingType)} selected · {maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB total</span></span></button></div>}
             </div>}
             {!asset && files.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><p className="mb-3 text-xs font-semibold">Asset files ({files.length})</p><div className="scroll-thin max-h-56 space-y-2 overflow-y-auto pr-1">{files.map((file, index) => { const kind = sourceKind(file); const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : FileAudio; const fileKey = fileIdentity(file); const showcaseKey = `asset:${fileKey}`; const isShowcased = showcaseOrder.includes(showcaseKey); return <div key={fileKey} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">{kind === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" /> : <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><Icon className="h-5 w-5" /></span>}<div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="text-[10px] uppercase text-gray-500">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p></div>{showShowcaseControls && (kind === "image" || kind === "video") && <button type="button" aria-pressed={isShowcased} disabled={!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}<button type="button" onClick={() => removeAssetFile(index, fileKey)} className="rounded p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>; })}</div></div>}
             {showShowcaseControls && showcaseOrder.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><div className="mb-3 flex justify-between"><p className="text-xs font-semibold">Showcase image order</p><p className="text-[10px] text-gray-500">First is the cover · use arrows to reorder</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{showcaseOrder.map((key, index) => {
@@ -437,6 +478,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueu
           <label className="block"><span className="mb-2 block text-sm font-semibold">Price in credits</span><input type="number" min="0" max="100000000" value={priceCredits} onChange={(event) => setPriceCredits(event.target.value)} className={inputClass} /></label>
           {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">{error}</p>}
           <div className="flex justify-end gap-3 border-t border-gray-200 pt-5 dark:border-white/10"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-semibold dark:border-white/10">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-60">{saving && <Loader2 className="h-4 w-4 animate-spin" />}{saving ? (asset ? "Saving..." : "Uploading...") : asset ? "Save changes" : "Upload asset"}</button></div>
+          </fieldset>
         </form>
       </div>
     </div>

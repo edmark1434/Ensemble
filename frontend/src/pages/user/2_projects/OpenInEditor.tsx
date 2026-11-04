@@ -1,11 +1,13 @@
 import { useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import api from "@/lib/axios.ts";
 
 const OpenInEditor: React.FC = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const share = searchParams.get("share");
   const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
 
   useEffect(() => {
@@ -13,12 +15,13 @@ const OpenInEditor: React.FC = () => {
       try {
         const { data } = await api.get('/api/editor/handoff-token');
         const params = new URLSearchParams({ token: data.handoffToken });
+        if (share) params.set("share", share);
         window.location.replace(`${EDITOR_URL}/editor/${projectId}?${params}`);
       } catch {
         navigate('/projects?error=could_not_open_project');
       }
     })();
-  }, [projectId]);
+  }, [projectId, share, navigate, EDITOR_URL]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-gray-50 dark:bg-dark-base">

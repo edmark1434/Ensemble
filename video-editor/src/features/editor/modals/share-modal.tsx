@@ -15,14 +15,19 @@ import {
   PopoverContent,
   PopoverTrigger
 } from "@/components/ui/popover";
-import { ChevronDown, Check, Search } from "lucide-react";
+import { ChevronDown, Check, Search, Link, PanelsTopLeft, Loader2 } from "lucide-react";
+import * as Y from "yjs";
 import { debounce } from "lodash";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
 import { useAccessRefresh } from "@/features/editor/hooks/use-access-refresh";
 import { Avatar } from "@/components/user-avatar";
+import { Separator } from "@/components/ui/separator";
 
 type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
 const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
+const SHARE_ACCESS_LABELS: Record<AssignableProjectRole, string> = {
+  Viewer: "view-only", Commenter: "comment-only", Editor: "edit access", Manager: "manager access",
+};
 
 interface ProjectPerson {
   userId: string;
@@ -161,6 +166,7 @@ interface ShareModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  templateSource?: { doc: Y.Doc; blockId?: string };
 }
 
 const refreshSceneAccess = () => {
@@ -168,7 +174,12 @@ const refreshSceneAccess = () => {
   if (blockId) void load(blockId);
 };
 
-export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
+export function ShareModal({ open, onOpenChange, projectId, templateSource }: ShareModalProps) {
+  const [copying, setCopying] = useState(false);
+  const [copiedRole, setCopiedRole] = useState<AssignableProjectRole | null>(null);
+  const [preparingTemplate, setPreparingTemplate] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [templateUrl, setTemplateUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [owner, setOwner] = useState<ProjectPerson | null>(null);
@@ -192,6 +203,48 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
   const roleOptions = canGrantManager
     ? ASSIGNABLE_PROJECT_ROLES
     : ASSIGNABLE_PROJECT_ROLES.filter((r) => r !== "Manager");
+
+  useEffect(() => { setCopiedRole(null); setShareError(null); setTemplateUrl(null); }, [open, projectId, newUserRole]);
+
+  const copyShareLink = async () => {
+    if (copying) return;
+    setCopying(true);
+    setShareError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/share-link`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: newUserRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not create a share link");
+      await navigator.clipboard.writeText(data.url);
+      setCopiedRole(newUserRole);
+    } catch (error) { setShareError(error instanceof Error ? error.message : "Could not copy the link"); }
+    finally { setCopying(false); }
+  };
+
+  const shareAsTemplate = async () => {
+    if (!templateSource || preparingTemplate) return;
+    // Open during the click so browsers don't block the tab after compaction finishes.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    setPreparingTemplate(true);
+    setShareError(null);
+    try {
+      const params = new URLSearchParams();
+      if (templateSource.blockId) params.set("blockId", templateSource.blockId);
+      const update = Y.encodeStateAsUpdate(templateSource.doc);
+      const res = await fetch(`/api/projects/${projectId}/template-snapshot?${params}`, {
+        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Uint8Array(update).buffer,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not prepare the template");
+      if (tab && !tab.closed) tab.location.replace(data.url);
+      else setTemplateUrl(data.url);
+    } catch (error) {
+      tab?.close();
+      setShareError(error instanceof Error ? error.message : "Could not prepare the template");
+    } finally { setPreparingTemplate(false); }
+  };
 
   const load = async (silent = false) => {
     const seq = ++loadSeq.current;
@@ -417,6 +470,11 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                 roles={roleOptions}
                 showDescriptions
               />
+              <Button className="w-full justify-center gap-2" disabled={copying} onClick={() => void copyShareLink()}>
+                {copying ? <Loader2 className="h-4 w-4 animate-spin" /> : copiedRole === newUserRole ? <Check className="h-4 w-4" /> : <Link className="h-4 w-4" />}
+                {copiedRole === newUserRole ? "Link copied" : `Copy ${SHARE_ACCESS_LABELS[newUserRole]} share link`}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">Anyone with this link can sign in to join. Links expire after 30 days.</p>
 
               {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
               {addError && <p className="text-xs text-red-500">{addError}</p>}
@@ -451,6 +509,18 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
               ))}
             </div>
           </ScrollArea>
+          {canManage && <div className="space-y-4">
+            <div className="relative flex h-5 items-center justify-center text-xs text-muted-foreground">
+              <Separator className="absolute inset-x-0 top-1/2" />
+              <span className="relative bg-card px-2">or</span>
+            </div>
+            <Button variant="outline" className="w-full gap-2" disabled={preparingTemplate || !templateSource} onClick={() => void shareAsTemplate()}>
+              {preparingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <PanelsTopLeft className="h-4 w-4" />}
+              {preparingTemplate ? "Preparing template…" : "Share as template in the Asset Library"}
+            </Button>
+            {templateUrl && <a href={templateUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block text-sm underline">Open template in the Asset Library</a>}
+          </div>}
+          {shareError && <p role="alert" className="text-xs text-red-500">{shareError}</p>}
         </div>
       </DialogContent>
     </Dialog>

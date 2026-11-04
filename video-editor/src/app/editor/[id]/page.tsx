@@ -6,6 +6,9 @@ import Editor from "@/features/editor";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { createProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
+import { verifyProjectShareLink } from "@/lib/auth/project-share-link";
+import { redeemProjectShareLink } from "@/lib/db/project-share-links";
+import { recheckProject } from "@/lib/collab/access-recheck";
 
 // Random/garbage segments (e.g. someone fat-fingering /editor/asdf) aren't
 // valid uuid syntax, and postgres throws on that rather than just returning
@@ -17,10 +20,10 @@ export default async function EditorPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ width?: string; height?: string }>;
+  searchParams: Promise<{ width?: string; height?: string; share?: string }>;
 }) {
   const { id } = await params;
-  const { width, height } = await searchParams;
+  const { width, height, share } = await searchParams;
 
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(EDITOR_SESSION_COOKIE)?.value;
@@ -28,7 +31,9 @@ export default async function EditorPage({
 
   if (!decoded) {
     if (UUID_PATTERN.test(id)) {
-      redirect(`${process.env.MAIN_APP_URL}/projects/open/${id}`);
+      const url = new URL(`/projects/open/${id}`, process.env.MAIN_APP_URL || "http://localhost:5173");
+      if (share) url.searchParams.set("share", share);
+      redirect(url.toString());
     }
     redirect("/auth-error");
     return;
@@ -46,6 +51,15 @@ export default async function EditorPage({
 
   if (!UUID_PATTERN.test(id)) {
     notFound();
+  }
+
+  if (share) {
+    const link = await verifyProjectShareLink(share, id);
+    if (!link || !(await redeemProjectShareLink(id, decoded.userId, link))) {
+      return <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">This share link has expired or is no longer available. Ask the project owner for a new link.</div>;
+    }
+    void recheckProject(id);
+    redirect(`/editor/${id}`);
   }
 
   const membership = await db

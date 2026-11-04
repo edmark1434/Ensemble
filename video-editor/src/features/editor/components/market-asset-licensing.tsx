@@ -10,8 +10,14 @@ import { MarketAssetPurchaseModal } from "../modals/market-asset-purchase-modal"
 import { collectMarketExportItems } from "../utils/market-export-assets";
 import { marketPlaybackSource } from "../utils/market-playback-source";
 import { PrepareMarketImages } from "./prepared-market-images";
+import { useSnapshotPreview } from "../hooks/use-snapshot-preview";
 
 export function MarketAssetLicensing({ children }: { children: ReactNode }) {
+  const preview = useSnapshotPreview();
+  return preview ? <>{children}</> : <LiveMarketAssetLicensing>{children}</LiveMarketAssetLicensing>;
+}
+
+function LiveMarketAssetLicensing({ children }: { children: ReactNode }) {
   useUploadAvailability();
   const projectId = useStore(state => state.projectId);
   const items = useStore(state => state.trackItemsMap);

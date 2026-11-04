@@ -68,6 +68,7 @@ import { ViewOnlyProvider } from "@/features/editor/hooks/use-view-only";
 import { useProjectFonts } from "@/features/editor/hooks/use-project-fonts";
 import SceneRemovedModal from "./modals/scene-removed-modal";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
+import { useSnapshotPreview, useSnapshotDocument } from "./hooks/use-snapshot-preview";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -518,9 +519,11 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   height?: number;
   role?: EditorRole;
 }) => {
+  const preview = useSnapshotPreview();
+  const snapshotReady = useSnapshotDocument(stateManager);
   const [storeSynced, setStoreSynced] = useState(false);
   useEffect(() => {
-    if (userId && id) {
+    if (!preview && userId && id) {
       useStore.setState({
         userId,
         userName,
@@ -537,7 +540,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   // only true once the seeding effect above has run AND the store actually
   // holds both values (whether they came from props here or were set
   // elsewhere, e.g. a new-project creation flow)
-  const collabReady = storeSynced && !!storeUserId && !!projectId;
+  const collabReady = !preview && storeSynced && !!storeUserId && !!projectId;
 
   const target: CollabTarget | undefined = !projectId
     ? undefined
@@ -546,7 +549,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
       : { kind: "project", id: projectId };
 
   const collab = useCollabDoc(
-    target,
+    preview ? undefined : target,
     collabReady ? projectId : undefined,
     collabReady ? storeUserId : undefined,
     collabReady ? storeUserName : undefined,
@@ -567,7 +570,8 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   // Removed from the project: reload, and the server renders the project's not-found page.
   const handleProjectAccessLost = useCallback(() => window.location.reload(), []);
 
-  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null, leaveSceneNoAccess, handleProjectAccessLost);
+  const liveRole = useEditorRole(preview ? undefined : projectId, preview ? undefined : activeSceneBlockId, preview ? undefined : storeUserId, role ?? null, leaveSceneNoAccess, handleProjectAccessLost);
+  const resolvedRole = preview ? "Viewer" : liveRole;
   const canEdit = canEditWithRole(resolvedRole);
   const canComment = canCommentWithRole(resolvedRole);
 
@@ -593,8 +597,8 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
 
   useSceneContentBroadcast(
     stateManager,
-    activeSceneBlockId ? projectId : undefined,
-    activeSceneBlockId ? storeUserId : undefined,
+    !preview && activeSceneBlockId ? projectId : undefined,
+    !preview && activeSceneBlockId ? storeUserId : undefined,
     activeSceneBlockId ? storeUserName : undefined,
     activeSceneBlockId ? activeSceneItemId ?? undefined : undefined,
     canEdit && blockDocReady,
@@ -714,7 +718,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     );
   }
 
-  if (!storeSynced || !loaded || (!collab?.ready && !hasSyncedOnceRef.current)) {
+  if (!storeSynced || !loaded || (preview ? !snapshotReady : (!collab?.ready && !hasSyncedOnceRef.current))) {
     return (
       <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center gap-4 bg-card">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -723,7 +727,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     );
   }
 
-  const timelineLoading = !collab?.ready; // true only on later scene switches now
+  const timelineLoading = preview ? !snapshotReady : !collab?.ready;
 
   return (
     <ViewOnlyProvider value={viewOnly}>
@@ -737,6 +741,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
             saveStatus={collab?.saveStatus}
             compactStatus={collab?.compactStatus}
             onForceSave={collab?.forceSave}
+            templateSource={collab?.ready ? { doc: collab.doc, blockId: collab.target.kind === "block" ? collab.target.id : undefined } : undefined}
           />
 
           <div className="flex flex-1 min-h-0">
