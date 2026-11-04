@@ -239,36 +239,22 @@ const FeatureCellCard: React.FC<{
   const cardRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isHovered, setIsHovered] = useState(false);
-  const [isInView, setIsInView] = useState(false);
 
-  // Auto-play & loop the video the moment the user scrolls to this card
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        setIsInView(entry.isIntersecting);
-      },
-      { threshold: 0.25 }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
+  // Play video on hover; pause and reset to start on mouse leave
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
 
-    if (isInView && !isHovered) {
-      vid.play().catch(() => {});
+    if (isHovered) {
+      const playPromise = vid.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
     } else {
       vid.pause();
+      vid.currentTime = 0;
     }
-  }, [isInView, isHovered]);
+  }, [isHovered]);
 
   const handleMouseEnter = () => {
     onHoverSound();
@@ -324,7 +310,7 @@ const FeatureCellCard: React.FC<{
         </span>
       </div>
 
-      {/* Full-Bleed Auto-Looping Video (Turns into Static Picture on Hover) */}
+      {/* Full-Bleed Media (Static Picture initially, Plays Video on Hover) */}
       <div
         style={{
           width: "100%",
@@ -335,24 +321,6 @@ const FeatureCellCard: React.FC<{
           position: "relative",
         }}
       >
-        <video
-          ref={videoRef}
-          src={item.video}
-          poster={item.img}
-          muted
-          loop
-          playsInline
-          preload="auto"
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            opacity: isHovered ? 0 : 1,
-            transition: "opacity 0.22s ease",
-            pointerEvents: "none",
-          }}
-        />
         <img
           src={item.img}
           alt={item.title}
@@ -364,8 +332,29 @@ const FeatureCellCard: React.FC<{
             height: "100%",
             objectFit: "cover",
             display: "block",
+            opacity: isHovered ? 0 : 1,
+            transition: "opacity 0.25s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1)",
+            pointerEvents: "none",
+          }}
+        />
+        <video
+          ref={videoRef}
+          src={item.video}
+          poster={item.img}
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="whats-inside-cell-video"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
             opacity: isHovered ? 1 : 0,
-            transition: "opacity 0.22s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1)",
+            transition: "opacity 0.25s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1)",
             pointerEvents: "none",
           }}
         />
@@ -495,6 +484,21 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
     clickAudioRef.current.play().catch(() => {});
   };
 
+  const handleTryNow = () => {
+    playClickSound();
+    const { user: currentUser, isAuthenticated: auth, isGuestMode } = useGlobalState.getState();
+    const isLoggedIn = Boolean((auth || currentUser) && !isGuestMode);
+    if (!isLoggedIn) {
+      navigate("/signup");
+    } else {
+      if (currentUser?.type === "Staff") {
+        navigate("/home");
+      } else {
+        navigate("/projects");
+      }
+    }
+  };
+
   const borderLine = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.15)";
   const crosshairColor = isDark ? "rgba(255, 255, 255, 0.55)" : "rgba(0, 0, 0, 0.5)";
   const bgSurface = isDark ? "#121214" : "#ffffff";
@@ -575,11 +579,13 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
           background: ${bgCellHover};
         }
 
-        .whats-inside-cell-img {
-          transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        .whats-inside-cell-img,
+        .whats-inside-cell-video {
+          transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
         }
 
-        .whats-inside-cell:hover .whats-inside-cell-img {
+        .whats-inside-cell:hover .whats-inside-cell-img,
+        .whats-inside-cell:hover .whats-inside-cell-video {
           transform: scale(1.03);
         }
 
@@ -1054,19 +1060,76 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
                 </span>
               </div>
 
-              <p
+              <div
                 style={{
-                  fontFamily: T.fontDisplay,
-                  fontSize: "clamp(13px, 1.3vw, 15.5px)",
-                  lineHeight: 1.55,
-                  fontWeight: 500,
-                  color: textSecondary,
-                  maxWidth: 820,
-                  margin: 0,
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 16,
                 }}
               >
-                Multiple editors working simultaneously on the same multi-track timeline—complete with live presence cursors, real-time clip locking, licensed project assets, and instant canvas layout controls.
-              </p>
+                <p
+                  style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: "clamp(13px, 1.3vw, 15.5px)",
+                    lineHeight: 1.55,
+                    fontWeight: 500,
+                    color: textSecondary,
+                    maxWidth: 820,
+                    margin: 0,
+                  }}
+                >
+                  Multiple editors working simultaneously on the same multi-track timeline—complete with live presence cursors, real-time clip locking, licensed project assets, and instant canvas layout controls.
+                </p>
+
+                <button
+                  onClick={handleTryNow}
+                  onMouseEnter={(e) => {
+                    playMinimalHover();
+                    e.currentTarget.style.background = "#3b82f6";
+                    e.currentTarget.style.color = "#ffffff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isDark ? "#ffffff" : "#0f172a";
+                    e.currentTarget.style.color = isDark ? "#0b0c10" : "#ffffff";
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "10px 22px",
+                    background: isDark ? "#ffffff" : "#0f172a",
+                    color: isDark ? "#0b0c10" : "#ffffff",
+                    fontFamily: T.fontDisplay,
+                    fontSize: 12.5,
+                    fontWeight: 800,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    border: "none",
+                    borderRadius: 0,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    flexShrink: 0,
+                  }}
+                  aria-label="Try Now"
+                >
+                  <span>Try Now</span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </button>
+              </div>
             </div>
           </FadeInScroll>
 
