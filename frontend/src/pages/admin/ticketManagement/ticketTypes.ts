@@ -114,7 +114,7 @@ export type TicketMessage = {
   createdAt: string;
 };
 
-export type TicketPerson = {
+export type TicketParticipant = {
   accountId: string;
   name: string;
   handle?: string | null;
@@ -489,8 +489,8 @@ export type TicketDetail = {
     device?: string;
     page?: string;
   } | null;
-  participants?: TicketPerson[];
-  involved?: TicketPerson[];
+  participants?: TicketParticipant[];
+  involved?: TicketParticipant[];
   pendingInvites?: { accountId: string; name: string; handle?: string | null }[];
   invitePending?: boolean;
   canManageParticipants?: boolean;

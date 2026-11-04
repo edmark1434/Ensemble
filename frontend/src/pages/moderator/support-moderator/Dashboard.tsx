@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -14,7 +14,7 @@ import {
   TimerReset,
   Users,
 } from "lucide-react";
-import api from "@/lib/axios";
+import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import {
   ChartCard,
   DonutChart,
@@ -26,6 +26,8 @@ import ModeratorDisputeDetailModal from "../shared/ModeratorDisputeDetailModal";
 import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { Alert, SupportOverview } from "../shared/moderatorTypes";
 import { AlertList, PriorityBadge, StatCard, StatusBadge, titleCaseWords } from "../shared/ui";
+
+const OVERVIEW_URL = "/api/moderator/support/overview";
 
 function DeskPanel({
   icon: Icon,
@@ -59,26 +61,31 @@ function DeskPanel({
 
 export default function SupportModeratorDashboard() {
   const navigate = useNavigate();
-  const [data, setData] = useState<SupportOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<SupportOverview | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
   const [selectedDisputeId, setSelectedDisputeId] = useState<number | string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<number | string | null>(null);
+  const hasData = useRef(Boolean(data));
 
   const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
+    if (isRefresh || hasData.current) setRefreshing(true);
     try {
-      const res = await api.get("/api/moderator/support/overview");
+      const res = await staffGet(OVERVIEW_URL);
       if (res.data?.success) {
+        hasData.current = true;
         setData(res.data.data);
         setError(false);
-      } else {
+      } else if (!hasData.current) {
         setError(true);
       }
     } catch {
-      setError(true);
+      if (!hasData.current) setError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);

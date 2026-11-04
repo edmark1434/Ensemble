@@ -1,5 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+// The suite edits configuration rows with raw SQL and expects the next read to see them.
+process.env.SETTINGS_CACHE_TTL_MS = '0';
 const { pool } = require('../lib/Database');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { getPublicConfigurationController } = require('../controllers/ConfigurationControllers');

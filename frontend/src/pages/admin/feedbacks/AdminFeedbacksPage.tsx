@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MessageSquare, User, Loader2, Calendar, Tag, Star, LayoutDashboard, Filter } from 'lucide-react';
-import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 
 interface Feedback {
   id: string;
@@ -46,18 +46,29 @@ const getFallbackAvatar = (name?: string): string => {
 
 const CATEGORIES = ["All", "General Insight", "Feature Request", "Bug Report", "UI/UX Suggestion"];
 
+const FEEDBACKS_URL = '/api/admin/feedbacks';
+
+const cachedFeedbacks = (): { feedbacks: Feedback[]; ratings: Rating[] } | null => {
+  const cached = peekStaffGet(FEEDBACKS_URL);
+  if (!cached) return null;
+  if (cached.data?.data?.feedbacks) {
+    return { feedbacks: cached.data.data.feedbacks, ratings: cached.data.data.ratings || [] };
+  }
+  return { feedbacks: Array.isArray(cached.data?.data) ? cached.data.data : [], ratings: [] };
+};
+
 const AdminFeedbacksPage = () => {
   const [activeTab, setActiveTab] = useState<'feedbacks' | 'ratings'>('feedbacks');
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
-  const [ratings, setRatings] = useState<Rating[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks()?.feedbacks ?? []);
+  const [ratings, setRatings] = useState<Rating[]>(() => cachedFeedbacks()?.ratings ?? []);
+  const [isLoading, setIsLoading] = useState(() => !cachedFeedbacks());
 
   const [activeCategory, setActiveCategory] = useState("All");
 
   useEffect(() => {
     const fetchFeedbacks = async () => {
       try {
-        const res = await api.get('/api/admin/feedbacks');
+        const res = await staffGet(FEEDBACKS_URL);
         if (res.data?.data?.feedbacks) {
           setFeedbacks(res.data.data.feedbacks);
           setRatings(res.data.data.ratings || []);

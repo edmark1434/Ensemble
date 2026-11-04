@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { NavLink } from 'react-router-dom';
 import LogoutButton from './LogoutButton';
 import { platformViewPathForConsole, STAFF_LOGIN_PATH } from '@/lib/staffRoutes';
+import { prefetchStaffRoute } from '@/lib/staffPrefetch';
 import { MODERATOR_THEME, type ModeratorAccent, type ModeratorNavItem } from './ModeratorShell';
 
 type Props = {
@@ -50,6 +51,8 @@ export default function ModeratorNavbar({
             key={label}
             to={to}
             end={to === homeTo}
+            onPointerEnter={() => prefetchStaffRoute(to)}
+            onFocus={() => prefetchStaffRoute(to)}
             className={({ isActive }) =>
               `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                 isActive

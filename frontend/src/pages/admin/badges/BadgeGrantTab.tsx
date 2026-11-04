@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Award, Check, Loader2, Search, Send, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { badgesRegistry } from '@/pages/user/7_profile/Utilities/BadgesRegistry';
 import { errorMessage, type CatalogBadge } from './badgeAdminTypes';
 
@@ -32,10 +33,17 @@ const avatarUrl = (path?: string | null, name?: string | null) => {
   return cloudfront ? `${cloudfront}/${clean}` : `/${clean}`;
 };
 
+const CATALOG_URL = '/api/admin/badges';
+
+function cachedCatalog(): CatalogBadge[] | null {
+  const cached = peekStaffGet(CATALOG_URL);
+  return cached ? cached.data?.data || [] : null;
+}
+
 export default function BadgeGrantTab() {
-  const [catalog, setCatalog] = useState<CatalogBadge[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogBadge[]>(() => cachedCatalog() || []);
+  const [catalogLoading, setCatalogLoading] = useState(() => !cachedCatalog());
+  const [selectedId, setSelectedId] = useState<string | null>(() => cachedCatalog()?.[0]?.registry_id ?? null);
 
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<Recipient[]>([]);
@@ -65,7 +73,7 @@ export default function BadgeGrantTab() {
 
   const loadCatalog = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/badges');
+      const res = await staffGet(CATALOG_URL);
       const rows: CatalogBadge[] = res.data?.data || [];
       setCatalog(rows);
       setSelectedId((current) => current ?? rows[0]?.registry_id ?? null);

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Hand, Inbox, Loader2, Plus, RefreshCw, Search, Ticket } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import api from "@/lib/axios";
+import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import TicketFiltersPanel from "@/pages/admin/ticketManagement/TicketFiltersPanel";
 import {
   DEFAULT_TICKET_FILTERS,
@@ -30,12 +30,6 @@ function formatDateTime(value: string | null | undefined) {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-function shortId(value: string | number | null | undefined) {
-  if (value == null || value === "") return "—";
-  const s = String(value);
-  return s.length > 10 ? `${s.slice(0, 8)}…` : s;
 }
 
 function SummaryCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
@@ -83,6 +77,13 @@ const ACCENT_ICON: Record<Accent, string> = {
   rose: "text-rose-300",
 };
 
+function scopeQueueTickets(rows: SupportTicket[], queueKey: keyof typeof QUEUE_TYPES) {
+  if (queueKey === "support") return rows;
+  // Hard-scope specialist queues so cross-queue tickets never appear in the desk.
+  const allowed = new Set(QUEUE_TYPES[queueKey].map((t) => t.toLowerCase()));
+  return rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()));
+}
+
 /**
  * Shared moderator ticket desk with admin-style desk filters + quick chips.
  */
@@ -106,9 +107,15 @@ export default function ModeratorTicketDesk({
   statusControl?: "select" | "buttons";
 }) {
   const [searchParams] = useSearchParams();
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tickets, setTickets] = useState<SupportTicket[]>(() => {
+    const cached = peekStaffGet(listPath || endpointBase);
+    return cached?.data?.success
+      ? scopeQueueTickets((cached.data.data || []) as SupportTicket[], queueKey)
+      : [];
+  });
+  const [loading, setLoading] = useState(() => !peekStaffGet(listPath || endpointBase)?.data?.success);
   const [refreshing, setRefreshing] = useState(false);
+  const hasData = useRef(!loading);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState<TicketFilterState>(() => {
     const next = { ...DEFAULT_TICKET_FILTERS };
@@ -138,23 +145,17 @@ export default function ModeratorTicketDesk({
   const typeCatalog = [...QUEUE_TYPES[queueKey]];
 
   const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !hasData.current) setLoading(true);
     else setRefreshing(true);
     setError("");
     try {
-      const res = await api.get(listPath || endpointBase);
+      const res = await staffGet(listPath || endpointBase);
       if (res.data?.success) {
-        const rows = (res.data.data || []) as SupportTicket[];
-        // Hard-scope specialist queues so cross-queue tickets never appear in the desk.
-        const allowed = new Set(typeCatalog.map((t) => t.toLowerCase()));
-        setTickets(
-          queueKey === "support"
-            ? rows
-            : rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()))
-        );
-      } else setError("Failed to load tickets");
+        hasData.current = true;
+        setTickets(scopeQueueTickets((res.data.data || []) as SupportTicket[], queueKey));
+      } else if (!hasData.current) setError("Failed to load tickets");
     } catch {
-      setError("Failed to load tickets");
+      if (!hasData.current) setError("Failed to load tickets");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -376,9 +377,6 @@ export default function ModeratorTicketDesk({
                     <td className="px-4 py-3.5">
                       <p className="text-zinc-200">{t.requester.name}</p>
                       <p className="text-xs text-zinc-500">@{t.requester.username || "—"}</p>
-                      <p className="font-mono text-[10px] text-zinc-600">
-                        acc {shortId(t.requester.accountId)}
-                      </p>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-300">{t.type || t.category || "—"}</td>
                     <td className="px-4 py-3.5">

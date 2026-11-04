@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, Loader2, Lock, MessageSquare, Pin, Search, Trash2, Unlock, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar from '../userTeam/components/TableFilterBar';
 
@@ -75,12 +76,28 @@ function apiMessage(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
 }
 
+const FORUM_GROUPS_URL = '/api/admin/moderation/forum/groups';
+const FORUM_DISCUSSIONS_URL = '/api/admin/moderation/forum/discussions';
+
+function cachedForum() {
+  const groups = peekStaffGet(FORUM_GROUPS_URL);
+  const discussions = peekStaffGet(FORUM_DISCUSSIONS_URL, { search: '' });
+  return groups && discussions ? { groups, discussions } : null;
+}
+
 export default function ForumManagementSection() {
   const [view, setView] = useState<'groups' | 'discussions'>('groups');
-  const [groups, setGroups] = useState<ForumGroup[]>([]);
-  const [discussions, setDiscussions] = useState<ForumDiscussion[]>([]);
-  const [available, setAvailable] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState<ForumGroup[]>(() => cachedForum()?.groups.data?.data?.groups || []);
+  const [discussions, setDiscussions] = useState<ForumDiscussion[]>(
+    () => cachedForum()?.discussions.data?.data?.discussions || []
+  );
+  const [available, setAvailable] = useState(() => {
+    const cached = cachedForum();
+    return (
+      cached?.groups.data?.data?.available !== false && cached?.discussions.data?.data?.available !== false
+    );
+  });
+  const [loading, setLoading] = useState(() => !cachedForum());
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [groupDetail, setGroupDetail] = useState<ForumGroup | null>(null);
@@ -88,19 +105,19 @@ export default function ForumManagementSection() {
   const [saving, setSaving] = useState(false);
 
   const loadGroups = async () => {
-    const res = await api.get('/api/admin/moderation/forum/groups');
+    const res = await staffGet(FORUM_GROUPS_URL);
     setAvailable(res.data?.data?.available !== false);
     setGroups(res.data?.data?.groups || []);
   };
 
   const loadDiscussions = async (query = search) => {
-    const res = await api.get('/api/admin/moderation/forum/discussions', { params: { search: query } });
+    const res = await staffGet(FORUM_DISCUSSIONS_URL, { search: query });
     setAvailable(res.data?.data?.available !== false);
     setDiscussions(res.data?.data?.discussions || []);
   };
 
   const load = async () => {
-    setLoading(true);
+    if (!cachedForum()) setLoading(true);
     try {
       await Promise.all([loadGroups(), loadDiscussions(search)]);
     } catch (err) {

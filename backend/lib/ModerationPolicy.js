@@ -204,12 +204,12 @@ async function resolveMarketplacePublishStatus({
 /**
  * Round-robin assign an unassigned dispute to an active support/admin staff member.
  */
-async function applyDisputeAutomations(disputeRow) {
+async function applyDisputeAutomations(disputeRow, knownSettings = null) {
   if (!disputeRow?.dispute_id && !disputeRow?.id) return disputeRow;
   const disputeId = disputeRow.dispute_id || disputeRow.id;
   if (disputeRow.handled_by_staff_id) return disputeRow;
 
-  const settings = await getModerationSettings();
+  const settings = knownSettings || await getModerationSettings();
   if (!settings.disputeAutoAssign) return disputeRow;
 
   const staff = await pool.query(
@@ -272,13 +272,33 @@ async function reconcileUnassignedDisputes() {
 
   let assignedCount = 0;
   for (const row of unassigned.rows) {
-    const updated = await applyDisputeAutomations(row);
+    const updated = await applyDisputeAutomations(row, settings);
     if (updated?.handled_by_staff_id) {
       assignedCount++;
     }
   }
 
   return { assigned: assignedCount };
+}
+
+/**
+ * Request-path variant: concurrent callers share one run, and runs are spaced
+ * at least REQUEST_RECONCILE_INTERVAL_MS apart. The cron job still reconciles.
+ */
+const REQUEST_RECONCILE_INTERVAL_MS = 30 * 1000;
+let reconcileInFlight = null;
+let lastReconcileStartedAt = 0;
+
+function reconcileUnassignedDisputesThrottled() {
+  if (reconcileInFlight) return reconcileInFlight;
+  if (Date.now() - lastReconcileStartedAt < REQUEST_RECONCILE_INTERVAL_MS) {
+    return Promise.resolve({ assigned: 0, skipped: true });
+  }
+  lastReconcileStartedAt = Date.now();
+  reconcileInFlight = reconcileUnassignedDisputes().finally(() => {
+    reconcileInFlight = null;
+  });
+  return reconcileInFlight;
 }
 
 /**
@@ -511,6 +531,7 @@ module.exports = {
   sendMarketplaceListingNotification,
   applyDisputeAutomations,
   reconcileUnassignedDisputes,
+  reconcileUnassignedDisputesThrottled,
   countActiveWarnings: sumActiveWarningPoints,
   sumActiveWarningPoints,
   maybeAutoSuspendAfterWarning,

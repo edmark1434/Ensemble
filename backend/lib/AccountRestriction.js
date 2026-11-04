@@ -251,8 +251,10 @@ async function getAccountAccess(accountId) {
   if (!accountId) return emptyAccess();
 
   try {
-    const lifted = await liftExpiredSuspension(accountId);
-    const warningsLapsed = await expireElapsedWarnings(accountId);
+    const [, warningsLapsed] = await Promise.all([
+      liftExpiredSuspension(accountId),
+      expireElapsedWarnings(accountId),
+    ]);
     if (warningsLapsed) {
       const { refreshWarningBand } = require('../services/WarningBandServices');
       await refreshWarningBand(accountId);
@@ -261,12 +263,19 @@ async function getAccountAccess(accountId) {
     console.warn('Could not lift an expired suspension or warning:', err.message);
   }
 
-  const account = await pool.query(
-    `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
-    [accountId]
-  );
+  const [account, violations, timeoutEnd] = await Promise.all([
+    pool.query(
+      `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
+      [accountId]
+    ),
+    listActiveViolations(accountId),
+    activeForumTimeout(accountId).catch((err) => {
+      console.warn('Could not load timeout:', err.message);
+      return undefined;
+    }),
+    refreshLiveThresholds(),
+  ]);
   const row = account.rows[0];
-  const violations = row ? await listActiveViolations(accountId) : [];
 
   if (!row || row.deleted_at) {
     const normalized = 'deleted';
@@ -280,17 +289,8 @@ async function getAccountAccess(accountId) {
     };
   }
 
-  let forumTimeout = false;
-  let forumTimeoutEndsAt = null;
-  try {
-    const timeoutEnd = await activeForumTimeout(accountId);
-    if (timeoutEnd !== undefined) {
-      forumTimeout = true;
-      forumTimeoutEndsAt = timeoutEnd;
-    }
-  } catch (err) {
-    console.warn('Could not load timeout:', err.message);
-  }
+  const forumTimeout = timeoutEnd !== undefined;
+  const forumTimeoutEndsAt = forumTimeout ? timeoutEnd : null;
 
   const normalized = normalizeAccountStatus(row.status);
   const member = String(row.type || '').toLowerCase() === 'user';
@@ -303,7 +303,6 @@ async function getAccountAccess(accountId) {
   } catch (err) {
     console.warn('Could not load warning points:', err.message);
   }
-  await refreshLiveThresholds();
   const warningBand = bandForPoints(member ? warningPoints : 0);
   const warningFrozen = member && warningBand.id === 'frozen' && normalized === 'active';
   const deactivated = normalized === 'deactivated' && member;

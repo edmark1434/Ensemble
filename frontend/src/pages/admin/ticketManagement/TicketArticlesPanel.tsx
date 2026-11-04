@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { TICKET_TYPE_GROUPS } from './ticketTypes';
 import type { TicketArticle } from './ticketTypes';
 
+const ARTICLES_URL = '/api/admin/ticket-articles';
+
 export default function TicketArticlesPanel() {
-  const [articles, setArticles] = useState<TicketArticle[]>([]);
+  const [articles, setArticles] = useState<TicketArticle[]>(() => {
+    const cached = peekStaffGet(ARTICLES_URL);
+    return cached?.data?.success ? cached.data.data || [] : [];
+  });
   const [ticketType, setTicketType] = useState<string>(TICKET_TYPE_GROUPS[0].types[0]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
 
   const load = async () => {
-    const res = await api.get('/api/admin/ticket-articles');
+    const res = await staffGet(ARTICLES_URL);
     if (res.data?.success) setArticles(res.data.data || []);
   };
 

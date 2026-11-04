@@ -18,8 +18,8 @@ import {
   Users,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import type { PlatformAnalytics } from './analyticsTypes';
 import {
   AreaChart,
@@ -50,6 +50,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
 ];
 
 const DEFAULT_FILTERS: AnalyticsFilterState = DEFAULT_ANALYTICS_FILTERS;
+const ANALYTICS_URL = '/api/admin/analytics-overview';
 
 function formatDate(value: string | null) {
   if (!value) return '—';
@@ -139,8 +140,11 @@ export default function AnalyticsPage() {
   const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
-  const [data, setData] = useState<PlatformAnalytics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PlatformAnalytics | null>(() => {
+    const cached = peekStaffGet(ANALYTICS_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
   const [search, setSearch] = useState('');
@@ -148,11 +152,11 @@ export default function AnalyticsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !peekStaffGet(ANALYTICS_URL)) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/analytics-overview');
+      const res = await staffGet(ANALYTICS_URL);
       if (res.data?.success) setData(res.data.data);
       else setError('Failed to load platform analytics');
     } catch {
@@ -227,7 +231,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">

@@ -325,7 +325,28 @@ function buildVerificationDetail(row) {
   };
 }
 
-async function markExpiredVerificationsForReverification() {
+/**
+ * Table-wide sweep that every user/team list awaits. Concurrent callers share one run,
+ * and repeat sweeps are skipped for EXPIRY_SWEEP_INTERVAL_MS.
+ */
+const EXPIRY_SWEEP_INTERVAL_MS = 30 * 1000;
+let expirySweepInFlight = null;
+let lastExpirySweepAt = 0;
+
+function markExpiredVerificationsForReverification() {
+  if (expirySweepInFlight) return expirySweepInFlight;
+  if (Date.now() - lastExpirySweepAt < EXPIRY_SWEEP_INTERVAL_MS) return Promise.resolve();
+  expirySweepInFlight = sweepExpiredVerifications()
+    .then(() => {
+      lastExpirySweepAt = Date.now();
+    })
+    .finally(() => {
+      expirySweepInFlight = null;
+    });
+  return expirySweepInFlight;
+}
+
+async function sweepExpiredVerifications() {
   await pool.query(`
     UPDATE verification_sessions
     SET verification_status = 'reverification_required',
@@ -689,7 +710,7 @@ async function markUserVerificationPending(accountId) {
   );
 }
 
-async function fetchTeamsFromDatabase() {
+async function fetchTeamsFromDatabase({ enrich = true } = {}) {
   const teamsResult = await pool.query(`
     SELECT
       t.team_id,
@@ -754,7 +775,8 @@ async function fetchTeamsFromDatabase() {
   if (!teamsResult.rows.length) return [];
 
   const teamIds = teamsResult.rows.map((r) => r.team_id);
-  const membersResult = await pool.query(
+  const accountIds = teamsResult.rows.map((r) => r.account_id);
+  const membersRequest = pool.query(
     `
     SELECT
       tm.team_id,
@@ -778,6 +800,27 @@ async function fetchTeamsFromDatabase() {
     `,
     [teamIds]
   );
+  const [membersResult, [creditMap, historyMap, activityMap, assetStats]] = await Promise.all([
+    membersRequest,
+    enrich
+      ? Promise.all([
+          fetchCreditActivityForAccounts(accountIds),
+          fetchHistoryForAccounts(accountIds),
+          fetchActivityForAccounts(accountIds),
+          pool.query(
+            `
+            SELECT submitted_by_account_id AS account_id,
+              COUNT(*)::int AS listing_count,
+              COALESCE(SUM(price_credits), 0)::int AS listing_value
+            FROM marketplace_listings
+            WHERE submitted_by_account_id = ANY($1::uuid[])
+            GROUP BY submitted_by_account_id
+            `,
+            [accountIds]
+          ).catch(() => ({ rows: [] })),
+        ])
+      : [new Map(), new Map(), new Map(), { rows: [] }],
+  ]);
 
   const membersByTeam = new Map();
   for (const row of membersResult.rows) {
@@ -795,24 +838,6 @@ async function fetchTeamsFromDatabase() {
     });
     membersByTeam.set(row.team_id, list);
   }
-
-  const accountIds = teamsResult.rows.map((r) => r.account_id);
-  const [creditMap, historyMap, activityMap, assetStats] = await Promise.all([
-    fetchCreditActivityForAccounts(accountIds),
-    fetchHistoryForAccounts(accountIds),
-    fetchActivityForAccounts(accountIds),
-    pool.query(
-      `
-      SELECT submitted_by_account_id AS account_id,
-        COUNT(*)::int AS listing_count,
-        COALESCE(SUM(price_credits), 0)::int AS listing_value
-      FROM marketplace_listings
-      WHERE submitted_by_account_id = ANY($1::uuid[])
-      GROUP BY submitted_by_account_id
-      `,
-      [accountIds]
-    ).catch(() => ({ rows: [] })),
-  ]);
 
   const assetsByAccount = new Map(
     assetStats.rows.map((r) => [r.account_id, r])
@@ -991,11 +1016,15 @@ async function getUsersManagement() {
   };
 }
 
+/** Counts and a few rows only, so it skips the per-account history/credit enrichment of the full lists. */
 async function getUserTeamOverview() {
-  const [teamsData, usersData] = await Promise.all([getTeamsManagement(), getUsersManagement()]);
-
-  const users = usersData.users;
-  const teams = teamsData.teams;
+  await markExpiredVerificationsForReverification();
+  const [users, teams] = await Promise.all([
+    fetchAllUsers(),
+    fetchTeamsFromDatabase({ enrich: false }),
+  ]);
+  const teamsData = { stats: computeTeamStats(teams) };
+  const usersData = { stats: computeUserStats(users) };
 
   const recentSignups = users.slice(0, 6).map((u) => ({
     id: u.id,

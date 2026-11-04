@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, UserCircle, Users, FileText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
+import { prefetchStaffTab } from '@/lib/staffPrefetch';
 import TeamsTab from './TeamsTab';
 import UsersTab from './UsersTab';
 import UserTeamOverviewTab from './UserTeamOverviewTab';
@@ -130,6 +131,8 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
               key={id}
               type="button"
               onClick={() => switchTab(id)}
+              onPointerEnter={() => prefetchStaffTab('userTeam', id)}
+              onFocus={() => prefetchStaffTab('userTeam', id)}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
                 tab === id
                   ? meta.accentTab

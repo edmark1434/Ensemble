@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import StaffOutlet from '@/pages/staff/StaffOutlet';
 import MarketplaceModeratorNavbar from './Navbar';
 import { ModeratorShell } from '../shared/ModeratorShell';
 
@@ -6,7 +6,7 @@ const MarketplaceModeratorLayout = () => {
   return (
     <ModeratorShell accent="amber">
       <MarketplaceModeratorNavbar />
-      <Outlet />
+      <StaffOutlet consoleId="marketplace" />
     </ModeratorShell>
   );
 };

@@ -1,5 +1,5 @@
 import { LayoutDashboard } from 'lucide-react';
-import { Outlet } from 'react-router-dom';
+import StaffOutlet from './StaffOutlet';
 import useGlobalState from '@/lib/global_state';
 import ModeratorNavbar from '@/pages/moderator/shared/ModeratorNavbar';
 import { ModeratorShell } from '@/pages/moderator/shared/ModeratorShell';
@@ -16,7 +16,7 @@ const StaffPortalLayout = () => {
         homeTo="/staff/dashboard"
         items={[{ label: 'Dashboard', icon: LayoutDashboard, to: '/staff/dashboard' }]}
       />
-      <Outlet />
+      <StaffOutlet consoleId="staff" />
     </ModeratorShell>
   );
 };

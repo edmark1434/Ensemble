@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import StaffOutlet from '@/pages/staff/StaffOutlet';
 import SupportModeratorNavbar from './Navbar';
 import { ModeratorShell } from '../shared/ModeratorShell';
 
@@ -6,7 +6,7 @@ const SupportModeratorLayout = () => {
   return (
     <ModeratorShell accent="sky">
       <SupportModeratorNavbar />
-      <Outlet />
+      <StaffOutlet consoleId="support" />
     </ModeratorShell>
   );
 };

@@ -486,7 +486,7 @@ function mapDisputeRow(row) {
       username: row.respondent_handle || '—',
     },
     assignee: row.handled_by_staff_id
-      ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
+      ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Staff member', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
     sanctionType: row.sanction_type || null,
@@ -545,7 +545,7 @@ function mapReportRow(row) {
     status: String(row.status || 'open').toLowerCase(),
     priority: String(row.priority || 'medium').toLowerCase(),
     assignee: row.assigned_staff_id
-      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned' }
+      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Staff member' }
       : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
@@ -564,6 +564,7 @@ async function getTicketsOverview(staffSession = null) {
     recentActivity,
     typeBreakdown,
     priorityBreakdown,
+    staff,
   ] = await Promise.all([
     pool.query(`
       SELECT
@@ -641,6 +642,7 @@ async function getTicketsOverview(staffSession = null) {
       GROUP BY priority
       ORDER BY count DESC
     `),
+    staffSession ? resolveDisputeStaffId(staffSession) : null,
   ]);
 
   const tc = ticketCounts.rows[0];
@@ -681,7 +683,6 @@ async function getTicketsOverview(staffSession = null) {
 
   const types = catalog.types.length ? catalog.types : typeLabels;
 
-  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const currentStaffId = staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(staffSession);
 
   return {

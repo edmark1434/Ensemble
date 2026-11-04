@@ -437,6 +437,8 @@ async function getAnalyticsOverview() {
     pendingVerify,
     activityTrend,
     platformEconomy,
+    signupsByMonth,
+    emailDomains,
   ] = await Promise.all([
       fetchPlatformMembers(),
       fetchStaffSummary(),
@@ -476,6 +478,13 @@ async function getAnalyticsOverview() {
         .catch(() => ({ rows: [{ c: 0 }] })),
       fetchActivityTrend(),
       fetchPlatformEconomyDetails(),
+      fetchSignupByMonth(),
+      pool
+        .query(`
+          SELECT LOWER(SPLIT_PART(email_address, '@', 2)) AS domain, COUNT(*)::int AS count
+          FROM users GROUP BY domain ORDER BY count DESC LIMIT 6
+        `)
+        .then((r) => r.rows.map((d) => ({ domain: d.domain, count: d.count }))),
     ]);
 
   const counts = accountCounts.rows[0];
@@ -513,7 +522,6 @@ async function getAnalyticsOverview() {
       ? Math.min(100, Math.round((forum.groups.totalMembers / totalMembers) * 100))
       : null;
 
-  const signupsByMonth = await fetchSignupByMonth();
   const engagementTrend = buildEngagementTrend(signupTrend, totalMembers);
   const creditBuckets = buildCreditBuckets(members);
   const groupSizeDistribution = forum.available
@@ -656,12 +664,7 @@ async function getAnalyticsOverview() {
         taglineRate: totalMembers ? Math.round((withTagline / totalMembers) * 100) : 0,
         completeProfiles: members.filter((m) => m.hasAvatar && m.hasTagline).length,
       },
-      emailDomains: await pool
-        .query(`
-          SELECT LOWER(SPLIT_PART(email_address, '@', 2)) AS domain, COUNT(*)::int AS count
-          FROM users GROUP BY domain ORDER BY count DESC LIMIT 6
-        `)
-        .then((r) => r.rows.map((d) => ({ domain: d.domain, count: d.count }))),
+      emailDomains,
     },
     community: forum.available
       ? {

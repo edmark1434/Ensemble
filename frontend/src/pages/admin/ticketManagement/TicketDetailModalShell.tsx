@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
+import { ClipboardList, Copy, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
@@ -16,6 +16,19 @@ import {
   TICKET_TYPE_GROUPS,
 } from './ticketTypes';
 import { formatEscalatedLabel } from './ticketFilterUtils';
+import {
+  BTN,
+  BTN_BASE,
+  ConfirmDialog,
+  EmptyNote,
+  FIELD,
+  Fact,
+  FieldLabel,
+  PanelSection,
+  Pill,
+  SidebarSection,
+  TabBar,
+} from '@/pages/moderator/shared/staffCaseUi';
 
 function apiErrorMessage(err: unknown, fallback: string) {
   return (
@@ -23,11 +36,8 @@ function apiErrorMessage(err: unknown, fallback: string) {
   );
 }
 
-const HANDLER_ACTION_BTN =
-  'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm disabled:opacity-50';
-const HANDLER_ACTION_ICON = 'h-4 w-4 shrink-0';
-const ADMIN_ESCALATE_BTN =
-  'border-violet-500/30 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20';
+const MESSAGE_ACTION =
+  'inline-flex items-center gap-1 text-[11px] text-zinc-500 transition hover:text-zinc-200 disabled:opacity-50';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -54,10 +64,28 @@ function submissionContextEntries(context?: TicketDetail['submissionContext']) {
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 }
 
-function shortId(value: string | number | null | undefined) {
-  if (value == null || value === '') return '—';
-  const s = String(value);
-  return s.length > 12 ? `${s.slice(0, 10)}…` : s;
+function CopyableId({ value }: { value: string | number | null | undefined }) {
+  if (value == null || value === '') return <>—</>;
+  const text = String(value);
+  return (
+    <span className="flex items-start gap-2">
+      <span className="min-w-0 flex-1 select-all break-all">{text}</span>
+      <button
+        type="button"
+        onClick={() =>
+          void navigator.clipboard.writeText(text).then(
+            () => showSuccessToast('Copied to clipboard'),
+            () => showErrorToast('Could not copy')
+          )
+        }
+        className="shrink-0 rounded p-0.5 text-zinc-500 transition hover:bg-white/5 hover:text-white"
+        aria-label="Copy"
+        title="Copy"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+    </span>
+  );
 }
 
 function titleCaseLabel(value: string | null | undefined) {
@@ -160,7 +188,7 @@ function MessageBubble({
   onReply?: () => void;
   onJumpToReply: (messageId: string) => void;
   onDelete: () => Promise<void>;
-  onToggleInternal: (isInternal: boolean) => Promise<void>;
+  onToggleInternal: (isInternal: boolean) => Promise<unknown>;
 }) {
   const kind = messageKind(message);
   const isStaffSide = kind === 'staff' || kind === 'internal';
@@ -176,7 +204,7 @@ function MessageBubble({
   const shell = message.isUnsent
     ? 'border-red-500/60 bg-red-500/15'
     : kind === 'internal'
-      ? 'border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-amber-500/[0.04]'
+      ? 'border-amber-500/30 bg-amber-500/[0.08]'
       : kind === 'staff'
         ? `border-white/10 ${accentSoft}`
         : 'border-white/10 bg-[#14151c]';
@@ -278,64 +306,64 @@ function MessageBubble({
               })}
             </div>
           )}
-          {!message.isUnsent && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {onReply && (
+        </div>
+
+        {!message.isUnsent && onReply && (
+          <div className={`mt-1 flex flex-wrap items-center gap-3 px-1 ${isStaffSide ? 'justify-end' : 'justify-start'}`}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onReply}
+              className={MESSAGE_ACTION}
+            >
+              <CornerDownRight className="h-3 w-3" />
+              Reply
+            </button>
+            {staffReply && (
               <button
                 type="button"
                 disabled={busy}
-                onClick={onReply}
-                className="inline-flex items-center gap-1 rounded-lg border border-sky-400/30 px-2 py-1 text-[11px] text-sky-100 hover:bg-sky-500/10 disabled:opacity-50"
+                onClick={() => void onToggleInternal(!message.isInternal)}
+                className={MESSAGE_ACTION}
               >
-                <CornerDownRight className="h-3 w-3" />
-                Reply
+                <Lock className="h-3 w-3" />
+                {message.isInternal ? 'Show to member' : 'Make internal'}
               </button>
-              )}
-              {onReply && (own || staffReply) && own && !confirmDelete && (
+            )}
+            {own && !confirmDelete && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmDelete(true)}
+                className={MESSAGE_ACTION}
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </button>
+            )}
+            {own && confirmDelete && (
+              <span className="inline-flex items-center gap-2 text-[11px]">
+                <span className="text-zinc-400">Delete this reply?</span>
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => setConfirmDelete(true)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+                  onClick={() => void onDelete()}
+                  className="font-medium text-red-300 hover:text-red-200 disabled:opacity-50"
                 >
-                  <Trash2 className="h-3 w-3" />
                   Delete
                 </button>
-              )}
-              {onReply && own && confirmDelete && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void onDelete()}
-                    className="rounded-lg border border-red-500/40 bg-red-500/15 px-2 py-1 text-[11px] text-red-100 disabled:opacity-50"
-                  >
-                    Delete reply
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setConfirmDelete(false)}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400"
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-              {onReply && staffReply && !message.isUnsent && (
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void onToggleInternal(!message.isInternal)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 px-2 py-1 text-[11px] text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-zinc-500 hover:text-zinc-300"
                 >
-                  <Lock className="h-3 w-3" />
-                  {message.isInternal ? 'Show to member' : 'Internal note'}
+                  Cancel
                 </button>
-              )}
-            </div>
-          )}
-        </div>
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -368,26 +396,46 @@ const ACCENT: Record<string, { text: string; spin: string; btn: string; soft: st
   },
 };
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium text-zinc-500">{label}</span>
-      {children}
-      {hint ? <span className="text-[11px] text-zinc-600">{hint}</span> : null}
-    </div>
-  );
+function priorityPillClass(priority: string | null | undefined) {
+  const p = String(priority || '').toLowerCase();
+  if (p === 'urgent' || p === 'high') return 'border-red-500/30 bg-red-500/10 text-red-200';
+  if (p === 'medium') return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  return 'border-white/10 bg-white/5 text-zinc-300';
 }
 
-const selectCls =
-  'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
+function PersonRow({
+  name,
+  detail,
+  tag,
+  tagClass,
+  action,
+}: {
+  name: string;
+  detail?: string;
+  tag?: string;
+  tagClass?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <li className="flex items-center gap-2.5 py-1.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-zinc-300">
+        {initials(name)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-xs font-medium text-white">{name}</span>
+          {tag ? (
+            <span className={`shrink-0 rounded-full border px-1.5 py-px text-[9px] font-medium uppercase tracking-wide ${tagClass || 'border-white/10 text-zinc-400'}`}>
+              {tag}
+            </span>
+          ) : null}
+        </span>
+        {detail ? <span className="block truncate text-[11px] text-zinc-500">{detail}</span> : null}
+      </span>
+      {action}
+    </li>
+  );
+}
 
 function CloseTimer({ closesAt, scheduled = false }: { closesAt?: string | null; scheduled?: boolean }) {
   const [now, setNow] = useState(() => Date.now());
@@ -491,6 +539,7 @@ export default function TicketDetailModalShell({
     kind: 'user' | 'staff';
     role: string;
   } | null>(null);
+  const [tab, setTab] = useState<'conversation' | 'details'>('conversation');
   const threadEndRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -606,6 +655,7 @@ export default function TicketDetailModalShell({
   };
 
   useEffect(() => {
+    setTab('conversation');
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, endpointBase]);
@@ -678,7 +728,9 @@ export default function TicketDetailModalShell({
     const chatId = detail?.chatId;
     if (!chatId) return;
 
-    const appendLiveMessage = (message: { conversation_id?: string }) => {
+    const appendLiveMessage = (
+      message: NonNullable<Parameters<typeof fromSocketMessage>[0]> & { conversation_id?: string }
+    ) => {
       if (String(message?.conversation_id || '') !== String(chatId)) return;
       const mapped = fromSocketMessage(message);
       if (mapped) placeMessage(mapped);
@@ -750,8 +802,8 @@ export default function TicketDetailModalShell({
   }, [detail?.chatId, ticketId, endpointBase]);
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [detail?.messages?.length]);
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [detail?.messages?.length, tab]);
 
   const onEscalateRoleChange = (role: string) => {
     setEscalateRole(role);
@@ -1090,195 +1142,717 @@ export default function TicketDetailModalShell({
   const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
   const contextEntries = submissionContextEntries(detail?.submissionContext);
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
+  const canChangeAssignee = !assigneeLocked || Boolean(perms?.canAssignOthers || isAdmin);
+  const ticketDirty = Boolean(
+    t &&
+      (status !== t.status ||
+        priority !== t.priority ||
+        (canChangeAssignee && assigneeId !== (t.assignee?.staffId?.toString() || '')))
+  );
+  const isAppeal = Boolean(t && ticketTypeOf(t) === 'Appeal an account penalty');
+  const peopleCount = involvedGroups.staff.length + involvedGroups.users.length;
+  const assignableOptions = (() => {
+    const options = (detail?.assignableStaff || []).filter((s) => {
+      if (!myStaffId) return true;
+      const isMe = String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+      // Hide yourself unless you already handle it; claiming goes through Assign myself.
+      return !isMe || alreadyAssignedToMe;
+    });
+    const current = t?.assignee;
+    const listed = current && options.some((s) => String(s.staffId).toLowerCase() === String(current.staffId).toLowerCase());
+    return current && !listed
+      ? [{ staffId: current.staffId, name: current.name, role: current.role }, ...options]
+      : options;
+  })();
+  const replyGuides = (() => {
+    const thread = (detail?.messages || []).filter(
+      (message) =>
+        !message.isInternal &&
+        !message.isUnsent &&
+        String(message.authorType).toLowerCase() !== 'system'
+    );
+    return thread.length <= 1 ? (detail?.articles || []).slice(0, 3) : [];
+  })();
+
+  const personAction = (accountId: string, name: string, locked: boolean, active: boolean) =>
+    detail?.canManageParticipants && !locked && active ? (
+      <button
+        type="button"
+        disabled={personBusy}
+        onClick={() => setConfirmRemove({ accountId, name })}
+        className="shrink-0 rounded-md p-1.5 text-zinc-500 transition hover:bg-white/5 hover:text-red-200 disabled:opacity-50"
+        aria-label={`Remove ${name}`}
+        title="Remove from ticket"
+      >
+        <UserMinus className="h-3.5 w-3.5" />
+      </button>
+    ) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-5">
-      <div className="relative flex h-[min(92vh,920px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0d12] shadow-2xl">
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
+      <div className="relative flex h-[min(92vh,920px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
           <div className="min-w-0">
-            <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${tone.text}`}>Ticket detail</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-bold text-white">{t?.number || `TKT-${ticketId}`}</h2>
-              {t?.type && (
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-zinc-300">
-                  {ticketTypeOf(t)}
-                </span>
-              )}
-              {t?.isEscalated && (
-                <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-medium text-violet-200">
-                  {formatEscalatedLabel(t)}
-                </span>
-              )}
-              {t?.waitingForResponse && (
-                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-medium text-amber-200">
-                  Awaiting Reply
-                </span>
-              )}
-            </div>
-            <p className="mt-1 truncate text-sm text-zinc-400">{t?.subject}</p>
+            <p className={`text-[10px] font-semibold uppercase tracking-wide ${tone.text}`}>
+              Ticket · {t?.number || `TKT-${ticketId}`}
+            </p>
+            <h2 className="mt-1 truncate text-lg font-semibold text-white">{t?.subject || 'Ticket'}</h2>
+            {t && (
+              <>
+                <p className="mt-1 truncate text-xs text-zinc-500">
+                  {t.requester.name}
+                  {t.requester.username ? ` (@${t.requester.username})` : ''} · Opened {formatDateTime(t.createdAt)} · Updated{' '}
+                  {formatDateTime(t.updatedAt)}
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <Pill className={statusButtonClass(t.status, true)}>{t.status}</Pill>
+                  <Pill className={priorityPillClass(t.priority)}>{t.priority} priority</Pill>
+                  <Pill className="border-white/10 bg-white/5 text-zinc-300">{ticketTypeOf(t)}</Pill>
+                  <Pill
+                    className={
+                      t.assignee
+                        ? 'border-white/10 bg-white/5 text-zinc-300'
+                        : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                    }
+                  >
+                    {t.assignee ? `Handler: ${t.assignee.name}` : 'Unassigned'}
+                  </Pill>
+                  {t.isEscalated && (
+                    <Pill className="border-violet-500/30 bg-violet-500/10 text-violet-200">{formatEscalatedLabel(t)}</Pill>
+                  )}
+                  {t.waitingForResponse && (
+                    <Pill className="border-amber-500/30 bg-amber-500/10 text-amber-200">Awaiting reply</Pill>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {t && (
+              <button type="button" onClick={() => setShowTranscript(true)} className={BTN.neutral}>
+                <FileText className="h-3.5 w-3.5" />
+                Transcript
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </header>
 
         {loading ? (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className={`h-8 w-8 animate-spin ${tone.spin}`} />
           </div>
         ) : detail && t ? (
-          <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
-            {/* LEFT — meta */}
-            <aside className="flex min-h-0 flex-col border-b border-white/10 lg:border-b-0 lg:border-r">
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-                <section className="rounded-xl border border-white/10 bg-[#14151c] p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Requester</p>
-                  <p className="mt-1.5 text-base font-semibold text-white">{t.requester.name}</p>
-                  <dl className="mt-3 space-y-2 text-xs text-zinc-400">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">Handle</dt>
-                      <dd>@{t.requester.username || '—'}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">Email</dt>
-                      <dd className="truncate text-right">{t.requester.email || '—'}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">Account</dt>
-                      <dd className="font-mono text-[11px]">{shortId(t.requester.accountId)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">User</dt>
-                      <dd className="font-mono text-[11px]">{shortId(t.requester.userId)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">Opened</dt>
-                      <dd>{formatDateTime(t.createdAt)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">Updated</dt>
-                      <dd>{formatDateTime(t.updatedAt)}</dd>
-                    </div>
-                  </dl>
-                </section>
+          <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
+            {/* Main column: conversation or details */}
+            <div className="flex min-h-[60vh] flex-col border-white/10 lg:min-h-0 lg:border-r">
+              <TabBar
+                label="Ticket sections"
+                active={tab}
+                onChange={setTab}
+                tabs={[
+                  { id: 'conversation', label: `Conversation (${detail.messages.length})`, icon: MessageSquare },
+                  { id: 'details', label: 'Details', icon: ClipboardList },
+                ] as const}
+              />
 
-                <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Who's involved</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">Staff and other users on this ticket.</p>
+              {tab === 'conversation' ? (
+                <>
+                  <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                    {detail.chatAvailable === false && (
+                      <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+                        Chat storage is offline, so messages can’t load right now. Status changes still work.
+                      </p>
+                    )}
+                    {detail.messages.length === 0 && detail.chatAvailable !== false && (
+                      <div className="flex h-full min-h-40 flex-col items-center justify-center text-center">
+                        <MessageSquare className="mb-2 h-8 w-8 text-zinc-700" />
+                        <p className="text-sm text-zinc-500">No messages yet</p>
+                        <p className="mt-1 text-xs text-zinc-600">Start the thread with a reply below.</p>
+                      </div>
+                    )}
+                    {detail.messages.map((m) =>
+                      String(m.authorType).toLowerCase() === 'system' ? (
+                        <div key={m.id} className="flex items-center gap-3 py-1">
+                          <span className="h-px flex-1 bg-white/[0.06]" />
+                          <span className="max-w-[80%] text-center text-[11px] text-zinc-500">
+                            {m.body}
+                            <span className="ml-2 text-zinc-600">{formatDateTime(m.createdAt)}</span>
+                          </span>
+                          <span className="h-px flex-1 bg-white/[0.06]" />
+                        </div>
+                      ) : (
+                        <MessageBubble
+                          key={m.id}
+                          message={m}
+                          accentSoft={tone.soft}
+                          own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
+                          busy={saving}
+                          replyQuote={quoteFor(m.replyToId)}
+                          onReply={canReply ? () => setReplyTarget(m) : undefined}
+                          onJumpToReply={jumpToMessage}
+                          onDelete={() => removeMessage(m.id)}
+                          onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
+                        />
+                      )
+                    )}
+                    <div ref={threadEndRef} />
                   </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Staff</p>
-                    {involvedGroups.staff.length === 0 ? (
-                      <p className="mt-1 text-xs text-zinc-500">No staff on this ticket yet.</p>
+
+                  <div className="shrink-0 border-t border-white/10 bg-[#0c0d12] p-4">
+                    {!canReply ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                        <p className="flex items-center gap-2 text-sm text-zinc-300">
+                          <Lock className="h-4 w-4 shrink-0 text-zinc-500" />
+                          {ticketClosed
+                            ? 'This ticket is closed. Reopen it before replying.'
+                            : ticketAssigneeId
+                              ? 'Only the assigned staff member can reply on this ticket.'
+                              : 'Claim this ticket before replying. No one is assigned yet.'}
+                        </p>
+                        {canAssignMyself && (
+                          <button type="button" onClick={() => void assignMyself()} disabled={saving} className={BTN.claim}>
+                            <Hand className="h-3.5 w-3.5" />
+                            Assign myself
+                          </button>
+                        )}
+                      </div>
                     ) : (
-                      <ul className="mt-1.5 space-y-1.5">
-                        {involvedGroups.staff.map((person) => {
-                          const isAssignee = Boolean(t?.assignee?.accountId) && String(person.accountId) === String(t?.assignee?.accountId);
-                          return (
-                            <li key={`staff-${person.accountId}`} className="text-xs text-zinc-200">
-                              <span className="font-medium text-white">{person.name}</span>
-                              <span className="text-zinc-500">
-                                {person.handle ? ` · @${person.handle}` : ''}
-                                {isAssignee ? ` · ${t?.assignee?.role || 'Assigned'}` : ' · Staff'}
-                                {person.replyCount > 0 ? ` · ${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : ''}
+                      <div className="space-y-2">
+                        {replyGuides.length > 0 && (
+                          <div>
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                              Suggested replies
+                            </p>
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                              {replyGuides.map((article) => (
+                                <button
+                                  key={article.id}
+                                  type="button"
+                                  onClick={() => setReply(article.body)}
+                                  title={article.body}
+                                  className="w-56 shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition hover:border-white/20 hover:bg-white/[0.06]"
+                                >
+                                  <span className="block truncate text-xs font-medium text-white">{article.title}</span>
+                                  <span className="mt-0.5 line-clamp-2 block text-[11px] text-zinc-500">{article.body}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {replyTarget && (
+                          <div className="flex items-start gap-2 rounded-lg border-l-2 border-sky-400 bg-sky-500/[0.06] px-3 py-2">
+                            <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">
+                                Replying to {replyTarget.authorName}
+                              </p>
+                              <p className="truncate text-xs text-zinc-300">{replyTarget.body || 'Attachment'}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setReplyTarget(null)}
+                              aria-label="Cancel reply"
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                        <div
+                          className={`rounded-xl border transition ${
+                            internalNote ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'border-white/10 bg-[#14151c]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1 border-b border-white/[0.06] px-2 py-1.5" role="group" aria-label="Message type">
+                            {[
+                              { internal: false, label: 'Reply to member', Icon: MessageSquare },
+                              { internal: true, label: 'Internal note', Icon: Lock },
+                            ].map(({ internal, label, Icon }) => {
+                              const active = internalNote === internal;
+                              return (
+                                <button
+                                  key={label}
+                                  type="button"
+                                  aria-pressed={active}
+                                  disabled={detail.chatAvailable === false}
+                                  onClick={() => setInternalNote(internal)}
+                                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${
+                                    active
+                                      ? internal
+                                        ? 'bg-amber-500/15 text-amber-100'
+                                        : 'bg-white/10 text-white'
+                                      : 'text-zinc-500 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <Icon className="h-3.5 w-3.5" />
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <textarea
+                            value={reply}
+                            onChange={(e) => setReply(e.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                                event.preventDefault();
+                                void sendReply();
+                              }
+                            }}
+                            rows={3}
+                            placeholder={internalNote ? 'Write a note only staff can see…' : 'Write a reply to the member…'}
+                            disabled={detail.chatAvailable === false}
+                            className="block w-full resize-none bg-transparent px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50"
+                          />
+                          {screenshots.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+                              {screenshots.map((file) => (
+                                <span
+                                  key={file.key}
+                                  className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-300"
+                                >
+                                  <Paperclip className="h-3 w-3" />
+                                  <span className="max-w-[10rem] truncate">{file.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setScreenshots((current) => current.filter((item) => item.key !== file.key))}
+                                    aria-label="Remove attachment"
+                                    className="text-zinc-500 hover:text-white"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-2 py-1.5">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <label
+                                title="Attach an image or video"
+                                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/5 hover:text-white ${
+                                  detail.chatAvailable === false || screenshots.length >= 4 ? 'pointer-events-none opacity-40' : 'cursor-pointer'
+                                }`}
+                              >
+                                <Paperclip className="h-4 w-4" />
+                                <span className="sr-only">Attach a file</span>
+                                <input
+                                  type="file"
+                                  accept="image/*,video/*"
+                                  multiple
+                                  className="hidden"
+                                  disabled={detail.chatAvailable === false || screenshots.length >= 4}
+                                  onChange={(event) => {
+                                    void uploadScreenshots(event.target.files);
+                                    event.target.value = '';
+                                  }}
+                                />
+                              </label>
+                              <span className="truncate text-[11px] text-zinc-500">
+                                {internalNote ? 'Only staff will see this note.' : 'Everyone on the ticket will see this reply.'}
                               </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void sendReply()}
+                              disabled={saving || (!reply.trim() && screenshots.length === 0) || detail.chatAvailable === false}
+                              className={`${BTN_BASE} shrink-0 border-transparent text-white ${internalNote ? 'bg-amber-500/80 hover:bg-amber-500' : tone.btn}`}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              {internalNote ? 'Add note' : 'Send reply'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
+                  <PanelSection title="Requester">
+                    <dl className="grid gap-2 sm:grid-cols-2">
+                      <Fact label="Name" value={t.requester.name || '—'} />
+                      <Fact label="Handle" value={t.requester.username ? `@${t.requester.username}` : '—'} />
+                      <Fact label="Email" value={t.requester.email || '—'} />
+                      <Fact label="Last message" value={formatDateTime(t.lastMessageAt)} />
+                      <Fact label="Account ID" value={<CopyableId value={t.requester.accountId} />} mono />
+                      <Fact label="User ID" value={<CopyableId value={t.requester.userId} />} mono />
+                    </dl>
+                  </PanelSection>
+
+                  <PanelSection title="Form answers" count={(detail.formValues || []).length}>
+                    {(detail.formValues || []).length === 0 ? (
+                      <EmptyNote>No extra form answers were submitted.</EmptyNote>
+                    ) : (
+                      <dl className="grid gap-2 sm:grid-cols-2">
+                        {(detail.formValues || []).map((answer) => (
+                          <Fact
+                            key={answer.key}
+                            label={answer.label}
+                            value={
+                              <>
+                                {answer.value}
+                                {answer.id ? <span className="mt-0.5 block break-all text-[11px] text-zinc-600">{answer.id}</span> : null}
+                              </>
+                            }
+                          />
+                        ))}
+                      </dl>
+                    )}
+                  </PanelSection>
+
+                  {contextEntries.length > 0 && (
+                    <PanelSection title="Submitted with">
+                      <dl className="grid gap-2 sm:grid-cols-2">
+                        {contextEntries.map(([label, value]) => (
+                          <Fact key={label} label={label} value={value} />
+                        ))}
+                      </dl>
+                    </PanelSection>
+                  )}
+
+                  {detail.payments && (
+                    <PanelSection
+                      title="Payments"
+                      count={
+                        detail.payments.payments.length +
+                        detail.payments.credits.length +
+                        (detail.payments.cashouts || []).length
+                      }
+                    >
+                      {detail.payments.payments.length === 0 &&
+                      detail.payments.credits.length === 0 &&
+                      (detail.payments.cashouts || []).length === 0 ? (
+                        <EmptyNote>No payment records for this account yet.</EmptyNote>
+                      ) : (
+                        <ul className="space-y-2">
+                          {(detail.payments.cashouts || []).map((cashout) => (
+                            <li key={cashout.id} className="rounded-lg border border-white/10 px-3 py-2.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-sm text-zinc-200">
+                                  Withdrawal · <span className="tabular-nums">{cashout.credits}</span> credits
+                                </span>
+                                <span className="text-[11px] text-zinc-500">{formatDateTime(cashout.createdAt)}</span>
+                              </div>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {titleCaseLabel(cashout.status)} · {cashout.channel || 'Payout'}
+                                {cashout.accountLast4 ? ` · ••••${cashout.accountLast4}` : ''}
+                                {cashout.failureCode ? ` · ${cashout.failureCode}` : ''}
+                              </p>
                             </li>
+                          ))}
+                          {detail.payments.payments.map((payment) => (
+                            <li key={payment.id} className="rounded-lg border border-white/10 px-3 py-2.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-sm text-zinc-200">
+                                  {payment.type || 'Payment'} · {payment.currency} <span className="tabular-nums">{payment.amount}</span>
+                                </span>
+                                <span className="text-[11px] text-zinc-500">{formatDateTime(payment.createdAt)}</span>
+                              </div>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {titleCaseLabel(payment.status)} · {payment.credits} credits
+                              </p>
+                            </li>
+                          ))}
+                          {detail.payments.credits.map((credit) => (
+                            <li key={credit.id} className="rounded-lg border border-white/10 px-3 py-2.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-sm text-zinc-200">
+                                  {credit.type} · <span className="tabular-nums">{credit.amount}</span> credits
+                                </span>
+                                <span className="text-[11px] text-zinc-500">{formatDateTime(credit.createdAt)}</span>
+                              </div>
+                              <p className="mt-1 text-xs text-zinc-500">{titleCaseLabel(credit.status)}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </PanelSection>
+                  )}
+
+                  <PanelSection title="Activity" count={(detail.timeline || []).length}>
+                    {(detail.timeline || []).length === 0 ? (
+                      <EmptyNote>No recorded activity yet.</EmptyNote>
+                    ) : (
+                      <ol className="space-y-0">
+                        {detail.timeline!.slice(0, 20).map((entry) => (
+                          <li key={entry.id} className="relative border-l border-white/10 pb-3 pl-4 last:pb-0">
+                            <span className="absolute -left-[3.5px] top-1.5 h-1.5 w-1.5 rounded-full bg-zinc-500" />
+                            <p className="text-sm text-zinc-200">{entry.summary}</p>
+                            <p className="text-[11px] text-zinc-500">
+                              {entry.kind === 'account' ? 'Account' : 'Ticket'} · {entry.actorName || 'Staff'}
+                              {entry.actorRole ? ` · ${entry.actorRole}` : ''} · {formatDateTime(entry.createdAt)}
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </PanelSection>
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar: actions */}
+            <aside className="flex min-h-0 flex-col bg-[#0c0d12]">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                <SidebarSection title="Handler">
+                  <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-[11px] font-semibold text-zinc-200">
+                      {t.assignee ? initials(t.assignee.name) : <UserRound className="h-4 w-4 text-zinc-500" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-white">
+                        {t.assignee?.name || 'No one assigned'}
+                        {alreadyAssignedToMe ? <span className="text-zinc-500"> (you)</span> : null}
+                      </p>
+                      <p className="truncate text-[11px] text-zinc-500">
+                        {t.assignee ? t.assignee.role : 'Claim it to reply to the member'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {canChangeAssignee && !ticketClosed && (
+                    <div>
+                      <FieldLabel>Assign to</FieldLabel>
+                      <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={FIELD}>
+                        <option value="">Unassigned</option>
+                        {assignableOptions.map((s) => (
+                          <option key={s.staffId} value={s.staffId}>
+                            {s.name} ({s.role})
+                            {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase() ? ' (you)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {ticketAssigneeId && (perms?.canAssignOthers || isAdmin) ? (
+                        <p className="mt-1.5 text-[11px] text-violet-300/80">Admin override: you can reassign without a release.</p>
+                      ) : null}
+                    </div>
+                  )}
+                  {ticketClosed ? (
+                    <p className="text-[11px] text-zinc-500">This ticket is closed. Reopen it before anyone can claim it.</p>
+                  ) : assigneeLocked && !canChangeAssignee ? (
+                    <p className="text-[11px] text-zinc-500">
+                      The assigned staff member must release the ticket before someone else can claim it.
+                    </p>
+                  ) : null}
+
+                  {(canAssignMyself || canRelease) && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {canAssignMyself && (
+                        <button
+                          type="button"
+                          onClick={() => void assignMyself()}
+                          disabled={saving}
+                          className={`${BTN.claim} ${canRelease ? '' : 'col-span-2'}`}
+                        >
+                          <Hand className="h-3.5 w-3.5" />
+                          Assign myself
+                        </button>
+                      )}
+                      {canRelease && (
+                        <button
+                          type="button"
+                          onClick={() => void releaseCase()}
+                          disabled={saving}
+                          className={`${BTN.warn} ${canAssignMyself ? '' : 'col-span-2'}`}
+                        >
+                          Release
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </SidebarSection>
+
+                <SidebarSection title="Ticket">
+                  <div>
+                    <FieldLabel>Status</FieldLabel>
+                    {statusControl === 'buttons' ? (
+                      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Ticket status">
+                        {statusOptions.map((s) => {
+                          const active = status.toLowerCase().replace(/_/g, ' ') === s.toLowerCase().replace(/_/g, ' ');
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setStatus(s)}
+                              aria-pressed={active}
+                              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${statusButtonClass(s, active)}`}
+                            >
+                              {s}
+                            </button>
                           );
                         })}
-                      </ul>
+                      </div>
+                    ) : (
+                      <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
+                        {statusOptions.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
                     )}
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/80">Users</p>
-                    {involvedGroups.users.length === 0 ? (
-                      <p className="mt-1 text-xs text-zinc-500">No other users on this ticket.</p>
+                    <FieldLabel>Priority</FieldLabel>
+                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className={FIELD}>
+                      {priorityOptions.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {t.status !== 'Closed' ? (
+                    <div className="space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-zinc-400">Closing</p>
+                      {detail.scheduledCloseAt || detail.autoClosesAt ? (
+                        <CloseTimer
+                          closesAt={detail.scheduledCloseAt || detail.autoClosesAt}
+                          scheduled={Boolean(detail.scheduledCloseAt)}
+                        />
+                      ) : (
+                        <p className="text-[11px] text-zinc-500">No close is scheduled.</p>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        <button type="button" disabled={schedulingClose} onClick={openSchedule} className={BTN.warn}>
+                          {detail.scheduledCloseAt ? 'Change time' : 'Schedule close'}
+                        </button>
+                        {detail.scheduledCloseAt ? (
+                          <button
+                            type="button"
+                            disabled={schedulingClose}
+                            onClick={() => void scheduleClose(true)}
+                            className={BTN.neutral}
+                          >
+                            {schedulingClose ? 'Cancelling…' : 'Cancel'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-500">Closed. A transcript was saved when it closed.</p>
+                  )}
+                </SidebarSection>
+
+                {isAppeal && (
+                  <SidebarSection title="Appeal decision">
+                    <p className="text-[11px] leading-relaxed text-zinc-500">
+                      Accepting ends the penalty in 24 hours. Denying lets them appeal again in 12 months. Deny permanently blocks every future appeal. Each choice closes the ticket.
+                    </p>
+                    {detail.appealDecision ? (
+                      <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-200">
+                        {detail.appealDecision === 'accepted'
+                          ? 'Accepted. The penalty ends 24 hours after this decision.'
+                          : detail.appealDecision === 'denied_permanent'
+                            ? 'Denied permanently. This account cannot appeal again.'
+                            : 'Denied. They can submit another appeal in 12 months.'}
+                      </p>
                     ) : (
-                      <ul className="mt-1.5 space-y-1.5">
+                      <div className="grid gap-1.5">
+                        <button type="button" onClick={() => setAppealChoice('accept')} className={BTN.success}>
+                          Accept appeal
+                        </button>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button type="button" onClick={() => setAppealChoice('deny')} className={BTN.warn}>
+                            Deny
+                          </button>
+                          <button type="button" onClick={() => setAppealChoice('deny_permanent')} className={BTN.danger}>
+                            Deny permanently
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </SidebarSection>
+                )}
+
+                <SidebarSection title={`People (${peopleCount})`}>
+                  {involvedGroups.staff.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Staff</p>
+                      <ul className="divide-y divide-white/[0.04]">
+                        {involvedGroups.staff.map((person) => {
+                          const isAssignee =
+                            Boolean(t.assignee?.accountId) && String(person.accountId) === String(t.assignee?.accountId);
+                          return (
+                            <PersonRow
+                              key={`staff-${person.accountId}`}
+                              name={person.name}
+                              detail={[
+                                person.handle ? `@${person.handle}` : '',
+                                person.replyCount > 0 ? `${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : '',
+                              ].filter(Boolean).join(' · ')}
+                              tag={isAssignee ? 'Handler' : 'Staff'}
+                              tagClass={isAssignee ? 'border-sky-500/30 text-sky-200' : 'border-violet-500/30 text-violet-200'}
+                              action={personAction(String(person.accountId), person.name, isAssignee, person.status === 'active')}
+                            />
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Members</p>
+                    {involvedGroups.users.length === 0 ? (
+                      <p className="py-1.5 text-xs text-zinc-500">No members on this ticket.</p>
+                    ) : (
+                      <ul className="divide-y divide-white/[0.04]">
                         {involvedGroups.users.map((person) => (
-                          <li key={`user-${person.accountId}`} className="text-xs text-zinc-200">
-                            <span className="font-medium text-white">{person.name}</span>
-                            <span className="text-zinc-500">
-                              {person.handle ? ` · @${person.handle}` : ''}
-                              {person.isRequester ? ' · Opened ticket' : ' · Added'}
-                              {person.replyCount > 0 ? ` · ${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : ''}
-                            </span>
-                          </li>
+                          <PersonRow
+                            key={`user-${person.accountId}`}
+                            name={person.name}
+                            detail={[
+                              person.handle ? `@${person.handle}` : '',
+                              person.replyCount > 0 ? `${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : '',
+                            ].filter(Boolean).join(' · ')}
+                            tag={person.isRequester ? 'Requester' : 'Added'}
+                            tagClass={person.isRequester ? 'border-white/15 text-zinc-300' : undefined}
+                            action={personAction(String(person.accountId), person.name, person.isRequester, person.status === 'active')}
+                          />
                         ))}
                       </ul>
                     )}
                   </div>
 
-                  <div className="border-t border-white/10 pt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">On this ticket</p>
-                    <ul className="mt-2 space-y-1.5">
-                      {(detail.participants || []).map((person) => {
-                        const isAssignee = Boolean(t.assignee?.accountId) && String(person.accountId) === String(t.assignee?.accountId);
-                        const locked = person.isRequester || isAssignee;
-                        return (
-                        <li key={`member-${person.accountId}`} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="min-w-0 truncate text-zinc-300">
-                            {person.name}
-                            <span className="text-zinc-600">
-                              {person.isRequester ? ' · opened ticket' : ''}
-                              {isAssignee ? ' · assigned' : person.isStaff && !isAssignee ? ' · staff' : ''}
-                            </span>
-                          </span>
-                          {detail.canManageParticipants && !locked && person.status === 'active' ? (
-                            <button
-                              type="button"
-                              disabled={personBusy}
-                              onClick={() => setConfirmRemove({ accountId: person.accountId, name: person.name })}
-                              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-                            >
-                              <UserMinus className="h-3 w-3" />
-                              Remove
-                            </button>
-                          ) : null}
-                        </li>
-                        );
-                      })}
-                    </ul>
-                    {detail.canManageParticipants ? (
-                      <p className="mt-2 text-[11px] text-zinc-600">The person who opened the ticket and the assigned staff member stay on it.</p>
-                    ) : null}
-                  </div>
-
                   {(detail.pendingInvites || []).length > 0 && (
-                    <div className="border-t border-white/10 pt-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Waiting to accept</p>
-                      <ul className="mt-2 space-y-1.5">
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-amber-200/70">Waiting to accept</p>
+                      <ul className="divide-y divide-white/[0.04]">
                         {detail.pendingInvites!.map((person) => (
-                          <li key={`invite-${person.accountId}`} className="flex items-center justify-between gap-2 text-xs">
-                            <span className="min-w-0 truncate text-zinc-300">
-                              {person.name}
-                              <span className="text-zinc-600">{person.handle ? ` · @${person.handle}` : ''}</span>
-                            </span>
-                            {detail.canManageParticipants ? (
-                              <button
-                                type="button"
-                                disabled={personBusy}
-                                onClick={() => void changeParticipant(person.accountId, 'remove')}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-                              >
-                                Cancel
-                              </button>
-                            ) : null}
-                          </li>
+                          <PersonRow
+                            key={`invite-${person.accountId}`}
+                            name={person.name}
+                            detail={person.handle ? `@${person.handle}` : undefined}
+                            tag="Invited"
+                            tagClass="border-amber-500/30 text-amber-200"
+                            action={
+                              detail.canManageParticipants ? (
+                                <button
+                                  type="button"
+                                  disabled={personBusy}
+                                  onClick={() => void changeParticipant(person.accountId, 'remove')}
+                                  className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-200 disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              ) : null
+                            }
+                          />
                         ))}
                       </ul>
                     </div>
                   )}
 
                   {detail.canManageParticipants && (
-                    <div className="space-y-2">
-                      <label className="block text-[11px] text-zinc-500" htmlFor="ticket-add-user">
+                    <div className="space-y-2 border-t border-white/[0.06] pt-3">
+                      <label className="block text-[11px] font-medium text-zinc-500" htmlFor="ticket-add-user">
                         Add a moderator or member
                       </label>
                       <input
@@ -1287,7 +1861,7 @@ export default function TicketDetailModalShell({
                         onChange={(event) => setPersonQuery(event.target.value)}
                         placeholder="Name, @handle, or email"
                         autoComplete="off"
-                        className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        className={FIELD}
                       />
                       {personQuery.replace(/^@/, '').trim().length === 1 && (
                         <p className="text-[11px] text-zinc-500">Type at least 2 characters.</p>
@@ -1308,23 +1882,27 @@ export default function TicketDetailModalShell({
                                   type="button"
                                   disabled={personBusy || alreadyOnTicket || alreadyInvited}
                                   onClick={() => setConfirmPerson(person)}
-                                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-left text-xs hover:bg-white/5 disabled:opacity-50"
+                                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-left text-xs transition hover:bg-white/5 disabled:opacity-50"
                                 >
                                   <span className="min-w-0">
-                                    <span className="block truncate text-white">{person.name}</span>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="truncate text-white">{person.name}</span>
+                                      <span
+                                        className={`shrink-0 rounded-full border px-1.5 py-px text-[9px] uppercase tracking-wide ${
+                                          person.kind === 'staff' ? 'border-violet-500/30 text-violet-200' : 'border-white/15 text-zinc-400'
+                                        }`}
+                                      >
+                                        {person.role}
+                                      </span>
+                                    </span>
                                     <span className="block truncate text-zinc-500">
                                       {person.handle || 'No handle'}
                                       {person.email ? ` · ${person.email}` : ''}
                                     </span>
                                   </span>
-                                  <span className="inline-flex shrink-0 flex-col items-end gap-1 text-zinc-300">
-                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${person.kind === 'staff' ? 'border-violet-400/40 text-violet-200' : 'border-white/15 text-zinc-400'}`}>
-                                      {person.role}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <UserPlus className="h-3.5 w-3.5" />
-                                      {alreadyOnTicket ? 'On ticket' : alreadyInvited ? 'Invited' : 'Add'}
-                                    </span>
+                                  <span className="inline-flex shrink-0 items-center gap-1 text-zinc-300">
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                    {alreadyOnTicket ? 'On ticket' : alreadyInvited ? 'Invited' : 'Add'}
                                   </span>
                                 </button>
                               </li>
@@ -1335,389 +1913,80 @@ export default function TicketDetailModalShell({
                       {!searchingPeople && personQuery.replace(/^@/, '').trim().length >= 2 && personResults.length === 0 && (
                         <p className="text-[11px] text-zinc-500">No matching moderators or members.</p>
                       )}
+                      <p className="text-[11px] text-zinc-600">The requester and the handler always stay on the ticket.</p>
                     </div>
                   )}
-                </section>
-
-                {detail.payments && (
-                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Payments</p>
-                    <p className="text-[11px] text-zinc-500">Provider payments and credit movements for this account.</p>
-                    {detail.payments.payments.length === 0 && detail.payments.credits.length === 0 && (detail.payments.cashouts || []).length === 0 && (
-                      <p className="text-xs text-zinc-500">No payment records yet.</p>
-                    )}
-                    {(detail.payments.cashouts || []).map((cashout) => (
-                      <div key={cashout.id} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
-                        <p className="text-white">Withdrawal {cashout.status} · {cashout.credits} credits</p>
-                        <p className="text-zinc-500">
-                          {cashout.channel || 'Payout'}
-                          {cashout.accountLast4 ? ` · ••••${cashout.accountLast4}` : ''}
-                          {cashout.failureCode ? ` · ${cashout.failureCode}` : ''}
-                          {' · '}{formatDateTime(cashout.createdAt)}
-                        </p>
-                      </div>
-                    ))}
-                    {detail.payments.payments.map((payment) => (
-                      <div key={payment.id} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
-                        <p className="text-white">{payment.status} · {payment.currency} {payment.amount}</p>
-                        <p className="text-zinc-500">{payment.type || 'Payment'} · {payment.credits} credits · {formatDateTime(payment.createdAt)}</p>
-                      </div>
-                    ))}
-                    {detail.payments.credits.map((credit) => (
-                      <div key={credit.id} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
-                        <p className="text-white">{credit.type} · {credit.amount} credits</p>
-                        <p className="text-zinc-500">{credit.status} · {formatDateTime(credit.createdAt)}</p>
-                      </div>
-                    ))}
-                  </section>
-                )}
+                </SidebarSection>
 
                 {detail.canAdjustCredits && (
-                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Credit change</p>
+                  <SidebarSection title="Credit change">
                     <p className="text-[11px] text-zinc-500">Admin and Support only. The note is stored on this ticket.</p>
                     <input
                       value={creditAmount}
                       onChange={(event) => setCreditAmount(event.target.value)}
-                      placeholder="Amount, use minus to deduct"
-                      className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
+                      inputMode="numeric"
+                      placeholder="Amount (use minus to deduct)"
+                      className={FIELD}
                     />
                     <textarea
                       value={creditNote}
                       onChange={(event) => setCreditNote(event.target.value)}
                       rows={2}
-                      placeholder="Why this payment change is being made"
-                      className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
+                      placeholder="Why this change is being made"
+                      className={`${FIELD} resize-none`}
                     />
                     <button
                       type="button"
-                      disabled={saving}
+                      disabled={saving || !creditAmount.trim()}
                       onClick={() => void applyCreditChange()}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white"
+                      className={`${BTN.neutral} w-full`}
                     >
                       Record on ticket
                     </button>
-                  </section>
+                  </SidebarSection>
                 )}
 
-                {(detail.timeline || []).length > 0 && (
-                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Audit</p>
-                    {detail.timeline!.slice(0, 12).map((entry) => (
-                      <div key={entry.id} className="text-xs">
-                        <p className="text-zinc-200">{entry.summary}</p>
-                        <p className="text-zinc-600">
-                          {entry.kind === 'account' ? 'Account' : 'Ticket'} · {entry.actorName || 'Staff'}
-                          {entry.actorRole ? ` · ${entry.actorRole}` : ''} · {formatDateTime(entry.createdAt)}
+                {allowEscalate && (
+                  <SidebarSection title="Move ticket">
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Current type</p>
+                      <p className="mt-0.5 text-sm text-white">{currentType || '—'}</p>
+                      {typeMeta?.description ? (
+                        <p className="mt-0.5 text-[11px] text-zinc-500">{typeMeta.description}</p>
+                      ) : null}
+                      {typeMeta?.subgroup || typeMeta?.group ? (
+                        <p className="mt-0.5 text-[11px] text-zinc-500">
+                          {[typeMeta?.group, typeMeta?.subgroup].filter(Boolean).join(' · ')}
                         </p>
-                      </div>
-                    ))}
-                  </section>
-                )}
-
-                {ticketTypeOf(detail.ticket) === 'Appeal an account penalty' && (
-                  <section className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-4">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-200/80">Appeal decision</p>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                        Accepting ends the penalty in 24 hours. Denying closes this ticket and lets them appeal again in 12 months. Deny permanently closes it and blocks every future appeal.
-                      </p>
+                      ) : null}
                     </div>
-                    {detail.appealDecision ? (
-                      <p className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white">
-                        {detail.appealDecision === 'accepted'
-                          ? 'Accepted. The penalty ends 24 hours after this decision, and the ticket is closed.'
-                          : detail.appealDecision === 'denied_permanent'
-                            ? 'Denied permanently. This account cannot submit another appeal.'
-                            : 'Denied. They can submit another appeal in 12 months.'}
-                      </p>
-                    ) : appealChoice ? (
-                      <div className="space-y-2">
-                        <p className="text-sm text-zinc-200">
-                          {appealChoice === 'accept'
-                            ? 'Accept this appeal, end the penalty in 24 hours, and close the ticket?'
-                            : appealChoice === 'deny_permanent'
-                              ? 'Deny this appeal permanently and close the ticket? They will not be able to appeal again.'
-                              : 'Deny this appeal and close the ticket? They can appeal again in 12 months.'}
-                        </p>
-                        <div className="flex gap-2">
+                    {canEscalate ? (
+                      <>
+                        <p className="text-[11px] text-zinc-500">Moving a ticket unassigns the current handler.</p>
+                        {allowEscalateToAdmin && (
                           <button
                             type="button"
-                            disabled={decidingAppeal}
-                            onClick={() => void decideAppeal()}
-                            className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                            disabled={saving}
+                            onClick={() => setConfirmEscalateAdmin(true)}
+                            className={`${BTN.admin} w-full`}
                           >
-                            {decidingAppeal ? 'Saving…' : 'Confirm'}
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            Escalate to Admin
                           </button>
-                          <button
-                            type="button"
-                            disabled={decidingAppeal}
-                            onClick={() => setAppealChoice(null)}
-                            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-200"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setAppealChoice('accept')}
-                          className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-left text-xs font-medium text-emerald-100"
-                        >
-                          Accept appeal
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAppealChoice('deny')}
-                          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-xs font-medium text-amber-100"
-                        >
-                          Deny appeal
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAppealChoice('deny_permanent')}
-                          className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-left text-xs font-medium text-rose-100"
-                        >
-                          Deny permanently
-                        </button>
-                      </div>
-                    )}
-                  </section>
-                )}
-
-                <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket fields</p>
-                  <div className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
-                    <p className="text-[11px] text-zinc-500">Current Type</p>
-                    <p className="mt-0.5 text-sm font-medium text-white">{currentType || '—'}</p>
-                    {typeMeta?.description && (
-                      <p className="mt-1 text-[11px] text-zinc-600">{typeMeta.description}</p>
-                    )}
-                    <p className="mt-1.5 text-[11px] text-zinc-600">
-                      {typeMeta?.subgroup ? `${typeMeta.group} · ${typeMeta.subgroup}. ` : ''}
-                      Any moderator can move this ticket to another group below.
-                    </p>
-                  </div>
-                  {(detail.formValues || []).length > 0 && (
-                    <div className="space-y-2">
-                      {(detail.formValues || []).map((answer) => (
-                        <div key={answer.key} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
-                          <p className="text-[11px] text-zinc-500">{answer.label}</p>
-                          <p className="mt-0.5 text-sm text-white">{answer.value}</p>
-                          {answer.id ? <p className="mt-0.5 break-all text-[11px] text-zinc-600">{answer.id}</p> : null}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {contextEntries.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Submitted with</p>
-                      {contextEntries.map(([label, value]) => (
-                        <div key={label} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
-                          <p className="text-[11px] text-zinc-500">{label}</p>
-                          <p className="mt-0.5 break-all text-sm text-white">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <Field label="Status" hint={t.status === 'Closed' ? 'This ticket is closed. A transcript is saved when it closes.' : undefined}>
-                    {t.status !== 'Closed' ? (
-                      <CloseTimer
-                        closesAt={detail.scheduledCloseAt || detail.autoClosesAt}
-                        scheduled={Boolean(detail.scheduledCloseAt)}
-                      />
-                    ) : null}
-                    {t.status !== 'Closed' ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          disabled={schedulingClose}
-                          onClick={openSchedule}
-                          className="w-fit rounded-lg border border-amber-400/40 px-2.5 py-1.5 text-xs text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
-                        >
-                          {detail.scheduledCloseAt ? 'Change close time' : 'Schedule close'}
-                        </button>
-                        {detail.scheduledCloseAt ? (
-                          <button
-                            type="button"
-                            disabled={schedulingClose}
-                            onClick={() => void scheduleClose(true)}
-                            className="w-fit rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50"
-                          >
-                            {schedulingClose ? 'Cancelling…' : 'Cancel scheduled close'}
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {statusControl === 'buttons' ? (
-                      <div
-                        className="flex flex-wrap gap-1.5"
-                        role="group"
-                        aria-label="Ticket status"
-                      >
-                        {statusOptions.map((s) => {
-                          const active =
-                            status.toLowerCase().replace(/_/g, ' ') ===
-                            s.toLowerCase().replace(/_/g, ' ');
-                          return (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => setStatus(s)}
-                              aria-pressed={active}
-                              className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${statusButtonClass(s, active)}`}
-                            >
-                              {s}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        className={selectCls}
-                      >
-                        {statusOptions.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </Field>
-                  <Field label="Priority">
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className={selectCls}>
-                      {priorityOptions.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Assignee">
-                    <select
-                      value={assigneeId}
-                      onChange={(e) => setAssigneeId(e.target.value)}
-                      disabled={assigneeLocked}
-                      className={`${selectCls} disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                      <option value="">Unassigned</option>
-                      {detail.assignableStaff
-                        .filter((s) => {
-                          if (!myStaffId) return true;
-                          const isMe =
-                            String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
-                          // Keep current handler visible while locked; otherwise use Assign myself.
-                          return !isMe || (assigneeLocked && alreadyAssignedToMe);
-                        })
-                        .map((s) => (
-                          <option key={s.staffId} value={s.staffId}>
-                            {s.name} ({s.role})
-                            {myStaffId &&
-                            String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                              ? ' (you)'
-                              : ''}
-                          </option>
-                        ))}
-                    </select>
-                    {ticketClosed && (
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        This ticket is closed. Open it again before anyone can claim it.
-                      </p>
-                    )}
-                    {assigneeLocked && !ticketClosed && (
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Handler is locked. The assigned moderator must release the case before it can
-                        be claimed by someone else.
-                      </p>
-                    )}
-                    {!assigneeLocked && ticketAssigneeId && (perms?.canAssignOthers || isAdmin) && (
-                      <p className="mt-1 text-[11px] text-violet-300/80">
-                        Admin override: you can reassign this ticket without a release.
-                      </p>
-                    )}
-                  </Field>
-                  {canAssignMyself && (
-                    <button
-                      type="button"
-                      onClick={() => void assignMyself()}
-                      disabled={saving}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2.5 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
-                    >
-                      <Hand className="h-4 w-4" />
-                      Assign myself
-                    </button>
-                  )}
-                  {canRelease && (
-                    <button
-                      type="button"
-                      onClick={() => void releaseCase()}
-                      disabled={saving}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
-                    >
-                      Release case
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void saveChanges()}
-                    disabled={saving}
-                    className={`mt-1 w-full rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${tone.btn}`}
-                  >
-                    Save changes
-                  </button>
-                </section>
-
-                {allowEscalate && canEscalate && (
-                  <section className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
-                    <div>
-                      <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Move to another group</p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                        Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler.
-                      </p>
-                    </div>
-                    {allowEscalateToAdmin && (
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => setConfirmEscalateAdmin(true)}
-                        className={`${HANDLER_ACTION_BTN} ${ADMIN_ESCALATE_BTN} w-full justify-center`}
-                      >
-                        <ShieldAlert className={HANDLER_ACTION_ICON} />
-                        Escalate to Admin
-                      </button>
-                    )}
-                    <div className={allowEscalateToAdmin ? 'border-t border-white/5 pt-3' : undefined}>
-                      <p className="mb-2 text-[11px] font-medium text-zinc-500">Moderator group</p>
-                      <div className="space-y-3">
-                        <Field label="Moderator Queue">
-                          <select
-                            value={escalateRole}
-                            onChange={(e) => onEscalateRoleChange(e.target.value)}
-                            className={`${selectCls} border-amber-500/25 text-amber-100`}
-                          >
+                        )}
+                        <div>
+                          <FieldLabel>Moderator queue</FieldLabel>
+                          <select value={escalateRole} onChange={(e) => onEscalateRoleChange(e.target.value)} className={FIELD}>
                             {escalateRoles.map((r) => (
                               <option key={r} value={r}>
                                 {r}
                               </option>
                             ))}
                           </select>
-                        </Field>
-                        <Field
-                          label="Type"
-                          hint={
-                            escalateTypeMeta?.description ||
-                            `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`
-                          }
-                        >
-                          <select
-                            value={escalateType}
-                            onChange={(e) => setEscalateType(e.target.value)}
-                            className={`${selectCls} border-amber-500/25 text-amber-100`}
-                          >
+                        </div>
+                        <div>
+                          <FieldLabel>Type</FieldLabel>
+                          <select value={escalateType} onChange={(e) => setEscalateType(e.target.value)} className={FIELD}>
                             {TICKET_TYPE_GROUPS.flatMap((group) => {
                               const buckets = group.subgroups?.length
                                 ? group.subgroups.map((sub) => ({
@@ -1742,229 +2011,38 @@ export default function TicketDetailModalShell({
                                 .filter(Boolean);
                             })}
                           </select>
-                        </Field>
+                          <p className="mt-1.5 text-[11px] text-zinc-600">
+                            {escalateTypeMeta?.description ||
+                              `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`}
+                          </p>
+                        </div>
                         <button
                           type="button"
                           onClick={() => setConfirmEscalate(true)}
                           disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
-                          className="w-full rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                          className={`${BTN.warn} w-full`}
                         >
-                          Move to this group
+                          Move to this queue
                         </button>
-                      </div>
-                    </div>
-                  </section>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-zinc-500">Only the handler, a moderator, or an admin can move this ticket.</p>
+                    )}
+                  </SidebarSection>
                 )}
-                {allowEscalate && !canEscalate && (
-                  <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                    <p className="text-[10px] font-semibold tracking-wide text-zinc-500">Escalate</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                      Sign in as a moderator or admin to move this ticket.
-                    </p>
-                  </section>
-                )}
+              </div>
+
+              <div className="shrink-0 border-t border-white/10 bg-[#0f1016] p-3">
+                <button
+                  type="button"
+                  onClick={() => void saveChanges()}
+                  disabled={saving || !ticketDirty}
+                  className={`${BTN_BASE} w-full border-transparent py-2.5 text-sm text-white ${tone.btn}`}
+                >
+                  {saving ? 'Saving…' : ticketDirty ? 'Save changes' : 'No unsaved changes'}
+                </button>
               </div>
             </aside>
-
-            {/* RIGHT — conversation */}
-            <section className="flex min-h-0 flex-col bg-[#0a0b0f]">
-              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <MessageSquare className={`h-4 w-4 ${tone.text}`} />
-                    Conversation
-                  </p>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-zinc-400">
-                    {detail.messages.length} message{detail.messages.length === 1 ? '' : 's'}
-                  </span>
-                  {t.waitingForResponse && (
-                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
-                      Awaiting Reply
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {t.lastMessageAt && (
-                    <p className="text-[11px] text-zinc-600">Last {formatDateTime(t.lastMessageAt)}</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowTranscript(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-white/5"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    Transcript
-                  </button>
-                </div>
-              </div>
-
-              <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-                {detail.chatAvailable === false && (
-                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-                    MongoDB is not connected — chats unavailable until MONGODB_URI is set. Status updates still work.
-                  </p>
-                )}
-                {detail.messages.length === 0 && detail.chatAvailable !== false && (
-                  <div className="flex h-full min-h-40 flex-col items-center justify-center text-center">
-                    <MessageSquare className="mb-2 h-8 w-8 text-zinc-700" />
-                    <p className="text-sm text-zinc-500">No messages yet</p>
-                    <p className="mt-1 text-xs text-zinc-600">Start the thread with a reply below.</p>
-                  </div>
-                )}
-                {detail.messages.map((m) => (
-                  String(m.authorType).toLowerCase() === 'system' ? (
-                    <p key={m.id} className="py-1 text-center text-[11px] text-zinc-500">
-                      {m.body}
-                      <span className="ml-2 text-zinc-600">{formatDateTime(m.createdAt)}</span>
-                    </p>
-                  ) : (
-                    <MessageBubble
-                      key={m.id}
-                      message={m}
-                      accentSoft={tone.soft}
-                      own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
-                      busy={saving}
-                      replyQuote={quoteFor(m.replyToId)}
-                      onReply={canReply ? () => setReplyTarget(m) : undefined}
-                      onJumpToReply={jumpToMessage}
-                      onDelete={() => removeMessage(m.id)}
-                      onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
-                    />
-                  )
-                ))}
-                <div ref={threadEndRef} />
-              </div>
-
-              <div className="shrink-0 border-t border-white/10 bg-[#0f1016] p-4">
-                {!canReply ? (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                    <p className="text-sm text-zinc-200">
-                      {ticketClosed
-                        ? 'This ticket is closed. Open it again before replying.'
-                        : ticketAssigneeId
-                        ? 'Only the assigned staff member can reply on this ticket.'
-                        : 'Claim this ticket before replying. No one is assigned yet.'}
-                    </p>
-                    {canAssignMyself && (
-                      <button
-                        type="button"
-                        onClick={() => void assignMyself()}
-                        disabled={saving}
-                        className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
-                      >
-                        <Hand className="h-4 w-4" />
-                        Assign myself
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                <>
-                {(() => {
-                  const thread = (detail.messages || []).filter(
-                    (message) =>
-                      !message.isInternal &&
-                      !message.isUnsent &&
-                      String(message.authorType).toLowerCase() !== 'system'
-                  );
-                  const showGuides = thread.length <= 1 && (detail.articles || []).length > 0;
-                  if (!showGuides) return null;
-                  return (
-                    <div className="mb-3 rounded-xl border border-sky-400/40 bg-sky-500/10 p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Reply guides</p>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                        {detail.articles!.slice(0, 3).map((article) => (
-                          <button
-                            key={article.id}
-                            type="button"
-                            onClick={() => setReply(article.body)}
-                            className="rounded-lg border border-sky-300/30 bg-sky-400/10 px-3 py-2 text-left text-xs text-sky-50 hover:bg-sky-400/20"
-                          >
-                            <span className="font-semibold text-white">{article.title}</span>
-                            <span className="mt-1 line-clamp-3 block text-sky-100/80">{article.body}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {replyTarget && (
-                  <div className="mb-2 flex items-start gap-2 rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2">
-                    <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">
-                        Replying to {replyTarget.authorName}
-                      </p>
-                      <p className="truncate text-xs text-sky-50">{replyTarget.body || 'Attachment'}</p>
-                    </div>
-                    <button type="button" onClick={() => setReplyTarget(null)} aria-label="Cancel reply" className="text-sky-100">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-                <textarea
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  rows={3}
-                  placeholder="Write a reply or internal note…"
-                  disabled={detail.chatAvailable === false}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-[#14151c] px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25 disabled:opacity-50"
-                />
-                {screenshots.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {screenshots.map((file) => (
-                      <span key={file.key} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-[11px] text-zinc-300">
-                        {file.name}
-                        <button type="button" onClick={() => setScreenshots((current) => current.filter((item) => item.key !== file.key))} aria-label="Remove screenshot">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-xs text-zinc-400">
-                    <input
-                      type="checkbox"
-                      checked={internalNote}
-                      onChange={(e) => setInternalNote(e.target.checked)}
-                      disabled={detail.chatAvailable === false}
-                    />
-                    Internal Note (hidden from requester)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <label
-                      title="Attach a file"
-                      className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 text-zinc-300 hover:bg-white/5"
-                    >
-                      <Paperclip className="h-4 w-4" />
-                      <span className="sr-only">Attach a file</span>
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        className="hidden"
-                        disabled={detail.chatAvailable === false || screenshots.length >= 4}
-                        onChange={(event) => {
-                          void uploadScreenshots(event.target.files);
-                          event.target.value = '';
-                        }}
-                      />
-                    </label>
-                  <button
-                    type="button"
-                    onClick={() => void sendReply()}
-                    disabled={saving || (!reply.trim() && screenshots.length === 0) || detail.chatAvailable === false}
-                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${tone.btn}`}
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    {internalNote ? 'Add Note' : 'Send Reply'}
-                  </button>
-                  </div>
-                </div>
-                </>
-                )}
-              </div>
-            </section>
           </div>
         ) : (
           <p className="py-16 text-center text-zinc-500">Ticket not found.</p>
@@ -1974,57 +2052,36 @@ export default function TicketDetailModalShell({
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-4">
             <div className="flex max-h-[85%] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#14151c] shadow-2xl">
               <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket transcript</p>
-                  <h3 className="mt-1 text-lg font-semibold text-white">{t.number}</h3>
-                  <p className="mt-1 text-sm text-zinc-400">{t.subject}</p>
-                  {detail.savedTranscript?.createdAt ? (
-                    <p className="mt-1 text-[11px] text-emerald-200/80">Saved transcript · {formatDateTime(detail.savedTranscript.createdAt)}</p>
-                  ) : (
-                    <p className="mt-1 text-[11px] text-zinc-500">Generate transcript to save a copy you can read, copy, or download here.</p>
-                  )}
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Transcript · {t.number}</p>
+                  <h3 className="mt-1 truncate text-base font-semibold text-white">{t.subject}</h3>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    {detail?.savedTranscript?.createdAt
+                      ? `Saved ${formatDateTime(detail.savedTranscript.createdAt)}`
+                      : 'Not saved yet. Generate one to keep a copy you can download.'}
+                  </p>
                 </div>
-                <button type="button" onClick={() => setShowTranscript(false)} aria-label="Close transcript" className="text-zinc-400 hover:text-white">
+                <button
+                  type="button"
+                  onClick={() => setShowTranscript(false)}
+                  aria-label="Close transcript"
+                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-violet-400/30 bg-violet-500/10 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200">Staff</p>
-                    {involvedGroups.staff.length === 0 ? (
-                      <p className="mt-2 text-xs text-zinc-400">None</p>
-                    ) : (
-                      <ul className="mt-2 space-y-1">
-                        {involvedGroups.staff.map((person) => (
-                          <li key={`transcript-staff-${person.accountId}`} className="text-sm text-white">
-                            {person.name}
-                            <span className="text-xs text-violet-100/70">{person.handle ? ` @${person.handle}` : ''}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Users</p>
-                    {involvedGroups.users.length === 0 ? (
-                      <p className="mt-2 text-xs text-zinc-400">None</p>
-                    ) : (
-                      <ul className="mt-2 space-y-1">
-                        {involvedGroups.users.map((person) => (
-                          <li key={`transcript-user-${person.accountId}`} className="text-sm text-white">
-                            {person.name}
-                            <span className="text-xs text-sky-100/70">
-                              {person.handle ? ` @${person.handle}` : ''}
-                              {person.isRequester ? ' · opened ticket' : ''}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-                {detail.savedTranscript?.text ? (
+                <dl className="grid gap-2 sm:grid-cols-2">
+                  <Fact
+                    label="Staff"
+                    value={involvedGroups.staff.length ? involvedGroups.staff.map((person) => person.name).join(', ') : 'None'}
+                  />
+                  <Fact
+                    label="Members"
+                    value={involvedGroups.users.length ? involvedGroups.users.map((person) => person.name).join(', ') : 'None'}
+                  />
+                </dl>
+                {detail?.savedTranscript?.text ? (
                   /^\s*<!doctype html/i.test(detail.savedTranscript.text) || /^\s*<html/i.test(detail.savedTranscript.text) ? (
                     <iframe
                       title="Saved ticket transcript"
@@ -2033,33 +2090,32 @@ export default function TicketDetailModalShell({
                       className="h-[28rem] w-full rounded-xl border border-white/10 bg-white"
                     />
                   ) : (
-                    <pre className="whitespace-pre-wrap rounded-xl border border-white/10 bg-[#0f1016] p-4 text-sm leading-relaxed text-zinc-100">{detail.savedTranscript.text}</pre>
+                    <pre className="whitespace-pre-wrap rounded-xl border border-white/10 bg-[#0f1016] p-4 text-sm leading-relaxed text-zinc-100">
+                      {detail.savedTranscript.text}
+                    </pre>
                   )
                 ) : (
-                <div className="space-y-3">
-                  {detail.messages.filter((message) => !message.isUnsent).map((message) => (
-                    <div key={`transcript-${message.id}`} className="border-b border-white/5 pb-3">
-                      <p className="text-[11px] text-zinc-500">
-                        {formatDateTime(message.createdAt)} · {message.authorName}
-                        {message.isInternal ? ' · internal note' : ''}
-                        {String(message.authorType).toLowerCase() === 'system' ? ' · system' : ''}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-100">{message.body || (message.attachments?.length ? 'Attachment' : '')}</p>
-                    </div>
-                  ))}
-                </div>
+                  <ol className="divide-y divide-white/[0.06]">
+                    {(detail?.messages || []).filter((message) => !message.isUnsent).map((message) => (
+                      <li key={`transcript-${message.id}`} className="py-2.5">
+                        <p className="text-[11px] text-zinc-500">
+                          {formatDateTime(message.createdAt)} · <span className="text-zinc-300">{message.authorName}</span>
+                          {message.isInternal ? ' · internal note' : ''}
+                          {String(message.authorType).toLowerCase() === 'system' ? ' · system' : ''}
+                        </p>
+                        <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-100">
+                          {message.body || (message.attachments?.length ? 'Attachment' : '')}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
                 )}
               </div>
-              <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
-                <button
-                  type="button"
-                  disabled={savingTranscript}
-                  onClick={() => void saveTranscript()}
-                  className="rounded-xl border border-sky-400/40 px-3 py-2 text-sm text-sky-100 hover:bg-sky-500/10 disabled:opacity-50"
-                >
-                  {savingTranscript ? 'Saving…' : 'Generate transcript'}
+              <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 px-5 py-3">
+                <button type="button" disabled={savingTranscript} onClick={() => void saveTranscript()} className={BTN.claim}>
+                  {savingTranscript ? 'Saving…' : detail?.savedTranscript?.text ? 'Regenerate' : 'Generate transcript'}
                 </button>
-                {detail.savedTranscript?.text ? (
+                {detail?.savedTranscript?.text ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -2071,7 +2127,7 @@ export default function TicketDetailModalShell({
                       link.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                    className={BTN.neutral}
                   >
                     Download
                   </button>
@@ -2079,7 +2135,7 @@ export default function TicketDetailModalShell({
                 <button
                   type="button"
                   onClick={() => {
-                    if (detail.savedTranscript?.text) {
+                    if (detail?.savedTranscript?.text) {
                       void navigator.clipboard.writeText(detail.savedTranscript.text).then(
                         () => showSuccessToast('Transcript copied'),
                         () => showErrorToast('Could not copy the transcript')
@@ -2097,7 +2153,7 @@ export default function TicketDetailModalShell({
                       ...(involvedGroups.users.length ? involvedGroups.users.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}${person.isRequester ? ' (opened ticket)' : ''}`) : ['- None']),
                       '',
                       'Transcript',
-                      ...detail.messages.filter((message) => !message.isUnsent).map((message) => {
+                      ...(detail?.messages || []).filter((message) => !message.isUnsent).map((message) => {
                         const label = message.isInternal ? 'internal note' : String(message.authorType).toLowerCase() === 'system' ? 'system' : 'message';
                         return `[${formatDateTime(message.createdAt)}] ${message.authorName} (${label}): ${message.body || (message.attachments?.length ? 'Attachment' : '')}`;
                       }),
@@ -2107,14 +2163,14 @@ export default function TicketDetailModalShell({
                       () => showErrorToast('Could not copy the transcript')
                     );
                   }}
-                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                  className={BTN.neutral}
                 >
                   Copy
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowTranscript(false)}
-                  className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-black"
+                  className={`${BTN_BASE} border-transparent bg-white text-black hover:bg-zinc-200`}
                 >
                   Close
                 </button>
@@ -2124,198 +2180,146 @@ export default function TicketDetailModalShell({
         )}
 
         {confirmRemove && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#14151c] p-5 shadow-2xl">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-red-200/80">Confirm remove</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Remove {confirmRemove.name}?</h3>
-              <p className="mt-2 text-sm text-zinc-400">They will leave this ticket and will not be able to open it.</p>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  disabled={personBusy}
-                  onClick={() => setConfirmRemove(null)}
-                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={personBusy}
-                  onClick={() => void changeParticipant(confirmRemove.accountId, 'remove')}
-                  className="rounded-xl bg-red-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                >
-                  {personBusy ? 'Removing…' : 'Remove'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {confirmSchedule && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#14151c] p-5 shadow-2xl">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Schedule close</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">When should this ticket close?</h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                The chat and the people on this ticket are notified now. They are notified again when it closes, and a transcript is saved.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {[
-                  ['1', '1 hour'],
-                  ['6', '6 hours'],
-                  ['24', '1 day'],
-                  ['72', '3 days'],
-                  ['168', '7 days'],
-                  ['custom', 'Custom'],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setScheduleChoice(value)}
-                    className={`rounded-lg border px-2.5 py-1.5 text-xs ${
-                      scheduleChoice === value
-                        ? 'border-amber-400/50 bg-amber-500/15 text-amber-100'
-                        : 'border-white/10 text-zinc-300 hover:bg-white/5'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {scheduleChoice === 'custom' ? (
-                <input
-                  type="datetime-local"
-                  value={customCloseAt}
-                  onChange={(event) => setCustomCloseAt(event.target.value)}
-                  className="mt-3 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
-                />
-              ) : null}
-              <p className="mt-3 text-xs text-zinc-400">
-                Closes {formatDateTime(chosenCloseIso())}
-              </p>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  disabled={schedulingClose}
-                  onClick={() => setConfirmSchedule(false)}
-                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={schedulingClose}
-                  onClick={() => void scheduleClose(false)}
-                  className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
-                >
-                  {schedulingClose ? 'Scheduling…' : 'Set close time'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            title={`Remove ${confirmRemove.name}?`}
+            description="They will leave this ticket and won’t be able to open it again."
+            confirmLabel="Remove"
+            busyLabel="Removing…"
+            busy={personBusy}
+            confirmClassName={BTN.danger}
+            onCancel={() => setConfirmRemove(null)}
+            onConfirm={() => void changeParticipant(confirmRemove.accountId, 'remove')}
+          />
         )}
 
         {confirmPerson && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-sky-500/30 bg-[#14151c] p-5 shadow-2xl">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/80">Confirm add</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Add {confirmPerson.name}?</h3>
-              <p className="mt-2 text-sm text-zinc-400">
+          <ConfirmDialog
+            title={`Add ${confirmPerson.name}?`}
+            description={
+              <>
                 {confirmPerson.kind === 'staff'
-                  ? 'Staff are added immediately and can open this ticket.'
-                  : 'They get a notification and have to accept before they can open this ticket.'}
-              </p>
-              <p className="mt-2 text-xs text-zinc-500">
-                {confirmPerson.handle || 'No handle'}
-                {confirmPerson.email ? ` · ${confirmPerson.email}` : ''}
-                {` · ${confirmPerson.role}`}
-              </p>
-              <div className="mt-4 flex justify-end gap-2">
+                  ? 'Staff are added right away and can open this ticket.'
+                  : 'They get a notification and must accept before they can open this ticket.'}
+                <span className="mt-1.5 block text-zinc-500">
+                  {confirmPerson.handle || 'No handle'}
+                  {confirmPerson.email ? ` · ${confirmPerson.email}` : ''} · {confirmPerson.role}
+                </span>
+              </>
+            }
+            confirmLabel={confirmPerson.kind === 'staff' ? 'Add staff' : 'Send invite'}
+            busyLabel="Adding…"
+            busy={personBusy}
+            confirmClassName={BTN.claim}
+            onCancel={() => setConfirmPerson(null)}
+            onConfirm={() => void changeParticipant(confirmPerson.accountId, 'add')}
+          />
+        )}
+
+        {confirmSchedule && (
+          <ConfirmDialog
+            title="When should this ticket close?"
+            description="Everyone on the ticket is notified now and again when it closes. A transcript is saved on close."
+            confirmLabel="Set close time"
+            busyLabel="Scheduling…"
+            busy={schedulingClose}
+            confirmClassName={BTN.warn}
+            onCancel={() => setConfirmSchedule(false)}
+            onConfirm={() => void scheduleClose(false)}
+          >
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                ['1', '1 hour'],
+                ['6', '6 hours'],
+                ['24', '1 day'],
+                ['72', '3 days'],
+                ['168', '7 days'],
+                ['custom', 'Custom'],
+              ].map(([value, label]) => (
                 <button
+                  key={value}
                   type="button"
-                  disabled={personBusy}
-                  onClick={() => setConfirmPerson(null)}
-                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                  onClick={() => setScheduleChoice(value)}
+                  aria-pressed={scheduleChoice === value}
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs transition ${
+                    scheduleChoice === value
+                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                      : 'border-white/10 text-zinc-300 hover:bg-white/5'
+                  }`}
                 >
-                  Cancel
+                  {label}
                 </button>
-                <button
-                  type="button"
-                  disabled={personBusy}
-                  onClick={() => void changeParticipant(confirmPerson.accountId, 'add')}
-                  className="rounded-xl bg-sky-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                >
-                  {personBusy ? 'Adding…' : confirmPerson.kind === 'staff' ? 'Add staff' : 'Send invite'}
-                </button>
-              </div>
+              ))}
             </div>
-          </div>
+            {scheduleChoice === 'custom' ? (
+              <input
+                type="datetime-local"
+                value={customCloseAt}
+                onChange={(event) => setCustomCloseAt(event.target.value)}
+                className={FIELD}
+              />
+            ) : null}
+            <p className="text-xs text-zinc-400">Closes {formatDateTime(chosenCloseIso())}</p>
+          </ConfirmDialog>
         )}
 
         {confirmEscalate && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#14151c] p-5 shadow-2xl">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Confirm Escalate</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Escalate this ticket?</h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                Queue: <span className="text-amber-100">{escalateRole}</span>
-                <br />
-                Type: <span className="text-amber-100">{escalateType}</span>
-              </p>
-              <p className="mt-2 text-xs text-zinc-500">
-                You will be unassigned. Type changes only through escalate.
-                {isAdminQueue(escalateRole) ? ' Support Moderators will no longer see this ticket.' : ''}
-              </p>
-              <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmEscalate(false)}
-                  disabled={saving}
-                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void escalateTo(escalateRole, escalateType, isAdminQueue(escalateRole))}
-                  disabled={saving}
-                  className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
-                >
-                  {saving ? 'Escalating…' : 'Confirm Escalate'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            title="Move this ticket?"
+            description={
+              <>
+                Queue: <span className="text-zinc-200">{escalateRole}</span> · Type:{' '}
+                <span className="text-zinc-200">{escalateType}</span>
+                <span className="mt-1.5 block text-zinc-500">
+                  You will be unassigned.
+                  {isAdminQueue(escalateRole) ? ' Support Moderators will no longer see this ticket.' : ''}
+                </span>
+              </>
+            }
+            confirmLabel="Move ticket"
+            busyLabel="Moving…"
+            busy={saving}
+            confirmClassName={BTN.warn}
+            onCancel={() => setConfirmEscalate(false)}
+            onConfirm={() => void escalateTo(escalateRole, escalateType, isAdminQueue(escalateRole))}
+          />
         )}
 
         {confirmEscalateAdmin && allowEscalateToAdmin && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-violet-500/30 bg-[#14151c] p-5 shadow-2xl">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Escalate to Admin</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Hand this ticket to Admin?</h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                The ticket becomes an Admin ticket and you are unassigned. Support Moderators will no longer see it.
-              </p>
-              <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmEscalateAdmin(false)}
-                  disabled={saving}
-                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void escalateToAdmin()}
-                  disabled={saving}
-                  className="rounded-xl border border-violet-500/40 bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
-                >
-                  {saving ? 'Escalating…' : 'Confirm escalate to Admin'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            title="Hand this ticket to Admin?"
+            description="It becomes an Admin ticket and you are unassigned. Support Moderators will no longer see it."
+            confirmLabel="Escalate to Admin"
+            busyLabel="Escalating…"
+            busy={saving}
+            confirmClassName={BTN.admin}
+            onCancel={() => setConfirmEscalateAdmin(false)}
+            onConfirm={() => void escalateToAdmin()}
+          />
+        )}
+
+        {appealChoice && (
+          <ConfirmDialog
+            title={
+              appealChoice === 'accept'
+                ? 'Accept this appeal?'
+                : appealChoice === 'deny_permanent'
+                  ? 'Deny this appeal permanently?'
+                  : 'Deny this appeal?'
+            }
+            description={
+              appealChoice === 'accept'
+                ? 'The penalty ends in 24 hours and the ticket closes.'
+                : appealChoice === 'deny_permanent'
+                  ? 'The ticket closes and this account can never appeal again.'
+                  : 'The ticket closes. They can appeal again in 12 months.'
+            }
+            confirmLabel="Confirm"
+            busyLabel="Saving…"
+            busy={decidingAppeal}
+            confirmClassName={appealChoice === 'accept' ? BTN.success : appealChoice === 'deny' ? BTN.warn : BTN.danger}
+            onCancel={() => setAppealChoice(null)}
+            onConfirm={() => void decideAppeal()}
+          />
         )}
       </div>
     </div>

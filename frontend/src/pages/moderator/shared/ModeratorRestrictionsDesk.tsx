@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Ban, Loader2, RefreshCw, Search, ShieldAlert, Activity, AlertTriangle, Clock, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
 import { SanctionScheduleFields, type SanctionTiming } from '@/pages/admin/userTeam/components/SanctionSchedule';
@@ -434,8 +435,11 @@ export default function ModeratorRestrictionsDesk({
   variant?: UserTeamVariant;
 }) {
   const caps = useMemo(() => getUserTeamCapabilities(variant), [variant]);
-  const [data, setData] = useState<RestrictionsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<RestrictionsPayload | null>(() => {
+    const cached = peekStaffGet(endpointBase);
+    return cached ? cached.data?.data || { violations: [], restrictedAccounts: [], recentActivity: [] } : null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -458,11 +462,10 @@ export default function ModeratorRestrictionsDesk({
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(endpointBase);
+      const res = await staffGet(endpointBase);
       setData(res.data?.data || { violations: [], restrictedAccounts: [], recentActivity: [] });
     } catch (err: unknown) {
       setError(apiMessage(err, 'Failed to load restrictions'));
-      setData(null);
     } finally {
       setLoading(false);
     }

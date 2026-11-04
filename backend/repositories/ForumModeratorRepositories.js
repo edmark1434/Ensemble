@@ -60,17 +60,18 @@ async function getModeratorForumGroups() {
   const db = forumDb();
   if (!db) return { available: false, groups: [] };
 
-  const groups = await db
-    .collection('forum_groups')
-    .find({})
-    .sort({ created_at: -1 })
-    .limit(100)
-    .toArray();
-
-  const discussionCounts = await db
-    .collection('forum_discussions')
-    .aggregate([{ $group: { _id: '$forum_group_id', count: { $sum: 1 } } }])
-    .toArray();
+  const [groups, discussionCounts] = await Promise.all([
+    db
+      .collection('forum_groups')
+      .find({})
+      .sort({ created_at: -1 })
+      .limit(100)
+      .toArray(),
+    db
+      .collection('forum_discussions')
+      .aggregate([{ $group: { _id: '$forum_group_id', count: { $sum: 1 } } }])
+      .toArray(),
+  ]);
   const countMap = {};
   for (const c of discussionCounts) countMap[String(c._id)] = c.count;
 
@@ -311,8 +312,41 @@ async function getForumContentStats() {
           },
         ])
         .toArray(),
-      db.collection('forum_groups').find({}).sort({ created_at: -1 }).limit(6).toArray(),
-      db.collection('forum_discussions').find({}).sort({ updated_at: -1, created_at: -1 }).limit(8).toArray(),
+      db
+        .collection('forum_groups')
+        .aggregate([
+          { $sort: { created_at: -1 } },
+          { $limit: 6 },
+          {
+            $project: {
+              group_name: 1,
+              status: 1,
+              created_at: 1,
+              memberCount: { $size: { $cond: [{ $isArray: '$members' }, '$members', []] } },
+            },
+          },
+        ])
+        .toArray(),
+      db
+        .collection('forum_discussions')
+        .aggregate([
+          { $sort: { updated_at: -1, created_at: -1 } },
+          { $limit: 8 },
+          {
+            $project: {
+              title: 1,
+              forum_group_id: 1,
+              status: 1,
+              deleted_at: 1,
+              is_locked: 1,
+              is_sticky: 1,
+              updated_at: 1,
+              created_at: 1,
+              commentCount: { $size: { $cond: [{ $isArray: '$comments' }, '$comments', []] } },
+            },
+          },
+        ])
+        .toArray(),
     ]);
 
   const d = discussionDocs[0] || { total: 0, removed: 0, locked: 0, sticky: 0, comments: 0 };
@@ -343,7 +377,7 @@ async function getForumContentStats() {
       id: String(g._id),
       name: g.group_name || 'Untitled group',
       status: g.status || 'active',
-      memberCount: Array.isArray(g.members) ? g.members.length : 0,
+      memberCount: g.memberCount || 0,
       createdAt: g.created_at || null,
     })),
     recentDiscussions: recentDiscussions.map((x) => ({
@@ -351,7 +385,7 @@ async function getForumContentStats() {
       title: x.title || 'Untitled discussion',
       groupId: x.forum_group_id ? String(x.forum_group_id) : null,
       groupName: x.forum_group_id ? groupNameMap[String(x.forum_group_id)] || null : null,
-      commentCount: Array.isArray(x.comments) ? x.comments.length : 0,
+      commentCount: x.commentCount || 0,
       status: x.deleted_at || x.status === 'removed' ? 'removed' : x.status || 'active',
       isLocked: Boolean(x.is_locked),
       isSticky: Boolean(x.is_sticky),
@@ -362,7 +396,8 @@ async function getForumContentStats() {
 
 async function getForumReportBreakdown(targetTypesIn) {
   const params = [targetTypesIn];
-  const result = await pool.query(
+  const [result, typeResult] = await Promise.all([
+  pool.query(
     `
     SELECT
       COUNT(*)::int AS total,
@@ -383,8 +418,8 @@ async function getForumReportBreakdown(targetTypesIn) {
       AND LOWER(COALESCE(target_type, type)) = ANY($1)
     `,
     params
-  );
-  const typeResult = await pool.query(
+  ),
+  pool.query(
     `
     SELECT LOWER(COALESCE(target_type, type)) AS target_type, COUNT(*)::int AS count
     FROM reports
@@ -394,7 +429,8 @@ async function getForumReportBreakdown(targetTypesIn) {
     ORDER BY count DESC
     `,
     params
-  );
+  ),
+  ]);
   const c = result.rows[0] || {};
   return {
     counts: {

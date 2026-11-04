@@ -33,8 +33,10 @@ const getAdminFeedbacks = async (req, res) => {
       ORDER BY pr.updated_at DESC
     `;
 
-    const feedbacksRes = await db.query(feedbacksQuery);
-    const ratingsRes = await db.query(ratingsQuery);
+    const [feedbacksRes, ratingsRes] = await Promise.all([
+      db.query(feedbacksQuery),
+      db.query(ratingsQuery),
+    ]);
 
     return res.status(200).json({
       success: true,

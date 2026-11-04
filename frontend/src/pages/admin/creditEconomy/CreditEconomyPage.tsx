@@ -12,8 +12,8 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import AuditTab from './AuditTab';
 import WalletDetailModal from './WalletDetailModal';
 import WalletsTab from './WalletsTab';
@@ -24,6 +24,8 @@ import type {
 } from './creditEconomyTypes';
 
 type TabId = 'overview' | 'wallets' | 'audit';
+
+const ECONOMY_URL = '/api/admin/economy-overview';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
@@ -54,19 +56,22 @@ export default function CreditEconomyPage() {
   const validTabs: TabId[] = ['overview', 'wallets', 'audit'];
   const initialTab = paramTab && validTabs.includes(paramTab) ? paramTab : 'overview';
 
-  const [data, setData] = useState<EconomyOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<EconomyOverview | null>(() => {
+    const cached = peekStaffGet(ECONOMY_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState<EconomyWallet | null>(null);
 
   const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !peekStaffGet(ECONOMY_URL)) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/economy-overview');
+      const res = await staffGet(ECONOMY_URL);
       if (res.data?.success) setData(res.data.data);
       else setError('Failed to load economy data');
     } catch {
@@ -102,7 +107,7 @@ export default function CreditEconomyPage() {
     );
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">

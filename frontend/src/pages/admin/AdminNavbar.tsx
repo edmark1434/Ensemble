@@ -17,6 +17,7 @@ import type { ComponentType } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import LogoutButton from '@/pages/moderator/shared/LogoutButton';
 import { ADMIN_LOGIN_PATH } from '@/lib/staffRoutes';
+import { prefetchStaffRoute } from '@/lib/staffPrefetch';
 
 type NavItem = {
   label: string;
@@ -75,6 +76,8 @@ const AdminNavbar = () => {
             key={label}
             to={to}
             end={to === '/admin/dashboard'}
+            onPointerEnter={() => prefetchStaffRoute(to)}
+            onFocus={() => prefetchStaffRoute(to)}
             className={({ isActive }) => {
               const active = itemIsActive(to, location.pathname, location.search, isActive);
               return `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${

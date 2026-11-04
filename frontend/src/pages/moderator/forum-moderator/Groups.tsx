@@ -1,20 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, Loader2, Play, Users } from "lucide-react";
 import api from "@/lib/axios";
+import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { ForumGroupModeration } from "../shared/moderatorTypes";
 
+const GROUPS_URL = "/api/moderator/forum/groups";
+
 export default function ForumGroups() {
-  const [groups, setGroups] = useState<ForumGroupModeration[]>([]);
-  const [available, setAvailable] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState<ForumGroupModeration[]>(() => {
+    const cached = peekStaffGet(GROUPS_URL);
+    return cached?.data?.success ? cached.data.data.groups : [];
+  });
+  const [available, setAvailable] = useState(() => {
+    const cached = peekStaffGet(GROUPS_URL);
+    return cached?.data?.success ? cached.data.data.available : true;
+  });
+  const [loading, setLoading] = useState(() => !peekStaffGet(GROUPS_URL)?.data?.success);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const hasData = useRef(!loading);
 
   const load = async () => {
-    setLoading(true);
+    if (!hasData.current) setLoading(true);
     try {
-      const res = await api.get("/api/moderator/forum/groups");
+      const res = await staffGet(GROUPS_URL);
       if (res.data?.success) {
+        hasData.current = true;
         setAvailable(res.data.data.available);
         setGroups(res.data.data.groups);
       }

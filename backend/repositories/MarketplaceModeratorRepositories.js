@@ -269,7 +269,8 @@ async function getMarketplaceReports({ status } = {}) {
 
 async function getMarketplaceReportBreakdown(targetTypesIn) {
   const params = [targetTypesIn];
-  const result = await pool.query(
+  const [result, typeResult] = await Promise.all([
+  pool.query(
     `
     SELECT
       COUNT(*)::int AS total,
@@ -290,8 +291,8 @@ async function getMarketplaceReportBreakdown(targetTypesIn) {
       AND LOWER(COALESCE(target_type, type)) = ANY($1)
     `,
     params
-  );
-  const typeResult = await pool.query(
+  ),
+  pool.query(
     `
     SELECT LOWER(COALESCE(target_type, type)) AS target_type, COUNT(*)::int AS count
     FROM reports
@@ -301,7 +302,8 @@ async function getMarketplaceReportBreakdown(targetTypesIn) {
     ORDER BY count DESC
     `,
     params
-  );
+  ),
+  ]);
   const c = result.rows[0] || {};
   return {
     counts: {

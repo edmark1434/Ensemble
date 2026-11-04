@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Check, Edit, X, Save, AlertTriangle } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showSuccessToast, showErrorToast } from '@/components/utility/toast';
 
 interface Feature {
@@ -19,10 +20,17 @@ interface Plan {
   features: Feature[];
 }
 
+const PLANS_URL = '/api/admin/subscriptions/plans';
+
+function cachedPlans(): { plans: Plan[]; allFeatures: Feature[] } | null {
+  const cached = peekStaffGet(PLANS_URL);
+  return cached?.data?.success ? cached.data.data : null;
+}
+
 export function AdminSubscriptionsTab() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [allFeatures, setAllFeatures] = useState<Feature[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [plans, setPlans] = useState<Plan[]>(() => cachedPlans()?.plans ?? []);
+  const [allFeatures, setAllFeatures] = useState<Feature[]>(() => cachedPlans()?.allFeatures ?? []);
+  const [loading, setLoading] = useState(() => !cachedPlans());
 
   // Edit Modal State
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -41,7 +49,7 @@ export function AdminSubscriptionsTab() {
 
   const fetchPlans = async () => {
     try {
-      const res = await api.get('/api/admin/subscriptions/plans');
+      const res = await staffGet(PLANS_URL);
       if (res.data?.success) {
         setPlans(res.data.data.plans);
         setAllFeatures(res.data.data.allFeatures);

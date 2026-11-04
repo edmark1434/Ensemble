@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { UserOverviewModal } from './components/AccountModals';
 import type { PlatformUserAccount } from './userTeamTypes';
 
@@ -18,12 +19,21 @@ type SurveyResponse = {
   created_at: string;
 };
 
+const SURVEY_URL = '/api/admin/survey-responses';
+
+function cachedResponses(): SurveyResponse[] | null {
+  const cached = peekStaffGet(SURVEY_URL);
+  return cached?.data?.success ? cached.data.data : null;
+}
+
 export default function SurveyResponsesTab({ refreshToken }: { refreshToken: number }) {
-  const [responses, setResponses] = useState<SurveyResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [responses, setResponses] = useState<SurveyResponse[]>(() => cachedResponses() || []);
+  const [loading, setLoading] = useState(() => !cachedResponses());
   const [error, setError] = useState('');
   
-  const [selectedQuestion, setSelectedQuestion] = useState<string>('');
+  const [selectedQuestion, setSelectedQuestion] = useState<string>(
+    () => cachedResponses()?.[0]?.question_text || ''
+  );
   const [searchQuery, setSearchQuery] = useState('');
   
   // For clicking a row to show the user profile
@@ -34,10 +44,10 @@ export default function SurveyResponsesTab({ refreshToken }: { refreshToken: num
   useEffect(() => {
     let mounted = true;
     const fetchResponses = async () => {
-      setLoading(true);
+      if (!peekStaffGet(SURVEY_URL)) setLoading(true);
       setError('');
       try {
-        const res = await api.get('/api/admin/survey-responses');
+        const res = await staffGet(SURVEY_URL);
         if (mounted && res.data.success) {
           const data = res.data.data;
           setResponses(data);
@@ -123,7 +133,7 @@ export default function SurveyResponsesTab({ refreshToken }: { refreshToken: num
     return <p className="py-12 text-center text-sm text-zinc-500">Loading survey responses…</p>;
   }
 
-  if (error) {
+  if (error && !responses.length) {
     return <p className="py-12 text-center text-sm text-rose-500">{error}</p>;
   }
 

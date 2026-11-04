@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import TableFilterBar, { uniqueOptions } from './components/TableFilterBar';
@@ -29,6 +29,8 @@ import {
   getUserTeamCapabilities,
   type UserTeamCapabilities,
 } from './userTeamCapabilities';
+
+const USERS_URL = '/api/admin/users-management';
 
 const ALL_BULK_ITEMS: BulkActionItem[] = [
   { id: 'restore', label: 'Restore to Active', section: 'Status' },
@@ -132,8 +134,11 @@ export default function UsersTab({
     () => ALL_BULK_ITEMS.filter((item) => capabilities.bulkActions.has(item.id)),
     [capabilities]
   );
-  const [data, setData] = useState<UserManagementData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<UserManagementData | null>(() => {
+    const cached = peekStaffGet(USERS_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [modal, setModal] = useState<ModalKind>(null);
   const [selected, setSelected] = useState<PlatformUserAccount | null>(null);
@@ -146,10 +151,10 @@ export default function UsersTab({
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = async () => {
-    setLoading(true);
+    if (!data) setLoading(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/users-management');
+      const res = await staffGet(USERS_URL);
       if (res.data?.success) {
         setData(res.data.data);
         onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
@@ -254,7 +259,7 @@ export default function UsersTab({
   const closeModal = () => setModal(null);
 
   const refreshAfterChange = async () => {
-    const res = await api.get('/api/admin/users-management');
+    const res = await staffGet(USERS_URL);
     if (res.data?.success) {
       setData(res.data.data);
       onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
@@ -322,7 +327,7 @@ export default function UsersTab({
     return <p className="py-12 text-center text-sm text-zinc-500">Loading platform users…</p>;
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <p className="py-12 text-center text-sm text-red-300">
         {error}{' '}

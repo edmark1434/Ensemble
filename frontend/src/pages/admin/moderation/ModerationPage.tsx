@@ -30,6 +30,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
 import type {
@@ -48,6 +49,7 @@ import VideoManagementSection from './VideoManagementSection';
 import ForumManagementSection from './ForumManagementSection';
 
 const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
+const MODERATION_OVERVIEW_URL = '/api/admin/moderation-overview';
 
 function disputeToModerationCase(d: Dispute): ModerationCase {
   return {
@@ -163,8 +165,11 @@ export default function ModerationPage() {
     legacyQueue ||
     (paramQueue && CASE_QUEUES.includes(paramQueue) ? paramQueue : 'mine');
 
-  const [data, setData] = useState<ModerationOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ModerationOverview | null>(() => {
+    const cached = peekStaffGet(MODERATION_OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
   const [caseQueue, setCaseQueue] = useState<CaseQueue>(initialCaseQueue);
@@ -173,11 +178,11 @@ export default function ModerationPage() {
   const [selectedActivity, setSelectedActivity] = useState<ModerationActivity | null>(null);
 
   const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !peekStaffGet(MODERATION_OVERVIEW_URL)) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/moderation-overview');
+      const res = await staffGet(MODERATION_OVERVIEW_URL);
       if (res.data?.success) setData(res.data.data);
       else setError('Failed to load moderation data');
     } catch {
@@ -246,7 +251,7 @@ export default function ModerationPage() {
     );
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
