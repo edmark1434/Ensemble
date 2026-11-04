@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, Coins, UserCheck, Layers, Sparkles, X, ArrowRight } from 'lucide-react';
 import { useTourStore, getActiveTourSteps, type UserPlatformRole } from '@/lib/tour_state';
@@ -10,6 +10,11 @@ interface TourWelcomeModalProps {
   onStart: (role: UserPlatformRole) => void;
 }
 
+const T = {
+  fontDisplay: "'Plus Jakarta Sans', sans-serif",
+  fontMono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+} as const;
+
 const WALKTHROUGH_VIDEOS = [
   '/gallery_images/new/vids/vid_asset.mp4',
   '/gallery_images/new/vids/vid_captioning.mp4',
@@ -19,7 +24,37 @@ const WALKTHROUGH_VIDEOS = [
   '/gallery_images/new/vids/vid_videochat.mp4',
 ];
 
+const Crosshair: React.FC<{
+  top?: boolean;
+  bottom?: boolean;
+  left?: boolean;
+  right?: boolean;
+  color: string;
+}> = ({ top, bottom, left, right, color }) => (
+  <span
+    aria-hidden="true"
+    style={{
+      position: 'absolute',
+      top: top ? -6 : undefined,
+      bottom: bottom ? -6 : undefined,
+      left: left ? -5 : undefined,
+      right: right ? -5 : undefined,
+      fontFamily: T.fontMono,
+      fontSize: 12,
+      lineHeight: 1,
+      color,
+      pointerEvents: 'none',
+      userSelect: 'none',
+      zIndex: 5,
+    }}
+  >
+    +
+  </span>
+);
+
 export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onClose, onStart }) => {
+  const theme = useGlobalState((state) => state.theme);
+  const isDark = theme === 'dark';
   const user = useGlobalState((state) => state.user);
   const userRole = useTourStore((state) => state.userRole);
   const setRole = useTourStore((state) => state.setRole);
@@ -28,6 +63,36 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
     const idx = Math.floor(Math.random() * WALKTHROUGH_VIDEOS.length);
     return WALKTHROUGH_VIDEOS[idx];
   });
+
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const softClickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const initAudio = () => {
+    if (!hoverAudioRef.current) {
+      hoverAudioRef.current = new Audio('/sounds/minimalhover.mp3');
+      hoverAudioRef.current.volume = 0.15;
+    }
+    if (!softClickAudioRef.current) {
+      softClickAudioRef.current = new Audio('/sounds/softclick.mp3');
+      softClickAudioRef.current.volume = 0.35;
+    }
+  };
+
+  const playHover = useCallback(() => {
+    initAudio();
+    if (hoverAudioRef.current) {
+      hoverAudioRef.current.currentTime = 0;
+      hoverAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  const playClick = useCallback(() => {
+    initAudio();
+    if (softClickAudioRef.current) {
+      softClickAudioRef.current.currentTime = 0;
+      softClickAudioRef.current.play().catch(() => {});
+    }
+  }, []);
 
   const handleVideoEnded = () => {
     setCurrentVideo((prev) => {
@@ -46,27 +111,31 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
 
   const roleConfigs: Record<
     'all' | 'freelancer' | 'client' | 'creator',
-    { label: string; icon: typeof Globe; desc: string; time: string }
+    { code: string; label: string; icon: typeof Globe; desc: string; time: string }
   > = {
     all: {
+      code: '01',
       label: 'Explore All',
       icon: Globe,
       desc: 'Experience the complete ecosystem: cloud video editor, job market, gigs, and creator asset library.',
       time: '~3 mins',
     },
     freelancer: {
+      code: '02',
       label: 'Freelancer',
       icon: Coins,
       desc: 'Focus on finding editing jobs, submitting milestone proposals, and earning with platform escrow protection.',
       time: '~2 mins',
     },
     client: {
+      code: '03',
       label: 'Client',
       icon: UserCheck,
       desc: 'Focus on posting video editing jobs, ordering vetted gig packages, and managing project milestones.',
       time: '~2 mins',
     },
     creator: {
+      code: '04',
       label: 'Asset Creator',
       icon: Layers,
       desc: 'Upload video assets & templates to the marketplace, get moderator approval, and earn credits from downloads.',
@@ -78,32 +147,130 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
   const currentStepCount = getActiveTourSteps(activeRole).length;
   const PERSPECTIVES: Array<'all' | 'freelancer' | 'client' | 'creator'> = ['all', 'freelancer', 'client', 'creator'];
 
+  const panelBg = isDark ? 'rgba(18, 18, 20, 0.94)' : 'rgba(255, 255, 255, 0.96)';
+  const subSurfaceBg = isDark ? 'rgba(24, 24, 28, 0.78)' : 'rgba(248, 250, 252, 0.88)';
+  const borderLine = isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.14)';
+  const textPrimary = isDark ? '#ffffff' : '#09090b';
+  const textSecondary = isDark ? '#d4d4d8' : '#27272a';
+  const textMeta = isDark ? '#a1a1aa' : '#52525b';
+  const crosshairColor = isDark ? 'rgba(255, 255, 255, 0.48)' : 'rgba(0, 0, 0, 0.45)';
+  const accentColor = '#3b82f6';
+
+  const HIGHLIGHTS = [
+    'Profile & Verification',
+    'Job Market & Proposals',
+    'Gigs & Video Services',
+    'Projects & Cloud Editor',
+    'Deliveries & Escrow',
+    'Credits, Inbox & Ask AI',
+  ];
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4">
+      <div
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5"
+        style={{ fontFamily: T.fontDisplay }}
+      >
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={() => {
+            playClick();
+            onClose();
+          }}
         />
 
-        {/* Modal Window */}
+        {/* Architectural Blueprint Modal Window */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 15 }}
+          initial={{ scale: 0.97, opacity: 0, y: 12 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 15 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#121214] text-gray-900 dark:text-zinc-100 shadow-2xl"
+          exit={{ scale: 0.97, opacity: 0, y: 12 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
           onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: 680,
+            border: `1px solid ${borderLine}`,
+            background: panelBg,
+            color: textPrimary,
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            boxShadow: isDark
+              ? '0 28px 80px rgba(0, 0, 0, 0.75)'
+              : '0 28px 80px rgba(0, 0, 0, 0.22)',
+          }}
         >
-          {/* Top highlight bar */}
-          <div className="h-1.5 w-full bg-amber-500" />
+          <Crosshair top left color={crosshairColor} />
+          <Crosshair top right color={crosshairColor} />
+          <Crosshair bottom left color={crosshairColor} />
+          <Crosshair bottom right color={crosshairColor} />
 
-          {/* Video Header Banner */}
-          <div className="relative h-44 sm:h-52 w-full overflow-hidden bg-black select-none">
+          {/* Top Blueprint Navigation Strip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 20px',
+              borderBottom: `1px solid ${borderLine}`,
+              gap: 12,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: textMeta,
+              }}
+            >
+              ENSEMBLE // ONBOARDING WALKTHROUGH
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                playClick();
+                onClose();
+              }}
+              onMouseEnter={playHover}
+              title="Skip for now"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'transparent',
+                border: `1px solid ${borderLine}`,
+                padding: '4px 8px',
+                color: textSecondary,
+                fontFamily: T.fontMono,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              <span>CLOSE</span>
+              <X size={12} />
+            </button>
+          </div>
+
+          {/* Architectural Hero Header Banner with Looping Feature Video */}
+          <div
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              padding: 'clamp(22px, 3.8vw, 34px) clamp(20px, 3.5vw, 32px)',
+              borderBottom: `1px solid ${borderLine}`,
+            }}
+          >
             <video
               key={currentVideo}
               src={currentVideo}
@@ -113,137 +280,396 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
               onEnded={handleVideoEnded}
               onError={handleVideoEnded}
               poster="/gallery_images/new/gallery/collab.png"
-              className="h-full w-full object-cover transition-opacity duration-700 opacity-90"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                opacity: isDark ? 0.85 : 0.82,
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: isDark
+                  ? 'linear-gradient(90deg, rgba(18, 18, 20, 0.90) 0%, rgba(18, 18, 20, 0.62) 52%, rgba(18, 18, 20, 0.16) 100%)'
+                  : 'linear-gradient(90deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.65) 52%, rgba(255, 255, 255, 0.14) 100%)',
+                pointerEvents: 'none',
+                zIndex: 1,
+              }}
             />
 
-            {/* Neutral Gradient Overlays */}
-            <div className="absolute inset-0 bg-gradient-to-t from-white via-white/50 to-black/40 dark:from-[#121214] dark:via-[#121214]/70 dark:to-black/60" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-transparent pointer-events-none" />
-
-            {/* Top Bar inside Banner */}
-            <div className="absolute top-3 left-4 right-4 flex items-center justify-between z-10">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-md px-3 py-1 text-[11px] font-semibold text-amber-300 border border-amber-500/30 shadow-md">
-                <Sparkles className="h-3 w-3 text-amber-400" /> Platform Walkthrough
-              </span>
-              <button
-                onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-zinc-300 hover:bg-black/80 hover:text-white transition-colors border border-white/10"
-                title="Skip for now"
+            <div style={{ position: 'relative', zIndex: 2 }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '4px 10px',
+                  border: `1px solid ${accentColor}`,
+                  background: isDark ? 'rgba(18, 18, 20, 0.75)' : 'rgba(255, 255, 255, 0.85)',
+                  color: accentColor,
+                  fontFamily: T.fontMono,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  marginBottom: 12,
+                }}
               >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+                <Sparkles size={12} />
+                <span>PLATFORM WALKTHROUGH • INTERACTIVE GUIDE</span>
+              </div>
 
-            {/* Welcome Title & Intro at bottom of Banner */}
-            <div className="absolute bottom-3 left-5 right-5 z-10">
-              <h2 className="text-xl sm:text-2xl font-black tracking-tight text-gray-900 dark:text-white drop-shadow-sm">
+              <h2
+                style={{
+                  fontSize: 'clamp(22px, 3.2vw, 30px)',
+                  fontWeight: 800,
+                  letterSpacing: '-0.03em',
+                  lineHeight: 1.12,
+                  margin: '0 0 8px',
+                  color: textPrimary,
+                }}
+              >
                 Welcome to Ensemble, {displayName}!
               </h2>
-              <p className="text-xs text-gray-600 dark:text-zinc-300 mt-0.5 drop-shadow-sm">
+              <p
+                style={{
+                  color: textSecondary,
+                  fontSize: 13.5,
+                  fontWeight: 500,
+                  lineHeight: 1.55,
+                  maxWidth: 520,
+                  margin: 0,
+                }}
+              >
                 Interactive guide to your workspace, tools, and escrow features.
               </p>
             </div>
           </div>
 
-          {/* Modal Body */}
-          <div className="p-5 sm:p-6 space-y-4">
-            {/* Perspective Track Selector */}
-            <div className="rounded-xl border border-gray-200 dark:border-zinc-800/80 bg-gray-50/70 dark:bg-zinc-900/60 p-3.5 sm:p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
-                  Your Platform Perspective
-                </span>
-                <span className="text-[11px] text-gray-500 dark:text-zinc-400">
-                  Switch anytime
-                </span>
-              </div>
+          {/* Perspective Track Selector Header Strip */}
+          <div
+            style={{
+              padding: '12px clamp(18px, 3vw, 28px)',
+              background: subSurfaceBg,
+              borderBottom: `1px solid ${borderLine}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: textPrimary,
+              }}
+            >
+              YOUR PLATFORM PERSPECTIVE
+            </span>
+            <span
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: textMeta,
+              }}
+            >
+              SWITCH ANYTIME
+            </span>
+          </div>
 
-              {/* 4 Cards: [Explore All], [Freelancer], [Client], [Asset Creator] */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {PERSPECTIVES.map((r) => {
-                  const cfg = roleConfigs[r];
-                  const Icon = cfg.icon;
-                  const isSelected = activeRole === r;
-                  const count = getActiveTourSteps(r).length;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setRole(r)}
-                      className={`flex flex-col items-center justify-center rounded-xl p-2.5 sm:p-3 text-center transition-all border ${
-                        isSelected
-                          ? 'border-amber-500/90 dark:border-amber-400/90 bg-amber-500/15 text-amber-950 dark:text-amber-200 shadow-sm font-semibold'
-                          : 'border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-zinc-700 dark:hover:text-zinc-200'
-                      }`}
+          {/* 4 Perspective Track Cells */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              borderBottom: `1px solid ${borderLine}`,
+            }}
+            className="max-sm:!grid-cols-2"
+          >
+            {PERSPECTIVES.map((r, idx) => {
+              const cfg = roleConfigs[r];
+              const Icon = cfg.icon;
+              const isSelected = activeRole === r;
+              const count = getActiveTourSteps(r).length;
+
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    playClick();
+                    setRole(r);
+                  }}
+                  onMouseEnter={playHover}
+                  style={{
+                    appearance: 'none',
+                    border: 'none',
+                    borderRight: idx < PERSPECTIVES.length - 1 ? `1px solid ${borderLine}` : 'none',
+                    borderBottom: isSelected ? `2px solid ${accentColor}` : 'none',
+                    background: isSelected
+                      ? isDark
+                        ? 'rgba(59, 130, 246, 0.10)'
+                        : 'rgba(59, 130, 246, 0.06)'
+                      : 'transparent',
+                    padding: '16px 14px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    transition: 'background 0.18s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: T.fontMono,
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        letterSpacing: '0.14em',
+                        color: isSelected ? accentColor : textMeta,
+                      }}
                     >
-                      <Icon className={`h-4 w-4 mb-1.5 ${isSelected ? 'text-amber-500 dark:text-amber-400' : 'text-gray-400 dark:text-zinc-500'}`} />
-                      <span className="text-xs leading-tight font-semibold">{cfg.label}</span>
-                      <span className="text-[10px] text-gray-400 dark:text-zinc-500 mt-1">{count} steps</span>
-                    </button>
-                  );
-                })}
-              </div>
+                      TRACK {cfg.code}
+                    </span>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        background: isSelected ? accentColor : 'transparent',
+                        border: `1px solid ${isSelected ? accentColor : borderLine}`,
+                        flexShrink: 0,
+                      }}
+                    />
+                  </div>
 
-              {/* Perspective Description */}
-              <p className="text-xs text-gray-600 dark:text-zinc-300 pt-0.5 leading-relaxed">
-                {currentConfig.desc}
-              </p>
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        fontSize: 13.5,
+                        fontWeight: 800,
+                        color: isSelected ? textPrimary : textSecondary,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Icon size={14} color={isSelected ? accentColor : textMeta} />
+                      <span>{cfg.label}</span>
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: T.fontMono,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: textMeta,
+                      }}
+                    >
+                      {count} STEPS
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-              {/* Estimated Duration Badge */}
-              <div className="pt-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/80 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
-                  <Sparkles className="h-3 w-3 text-amber-500" />
-                  {currentConfig.time} • {currentStepCount} key steps
-                </span>
-              </div>
+          {/* Selected Track Description & Duration Strip */}
+          <div
+            style={{
+              padding: '16px clamp(18px, 3vw, 28px)',
+              borderBottom: `1px solid ${borderLine}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            <p
+              style={{
+                fontSize: 13,
+                color: textSecondary,
+                lineHeight: 1.55,
+                margin: 0,
+                flex: '1 1 320px',
+              }}
+            >
+              {currentConfig.desc}
+            </p>
+
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 10px',
+                border: `1px solid ${borderLine}`,
+                background: subSurfaceBg,
+                fontFamily: T.fontMono,
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: textPrimary,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Sparkles size={12} color={accentColor} />
+              <span>
+                {currentConfig.time} • {currentStepCount} KEY STEPS
+              </span>
+            </span>
+          </div>
+
+          {/* Walkthrough Highlights Section */}
+          <div
+            style={{
+              padding: '16px clamp(18px, 3vw, 28px)',
+              borderBottom: `1px solid ${borderLine}`,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: T.fontMono,
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: textMeta,
+                marginBottom: 10,
+              }}
+            >
+              WALKTHROUGH HIGHLIGHTS:
             </div>
-
-            {/* Quick Overview Highlights */}
-            <div className="space-y-1.5 text-xs text-gray-500 dark:text-zinc-400">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
-                Walkthrough Highlights:
-              </p>
-              <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Profile & Verification
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Job Market & Proposals
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Gigs & Video Services
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Projects & Cloud Editor
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Deliveries & Escrow
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Credits, Inbox & Ask AI
-                </li>
-              </ul>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '8px 16px',
+              }}
+              className="max-sm:!grid-cols-1"
+            >
+              {HIGHLIGHTS.map((item) => (
+                <div
+                  key={item}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: textSecondary,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      background: accentColor,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
+          </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-zinc-800/80">
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-medium text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
-              >
-                Skip (I know Ensemble)
-              </button>
+          {/* Action Bar */}
+          <div
+            style={{
+              padding: '16px clamp(18px, 3vw, 28px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              background: subSurfaceBg,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                playClick();
+                onClose();
+              }}
+              onMouseEnter={playHover}
+              style={{
+                background: 'transparent',
+                border: `1px solid ${borderLine}`,
+                padding: '12px 18px',
+                fontFamily: T.fontMono,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: textSecondary,
+                cursor: 'pointer',
+              }}
+            >
+              Skip (I know Ensemble)
+            </button>
 
-              <button
-                type="button"
-                onClick={() => onStart(activeRole)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:bg-black dark:bg-zinc-100 dark:hover:bg-white dark:active:bg-zinc-200 px-5 py-2.5 text-xs font-bold text-white dark:text-zinc-900 transition-colors shadow-lg shadow-black/10"
-              >
-                Start Walkthrough
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                playClick();
+                onStart(activeRole);
+              }}
+              onMouseEnter={playHover}
+              style={{
+                background: isDark ? '#ffffff' : '#09090b',
+                color: isDark ? '#09090b' : '#ffffff',
+                border: 'none',
+                padding: '12px 22px',
+                fontFamily: T.fontMono,
+                fontSize: 11.5,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                transition: 'background 0.18s ease, color 0.18s ease',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = accentColor;
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = isDark ? '#ffffff' : '#09090b';
+                e.currentTarget.style.color = isDark ? '#09090b' : '#ffffff';
+              }}
+            >
+              <span>Start Walkthrough</span>
+              <ArrowRight size={14} />
+            </button>
           </div>
         </motion.div>
       </div>
