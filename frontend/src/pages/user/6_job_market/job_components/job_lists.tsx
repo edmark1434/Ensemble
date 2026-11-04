@@ -6,6 +6,7 @@ import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import useGlobalState from "@/lib/global_state";
 import { computeJobRankingBreakdown } from "../job_ranking";
 
@@ -216,7 +217,7 @@ const JobList: React.FC<JobListProps> = ({
                 : "flex flex-col gap-4"
             }`}
           >
-      <AnimatePresence>
+      <AnimatePresence mode="popLayout">
         {paginatedJobs.map((job, index) => {
           const isActive = activeJobId === job.id;
           const rankInfo = computeJobRankingBreakdown(job);
@@ -226,10 +227,11 @@ const JobList: React.FC<JobListProps> = ({
             return (
               <motion.div
                 key={job.id}
-                initial={{ opacity: 0, y: 8 }}
+                layout="position"
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
                 data-tour={index === 0 ? "job-card-first" : undefined}
                 onClick={() => navigate(`${baseRoute}/${job.id}`)}
                 className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
@@ -433,6 +435,7 @@ const JobList: React.FC<JobListProps> = ({
                       </div>
                     </div>
                     <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
+                    <SubscriptionIcon plan={job.clientSubscriptionPlan} />
                   </div>
 
                   <div className="flex items-center gap-1 text-gray-400 dark:text-zinc-400 text-[10px] shrink-0 ml-2">
@@ -448,10 +451,11 @@ const JobList: React.FC<JobListProps> = ({
           return (
             <motion.div
               key={job.id}
-              initial={{ opacity: 0, y: 8 }}
+              layout="position"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
               data-tour={index === 0 ? "job-card-first" : undefined}
               onClick={() => navigate(`${baseRoute}/${job.id}`)}
               className={`group flex flex-col md:flex-row gap-5 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
@@ -651,7 +655,10 @@ const JobList: React.FC<JobListProps> = ({
                       </div>
                     </div>
                     <div className="text-left leading-tight">
-                      <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{job.postedBy}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{job.postedBy}</p>
+                        <SubscriptionIcon plan={job.clientSubscriptionPlan} />
+                      </div>
                       <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                         <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                         <span>{job.ratingCount > 0 ? `${job.clientRating} (${job.ratingCount})` : "N/A"}</span>

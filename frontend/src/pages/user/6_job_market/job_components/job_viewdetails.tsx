@@ -5,6 +5,7 @@ import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import useGlobalState from "@/lib/global_state";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
@@ -637,6 +638,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
                         {selectedJob.postedBy}
                       </p>
+                      <SubscriptionIcon plan={selectedJob.clientSubscriptionPlan} />
                       <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
                         <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                         <span>{selectedJob.ratingCount > 0 ? `${selectedJob.clientRating} (${selectedJob.ratingCount})` : "N/A"}</span>

@@ -41,6 +41,7 @@ import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { JobRichText } from "../job_components/JobRichText";
@@ -1088,9 +1089,12 @@ const JobFullPage: React.FC = () => {
                     <p className="text-[10px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
                       {isTeam ? "Project Team" : "Project Client"}
                     </p>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">
-                      {job.postedBy}
-                    </p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">
+                        {job.postedBy}
+                      </p>
+                      <SubscriptionIcon plan={job.clientSubscriptionPlan} sizeClassName="w-4 h-4" />
+                    </div>
                     <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
                       <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
                       <span>{job.ratingCount > 0 ? `${job.clientRating} (${job.ratingCount})` : "N/A"}</span>
