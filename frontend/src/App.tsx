@@ -1,9 +1,10 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, type ComponentType, useEffect } from 'react'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
 import {ToastTestingWidget} from "@/components/utility/ToastTestingWidget.tsx";
 import {DevModeWidget} from "@/components/utility/DevModeWidget.tsx";
 import { GlobalLoader } from '@/components/ui/GlobalLoader';
+import ClickSpark from '@/components/ui/ClickSpark';
 import useGlobalState from '@/lib/global_state';
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -163,6 +164,17 @@ const PageUsecase = lazyPage(() => import('./pages/landing/pages/page_Usecase'))
 function App() {
   const theme = useGlobalState((state) => state.theme);
   const setTheme = useGlobalState((state) => state.setTheme);
+  const location = useLocation();
+  const pathname = location.pathname;
+  const isClickSparkDisabled =
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname === '/staff' ||
+    pathname.startsWith('/staff/') ||
+    pathname === '/moderator' ||
+    pathname.startsWith('/moderator/') ||
+    pathname.startsWith('/projects/open');
+  const sparkColor = theme === 'dark' || pathname === '/' ? '#ffffff' : '#0f172a';
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -185,6 +197,7 @@ function App() {
       <DevModeWidget />
       <AccountRestrictionHost />
       <PlatformTour />
+      <ClickSpark sparkColor={sparkColor} disabled={isClickSparkDisabled} className="min-h-screen">
       <Suspense fallback={<GlobalLoader />}>
       <Routes>
       <Route path="/admin" element={<AdminLoginPage />} />
@@ -439,6 +452,7 @@ function App() {
       </Route>
       </Routes>
       </Suspense>
+      </ClickSpark>
     </>
   )
 }
