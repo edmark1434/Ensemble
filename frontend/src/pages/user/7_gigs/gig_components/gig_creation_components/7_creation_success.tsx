@@ -5,12 +5,14 @@ interface CreationSuccessProps {
   isOpen: boolean;
   onConfirm: () => void;
   autoCloseMs?: number;
+  message?: string;
 }
 
 export const CreationSuccess: React.FC<CreationSuccessProps> = ({
   isOpen,
   onConfirm,
   autoCloseMs = 2800,
+  message = "Your service is now live in the marketplace and ready to receive orders.",
 }) => {
   useEffect(() => {
     if (!isOpen) return;
@@ -30,7 +32,7 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
       {/* Base SuccessModal with built-in confetti trigger */}
       <SuccessModal
         isOpen={isOpen}
-        message="Your service is now live in the marketplace and ready to receive orders."
+        message={message}
         onConfirm={onConfirm}
       />
     </div>

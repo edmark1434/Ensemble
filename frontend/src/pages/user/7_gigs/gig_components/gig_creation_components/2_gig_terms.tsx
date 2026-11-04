@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useTerms } from "@/hooks/useTerms";
 import { showErrorToast } from "@/components/utility/toast";
+import { getImageUrl } from "@/lib/utils";
 import type { Questionnaire } from "../../gig_datasets";
 
 interface GigTermsProps {
@@ -36,6 +37,8 @@ interface GigTermsProps {
   setSelectedTosId: (val: string) => void;
   workSampleFiles: File[];
   setWorkSampleFiles: React.Dispatch<React.SetStateAction<File[]>>;
+  galleryUrls?: string[];
+  setGalleryUrls?: React.Dispatch<React.SetStateAction<string[]>>;
   slots: number;
   setSlots: (val: number) => void;
   additionalWorkRate: number;
@@ -103,6 +106,8 @@ export const GigTerms: React.FC<GigTermsProps> = ({
   setSelectedTosId,
   workSampleFiles,
   setWorkSampleFiles,
+  galleryUrls = [],
+  setGalleryUrls,
   slots,
   setSlots,
   additionalWorkRate = 25,
@@ -811,7 +816,7 @@ export const GigTerms: React.FC<GigTermsProps> = ({
             </label>
           </div>
           <span className="text-[10px] font-mono text-gray-400 dark:text-zinc-500 font-semibold">
-            {workSampleFiles.length} of 6 files
+            {galleryUrls.length + workSampleFiles.length} of 6 files
           </span>
         </div>
 
@@ -820,7 +825,7 @@ export const GigTerms: React.FC<GigTermsProps> = ({
         </p>
 
         {/* Dropzone (shown when under limit of 6) */}
-        {workSampleFiles.length < 6 && (
+        {(galleryUrls.length + workSampleFiles.length) < 6 && (
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
@@ -854,6 +859,55 @@ export const GigTerms: React.FC<GigTermsProps> = ({
           className="hidden"
           onChange={(e) => handleFileProcess(e.target.files)}
         />
+
+        {/* Existing Saved Gallery URLs (Edit Mode) */}
+        {galleryUrls.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-1">
+            {galleryUrls.map((rawUrl, idx) => {
+              const resolvedUrl = getImageUrl(rawUrl);
+              const name = rawUrl.split("/").pop() || `Sample #${idx + 1}`;
+              return (
+                <div
+                  key={`existing-${idx}`}
+                  className="group relative aspect-square rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-2xs flex flex-col justify-between select-none"
+                >
+                  <div className="relative w-full flex-1 min-h-0 bg-zinc-100 dark:bg-zinc-850 overflow-hidden flex items-center justify-center">
+                    <img
+                      src={resolvedUrl}
+                      alt={name}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <span className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[9px] font-mono font-bold uppercase text-white shadow-xs">
+                      Saved
+                    </span>
+                    {setGalleryUrls && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setGalleryUrls((prev) => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="absolute top-1.5 right-1.5 z-20 w-6 h-6 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center transition-colors cursor-pointer shadow-md backdrop-blur-xs"
+                        title="Remove saved sample"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-2 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-zinc-900/90 text-left">
+                    <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate" title={name}>
+                      {name}
+                    </p>
+                    <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Published Sample
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Uploaded File Previews List / Grid with Square Cards */}
         {workSampleFiles.length > 0 && (
