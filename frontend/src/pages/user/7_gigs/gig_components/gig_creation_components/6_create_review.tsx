@@ -43,6 +43,7 @@ import {
   Download,
   PackagePlus,
   Percent,
+  Activity,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -111,6 +112,7 @@ interface CreateReviewProps {
   skills: string[];
   firstDraftDelivery?: string;
   workSampleFiles?: File[];
+  galleryUrls?: string[];
   tiers: GigTier[];
   addOns?: GigAddOn[];
   milestones: ServiceMilestone[];
@@ -126,9 +128,11 @@ interface CreateReviewProps {
   onSubmit: () => Promise<void> | void;
   onEditStep: (step: number) => void;
   isSubmitting?: boolean;
+  isEditMode?: boolean;
 }
 
 const EMPTY_FILES: File[] = [];
+const EMPTY_URLS: string[] = [];
 
 export const CreateReview: React.FC<CreateReviewProps> = ({
   title,
@@ -140,6 +144,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   skills,
   firstDraftDelivery = "3 Days",
   workSampleFiles = EMPTY_FILES,
+  galleryUrls = EMPTY_URLS,
   tiers,
   addOns = [],
   milestones,
@@ -155,6 +160,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   onSubmit,
   onEditStep,
   isSubmitting = false,
+  isEditMode = false,
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [agreedToFee, setAgreedToFee] = useState(false);
@@ -163,7 +169,14 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
   const user = useGlobalState((state) => state.user);
   const theme = useGlobalState((state) => state.theme);
+  const globalSubscriptionPlan = useGlobalState((state) => state.subscriptionPlan);
   const isDark = theme === "dark" || (typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+
+  const rawSubscriptionPlan =
+    globalSubscriptionPlan ||
+    user?.subscription_plan ||
+    user?.subscriptionTier ||
+    "Free";
 
   // Collapsible sections 02, 03, 04, 05 (Section 01 is permanent anchor - not collapsible)
   const [isSection2Collapsed, setIsSection2Collapsed] = useState(false); // Service Details
@@ -351,7 +364,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       ordersCount: 0,
       pendingOrdersCount: 0,
       thumbnail: thumbnailUrl || "/placeholder-gig.png",
-      gallery: workSampleFiles.map((f) => f.name),
+      gallery: [...galleryUrls, ...workSampleFiles.map((f) => f.name)],
+      addOns,
       status: "Open",
       postedBy: postingAs === "team" ? teamName : userName,
       clientAvatar: postingAs === "team" && teamAvatar ? teamAvatar : (profileAvatar || "/profile_presets/p1.png"),
@@ -362,21 +376,29 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       tiers: tiers.map((t, idx) => ({
         id: (t as any).id || (t as any).tierId || t.title || String(idx),
         name: t.title || t.tierName || (idx === 0 ? "Basic" : idx === 1 ? "Standard" : "Premium"),
+        tierName: t.tierName || (idx === 0 ? "Basic" : idx === 1 ? "Standard" : "Premium"),
+        title: t.title || "",
+        description: t.description || "",
         price: t.price,
+        daysOfDelivery: t.daysOfDelivery,
         timeline: `${t.daysOfDelivery} Days`,
         revisions: String(t.revisions),
         features: (t as any).features || [],
       })),
       milestones: milestones.map((m, idx) => ({
         id: String(m.id || idx),
+        name: m.name || `Phase ${idx + 1}`,
         title: m.name || `Phase ${idx + 1}`,
         description: m.description,
+        tasks: m.tasks || [],
         deliverables: m.tasks || [],
         timelinePercentage: m.percentage ?? 0,
       })),
       skills,
       termsOfService,
       slots: slots || 3,
+      freelancerSubscriptionPlan: rawSubscriptionPlan,
+      freelancerMerit: user?.merit_score ?? user?.merit ?? 100,
       isSaved: false,
       isOwnGig: true,
       canManageGig: true,
@@ -386,7 +408,9 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
     description,
     category,
     thumbnailUrl,
+    galleryUrls,
     workSampleFiles,
+    addOns,
     user,
     postingAs,
     teamName,
@@ -399,6 +423,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
     skills,
     termsOfService,
     slots,
+    rawSubscriptionPlan,
   ]);
 
   const ranking = useMemo(() => computeGigRankingBreakdown(previewGig), [previewGig]);
@@ -643,32 +668,44 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 shadow-sm flex-1 flex flex-col justify-between space-y-3">
                 {/* Header Badge */}
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-2.5">
-                  <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
-                    Feed Appeal Rating
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    ranking.totalScore >= 80 
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-                      : ranking.totalScore >= 60
-                      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
-                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                  }`}>
-                    {ranking.totalScore >= 80 ? "High Visibility" : ranking.totalScore >= 60 ? "Solid Listing" : "Moderate Reach"}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
+                      Feed Appeal Rating
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-zinc-400">
+                      {ranking.serviceTypeLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {ranking.subscriptionBoost > 0 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                        +{ranking.subscriptionBoost.toFixed(1)} pts ({ranking.subscriptionPlan})
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      ranking.totalScore >= 80 
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
+                        : ranking.totalScore >= 60
+                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                    }`}>
+                      {ranking.totalScore >= 80 ? "High Visibility" : ranking.totalScore >= 60 ? "Solid Listing" : "Moderate Reach"}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Score Dial */}
                 <div className="flex items-center gap-3.5 my-auto">
-                  <div className="flex flex-col items-center justify-center h-14 w-14 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 shrink-0">
-                    <span className="text-xl font-black text-gray-900 dark:text-white leading-none">
-                      {Math.round(ranking.totalScore)}
+                  <div className="flex flex-col items-center justify-center h-14 w-16 px-2 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 shrink-0">
+                    <span className="text-lg font-black text-gray-900 dark:text-white leading-none">
+                      {ranking.totalScore.toFixed(1)}
                     </span>
                     <span className="text-[9px] font-bold text-gray-400 dark:text-zinc-500 mt-0.5">/ 100</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between text-xs font-semibold mb-1">
                       <span className="text-gray-700 dark:text-zinc-300">Listing Strength</span>
-                      <span className="text-gray-900 dark:text-white font-bold">{Math.round(ranking.totalScore)}%</span>
+                      <span className="text-gray-900 dark:text-white font-bold">{ranking.totalScore.toFixed(1)}%</span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
                       <div
@@ -684,25 +721,93 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   </div>
                 </div>
 
-                {/* Compact Breakdown Grid */}
+                {/* The 3 Score Basis Categories (Origin Breakdown - Matching Job Review) */}
                 <div className="pt-2.5 border-t border-gray-200 dark:border-white/10 space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                      <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Listing Completeness</span>
-                      <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                        {Math.round(ranking.completenessScore * 100)}%
-                      </span>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 mb-1">
+                    Score Basis Breakdown
+                  </div>
+                  <div className="space-y-1.5">
+                    {/* 1. Service Package Content */}
+                    <div className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileText className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <div className="truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-gray-900 dark:text-white">Package Quality</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                              Editable
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                            Title, scope, 3 tiers, media & milestones
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="font-mono font-bold text-gray-900 dark:text-white text-xs">
+                          {ranking.contentPoints.toFixed(1)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 25 pts</span>
+                      </div>
                     </div>
-                    <div className="p-2 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5">
-                      <span className="text-[10px] text-gray-500 dark:text-zinc-400 block font-medium">Platform Trust</span>
-                      <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
-                        {ranking.bayesianRating.toFixed(1)} / 5.0
-                      </span>
+
+                    {/* 2. Creator Account Standing */}
+                    <div className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0" />
+                        <div className="truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-gray-900 dark:text-white">Account Profile</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                              Dynamic
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                            {ranking.bayesianRating.toFixed(1)}★ rating · {ranking.freelancerMerit} Merit{ranking.subscriptionBoost > 0 ? ` · ${ranking.subscriptionPlan}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="font-mono font-bold text-gray-900 dark:text-white text-xs">
+                          {(ranking.accountBasePoints + ranking.subscriptionBoost).toFixed(1)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 35 pts</span>
+                      </div>
+                    </div>
+
+                    {/* 3. Live Market & Queue Capacity */}
+                    <div className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Activity className="h-4 w-4 text-amber-500 shrink-0" />
+                        <div className="truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-gray-900 dark:text-white">Market & Queue</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                              Dynamic
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                            New launch window · {slots || 3} open queue slots
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="font-mono font-bold text-gray-900 dark:text-white text-xs">
+                          {ranking.marketPoints.toFixed(1)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-500"> / 40 pts</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Signals */}
-                  <div className="flex flex-wrap gap-1 text-[10px]">
+                  <div className="flex flex-wrap gap-1 text-[10px] pt-1">
+                    {ranking.isRisingCreator && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 border border-emerald-500/20">
+                        <TrendingUp className="h-2.5 w-2.5" />
+                        Rising Eligible
+                      </span>
+                    )}
                     <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">
                       &#10003; {tiers.length} Tiers
                     </span>
@@ -1448,18 +1553,33 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           <ArrowLeft className="h-4 w-4" /> Return to Tiers
         </button>
 
-        <button
-          type="button"
-          onClick={() => setIsCheckoutModalOpen(true)}
-          disabled={isSubmitting}
-          className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow-md shadow-blue-500/20 cursor-pointer flex items-center justify-center gap-2.5"
-        >
-          <Rocket className="h-4 w-4" />
-          <span>Proceed to Checkout</span>
-          <span className="px-2 py-0.5 rounded-md bg-blue-700/80 text-[10px] font-extrabold text-blue-100">
-            50 Credits
-          </span>
-        </button>
+        {isEditMode ? (
+          <button
+            type="button"
+            onClick={() => onSubmit()}
+            disabled={isSubmitting}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold text-xs transition shadow-md shadow-blue-500/20 cursor-pointer flex items-center justify-center gap-2.5"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            <span>{isSubmitting ? "Saving Changes..." : "Save Service Changes"}</span>
+            <span className="px-2 py-0.5 rounded-md bg-blue-700/80 text-[10px] font-extrabold text-blue-100">
+              Free Update
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsCheckoutModalOpen(true)}
+            disabled={isSubmitting}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow-md shadow-blue-500/20 cursor-pointer flex items-center justify-center gap-2.5"
+          >
+            <Rocket className="h-4 w-4" />
+            <span>Proceed to Checkout</span>
+            <span className="px-2 py-0.5 rounded-md bg-blue-700/80 text-[10px] font-extrabold text-blue-100">
+              50 Credits
+            </span>
+          </button>
+        )}
       </div>
 
       {/* =========================================================================
