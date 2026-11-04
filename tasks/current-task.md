@@ -1,22 +1,13 @@
-# Current task: Faster, smoother staff and admin consoles
+# Current Task: Gig Edit Page Overhaul, Add-ons Persistence & 13-Factor Service Algorithm
 
 ## Objective
+1. **Fix Missing Add-ons on Gig Edit (`/gigs/edit/:id`)**: Load `addOns` on the edit page, pass them into `CreateTiers` and `CreateReview`, and persist updated add-ons in `updateGigController` and `updateGigRepository` (`PUT /api/gigs/:id`).
+2. **Wide Layout & Stepper Navigation on Gig Edit**: Match the `max-w-6xl 2xl:max-w-7xl` full-width layout and 6-step wizard of `gig_create_page.tsx` with clickable stepper navigation across all 6 steps (`maxReachedStep={6}`, `hasReachedReview={true}`, `onStepClick`).
+3. **Free Service Updates (0 Credits)**: Ensure editing an existing service does not require re-paying the 50 Credits creation fee (`isEditMode` in `0_gig_identity.tsx` and `6_create_review.tsx`).
+4. **Apply 13-Factor Discovery Algorithm to Gigs (`gig_ranking.ts`, Gig Cards/Details, and `/gigs/info`)**: Align the Gig ranking breakdown and `/gigs/info` table view with `/jobs/info` (`Trust (35)`, `Freshness (25)`, `Package & Media (25)`, `Open Slots (15)`, and `Subscription Boost (+0..9)`).
 
-Reduce load time and navigation stalls across the admin console, every moderator desk, and the staff portal without changing what the pages show or what staff can do.
-
-## Scope
-
-- Frontend: preload staff console page chunks so sidebar navigation does not freeze, keep the sidebar visible while a page chunk loads, and stop serial request chains on staff pages.
-- Backend: remove serial database round-trips from per-request middleware, cache configuration sections briefly in memory with write-through invalidation, stop repeating idempotent seeding/reconciliation writes on every GET, and run independent queries in parallel in the staff overview/list endpoints.
-
-## Acceptance criteria
-
-- Clicking any staff sidebar item after the console has loaded switches pages without waiting for a chunk download.
-- While a page chunk does load (cold start), the sidebar stays visible and only the content area shows a loader.
-- `getAccountAccess` returns the same result as before, with independent queries batched.
-- Configuration reads are cached at most 15 seconds per process; saving settings invalidates the cache immediately.
-- `ensureDefaultSettings` runs once per process instead of on every settings GET; dispute auto-assign reconciliation runs at most once every 30 seconds per process and never concurrently with itself.
-- Revisiting any staff page or data-owning tab renders the last response immediately and refreshes in the background; hovering a sidebar link or tab starts its data load. Staff writes and sign-out clear the browser cache.
-- `/api/admin/user-team-overview` no longer builds per-account history, activity, credit, or listing enrichment.
-- No API response shape changes. No new migrations.
-- `npm run build` passes in `frontend/`; changed backend modules load with `node -e "require(...)"`.
+## Acceptance Criteria
+- [x] `backend/controllers/GigControllers.js` and `backend/repositories/GigRepositories.js` persist `addOns` on `PUT /api/gigs/:id`.
+- [x] `gig_edit_page.tsx` uses `max-w-6xl 2xl:max-w-7xl`, loads `addOns`, enables clicking all 6 stepper tabs, and saves without charging 50 Credits.
+- [x] `gig_ranking.ts`, `GigViewDetails.tsx`, `GigRichText.tsx`, `gig_lists.tsx`, and `GigServicesInfoGuide.tsx` (`/gigs/info`) implement the 13-factor 100-point + Subscription Boost algorithm and clean table layout.
+- [x] Frontend build (`npm --prefix frontend run build`) passes with 0 errors.

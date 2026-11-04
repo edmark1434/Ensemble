@@ -493,11 +493,18 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   };
 
   const saveAccountTagsEdit = (newRoles: string[]) => {
+    const formattedRoles = newRoles.map((r) => ({ role_id: 0, role_name: r as any }));
     setUserDetails((prev) => {
       if (!prev) return prev;
-      const formattedRoles = newRoles.map((r) => ({ role_id: 0, role_name: r as any }));
       return { ...prev, role: formattedRoles };
     });
+    if (isOwner && user) {
+      useGlobalState.getState().setUser({
+        ...user,
+        roles: formattedRoles,
+        role: formattedRoles,
+      });
+    }
   };
 
   const saveSelectedBadges = async (updatedBadgesList: BadgeMetadata[]) => {
