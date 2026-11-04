@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -16,8 +16,8 @@ import {
   TimerReset,
   XCircle,
 } from 'lucide-react';
-import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import {
   ChartCard,
   DonutChart,
@@ -28,6 +28,8 @@ import ModeratorTicketDetailModal from '../shared/ModeratorTicketDetailModal';
 import { PriorityBadge, StatusBadge, titleCaseWords } from '../shared/ui';
 import { listingStatusPill } from './ListingDetailModal';
 import type { MarketplaceAlert, MarketplaceOverview } from './marketplaceTypes';
+
+const OVERVIEW_URL = '/api/moderator/marketplace/overview';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -42,23 +44,29 @@ function formatDateTime(value: string | null | undefined) {
 export default function MarketplaceModeratorDashboard() {
   const { user } = useGlobalState();
   const navigate = useNavigate();
-  const [data, setData] = useState<MarketplaceOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<MarketplaceOverview | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<number | string | null>(null);
+  const hasData = useRef(Boolean(data));
 
   const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !hasData.current) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/moderator/marketplace/overview');
-      if (res.data?.success) setData(res.data.data);
-      else setError(res.data?.message || 'Failed to load marketplace dashboard');
+      const res = await staffGet(OVERVIEW_URL);
+      if (res.data?.success) {
+        hasData.current = true;
+        setData(res.data.data);
+      } else if (!hasData.current) setError(res.data?.message || 'Failed to load marketplace dashboard');
     } catch {
-      setError('Failed to load marketplace dashboard');
+      if (!hasData.current) setError('Failed to load marketplace dashboard');
     } finally {
       setLoading(false);
       setRefreshing(false);

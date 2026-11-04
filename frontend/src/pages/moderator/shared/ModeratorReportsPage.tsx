@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
-import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import ReportDesk from './ReportDesk';
 import type { UserReport } from './moderatorTypes';
 
 type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
+
+type Handler = { id: string | number; name: string; role?: string };
 
 const ACCENT_LABEL: Record<string, string> = {
   violet: 'text-violet-400',
@@ -13,6 +15,20 @@ const ACCENT_LABEL: Record<string, string> = {
   emerald: 'text-emerald-400',
   rose: 'text-rose-400',
 };
+
+function overviewPathFor(endpointBase: string) {
+  return endpointBase.replace(/\/reports\/?$/, '/overview');
+}
+
+function workloadHandlers(body: { data?: { staffWorkload?: unknown } } | undefined): Handler[] {
+  const workload = body?.data?.staffWorkload || [];
+  if (!Array.isArray(workload)) return [];
+  return workload.map((s: { staffId: string | number; name: string; role?: string }) => ({
+    id: s.staffId,
+    name: s.name,
+    role: s.role,
+  }));
+}
 
 /** Shared specialist/support Reports page shell around ReportDesk. */
 export default function ModeratorReportsPage({
@@ -28,37 +44,37 @@ export default function ModeratorReportsPage({
   accent: Accent;
   deskLabel?: string;
 }) {
-  const [reports, setReports] = useState<UserReport[]>([]);
-  const [handlers, setHandlers] = useState<{ id: string | number; name: string; role?: string }[]>(
-    []
+  const [reports, setReports] = useState<UserReport[]>(() => {
+    const cached = peekStaffGet(endpointBase);
+    return cached?.data?.success ? cached.data.data || [] : [];
+  });
+  const [handlers, setHandlers] = useState<Handler[]>(() =>
+    workloadHandlers(peekStaffGet(overviewPathFor(endpointBase))?.data)
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !peekStaffGet(endpointBase)?.data?.success);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasData = useRef(!loading);
 
   const load = async () => {
-    setLoading(true);
-    const overviewPath = endpointBase.replace(/\/reports\/?$/, '/overview');
-    const handlersRequest = api
-      .get(overviewPath)
+    if (hasData.current) setRefreshing(true);
+    else setLoading(true);
+    const handlersRequest = staffGet(overviewPathFor(endpointBase))
       .then((overview) => {
-        const workload = overview.data?.data?.staffWorkload || [];
-        if (Array.isArray(workload) && workload.length) {
-          setHandlers(
-            workload.map((s: { staffId: string | number; name: string; role?: string }) => ({
-              id: s.staffId,
-              name: s.name,
-              role: s.role,
-            }))
-          );
-        }
+        const next = workloadHandlers(overview.data);
+        if (next.length) setHandlers(next);
       })
       .catch(() => {
         // Overview may not expose workload; assignees still derived from report rows.
       });
     try {
-      const res = await api.get(endpointBase);
-      if (res.data?.success) setReports(res.data.data || []);
+      const res = await staffGet(endpointBase);
+      if (res.data?.success) {
+        hasData.current = true;
+        setReports(res.data.data || []);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
     await handlersRequest;
   };
@@ -86,10 +102,10 @@ export default function ModeratorReportsPage({
         <button
           type="button"
           onClick={() => void load()}
-          disabled={loading}
+          disabled={loading || refreshing}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
-          {loading ? (
+          {loading || refreshing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5" />

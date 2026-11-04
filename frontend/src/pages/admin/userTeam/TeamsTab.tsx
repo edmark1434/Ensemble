@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import TableFilterBar, { uniqueOptions } from './components/TableFilterBar';
@@ -22,6 +22,8 @@ import {
 import { buildRowActionItems, exportAccountJson } from './statusActions';
 import { formatDateTime } from './formatDateTime';
 import type { PlatformTeam, TeamManagementData } from './userTeamTypes';
+
+const TEAMS_URL = '/api/admin/teams-management';
 
 type ModalKind =
   | 'overview'
@@ -105,8 +107,11 @@ export default function TeamsTab({
   refreshToken = 0,
   defaultVerificationFilter = 'all',
 }: TeamsTabProps) {
-  const [data, setData] = useState<TeamManagementData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<TeamManagementData | null>(() => {
+    const cached = peekStaffGet(TEAMS_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [modal, setModal] = useState<ModalKind>(null);
   const [selected, setSelected] = useState<PlatformTeam | null>(null);
@@ -119,10 +124,10 @@ export default function TeamsTab({
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = async () => {
-    setLoading(true);
+    if (!data) setLoading(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/teams-management');
+      const res = await staffGet(TEAMS_URL);
       if (res.data?.success) {
         setData(res.data.data);
         onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
@@ -229,7 +234,7 @@ export default function TeamsTab({
   const closeModal = () => setModal(null);
 
   const refreshAfterChange = async () => {
-    const res = await api.get('/api/admin/teams-management');
+    const res = await staffGet(TEAMS_URL);
     if (res.data?.success) {
       setData(res.data.data);
       onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
@@ -291,7 +296,7 @@ export default function TeamsTab({
     return <p className="py-12 text-center text-sm text-zinc-500">Loading team accounts…</p>;
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <p className="py-12 text-center text-sm text-red-300">
         {error}{' '}

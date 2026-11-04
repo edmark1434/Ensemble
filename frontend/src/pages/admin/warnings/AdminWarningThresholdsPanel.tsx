@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { DURATION_OPTIONS } from '@/lib/warningLadder';
 
@@ -53,22 +54,28 @@ function effectLabel(effect: string) {
   return EFFECTS.find((item) => item.id === effect)?.label || effect;
 }
 
+const THRESHOLDS_URL = '/api/admin/warning-thresholds';
+
+function thresholdRows(data: unknown): Threshold[] {
+  return ((data || []) as (Threshold & { min_points?: number; suspend_days?: number | null })[]).map((row) => ({
+    ...row,
+    minPoints: Number(row.minPoints ?? row.min_points ?? 0),
+    suspendDays: row.suspendDays ?? row.suspend_days ?? null,
+    note: row.note || '',
+  }));
+}
+
 export default function AdminWarningThresholdsPanel() {
-  const [rows, setRows] = useState<Threshold[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<Threshold[]>(() => thresholdRows(peekStaffGet(THRESHOLDS_URL)?.data?.data));
+  const [loading, setLoading] = useState(() => !peekStaffGet(THRESHOLDS_URL));
   const [editor, setEditor] = useState<'create' | Threshold | null>(null);
   const [form, setForm] = useState<ThresholdForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
   const load = async () => {
-    const res = await api.get('/api/admin/warning-thresholds');
-    setRows((res.data?.data || []).map((row: Threshold & { min_points?: number; suspend_days?: number | null }) => ({
-      ...row,
-      minPoints: Number(row.minPoints ?? row.min_points ?? 0),
-      suspendDays: row.suspendDays ?? row.suspend_days ?? null,
-      note: row.note || '',
-    })));
+    const res = await staffGet(THRESHOLDS_URL);
+    setRows(thresholdRows(res.data?.data));
   };
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -21,8 +21,8 @@ import {
   Ticket,
   TimerReset,
 } from 'lucide-react';
-import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import {
   ChartCard,
   DonutChart,
@@ -34,6 +34,8 @@ import ModeratorTicketDetailModal from '../shared/ModeratorTicketDetailModal';
 import ModeratorDisputeDetailModal from '../shared/ModeratorDisputeDetailModal';
 import type { Alert, JobsOverview } from '../shared/moderatorTypes';
 import { PriorityBadge, StatusBadge, titleCaseWords } from '../shared/ui';
+
+const OVERVIEW_URL = '/api/moderator/jobs/overview';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -57,24 +59,30 @@ function postingStatusClass(status: string) {
 export default function JobsModeratorDashboard() {
   const { user } = useGlobalState();
   const navigate = useNavigate();
-  const [data, setData] = useState<JobsOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<JobsOverview | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<number | string | null>(null);
   const [selectedDisputeId, setSelectedDisputeId] = useState<number | string | null>(null);
+  const hasData = useRef(Boolean(data));
 
   const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !hasData.current) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/moderator/jobs/overview');
-      if (res.data?.success) setData(res.data.data);
-      else setError(res.data?.message || 'Failed to load jobs dashboard');
+      const res = await staffGet(OVERVIEW_URL);
+      if (res.data?.success) {
+        hasData.current = true;
+        setData(res.data.data);
+      } else if (!hasData.current) setError(res.data?.message || 'Failed to load jobs dashboard');
     } catch {
-      setError('Failed to load jobs dashboard');
+      if (!hasData.current) setError('Failed to load jobs dashboard');
     } finally {
       setLoading(false);
       setRefreshing(false);

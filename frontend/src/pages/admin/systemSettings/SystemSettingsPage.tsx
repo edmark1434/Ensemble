@@ -1,5 +1,5 @@
 import { AdminSubscriptionsTab } from '../creditEconomy/components/AdminSubscriptionsTab';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -17,6 +17,7 @@ import {
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type {
   EconomySettings,
@@ -201,6 +202,25 @@ function stableStringify(value: unknown) {
   return JSON.stringify(value);
 }
 
+const SETTINGS_URL = '/api/admin/settings-overview';
+
+function settingsDrafts(d: SettingsOverview) {
+  const platform = { ...d.sections.platform.value };
+  if (platform.sessionTimeoutDays == null && platform.sessionTimeoutMinutes != null) {
+    platform.sessionTimeoutDays = Math.max(1, Math.round(platform.sessionTimeoutMinutes / 1440));
+  }
+  return {
+    platform,
+    moderation: { ...d.sections.moderation.value },
+    economy: JSON.parse(JSON.stringify(d.sections.economy.value)) as EconomySettings,
+    notifications: { ...d.sections.notifications.value },
+    security: {
+      ...d.sections.security.value,
+      allowedAdminIps: [...(d.sections.security.value.allowedAdminIps || [])],
+    },
+  };
+}
+
 export default function SystemSettingsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -208,44 +228,54 @@ export default function SystemSettingsPage() {
   const valid: TabId[] = ['platform', 'moderation', 'economy', 'notifications', 'security'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'platform';
 
-  const [data, setData] = useState<SettingsOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<SettingsOverview | null>(() => {
+    const cached = peekStaffGet(SETTINGS_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [platform, setPlatform] = useState<PlatformSettings | null>(null);
-  const [moderation, setModeration] = useState<ModerationSettings | null>(null);
-  const [economy, setEconomy] = useState<EconomySettings | null>(null);
-  const [notifications, setNotifications] = useState<NotificationSettings | null>(null);
-  const [security, setSecurity] = useState<SecuritySettings | null>(null);
+  const [platform, setPlatform] = useState<PlatformSettings | null>(() =>
+    data ? settingsDrafts(data).platform : null
+  );
+  const [moderation, setModeration] = useState<ModerationSettings | null>(() =>
+    data ? settingsDrafts(data).moderation : null
+  );
+  const [economy, setEconomy] = useState<EconomySettings | null>(() =>
+    data ? settingsDrafts(data).economy : null
+  );
+  const [notifications, setNotifications] = useState<NotificationSettings | null>(() =>
+    data ? settingsDrafts(data).notifications : null
+  );
+  const [security, setSecurity] = useState<SecuritySettings | null>(() =>
+    data ? settingsDrafts(data).security : null
+  );
   const [ipDraft, setIpDraft] = useState('');
 
-  const applyData = (d: SettingsOverview) => {
+  const applyData = (d: SettingsOverview, keepEdits = false) => {
     setData(d);
-    const plat = { ...d.sections.platform.value };
-    if (plat.sessionTimeoutDays == null && plat.sessionTimeoutMinutes != null) {
-      plat.sessionTimeoutDays = Math.max(1, Math.round(plat.sessionTimeoutMinutes / 1440));
+    const drafts = settingsDrafts(d);
+    const edited = keepEdits ? dirtyRef.current : null;
+    if (!edited?.platform) setPlatform(drafts.platform);
+    if (!edited?.moderation) setModeration(drafts.moderation);
+    if (!edited?.economy) setEconomy(drafts.economy);
+    if (!edited?.notifications) setNotifications(drafts.notifications);
+    if (!edited?.security) {
+      setSecurity(drafts.security);
+      setIpDraft('');
     }
-    setPlatform(plat);
-    setModeration({ ...d.sections.moderation.value });
-    setEconomy(JSON.parse(JSON.stringify(d.sections.economy.value)));
-    setNotifications({ ...d.sections.notifications.value });
-    setSecurity({
-      ...d.sections.security.value,
-      allowedAdminIps: [...(d.sections.security.value.allowedAdminIps || [])],
-    });
-    setIpDraft('');
   };
 
   const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !peekStaffGet(SETTINGS_URL)) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/settings-overview');
-      if (res.data?.success) applyData(res.data.data);
+      const res = await staffGet(SETTINGS_URL);
+      if (res.data?.success) applyData(res.data.data, !silent);
       else setError('Failed to load system settings from database');
     } catch {
       setError('Failed to load system settings from database');
@@ -287,6 +317,11 @@ export default function SystemSettingsPage() {
       security: stableStringify(security) !== stableStringify(data.sections.security.value),
     };
   }, [data, platform, moderation, economy, notifications, security]);
+
+  const dirtyRef = useRef(dirty);
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   const saveSection = async (section: TabId, values: object) => {
     setSaving(true);
@@ -337,7 +372,7 @@ export default function SystemSettingsPage() {
     );
   }
 
-  if (error || !data || !platform || !moderation || !economy || !notifications || !security) {
+  if (!data || !platform || !moderation || !economy || !notifications || !security) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">

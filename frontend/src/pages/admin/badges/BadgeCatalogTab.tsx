@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Award, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { badgesRegistry } from '@/pages/user/7_profile/Utilities/BadgesRegistry';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import {
@@ -39,11 +40,21 @@ function defaultCategoryId(categories: BadgeCategory[]) {
     || '';
 }
 
+const BADGES_URL = '/api/admin/badges';
+const REQUIREMENT_TYPES_URL = '/api/admin/badge-requirement-types';
+const BADGE_CATEGORIES_URL = '/api/admin/badge-categories';
+
 export default function BadgeCatalogTab() {
-  const [badges, setBadges] = useState<CatalogBadge[]>([]);
-  const [categories, setCategories] = useState<BadgeCategory[]>([]);
-  const [unlockTypes, setUnlockTypes] = useState<RequirementType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [badges, setBadges] = useState<CatalogBadge[]>(() => peekStaffGet(BADGES_URL)?.data?.data || []);
+  const [categories, setCategories] = useState<BadgeCategory[]>(
+    () => peekStaffGet(BADGE_CATEGORIES_URL)?.data?.data || []
+  );
+  const [unlockTypes, setUnlockTypes] = useState<RequirementType[]>(
+    () => peekStaffGet(REQUIREMENT_TYPES_URL)?.data?.data || []
+  );
+  const [loading, setLoading] = useState(
+    () => ![BADGES_URL, REQUIREMENT_TYPES_URL, BADGE_CATEGORIES_URL].every((url) => peekStaffGet(url))
+  );
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [editor, setEditor] = useState<'create' | CatalogBadge | null>(null);
@@ -56,9 +67,9 @@ export default function BadgeCatalogTab() {
 
   const load = async () => {
     const [badgeRes, typeRes, categoryRes] = await Promise.all([
-      api.get('/api/admin/badges'),
-      api.get('/api/admin/badge-requirement-types'),
-      api.get('/api/admin/badge-categories'),
+      staffGet(BADGES_URL),
+      staffGet(REQUIREMENT_TYPES_URL),
+      staffGet(BADGE_CATEGORIES_URL),
     ]);
     setBadges(badgeRes.data?.data || []);
     setUnlockTypes(typeRes.data?.data || []);

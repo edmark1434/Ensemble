@@ -16,5 +16,7 @@ Reduce load time and navigation stalls across the admin console, every moderator
 - `getAccountAccess` returns the same result as before, with independent queries batched.
 - Configuration reads are cached at most 15 seconds per process; saving settings invalidates the cache immediately.
 - `ensureDefaultSettings` runs once per process instead of on every settings GET; dispute auto-assign reconciliation runs at most once every 30 seconds per process and never concurrently with itself.
+- Revisiting any staff page or data-owning tab renders the last response immediately and refreshes in the background; hovering a sidebar link or tab starts its data load. Staff writes and sign-out clear the browser cache.
+- `/api/admin/user-team-overview` no longer builds per-account history, activity, credit, or listing enrichment.
 - No API response shape changes. No new migrations.
 - `npm run build` passes in `frontend/`; changed backend modules load with `node -e "require(...)"`.

@@ -26,6 +26,12 @@
 - `updateSettingsSection` reads the section uncached and clears the cache after writing. Other processes and raw SQL edits are picked up within the TTL.
 - Request paths seed default configuration rows once per process. `lib/Seed.js` still calls `ensureDefaultSettings` directly.
 
+## Staff console data (browser)
+
+- `frontend/src/lib/staffCache.ts` keeps the last successful response of each staff page/tab GET in memory, keyed by URL plus sorted params. There is no storage persistence and no TTL. Pages render the cached response, then always refetch on mount. Identical in-flight GETs are shared.
+- Any non-GET request through the shared `api` client (including logout) clears the cache, as does a change of signed-in staff identity. Responses that started before a clear are not stored.
+- `frontend/src/lib/staffPrefetch.ts` maps sidebar routes and data-owning tabs to their first-mount GETs. Hover or focus prefetches them unless a response under 15 seconds old or the same request already exists. Keep this map in sync when a page changes what it loads on mount.
+
 ## Request-path sweeps
 
 - Dispute auto-assign reconciliation on staff dispute lists runs at most once every 30 seconds per process, and concurrent callers share the in-flight run. The five-minute cron job is unchanged.

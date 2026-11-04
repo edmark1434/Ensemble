@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, UserCircle, Users } from 'lucide-react';
-import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import StatCards from './components/StatCards';
 import { formatDateTime } from './formatDateTime';
+
+const OVERVIEW_URL = '/api/admin/user-team-overview';
 
 type OverviewData = {
   lastUpdated: string;
@@ -74,14 +76,17 @@ export default function UserTeamOverviewTab({
   onGoTeams,
   showTeams = true,
 }: UserTeamOverviewTabProps) {
-  const [data, setData] = useState<OverviewData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<OverviewData | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
+      if (!peekStaffGet(OVERVIEW_URL)) setLoading(true);
       try {
-        const res = await api.get('/api/admin/user-team-overview');
+        const res = await staffGet(OVERVIEW_URL);
         if (res.data?.success) {
           setData(res.data.data);
           onStatsLoaded?.(

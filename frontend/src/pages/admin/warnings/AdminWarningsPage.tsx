@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import {
   warningLadderSummary,
@@ -9,6 +10,7 @@ import {
   clampDurationDays,
   warningDurationDays,
 } from '@/lib/warningLadder';
+import { prefetchStaffTab } from '@/lib/staffPrefetch';
 import AdminWarningThresholdsPanel from './AdminWarningThresholdsPanel';
 import AdminPunishmentDefsPanel from './AdminPunishmentDefsPanel';
 
@@ -64,9 +66,11 @@ function errorMessage(err: unknown, fallback: string) {
   return response || fallback;
 }
 
+const WARNING_DEFS_URL = '/api/admin/warning-defs';
+
 export default function AdminWarningsPage() {
-  const [defs, setDefs] = useState<WarningDef[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [defs, setDefs] = useState<WarningDef[]>(() => peekStaffGet(WARNING_DEFS_URL)?.data?.data || []);
+  const [loading, setLoading] = useState(() => !peekStaffGet(WARNING_DEFS_URL));
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<'create' | WarningDef | null>(null);
   const [form, setForm] = useState<DefForm>(emptyForm());
@@ -75,7 +79,7 @@ export default function AdminWarningsPage() {
   const [tab, setTab] = useState<'catalog' | 'thresholds' | 'punishments'>('catalog');
 
   const load = async () => {
-    const res = await api.get('/api/admin/warning-defs');
+    const res = await staffGet(WARNING_DEFS_URL);
     setDefs(res.data?.data || []);
   };
 
@@ -206,6 +210,8 @@ export default function AdminWarningsPage() {
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
+              onPointerEnter={() => prefetchStaffTab('warnings', item.id)}
+              onFocus={() => prefetchStaffTab('warnings', item.id)}
               className={`rounded-xl border px-4 py-2 text-sm font-medium ${
                 tab === item.id
                   ? 'border-rose-400/40 bg-rose-500/10 text-white'

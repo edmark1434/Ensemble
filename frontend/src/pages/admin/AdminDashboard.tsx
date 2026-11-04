@@ -15,9 +15,11 @@ import {
   Users,
   UserPlus,
 } from 'lucide-react';
-import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import type { AdminDashboardData } from './adminDashboardTypes';
+
+const DASHBOARD_URL = '/api/admin/dashboard-overview';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -46,17 +48,20 @@ function rolePill(role: string) {
 
 export default function AdminDashboard() {
   const { user } = useGlobalState();
-  const [data, setData] = useState<AdminDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<AdminDashboardData | null>(() => {
+    const cached = peekStaffGet(DASHBOARD_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(() => !data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const loadData = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !peekStaffGet(DASHBOARD_URL)) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/dashboard-overview');
+      const res = await staffGet(DASHBOARD_URL);
       if (res.data?.success) setData(res.data.data);
       else setError(res.data?.message || 'Failed to load dashboard');
     } catch (err: unknown) {
@@ -83,7 +88,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">

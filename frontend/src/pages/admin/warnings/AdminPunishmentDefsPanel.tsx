@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Gavel, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { DURATION_OPTIONS, clampDurationDays } from '@/lib/warningLadder';
 import {
@@ -64,9 +65,11 @@ function errorMessage(err: unknown, fallback: string) {
   return response || fallback;
 }
 
+const PUNISHMENT_DEFS_URL = '/api/admin/punishment-defs';
+
 export default function AdminPunishmentDefsPanel() {
-  const [defs, setDefs] = useState<PunishmentDef[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [defs, setDefs] = useState<PunishmentDef[]>(() => peekStaffGet(PUNISHMENT_DEFS_URL)?.data?.data || []);
+  const [loading, setLoading] = useState(() => !peekStaffGet(PUNISHMENT_DEFS_URL));
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | PunishmentKind>('all');
   const [editor, setEditor] = useState<'create' | PunishmentDef | null>(null);
@@ -75,7 +78,7 @@ export default function AdminPunishmentDefsPanel() {
   const [formError, setFormError] = useState('');
 
   const load = async () => {
-    const res = await api.get('/api/admin/punishment-defs');
+    const res = await staffGet(PUNISHMENT_DEFS_URL);
     setDefs(res.data?.data || []);
   };
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   CheckCircle2,
@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import ListingDetailModal, {
   SellerListingsModal,
@@ -22,6 +23,21 @@ import ListingDetailModal, {
 import type { MarketplaceListing, MarketplaceOverview } from './marketplaceTypes';
 
 const STATUS_TABS = ['all', 'pending', 'approved', 'rejected', 'delisted'] as const;
+
+const OVERVIEW_URL = '/api/moderator/marketplace/overview';
+const LISTINGS_URL = '/api/moderator/marketplace/listings';
+
+function listingParams(status: string, category: string, search: string) {
+  return {
+    status: status === 'all' ? undefined : status,
+    category: category === 'all' ? undefined : category,
+    search: search.trim() || undefined,
+  };
+}
+
+function overviewCategories(data: MarketplaceOverview): string[] {
+  return (data.charts?.listingCategories || []).map((c: { label: string }) => c.label);
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -119,26 +135,38 @@ function SkeletonRows() {
 }
 
 export default function MarketplaceControl() {
-  const [listings, setListings] = useState<MarketplaceListing[]>([]);
-  const [overview, setOverview] = useState<MarketplaceOverview['summary'] | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>('pending');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [listings, setListings] = useState<MarketplaceListing[]>(() => {
+    const cached = peekStaffGet(LISTINGS_URL, listingParams(statusFilter, categoryFilter, search));
+    return cached?.data?.success ? cached.data.data : [];
+  });
+  const [overview, setOverview] = useState<MarketplaceOverview['summary'] | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data.summary : null;
+  });
+  const [categories, setCategories] = useState<string[]>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? overviewCategories(cached.data.data) : [];
+  });
+  const [loading, setLoading] = useState(
+    () => !peekStaffGet(LISTINGS_URL, listingParams(statusFilter, categoryFilter, search))?.data?.success
+  );
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [sellerAccountId, setSellerAccountId] = useState<number | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const shownListingsKey = useRef(
+    loading ? null : JSON.stringify(listingParams(statusFilter, categoryFilter, search))
+  );
 
   const loadOverview = async () => {
     try {
-      const res = await api.get('/api/moderator/marketplace/overview');
+      const res = await staffGet(OVERVIEW_URL);
       if (res.data?.success) {
         setOverview(res.data.data.summary);
-        const cats = (res.data.data.charts?.listingCategories || []).map(
-          (c: { label: string }) => c.label
-        );
-        setCategories(cats);
+        setCategories(overviewCategories(res.data.data));
       }
     } catch {
       /* overview chips are secondary */
@@ -146,18 +174,24 @@ export default function MarketplaceControl() {
   };
 
   const load = async () => {
-    setLoading(true);
+    const params = listingParams(statusFilter, categoryFilter, search);
+    const key = JSON.stringify(params);
+    const cached = peekStaffGet(LISTINGS_URL, params);
+    if (cached?.data?.success) {
+      shownListingsKey.current = key;
+      setListings(cached.data.data);
+    }
+    if (shownListingsKey.current === key) setRefreshing(true);
+    else setLoading(true);
     try {
-      const res = await api.get('/api/moderator/marketplace/listings', {
-        params: {
-          status: statusFilter === 'all' ? undefined : statusFilter,
-          category: categoryFilter === 'all' ? undefined : categoryFilter,
-          search: search.trim() || undefined,
-        },
-      });
-      if (res.data?.success) setListings(res.data.data);
+      const res = await staffGet(LISTINGS_URL, params);
+      if (res.data?.success) {
+        shownListingsKey.current = key;
+        setListings(res.data.data);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -239,10 +273,10 @@ export default function MarketplaceControl() {
         <button
           type="button"
           onClick={() => void refreshAll()}
-          disabled={loading}
+          disabled={loading || refreshing}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>

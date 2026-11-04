@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowUpRight,
@@ -28,11 +28,23 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "@/lib/axios";
+import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { JobsGigsPosting, JobsGigsPostingDetail, JobsOverview, UserJobsHistory } from "../shared/moderatorTypes";
 
 const TYPE_TABS = ["all", "job", "gig"] as const;
 const STATUS_TABS = ["all", "active", "paused", "closed", "archived"] as const;
+
+const OVERVIEW_URL = "/api/moderator/jobs/overview";
+const POSTINGS_URL = "/api/moderator/jobs/postings";
+
+function postingParams(type: string, status: string, search: string) {
+  return {
+    type: type === "all" ? undefined : type,
+    status: status === "all" ? undefined : status,
+    search: search.trim() || undefined,
+  };
+}
 
 function postingStatusClass(status: string) {
   const s = status.toLowerCase();
@@ -862,19 +874,31 @@ function UserHistoryModal({
 }
 
 export default function JobsGigsControl() {
-  const [postings, setPostings] = useState<JobsGigsPosting[]>([]);
-  const [overviewSummary, setOverviewSummary] = useState<JobsOverview["summary"] | null>(null);
-  const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_TABS)[number]>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>("all");
   const [search, setSearch] = useState("");
+  const [postings, setPostings] = useState<JobsGigsPosting[]>(() => {
+    const cached = peekStaffGet(POSTINGS_URL, postingParams(typeFilter, statusFilter, search));
+    return cached?.data?.success ? cached.data.data : [];
+  });
+  const [overviewSummary, setOverviewSummary] = useState<JobsOverview["summary"] | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data.summary : null;
+  });
+  const [loading, setLoading] = useState(
+    () => !peekStaffGet(POSTINGS_URL, postingParams(typeFilter, statusFilter, search))?.data?.success
+  );
+  const [refreshing, setRefreshing] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [historyAccountId, setHistoryAccountId] = useState<string | null>(null);
   const [selectedPosting, setSelectedPosting] = useState<JobsGigsPosting | null>(null);
+  const shownPostingsKey = useRef(
+    loading ? null : JSON.stringify(postingParams(typeFilter, statusFilter, search))
+  );
 
   const loadOverview = async () => {
     try {
-      const res = await api.get("/api/moderator/jobs/overview");
+      const res = await staffGet(OVERVIEW_URL);
       if (res.data?.success) setOverviewSummary(res.data.data.summary);
     } catch {
       /* chips fall back to in-view counts */
@@ -882,18 +906,24 @@ export default function JobsGigsControl() {
   };
 
   const load = async () => {
-    setLoading(true);
+    const params = postingParams(typeFilter, statusFilter, search);
+    const key = JSON.stringify(params);
+    const cached = peekStaffGet(POSTINGS_URL, params);
+    if (cached?.data?.success) {
+      shownPostingsKey.current = key;
+      setPostings(cached.data.data);
+    }
+    if (shownPostingsKey.current === key) setRefreshing(true);
+    else setLoading(true);
     try {
-      const res = await api.get("/api/moderator/jobs/postings", {
-        params: {
-          type: typeFilter === "all" ? undefined : typeFilter,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          search: search.trim() || undefined,
-        },
-      });
-      if (res.data?.success) setPostings(res.data.data);
+      const res = await staffGet(POSTINGS_URL, params);
+      if (res.data?.success) {
+        shownPostingsKey.current = key;
+        setPostings(res.data.data);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -1003,10 +1033,10 @@ export default function JobsGigsControl() {
         <button
           type="button"
           onClick={() => void refreshAll()}
-          disabled={loading}
+          disabled={loading || refreshing}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? "animate-spin" : ""}`} />
           Refresh
         </button>
       </div>

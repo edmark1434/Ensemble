@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Lock, Search, Snowflake, Unlock, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar from '../userTeam/components/TableFilterBar';
 
@@ -88,9 +89,14 @@ function apiMessage(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
 }
 
+const VIDEOS_URL = '/api/admin/moderation/videos';
+const INITIAL_VIDEO_PARAMS = { status: 'all', search: '' };
+
 export default function VideoManagementSection() {
-  const [projects, setProjects] = useState<VideoProject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<VideoProject[]>(
+    () => peekStaffGet(VIDEOS_URL, INITIAL_VIDEO_PARAMS)?.data?.data || []
+  );
+  const [loading, setLoading] = useState(() => !peekStaffGet(VIDEOS_URL, INITIAL_VIDEO_PARAMS));
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -103,22 +109,23 @@ export default function VideoManagementSection() {
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const load = async (nextStatus = status, nextSearch = search) => {
-    setLoading(true);
+    const params = { status: nextStatus, search: nextSearch };
+    const cached = peekStaffGet(VIDEOS_URL, params);
+    if (cached) setProjects(cached.data?.data || []);
+    else setLoading(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/moderation/videos', {
-        params: { status: nextStatus, search: nextSearch },
-      });
+      const res = await staffGet(VIDEOS_URL, params);
       setProjects(res.data?.data || []);
     } catch (err) {
-      setError(apiMessage(err, 'Failed to load video projects'));
+      if (!cached) setError(apiMessage(err, 'Failed to load video projects'));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void load('all', '');
+    void load(INITIAL_VIDEO_PARAMS.status, INITIAL_VIDEO_PARAMS.search);
   }, []);
 
   const visible = useMemo(() => {

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
-import api from '@/lib/axios';
+import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import DisputeDesk from './DisputeDesk';
 import type { Dispute } from './moderatorTypes';
 
@@ -21,6 +21,17 @@ function toDeskAccent(accent: Accent): DeskAccent {
   if (accent === 'sky') return 'sky';
   if (accent === 'emerald' || accent === 'violet') return 'emerald';
   return 'rose';
+}
+
+function workloadHandlers(overview: { data?: { data?: unknown } } | undefined) {
+  const workload =
+    (overview?.data?.data as { staffWorkload?: { staffId: string | number; name: string; role: string }[] })
+      ?.staffWorkload || [];
+  return workload.map((s) => ({
+    id: s.staffId,
+    name: s.name,
+    role: s.role,
+  }));
 }
 
 type Props = {
@@ -46,35 +57,36 @@ export default function ModeratorDisputesPage({
   overviewEndpoint,
   deskLabel,
 }: Props) {
-  const [disputes, setDisputes] = useState<Dispute[]>([]);
-  const [handlers, setHandlers] = useState<{ id: string | number; name: string; role: string }[]>(
-    []
+  const [disputes, setDisputes] = useState<Dispute[]>(() => {
+    const cached = peekStaffGet(endpointBase);
+    return cached?.data?.success ? (cached.data.data as Dispute[]) || [] : [];
+  });
+  const [handlers, setHandlers] = useState<{ id: string | number; name: string; role: string }[]>(() =>
+    workloadHandlers(overviewEndpoint ? peekStaffGet(overviewEndpoint) : undefined)
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !peekStaffGet(endpointBase)?.data?.success);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasData = useRef(!loading);
 
   const load = async () => {
-    setLoading(true);
+    if (hasData.current) setRefreshing(true);
+    else setLoading(true);
     try {
       const requests: Promise<{ data?: { success?: boolean; data?: unknown } }>[] = [
-        api.get(endpointBase),
+        staffGet(endpointBase),
       ];
-      if (overviewEndpoint) requests.push(api.get(overviewEndpoint));
+      if (overviewEndpoint) requests.push(staffGet(overviewEndpoint));
 
       const [disputesRes, overviewRes] = await Promise.all(requests);
-      if (disputesRes.data?.success) setDisputes((disputesRes.data.data as Dispute[]) || []);
+      if (disputesRes.data?.success) {
+        hasData.current = true;
+        setDisputes((disputesRes.data.data as Dispute[]) || []);
+      }
 
-      const workload =
-        (overviewRes?.data?.data as { staffWorkload?: { staffId: string | number; name: string; role: string }[] })
-          ?.staffWorkload || [];
-      setHandlers(
-        workload.map((s) => ({
-          id: s.staffId,
-          name: s.name,
-          role: s.role,
-        }))
-      );
+      setHandlers(workloadHandlers(overviewRes));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -98,10 +110,10 @@ export default function ModeratorDisputesPage({
         <button
           type="button"
           onClick={() => void load()}
-          disabled={loading}
+          disabled={loading || refreshing}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
-          {loading ? (
+          {loading || refreshing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5" />

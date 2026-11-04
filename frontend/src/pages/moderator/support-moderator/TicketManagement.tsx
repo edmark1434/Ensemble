@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,8 +13,8 @@ import {
   UserCog,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
+import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import {
   ChartCard,
   DonutChart,
@@ -36,6 +36,8 @@ import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { Alert, SupportOverview } from "../shared/moderatorTypes";
 
 type TabId = "overview" | "tickets" | "mine" | "assignments";
+
+const OVERVIEW_URL = "/api/moderator/support/overview";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
@@ -140,8 +142,11 @@ export default function SupportTicketManagement() {
         ? "tickets"
         : "overview";
 
-  const [data, setData] = useState<SupportOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<SupportOverview | null>(() => {
+    const cached = peekStaffGet(OVERVIEW_URL);
+    return cached?.data?.success ? cached.data.data : null;
+  });
+  const [loading, setLoading] = useState(!data);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<TabId>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
@@ -154,17 +159,20 @@ export default function SupportTicketManagement() {
     ...DEFAULT_TICKET_FILTERS,
     flag: "open_only",
   });
+  const hasData = useRef(Boolean(data));
 
   const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !hasData.current) setLoading(true);
     else setRefreshing(true);
     setError("");
     try {
-      const res = await api.get("/api/moderator/support/overview");
-      if (res.data?.success) setData(res.data.data);
-      else setError("Failed to load ticket management data");
+      const res = await staffGet(OVERVIEW_URL);
+      if (res.data?.success) {
+        hasData.current = true;
+        setData(res.data.data);
+      } else if (!hasData.current) setError("Failed to load ticket management data");
     } catch {
-      setError("Failed to load ticket management data");
+      if (!hasData.current) setError("Failed to load ticket management data");
     } finally {
       setLoading(false);
       setRefreshing(false);
