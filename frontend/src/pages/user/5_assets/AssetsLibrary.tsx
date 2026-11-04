@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, PanelsRightBottom, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -9,6 +9,8 @@ import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import AssetEditorModal from "./AssetEditorModal";
+import type { TemplateDraft } from "./AssetEditorModal";
+import TemplateAssetModal from "./TemplateAssetModal";
 import AssetMedia from "./AssetMedia";
 import { AssetCard } from "./AssetCard";
 import PendingAssetCard from "./PendingAssetCard";
@@ -100,7 +102,16 @@ export default function AssetsLibrary() {
   const [debouncedSearch, setDebouncedSearch] = useState(location.state?.searchQuery || "");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [editorOpen, setEditorOpen] = useState(false);
+  const templateParams = new URLSearchParams(location.search);
+  const templateSnapshotId = templateParams.get("templateSnapshot");
+  const templateName = templateParams.get("templateName") || "Untitled template";
+  const templatePreviewToken = templateParams.get("templatePreview") || undefined;
+  const initialTemplate = !isGuestView && templateSnapshotId && /^[1-9]\d*$/.test(templateSnapshotId)
+    ? { snapshotId: templateSnapshotId, name: templateName, previewToken: templatePreviewToken } : undefined;
+  const [editorOpen, setEditorOpen] = useState(Boolean(initialTemplate));
+  const [templateDraft, setTemplateDraft] = useState<TemplateDraft | undefined>(initialTemplate);
+  const templateHandoff = useRef<string | null>(null);
+  const createRequest = useRef(0);
   const [eligibility, setEligibility] = useState<AssetPostingEligibility | null>(null);
 
   const fetchEligibility = useCallback(async () => {
@@ -124,7 +135,7 @@ export default function AssetsLibrary() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, loading]);
-  const [checkingPostEligibility, setCheckingPostEligibility] = useState(false);
+  const [checkingPostEligibility, setCheckingPostEligibility] = useState(Boolean(initialTemplate));
   const [editingAsset, setEditingAsset] = useState<AssetRecord | null>(null);
   const [deletingAsset, setDeletingAsset] = useState<AssetRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -244,39 +255,77 @@ export default function AssetsLibrary() {
     };
   }, [loadAssets]);
 
-  const openCreate = async () => {
+  const openCreate = async (snapshot?: TemplateDraft) => {
     if (isGuestView) {
       setIsGuestLoginOpen(true);
       return;
     }
     
-    const canContinue = await continueIfAccountVerified(
-      () => {},
-      false,
-      "Account Verification is required to upload Assets. Please verify your identity to proceed."
-    );
-    if (!canContinue) return;
-
-    if (checkingPostEligibility) return;
+    if (checkingPostEligibility && createRequest.current > 0) return;
+    const request = ++createRequest.current;
     setCheckingPostEligibility(true);
+    setEditingAsset(null);
+    setTemplateDraft(snapshot);
+    setEditorOpen(true);
     try {
+      const canContinue = await continueIfAccountVerified(
+        () => {},
+        false,
+        "Account Verification is required to upload Assets. Please verify your identity to proceed."
+      );
+      if (request !== createRequest.current) return;
+      if (!canContinue) {
+        setEditorOpen(false);
+        return;
+      }
       const eligibility = await getAssetPostingEligibility();
+      if (request !== createRequest.current) return;
+      setEligibility(eligibility);
       if (!eligibility.allowed) {
+        setEditorOpen(false);
         showErrorToast(eligibility.message || "Asset posting is unavailable for this account.");
         return;
       }
-      setEditingAsset(null);
-      setEditorOpen(true);
     } catch (error) {
+      if (request !== createRequest.current) return;
+      setEditorOpen(false);
       showErrorToast(requestError(error));
     } finally {
-      setCheckingPostEligibility(false);
+      if (request === createRequest.current) setCheckingPostEligibility(false);
     }
   };
 
   const openEdit = (asset: AssetRecord) => {
+    createRequest.current++;
+    setCheckingPostEligibility(false);
+    setTemplateDraft(undefined);
     setEditingAsset(asset);
     setEditorOpen(true);
+  };
+
+  useEffect(() => {
+    if (!templateSnapshotId || isGuestView || templateHandoff.current === templateSnapshotId) return;
+    templateHandoff.current = templateSnapshotId;
+    if (!/^[1-9]\d*$/.test(templateSnapshotId)) {
+      showErrorToast("This template link is invalid. Share the project again from the editor.");
+      return;
+    }
+    void openCreate({ snapshotId: templateSnapshotId, name: templateName, previewToken: templatePreviewToken });
+  }, [templateSnapshotId, templateName, templatePreviewToken, isGuestView]);
+
+  const closeEditor = () => {
+    if (deleting) return;
+    createRequest.current++;
+    setCheckingPostEligibility(false);
+    setEditorOpen(false);
+    setTemplateDraft(undefined);
+    if (templateSnapshotId) {
+      const params = new URLSearchParams(location.search);
+      params.delete("templateSnapshot");
+      params.delete("templateName");
+      params.delete("templatePreview");
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
   };
 
   const onSaved = (asset: AssetRecord) => {
@@ -371,6 +420,11 @@ export default function AssetsLibrary() {
           <h1 className="text-2xl font-bold">Assets Library</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, audio, and templates shared by the community.</p>
         </div>
+
+        {templateSnapshotId && !editorOpen && /^[1-9]\d*$/.test(templateSnapshotId) && <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-dark-surface">
+          <span className="truncate text-sm">Template ready: {templateName}</span>
+          <button type="button" disabled={checkingPostEligibility} onClick={() => void openCreate({ snapshotId: templateSnapshotId, name: templateName, previewToken: templatePreviewToken })} className="shrink-0 text-sm font-semibold text-blue-600 dark:text-blue-400 disabled:opacity-50">Continue adding template</button>
+        </div>}
 
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
           <button
@@ -593,7 +647,8 @@ export default function AssetsLibrary() {
         )}
       </main>
 
-      <AssetEditorModal open={editorOpen} asset={editingAsset} onClose={() => !deleting && setEditorOpen(false)} onSaved={onSaved} onQueued={onUploadQueued} />
+      <AssetEditorModal open={editorOpen && !templateDraft && editingAsset?.type !== "template"} checkingEligibility={checkingPostEligibility} asset={editingAsset} onClose={closeEditor} onSaved={onSaved} onQueued={onUploadQueued} />
+      <TemplateAssetModal open={editorOpen && (!!templateDraft || editingAsset?.type === "template")} checkingEligibility={checkingPostEligibility} asset={editingAsset} snapshot={templateDraft} onClose={closeEditor} onSaved={onSaved} onQueued={onUploadQueued} />
       <GuestLoginModal
         isOpen={isGuestLoginOpen}
         onClose={() => setIsGuestLoginOpen(false)}

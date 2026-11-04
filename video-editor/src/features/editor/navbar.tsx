@@ -55,6 +55,7 @@ import { canManageSharing } from "@/features/editor/types/editor-role";
 import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
 import { CommentsButton } from "@/features/editor/comments/comments-button";
+import { useSnapshotPreview } from "./hooks/use-snapshot-preview";
 
 export default function Navbar({
   user,
@@ -63,7 +64,8 @@ export default function Navbar({
   viewOnly,
   saveStatus,
   compactStatus,
-  onForceSave
+  onForceSave,
+  templateSource,
 }: {
   user: unknown | null;
   stateManager: StateManager;
@@ -72,8 +74,10 @@ export default function Navbar({
   saveStatus?: "saved" | "saving" | "error";
   compactStatus?: "idle" | "compacting" | "error";
   onForceSave?: () => void;
+  templateSource?: { doc: Y.Doc; blockId?: string };
 }) {
   const isViewOnly = useViewOnly();
+  const preview = useSnapshotPreview();
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
   const isSmallScreen = useIsSmallScreen();
@@ -82,8 +86,8 @@ export default function Navbar({
   const canComment = useCanComment();
   const [title, setTitle] = useState(projectName);
 
-  const projectRole = useProjectRole(projectId);
-  const canShare = canManageSharing(projectRole);
+  const projectRole = useProjectRole(preview ? undefined : projectId);
+  const canShare = !preview && canManageSharing(projectRole);
 
   useEffect(() => {
     setTitle(projectName);
@@ -163,8 +167,8 @@ export default function Navbar({
       }}
       className="bg-primary/12 pointer-events-none flex h-16 shrink-0 items-center border-b border-border/80 px-2"
     >
-      <CommentsSync />
-      <DownloadProgressModal />
+      {!preview && <CommentsSync />}
+      {!preview && <DownloadProgressModal />}
 
       <div className="flex items-center gap-2">
         <DropdownMenu>
@@ -304,7 +308,7 @@ export default function Navbar({
       <div className="flex h-13 items-center justify-end gap-2">
         <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
           {/* gap-2 + mr-1.5 = the same 14px the logo sits from the undo button */}
-          <PresenceAvatars className="mr-2 hidden md:flex" />
+          {!preview && <PresenceAvatars className="mr-2 hidden md:flex" />}
           {!viewOnly && (
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>
@@ -331,7 +335,7 @@ export default function Navbar({
             </Tooltip>
           )}
           {canComment && <CommentsButton />}
-          <DownloadPopover stateManager={stateManager} />
+          {!preview && <DownloadPopover stateManager={stateManager} />}
 
           {canShare && (
             <Button
@@ -355,6 +359,7 @@ export default function Navbar({
         open={isShareModalOpen}
         onOpenChange={setShareModalOpen}
         projectId={projectId}
+        templateSource={templateSource}
       />
     </div>
   );

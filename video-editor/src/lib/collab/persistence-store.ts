@@ -10,7 +10,7 @@ import * as Y from "yjs";
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 import { compactBlockFromStorage, withBlockSnapshotLock } from "@/lib/collab/block-persistence-store";
 
-export async function compactProject(projectId: string, extraUpdate?: Uint8Array): Promise<void> {
+export async function compactProject(projectId: string, extraUpdate?: Uint8Array): Promise<string | undefined> {
   const snapshotRow = await db
     .selectFrom("project_yjs_snapshots")
     .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")
@@ -50,7 +50,7 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
 
   doc.destroy();
 
-  await db.transaction().execute(async (trx) => {
+  return db.transaction().execute(async (trx) => {
     const newSnapshot = await trx
       .insertInto("yjs_snapshots")
       .values({ document: compacted })
@@ -89,6 +89,7 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
       await trx.deleteFrom("project_yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
       await trx.deleteFrom("yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
     }
+    return String(newSnapshot.yjs_snapshot_id);
   });
 }
 

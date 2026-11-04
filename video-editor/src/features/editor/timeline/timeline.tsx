@@ -51,6 +51,7 @@ import { patchTransitionRenderPositioning } from "./items/transitions/transition
 import { dispatch } from "@designcombo/events";
 import { PLAYER_PAUSE } from "@/features/editor/constants/events";
 import { canOpenScene } from "@/features/editor/utils/scene-access";
+import { useSnapshotPreview } from "../hooks/use-snapshot-preview";
 
 CanvasTimeline.registerItems({
   Text,
@@ -171,7 +172,8 @@ const getItemRect = (item: any): { left: number; top: number; width: number; hei
   return { left: item.left, top: item.top, width: item.width, height: item.height };
 };
 
-const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManager; readOnly?: boolean }) => {
+const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true }: { stateManager: StateManager; readOnly?: boolean; allowSceneNavigation?: boolean }) => {
+  const preview = useSnapshotPreview();
   // prevent duplicate scroll events
   const canScrollRef = useRef(false);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -511,6 +513,7 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
     });
 
     canvas.on("mouse:dblclick", (e: any) => {
+      if (!allowSceneNavigation) return;
       const target = e.target;
       if (!target || target.type !== "scene") return;
 
@@ -519,7 +522,15 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
       const blockId = sceneItem?.details?.blockId;
       if (!blockId) return;
 
-      void canOpenScene(blockId, userId).then((allowed) => {
+        if (preview) {
+          if (preview.scenes[blockId]) {
+            stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+            dispatch(PLAYER_PAUSE);
+            useStore.getState().openScene(blockId, target.id, sceneItem?.details?.name);
+          }
+          return;
+        }
+        void canOpenScene(blockId, userId).then((allowed) => {
         if (!allowed) return;
 
         // Old selection references ids that won't exist in the scene's own

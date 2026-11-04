@@ -67,25 +67,25 @@ export default function PresenceAvatars({ className }: { className?: string }) {
           onMouseEnter={openNow}
           onMouseLeave={closeSoon}
           className={cn(
-            "items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "items-center rounded-full outline-none focus-visible:outline-none",
             className
           )}
         >
           <div className="flex items-center -space-x-2">
-            {visible.map((user) => {
+            {visible.map((user, index) => {
               const info = directory.get(user.userId);
               return (
                 // The presence color is the same one the timeline uses for
                 // this person's selection / "inside" borders.
                 <span
                   key={user.userId}
-                  className="inline-flex flex-none items-center justify-center overflow-hidden rounded-full border ring-2 ring-background"
-                  style={{ borderColor: user.color, width: 34, height: 34, minWidth: 34, aspectRatio: "1 / 1" }}
+                  className="inline-flex flex-none items-center justify-center overflow-hidden rounded-full ring-2 ring-background"
+                  style={{ width: 36, height: 36, minWidth: 36, aspectRatio: "1 / 1", zIndex: visible.length - index, boxShadow: `0 0 0 2px ${user.color}` }}
                 >
                   <Avatar
                     name={info?.name ?? user.name}
                     avatarUrl={info?.avatarUrl}
-                    className="h-8 w-8 max-w-none text-[11px] leading-none [&>span]:-translate-y-px"
+                    className="h-9 w-9 max-w-none text-[11px] leading-none [&>span]:-translate-y-px"
                   />
                 </span>
               );
