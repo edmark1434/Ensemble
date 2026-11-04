@@ -4,6 +4,7 @@ import { Outlet, useNavigate, useLocation, useParams } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 
 // Modular Component Imports
 import GigSearchBar from "./gig_components/gig_searchbar";
@@ -49,7 +50,7 @@ const fastestDelivery = (gig: Gig) => (gig.tiers?.length ? Math.min(...gig.tiers
 
 // Datasets & Types
 import { sampleGigs, type Gig } from "./gig_datasets";
-import { computeGigRankingBreakdown } from "./gig_ranking";
+import { computeGigRankingBreakdown, computeWeightedGigDiscoveryOrderKey } from "./gig_ranking";
 import GigViewDetails from "./gig_components/GigViewDetails";
 
 export interface GigMainContext {
@@ -59,7 +60,121 @@ export interface GigMainContext {
   viewType: ViewType;
   toggleSaveGig: (e: React.MouseEvent, gigId: string) => void;
   getBudgetStatus: (gig: Gig) => GigBudgetStatus;
+  handleClearFilters: () => void;
 }
+
+export const CATEGORY_ALIASES: Record<string, string[]> = {
+  "Ads & Social": ["Social", "Commercials", "Ads & Social", "Tiktoks", "Ads"],
+  "Social": ["Ads & Social", "Social", "Commercials", "Tiktoks"],
+  "Commercials": ["Ads & Social", "Commercials", "Social", "Ads"],
+  "Youtube Videos": ["YouTube", "YouTube Videos", "Youtube"],
+  "YouTube": ["YouTube", "YouTube Videos", "Youtube"],
+  "YouTube Videos": ["YouTube", "YouTube Videos", "Youtube"],
+  "Tiktoks": ["Tiktoks", "Social", "Ads & Social"],
+  "Corporate Videos": ["Corporate", "Corporate Videos"],
+  "Corporate": ["Corporate", "Corporate Videos"],
+  "Gaming Videos": ["Gaming", "Gaming Videos"],
+  "Gaming": ["Gaming", "Gaming Videos"],
+  "Family & Travel": ["Family & Travel", "Vlogs", "Travel"],
+  "Vlogs": ["Family & Travel", "Vlogs", "Travel"],
+  "Music Videos": ["Music Videos", "Music"],
+  "Wedding": ["Wedding", "Events"],
+  "Events": ["Events", "Wedding"],
+  "Explainer Videos": ["Explainer Videos", "Educational", "Corporate", "Commercials"],
+  "Educational": ["Educational", "Tutorial Videos", "Explainer Videos"],
+  "Tutorial Videos": ["Tutorial Videos", "Educational"],
+  "Showreels": ["Showreels", "Portfolio"],
+  "Fiction Films": ["Fiction Films", "Short Films"],
+  "Short Films": ["Fiction Films", "Short Films"],
+  "Movie Trailers": ["Movie Trailers", "Teaser Videos"],
+  "Teaser Videos": ["Teaser Videos", "Movie Trailers", "Commercials"],
+  "Podcast": ["Podcast", "Podcasts"],
+  "Podcasts": ["Podcast", "Podcasts"],
+  "Sports Video": ["Sports Video", "Fitness"],
+  "Montages": ["Montages", "Gaming", "Anime Edits"],
+  "Anime Edits": ["Anime Edits", "Animation"],
+  "Short Drama": ["Short Drama", "Short Films"],
+  "Animation": ["Animation", "Anime Edits"],
+  "Presentation": ["Presentation", "Corporate"],
+  "Cinematic": ["Cinematic", "Short Films"],
+  "Design": ["Design", "Thumbnails", "Graphics", "UI"],
+  "Others": ["Others", "Other"],
+  "Other": ["Others", "Other"],
+};
+
+export const isCategoryMatch = (gigCategory: string | undefined, filterCategory: string): boolean => {
+  if (!filterCategory || filterCategory === "All") return true;
+  if (!gigCategory) return false;
+  
+  const gCat = gigCategory.toLowerCase().trim();
+  const fCat = filterCategory.toLowerCase().trim();
+  if (gCat === fCat) return true;
+
+  const aliases = CATEGORY_ALIASES[filterCategory] || [];
+  if (aliases.some((a) => a.toLowerCase().trim() === gCat)) return true;
+
+  const revAliases = CATEGORY_ALIASES[gigCategory] || [];
+  if (revAliases.some((a) => a.toLowerCase().trim() === fCat)) return true;
+
+  if (gCat.includes(fCat) || fCat.includes(gCat)) return true;
+
+  return false;
+};
+
+export const isSearchMatch = (gig: Gig, query: string): boolean => {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const title = (gig.title || "").toLowerCase();
+  const postedBy = (gig.postedBy || "").toLowerCase();
+  const category = (gig.category || "").toLowerCase();
+  const desc = (gig.description || "").toLowerCase();
+  const skills = (gig.skills || []).map((s) => s.toLowerCase());
+  const tags = ((gig as any).tags || []).map((t: string) => String(t).toLowerCase());
+
+  // Direct whole-query match
+  if (
+    title.includes(q) ||
+    postedBy.includes(q) ||
+    category.includes(q) ||
+    desc.includes(q) ||
+    skills.some((s) => s.includes(q)) ||
+    tags.some((t) => t.includes(q))
+  ) {
+    return true;
+  }
+
+  // Category alias match
+  for (const [catName, aliases] of Object.entries(CATEGORY_ALIASES)) {
+    const allNames = [catName, ...aliases].map((n) => n.toLowerCase());
+    if (allNames.some((n) => n === q || q.includes(n) || n.includes(q))) {
+      if (allNames.includes(category) || isCategoryMatch(gig.category, catName)) {
+        return true;
+      }
+    }
+  }
+
+  // Keyword / token matching
+  const tokens = q
+    .split(/[\s,&/+-]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && !["and", "the", "for", "with", "in"].includes(w));
+
+  if (tokens.length > 0) {
+    const hasTokenMatch = tokens.some(
+      (tok) =>
+        title.includes(tok) ||
+        category.includes(tok) ||
+        postedBy.includes(tok) ||
+        skills.some((s) => s.includes(tok)) ||
+        tags.some((t) => t.includes(tok)) ||
+        desc.includes(tok)
+    );
+    if (hasTokenMatch) return true;
+  }
+
+  return false;
+};
 
 const SidebarSkeleton = () => (
   <div className="space-y-6">
@@ -106,6 +221,15 @@ const GigMain: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
 
+  useEffect(() => {
+    if (location.state?.searchQuery !== undefined) {
+      setSearchQuery(location.state.searchQuery);
+    }
+    if (location.state?.category !== undefined) {
+      setActiveCategoryFilter(location.state.category);
+    }
+  }, [location.state]);
+
   const [saved] = useState(readSavedFilters);
   const [minPrice, setMinPrice] = useState(saved.minPrice ?? "");
   const [maxPrice, setMaxPrice] = useState(saved.maxPrice ?? "");
@@ -123,21 +247,6 @@ const GigMain: React.FC = () => {
   const { user } = useGlobalState();
 
   useEffect(() => {
-    if (!user?.account_id) return;
-    api.get(`/api/accounts/profile/${user.account_id}`)
-      .then(({ data }) => {
-        const payload = data?.data ?? data?.profile ?? data;
-        const profile = Array.isArray(payload) ? payload[0] : payload;
-        const budget = profile?.budget_credits;
-        if (Number.isSafeInteger(budget) && budget > 0) {
-          setProfileBudget(budget);
-          if (saved.budgetMatch === undefined) setBudgetMatch(true);
-        }
-      })
-      .catch(() => setProfileBudget(null));
-  }, [user?.account_id, saved.budgetMatch]);
-
-  useEffect(() => {
     const toSave: SavedGigFilters = {
       minPrice, maxPrice, priceSort, tiersCount, tiersSort, dateSort, deliverySort,
       revisions, deliveryDays, ratingSort, budgetMatch, budgetTarget,
@@ -148,11 +257,38 @@ const GigMain: React.FC = () => {
   const budgetCredits = budgetTarget ?? profileBudget;
 
   useEffect(() => {
-    const fetchGigs = async () => {
+    let isCancelled = false;
+
+    const loadAllGigMarketData = async () => {
       setLoading(true);
       try {
-        const response = await api.get("/api/gigs");
-        if (response.data.success && response.data.data) {
+        // Fetch both gigs and user profile budget concurrently while skeleton loading is active!
+        // This prevents a second profile fetch from flipping budgetMatch / profileBudget AFTER
+        // the skeleton hides, which previously caused cards to fly and reorder on screen.
+        const [gigsResult, profileResult] = await Promise.allSettled([
+          api.get("/api/gigs"),
+          user?.account_id
+            ? api.get(`/api/accounts/profile/${user.account_id}`)
+            : Promise.resolve(null),
+        ]);
+
+        if (!isCancelled && profileResult.status === "fulfilled" && profileResult.value?.data) {
+          const data = profileResult.value.data;
+          const payload = data?.data ?? data?.profile ?? data;
+          const profile = Array.isArray(payload) ? payload[0] : payload;
+          const budget = profile?.budget_credits;
+          if (Number.isSafeInteger(budget) && budget > 0) {
+            setProfileBudget(budget);
+            if (saved.budgetMatch === undefined) setBudgetMatch(true);
+          } else {
+            setProfileBudget(null);
+          }
+        }
+
+        if (isCancelled) return;
+
+        const response = gigsResult.status === "fulfilled" ? gigsResult.value : null;
+        if (response?.data?.success && response?.data?.data) {
           const mappedGigs = response.data.data.map((g: any) => {
             const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
             const mapUrl = (path: string) => {
@@ -174,28 +310,63 @@ const GigMain: React.FC = () => {
               g.user?.account_id ||
               g.postedById;
 
-            return {
+            const mappedGig: Gig = {
               ...g,
               client_account_id: creatorAccountId,
+              freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
               thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
-              clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
+              clientAvatar: resolveAvatarPath(g.clientAvatar || g.client_avatar_path),
               gallery: (g.gallery || []).map((p: string) => mapUrl(p))
             };
+            return {
+              ...mappedGig,
+              discoveryOrderKey: computeWeightedGigDiscoveryOrderKey(mappedGig),
+            };
           });
-          setGigsList(mappedGigs.length > 0 ? mappedGigs : sampleGigs);
+
+          // PRE-SORT gigs by discovery order while STILL in skeleton loading!
+          // This ensures the initial order is 100% arranged before any cards render.
+          mappedGigs.sort((a: Gig, b: Gig) => {
+            const keyB = typeof b.discoveryOrderKey === "number" ? b.discoveryOrderKey : computeGigRankingBreakdown(b).totalScore;
+            const keyA = typeof a.discoveryOrderKey === "number" ? a.discoveryOrderKey : computeGigRankingBreakdown(a).totalScore;
+            return keyB - keyA;
+          });
+
+          const fallbackSamples = sampleGigs
+            .map((sg) => ({
+              ...sg,
+              discoveryOrderKey: computeWeightedGigDiscoveryOrderKey(sg),
+            }))
+            .sort((a, b) => (b.discoveryOrderKey ?? 0) - (a.discoveryOrderKey ?? 0));
+
+          setGigsList(mappedGigs.length > 0 ? mappedGigs : fallbackSamples);
         } else {
-          console.error("API returned unsuccessful data", response.data);
-          setGigsList(sampleGigs);
+          const fallbackSamples = sampleGigs
+            .map((sg) => ({ ...sg, discoveryOrderKey: computeWeightedGigDiscoveryOrderKey(sg) }))
+            .sort((a, b) => (b.discoveryOrderKey ?? 0) - (a.discoveryOrderKey ?? 0));
+          setGigsList(fallbackSamples);
         }
       } catch (err) {
         console.error("Error fetching gigs:", err);
-        setGigsList(sampleGigs);
+        if (!isCancelled) {
+          const fallbackSamples = sampleGigs
+            .map((sg) => ({ ...sg, discoveryOrderKey: computeWeightedGigDiscoveryOrderKey(sg) }))
+            .sort((a, b) => (b.discoveryOrderKey ?? 0) - (a.discoveryOrderKey ?? 0));
+          setGigsList(fallbackSamples);
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
-    fetchGigs();
-  }, []);
+
+    loadAllGigMarketData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user?.account_id]);
 
   useEffect(() => {
     if (id) {
@@ -280,21 +451,34 @@ const GigMain: React.FC = () => {
       label: name,
       count: counts[name],
     }));
+
+    if (
+      activeCategoryFilter !== "All" &&
+      !catArray.some((c) => c.label.toLowerCase() === activeCategoryFilter.toLowerCase())
+    ) {
+      const matchCount = tabFilteredGigs.filter((gig) =>
+        isCategoryMatch(gig.category, activeCategoryFilter)
+      ).length;
+      if (matchCount > 0) {
+        catArray.unshift({
+          label: activeCategoryFilter,
+          count: matchCount,
+        });
+      }
+    }
+
     return [
       { label: "All", count: tabFilteredGigs.length },
       ...catArray.sort((a, b) => b.count - a.count),
     ];
-  }, [tabFilteredGigs]);
+  }, [tabFilteredGigs, activeCategoryFilter]);
 
   const filteredGigs = useMemo(() => {
     const isServicesTab = !location.pathname.includes("/saved-services") && !location.pathname.includes("/my-services");
     const applyBudget = budgetMatch && budgetCredits !== null && isServicesTab;
     let result = tabFilteredGigs.filter((gig) => {
-      const matchesSearch =
-        gig.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        gig.postedBy.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory =
-        activeCategoryFilter === "All" || gig.category === activeCategoryFilter;
+      const matchesSearch = isSearchMatch(gig, searchQuery);
+      const matchesCategory = isCategoryMatch(gig.category, activeCategoryFilter);
       
       if (!matchesSearch || !matchesCategory) return false;
 
@@ -392,9 +576,11 @@ const GigMain: React.FC = () => {
       }
 
       // Default Recommended (Fair Discovery) Ranking:
-      // Combines Bayesian Rating (40%) + Newcomer Freshness (25%) + Listing Completeness (20%) + Slot Availability (15%)
-      if (bRank.totalScore !== aRank.totalScore) {
-        return bRank.totalScore - aRank.totalScore;
+      // Uses the 0-100 Score-Weighted Discovery Roll (matching Jobs Market)
+      const keyB = typeof b.discoveryOrderKey === "number" ? b.discoveryOrderKey : bRank.totalScore;
+      const keyA = typeof a.discoveryOrderKey === "number" ? a.discoveryOrderKey : aRank.totalScore;
+      if (keyB !== keyA) {
+        return keyB - keyA;
       }
 
       return 0;
@@ -441,6 +627,7 @@ const GigMain: React.FC = () => {
     viewType,
     toggleSaveGig,
     getBudgetStatus,
+    handleClearFilters,
   };
 
   return (

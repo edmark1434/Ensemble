@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Star, Clock, Users, Bookmark, Share2,
-  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart, TrendingUp, PackagePlus, Play
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart, TrendingUp, PackagePlus, Play, Sparkles
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { Gig } from "../gig_datasets";
 import { computeGigRankingBreakdown } from "../gig_ranking";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
 import { GigsOtherServices } from "./gigs_other_services";
@@ -36,6 +37,49 @@ interface GigRichTextProps {
   layout?: "drawer" | "page";
   onReportGig?: (gig: Gig) => void;
 }
+
+const CircularProgress: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}> = ({ percentage, size = 36, strokeWidth = 3.5 }) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0 select-none"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-gray-200 dark:stroke-white/10"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-blue-600 dark:stroke-blue-500 transition-all duration-500 ease-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono text-gray-800 dark:text-zinc-100">
+        {clamped}%
+      </span>
+    </div>
+  );
+};
 
 export const GigRichText: React.FC<GigRichTextProps> = ({
   gig,
@@ -322,9 +366,12 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         </div>
 
         <div className="text-left min-w-0">
-          <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate mb-1">
-            {gig.postedBy}
-          </p>
+          <div className="flex items-center gap-1.5 min-w-0 mb-1">
+            <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
+              {gig.postedBy}
+            </p>
+            <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
+          </div>
           <div className="space-y-0.5">
             <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
               <span>Freelancer Rating:</span>
@@ -1074,43 +1121,72 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                           className="overflow-hidden border-t border-gray-100 dark:border-white/5"
                         >
                           <div className="p-4 space-y-3 bg-gray-50/50 dark:bg-white/[0.01]">
+                            <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
+                              <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.serviceTypeLabel}</strong></span>
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
-                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust Rating (40)</div>
-                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                  {(rankInfo.bayesianScore * 40).toFixed(1)} pts
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
+                                  <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                    {(rankInfo.bayesianScore * 35).toFixed(1)} pts
+                                  </div>
                                 </div>
+                                <CircularProgress percentage={rankInfo.bayesianScore * 100} size={34} strokeWidth={3} />
                               </div>
-                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
-                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                  {(rankInfo.freshnessScore * 25).toFixed(1)} pts
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                                  <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                    {(rankInfo.freshnessScore * 25).toFixed(1)} pts
+                                  </div>
                                 </div>
+                                <CircularProgress percentage={rankInfo.freshnessScore * 100} size={34} strokeWidth={3} />
                               </div>
-                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Completeness (20)</div>
-                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                  {(rankInfo.completenessScore * 20).toFixed(1)} pts ({Math.round(rankInfo.completenessScore * 100)}%)
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-gray-500 dark:text-zinc-400">Package & Media (25)</div>
+                                  <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                    {(rankInfo.completenessScore * 25).toFixed(1)} pts
+                                  </div>
                                 </div>
+                                <CircularProgress percentage={rankInfo.completenessScore * 100} size={34} strokeWidth={3} />
                               </div>
-                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
-                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Slots (15)</div>
-                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                                  {(rankInfo.availabilityScore * 15).toFixed(1)} pts
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Slots (15)</div>
+                                  <div className="text-xs font-bold text-gray-900 dark:text-white font-mono mt-0.5">
+                                    {(rankInfo.availabilityScore * 15).toFixed(1)} pts
+                                  </div>
                                 </div>
+                                <CircularProgress percentage={rankInfo.availabilityScore * 100} size={34} strokeWidth={3} />
                               </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-white/70 dark:bg-dark-base/60 border border-gray-200/80 dark:border-white/10 text-[11px]">
+                              <div className="flex items-center gap-1.5 text-gray-700 dark:text-zinc-200">
+                                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                                <span>Plan Visibility: <strong>{rankInfo.subscriptionPlan}</strong></span>
+                              </div>
+                              <span className="font-mono font-bold text-gray-900 dark:text-white">
+                                {rankInfo.subscriptionBoost > 0 ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400">+{rankInfo.subscriptionBoost.toFixed(1)} pts boost</span>
+                                ) : (
+                                  <span className="text-gray-400 dark:text-zinc-500">+0.0 pts (Free)</span>
+                                )}
+                              </span>
                             </div>
 
                             <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-0.5">
                               <span>
                                 {rankInfo.completenessScore >= 0.85
                                   ? "85%+ completeness achieved!"
-                                  : "Add 3 tiers, 3+ images & milestones for Rising."}
+                                  : "Add 3 tiers, 3+ samples & milestones for Rising."}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => navigate("/gigs/info")}
-                                className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-200 hover:underline shrink-0"
+                                className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-200 hover:underline shrink-0 cursor-pointer"
                               >
                                 <HelpCircle className="h-3 w-3" />
                                 How it works

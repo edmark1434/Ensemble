@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp, Layers, Check } from "lucide-react";
+import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp, Layers, Check, Sparkles } from "lucide-react";
 import { computeGigRankingBreakdown } from "../gig_ranking";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import { formatDistanceToNow } from "date-fns";
 import type { Gig } from "../gig_datasets";
 import PopupReportGig from "./PopupReportGig";
@@ -99,6 +100,7 @@ export const GigList: React.FC<GigListProps> = ({
 }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
   const [reportingGig, setReportingGig] = useState<Gig | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 9;
@@ -200,6 +202,39 @@ export const GigList: React.FC<GigListProps> = ({
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                      {isDevModeOpen && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                          <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                            Algo Score
+                          </span>
+                          <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                            {rankInfo.totalScore.toFixed(1)}
+                          </span>
+                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                            {typeof gig.discoveryOrderKey === "number" && (
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                                Roll: {gig.discoveryOrderKey.toFixed(1)}
+                              </span>
+                            )}
+                            {rankInfo.subscriptionBoost > 0 ? (
+                              <span
+                                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                                  rankInfo.subscriptionPlan === "Business"
+                                    ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                                    : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                                }`}
+                              >
+                                <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                                <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                                Free (+0.0)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Top-left: Orders and Ordered status tag (matches Jobs Proposals & Applied tag) */}
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
@@ -360,7 +395,10 @@ export const GigList: React.FC<GigListProps> = ({
                         </div>
                       </div>
                       <div className="text-left leading-tight truncate">
-                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                          <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
+                        </div>
                         {/* Freelancer Overall Rating */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
@@ -403,6 +441,39 @@ export const GigList: React.FC<GigListProps> = ({
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                  {isDevModeOpen && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                      <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                        Algo Score
+                      </span>
+                      <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                        {rankInfo.totalScore.toFixed(1)}
+                      </span>
+                      <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                        {typeof gig.discoveryOrderKey === "number" && (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                            Roll: {gig.discoveryOrderKey.toFixed(1)}
+                          </span>
+                        )}
+                        {rankInfo.subscriptionBoost > 0 ? (
+                          <span
+                            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                              rankInfo.subscriptionPlan === "Business"
+                                ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                                : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                            }`}
+                          >
+                            <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                            <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                            Free (+0.0)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Top-left: Orders and Ordered status tag (matches Jobs Proposals & Applied tag) */}
                   <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
@@ -590,7 +661,10 @@ export const GigList: React.FC<GigListProps> = ({
                         </div>
                       </div>
                       <div className="text-left leading-tight truncate">
-                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                          <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
+                        </div>
                         {/* Freelancer Overall Rating */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />

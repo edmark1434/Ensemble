@@ -9,11 +9,14 @@ import {
   Clock,
   Layers,
   TrendingUp,
+  Sparkles,
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 import api from "@/lib/axios";
 import { formatDistanceToNow } from "date-fns";
-import { computeGigRankingBreakdown } from "../gig_ranking";
+import { computeGigRankingBreakdown, computeWeightedGigDiscoveryOrderKey } from "../gig_ranking";
 import useGlobalState from "@/lib/global_state";
 
 interface GigsOtherServicesProps {
@@ -23,6 +26,7 @@ interface GigsOtherServicesProps {
 export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGigId }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
   const [gigs, setGigs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -66,22 +70,23 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                 !g.status;
               return isNotCurrent && isOpen;
             })
-            .sort(
-              (a: any, b: any) =>
-                computeGigRankingBreakdown(b).totalScore -
-                computeGigRankingBreakdown(a).totalScore
-            )
-            .slice(0, 3)
             .map((g: any) => {
               const rawAvatar = g.client_avatar_path || g.clientAvatar || g.creator_avatar_path;
               const isValidAvatar = rawAvatar && !rawAvatar.includes("pravatar.cc");
 
-              return {
+              const mappedGig = {
                 ...g,
+                freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
                 thumbnail: mapUrl(g.thumbnail_path || g.thumbnail),
-                clientAvatar: isValidAvatar ? mapUrl(rawAvatar) : undefined,
+                clientAvatar: isValidAvatar ? resolveAvatarPath(rawAvatar) : undefined,
               };
-            });
+              return {
+                ...mappedGig,
+                discoveryOrderKey: computeWeightedGigDiscoveryOrderKey(mappedGig),
+              };
+            })
+            .sort((a: any, b: any) => (b.discoveryOrderKey ?? 0) - (a.discoveryOrderKey ?? 0))
+            .slice(0, 3);
           setGigs(mappedGigs);
         }
       } catch (error) {
@@ -211,6 +216,39 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                      {isDevModeOpen && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none select-none p-2 text-center">
+                          <span className="text-[9px] uppercase tracking-widest font-black text-indigo-300">
+                            Algo Score
+                          </span>
+                          <span className="text-2xl md:text-3xl font-black text-white font-mono drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                            {rankInfo.totalScore.toFixed(1)}
+                          </span>
+                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                            {typeof gig.discoveryOrderKey === "number" && (
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                                Roll: {gig.discoveryOrderKey.toFixed(1)}
+                              </span>
+                            )}
+                            {rankInfo.subscriptionBoost > 0 ? (
+                              <span
+                                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
+                                  rankInfo.subscriptionPlan === "Business"
+                                    ? "bg-purple-500/30 border-purple-400/50 text-purple-200"
+                                    : "bg-amber-500/30 border-amber-400/50 text-amber-200"
+                                }`}
+                              >
+                                <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                                <span>{rankInfo.subscriptionPlan} (+{rankInfo.subscriptionBoost.toFixed(1)})</span>
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[8.5px] font-mono text-zinc-300">
+                                Free (+0.0)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Orders and Service Rating grouped together at top-left */}
                       <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5 z-10">
@@ -404,9 +442,12 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                       </div>
 
                       <div className="flex flex-col truncate">
-                        <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300 truncate">
-                          {gig.postedBy}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300 truncate">
+                            {gig.postedBy}
+                          </span>
+                          <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
+                        </div>
                         <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">
                           <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
                           <span>
