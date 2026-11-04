@@ -599,6 +599,24 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             a.display_name as "postedBy",
 
+            COALESCE((
+                SELECT p.name
+                FROM subscriptions s
+                JOIN users u ON u.user_id = s.user_id
+                JOIN plans p ON p.plan_id = s.plan_id
+                WHERE u.account_id = g.freelancer_account_id
+                  AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
+                  AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+                ORDER BY
+                  CASE
+                    WHEN LOWER(p.name) = 'business' THEN 1
+                    WHEN LOWER(p.name) = 'premium' THEN 2
+                    ELSE 3
+                  END,
+                  s.updated_at DESC, s.created_at DESC
+                LIMIT 1
+            ), 'Free') as "freelancerSubscriptionPlan",
+
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
 
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
@@ -738,6 +756,10 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
             id: row.id,
 
             postedBy: row.postedBy || 'Unknown',
+
+        freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
+
+            freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
 
             clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
 
@@ -897,6 +919,24 @@ async function getSavedGigsRepository(accountId) {
             g.no_of_concurrent_max as slots,
 
             g.created_at as "postedAt", a.display_name as "postedBy",
+
+            COALESCE((
+                SELECT p.name
+                FROM subscriptions s
+                JOIN users u ON u.user_id = s.user_id
+                JOIN plans p ON p.plan_id = s.plan_id
+                WHERE u.account_id = g.freelancer_account_id
+                  AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
+                  AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+                ORDER BY
+                  CASE
+                    WHEN LOWER(p.name) = 'business' THEN 1
+                    WHEN LOWER(p.name) = 'premium' THEN 2
+                    ELSE 3
+                  END,
+                  s.updated_at DESC, s.created_at DESC
+                LIMIT 1
+            ), 'Free') as "freelancerSubscriptionPlan",
 
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
 
@@ -1061,6 +1101,10 @@ async function getSavedGigsRepository(accountId) {
             id: row.id,
 
             postedBy: row.postedBy || 'Unknown',
+
+        freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
+
+            freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
 
             clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
 
@@ -1633,6 +1677,24 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             g.created_at as "postedAt", a.display_name as "postedBy",
 
+            COALESCE((
+                SELECT p.name
+                FROM subscriptions s
+                JOIN users u ON u.user_id = s.user_id
+                JOIN plans p ON p.plan_id = s.plan_id
+                WHERE u.account_id = g.freelancer_account_id
+                  AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
+                  AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+                ORDER BY
+                  CASE
+                    WHEN LOWER(p.name) = 'business' THEN 1
+                    WHEN LOWER(p.name) = 'premium' THEN 2
+                    ELSE 3
+                  END,
+                  s.updated_at DESC, s.created_at DESC
+                LIMIT 1
+            ), 'Free') as "freelancerSubscriptionPlan",
+
             g.freelancer_account_id,
 
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
@@ -1871,6 +1933,8 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
         postedBy: row.postedBy || 'Unknown',
 
+        freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
+
         clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
 
         title: row.title,
@@ -1995,7 +2059,13 @@ async function updateGigRepository(gigId, accountIds, gigData) {
 
 
 
-        await client.query('DELETE FROM gig_tiers WHERE gig_id = $1', [gigId]);
+        const existingTiersRes = await client.query(
+            'SELECT gig_tier_id FROM gig_tiers WHERE gig_id = $1 ORDER BY gig_tier_id ASC',
+            [gigId]
+        );
+        const existingTierIds = existingTiersRes.rows.map((r) => r.gig_tier_id);
+
+        await client.query('UPDATE gig_addons SET deleted_at = NOW() WHERE gig_id = $1 AND deleted_at IS NULL', [gigId]);
 
         await client.query('DELETE FROM gig_milestones WHERE gig_id = $1', [gigId]);
 
@@ -2009,15 +2079,62 @@ async function updateGigRepository(gigId, accountIds, gigData) {
 
         if (gigData.tiers && gigData.tiers.length > 0) {
 
-            for (const tier of gigData.tiers) {
+            for (let i = 0; i < gigData.tiers.length; i++) {
 
+                const tier = gigData.tiers[i];
+
+                const tierTitle = tier.tierName ? `${tier.tierName} - ${tier.title}` : (tier.title || 'Standard Package');
+
+                if (i < existingTierIds.length) {
+
+                    await client.query(
+                        'UPDATE gig_tiers SET title = $1, description = $2, rate_credits = $3, delivery_days = $4, no_of_revisions_max = $5 WHERE gig_tier_id = $6',
+                        [tierTitle, tier.description || '', Number(tier.price) || 0, Number(tier.daysOfDelivery) || 1, Number(tier.revisions) || 0, existingTierIds[i]]
+                    );
+
+                } else {
+
+                    await client.query(
+                        'INSERT INTO gig_tiers (gig_id, title, description, rate_credits, delivery_days, no_of_revisions_max) VALUES ($1, $2, $3, $4, $5, $6)',
+                        [gigId, tierTitle, tier.description || '', Number(tier.price) || 0, Number(tier.daysOfDelivery) || 1, Number(tier.revisions) || 0]
+                    );
+
+                }
+
+            }
+
+            if (existingTierIds.length > gigData.tiers.length) {
+                const extraTierIds = existingTierIds.slice(gigData.tiers.length);
                 await client.query(
-
-                    'INSERT INTO gig_tiers (gig_id, title, description, rate_credits, delivery_days, no_of_revisions_max) VALUES ($1, $2, $3, $4, $5, $6)',
-
-                    [gigId, `${tier.tierName} - ${tier.title}`, tier.description, tier.price, tier.daysOfDelivery, tier.revisions]
-
+                    'DELETE FROM gig_tiers WHERE gig_tier_id = ANY($1::uuid[]) AND gig_tier_id NOT IN (SELECT DISTINCT gig_tier_id FROM gig_requests WHERE gig_tier_id IS NOT NULL)',
+                    [extraTierIds]
                 );
+            }
+
+        }
+
+
+
+        if (gigData.addOns && Array.isArray(gigData.addOns) && gigData.addOns.length > 0) {
+
+            const addonQuery = `
+                INSERT INTO gig_addons (
+                    gig_id, name, price_credits, additional_days
+                ) VALUES ($1, $2, $3, $4)
+            `;
+
+            for (const addon of gigData.addOns) {
+
+                const name = (addon.title || addon.name || '').trim();
+
+                if (!name) continue;
+
+                await client.query(addonQuery, [
+                    gigId,
+                    name.substring(0, 50),
+                    Number(addon.price) || 0,
+                    Number(addon.deliveryDays) || 0
+                ]);
 
             }
 

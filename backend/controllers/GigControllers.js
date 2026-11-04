@@ -293,7 +293,7 @@ async function updateGigController(req, res) {
 
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
-            additionalWorkRate, tiers, milestones, questionnaires, skills,
+            additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
             thumbnailFileId, galleryFileIds
         } = req.body;
 
@@ -307,7 +307,7 @@ async function updateGigController(req, res) {
 
         const gigData = {
             freelancer_account_id, title, description, category, slots, termsOfService,
-            firstDraftDelivery, additionalWorkRate, tiers, milestones, questionnaires,
+            firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
             skills, thumbnailFileId, galleryFileIds
         };
 
