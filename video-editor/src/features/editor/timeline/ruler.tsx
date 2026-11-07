@@ -13,6 +13,7 @@ import { timeMsToUnits } from "@designcombo/timeline";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 import { useCommentMarkers } from "@/features/editor/comments/use-comment-markers";
+import commentColors from "@/features/editor/comments/comment-colors.module.css";
 import { commentPreview } from "@/features/editor/comments/comments-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -493,7 +494,7 @@ const Ruler = (props: RulerProps) => {
         .map((marker) => {
           const x = timeMsToUnits(marker.timeMs, scale.zoom) - scrollLeft + offsetX;
           if (x < 0 || x > canvasSize.width) return null;
-          const color = marker.type === "comment" ? "var(--primary)" : "#f43f5e";
+          const color = marker.type === "comment" ? "#f43f5e" : "var(--primary)";
           return (
             <div
               key={marker.id}
@@ -540,7 +541,7 @@ const Ruler = (props: RulerProps) => {
               transform: "translateX(-50%)",
               zIndex: 4,
               pointerEvents: "none",
-              backgroundColor: "var(--primary)",
+              backgroundColor: "#f43f5e",
               clipPath: COMMENT_MARKER_CLIP,
             }}
           />
@@ -581,7 +582,7 @@ const Ruler = (props: RulerProps) => {
               <TooltipTrigger asChild>{markerButton}</TooltipTrigger>
               <TooltipContent
                 side="top"
-                className="max-w-[260px] text-wrap break-words bg-primary text-primary-foreground [&_svg]:bg-primary [&_svg]:fill-primary"
+                className={`max-w-[260px] text-wrap break-words ${commentColors.tooltip}`}
               >
                 {preview}
               </TooltipContent>

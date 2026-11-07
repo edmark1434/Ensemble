@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AudioLines, Clapperboard, ImageIcon, Loader2, PackageOpen } from "lucide-react";
+import { AudioLines, Clapperboard, ImageIcon, LayoutTemplate, Loader2, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CreditIcon } from "@/components/credit-icon";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import useStore from "../store/use-store";
 import { useMarketLicenses } from "../store/use-market-licenses";
+import { applyTemplate } from "../utils/apply-template";
 
 interface PurchaseDetails {
   asset: { name: string; type: string; price_credits: number; media_asset_count: number; is_owner: boolean };
@@ -21,6 +22,7 @@ export function MarketAssetPurchaseModal() {
   return assetId && projectId ? <PurchaseModal key={`${projectId}:${assetId}`} assetId={assetId} projectId={projectId} /> : null;
 }
 function PurchaseModal({ assetId, projectId }: { assetId: string; projectId: string }) {
+  const templateMode = useMarketLicenses(state => state.templateMode);
   const [details, setDetails] = useState<PurchaseDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -40,6 +42,7 @@ function PurchaseModal({ assetId, projectId }: { assetId: string; projectId: str
     return () => controller.abort();
   }, [assetId, projectId, reload]);
   const price = details?.asset.price_credits ?? 0;
+  const isTemplate = details?.asset.type === "template";
   const ownerDiscount = details?.asset.is_owner ? price : 0;
   const due = details?.hasAvailableLicense || details?.licensed ? 0 : price - ownerDiscount;
   const insufficient = details?.balanceCredits !== null && details?.balanceCredits !== undefined && details.balanceCredits < due;
@@ -47,34 +50,40 @@ function PurchaseModal({ assetId, projectId }: { assetId: string; projectId: str
     if (!details || pending) return;
     setPending(true); setError("");
     try {
-      const response = await fetch(`/api/market-assets/${assetId}/purchase`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, expectedPrice: details.asset.price_credits, expectedCharge: due }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (["ASSET_PRICE_CHANGED", "ASSET_LICENSE_COST_CHANGED"].includes(data.code)) { setLoading(true); setReload(value => value + 1); }
-        throw new Error(data.error || "Unable to purchase this asset.");
+      if (!details.licensed) {
+        const response = await fetch(`/api/market-assets/${assetId}/purchase`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, expectedPrice: details.asset.price_credits, expectedCharge: due }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          if (["ASSET_PRICE_CHANGED", "ASSET_LICENSE_COST_CHANGED"].includes(data.code)) { setLoading(true); setReload(value => value + 1); }
+          throw new Error(data.error || "Unable to purchase this asset.");
+        }
+        setDetails({ ...details, licensed: true });
       }
       // The refresh publishes the license together with its direct media URLs.
       window.dispatchEvent(new Event("market-license-updated"));
-      toast.success("Watermarks removed. This project is licensed to use the asset.");
+      if (isTemplate && templateMode) {
+        await applyTemplate(assetId, projectId, templateMode);
+        toast.success(templateMode === "replace" ? "Project replaced with the template." : "Template added to the end of the project.");
+      } else toast.success(isTemplate ? "This project is licensed to use the template." : "Watermarks removed. This project is licensed to use the asset.");
       close();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to purchase this asset.");
     } finally { setPending(false); }
   };
   const count = details?.asset.media_asset_count ?? 1;
-  const Icon = count > 1 ? PackageOpen : details?.asset.type === "audio" ? AudioLines : details?.asset.type === "video" ? Clapperboard : ImageIcon;
+  const Icon = isTemplate ? LayoutTemplate : count > 1 ? PackageOpen : details?.asset.type === "audio" ? AudioLines : details?.asset.type === "video" ? Clapperboard : ImageIcon;
   return <Dialog open onOpenChange={open => { if (!open && !pending) close(); }}>
     <DialogContent className="z-[300] max-h-[calc(100dvh-2rem)] overflow-y-auto border bg-card px-2 py-8 gap-6 sm:max-w-lg" onClick={event => event.stopPropagation()} onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onPointerDownOutside={event => { if (pending) event.preventDefault(); }}>
       <DialogHeader className="px-6 -mt-0.75">
-        <DialogTitle className="text-md font-semibold">Remove watermarks</DialogTitle>
-        <DialogDescription className="leading-relaxed text-pretty">Purchase a license to use this asset in the current project. All collaborators and future edits in this project are covered.</DialogDescription>
+        <DialogTitle className="text-md font-semibold">{isTemplate ? "Purchase template" : loading ? "Purchase license" : "Remove watermarks"}</DialogTitle>
+        <DialogDescription className="leading-relaxed text-pretty">{isTemplate ? "Purchase a license to use this template in the current project. Paid assets are sold separately." : "Purchase a license to use this asset in the current project. All collaborators and future edits in this project are covered."}</DialogDescription>
       </DialogHeader>
       <div className="space-y-6 px-6">
         {loading ? <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading purchase details…</div> : details && <>
-          <div className="flex items-center gap-3 rounded-lg border bg-secondary/30 p-4"><Icon className="size-6 shrink-0 text-muted-foreground" /><div className="min-w-0"><p className="break-words text-sm font-semibold">{details.asset.name}</p><p className="mt-1 text-xs text-muted-foreground">{count > 1 ? `Bundle · ${count} files` : `${details.asset.type[0].toUpperCase()}${details.asset.type.slice(1)} asset`} · One project license</p></div></div>
+          <div className="flex items-center gap-3 rounded-lg border bg-secondary/30 p-4"><Icon className="size-6 shrink-0 text-muted-foreground" /><div className="min-w-0"><p className="break-words text-sm font-semibold">{details.asset.name}</p><p className="mt-1 text-xs text-muted-foreground">{isTemplate ? "Template" : count > 1 ? `Bundle · ${count} files` : `${details.asset.type[0].toUpperCase()}${details.asset.type.slice(1)}`} · One project license</p></div></div>
           {details.asset.is_owner && !details.licensed && <p className="text-sm text-primary text-pretty text-center">You own this asset, so a 100% owner discount applies to this purchase.</p>}
           {details.hasAvailableLicense && !details.asset.is_owner && !details.licensed && <p className="text-sm text-muted-foreground">You already have an unassigned license. Use it for this project at no extra cost.</p>}
           {details.licensed && <p className="text-sm text-muted-foreground">This asset is already licensed for this project.</p>}
@@ -92,7 +101,7 @@ function PurchaseModal({ assetId, projectId }: { assetId: string; projectId: str
         {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
         <DialogFooter>
           <Button variant="outline" disabled={pending} onClick={close}>Cancel</Button>
-          {!details && !loading ? <Button onClick={() => { setLoading(true); setReload(value => value + 1); }}>Try again</Button> : <Button disabled={loading || pending || !details || insufficient || (!details.asset.is_owner && !details.hasAvailableLicense && due > 0 && details.balanceCredits === null)} onClick={() => { if (details?.licensed) { window.dispatchEvent(new Event("market-license-updated")); close(); } else void confirm(); }}>{pending && <Loader2 className="size-4 animate-spin" />}{pending ? "Processing…" : details?.licensed ? "Done" : details?.asset.is_owner ? "Confirm purchase" : details?.hasAvailableLicense ? "Use license" : due === 0 ? "Get license" : "Confirm purchase"}</Button>}
+          {!details && !loading ? <Button onClick={() => { setLoading(true); setReload(value => value + 1); }}>Try again</Button> : <Button disabled={loading || pending || !details || insufficient || (!details.asset.is_owner && !details.hasAvailableLicense && due > 0 && details.balanceCredits === null)} onClick={() => { if (details?.licensed && !templateMode) { window.dispatchEvent(new Event("market-license-updated")); close(); } else void confirm(); }}>{pending && <Loader2 className="size-4 animate-spin" />}{pending ? "Processing…" : details?.licensed ? templateMode ? "Apply template" : "Done" : details?.asset.is_owner ? "Confirm purchase" : details?.hasAvailableLicense ? "Use license" : due === 0 ? "Get license" : "Confirm purchase"}</Button>}
         </DialogFooter>
       </div>
     </DialogContent>

@@ -101,7 +101,7 @@ export function useKeyboardShortcuts(
       const { activeIds, playerRef } = useStore.getState();
 
       // open / close keyboard shortcuts dialog
-      if (!viewOnlyRef.current && mod && e.code === "Slash") {
+      if (mod && e.code === "Slash") {
         e.preventDefault();
         const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
         setShortcutsModalOpen(!isShortcutsModalOpen);
@@ -180,7 +180,7 @@ export function useKeyboardShortcuts(
       }
 
       // jump to previous / next comment (hold C + left / right)
-      if (cKeyDownRef.current && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+      if (canCommentRef.current && cKeyDownRef.current && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
         e.preventDefault();
         cComboUsedRef.current = true;
         const { playerRef, fps, duration } = useStore.getState();
@@ -343,21 +343,21 @@ export function useKeyboardShortcuts(
       }
 
       // zoom in
-      if (!viewOnlyRef.current && mod && (e.code === "Equal" || e.code === "NumpadAdd")) {
+      if (!mod && !e.altKey && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
         const { scale } = useStore.getState();
         applyScale(getNextZoomLevel(scale));
       }
 
       // zoom out
-      if (!viewOnlyRef.current && mod && (e.code === "Minus" || e.code === "NumpadSubtract")) {
+      if (!mod && !e.altKey && e.key === "-") {
         e.preventDefault();
         const { scale } = useStore.getState();
         applyScale(getPreviousZoomLevel(scale));
       }
 
       // zoom to fit
-      if (!viewOnlyRef.current && !mod && e.shiftKey && e.code === "KeyZ") {
+      if (!mod && !e.altKey && e.shiftKey && e.code === "KeyZ") {
         e.preventDefault();
         const { scale, duration, activeIds, trackItemsMap } = useStore.getState();
 
@@ -383,7 +383,7 @@ export function useKeyboardShortcuts(
       }
 
       // cycle timeline height: max -> default -> zero
-      if (!viewOnlyRef.current && e.code === "Backquote") {
+      if (!mod && !e.altKey && !e.shiftKey && e.code === "Backquote") {
         e.preventDefault();
         cycleTimelineHeight();
       }
@@ -578,7 +578,7 @@ export function useKeyboardShortcuts(
       }
 
       // go back from scene (back to home)
-      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyH") {
+      if (!mod && !e.altKey && !e.shiftKey && e.code === "KeyH") {
         e.preventDefault();
         const { activeSceneBlockId, closeScene, saveStatus, compactStatus } = useStore.getState();
         if (!activeSceneBlockId) return;

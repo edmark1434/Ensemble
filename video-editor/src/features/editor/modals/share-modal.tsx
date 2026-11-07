@@ -15,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger
 } from "@/components/ui/popover";
-import { ChevronDown, Check, Search, Link, PanelsTopLeft, Loader2 } from "lucide-react";
+import { ChevronDown, Check, Search, Link, LayoutTemplate, Loader2 } from "lucide-react";
 import * as Y from "yjs";
 import { debounce } from "lodash";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
@@ -515,7 +515,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
               <span className="relative bg-card px-2">or</span>
             </div>
             <Button variant="outline" className="w-full gap-2" disabled={preparingTemplate || !templateSource} onClick={() => void shareAsTemplate()}>
-              {preparingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <PanelsTopLeft className="h-4 w-4" />}
+              {preparingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutTemplate className="h-4 w-4" />}
               {preparingTemplate ? "Preparing template…" : "Share as template in the Asset Library"}
             </Button>
             {templateUrl && <a href={templateUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block text-sm underline">Open template in the Asset Library</a>}

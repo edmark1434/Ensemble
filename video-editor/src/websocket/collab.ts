@@ -395,7 +395,7 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
         if (room.clients.size !== 0) return;
         room.emptyTimeout = null;
 
-        const finalSnapshot: Promise<void> = !room.dirty
+        const finalSnapshot = !room.dirty
           ? Promise.resolve()
           : target.kind === "project"
             ? withProjectSnapshotLock(target.id, () =>

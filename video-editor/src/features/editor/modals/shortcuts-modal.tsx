@@ -10,6 +10,8 @@ import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import React from "react";
+import { useViewOnly } from "../hooks/use-view-only";
+import { useCanComment } from "../hooks/use-can-comment";
 
 interface ShortcutsModalProps {
   open: boolean;
@@ -21,6 +23,7 @@ interface ShortcutItem {
   keys: string[];
   alt?: string[];
   disabled?: boolean;
+  access?: "view" | "comment";
 }
 
 interface ShortcutCategory {
@@ -32,7 +35,7 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Global",
     items: [
-      { label: "Play or pause", keys: ["Space"] },
+      { label: "Play or pause", keys: ["Space"], access: "view" },
 
       { label: "Select all", keys: ["Ctrl", "A"] },
 
@@ -50,11 +53,11 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Timeline",
     items: [
-      { label: "Toggle timeline height", keys: ["`"] },
+      { label: "Toggle timeline height", keys: ["`"], access: "view" },
 
-      { label: "Zoom in", keys: ["Ctrl", "+"] },
-      { label: "Zoom out", keys: ["Ctrl", "-"] },
-      { label: "Zoom to fit", keys: ["Shift", "Z"] },
+      { label: "Zoom in", keys: ["="], alt: ["+"], access: "view" },
+      { label: "Zoom out", keys: ["-"], access: "view" },
+      { label: "Zoom to fit", keys: ["Shift", "Z"], access: "view" },
 
       { label: "Go to last frame", keys: ["Ctrl", "🡠"] },
       { label: "Go to next frame", keys: ["Ctrl", "🡢"] },
@@ -66,8 +69,8 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Timeline",
     items: [
-      { label: "Jump to start", keys: ["Home"] },
-      { label: "Jump to end", keys: ["End"] },
+      { label: "Jump to start", keys: ["Home"], access: "view" },
+      { label: "Jump to end", keys: ["End"], access: "view" },
 
       { label: "Split", keys: ["Ctrl", "B"] },
       { label: "Delete left", keys: ["Q"] },
@@ -81,22 +84,22 @@ const SHORTCUTS: ShortcutCategory[] = [
     title: "Collaboration",
     items: [
       { label: "Add scene", keys: ["S"] },
-      { label: "Go back from scene", keys: ["H"] },
+      { label: "Go back from scene", keys: ["H"], access: "view" },
 
       { label: "Add or remove markers", keys: ["M"] },
-      { label: "Go to last marker", keys: ["M", "🡠"] },
-      { label: "Go to next marker", keys: ["M", "🡢"] },
+      { label: "Go to last marker", keys: ["M", "🡠"], access: "view" },
+      { label: "Go to next marker", keys: ["M", "🡢"], access: "view" },
 
-      { label: "Add comment", keys: ["C"] },
-      { label: "Jump to last comment", keys: ["C", "🡠"] },
-      { label: "Jump to next comment", keys: ["C", "🡢"] },
+      { label: "Add comment", keys: ["C"], access: "comment" },
+      { label: "Jump to last comment", keys: ["C", "🡠"], access: "comment" },
+      { label: "Jump to next comment", keys: ["C", "🡢"], access: "comment" },
     ]
   },
   {
     title: "Canvas",
     items: [
-      { label: "Toggle fullscreen", keys: ["F"] },
-      { label: "Mute preview", keys: ["Ctrl", "M"] },
+      { label: "Toggle fullscreen", keys: ["F"], access: "view" },
+      { label: "Mute preview", keys: ["Ctrl", "M"], access: "view" },
 
       { label: "Move up 1 px", keys: ["🡡"] },
       { label: "Move down 1 px", keys: ["🡣"] },
@@ -122,6 +125,25 @@ const KeyCombo = ({ keys }: { keys: string[] }) => (
 );
 
 export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
+  const viewOnly = useViewOnly();
+  const canComment = useCanComment();
+  const shortcuts = SHORTCUTS.map((category) => ({
+    ...category,
+    items: category.items.filter((item) =>
+      item.access === "view" || (item.access === "comment" ? canComment : !viewOnly)
+    ),
+  })).filter((category) => category.items.length > 0).reduce<ShortcutCategory[]>((columns, category) => {
+    const timelineColumn = viewOnly && category.title === "Timeline"
+      ? columns.find((column) => column.title === "Timeline")
+      : undefined;
+    if (timelineColumn) {
+      timelineColumn.items.push(...category.items);
+    } else {
+      columns.push(category);
+    }
+    return columns;
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="z-[300] md:max-w-7xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
@@ -140,18 +162,18 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
         <div className="px-6">
           {/* gap-8 (32px) between columns of the same category; a category change adds ml-6 on top = 56px, divider sits at half (-right-7 = 28px) */}
           <div className="flex gap-8">
-            {SHORTCUTS.map((category, index) => (
+            {shortcuts.map((category, index) => (
               <div
                 key={category.title + index}
                 className={cn(
                   "flex flex-1 flex-col gap-6 relative",
-                  index > 0 && SHORTCUTS[index - 1].title !== category.title && "ml-6"
+                  index > 0 && shortcuts[index - 1].title !== category.title && "ml-6"
                 )}
               >
                 <h3
                   className={cn(
                     "text-sm font-semibold",
-                    index > 0 && SHORTCUTS[index - 1].title === category.title && "invisible"
+                    index > 0 && shortcuts[index - 1].title === category.title && "invisible"
                   )}
                 >
                   {category.title}
@@ -178,7 +200,7 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
                     </div>
                   ))}
                 </div>
-                {index < SHORTCUTS.length - 1 && SHORTCUTS[index + 1].title !== category.title && (
+                {index < shortcuts.length - 1 && shortcuts[index + 1].title !== category.title && (
                   <>
                     <div className="md:hidden">
                       <Separator className="my-4 bg-zinc-800" />

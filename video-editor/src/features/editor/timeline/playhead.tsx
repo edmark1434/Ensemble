@@ -117,12 +117,12 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
     markers.some((m) => m.type === "comment" && isNear(m));
   const nearNormal = markers.some((m) => m.type !== "comment" && isNear(m));
 
-  // normal markers are pink, comment markers use the primary color;
+  // normal markers use the primary color, comment markers are pink;
   // when both sit on the playhead, the normal marker wins
   const markerColor = nearNormal
-    ? "#f43f5e"
+    ? "var(--primary)"
     : nearComment
-      ? "var(--primary)"
+      ? "#f43f5e"
       : null;
   const playheadColor = playheadSnapped
     ? `color-mix(in oklch, var(--primary) 50%, var(--card))`

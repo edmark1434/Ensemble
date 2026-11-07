@@ -1,0 +1,14 @@
+.surface,
+.tooltip {
+  background-color: #f43f5e;
+  color: #000;
+}
+
+.tooltip {
+  --primary: #f43f5e;
+  --primary-foreground: #000;
+}
+
+.text {
+  color: #f43f5e;
+}

@@ -17,10 +17,12 @@ import {
   ClosedCaption,
   Clapperboard,
   CloudUpload,
+  LayoutTemplate,
   ArrowBigRightDash
 } from "lucide-react";
 
 const MENU_ITEMS = [
+  { id: "templates", icon: LayoutTemplate, label: "Templates", ariaLabel: "Browse market templates" },
   { id: "videos", icon: Clapperboard, label: "Videos", ariaLabel: "Add and manage video content" },
   { id: "images", icon: Image, label: "Images", ariaLabel: "Add and manage images" },
   { id: "audios", icon: AudioLines, label: "Audios", ariaLabel: "Add and manage audio content" },

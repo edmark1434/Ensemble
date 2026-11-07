@@ -14,6 +14,7 @@ import { MenuItem } from "./menu-item/menu-item";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { Button } from "@/components/ui/button";
 import { PlanIcon } from "./components/plan-icon";
+import { LayoutTemplate } from "lucide-react";
 
 // Define menu item data structure
 interface MenuItemData {
@@ -24,6 +25,7 @@ interface MenuItemData {
 
 // Menu items configuration
 const menuItems: MenuItemData[] = [
+  { id: "templates", label: "Templates", icon: LayoutTemplate },
   {
     id: "texts",
     label: "Text",

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bookmark, Heart, BadgeCheck, Loader2 } from "lucide-react";
+import { Bookmark, Heart, ShoppingBag, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { debounce } from "lodash";
 import { MediaSearchBar } from "@/components/media-search-bar";
 import { MarketBrowserHeader } from "@/components/market-browser-header";
+import { MarketCollectionRow } from "@/components/market-collection-row";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MarketAssetDetails, MarketAssetListings, type MarketAssetBundle } from "@/components/market-asset-browser";
 import { useMarketAssets, type MarketAssetType } from "@/hooks/use-market-assets";
@@ -17,7 +18,7 @@ const mediaLabels = { image: "images", video: "videos", audio: "audios" };
 const collectionTitle = (view: MarketCollectionView, type: MarketAssetType) => view === "licensed"
   ? `Licensed ${mediaLabels[type]} for this project`
   : `${view === "liked" ? "Liked" : "Saved"} ${mediaLabels[type]}`;
-const collectionIcon = (view: MarketCollectionView) => view === "licensed" ? BadgeCheck : view === "liked" ? Heart : Bookmark;
+const collectionIcon = (view: MarketCollectionView) => view === "licensed" ? ShoppingBag : view === "liked" ? Heart : Bookmark;
 
 function useCollectionRefresh(refresh: () => void, view: MarketCollectionView, poll = false) {
   const licenseKey = useMarketLicenses(state => view === "licensed" ? Object.values(state.assets).filter(asset => asset.licensed).map(asset => asset.assetId).sort().join(",") : "");
@@ -48,16 +49,8 @@ function CollectionRow({ type, view, onOpen }: {
   const Icon = collectionIcon(view);
   const title = collectionTitle(view, type);
 
-  return (
-    <button type="button" onClick={() => onOpen(view)}
-      title={title} className="group flex min-w-0 w-full items-center gap-2 rounded bg-secondary/70 px-3 py-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground"><Icon className="size-4" /></span>
-      <span className="min-w-0 flex-1">
-        <span className="mb-0.5 block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-300">{title}</span>
-        <span className="block truncate text-xs text-muted-foreground">{loading ? "Loading…" : error ? "Collection unavailable" : totalMediaCount === 0 ? `No ${view} ${mediaLabels[type]} yet` : `${totalMediaCount} ${totalMediaCount === 1 ? type : mediaLabels[type]}`}</span>
-      </span>
-    </button>
-  );
+  return <MarketCollectionRow title={title} icon={<Icon className="size-4" />} onOpen={() => onOpen(view)}
+    description={loading ? "Loading…" : error ? "Collection unavailable" : totalMediaCount === 0 ? `No ${view} ${mediaLabels[type]} yet` : `${totalMediaCount} ${totalMediaCount === 1 ? type : mediaLabels[type]}`} />;
 }
 
 export function MarketCollectionRows({ type, onOpen }: {

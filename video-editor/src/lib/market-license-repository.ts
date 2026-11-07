@@ -15,9 +15,12 @@ export async function readProjectMarketLicenses(projectId: string, userId: strin
       eb.exists(eb.selectFrom("market_asset_licenses as license").select("license.market_asset_license_id")
         .whereRef("license.market_asset_id", "=", "ma.market_asset_id").where("license.project_id", "=", projectId)
         .where("license.status", "=", "active").where("license.deleted_at", "is", null)).as("licensed"),
-      eb.exists(eb.selectFrom("market_media_assets as link").innerJoin("media_assets as media", "media.media_asset_id", "link.media_asset_id")
-        .select("link.market_asset_id").whereRef("link.market_asset_id", "=", "ma.market_asset_id")
-        .where("media.owner_user_id", "=", userId).where("media.deleted_at", "is", null)).as("isOwner"),
+      eb.exists(eb.selectFrom(db.selectFrom("marketplace_listings").distinctOn("market_asset_id")
+        .select(["market_asset_id", "submitted_by_account_id as account_id"])
+        .orderBy("market_asset_id").orderBy("created_at", "desc").orderBy("listing_id", "desc").as("listing"))
+        .innerJoin("users as creator", "creator.account_id", "listing.account_id")
+        .select("listing.market_asset_id").whereRef("listing.market_asset_id", "=", "ma.market_asset_id")
+        .where("creator.user_id", "=", userId)).as("isOwner"),
     ]).execute();
   const licensedIds = assets.filter(asset => asset.licensed).map(asset => asset.assetId);
   const media = licensedIds.length ? await db.selectFrom("market_media_assets as link")

@@ -59,6 +59,19 @@ async function main() {
     await query(`INSERT INTO market_assets(market_asset_id, name, description, price_credits, status, created_at, updated_at)
       VALUES ($1, 'License regression', 'Rollback-only fixture', 100, 'published', NOW(), NOW())`, [assetId]);
     await query('INSERT INTO market_media_assets(market_asset_id, media_asset_id, position) VALUES ($1,$2,0)', [assetId, mediaId]);
+    await query(`INSERT INTO marketplace_listings(listing_number,market_asset_id,submitted_by_account_id,title,status)
+      VALUES ($1,$2,$3,'Ownership regression','approved')`, ['TEST-' + assetId.slice(0, 14), assetId, creator.account_id]);
+    // Listing submitter wins even when the underlying media belongs to someone else.
+    await query('UPDATE media_assets SET owner_user_id=$1 WHERE media_asset_id=$2', [outsider.user_id, mediaId]);
+    assert.equal((await repo.getAssetRepository(assetId, creator.account_id)).is_owner, true);
+    assert.equal((await repo.getAssetRepository(assetId, outsider.account_id)).is_owner, false);
+    await query('SAVEPOINT unavailable_image');
+    await query('UPDATE files SET deleted_at=NOW() WHERE file_id=$1', [fileId]);
+    assert.equal((await repo.getAssetRepository(assetId, creator.account_id)).type, 'image', 'Missing original must not classify an image as a template');
+    await query('UPDATE media_assets SET deleted_at=NOW() WHERE media_asset_id=$1', [mediaId]);
+    assert.equal((await repo.getAssetRepository(assetId, creator.account_id)).type, 'image', 'Deleted media retains its listing type');
+    await query('ROLLBACK TO SAVEPOINT unavailable_image');
+    await query('RELEASE SAVEPOINT unavailable_image');
     const projectIds = [randomUUID(), randomUUID(), randomUUID()];
     for (const id of projectIds) {
       await query("INSERT INTO projects(project_id, name, status) VALUES ($1, 'License regression', 'active')", [id]);
@@ -257,6 +270,70 @@ async function main() {
     assert.deepEqual((await query('SELECT wallet_id,balance_credits FROM wallets ORDER BY wallet_id')).rows, balancesBefore);
     assert.deepEqual((await query('SELECT count(*) FROM credit_transactions')).rows, ledgerBefore);
     console.log('PASS lasting free use: server price check, no payment, no license consumption, frozen/viewer gates, access after price increase, new-project and owner-discount safeguards');
+
+    const templateId = randomUUID();
+    await query(`INSERT INTO market_assets(market_asset_id,name,description,price_credits,status,created_at,updated_at)
+      VALUES ($1,'Template regression','Rollback-only fixture',100,'published',NOW(),NOW())`, [templateId]);
+    await query('INSERT INTO market_asset_thumbnails(market_asset_id,media_asset_id,position) VALUES ($1,$2,0)', [templateId, mediaId]);
+    await query(`INSERT INTO marketplace_listings(listing_number,market_asset_id,submitted_by_account_id,title,status)
+      VALUES ($1,$2,$3,'Template ownership regression','approved')`, ['TEST-' + templateId.slice(0, 14), templateId, creator.account_id]);
+    assert.equal((await repo.getAssetRepository(templateId, creator.account_id)).is_owner, true);
+    assert.equal((await repo.getAssetRepository(templateId, outsider.account_id)).is_owner, false);
+    await query('SAVEPOINT missing_showcase');
+    await query('UPDATE media_assets SET deleted_at=NOW() WHERE media_asset_id=$1', [mediaId]);
+    assert.equal((await repo.getAssetRepository(templateId, creator.account_id)).is_owner, true, 'Ownership survives a deleted showcase');
+    await query('ROLLBACK TO SAVEPOINT missing_showcase');
+    await query('RELEASE SAVEPOINT missing_showcase');
+    assert.equal(await repo.deleteAssetRepository(templateId, outsider.account_id), false, 'Showcase owner cannot delete the template');
+    assert.equal(await repo.updateAssetRepository(templateId, outsider.account_id, {}), null, 'Showcase owner cannot edit the template');
+    const { rows: [snapshot] } = await query('INSERT INTO yjs_snapshots(document) VALUES ($1) RETURNING yjs_snapshot_id', [Buffer.from([0, 0])]);
+    await query('INSERT INTO project_yjs_snapshots(yjs_snapshot_id,project_id) VALUES ($1,$2)', [snapshot.yjs_snapshot_id, projectIds[0]]);
+    await query('INSERT INTO market_ydoc_assets(market_asset_id,yjs_snapshot_id) VALUES ($1,$2)', [templateId, snapshot.yjs_snapshot_id]);
+    const prepared = () => ({ snapshotId: String(snapshot.yjs_snapshot_id), name: 'Template copy', width: 1280, height: 720,
+      durationSeconds: 5, document: 'AAA=', scenes: [{ id: randomUUID(), name: 'Copied scene', width: 1280, height: 720, fps: 30, document: 'AAA=' }] });
+    const createCopy = (person, id, charge, content = prepared()) => repo.purchaseAssetRepository(templateId, person.account_id, 10,
+      { projectId: id, expectedPrice: 100, expectedCharge: charge, templateProject: content });
+    const failedCopyId = randomUUID();
+    await assert.rejects(createCopy(outsider, failedCopyId, 100), { code: 'ASSET_INSUFFICIENT_BALANCE' });
+    assert.equal((await query('SELECT 1 FROM projects WHERE project_id=$1', [failedCopyId])).rowCount, 0);
+    await query('UPDATE wallets SET balance_credits=10000 WHERE wallet_id=$1', [buyer.wallet_id]);
+    const available = await repo.purchaseAssetRepository(templateId, buyer.account_id, 10);
+    const copyId = randomUUID();
+    const copyContent = prepared();
+    const uploadMediaId = randomUUID();
+    const copiedUploadId = randomUUID();
+    await query(`INSERT INTO media_assets(media_asset_id,name,type,owner_user_id,original_file_id,proxy_file_id,thumbnail_file_id)
+      VALUES ($1,'Included upload','image',$2,$3,$3,$3)`, [uploadMediaId, creator.user_id, fileId]);
+    copyContent.uploads = [{ sourceId: uploadMediaId, id: copiedUploadId }];
+    const beforeUse = (await query('SELECT balance_credits FROM wallets WHERE wallet_id=$1', [buyer.wallet_id])).rows[0];
+    const used = await createCopy(buyer, copyId, 0, copyContent);
+    assert.equal(used.license.market_asset_license_id, available.license.market_asset_license_id);
+    assert.equal(used.license.project_id, copyId);
+    assert.deepEqual((await query('SELECT balance_credits FROM wallets WHERE wallet_id=$1', [buyer.wallet_id])).rows[0], beforeUse);
+    assert.equal((await query('SELECT 1 FROM blocks WHERE project_id=$1', [copyId])).rowCount, 1);
+    assert.equal((await query('SELECT 1 FROM project_yjs_snapshots WHERE project_id=$1', [copyId])).rowCount, 1);
+    assert.equal((await query('SELECT 1 FROM project_members WHERE project_id=$1', [copyId])).rowCount, 1);
+    const copiedUpload = (await query('SELECT owner_user_id, project_id, original_file_id FROM media_assets WHERE media_asset_id=$1', [copiedUploadId])).rows[0];
+    assert.equal(copiedUpload.owner_user_id, buyer.user_id);
+    assert.equal(copiedUpload.project_id, copyId);
+    assert.equal(copiedUpload.original_file_id, fileId, 'Independent upload record retains the shared file');
+    assert.equal((await query('SELECT user_id FROM block_members WHERE block_id=$1', [copyContent.scenes[0].id])).rows[0].user_id, buyer.user_id);
+    assert.equal((await query('SELECT 1 FROM market_asset_licenses WHERE project_id=$1', [copyId])).rowCount, 1, 'Source media licenses are not copied');
+    assert.equal((await createCopy(buyer, copyId, 0)).license.market_asset_license_id, used.license.market_asset_license_id);
+    assert.equal((await query('SELECT 1 FROM blocks WHERE project_id=$1', [copyId])).rowCount, 1, 'Retry does not duplicate scenes');
+    await assert.rejects(createCopy(outsider, copyId, 0), { code: 'TEMPLATE_UNAVAILABLE' });
+    await assert.rejects(createCopy(buyer, projectIds[0], 100), { code: 'TEMPLATE_UNAVAILABLE' }, 'Cannot overwrite an existing project');
+    const changedId = randomUUID();
+    await assert.rejects(createCopy(buyer, changedId, 100, { ...prepared(), snapshotId: '0' }), { code: 'TEMPLATE_UNAVAILABLE' });
+    assert.equal((await query('SELECT 1 FROM projects WHERE project_id=$1', [changedId])).rowCount, 0);
+    const secondCopyId = randomUUID();
+    const secondCopy = await createCopy(buyer, secondCopyId, 100);
+    assert.notEqual(secondCopy.license.market_asset_license_id, used.license.market_asset_license_id);
+    assert.equal(secondCopy.license.price_credits, 100);
+    const creatorCopy = await createCopy(creator, randomUUID(), 0);
+    assert.equal(creatorCopy.license.price_credits, 0);
+    assert.equal(creatorCopy.license.credit_transaction_id, null);
+    console.log('PASS template checkout: atomic rollback, existing-license use, paid and creator copies, scene ownership, retry safety, no source grants, snapshot mismatch and overwrite rejection');
 
 
 

@@ -32,16 +32,21 @@ const {
 } = require('../controllers/AssetControllers');
 
 const optionalAuth = require('../middleware/OptionalAuth');
+const { getTemplatePreviewController, getTemplateUseController, useTemplateController } = require('../controllers/TemplateControllers');
 
 router.post('/internal/editor/:assetId/action', require('../middleware/RequireInternalSecret'), editorAssetActionController);
 
 router.get('/', optionalAuth, listAssetsController);
 router.get('/posting-eligibility', [checkSession, requireAuth], getAssetPostingEligibilityController);
 router.get('/:assetId', optionalAuth, getAssetController);
+router.get('/:assetId/template-preview', optionalAuth, getTemplatePreviewController);
 router.get('/:assetId/reviews', optionalAuth, listAssetReviewsController);
 router.get('/:assetId/comments', optionalAuth, listCommentsController);
 
 router.use(checkSession, requireAuth);
+
+router.get('/:assetId/template-use', getTemplateUseController);
+router.post('/:assetId/template-use', useTemplateController);
 
 router.post('/', createAssetController);
 router.post('/:assetId/report', reportAssetController);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MediaPlaceholder } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
+import { isMissingMediaSource } from "../../utils/missing-media";
 import useStore from "../../store/use-store";
 import { useMarketAssetSource, useMarketImageFailed } from "../../hooks/use-market-asset-source";
 import { IImage } from "@designcombo/types";
@@ -20,7 +21,7 @@ function MarketImage({ item, ...props }: { item: IImage } & Omit<React.Component
   const [loaded, setLoaded] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   if (isRendering) return <Img {...props} src={item.details.src} />;
-  if (missing) return <MediaPlaceholder missing />;
+  if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
   return <>
     {src && failed !== src && <Img {...props} src={src} onLoad={() => setLoaded(src)} onError={() => setFailed(src)} />}
     {(!src || loaded !== src || failed === src) && <MediaPlaceholder failed={preparationFailed || (!!src && failed === src)} />}

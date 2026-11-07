@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import useLayoutStore from "../store/use-layout-store";
 import { useCommentNotifications } from "../store/use-comment-notifications";
+import commentColors from "./comment-colors.module.css";
 
 export function CommentsButton() {
   const commentsOpen = useLayoutStore(s => s.activeRightItem === "comments");
@@ -41,13 +42,13 @@ export function CommentsButton() {
           >
             <MessageSquare size={20} />
             {count > 0 && (
-              <span aria-hidden="true" className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-none tracking-normal text-primary-foreground">
+              <span aria-hidden="true" className={cn("absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full px-1 text-center text-[10px] font-semibold leading-none tracking-normal", commentColors.surface)}>
                 <span className="block -translate-y-px leading-none tabular-nums">{count > 99 ? "99+" : count}</span>
               </span>
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" align="center" sideOffset={1} onEscapeKeyDown={dismissNotice}>
+        <TooltipContent className={commentColors.tooltip} side="bottom" align="center" sideOffset={1} onEscapeKeyDown={dismissNotice}>
           {notice ? message : commentsOpen ? "Close comments" : "Comments"}
         </TooltipContent>
       </Tooltip>

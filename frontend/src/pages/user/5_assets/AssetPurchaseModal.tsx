@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { AudioLines, Coins, Loader2, ShoppingCart, X } from "lucide-react";
+import { AudioLines, Loader2, ShoppingCart, X } from "lucide-react";
 import api from "@/lib/axios";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import { mediaUrl, type AssetPurchaseResponse, type AssetRecord } from "./assetTypes";
 
 interface AssetPurchaseModalProps {
@@ -24,6 +25,7 @@ export default function AssetPurchaseModal({ open, asset, onClose, onPurchased }
 }
 
 function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurchaseModalProps, "open">) {
+  const noun = asset.type === "template" ? "template" : "asset";
   const [balance, setBalance] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -73,8 +75,8 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
         <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-white/10">
           <div>
-            <h2 id="asset-purchase-title" className="text-lg font-bold text-gray-900 dark:text-white">{asset.price_credits === 0 ? "Get asset" : "Purchase asset"}</h2>
-            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Confirm access to the protected files and project links.</p>
+            <h2 id="asset-purchase-title" className="text-lg font-bold text-gray-900 dark:text-white">{asset.price_credits === 0 ? `Get ${noun}` : `Purchase ${noun}`}</h2>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.type === "template" ? "Purchase one template license for your library." : "Confirm access to the protected files and project links."}</p>
           </div>
           <button type="button" onClick={onClose} disabled={purchasing} className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 dark:hover:bg-white/5 dark:hover:text-white" aria-label="Close purchase dialog">
             <X className="h-5 w-5" />
@@ -87,12 +89,12 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
           </div>
           <h3 className="mt-4 truncate font-bold text-gray-900 dark:text-white">{asset.name}</h3>
           <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">by {asset.creator_name}</p>
-          <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-zinc-400">One license covers this {asset.media_asset_count > 1 ? "bundle" : "asset"} in one project, including future edits by its collaborators. It stays unassigned until you assign it to a project.</p>
+          <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-zinc-400">One license covers this {asset.type === "template" ? "template" : asset.media_asset_count > 1 ? "bundle" : "asset"} in one project, including future edits by its collaborators. It stays unassigned until you assign it to a project.</p>
 
           <dl className="mt-5 space-y-3 rounded-xl border border-gray-200 p-4 text-sm dark:border-white/10">
             <div className="flex items-center justify-between gap-4">
               <dt className="text-gray-500 dark:text-zinc-400">Total credits</dt>
-              <dd className="inline-flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-300"><Coins className="h-4 w-4" /> {asset.price_credits.toLocaleString()} credits</dd>
+              <dd className="inline-flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-4 w-4" /> {asset.price_credits.toLocaleString()} credits</dd>
             </div>
             <div className="flex items-center justify-between gap-4 border-t border-gray-200 pt-3 dark:border-white/10">
               <dt className="text-gray-500 dark:text-zinc-400">Current balance</dt>
@@ -115,7 +117,7 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
             <button type="button" onClick={onClose} disabled={purchasing} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5">Cancel</button>
             <button type="button" onClick={() => void confirmPurchase()} disabled={purchasing || loadingBalance || balance === null || insufficient} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
               {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              {purchasing ? "Processing…" : asset.price_credits === 0 ? "Get asset" : "Confirm purchase"}
+              {purchasing ? "Processing…" : asset.price_credits === 0 ? `Get ${noun}` : "Confirm purchase"}
             </button>
           </div>
         </div>

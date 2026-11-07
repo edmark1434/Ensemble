@@ -26,7 +26,7 @@ function LiveMarketAssetLicensing({ children }: { children: ReactNode }) {
   const idsKey = useMemo(() => [...new Set(marketItems.map(getMarketAssetId).filter((id): id is string => !!id))].sort().join(","), [marketItems]);
   const licenses = useMarketLicenses();
   useEffect(() => {
-    useMarketLicenses.setState({ projectId, assets: {}, purchaseAssetId: null });
+    useMarketLicenses.setState({ projectId, assets: {}, purchaseAssetId: null, templateMode: null });
   }, [projectId]);
   useEffect(() => {
     if (!projectId || !idsKey) return;

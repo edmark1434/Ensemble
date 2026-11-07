@@ -1,6 +1,7 @@
 import { IAudio, ITrackItem, IVideo } from "@designcombo/types";
 import { AudioData, getAudioData, visualizeAudio } from "@remotion/media-utils";
 import { isEqual } from "lodash";
+import { isMissingMediaSource } from "../../utils/missing-media";
 
 interface AudioDataCache {
   data: AudioData;
@@ -22,6 +23,10 @@ export class AudioDataManager {
   }
 
   private async loadAudioData(src: string, id: string): Promise<void> {
+    if (isMissingMediaSource(src)) {
+      this.removeItem(id);
+      return;
+    }
     try {
       const data = await getAudioData(src);
       this.audioDatas[id] = {

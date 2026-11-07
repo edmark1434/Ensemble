@@ -877,7 +877,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                           variant={"ghost"}
                           size={"icon"}
                           className="disabled:opacity-0 disabled:pointer-events-none"
-                          style={isMarkerActive ? { color: "#f43f5e" } : undefined}
+                          style={isMarkerActive ? { color: "var(--primary)" } : undefined}
                         >
                           {isMarkerActive ? <IconRemoveMarker size={16} /> : <IconAddMarker size={16} />}
                         </Button>
@@ -899,7 +899,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                         onClick={isCommentActive ? openActiveComment : startComment}
                         variant={"ghost"}
                         size={"icon"}
-                        className={isCommentActive ? "text-primary hover:text-primary" : ""}
+                        style={isCommentActive ? { color: "#f43f5e" } : undefined}
                       >
                         {isCommentActive ? <MessageSquareShare size={16} /> : <MessageSquare size={16} />}
                       </Button>
@@ -1055,8 +1055,6 @@ const ZoomControl = ({
           >
             Zoom out
             <KbdGroup>
-              <Kbd>Ctrl</Kbd>
-              <span>+</span>
               <Kbd>-</Kbd>
             </KbdGroup>
           </TooltipContent>
@@ -1090,8 +1088,8 @@ const ZoomControl = ({
           >
             Zoom in
             <KbdGroup>
-              <Kbd>Ctrl</Kbd>
-              <span>+</span>
+              <Kbd>=</Kbd>
+              <span>/</span>
               <Kbd>+</Kbd>
             </KbdGroup>
           </TooltipContent>

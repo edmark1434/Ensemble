@@ -590,12 +590,12 @@ function emitPurchaseEvents(result) {
   }
 }
 
-async function purchaseAssetServices(assetId, accountId, projectId = null, expectedPrice = null, expectedCharge = null, freeOnly = false) {
+async function purchaseAssetServices(assetId, accountId, projectId = null, expectedPrice = null, expectedCharge = null, freeOnly = false, templateProject = null) {
   if (projectId !== null) requireUuid(projectId, 'Project ID');
   assetId = requireUuid(assetId).toLowerCase();
   try {
     const feePercent = await getMarketplaceTransactionFeePercent();
-    const result = await purchaseAssetRepository(assetId, accountId, feePercent, { projectId, expectedPrice, expectedCharge, freeOnly });
+    const result = await purchaseAssetRepository(assetId, accountId, feePercent, { projectId, expectedPrice, expectedCharge, freeOnly, templateProject });
     const asset = await getAssetServices(assetId, accountId);
     emitPurchaseEvents(result);
     return {

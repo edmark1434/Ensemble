@@ -266,6 +266,7 @@ interface MarketAssetLicensesTable {
 }
 
 interface Database {
+  marketplace_listings: { listing_id: string; market_asset_id: string | null; submitted_by_account_id: string | null; created_at: Date };
   market_asset_licenses: MarketAssetLicensesTable;
   asset_likes: AssetEngagementTable;
   asset_saves: AssetEngagementTable;

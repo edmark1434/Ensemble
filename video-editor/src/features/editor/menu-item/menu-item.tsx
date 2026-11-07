@@ -11,9 +11,12 @@ import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { Uploads } from "./uploads";
 import { AiVoice } from "./ai-voice";
 import { SFX } from "./sfx";
+import { Templates } from "./templates";
 
 const ActiveMenuItem = () => {
   const { activeMenuItem } = useLayoutStore();
+
+  if (activeMenuItem === "templates") return <Templates />;
 
   if (activeMenuItem === "transitions") {
     return <Transitions />;

@@ -1,4 +1,6 @@
 import { drawMissingMedia } from "./missing-media";
+import { isMissingMediaSource } from "../../utils/missing-media";
+import { mediaSourceKey } from "../../utils/media-sources";
 import {
   Resizable,
   ResizableProps,
@@ -39,7 +41,13 @@ class Image extends Resizable {
     super(props);
     this.id = props.id;
     this.src = props.src;
-    this.thumbnailSrc = props.metadata?.market ? props.metadata.previewUrl || "" : undefined;
+    // Template copies made before previewUrl was preserved still have a public
+    // proxy in src. Never fall back to a licensed original for timeline tiles.
+    const sourcePath = mediaSourceKey(props.src || "");
+    const publicProxy = sourcePath.startsWith("assets/proxies/") && !sourcePath.includes("..") && !sourcePath.includes("\\");
+    this.thumbnailSrc = props.metadata?.market
+      ? props.metadata.previewUrl || (publicProxy ? props.src : "")
+      : undefined;
     this.display = props.display;
     this.tScale = props.tScale;
     this.hidden = props.hidden ?? false;
@@ -150,7 +158,7 @@ class Image extends Resizable {
 
   public loadImage() {
     const src = this.thumbnailSrc ?? this.src;
-    if (!src) {
+    if (isMissingMediaSource(this.src) || !src) {
       this.isLoading = false;
       this.stopLoadingAnimation();
       return;

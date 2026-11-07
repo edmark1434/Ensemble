@@ -157,7 +157,11 @@ export async function GET(request: NextRequest) {
           .onRef("thumb.file_id", "!=", "m.original_file_id")
           .on("thumb.deleted_at", "is", null)
           .on("thumb.path", "not like", "asset-originals/%"))
-        .innerJoin("users as u", "u.user_id", "m.owner_user_id")
+        .innerJoin(db.selectFrom("marketplace_listings").distinctOn("market_asset_id")
+          .select(["market_asset_id", "submitted_by_account_id as account_id"])
+          .orderBy("market_asset_id").orderBy("created_at", "desc").orderBy("listing_id", "desc").as("listing_owner"),
+          "listing_owner.market_asset_id", "mma.market_asset_id")
+        .innerJoin("users as u", "u.account_id", "listing_owner.account_id")
         .where("mma.market_asset_id", "in", marketAssetIds)
         .where("m.deleted_at", "is", null)
         .where("orig.deleted_at", "is", null)

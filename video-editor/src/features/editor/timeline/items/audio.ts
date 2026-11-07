@@ -1,4 +1,5 @@
 import { drawMissingMedia } from "./missing-media";
+import { isMissingMediaSource } from "../../utils/missing-media";
 import {
   Control,
   Trimmable,
@@ -118,6 +119,14 @@ class Audio extends Trimmable {
   }
 
   private async initialize() {
+    if (isMissingMediaSource(this.src)) {
+      this.barData = undefined;
+      this.bars = [];
+      this.isLoading = false;
+      this.stopLoadingAnimation();
+      this.canvas?.requestRenderAll();
+      return;
+    }
     const audioData = await getAudioData(this.src);
     this.barData = audioData;
     this.bars = this.getBars(0, 0) as any;

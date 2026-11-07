@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, PanelsRightBottom, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -39,7 +39,7 @@ const FILTERS: { value: FilterType; label: string; icon?: typeof Image }[] = [
   { value: "image", label: "Images", icon: Image },
   { value: "video", label: "Videos", icon: Clapperboard },
   { value: "audio", label: "Audio", icon: AudioLines },
-  { value: "template", label: "Templates", icon: PanelsRightBottom },
+  { value: "template", label: "Templates", icon: LayoutTemplate },
 ];
 
 function requestError(error: unknown) {

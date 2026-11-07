@@ -309,7 +309,6 @@ export default function Navbar({
         <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
           {/* gap-2 + mr-1.5 = the same 14px the logo sits from the undo button */}
           {!preview && <PresenceAvatars className="mr-2 hidden md:flex" />}
-          {!viewOnly && (
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>
                 <Button
@@ -333,7 +332,6 @@ export default function Navbar({
                 </KbdGroup>
               </TooltipContent>
             </Tooltip>
-          )}
           {canComment && <CommentsButton />}
           {!preview && <DownloadPopover stateManager={stateManager} />}
 

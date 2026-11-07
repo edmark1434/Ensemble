@@ -18,6 +18,17 @@ const MAX_CONTENT_FILES = 20;
 const MAX_MARKET_MEDIA_NAME_LENGTH = 50;
 const LINK_TABLES = new Set(['market_media_assets', 'market_asset_thumbnails']);
 
+// Listing type comes from its linked content, independently of file availability.
+// A missing/deleted preview or original must never turn a media listing into a template.
+const ASSET_TYPE_SQL = `COALESCE(
+  (SELECT typed_media.type FROM market_media_assets typed_link
+   JOIN media_assets typed_media ON typed_media.media_asset_id = typed_link.media_asset_id
+   WHERE typed_link.market_asset_id = ma.market_asset_id
+   ORDER BY typed_link.position, typed_media.media_asset_id LIMIT 1),
+  CASE WHEN EXISTS (SELECT 1 FROM market_ydoc_assets typed_snapshot
+    WHERE typed_snapshot.market_asset_id = ma.market_asset_id) THEN 'template' END
+)`;
+
 function formatMarketMediaName(name, suffix = '') {
   const nameCharacters = Array.from(name || '');
   const suffixLength = Array.from(suffix).length;
@@ -364,19 +375,10 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
      ), usage AS (
        SELECT COUNT(DISTINCT ma.market_asset_id)::int AS posted_count
        FROM market_assets ma
-       JOIN LATERAL (
-         SELECT media.owner_user_id
-         FROM market_media_assets link
-         JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-         WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-         UNION ALL
-         SELECT media.owner_user_id
-         FROM market_asset_thumbnails link
-         JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-         WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-         LIMIT 1
-       ) listing_owner ON TRUE
-       JOIN users owner_user ON owner_user.user_id = listing_owner.owner_user_id
+       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+       JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
        WHERE owner_user.account_id = $1
          AND ma.status = 'published'
          AND ($2::uuid IS NULL OR ma.market_asset_id <> $2::uuid)
@@ -488,7 +490,7 @@ const ASSET_SELECT = `
   FROM market_assets ma
   JOIN LATERAL (
     SELECT content.media_asset_id,
-           COALESCE(content.type, 'template') AS type,
+           ${ASSET_TYPE_SQL} AS type,
            content.width, content.height, content.duration_seconds,
            COALESCE(content.proxy_path, cover.thumbnail_path) AS proxy_path,
            COALESCE(cover.thumbnail_path, content.thumbnail_path) AS thumbnail_path,
@@ -567,11 +569,10 @@ const ASSET_SELECT = `
                         ELSE 'ready' END
             FROM market_media_assets job_link
             JOIN media_asset_jobs job ON job.media_asset_id = job_link.media_asset_id
-            WHERE job_link.market_asset_id = ma.market_asset_id) AS processing_status,
-           COALESCE(content.owner_user_id, cover.owner_user_id) AS owner_user_id
+            WHERE job_link.market_asset_id = ma.market_asset_id) AS processing_status
     FROM (SELECT 1) anchor
     LEFT JOIN LATERAL (
-      SELECT cover_media.owner_user_id, cover_file.path AS thumbnail_path
+      SELECT cover_file.path AS thumbnail_path
       FROM market_asset_thumbnails cover_link
       JOIN media_assets cover_media ON cover_media.media_asset_id = cover_link.media_asset_id
       JOIN files cover_file ON cover_file.file_id = cover_media.thumbnail_file_id
@@ -589,7 +590,7 @@ const ASSET_SELECT = `
     LEFT JOIN LATERAL (
       SELECT m.media_asset_id, m.type, m.width, m.height, m.duration_seconds,
              proxy.path AS proxy_path, poster.path AS thumbnail_path,
-             original.mime_type, original.size_bytes, m.owner_user_id
+             original.mime_type, original.size_bytes
       FROM market_media_assets content_link
       JOIN media_assets m ON m.media_asset_id = content_link.media_asset_id
       JOIN files original ON original.file_id = m.original_file_id
@@ -603,7 +604,10 @@ const ASSET_SELECT = `
       LIMIT 1
     ) content ON TRUE
   ) media ON TRUE
-  JOIN users owner_user ON owner_user.user_id = media.owner_user_id
+  JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+  JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
   JOIN accounts owner ON owner.account_id = owner_user.account_id
     LEFT JOIN files owner_avatar ON owner_avatar.file_id = owner.avatar_file_id
   LEFT JOIN LATERAL (
@@ -782,6 +786,13 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
       [data.name, data.description, data.priceCredits, needsProcessing ? 'draft' : data.status]
     );
     const marketAssetId = market.rows[0].market_asset_id;
+    await client.query(
+      `INSERT INTO marketplace_listings
+        (listing_number, market_asset_id, submitted_by_account_id, title, description, category, price_credits, status)
+       VALUES ('LST-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16), $1, $2, $3, $4, $5, $6, $7)`,
+      [marketAssetId, accountId, data.name, data.description, data.type, data.priceCredits,
+        data.status === 'published' ? 'approved' : 'draft']);
+
 
     if (data.type === 'template') {
       if (thumbnails.length < 1 || thumbnails.length > MAX_SHOWCASE_IMAGES) {
@@ -931,7 +942,10 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
      JOIN media_assets media ON media.media_asset_id = link.media_asset_id
      JOIN files original ON original.file_id = media.original_file_id
      LEFT JOIN files proxy ON proxy.file_id = media.proxy_file_id AND proxy.deleted_at IS NULL
-     JOIN users owner_user ON owner_user.user_id = media.owner_user_id
+     JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+  JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
      JOIN accounts owner ON owner.account_id = owner_user.account_id
      WHERE ma.market_asset_id = $1
        AND original.deleted_at IS NULL
@@ -970,7 +984,7 @@ async function getEditorAssetPurchaseContextRepository(assetId, accountId, proje
   return context || null;
 }
 
-async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT, { projectId = null, expectedPrice = null, expectedCharge = null, freeOnly = false } = {}) {
+async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT, { projectId = null, expectedPrice = null, expectedCharge = null, freeOnly = false, templateProject = null } = {}) {
   if (freeOnly && !projectId) throw repoError('ASSET_LICENSE_PROJECT_FORBIDDEN');
   const client = await pool.connect();
   try {
@@ -980,6 +994,9 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       [buyerAccountId, assetId]
     );
 
+    if (templateProject) {
+      await require('./TemplateRepositories').createTemplateProject(client, assetId, buyerAccountId, projectId, templateProject);
+    }
     let projectContext = null;
     if (projectId) {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [projectId, assetId]);
@@ -1000,23 +1017,10 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
               buyer.display_name AS buyer_name,
               buyer_user.user_id AS buyer_user_id
        FROM market_assets ma
-       JOIN LATERAL (
-         SELECT candidate.owner_user_id
-         FROM (
-           SELECT media.owner_user_id, 0 AS source_order
-           FROM market_media_assets link
-           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-           UNION ALL
-           SELECT media.owner_user_id, 1 AS source_order
-           FROM market_asset_thumbnails link
-           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-         ) candidate
-         ORDER BY candidate.source_order
-         LIMIT 1
-       ) asset_owner ON TRUE
-       JOIN users owner_user ON owner_user.user_id = asset_owner.owner_user_id
+       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) asset_owner ON asset_owner.market_asset_id = ma.market_asset_id
+       JOIN users owner_user ON owner_user.account_id = asset_owner.account_id
        JOIN accounts owner ON owner.account_id = owner_user.account_id
        JOIN accounts buyer ON buyer.account_id = $2
        JOIN users buyer_user ON buyer_user.account_id = buyer.account_id
@@ -1513,25 +1517,12 @@ async function updateAssetRepository(assetId, accountId, data, derivatives = new
   try {
     await client.query('BEGIN');
     const owned = await client.query(
-      `SELECT ma.market_asset_id, ma.status AS current_status, listing_owner.owner_user_id,
-              COALESCE(content.type, 'template') AS type
+      `SELECT ma.market_asset_id, ma.status AS current_status, u.user_id AS owner_user_id,
+              ${ASSET_TYPE_SQL} AS type
        FROM market_assets ma
-       JOIN LATERAL (
-         SELECT candidate.owner_user_id
-         FROM (
-           SELECT media.owner_user_id, 0 AS source_order
-           FROM market_media_assets link
-           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-           UNION ALL
-           SELECT media.owner_user_id, 1 AS source_order
-           FROM market_asset_thumbnails link
-           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-         ) candidate
-         ORDER BY candidate.source_order
-         LIMIT 1
-       ) listing_owner ON TRUE
+       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
        LEFT JOIN LATERAL (
          SELECT m.type
          FROM market_media_assets content_link
@@ -1541,7 +1532,7 @@ async function updateAssetRepository(assetId, accountId, data, derivatives = new
          ORDER BY content_link.position, m.media_asset_id
          LIMIT 1
        ) content ON TRUE
-       JOIN users u ON u.user_id = listing_owner.owner_user_id
+       JOIN users u ON u.account_id = listing_owner.account_id
        WHERE ma.market_asset_id = $1 AND u.account_id = $2
          AND ma.deleted_at IS NULL
        FOR UPDATE OF ma`,
@@ -1625,23 +1616,10 @@ async function deleteAssetRepository(assetId, accountId) {
     const owned = await client.query(
       `SELECT ma.market_asset_id
        FROM market_assets ma
-       JOIN LATERAL (
-         SELECT candidate.owner_user_id
-         FROM (
-           SELECT media.owner_user_id, 0 AS source_order
-           FROM market_media_assets content_link
-           JOIN media_assets media ON media.media_asset_id = content_link.media_asset_id
-           WHERE content_link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-           UNION ALL
-           SELECT media.owner_user_id, 1 AS source_order
-           FROM market_asset_thumbnails showcase_link
-           JOIN media_assets media ON media.media_asset_id = showcase_link.media_asset_id
-           WHERE showcase_link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-         ) candidate
-         ORDER BY candidate.source_order
-         LIMIT 1
-       ) asset_owner ON TRUE
-       JOIN users u ON u.user_id = asset_owner.owner_user_id
+       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) asset_owner ON asset_owner.market_asset_id = ma.market_asset_id
+       JOIN users u ON u.account_id = asset_owner.account_id
        WHERE ma.market_asset_id = $1 AND u.account_id = $2
          AND ma.deleted_at IS NULL
        LIMIT 1

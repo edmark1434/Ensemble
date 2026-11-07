@@ -41,12 +41,13 @@ export function useSnapshotDocument(stateManager: StateManager) {
     const state = { trackItemsMap: snapshot.trackItemsMap, trackItemIds: snapshot.trackItemIds,
       transitionsMap: snapshot.transitionsMap, transitionIds: snapshot.transitionIds,
       tracks: snapshot.tracks, size, fps, duration };
-    stateManager.updateState(state, { updateHistory: false });
+    // Publish availability before timeline subscriptions start loading media.
+    useMissingMedia.setState({ projectId: "", missing: new Set(preview.missingSources) });
     useStore.setState({ ...state, projectId: "", userId: "", userName: "", collabSchema: null,
       collabOrigin: null, activeIds: [], markers: snapshot.markers, projectName: preview.name,
       background: snapshot.background ?? useStore.getInitialState().background,
     });
-    useMissingMedia.setState({ projectId: "", missing: new Set(preview.missingSources) });
+    stateManager.updateState(state, { updateHistory: false });
     if (timeline && timeline === useStore.getState().timeline) {
       const canvas = timeline as any;
       const present = new Set(canvas.getTrackItems().map((item: { id: string }) => item.id));

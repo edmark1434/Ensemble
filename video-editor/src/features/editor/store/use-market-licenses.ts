@@ -16,14 +16,15 @@ interface MarketLicenseStore {
   projectId: string;
   assets: Record<string, MarketLicenseStatus>;
   purchaseAssetId: string | null;
-  openPurchase: (assetId: string) => void;
+  templateMode: "replace" | "append" | null;
+  openPurchase: (assetId: string, templateMode?: "replace" | "append") => void;
   closePurchase: () => void;
   update: (projectId: string, assets: MarketLicenseStatus[]) => void;
 }
 export const useMarketLicenses = create<MarketLicenseStore>((set) => ({
-  projectId: "", assets: {}, purchaseAssetId: null,
-  openPurchase: (purchaseAssetId) => set({ purchaseAssetId }),
-  closePurchase: () => set({ purchaseAssetId: null }),
+  projectId: "", assets: {}, purchaseAssetId: null, templateMode: null,
+  openPurchase: (purchaseAssetId, templateMode = undefined) => set({ purchaseAssetId, templateMode: templateMode ?? null }),
+  closePurchase: () => set({ purchaseAssetId: null, templateMode: null }),
   update: (projectId, assets) => set(state => state.projectId !== projectId ? state : ({
     assets: { ...state.assets, ...Object.fromEntries(assets.map(asset => [asset.assetId, mergeMarketLicense(state.assets[asset.assetId], asset)])) },
   })),

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MediaPlaceholder } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
+import { isMissingMediaSource } from "../../utils/missing-media";
 import useStore from "../../store/use-store";
 import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
 import { IVideo } from "@designcombo/types";
@@ -41,7 +42,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
     );
   }
 
-  if (missing) return <MediaPlaceholder missing />;
+  if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
   if (!src) return <MediaPlaceholder />;
   return (<>
     {failed !== src && <Html5Video

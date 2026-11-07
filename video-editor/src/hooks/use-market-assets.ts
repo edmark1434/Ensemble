@@ -3,7 +3,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 
 export type MarketAssetType = "image" | "video" | "audio";
 
-export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover" | "liked" | "saved" | "licensed" = "discover", projectId?: string) {
+export function useMarketAssets<T = any>(type?: MarketAssetType | "template", view: "discover" | "liked" | "saved" | "licensed" | "purchased" = "discover", projectId?: string) {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -26,7 +26,8 @@ export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover
         setItems([]); setTotalMediaCount(0); setHasMore(false);
         pageRef.current = 1;
       }
-      if (view === "licensed" && !projectId) { setLoading(false); setHasMore(false); return; }
+      const needsProject = view === "licensed" || (type === "template" && view === "purchased");
+      if (needsProject && !projectId) { setLoading(false); setHasMore(false); return; }
       try {
         const params = new URLSearchParams({
           view,
@@ -34,10 +35,10 @@ export function useMarketAssets<T = any>(type?: MarketAssetType, view: "discover
           limit: "20"
         });
         if (type) params.set("type", type);
-        if (view === "licensed" && projectId) params.set("projectId", projectId);
+        if (needsProject && projectId) params.set("projectId", projectId);
         if (query.trim()) params.set("query", query.trim());
 
-        const res = await fetch(`/api/market-assets?${params}`);
+        const res = await fetch(`${type === "template" ? "/api/market-templates" : "/api/market-assets"}?${params}`);
         if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || "Unable to load market assets."); }
         const data = await res.json();
 

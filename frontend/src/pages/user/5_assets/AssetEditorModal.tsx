@@ -8,6 +8,7 @@ import { enqueueAssetUpload } from "./assetUploadStore";
 import useGlobalState from "@/lib/global_state";
 import VideoUploadNotice from "./VideoUploadNotice";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import { templateSnapshotPreviewUrl } from "./templatePreview";
 
 type SourceKind = Exclude<AssetType, "template">;
 
@@ -101,8 +102,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     setError("");
     try {
       const { data } = await api.get('/api/editor/handoff-token');
-      const editorUrl = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
-      const url = `${editorUrl}/preview/${encodeURIComponent(template.previewToken)}?${new URLSearchParams({ token: data.handoffToken })}`;
+      const url = templateSnapshotPreviewUrl(template.previewToken, data.handoffToken);
       if (tab && !tab.closed) tab.location.replace(url);
       else setPreviewUrl(url);
     } catch {

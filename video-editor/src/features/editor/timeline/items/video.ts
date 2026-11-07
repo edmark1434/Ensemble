@@ -1,4 +1,5 @@
 import { drawMissingMedia } from "./missing-media";
+import { isMissingMediaSource } from "../../utils/missing-media";
 import {
   Control,
   Pattern,
@@ -162,6 +163,13 @@ class Video extends Trimmable {
   }
 
   public async initialize() {
+    if (isMissingMediaSource(this.src)) {
+      this.clip = null;
+      this.isLoading = false;
+      this.stopLoadingAnimation();
+      this.canvas?.requestRenderAll();
+      return;
+    }
     // Older saved items contain the former still URL. Resolve their current
     // generated preview without rewriting project history or fetching originals.
     if (this.metadata?.market && !this.hasVideoPreview()) {
@@ -209,6 +217,7 @@ class Video extends Trimmable {
   }
 
   public async prepareAssets() {
+    if (isMissingMediaSource(this.src)) return;
     // Never download the full market proxy/original just to draw timeline tiles.
     if (this.metadata?.market && !this.hasVideoPreview()) return;
     const file = await getFileFromUrl(this.metadata?.market ? this.previewUrl : this.src);

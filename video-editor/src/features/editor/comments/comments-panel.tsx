@@ -30,6 +30,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Avatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import commentColors from "./comment-colors.module.css";
 import { COMMENT_MAX_IMAGES, COMMENT_MAX_IMAGE_BYTES } from "@/features/editor/constants/comment-limits";
 import useStore from "../store/use-store";
 import useLayoutStore from "../store/use-layout-store";
@@ -987,7 +988,7 @@ export function Entry({
             <p className="whitespace-nowrap text-xs text-muted-foreground">
               {formatCreatedAt(item.createdAt, now)}
             </p>
-            {unread && <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">New</span>}
+            {unread && <span className={cn("rounded-full px-1.5 py-0.5 text-xs font-semibold", commentColors.surface)}>New</span>}
           </div>
           {item.canDelete && (
             <Popover open={menuOpen} onOpenChange={setMenuOpen}>
@@ -1090,16 +1091,11 @@ function Thread({
 
   const parts: ReactNode[] = [];
   if (n > 0) parts.push(`${n} ${n === 1 ? "reply" : "replies"}`);
-  if (unreadReplies > 0) parts.push(
-    <span key="unread" className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
-      {unreadReplies} new
-    </span>,
-  );
   if (images > 0) parts.push(`${images} ${images === 1 ? "image" : "images"}`);
   if (parts.length === 0 && canComment) parts.push("Reply");
   if (mentioned) {
     parts.push(
-      <span key="mention" className="text-primary">
+      <span key="mention" className={commentColors.text}>
         Mentions you
       </span>,
     );
@@ -1109,12 +1105,14 @@ function Thread({
     <div
       id={`comment-${thread.id}`}
       onClick={clickable ? onOpen : undefined}
+      style={focused ? {
+        borderColor: "#f43f5e",
+        backgroundColor: "rgba(244, 63, 94, 0.05)",
+      } : undefined}
       className={cn(
         "flex scroll-my-4 flex-col gap-4 rounded-md border p-3 shadow-xs transition-all",
         clickable && "cursor-pointer",
-        focused
-          ? "border-primary bg-primary/5"
-          : "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        !focused && "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         resolved && !focused && "opacity-70",
       )}
     >
@@ -1126,9 +1124,9 @@ function Thread({
       />
 
       {(parts.length > 0 || resolved) && (
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-xs leading-4 text-muted-foreground">
           {parts.length > 0 && (
-            <span>
+            <span className="py-0.5">
               {parts.map((p, i) => (
                 <Fragment key={i}>
                   {i > 0 && " · "}
@@ -1137,10 +1135,19 @@ function Thread({
               ))}
             </span>
           )}
-          {resolved && (
-            <span className="ml-auto inline-flex items-center gap-1">
-              <Check size={12} />
-              Resolved
+          {(resolved || unreadReplies > 0) && (
+            <span className="ml-auto inline-flex shrink-0 items-center gap-3">
+              {resolved && (
+                <span className="inline-flex items-center gap-1">
+                  <Check size={12} />
+                  Resolved
+                </span>
+              )}
+              {unreadReplies > 0 && (
+                <span className={cn("inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs leading-4 font-semibold", commentColors.surface)}>
+                  {unreadReplies} new
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -1329,6 +1336,7 @@ export function CommentsPanel() {
                   mentioned={mentionsUser(t, userId)}
                   onSeek={seek}
                   onOpen={() => {
+                    if (t.timeMs != null) seek(t.timeMs);
                     setOpenThreadId(t.id);
                     setFloatingControl("comment-thread");
                   }}

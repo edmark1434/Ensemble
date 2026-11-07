@@ -77,8 +77,9 @@ export async function getUploadUsage(userId: string, id: string) {
 }
 
 export async function missingUploadSources(sources: string[]): Promise<string[]> {
-  const paths = [...new Set(sources.map(mediaSourceKey))];
-  if (!paths.length) return [];
+  const placeholders = new Set(sources.filter(source => source.startsWith("missing-template-media:")));
+  const paths = [...new Set(sources.filter(source => !placeholders.has(source)).map(mediaSourceKey))];
+  if (!paths.length) return [...placeholders];
   const rows = await db
     .selectFrom("media_assets")
     .innerJoin("files", join => join.on(eb => eb.or([
@@ -88,7 +89,15 @@ export async function missingUploadSources(sources: string[]): Promise<string[]>
     .select("files.path")
     .where("files.path", "in", paths)
     .where("media_assets.deleted_at", "is not", null)
+    // A purchased template copy can retain the same file after the source upload
+    // is deleted. Only report a missing source when no live media record retains it.
+    .where(eb => eb.not(eb.exists(eb.selectFrom("media_assets as retained")
+      .select("retained.media_asset_id").where("retained.deleted_at", "is", null)
+      .where(inner => inner.or([
+        inner("retained.original_file_id", "=", inner.ref("files.file_id")),
+        inner("retained.proxy_file_id", "=", inner.ref("files.file_id")),
+      ])))))
     .execute();
   const missing = new Set(rows.map(row => row.path));
-  return sources.filter(source => missing.has(mediaSourceKey(source)));
+  return sources.filter(source => placeholders.has(source) || missing.has(mediaSourceKey(source)));
 }

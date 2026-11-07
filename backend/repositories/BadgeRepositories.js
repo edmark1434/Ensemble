@@ -215,19 +215,10 @@ async function getAccountBadgeProgress(accountId) {
           (
             SELECT COUNT(DISTINCT ma.market_asset_id)::int
             FROM market_assets ma
-            JOIN LATERAL (
-              SELECT media.owner_user_id
-              FROM market_media_assets link
-              JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-              WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-              UNION ALL
-              SELECT media.owner_user_id
-              FROM market_asset_thumbnails link
-              JOIN media_assets media ON media.media_asset_id = link.media_asset_id
-              WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
-              LIMIT 1
-            ) listing_owner ON TRUE
-            JOIN users owner_user ON owner_user.user_id = listing_owner.owner_user_id
+            JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+            JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
             WHERE owner_user.account_id = $1
               AND ma.status = 'published'
               AND ma.deleted_at IS NULL

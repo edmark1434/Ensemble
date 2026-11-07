@@ -4,7 +4,6 @@ import {
   BadgeCheck,
   Bookmark,
   Calendar,
-  CheckCircle2,
   Clock3,
   CornerDownRight,
   Edit3,
@@ -22,9 +21,9 @@ import {
   ShoppingCart,
   Star,
   Trash2,
-  PanelsRightBottom,
+  LayoutTemplate,
   User,
-  ArrowUpRight, ArrowRight
+  ArrowRight
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
@@ -42,6 +41,8 @@ import { MediaFallback } from "./AssetMedia";
 import AssetOriginalModal from "./AssetOriginalModal";
 import AssetReportButton from "./AssetReportButton";
 import AssetPurchaseModal from "./AssetPurchaseModal";
+import TemplateUseModal from "./TemplateUseModal";
+import { templateSnapshotPreviewUrl } from "./templatePreview";
 import { mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -63,7 +64,7 @@ function getTypeIcon(type: string) {
     case "video": return <Clapperboard className="h-3 w-3" />;
     case "image": return <Image className="h-3 w-3" />;
     case "audio": return <AudioLines className="h-3 w-3" />;
-    case "template": return <PanelsRightBottom className="h-3 w-3" />;
+    case "template": return <LayoutTemplate className="h-3 w-3" />;
     default: return null;
   }
 }
@@ -86,6 +87,13 @@ function DetailSkeleton() {
   );
 }
 
+interface TemplatePreviewDetails {
+  previewToken: string;
+  width: number;
+  height: number;
+  durationSeconds: number;
+}
+
 export default function AssetDetails() {
   const { assetId = "" } = useParams();
   const navigate = useNavigate();
@@ -93,6 +101,9 @@ export default function AssetDetails() {
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isGuestView = isGuestMode || !user?.account_id;
   const [asset, setAsset] = useState<AssetRecord | null>(null);
+  const [templatePreview, setTemplatePreview] = useState<TemplatePreviewDetails | null>(null);
+  const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false);
+  const [openingTemplatePreview, setOpeningTemplatePreview] = useState(false);
   const [comments, setComments] = useState<AssetComment[]>([]);
   const [reviews, setReviews] = useState<AssetReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +127,7 @@ export default function AssetDetails() {
   const [deleting, setDeleting] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [templateUseOpen, setTemplateUseOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [selectedOriginalFile, setSelectedOriginalFile] = useState<AssetMediaFile | null>(null);
   const [engagementPending, setEngagementPending] = useState<"like" | "save" | null>(null);
@@ -152,6 +164,40 @@ export default function AssetDetails() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  useEffect(() => {
+    if (!asset || asset.type !== "template") {
+      setTemplatePreview(null);
+      setTemplatePreviewLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setTemplatePreview(null);
+    setTemplatePreviewLoading(true);
+    api.get<TemplatePreviewDetails>(`/api/assets/${asset.market_asset_id}/template-preview`, { signal: controller.signal })
+      .then(({ data }) => { if (!controller.signal.aborted) setTemplatePreview(data); })
+      .catch(() => { if (!controller.signal.aborted) setTemplatePreview(null); })
+      .finally(() => { if (!controller.signal.aborted) setTemplatePreviewLoading(false); });
+    return () => controller.abort();
+  }, [asset?.market_asset_id, asset?.type]);
+
+  const openTemplatePreview = async () => {
+    if (!templatePreview?.previewToken || openingTemplatePreview) return;
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    setOpeningTemplatePreview(true);
+    try {
+      const { data } = await api.get<{ handoffToken: string }>("/api/editor/handoff-token");
+      const previewUrl = templateSnapshotPreviewUrl(templatePreview.previewToken, data.handoffToken);
+      if (tab && !tab.closed) tab.location.replace(previewUrl);
+      else window.open(previewUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      tab?.close();
+      showErrorToast("Log in to preview this template.");
+    } finally {
+      setOpeningTemplatePreview(false);
+    }
+  };
 
   useEffect(() => {
     if (asset?.processing_status !== "processing") return;
@@ -383,10 +429,23 @@ export default function AssetDetails() {
     setAsset(result.asset);
     setPurchaseOpen(false);
     showSuccessToast(result.alreadyPurchased
-      ? "You already have an unassigned license for this asset."
+      ? `You already have an unassigned license for this ${result.asset.type === "template" ? "template" : "asset"}.`
       : result.asset.price_credits === 0
-        ? "Asset license added to your purchased library."
-        : "Asset license purchased successfully.");
+        ? `${result.asset.type === "template" ? "Template" : "Asset"} license added to your purchased library.`
+        : `${result.asset.type === "template" ? "Template" : "Asset"} license purchased successfully.`);
+  };
+
+  const handleTemplateCreated = async (result: AssetPurchaseResponse & { projectId: string }) => {
+    setAsset(result.asset);
+    try {
+      const { data } = await api.get<{ handoffToken: string }>("/api/editor/handoff-token");
+      const editorUrl = (import.meta.env.VITE_EDITOR_URL || "http://localhost:3000").replace(/\/$/, "");
+      window.location.assign(`${editorUrl}/editor/${result.projectId}?${new URLSearchParams({ token: data.handoffToken })}`);
+    } catch {
+      setTemplateUseOpen(false);
+      navigate("/projects");
+      showErrorToast("Your project was created. Open it from Projects when you are ready.");
+    }
   };
 
   const requestPurchase = () => {
@@ -510,14 +569,14 @@ export default function AssetDetails() {
                 </div>
                 <div className="order-1 flex flex-wrap items-center gap-2">
                   {asset.is_owner && (
-                      <button type="button" onClick={() => navigate("/projects")} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-left text-white transition hover:bg-emerald-500">
+                      <button type="button" onClick={() => asset.type === "template" ? setTemplateUseOpen(true) : navigate("/projects")} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-left text-white transition hover:bg-emerald-500">
                         <BadgeCheck className="h-4 w-4 shrink-0" />
                         <span className="whitespace-nowrap text-sm font-bold">Use in a project</span>
-                        <span className="text-xs font-medium text-emerald-100">You own this asset</span>
+                        <span className="text-xs font-medium text-emerald-100">You own {asset.type === "template" ? "this template" : "this asset"}</span>
                       </button>
                   )}
                   {!asset.is_owner && asset.is_purchased && asset.available_license_count > 0 && (
-                      <button type="button" onClick={() => navigate("/projects")} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-left text-white transition hover:bg-emerald-500">
+                      <button type="button" onClick={() => asset.type === "template" ? setTemplateUseOpen(true) : navigate("/projects")} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-left text-white transition hover:bg-emerald-500">
                         <BadgeCheck className="h-4 w-4 shrink-0" />
                         <span className="whitespace-nowrap text-sm font-bold">Use in a project</span>
                         <span className="text-xs font-medium text-emerald-100">{asset.available_license_count} {asset.available_license_count === 1 ? "license" : "licenses"} available</span>
@@ -526,16 +585,28 @@ export default function AssetDetails() {
                   {!asset.is_owner && asset.is_purchased && asset.available_license_count === 0 && (
                       <button type="button" onClick={requestPurchase} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-blue-600 px-3.5 py-2.5 text-left text-white transition hover:bg-blue-500">
                         <ShoppingCart className="h-4 w-4 shrink-0" />
-                        <span className="whitespace-nowrap text-sm font-bold">Purchase asset</span>
+                        <span className="whitespace-nowrap text-sm font-bold">{asset.type === "template" ? "Purchase template" : "Purchase asset"}</span>
                       </button>
                   )}
                   {!asset.is_owner && !asset.is_purchased && asset.available_license_count === 0 && asset.status === "published" && (
                     <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                      <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
+                      <ShoppingCart className="h-4 w-4" /> {asset.price_credits === 0 ? (asset.type === "template" ? "Get template" : "Get asset") : (asset.type === "template" ? "Purchase template" : "Purchase asset")}
                     </button>
                   )}
                 </div>
               </div>
+
+              {asset.type === "template" && (
+                <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+                  <div className="flex items-start gap-3">
+                    <CreditIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-sm font-bold text-gray-900 dark:text-white">Template contains paid assets</h2>
+                      <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-zinc-400">Paid assets are sold separately and are not included in the template price. You can purchase their licenses or replace them in the editor.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {asset.is_owner && asset.price_credits > 0 && (
                 <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
@@ -594,7 +665,14 @@ export default function AssetDetails() {
 
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 md:p-7 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div id="asset-deliverables" className="scroll-mt-24">
-            {asset.media_asset_count > 0 && (asset.type !== "template" || asset.can_download) && (
+            {asset.type === "template" ? (
+              <section className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:bg-white/[0.025]">
+                <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Template snapshot</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Preview the saved project snapshot.</p></div>
+                <button type="button" onClick={() => void openTemplatePreview()} disabled={!templatePreview || templatePreviewLoading || openingTemplatePreview} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+                  {templatePreviewLoading || openingTemplatePreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}{templatePreviewLoading ? "Loading preview…" : openingTemplatePreview ? "Opening…" : "Preview"}
+                </button>
+              </section>
+            ) : asset.media_asset_count > 0 && (
               <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
                   <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                     <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{packageMediaLabels(asset.media_assets, true)}</p></div>
@@ -618,9 +696,12 @@ export default function AssetDetails() {
 
             <dl className="mt-6 flex flex-wrap gap-3 border-t border-gray-200 pt-5 text-sm dark:border-white/10">
               <Metadata icon={Calendar} label="Published" value={formatDate(asset.created_at)} />
-              {asset.media_asset_count <= 1 && asset.type !== "audio" && <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />}
-              {asset.media_asset_count <= 1 && asset.type !== "image" && <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />}
-              <Metadata icon={MessageSquare} label="Package size" value={readableSize(asset.media_assets.reduce((total, file) => total + Number(file.size_bytes || 0), 0))} />
+              {asset.type === "template"
+                ? <Metadata icon={Ruler} label="Dimensions" value={templatePreview ? `${templatePreview.width} × ${templatePreview.height}` : "—"} />
+                : asset.media_asset_count <= 1 && asset.type !== "audio" && <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />}
+              {asset.type === "template"
+                ? <Metadata icon={Clock3} label="Duration" value={readableDuration(templatePreview?.durationSeconds)} />
+                : asset.media_asset_count <= 1 && asset.type !== "image" && <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />}
             </dl>
         </section>
 
@@ -761,6 +842,7 @@ export default function AssetDetails() {
       </main>
 
       <AssetEditorModal open={editorOpen} asset={asset} onClose={() => setEditorOpen(false)} onSaved={(updated) => { setAsset(updated); setEditorOpen(false); showSuccessToast("Asset updated."); }} />
+      {asset.type === "template" && !isGuestView && <TemplateUseModal open={templateUseOpen} asset={asset} onClose={() => setTemplateUseOpen(false)} onCreated={handleTemplateCreated} />}
       {!asset.is_owner && !isGuestView && <AssetPurchaseModal open={purchaseOpen} asset={asset} onClose={() => setPurchaseOpen(false)} onPurchased={handlePurchased} />}
       <GuestLoginModal
         isOpen={isGuestLoginOpen}
