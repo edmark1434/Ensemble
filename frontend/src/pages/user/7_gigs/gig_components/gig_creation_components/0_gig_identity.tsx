@@ -44,6 +44,7 @@ interface GigIdentityProps {
   includedMemberIds: string[];
   setIncludedMemberIds: React.Dispatch<React.SetStateAction<string[]>>;
   onNext: () => void;
+  isEditMode?: boolean;
 }
 
 export const GigIdentity: React.FC<GigIdentityProps> = ({
@@ -54,6 +55,7 @@ export const GigIdentity: React.FC<GigIdentityProps> = ({
   includedMemberIds,
   setIncludedMemberIds,
   onNext,
+  isEditMode = false,
 }) => {
   const user = useGlobalState((state) => state.user);
   const [teams, setTeams] = useState<UserTeam[]>([]);
@@ -291,45 +293,63 @@ export const GigIdentity: React.FC<GigIdentityProps> = ({
         </p>
       </div>
 
-      {/* Upfront 50 Credits Publishing Fee Disclosure */}
-      <div className="p-3.5 sm:p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
-              Service Publishing Fee
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300/70 dark:border-zinc-700 shadow-2xs">
-              <CreditIcon className="h-3 w-3 text-amber-500" /> 50 Credits
-            </span>
+      {/* Upfront 50 Credits Publishing Fee Disclosure or Edit Mode Free Banner */}
+      {isEditMode ? (
+        <div className="p-3.5 sm:p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                Editing Active Service
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shadow-2xs">
+                <Check className="h-3 w-3" /> Free Update (0 Credits)
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+              Updating your service specifications, packages, add-ons, or gallery is completely free — no credits will be deducted.
+            </p>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-            50 Credits will be deducted upon final review and publishing in Step 6. Drafting is free.
-          </p>
         </div>
+      ) : (
+        <div className="p-3.5 sm:p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                Service Publishing Fee
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300/70 dark:border-zinc-700 shadow-2xs">
+                <CreditIcon className="h-3 w-3 text-amber-500" /> 50 Credits
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+              50 Credits will be deducted upon final review and publishing in Step 6. Drafting is free.
+            </p>
+          </div>
 
-        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-zinc-200/60 dark:border-zinc-800/80">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-zinc-500 dark:text-zinc-400">Your Wallet:</span>
-            <span className="font-bold text-zinc-900 dark:text-white inline-flex items-center gap-1">
-              <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
-              {walletBalance !== null ? `${walletBalance} Cr` : "..."}
-            </span>
+          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-zinc-200/60 dark:border-zinc-800/80">
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-zinc-500 dark:text-zinc-400">Your Wallet:</span>
+              <span className="font-bold text-zinc-900 dark:text-white inline-flex items-center gap-1">
+                <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
+                {walletBalance !== null ? `${walletBalance} Cr` : "..."}
+              </span>
+            </div>
+            {walletBalance !== null && walletBalance < 50 ? (
+              <button
+                type="button"
+                onClick={() => window.open("/credits", "_blank")}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+              >
+                Top up Credits <ExternalLink className="h-3 w-3" />
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3 w-3" /> Balance sufficient
+              </span>
+            )}
           </div>
-          {walletBalance !== null && walletBalance < 50 ? (
-            <button
-              type="button"
-              onClick={() => window.open("/credits", "_blank")}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
-            >
-              Top up Credits <ExternalLink className="h-3 w-3" />
-            </button>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="h-3 w-3" /> Balance sufficient
-            </span>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Main Representation Choice: Solo vs Team */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">

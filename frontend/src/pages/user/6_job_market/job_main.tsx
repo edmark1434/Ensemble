@@ -340,9 +340,14 @@ const JobMain: React.FC = () => {
 
   const filteredJobs = useMemo(() => {
     const result = tabFilteredJobs.filter((job) => {
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        job.postedBy.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        job.title.toLowerCase().includes(q) ||
+        job.postedBy.toLowerCase().includes(q) ||
+        (job.category && job.category.toLowerCase().includes(q)) ||
+        (job.description && job.description.toLowerCase().includes(q)) ||
+        (Array.isArray(job.tags) && job.tags.some((t: string) => t.toLowerCase().includes(q)));
       const matchesCategory =
         activeCategoryFilter === "All" || job.category === activeCategoryFilter;
       const matchesMinPrice = minPrice === "" || job.minBudget >= parseInt(minPrice);

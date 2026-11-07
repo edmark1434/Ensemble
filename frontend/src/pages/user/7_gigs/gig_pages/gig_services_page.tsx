@@ -7,7 +7,7 @@ import type { GigMainContext } from "../gig_main";
 import { GigList } from "../gig_components/gig_lists";
 
 const GigServicesPage: React.FC = () => {
-  const { filteredGigs, viewType, loading, toggleSaveGig, getBudgetStatus } = useOutletContext<GigMainContext>();
+  const { filteredGigs, viewType, loading, toggleSaveGig, getBudgetStatus, handleClearFilters } = useOutletContext<GigMainContext>();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -24,7 +24,10 @@ const GigServicesPage: React.FC = () => {
           We couldn't find any services matching your search or filter parameters. Try adjusting your search criteria.
         </p>
         <button
-          onClick={() => navigate("/gigs/services")}
+          onClick={() => {
+            if (handleClearFilters) handleClearFilters();
+            navigate("/gigs/services", { replace: true, state: {} });
+          }}
           className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 shadow-lg shadow-blue-500/20"
         >
           <Search className="h-4 w-4" />

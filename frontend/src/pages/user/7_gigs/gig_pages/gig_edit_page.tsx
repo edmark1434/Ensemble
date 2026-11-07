@@ -1,592 +1,495 @@
-// src/pages/user/7_gigs/gig_pages/gig_edit_page.tsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trash2 } from "lucide-react";
-import ShapeGrid from "@/components/ui/ShapeGrid";
-import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
-import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
-import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
+import useGlobalState from "@/lib/global_state";
+import { GigCreateHeader } from "../gig_components/gig_creation_components/gig_create_header";
+import { GigIdentity } from "../gig_components/gig_creation_components/0_gig_identity";
+import { CreateCoreInfo } from "../gig_components/gig_creation_components/1_create_coreinfo";
+import { GigTerms } from "../gig_components/gig_creation_components/2_gig_terms";
+import { GigMilestones, type ServiceMilestone } from "../gig_components/gig_creation_components/3_gig_milestones";
+import { CreateTiers } from "../gig_components/gig_creation_components/3_create_tiers";
+import { CreateReview } from "../gig_components/gig_creation_components/6_create_review";
+import { CreationSuccess } from "../gig_components/gig_creation_components/7_creation_success";
+import type { GigTier, GigAddOn, Questionnaire } from "../gig_datasets";
 import { showErrorToast } from "@/components/utility/toast";
 
-// Types
-import type { GigTier, Milestone, Questionnaire } from "../gig_datasets";
-
-// Components
-import GigCreateHeader from "../gig_components/gig_creation_components/gig_create_header";
-import CreateCoreInfo from "../gig_components/gig_creation_components/1_create_coreinfo";
-import CreateDelivery from "../gig_components/gig_creation_components/2_create_delivery";
-import CreateTiers from "../gig_components/gig_creation_components/3_create_tiers";
-import CreateMilestones from "../gig_components/gig_creation_components/4_create_milestones";
-import CreateForms from "../gig_components/gig_creation_components/5_create_forms";
-import CreateReview from "../gig_components/gig_creation_components/6_create_review";
-import CreationSuccess from "../gig_components/gig_creation_components/7_creation_success";
-
-const GigEditPage: React.FC = () => {
-  const { id } = useParams();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOwnGig, setIsOwnGig] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+export const GigEditPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const theme = useGlobalState((state) => state.theme);
+  const user = useGlobalState((state) => state.user);
 
-  const [currentSlide, setCurrentSlide] = useState<number>(1);
-  const [highestStepReached, setHighestStepReached] = useState<number>(1);
-  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(2);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Snapshot for dirty-check comparison
-  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
+  // Step 1: Representation & Identity
+  const [postingAs, setPostingAs] = useState<"self" | "team">("self");
+  const [actingTeamId, setActingTeamId] = useState<string>("");
+  const [includedMemberIds, setIncludedMemberIds] = useState<string[]>(() => {
+    const uid = user?.account_id || (user as any)?.accountId || user?.id;
+    return uid ? [String(uid)] : [];
+  });
 
-  // --- SLIDE 1: CORE INFO ---
+  // Step 2: Core Info
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [description, setDescription] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-
-  // --- SLIDE 2: DELIVERY ---
-  const [slots, setSlots] = useState<number>(1);
-  const [termsOfService, setTermsOfService] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
-  const [firstDraftDelivery, setFirstDraftDelivery] = useState("");
+
+  // Step 3: Order Policies, Work Samples & Buyer Requirements
+  const [termsOfService, setTermsOfService] = useState("");
+  const [selectedTosId, setSelectedTosId] = useState("default-standard");
+  const [workSampleFiles, setWorkSampleFiles] = useState<File[]>([]);
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
-  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
-
-  // --- SLIDE 3: TIERS & MILESTONES ---
-  const [tiers, setTiers] = useState<GigTier[]>([]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(50);
-
-  // --- SLIDE 4: QUESTIONNAIRES ---
+  const [slots, setSlots] = useState<number>(3);
+  const [firstDraftDelivery, setFirstDraftDelivery] = useState("3 Days");
+  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(25);
+  const [askNDA, setAskNDA] = useState<boolean>(false);
+  const [askPortfolio, setAskPortfolio] = useState<boolean>(true);
+  const [portfolioDuration, setPortfolioDuration] = useState<string>("30");
   const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
 
-  // --- VALIDATION & ERRORS ---
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  // Step 4: Milestones
+  const [milestones, setMilestones] = useState<ServiceMilestone[]>([
+    {
+      id: "1",
+      name: "Initial Concept & Rough Cut",
+      description: "Assembly of timeline, storyboarding, and initial sync for review.",
+      hours: 8,
+      revisions: 1,
+      percentage: 40,
+      tasks: ["Asset & Script Sync", "Timeline Assembly", "Rough Cut Export"],
+    },
+    {
+      id: "2",
+      name: "Final Polish & Master Export",
+      description: "Color grading, sound design, motion graphics, and final render.",
+      hours: 12,
+      revisions: 2,
+      percentage: 60,
+      tasks: ["Color Grading & VFX", "Audio Mixing & Mastering", "Final 4K Render"],
+    },
+  ]);
+
+  // Step 5: Tiers & Add-ons
+  const [tiers, setTiers] = useState<GigTier[]>([
+    { tierName: "Basic", title: "Basic Package", description: "", price: 150, daysOfDelivery: 3, revisions: 1 },
+  ]);
+  const [addOns, setAddOns] = useState<GigAddOn[]>([]);
 
   useEffect(() => {
     const fetchGig = async () => {
       try {
         const res = await api.get(`/api/gigs/${id}`);
-        const data = res.data.data;
-        if (data) {
-          setIsOwnGig(Boolean(data.canManageGig));
+        if (res.data?.success && res.data.data) {
+          const data = res.data.data;
+          if (data.canManageGig === false) {
+            showErrorToast("You are not authorized to edit this service.");
+            navigate("/gigs/services");
+            return;
+          }
 
-          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
-          const mapUrl = (path: string) => {
-            if (!path) return "";
-            if (!cloudFrontUrl && path.includes("public")) return "";
-            if (path.startsWith("http") || path.startsWith("/")) return path;
-            return `${cloudFrontUrl}/${path}`;
-          };
+          setTitle(data.title || "");
+          setCategory(data.category || "");
+          setDescription(data.description || "");
+          setThumbnailUrl(data.thumbnail || null);
+          setSlots(Number(data.slots) || 3);
+          setTermsOfService(data.termsOfService || data.terms_of_service || "");
+          setFirstDraftDelivery(data.firstDraftDelivery || "3 Days");
+          setAdditionalWorkRate(Number(data.additionalWorkRate) || 25);
+          setSkills(Array.isArray(data.skills) ? data.skills : []);
 
-          const initialTitle = data.title || "";
-          const initialDesc = data.description || "";
-          const initialCat = data.category || "";
-          const initialThumb = mapUrl(data.thumbnail) || "";
-          const initialSlots = data.slots || 1;
+          if (data.isTeam || data.teamId) {
+            setPostingAs("team");
+            if (data.teamId) setActingTeamId(String(data.teamId));
+          } else {
+            setPostingAs("self");
+          }
 
-          // Resolve TOS from all possible backend key variations
-          const initialTos =
-            data.termsOfService ||
-            data.terms_of_service ||
-            data.terms ||
-            data.tos ||
-            data.service_terms ||
-            "";
+          // Load gallery URLs (exclude thumbnail if duplicated)
+          if (Array.isArray(data.gallery) && data.gallery.length > 0) {
+            const filteredGallery = data.gallery.filter(
+              (url: string) => Boolean(url) && url !== data.thumbnail
+            );
+            setGalleryUrls(filteredGallery);
+          }
 
-          const initialSkills = data.skills || [];
-          const initialTimeline = data.firstDraftDelivery || "";
-          const initialGallery = data.gallery ? data.gallery.map((p: string) => mapUrl(p)).filter(Boolean) : [];
-          const initialTiers = data.tiers || [];
-          const initialMilestones = data.milestones || [];
-          const initialQuestions = data.questionnaires || [];
+          // Load tiers
+          if (Array.isArray(data.tiers) && data.tiers.length > 0) {
+            const defaultTierNames = ["Basic", "Standard", "Premium"];
+            setTiers(
+              data.tiers.map((t: any, idx: number) => ({
+                tierId: t.tierId || t.id,
+                tierName: (t.tierName || defaultTierNames[idx] || "Basic") as "Basic" | "Standard" | "Premium",
+                title: t.title || t.name || `${defaultTierNames[idx] || "Basic"} Package`,
+                description: t.description || "",
+                price: Number(t.price) || 150,
+                daysOfDelivery: Number(t.daysOfDelivery) || 3,
+                revisions: Number(t.revisions) || 1,
+              }))
+            );
+          }
 
-          setTitle(initialTitle);
-          setDescription(initialDesc);
-          setCategory(initialCat);
-          setThumbnailUrl(initialThumb);
-          setSlots(initialSlots);
-          setTermsOfService(initialTos);
-          setSkills(initialSkills);
-          setFirstDraftDelivery(initialTimeline);
-          setGalleryUrls(initialGallery);
-          setTiers(initialTiers);
-          setMilestones(initialMilestones);
-          setQuestionnaires(initialQuestions);
+          // Load add-ons
+          const rawAddOns = data.addOns || data.add_ons || [];
+          if (Array.isArray(rawAddOns) && rawAddOns.length > 0) {
+            setAddOns(
+              rawAddOns.map((a: any, idx: number) => ({
+                id: String(a.id || a.gig_addon_id || `addon-${idx}`),
+                title: a.title || a.name || "",
+                price: Number(a.price ?? a.price_credits ?? 25),
+                deliveryDays: Number(a.deliveryDays ?? a.additional_days ?? 0),
+              }))
+            );
+          } else {
+            setAddOns([]);
+          }
 
-          // Save snapshot of initial values to detect actual user changes
-          setInitialSnapshot(
-            JSON.stringify({
-              title: initialTitle,
-              description: initialDesc,
-              category: initialCat,
-              slots: initialSlots,
-              termsOfService: initialTos,
-              skills: initialSkills,
-              firstDraftDelivery: initialTimeline,
-              galleryUrls: initialGallery,
-              tiers: initialTiers,
-              milestones: initialMilestones,
-              questionnaires: initialQuestions,
-            })
-          );
+          // Load milestones
+          if (Array.isArray(data.milestones) && data.milestones.length > 0) {
+            const count = data.milestones.length;
+            const defaultPct = Math.floor(100 / count);
+            setMilestones(
+              data.milestones.map((m: any, idx: number) => {
+                const rawTasks = Array.isArray(m.tasks)
+                  ? m.tasks
+                  : Array.isArray(m.deliverables)
+                  ? m.deliverables
+                  : typeof m.tasks === "string"
+                  ? (() => {
+                      try {
+                        return JSON.parse(m.tasks);
+                      } catch {
+                        return [];
+                      }
+                    })()
+                  : [];
+                return {
+                  id: String(m.id || idx + 1),
+                  name: m.name || m.title || `Phase ${idx + 1}`,
+                  description: m.description || "",
+                  hours: Number(m.hours) || 8,
+                  revisions: Number(m.revisions) || 1,
+                  percentage:
+                    Number(m.percentage ?? m.timelinePercentage) ||
+                    (idx === count - 1 ? 100 - defaultPct * (count - 1) : defaultPct),
+                  tasks: rawTasks.length > 0 ? rawTasks : ["Deliverable Check"],
+                };
+              })
+            );
+          }
+
+          // Load questionnaires
+          if (Array.isArray(data.questionnaires) && data.questionnaires.length > 0) {
+            setQuestionnaires(
+              data.questionnaires.map((q: any, idx: number) => ({
+                id: String(q.id || idx + 1),
+                type: q.type || "text",
+                question: q.question || "",
+                isRequired: q.isRequired !== undefined ? Boolean(q.isRequired) : true,
+                multipleAnswer: Boolean(q.multipleAnswer),
+                fileLimit: q.fileLimit || undefined,
+                fileTypes: Array.isArray(q.fileTypes) ? q.fileTypes : [],
+                options: Array.isArray(q.options) ? q.options : [],
+              }))
+            );
+          }
         }
       } catch (err) {
-        console.error("Failed to fetch gig details:", err);
+        console.error("Failed to load gig details:", err);
+        showErrorToast("Could not load service details.");
+        navigate("/gigs/services");
       } finally {
         setIsLoading(false);
       }
     };
     if (id) fetchGig();
-  }, [id]);
+  }, [id, navigate]);
 
-  // Check if anything actually changed from what was initially loaded
-  const hasUnsavedChanges = useMemo(() => {
-    if (!initialSnapshot) return false;
-    if (thumbnailFile !== null || galleryFiles.length > 0) return true;
+  const validateCurrentStep = (stepToValidate = currentSlide) => {
+    const newErrors: Record<string, string> = {};
 
-    const currentSnapshot = JSON.stringify({
-      title,
-      description,
-      category,
-      slots,
-      termsOfService,
-      skills,
-      firstDraftDelivery,
-      galleryUrls,
-      tiers,
-      milestones,
-      questionnaires,
-    });
-
-    return currentSnapshot !== initialSnapshot;
-  }, [
-    initialSnapshot,
-    title,
-    description,
-    category,
-    slots,
-    termsOfService,
-    skills,
-    firstDraftDelivery,
-    galleryUrls,
-    tiers,
-    milestones,
-    questionnaires,
-    thumbnailFile,
-    galleryFiles,
-  ]);
-
-  const handleReturnTrigger = () => {
-    if (hasUnsavedChanges) {
-      setIsDiscardOpen(true);
-    } else {
-      navigate("/gigs/my-services");
-    }
-  };
-
-  const handleDeletePost = async () => {
-    if (!window.confirm("Are you sure you want to delete this service? It will no longer appear in the marketplace.")) {
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      await api.delete(`/api/gigs/${id}`);
-      navigate("/gigs/my-services");
-    } catch (err: any) {
-      console.error("Failed to delete gig:", err);
-      showErrorToast(err.response?.data?.message || "Failed to delete gig");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleNext = (targetSlide: number) => {
-    if (currentSlide === 1 && targetSlide > 1) {
-      const stepErrors: Record<string, string> = {};
-      if (!title.trim()) stepErrors.title = "Service title is required";
-      if (!description.trim()) stepErrors.description = "Service description is required";
-      if (!category) stepErrors.category = "Category is required";
-      if (!thumbnailFile && !thumbnailUrl) stepErrors.thumbnail = "Thumbnail image is required";
-      if (skills.length === 0) stepErrors.skills = "At least 1 skill is required";
-
-      if (Object.keys(stepErrors).length > 0) {
-        setErrors(stepErrors);
-        return;
-      }
-      setErrors({});
-    }
-
-    if (currentSlide === 2 && targetSlide > 2) {
-      const stepErrors: Record<string, string> = {};
-      if (skills.length === 0) stepErrors.skills = "At least 1 skill is required";
-      if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Timeline is required";
-      if (!termsOfService.trim()) stepErrors.termsOfService = "Terms of service are required";
-      if (galleryFiles.length === 0 && galleryUrls.length === 0) stepErrors.galleryUrls = "At least 1 supporting picture is required";
-
-      if (Object.keys(stepErrors).length > 0) {
-        setErrors(stepErrors);
-        return;
-      }
-      setErrors({});
-    }
-
-    if (currentSlide === 3 && targetSlide > 3) {
-      const stepErrors: Record<string, string> = {};
-      tiers.forEach((tier, index) => {
-        if (!tier.title.trim()) stepErrors[`tier_${index}_title`] = "Title required";
-        if (!tier.description.trim()) stepErrors[`tier_${index}_description`] = "Description required";
-        if (tier.price <= 0) stepErrors[`tier_${index}_price`] = "Price required";
-      });
-      if (additionalWorkRate <= 0) stepErrors.additionalWorkRate = "Hourly rate must be > 0";
-
-      if (Object.keys(stepErrors).length > 0) {
-        setErrors(stepErrors);
-        return;
-      }
-      setErrors({});
-    }
-
-    if (currentSlide === 4 && targetSlide > 4) {
-      const stepErrors: Record<string, string> = {};
-      if (milestones.length === 0) {
-        stepErrors.milestones = "At least 1 milestone is required";
-      }
-      milestones.forEach((m, index) => {
-        if (!m.name.trim()) stepErrors[`milestone_${index}_name`] = "Name required";
-        if (!m.description.trim()) stepErrors[`milestone_${index}_desc`] = "Description required";
-      });
-      if (Object.keys(stepErrors).length > 0) {
-        setErrors(stepErrors);
-        return;
-      }
-      setErrors({});
-    }
-
-    if (currentSlide === 5 && targetSlide > 5) {
-      const stepErrors: Record<string, string> = {};
+    if (stepToValidate === 2) {
+      if (!title.trim()) newErrors.title = "Title is required.";
+      else if (title.trim().length < 10) newErrors.title = "Title must be at least 10 characters.";
+      if (!category) newErrors.category = "Please select a category.";
+      const plainDesc = description.replace(/<[^>]+>/g, "").trim();
+      if (!plainDesc) newErrors.description = "Description is required.";
+      else if (plainDesc.length < 30) newErrors.description = "Please provide a more detailed description.";
+      if (!thumbnailUrl) newErrors.thumbnail = "Thumbnail image is required.";
+      if (skills.length === 0) newErrors.skills = "Select at least one skill.";
+    } else if (stepToValidate === 3) {
+      if (slots < 1) newErrors.slots = "Slots must be at least 1.";
+      if (!termsOfService.trim()) newErrors.termsOfService = "Terms of Service are required.";
       questionnaires.forEach((q) => {
-        if (!q.question.trim()) stepErrors[`question_${q.id}_question`] = "Question text is required";
-        if (q.type === "choice") {
-          if (!q.options || q.options.length < 2) {
-            stepErrors[`question_${q.id}_options_length`] = "Multiple choice requires at least 2 options";
-          } else {
-            q.options.forEach((opt, optIdx) => {
-              if (!opt.trim()) stepErrors[`question_${q.id}_option_${optIdx}`] = "Option cannot be empty";
-            });
-          }
+        if (!q.question.trim()) {
+          newErrors[`question_${q.id}_question`] = "Question cannot be empty.";
         }
       });
-
-      if (Object.keys(stepErrors).length > 0) {
-        setErrors(stepErrors);
-        return;
+    } else if (stepToValidate === 4) {
+      if (milestones.length === 0) {
+        newErrors.milestones = "At least one milestone is required.";
+      } else {
+        milestones.forEach((m, idx) => {
+          if (!m.name.trim()) newErrors[`milestone_${idx}_name`] = "Milestone title is required.";
+          if (!m.description.trim()) newErrors[`milestone_${idx}_desc`] = "Description is required.";
+        });
       }
-      setErrors({});
+    } else if (stepToValidate === 5) {
+      tiers.forEach((t, idx) => {
+        if (!t.title.trim()) newErrors[`tier_${idx}_title`] = "Package name is required.";
+        if (!t.description.trim()) newErrors[`tier_${idx}_desc`] = "Package description is required.";
+        if (t.price < 5) newErrors[`tier_${idx}_price`] = "Minimum price is 5 Credits.";
+        if (t.daysOfDelivery < 1) newErrors[`tier_${idx}_days`] = "Must be at least 1 day.";
+      });
     }
 
-    setCurrentSlide(targetSlide);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleStepJump = (targetStep: number) => {
+    setErrors({});
+    setCurrentSlide(targetStep);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleNext = (targetSlide?: number) => {
+    const nextSlide = targetSlide !== undefined ? targetSlide : currentSlide + 1;
+    if (nextSlide > currentSlide) {
+      if (!validateCurrentStep(currentSlide)) return;
+    }
+    setCurrentSlide(nextSlide);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleBack = () => {
+    setErrors({});
+    setCurrentSlide((prev) => Math.max(1, prev - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      let thumbnailFileId = null;
-      let galleryFileIds: string[] = [];
+      let uploadedThumbnailId: string | null = null;
+      const uploadedGalleryIds: string[] = [];
 
-      const uploadPromises: Promise<void>[] = [];
-
+      // Upload new thumbnail if file selected
       if (thumbnailFile) {
-        uploadPromises.push(
-          uploadFileWithIntent(thumbnailFile, "gig_thumbnails").then((res) => {
-            thumbnailFileId = res.fileId;
-          })
-        );
+        const upRes = await uploadFileWithIntent(thumbnailFile, "gig_thumbnails");
+        uploadedThumbnailId = upRes?.fileId || null;
+      } else if (thumbnailUrl && (thumbnailUrl.startsWith("/gig_banners/") || thumbnailUrl.startsWith("http"))) {
+        const regRes = await api.post("/api/files/register-url", {
+          url: thumbnailUrl,
+          filename: thumbnailUrl.split("/").pop() || "preset_banner.png",
+        });
+        uploadedThumbnailId = regRes.data?.file?.file_id || null;
       }
 
-      galleryFiles.forEach((file, index) => {
-        uploadPromises.push(
-          uploadFileWithIntent(file, "gig_galleries").then((res) => {
-            galleryFileIds[index] = res.fileId;
-          })
-        );
-      });
-
-      await Promise.all(uploadPromises);
+      // Upload or register gallery items (only overwrite gallery if new files uploaded or existing gallery modified)
+      for (const gUrl of galleryUrls) {
+        if (gUrl) {
+          const regRes = await api.post("/api/files/register-url", {
+            url: gUrl,
+            filename: gUrl.split("/").pop() || "gallery_sample.png",
+          });
+          if (regRes.data?.file?.file_id) {
+            uploadedGalleryIds.push(regRes.data.file.file_id);
+          }
+        }
+      }
+      for (const gFile of workSampleFiles) {
+        const upRes = await uploadFileWithIntent(gFile, "gig_samples");
+        if (upRes?.fileId) uploadedGalleryIds.push(upRes.fileId);
+      }
 
       const gigPayload = {
         title,
-        description,
         category,
+        description,
         slots,
         termsOfService,
-        terms_of_service: termsOfService,
         firstDraftDelivery,
         additionalWorkRate,
         tiers,
+        addOns,
         milestones,
         questionnaires,
         skills,
-        thumbnailFileId,
-        galleryFileIds,
+        thumbnailFileId: uploadedThumbnailId,
+        galleryFileIds: uploadedGalleryIds.length > 0 ? uploadedGalleryIds : undefined,
       };
 
-      await api.put(`/api/gigs/${id}`, gigPayload);
-      setIsSuccessOpen(true);
-    } catch (err: any) {
-      console.error("Error updating gig:", err);
-      showErrorToast(err.response?.data?.message || err.message || "Failed to update gig");
+      const res = await api.put(`/api/gigs/${id}`, gigPayload);
+      if (res.data?.success) {
+        setIsSuccessOpen(true);
+      }
+    } catch (error: any) {
+      console.error("Failed to update gig:", error);
+      showErrorToast(error?.response?.data?.message || "Failed to update service changes.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleConfirmSuccess = () => {
+    setIsSuccessOpen(false);
+    navigate(`/gigs/services/${id}/page`);
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-base">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-          <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Loading service details...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">
-      {/* Background Grid Animation */}
-      <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
-        <ShapeGrid
-          shape="square"
-          squareSize={48}
-          direction="diagonal"
-          speed={0.4}
-          borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
-          hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
-          hoverTrailAmount={3}
-        />
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-colors duration-300 font-['Plus_Jakarta_Sans',sans-serif]">
+      <div className="pointer-events-none fixed inset-0 z-0 opacity-60 dark:opacity-30">
+        <div className="absolute -top-40 left-1/2 h-96 w-[60rem] -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
       </div>
 
-      <FloatingCreditsPill />
+      {/* Wide container matching gig_create_page.tsx */}
+      <div className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6">
+        <GigCreateHeader
+          currentStep={currentSlide}
+          maxReachedStep={6}
+          hasReachedReview={true}
+          onStepClick={(stepId) => handleStepJump(stepId)}
+        />
 
-      <div className="relative z-10 mx-auto max-w-4xl flex min-h-screen flex-col px-4 py-8 md:py-12 w-full">
-        {/* Title Heading Display + Delete Button */}
-        <motion.div
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8 flex items-center justify-between"
-        >
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-              Editing a Gig Post
-            </h1>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-              Update the details below to modify your service offering.
-            </p>
-          </div>
-
-          {isOwnGig && (
-            <button
-              type="button"
-              onClick={handleDeletePost}
-              disabled={isDeleting}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 rounded-xl transition-all disabled:opacity-50"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>{isDeleting ? "Deleting..." : "Delete Service"}</span>
-            </button>
+        <div className="mt-2">
+          {currentSlide === 1 && (
+            <GigIdentity
+              postingAs={postingAs}
+              setPostingAs={setPostingAs}
+              actingTeamId={actingTeamId}
+              setActingTeamId={setActingTeamId}
+              includedMemberIds={includedMemberIds}
+              setIncludedMemberIds={setIncludedMemberIds}
+              onNext={() => handleNext(2)}
+              isEditMode={true}
+            />
           )}
-        </motion.div>
 
-        {/* Header (Stepper) */}
-        <div className="mb-6 w-full">
-          <GigCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} highestStepReached={highestStepReached} onJumpToReview={() => handleNext(6)} />
-        </div>
+          {currentSlide === 2 && (
+            <CreateCoreInfo
+              title={title}
+              setTitle={setTitle}
+              category={category}
+              setCategory={setCategory}
+              description={description}
+              setDescription={setDescription}
+              thumbnailUrl={thumbnailUrl}
+              setThumbnailUrl={setThumbnailUrl}
+              setThumbnailFile={setThumbnailFile}
+              skills={skills}
+              setSkills={setSkills}
+              errors={errors}
+              setErrors={setErrors}
+              onNext={() => handleNext(3)}
+            />
+          )}
 
-        {/* Content Area */}
-        <div className="flex-1 flex justify-center">
-          <div className="w-full max-w-4xl relative">
-            <AnimatePresence mode="wait">
-              {currentSlide === 1 && (
-                <motion.div
-                  key="slide1"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
-                    <CreateCoreInfo
-                      title={title}
-                      setTitle={setTitle}
-                      description={description}
-                      setDescription={setDescription}
-                      category={category}
-                      setCategory={setCategory}
-                      skills={skills}
-                      setSkills={setSkills}
-                      previewUrl={thumbnailUrl}
-                      setPreviewUrl={setThumbnailUrl}
-                      setThumbnailFile={setThumbnailFile}
-                      isDragging={false}
-                      setIsDragging={() => {}}
-                      errors={errors}
-                      setErrors={setErrors}
-                      onNext={() => handleNext(2)}
-                      onDiscard={handleReturnTrigger}
-                    />
-                  </div>
-                </motion.div>
-              )}
-              {currentSlide === 2 && (
-                <motion.div
-                  key="slide2"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
-                    <CreateDelivery
-                      slots={slots}
-                      setSlots={setSlots}
-                      termsOfService={termsOfService}
-                      setTermsOfService={setTermsOfService}
-                      skills={skills}
-                      setSkills={setSkills}
-                      firstDraftDelivery={firstDraftDelivery}
-                      setFirstDraftDelivery={setFirstDraftDelivery}
-                      galleryUrls={galleryUrls}
-                      setGalleryUrls={setGalleryUrls}
-                      setGalleryFiles={setGalleryFiles}
-                      errors={errors}
-                      setErrors={setErrors}
-                      onBack={() => handleNext(1)}
-                      onNext={() => handleNext(3)}
-                    />
-                  </div>
-                </motion.div>
-              )}
-              {currentSlide === 3 && (
-                <motion.div
-                  key="slide3"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
-                    <CreateTiers
-                      tiers={tiers}
-                      setTiers={setTiers}
-                      additionalWorkRate={additionalWorkRate}
-                      setAdditionalWorkRate={setAdditionalWorkRate}
-                      errors={errors}
-                      setErrors={setErrors}
-                      onBack={() => handleNext(2)}
-                      onNext={() => handleNext(4)}
-                    />
-                  </div>
-                </motion.div>
-              )}
+          {currentSlide === 3 && (
+            <GigTerms
+              termsOfService={termsOfService}
+              setTermsOfService={setTermsOfService}
+              selectedTosId={selectedTosId}
+              setSelectedTosId={setSelectedTosId}
+              workSampleFiles={workSampleFiles}
+              setWorkSampleFiles={setWorkSampleFiles}
+              galleryUrls={galleryUrls}
+              setGalleryUrls={setGalleryUrls}
+              slots={slots}
+              setSlots={setSlots}
+              additionalWorkRate={additionalWorkRate}
+              setAdditionalWorkRate={setAdditionalWorkRate}
+              askNDA={askNDA}
+              setAskNDA={setAskNDA}
+              askPortfolio={askPortfolio}
+              setAskPortfolio={setAskPortfolio}
+              portfolioDuration={portfolioDuration}
+              setPortfolioDuration={setPortfolioDuration}
+              questionnaires={questionnaires}
+              setQuestionnaires={setQuestionnaires}
+              errors={errors}
+              setErrors={setErrors}
+              onNext={() => handleNext(4)}
+              onBack={handleBack}
+            />
+          )}
 
-              {currentSlide === 4 && (
-                <motion.div
-                  key="slide4"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
-                    <CreateMilestones
-                      milestones={milestones}
-                      setMilestones={setMilestones}
-                      errors={errors}
-                      setErrors={setErrors}
-                      onBack={() => handleNext(3)}
-                      onNext={() => handleNext(5)}
-                    />
-                  </div>
-                </motion.div>
-              )}
+          {currentSlide === 4 && (
+            <GigMilestones
+              milestones={milestones}
+              setMilestones={setMilestones}
+              errors={errors}
+              setErrors={setErrors}
+              onNext={() => handleNext(5)}
+              onBack={handleBack}
+            />
+          )}
 
-              {currentSlide === 5 && (
-                <motion.div
-                  key="slide5"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
-                    <CreateForms
-                      questionnaires={questionnaires}
-                      setQuestionnaires={setQuestionnaires}
-                      errors={errors}
-                      setErrors={setErrors}
-                      onBack={() => handleNext(4)}
-                      onNext={() => handleNext(6)}
-                    />
-                  </div>
-                </motion.div>
-              )}
+          {currentSlide === 5 && (
+            <CreateTiers
+              tiers={tiers}
+              setTiers={setTiers}
+              addOns={addOns}
+              setAddOns={setAddOns}
+              errors={errors}
+              setErrors={setErrors}
+              onNext={() => handleNext(6)}
+              onBack={handleBack}
+            />
+          )}
 
-              {currentSlide === 6 && (
-                <motion.div
-                  key="slide6"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
-                    <CreateReview
-                      title={title}
-                      description={description}
-                      category={category}
-                      thumbnailUrl={thumbnailUrl}
-                      slots={slots}
-                      termsOfService={termsOfService}
-                      skills={skills}
-                      firstDraftDelivery={firstDraftDelivery}
-                      galleryUrls={galleryUrls}
-                      tiers={tiers}
-                      milestones={milestones}
-                      additionalWorkRate={additionalWorkRate}
-                      questionnaires={questionnaires}
-                      onBack={() => handleNext(5)}
-                      onSubmit={handleSubmit}
-                      onEdit={(step) => setCurrentSlide(step)}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {currentSlide === 6 && (
+            <CreateReview
+              title={title}
+              description={description}
+              category={category}
+              thumbnailUrl={thumbnailUrl}
+              slots={slots}
+              termsOfService={termsOfService}
+              skills={skills}
+              firstDraftDelivery={firstDraftDelivery}
+              workSampleFiles={workSampleFiles}
+              galleryUrls={galleryUrls}
+              tiers={tiers}
+              addOns={addOns}
+              milestones={milestones}
+              additionalWorkRate={additionalWorkRate}
+              questionnaires={questionnaires}
+              askNDA={askNDA}
+              askPortfolio={askPortfolio}
+              portfolioDuration={portfolioDuration}
+              postingAs={postingAs}
+              actingTeamId={actingTeamId}
+              includedMemberIds={includedMemberIds}
+              onBack={handleBack}
+              onSubmit={handleSubmit}
+              onEditStep={(step) => handleStepJump(step)}
+              isSubmitting={isSubmitting}
+              isEditMode={true}
+            />
+          )}
         </div>
       </div>
 
       <CreationSuccess
         isOpen={isSuccessOpen}
-        onConfirm={() => navigate("/gigs/my-services")}
-      />
-
-      <PopupConfirmReturn
-        isOpen={isDiscardOpen}
-        onConfirm={() => {
-          setIsDiscardOpen(false);
-          navigate("/gigs/my-services");
-        }}
-        onCancel={() => setIsDiscardOpen(false)}
-        description="All unsaved changes to this service offering will be permanently lost."
+        message="Your service changes have been saved and updated in the marketplace."
+        onConfirm={handleConfirmSuccess}
       />
     </div>
   );

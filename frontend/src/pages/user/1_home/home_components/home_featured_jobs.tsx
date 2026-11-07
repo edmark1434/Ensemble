@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import {
   Clock,
   ArrowRight,
@@ -16,8 +17,9 @@ import {
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../6_job_market/job_components/JobRichText";
-import { computeJobRankingBreakdown } from "../../6_job_market/job_ranking";
+import { computeJobRankingBreakdown, computeWeightedDiscoveryOrderKey } from "../../6_job_market/job_ranking";
 import { getImageUrl } from "@/lib/utils";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 
@@ -138,7 +140,7 @@ export const HomeFeaturedJobs: React.FC = () => {
             timeline: `${j.timeline_min}-${j.timeline_max} Days`,
             thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
             hasCustomThumbnail: Boolean(j.thumbnail_path),
-            clientAvatar: getImageUrl(j.client_avatar_path) || undefined,
+            clientAvatar: resolveAvatarPath(j.client_avatar_path),
             skills: j.tags || [],
             isSaved: j.is_saved || false,
             isOwnPost: Boolean(j.is_own_post || userInfo?.account_id === j.client_account_id),
@@ -159,10 +161,13 @@ export const HomeFeaturedJobs: React.FC = () => {
           };
         });
 
-        // Only show Open jobs, sorted newest first
         const openJobs = mappedJobs
           .filter((j: any) => j.status?.toLowerCase() === "open" || !j.status)
-          .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          .map((j: any) => ({
+            ...j,
+            discoveryOrderKey: computeWeightedDiscoveryOrderKey(j),
+          }))
+          .sort((a: any, b: any) => (b.discoveryOrderKey ?? 0) - (a.discoveryOrderKey ?? 0));
         setJobs(openJobs.slice(0, 3));
       } catch (err) {
         console.error(err);
@@ -254,6 +259,11 @@ export const HomeFeaturedJobs: React.FC = () => {
                       {rankInfo.totalScore.toFixed(1)}
                     </span>
                     <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                      {typeof job.discoveryOrderKey === "number" && (
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 border border-indigo-400/40 text-[8.5px] font-mono font-bold text-indigo-100">
+                          Roll: {job.discoveryOrderKey.toFixed(1)}
+                        </span>
+                      )}
                       {rankInfo.subscriptionBoost > 0 ? (
                         <span
                           className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold border shadow-xs ${
@@ -406,20 +416,26 @@ export const HomeFeaturedJobs: React.FC = () => {
             {/* Footer */}
             <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
               <div className="flex items-center gap-1.5 truncate">
-                {job.clientAvatar ? (
+                <div className="relative h-5 w-5 shrink-0">
                   <img
                     src={job.clientAvatar}
-                    alt=""
+                    alt={job.postedBy}
+                    className={`h-5 w-5 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!job.clientAvatar ? "hidden" : ""}`}
                     onError={(e) => {
-                      (e.currentTarget as HTMLElement).style.display = "none";
+                      e.currentTarget.style.display = "none";
+                      const fallback = e.currentTarget.nextElementSibling;
+                      if (fallback) {
+                        fallback.classList.remove("hidden");
+                        fallback.classList.add("flex");
+                      }
                     }}
-                    className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10"
                   />
-                ) : null}
-                <div className={`h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 ${job.clientAvatar ? "hidden" : ""}`}>
-                  {job.postedBy.charAt(0).toUpperCase()}
+                  <div className={`${job.clientAvatar ? "hidden" : "flex"} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                    {job.postedBy ? job.postedBy.charAt(0).toUpperCase() : "U"}
+                  </div>
                 </div>
                 <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
+                <SubscriptionIcon plan={job.clientSubscriptionPlan} />
               </div>
 
               <div className="flex items-center gap-1 text-gray-400 dark:text-zinc-400 text-[10px] shrink-0 ml-2">

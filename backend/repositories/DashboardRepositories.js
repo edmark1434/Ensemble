@@ -1133,7 +1133,7 @@ async function buyRevision({
         );
 
         const contractResult = await client.query(
-            `SELECT contract_id, status, revision_price_credits
+            `SELECT contract_id, status, rate_credits, revision_price_credits
              FROM contracts
              WHERE contract_id = $1
              FOR UPDATE`,
@@ -1159,8 +1159,8 @@ async function buyRevision({
         }
         const participants = permissions.participants;
 
-        const priceCredits = Number(contract.revision_price_credits);
-        if (!Number.isSafeInteger(priceCredits) || priceCredits <= 0) {
+        const ratePct = Number(contract.revision_price_credits);
+        if (!Number.isSafeInteger(ratePct) || ratePct <= 0) {
             const error = new Error('The additional revision price is not configured');
             error.statusCode = 409;
             throw error;
@@ -1168,7 +1168,7 @@ async function buyRevision({
 
         const milestoneResult = await client.query(
             `SELECT cm.contract_milestone_id, cm.name, cm.status,
-                    cm.no_of_revisions_max,
+                    cm.no_of_revisions_max, cm.credits,
                     (
                         SELECT COUNT(*)::integer
                         FROM milestone_submits ms
@@ -1192,6 +1192,21 @@ async function buyRevision({
             error.statusCode = 409;
             throw error;
         }
+
+        // Calculate additional revision cost based on the milestone budget and additional work rate percentage
+        const previousRevisionsSum = await client.query(
+            `SELECT COALESCE(SUM(amount_credits), 0)::int as total_revision_credits
+             FROM credit_transactions
+             WHERE reference_table = 'contract_milestone_revisions'
+               AND reference_id = $1
+               AND type = 'Escrow Hold'
+               AND LOWER(status) = 'completed'`,
+            [milestoneId]
+        );
+        const revHold = Number(previousRevisionsSum.rows[0]?.total_revision_credits || 0);
+        const currentMilestoneCredits = Number(milestone.credits || contract.rate_credits || 0);
+        const baseMilestoneCredits = Math.max(1, currentMilestoneCredits - revHold);
+        const priceCredits = Math.max(1, Math.round((baseMilestoneCredits * ratePct) / 100));
 
         const existingResult = await client.query(
             `SELECT ct.credit_transaction_id, ct.type, ct.amount_credits,

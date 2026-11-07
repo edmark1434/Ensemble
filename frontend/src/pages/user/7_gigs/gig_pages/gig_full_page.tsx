@@ -4,6 +4,7 @@ import { GigRichText } from "../gig_components/GigRichText";
 import { ArrowLeft } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 import type { Gig } from "../gig_datasets";
 
 const GigFullPage: React.FC = () => {
@@ -50,10 +51,11 @@ const GigFullPage: React.FC = () => {
           setGig({
             ...g,
             client_account_id: creatorAccountId,
+            freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
             termsOfService: resolvedTos,
             terms_of_service: resolvedTos,
             thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
-            clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith("/") ? "" : "/"}${g.clientAvatar}` : undefined,
+            clientAvatar: resolveAvatarPath(g.clientAvatar || g.client_avatar_path),
             gallery: (g.gallery || []).map((p: string) => mapUrl(p))
           });
         } else {

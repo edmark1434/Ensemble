@@ -155,11 +155,11 @@ async function updateProfileDetailsServices(accountId, originalUpdates, updates)
 
         let rolesResult = null;
         if (updates.roles !== undefined) {
-            // Check if roles have changed
+            // Check if roles or their order have changed
             const originalRoles = originalUpdates.roles || [];
             const newRoles = updates.roles;
-            const originalRoleNames = originalRoles.map(r => r.role_name || r).sort().join(',');
-            const newRoleNames = newRoles.sort().join(',');
+            const originalRoleNames = originalRoles.map(r => r.role_name || r).join(',');
+            const newRoleNames = newRoles.join(',');
             
             if (originalRoleNames !== newRoleNames) {
                 rolesResult = await updateUserRolesByAccountIdRepositories(accountId, newRoles);

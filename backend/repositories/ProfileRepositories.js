@@ -505,15 +505,17 @@ async function updateUserRolesByAccountIdRepositories(accountId, roles) {
         // Delete existing roles
         await client.query('DELETE FROM user_platform_purpose WHERE user_id = $1', [userId]);
 
-        // Insert new roles if any
+        // Insert new roles in the exact user-selected order
         if (roles && roles.length > 0) {
-            const insertQuery = `
-                INSERT INTO user_platform_purpose (user_id, plpu_id)
-                SELECT $1, plpu_id 
-                FROM platform_purpose 
-                WHERE purpose_name = ANY($2::text[])
-            `;
-            await client.query(insertQuery, [userId, roles]);
+            for (const roleName of roles) {
+                await client.query(
+                    `INSERT INTO user_platform_purpose (user_id, plpu_id)
+                     SELECT $1, plpu_id
+                     FROM platform_purpose
+                     WHERE purpose_name = $2`,
+                    [userId, roleName]
+                );
+            }
         }
         
         await client.query('COMMIT');

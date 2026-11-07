@@ -66,6 +66,10 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
     const maxRevisions = activeMilestone?.revisions_max || 0;
     const isOutOfRevisions = maxRevisions > 0 && usedRevisions >= maxRevisions;
 
+    const ratePct = Number(task?.revision_price_credits || 25);
+    const milestoneCredits = Number(activeMilestone?.credits || 0);
+    const calculatedRevisionPrice = milestoneCredits > 0 ? Math.max(1, Math.round((milestoneCredits * ratePct) / 100)) : ratePct;
+
     const handleReviewSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!action || (action !== 'approve' && action !== 'revise')) return;
@@ -306,7 +310,7 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
 
                     <p className="text-xs text-gray-600 dark:text-zinc-300">
                         You have used all <b>{maxRevisions}</b> included revisions. You can purchase an additional
-                        revision for <b>{task?.revision_price_credits || 0} credits</b>.
+                        revision for <b>{calculatedRevisionPrice} credits</b> (+{ratePct}%).
                     </p>
 
                     <div className="flex justify-end gap-2">
@@ -323,7 +327,7 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
                             disabled={isSubmitting}
                             className="px-4 py-1.5 rounded-lg text-xs font-bold bg-yellow-500 hover:bg-yellow-600 text-black shadow-sm disabled:opacity-50"
                         >
-                            {isSubmitting ? 'Processing...' : `Pay ${task?.revision_price_credits || 0} Credits & Revise`}
+                            {isSubmitting ? 'Processing...' : `Pay ${calculatedRevisionPrice} Credits & Revise`}
                         </button>
                     </div>
                 </div>

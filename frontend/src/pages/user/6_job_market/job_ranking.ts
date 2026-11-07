@@ -73,11 +73,7 @@ export function hasGenuineCustomVisual(job: Partial<Job>): boolean {
   if (Array.isArray(job.attachments) && job.attachments.length > 0) {
     return true;
   }
-  if (typeof job.hasCustomThumbnail === "boolean") {
-    return job.hasCustomThumbnail;
-  }
   const thumb = String(job.thumbnail || "").trim().toLowerCase();
-  if (!thumb) return false;
   if (
     thumb.includes("placeholder") ||
     thumb.includes("/job_banners/") ||
@@ -85,6 +81,10 @@ export function hasGenuineCustomVisual(job: Partial<Job>): boolean {
   ) {
     return false;
   }
+  if (typeof job.hasCustomThumbnail === "boolean") {
+    return job.hasCustomThumbnail;
+  }
+  if (!thumb) return false;
   return true;
 }
 
@@ -457,5 +457,5 @@ export function computeWeightedDiscoveryOrderKey(
   const u2 = Math.random();
   const centeredNoise = ((u1 + u2) / 2 - 0.5) * 28; // -14 to +14 pts bell-shaped jitter
   const zeroProposalBoost = breakdown.proposalsPerSeat === 0 ? 3.5 : 0;
-  return breakdown.totalScore + zeroProposalBoost + centeredNoise;
+  return Math.max(0, Math.min(100, breakdown.totalScore + zeroProposalBoost + centeredNoise));
 }

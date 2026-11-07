@@ -17,6 +17,7 @@ import api from "@/lib/axios";
 import { JobRichText } from "./JobRichText";
 import { computeJobRankingBreakdown, computeWeightedDiscoveryOrderKey } from "../job_ranking";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import useGlobalState from "@/lib/global_state";
 import { formatDistanceToNow } from "date-fns";
 
@@ -434,6 +435,7 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                       <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">
                         {job.postedBy}
                       </span>
+                      <SubscriptionIcon plan={job.clientSubscriptionPlan} />
                     </div>
 
                     <div className="flex items-center gap-1 text-gray-400 dark:text-zinc-400 text-[10px] shrink-0 ml-2">

@@ -141,7 +141,7 @@ export function MarketplaceContextCard({
 
           {isRevision && Number(conversation.revision_price_credits || 0) > 0 && (
             <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
-              Revision rate: {Number(conversation.revision_price_credits).toLocaleString()} credits
+              Revision rate: +{Number(conversation.revision_price_credits)}% per pass
             </p>
           )}
 

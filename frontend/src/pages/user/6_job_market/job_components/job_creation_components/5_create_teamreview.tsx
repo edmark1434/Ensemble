@@ -482,16 +482,16 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
 
             {/* Score Dial */}
             <div className="flex items-center gap-4">
-              <div className="flex flex-col items-center justify-center h-16 w-16 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 shrink-0">
-                <span className="text-2xl font-black text-gray-900 dark:text-white leading-none">
-                  {Math.round(ranking.totalScore)}
+              <div className="flex flex-col items-center justify-center h-16 w-18 px-2 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 shrink-0">
+                <span className="text-xl font-black text-gray-900 dark:text-white leading-none">
+                  {ranking.totalScore.toFixed(1)}
                 </span>
                 <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 mt-0.5">/ 100</span>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between text-xs font-semibold mb-1">
                   <span className="text-gray-700 dark:text-zinc-300">Roadmap Strength</span>
-                  <span className="text-gray-900 dark:text-white font-bold">{Math.round(ranking.totalScore)}%</span>
+                  <span className="text-gray-900 dark:text-white font-bold">{ranking.totalScore.toFixed(1)}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
                   <div

@@ -255,7 +255,7 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
   const handleCategoryClick = (categoryLabel: string) => {
     playClick();
     setIsGuestMode(true);
-    navigate("/gigs/services", { state: { searchQuery: categoryLabel } });
+    navigate("/gigs/services", { state: { category: categoryLabel } });
   };
 
   const borderLine = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.15)";

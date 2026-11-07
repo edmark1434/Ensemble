@@ -355,8 +355,12 @@ export const DashboardTaskDetail = () => {
                                                     </div>
                                                     <div className="flex items-center justify-end gap-1.5 text-gray-600 dark:text-zinc-400">
                                                         <span>Extra Rev:</span>
-                                                        <span className="font-semibold text-gray-900 dark:text-white">
-                                                            {task.revision_price_credits ? `+${task.revision_price_credits} C` : '0 C'}
+                                                        <span className="font-semibold text-gray-900 dark:text-white" title={task.revision_price_credits ? `+${task.revision_price_credits}% additional work rate` : undefined}>
+                                                            {(() => {
+                                                                const ratePct = Number(task.revision_price_credits || 0);
+                                                                const extraCredits = m.credits ? Math.round((Number(m.credits) * ratePct) / 100) : 0;
+                                                                return extraCredits > 0 ? `+${extraCredits} C (+${ratePct}%)` : ratePct > 0 ? `+${ratePct}%` : '0 C';
+                                                            })()}
                                                         </span>
                                                     </div>
                                                 </div>

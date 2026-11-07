@@ -25,7 +25,8 @@ const GigCategories: React.FC<GigCategoriesProps> = ({
 
       <div className="flex flex-wrap gap-1.5">
         {categories.map((cat) => {
-          const isActive = activeCategory === cat.label;
+          const isActive =
+            activeCategory.toLowerCase().trim() === cat.label.toLowerCase().trim();
 
           return (
             <button
