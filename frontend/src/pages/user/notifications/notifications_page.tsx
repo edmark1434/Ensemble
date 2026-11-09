@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
+import { useNotificationStore } from "@/lib/notification_state";
 
 interface Notification {
   notification_id: string;
@@ -71,7 +72,8 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 // ─── Main Component ────────────────────────────────────────────────────────
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notifications = useNotificationStore((state) => state.notifications) as Notification[];
+  const setNotifications = useNotificationStore((state) => state.setNotifications) as React.Dispatch<React.SetStateAction<Notification[]>>;
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -141,9 +143,9 @@ const NotificationsPage: React.FC = () => {
         await api.patch(`/api/notifications/${n.notification_id}/read`);
         setNotifications(prev => prev.map(item => item.notification_id === n.notification_id ? { ...item, is_read: true } : item));
         if (socket.connected) socket.emit("markMessageAsRead", n.notification_id);
-      } catch { return; }
+      } catch { /* ignore read error and still navigate */ }
     }
-    const path = n.reference_path || "";
+    const path = n.reference_path || (n.reference_prefix === "follow" && n.reference_id ? `/profile/${n.reference_id}` : "");
     const convMatch = path.match(/^\/inbox\/(?!direct(?:\/|$)|marketplace(?:\/|$))([^/?#]+)/);
     const qi = path.indexOf("?");
     const convId = new URLSearchParams(qi >= 0 ? path.slice(qi + 1) : "").get("conversation") || convMatch?.[1];

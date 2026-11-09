@@ -96,8 +96,8 @@ const watchWindow = (live: { current: Live }) => {
 const SwipeRow: React.FC<SwipeRowProps> = ({
   children,
   actions = DEFAULT_ACTIONS,
-  actionColor = '#334155',
-  drawerColor = '#334155',
+  actionColor = '#27272a',
+  drawerColor = '#27272a',
   isUnread = false,
   radius = 12,
   actionWidth = 74,
@@ -262,9 +262,6 @@ const SwipeRow: React.FC<SwipeRowProps> = ({
       hist: [],
       touch: e.pointerType === 'touch'
     };
-    try {
-      surface.current?.setPointerCapture(e.pointerId);
-    } catch {}
     unwatch.current?.();
     unwatch.current = watchWindow(live);
   };
@@ -278,6 +275,9 @@ const SwipeRow: React.FC<SwipeRowProps> = ({
       g.grab = s * (g.x0 + Math.sign(dx) * HYST) - inv(exposed.get());
       g.moved = true;
       root.current?.setAttribute('data-dragging', '');
+      try {
+        surface.current?.setPointerCapture(e.pointerId);
+      } catch {}
     }
     const ex = map(s * e.clientX - g.grab);
     x.set(s * ex);
@@ -398,7 +398,7 @@ const SwipeRow: React.FC<SwipeRowProps> = ({
         {/* Right side drawer (Archive): Dark slate action */}
         <motion.div
           id={railId}
-          className="absolute inset-y-0 right-0 z-0 bg-slate-700 dark:bg-slate-800 overflow-hidden flex items-center justify-center"
+          className="absolute inset-y-0 right-0 z-0 bg-zinc-700 dark:bg-zinc-800 overflow-hidden flex items-center justify-center"
           style={{ width: `${A}px`, opacity: railOpacity }}
           inert={!open || undefined}
           aria-hidden={!open}
@@ -406,7 +406,7 @@ const SwipeRow: React.FC<SwipeRowProps> = ({
           {primary ? (
             <button
               type="button"
-              className="w-full h-full cursor-pointer touch-manipulation grid place-items-center border-0 bg-transparent p-0 outline-none select-none text-white hover:bg-slate-600/50 transition-colors"
+              className="w-full h-full cursor-pointer touch-manipulation grid place-items-center border-0 bg-transparent p-0 outline-none select-none text-white hover:bg-zinc-600/50 transition-colors"
               onClick={e => act(primary, e)}
             >
               <span className="grid justify-items-center gap-1.5 text-[10px] uppercase tracking-wider leading-none font-bold text-white">
@@ -424,8 +424,8 @@ const SwipeRow: React.FC<SwipeRowProps> = ({
           ref={surface}
           className={`relative z-10 flex w-full h-full touch-pan-y items-start ${
             isUnread
-              ? 'bg-gray-50/95 dark:bg-[#151827] hover:bg-gray-100/90 dark:hover:bg-[#1c2033]'
-              : 'bg-white dark:bg-[#12141f] hover:bg-gray-50/80 dark:hover:bg-white/[0.04]'
+              ? 'bg-gray-50/95 dark:bg-[#202024] hover:bg-gray-100/90 dark:hover:bg-[#27272a]'
+              : 'bg-white dark:bg-[#18181b] hover:bg-gray-50/80 dark:hover:bg-[#202024]'
           }`}
           style={{ transform: surfaceXf }}
           onPointerDown={down}

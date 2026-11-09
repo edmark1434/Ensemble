@@ -59,28 +59,30 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
-      try {
-        await api.patch(
-          `/api/notifications/${notification.notification_id}/read`
-        );
-        setNotifications((prev) =>
-          prev.map((item) =>
-            item.notification_id === notification.notification_id
-              ? { ...item, is_read: true }
-              : item
-          )
-        );
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.notification_id === notification.notification_id
+            ? { ...item, is_read: true }
+            : item
+        )
+      );
+      if (notification.notification_id) {
+        api.patch(`/api/notifications/${notification.notification_id}/read`).catch((error) => {
+          console.error("Failed to mark notification as read", error);
+        });
         if (socket.connected) {
           socket.emit("markMessageAsRead", notification.notification_id);
         }
-      } catch (error) {
-        console.error("Failed to mark notification as read", error);
-        return;
       }
     }
 
     onClose();
     let referencePath = notification.reference_path || "";
+
+    // For follow notifications, ensure navigation goes to the follower's profile
+    if (notification.reference_prefix === "follow" && notification.reference_id && !referencePath) {
+      referencePath = `/profile/${notification.reference_id}`;
+    }
 
     // For offer_received notifications, ensure the URL includes the contract ID
     if (notification.reference_prefix === "offer_received" && notification.reference_id) {
@@ -104,7 +106,9 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       });
       return;
     }
-    navigate(referencePath);
+    if (referencePath) {
+      navigate(referencePath);
+    }
   };
 
   const handleMarkAllRead = async () => {
@@ -156,11 +160,13 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
   if (!isOpen) return null;
 
   const unreadCount = visibleNotifications.filter((n) => !n.is_read).length;
+  const totalUnreadCount = notificationsData.filter((n) => !n.is_read).length;
+  const archivedUnreadCount = Math.max(0, totalUnreadCount - unreadCount);
 
   return (
-    <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#11131c] shadow-2xl overflow-hidden z-50 font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-2xl overflow-hidden z-50 font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200/80 dark:border-white/10 px-4 py-3 bg-gray-50/50 dark:bg-white/[0.02]">
+      <div className="flex items-center justify-between border-b border-gray-200/80 dark:border-zinc-800 px-4 py-3 bg-gray-50/50 dark:bg-white/[0.02]">
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
             Notifications
@@ -221,8 +227,8 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
                 direction="left"
                 actionWidth={74}
                 radius={12}
-                actionColor="#334155"
-                drawerColor="#334155"
+                actionColor="#27272a"
+                drawerColor="#27272a"
                 isUnread={!notification.is_read}
                 className="mb-1.5"
                 onCommit={() => handleArchiveNotification(notification.notification_id)}
@@ -231,7 +237,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
                     id: "archive",
                     label: "Archive",
                     icon: <Archive size={16} strokeWidth={2.2} />,
-                    color: "#334155",
+                    color: "#27272a",
                     onSelect: () => handleArchiveNotification(notification.notification_id),
                   },
                 ]}
@@ -327,15 +333,20 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-gray-200/80 dark:border-white/10 p-2.5 bg-gray-50/50 dark:bg-white/[0.02] flex items-center justify-between gap-2">
+      <div className="border-t border-gray-200/80 dark:border-zinc-800 p-2.5 bg-gray-50/50 dark:bg-white/[0.02] flex items-center justify-between gap-2">
         <button
           onClick={() => {
             onClose();
             navigate("/notifications");
           }}
-          className="flex-1 py-1.5 px-3 rounded-xl text-center text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+          className="flex-1 py-1.5 px-3 rounded-xl text-center text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white transition cursor-pointer inline-flex items-center justify-center gap-2"
         >
-          Open Full View
+          <span>Open Full View</span>
+          {archivedUnreadCount > 0 && (
+            <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white shadow-xs">
+              {archivedUnreadCount > 99 ? "99+" : archivedUnreadCount}
+            </span>
+          )}
         </button>
         {visibleNotifications.length > 0 && (
           <button

@@ -75,45 +75,45 @@ body {
 
 /* Firefox support */
 .inbox-scroll-thin {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  /* Uses ::-webkit-scrollbar below so Chromium hides top/bottom arrow buttons */
+  /* dark thumb via .dark ::-webkit-scrollbar-thumb */
 }
 
 /* Thin, theme-aware scrollbar that stays hidden or subtle */
-.scroll-thin {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+.scroll-thin, .custom-scrollbar {
+  /* Uses ::-webkit-scrollbar below so Chromium hides top/bottom arrow buttons */
+  /* theme-aware thumb via ::-webkit-scrollbar-thumb */
 }
 
-.dark .scroll-thin {
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+.dark .scroll-thin, .dark .custom-scrollbar {
+  /* dark thumb via .dark ::-webkit-scrollbar-thumb */
 }
 
-.scroll-thin::-webkit-scrollbar {
+.scroll-thin::-webkit-scrollbar, .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
 .scroll-thin::-webkit-scrollbar-track,
-.scroll-thin::-webkit-scrollbar-button {
+.scroll-thin::-webkit-scrollbar-button, .custom-scrollbar::-webkit-scrollbar-track, .custom-scrollbar::-webkit-scrollbar-button {
   display: none;
   background: transparent;
 }
 
-.scroll-thin::-webkit-scrollbar-thumb {
+.scroll-thin::-webkit-scrollbar-thumb, .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);
   border-radius: 9999px;
 }
 
-.dark .scroll-thin::-webkit-scrollbar-thumb {
+.dark .scroll-thin::-webkit-scrollbar-thumb, .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.scroll-thin:hover::-webkit-scrollbar-thumb {
+.scroll-thin:hover::-webkit-scrollbar-thumb, .custom-scrollbar:hover::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.3);
 }
 
-.dark .scroll-thin:hover::-webkit-scrollbar-thumb {
+.dark .scroll-thin:hover::-webkit-scrollbar-thumb, .dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.25);
 }
 
