@@ -6,6 +6,7 @@ export const ToastProvider = () => {
   return (
     <Toaster
       position="top-right"
+      gutter={10}
       toastOptions={{
         duration: 4000,
         style: toastConfig.style,
@@ -14,9 +15,8 @@ export const ToastProvider = () => {
         loading: toastConfig.loading,
       }}
       containerStyle={{
-        top: '50%',
+        top: 84,
         right: 20,
-        transform: 'translateY(-80%)',
       }}
     />
   );

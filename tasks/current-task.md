@@ -1,13 +1,17 @@
-# Current Task: Gig Edit Page Overhaul, Add-ons Persistence & 13-Factor Service Algorithm
+# Current Task: SwipeToast with Bottom Fuse Timer & Notification Click Navigation
 
-## Objective
-1. **Fix Missing Add-ons on Gig Edit (`/gigs/edit/:id`)**: Load `addOns` on the edit page, pass them into `CreateTiers` and `CreateReview`, and persist updated add-ons in `updateGigController` and `updateGigRepository` (`PUT /api/gigs/:id`).
-2. **Wide Layout & Stepper Navigation on Gig Edit**: Match the `max-w-6xl 2xl:max-w-7xl` full-width layout and 6-step wizard of `gig_create_page.tsx` with clickable stepper navigation across all 6 steps (`maxReachedStep={6}`, `hasReachedReview={true}`, `onStepClick`).
-3. **Free Service Updates (0 Credits)**: Ensure editing an existing service does not require re-paying the 50 Credits creation fee (`isEditMode` in `0_gig_identity.tsx` and `6_create_review.tsx`).
-4. **Apply 13-Factor Discovery Algorithm to Gigs (`gig_ranking.ts`, Gig Cards/Details, and `/gigs/info`)**: Align the Gig ranking breakdown and `/gigs/info` table view with `/jobs/info` (`Trust (35)`, `Freshness (25)`, `Package & Media (25)`, `Open Slots (15)`, and `Subscription Boost (+0..9)`).
+## Objectives
+1. Adapt `@react-bits/SwipeToast-JS-TW` (`SwipeToast`) with:
+   - Bottom burning fuse timer (`scaleX(1) -> scaleX(0)` that pauses on hover/drag/blur).
+   - Horizontal **swipe-right** (`dx > 0`) to dismiss immediately (with rubberband resistance when dragging left).
+   - No Undo / action button.
+   - Upper-right placement where new toasts appear at the top and push older toasts downward.
+2. Apply `SwipeToast` to both real-time notification toasts (`user_header.tsx`, `AccountStanding.tsx`) and general app toasts (`showSuccessToast`, `showErrorToast`, `showCustomToast` in `toast.ts`).
+3. Fix clicking notifications in the floating Notifications popup (`UserNotificationModal`) and Full View (`notifications_page.tsx`) so clicking a notification row (especially `NEW FOLLOWER` notifications) reliably navigates to the person's profile (`/profile/${notification.reference_id}`) without being swallowed by `SwipeRow` pointer capture or blocked by the mark-as-read request.
 
 ## Acceptance Criteria
-- [x] `backend/controllers/GigControllers.js` and `backend/repositories/GigRepositories.js` persist `addOns` on `PUT /api/gigs/:id`.
-- [x] `gig_edit_page.tsx` uses `max-w-6xl 2xl:max-w-7xl`, loads `addOns`, enables clicking all 6 stepper tabs, and saves without charging 50 Credits.
-- [x] `gig_ranking.ts`, `GigViewDetails.tsx`, `GigRichText.tsx`, `gig_lists.tsx`, and `GigServicesInfoGuide.tsx` (`/gigs/info`) implement the 13-factor 100-point + Subscription Boost algorithm and clean table layout.
-- [x] Frontend build (`npm --prefix frontend run build`) passes with 0 errors.
+- [x] `SwipeRow` only calls `setPointerCapture` after crossing the drag hysteresis (`HYST = 8px`) in `onPointerMove`, allowing normal clicks on child notification cards to fire reliably.
+- [x] `UserNotificationModal` and `notifications_page.tsx` mark notifications as read optimistically without blocking navigation if the `PATCH` request fails, and resolve `follow` notifications to `/profile/${notification.reference_id}`.
+- [x] `SwipeToast` component created in `frontend/src/components/ui/SwipeToast.tsx` with bottom burning fuse timer and swipe-right dismissal.
+- [x] Applied `SwipeToast` to `toast.ts` (`showSuccessToast`, `showErrorToast`, `showCustomToast`), `user_header.tsx` notification toasts, and `AccountStanding.tsx` warning toasts, positioned at the upper-right (`top: 16, right: 20`).
+- [x] `cd frontend && npm run build` passes with zero errors.

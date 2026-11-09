@@ -6,6 +6,7 @@ import useGlobalState from '@/lib/global_state';
 import socket from '@/lib/socket';
 import api from '@/lib/axios';
 import { showSuccessToast } from '@/components/utility/toast';
+import { SwipeToast } from '@/components/ui/SwipeToast';
 
 export type AccountViolation = {
   type?: string | null;
@@ -288,10 +289,10 @@ export function showAccountWarningToast(payload: {
         role="alert"
         className={`${
           t.visible ? 'animate-enter' : 'animate-leave'
-        } relative max-w-md w-full bg-[#12131a] text-white shadow-2xl rounded-2xl pointer-events-auto border border-amber-500/40 p-4 pt-6 mt-2`}
+        } relative max-w-md w-full bg-[#18181b] text-white shadow-2xl rounded-2xl pointer-events-auto border border-amber-500/40 p-0`}
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-        <div className="absolute top-2.5 left-3.5 flex items-center gap-1.5">
+        <SwipeToast open={t.visible} onClose={() => toast.dismiss(t.id)} duration={8000} fuseColor="#f5a524" radius={16} className="w-full !bg-[#18181b] !text-white p-4 pt-6 border-0"><div className="absolute top-2.5 left-3.5 flex items-center gap-1.5">
           <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping" />
           <span className="text-[10px] font-bold tracking-wider uppercase text-amber-400">
             ⚠️ Account Warning Issued
@@ -333,12 +334,12 @@ export function showAccountWarningToast(payload: {
             onClick={() => toast.dismiss(t.id)}
             className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
           >
-            Dismiss
+            Dismiss</button></div></SwipeToast><div className="hidden"><button>
           </button>
         </div>
       </div>
     ),
-    { duration: 8000, id: toastId }
+    { duration: Infinity, id: toastId }
   );
 }
 

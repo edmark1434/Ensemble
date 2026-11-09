@@ -11,11 +11,13 @@ import { auth } from "@/pages/firebase";
 
 import UserNotificationModal from "./user_notification_modal";
 import { isPopupArchived } from "@/lib/popupNotificationStorage";
+import { useNotificationStore } from "@/lib/notification_state";
 import UserLogoutModal from "./user_logout_modal";
 import socket from "@/lib/socket";
 import useChatState from "@/components/ui/chat_bubble/chat_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import toast from "react-hot-toast";
+import { SwipeToast } from "@/components/ui/SwipeToast";
 import AccountAvatar from "@/components/ui/AccountAvatar";
 import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import TicketInviteActions from "@/components/nav/TicketInviteActions";
@@ -273,6 +275,31 @@ const UserHeader: React.FC<UserHeaderProps> = ({
     setProfilePillStyle((prev) => ({ ...prev, opacity: 0 }));
   };
 
+  const [creatorPillStyle, setCreatorPillStyle] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+  }>({
+    top: 0,
+    height: 0,
+    opacity: 0,
+  });
+  const creatorItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const handleCreatorItemHover = (index: number) => {
+    const el = creatorItemRefs.current[index];
+    if (!el) return;
+    setCreatorPillStyle({
+      top: el.offsetTop,
+      height: el.offsetHeight,
+      opacity: 1,
+    });
+  };
+
+  const handleCreatorMenuLeave = () => {
+    setCreatorPillStyle((prev) => ({ ...prev, opacity: 0 }));
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hoverItem = new URLSearchParams(window.location.search).get("hoverProfile");
@@ -376,7 +403,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [userAvatarState, setUserAvatarState] = useState<string>(initialAvatar);
   const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">(initialPlan);
   const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notifications = useNotificationStore((state) => state.notifications) as Notification[];
+  const setNotifications = useNotificationStore((state) => state.setNotifications) as React.Dispatch<React.SetStateAction<Notification[]>>;
+  const [popupArchiveRevision, setPopupArchiveRevision] = useState(0);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [isAskAiLoaded, setIsAskAiLoaded] = useState(false);
   const [isAskAiClickLoading, setIsAskAiClickLoading] = useState(false);
@@ -419,9 +448,19 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   useEffect(() => {
     setHasUnreadNotifications(
-      notifications.some((notification) => !notification.is_read)
+      notifications.some(
+        (notification) =>
+          !notification.is_read &&
+          !isPopupArchived(notification, userInfo?.account_id ? String(userInfo.account_id) : undefined)
+      )
     );
-  }, [notifications]);
+  }, [notifications, userInfo?.account_id, popupArchiveRevision]);
+
+  useEffect(() => {
+    const onArchiveChanged = () => setPopupArchiveRevision((v) => v + 1);
+    window.addEventListener("ensemble:popup-archive-changed", onArchiveChanged);
+    return () => window.removeEventListener("ensemble:popup-archive-changed", onArchiveChanged);
+  }, []);
 
 
 useEffect(() => {
@@ -507,7 +546,13 @@ useEffect(() => {
         const tagText = `${typeLabel} | ${getActionLabel(notification.chatAction)}`;
 
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={5000}
+            fuseColor="#3b82f6"
+            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
+          >
             <div className="absolute top-2 left-3">
               <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
                 {tagText}
@@ -527,8 +572,8 @@ useEffect(() => {
                 <img src={notification.userAvatar ? constructAvatarUrl(notification.userAvatar) : "/images/default_avatar.png"} alt={notification.userName} className="h-10 w-10 rounded-full object-cover" />
               </div>
             </div>
-          </div>
-        ), { ...toastOptions, duration: 5000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       } else if (notification.reference_prefix === 'MILESTONE_FUNDS_RELEASED') {
         const creditsMatch = notification.message.match(/^([\d,]+)\s+credits/);
         const creditsAmount = creditsMatch ? creditsMatch[1] : '';
@@ -536,7 +581,13 @@ useEffect(() => {
         const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
 
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4`}>
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={6000}
+            fuseColor="#10b981"
+            className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 flex"
+          >
             <div className="flex-1 w-0 flex items-start">
               <div className="flex-shrink-0 pt-0.5">
                 <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
@@ -552,8 +603,8 @@ useEffect(() => {
                 </p>
               </div>
             </div>
-          </div>
-        ), { ...toastOptions, duration: 6000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       } else if (notification.reference_prefix === 'MILESTONE_REVISION_PURCHASED') {
         const milestoneMatch = notification.message.match(/revision for "([^"]+)"/);
         const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
@@ -561,7 +612,13 @@ useEffect(() => {
         const buyerName = nameMatch ? nameMatch[1] : 'Client';
         
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-blue-200 dark:border-blue-500/20 p-4 pt-7 mt-2`}>
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={6000}
+            fuseColor="#3b82f6"
+            className="w-[356px] max-w-[calc(100vw-32px)] border-blue-200 dark:border-blue-500/20 p-4 pt-7 flex"
+          >
             <div className="absolute top-2 left-3">
               <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
                 Revision Purchased
@@ -585,20 +642,23 @@ useEffect(() => {
                 </div>
               </div>
             </div>
-          </div>
-        ), { ...toastOptions, duration: 6000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
         const isSealed = Boolean(notification.is_sealed || !notification.reviewStars || !notification.contractCompleted);
         const stars = notification.reviewStars || 5;
         const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
         
         toast.custom((t) => (
-          <div 
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={6000}
+            fuseColor={isSealed ? "#f5a524" : "#3b82f6"}
             onClick={() => {
-              toast.dismiss(t.id);
               if (notification.reference_path) navigate(notification.reference_path);
             }}
-            className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.01]`}
+            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
           >
             <div className="absolute top-2 left-3">
               <span className={`text-[9px] font-bold tracking-wider uppercase ${isSealed ? 'text-amber-600 dark:text-amber-400' : 'text-blue-500 dark:text-blue-400'}`}>
@@ -632,12 +692,21 @@ useEffect(() => {
                 </div>
               </div>
             </div>
-          </div>
-        ), { ...toastOptions, duration: 6000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       } else if (notification.reference_prefix === 'follow') {
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
-               onClick={() => { toast.dismiss(t.id); window.location.href = notification.reference_path || '#'; }}>
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={5000}
+            fuseColor="#10b981"
+            onClick={() => {
+              const target = notification.reference_path || (notification.reference_id ? `/profile/${notification.reference_id}` : '/notifications');
+              navigate(target);
+            }}
+            className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 flex"
+          >
             <div className="absolute top-2 left-3">
               <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
                 NEW FOLLOWER
@@ -656,8 +725,8 @@ useEffect(() => {
                 <AccountAvatar url={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : null} name={notification.followerName} />
               </div>
             </div>
-          </div>
-        ), { ...toastOptions, duration: 5000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
         showAccountWarningToast({
           violationId: notification.reference_id,
@@ -668,7 +737,13 @@ useEffect(() => {
       } else if (notification.reference_prefix === 'TICKET_INVITE' && notification.reference_id) {
         const def = getNotificationIcon(notification.reference_prefix);
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={12000}
+            fuseColor="#f5a524"
+            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7"
+          >
             <div className="absolute top-2 left-3">
               <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
                 {getNotificationLabel(notification.reference_prefix)}
@@ -683,13 +758,21 @@ useEffect(() => {
                 if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
               }}
             />
-          </div>
-        ), { ...toastOptions, duration: 12000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       } else {
         const def = getNotificationIcon(notification.reference_prefix);
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
-               onClick={() => { toast.dismiss(t.id); if (notification.reference_path) navigate(notification.reference_path); }}>
+          <SwipeToast
+            open={t.visible}
+            onClose={() => toast.dismiss(t.id)}
+            duration={5000}
+            fuseColor="#f5a524"
+            onClick={() => {
+              if (notification.reference_path) navigate(notification.reference_path);
+            }}
+            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
+          >
             <div className="absolute top-2 left-3">
               <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
                 {getNotificationLabel(notification.reference_prefix)}
@@ -703,8 +786,8 @@ useEffect(() => {
                 {def.icon}
               </div>
             </div>
-          </div>
-        ), { ...toastOptions, duration: 5000 });
+          </SwipeToast>
+        ), { ...toastOptions, duration: Infinity });
       }
     }
 
@@ -859,12 +942,8 @@ useEffect(() => {
           return {
             accountId: String(account.account_id),
             name,
-            username: `@${account.handle}`,
-            avatar: avatarPath
-              ? /^https?:\/\//i.test(avatarPath)
-                ? avatarPath
-                : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=71717a&color=fff`,
+            username: `@${String(account.handle || "").replace(/^@/, "")}`,
+            avatar: avatarPath ? constructAvatarUrl(avatarPath) : "",
             deactivated: String(account.status || "").toLowerCase() === "deactivated",
           };
         });
@@ -1207,27 +1286,43 @@ useEffect(() => {
                   </div>
 
                   {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length > 0 && (
-                    <div className="absolute top-full mt-2 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-xl z-50 overflow-hidden">
+                    <div className="absolute top-full mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
                       {isSearchingCreators ? (
                         <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">Searching...</div>
                       ) : creatorSearchResults.length > 0 ? (
-                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                          {creatorSearchResults.map((creator) => (
+                        <div
+                          className="relative p-1.5 space-y-0.5 max-h-64 overflow-y-auto custom-scrollbar [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/70 dark:[&::-webkit-scrollbar-thumb]:bg-white/15 hover:dark:[&::-webkit-scrollbar-thumb]:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-button]:hidden"
+                          onMouseLeave={handleCreatorMenuLeave}
+                        >
+                          <span
+                            className="pointer-events-none absolute left-1.5 right-1.5 rounded-lg transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                            style={{
+                              top: `${creatorPillStyle.top}px`,
+                              height: `${creatorPillStyle.height}px`,
+                              opacity: creatorPillStyle.opacity,
+                              backgroundColor: theme === "dark" ? "#27272a" : "#f1f5f9",
+                              transitionProperty: "top, height, opacity, background-color",
+                            }}
+                            aria-hidden="true"
+                          />
+                          {creatorSearchResults.map((creator, idx) => (
                             <div
                               key={creator.accountId}
+                              ref={(el) => { creatorItemRefs.current[idx] = el; }}
+                              onMouseEnter={() => handleCreatorItemHover(idx)}
                               onClick={() => {
                                 navigate(`/search/user/${creator.username}`);
                                 setIsCreatorSearchOpen(false);
                               }}
-                              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-100 dark:border-white/5 last:border-none"
+                              className="relative z-[1] flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors"
                             >
-                              <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10" />
+                              <AccountAvatar url={creator.avatar || null} name={creator.name} className="h-8 w-8 border border-gray-200 dark:border-white/10 text-xs" />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
                                   {creator.deactivated && <DeactivatedBadge />}
                                 </div>
-                                <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">@{creator.username}</p>
+                                <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">{creator.username.startsWith("@") ? creator.username : `@${creator.username}`}</p>
                               </div>
                             </div>
                           ))}
@@ -1465,11 +1560,12 @@ useEffect(() => {
                   >
                     <Bell className="h-5 w-5" />
                     {hasUnreadNotifications && (
-                      <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#080a12]" />
+                      <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-dark-base" />
                     )}
                   </button>
                   <UserNotificationModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} notificationsData={notifications} 
                     setNotifications={setNotifications}
+                    accountId={userInfo?.account_id ? String(userInfo.account_id) : undefined}
                   />
                 </div>
 

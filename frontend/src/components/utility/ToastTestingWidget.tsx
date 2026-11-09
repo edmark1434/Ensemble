@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, CheckCircle, XCircle, Loader2, Info, GripHorizontal, Bell, User, Star } from "lucide-react";
-import { showSuccessToast, showErrorToast, showLoadingToast, dismissToast, toastConfig } from "./toast";
+import { showSuccessToast, showErrorToast, showLoadingToast, showCustomToast, dismissToast } from "./toast";
 import toast from "react-hot-toast";
 import { DevRateReviewModal } from './DevRateReviewModal';
 import useGlobalState from "@/lib/global_state";
@@ -130,7 +130,7 @@ export const ToastTestingWidget: React.FC = () => {
                     <button onClick={() => { const id = showLoadingToast(toastText); setTimeout(() => dismissToast(id), 3000); }} className="flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded text-[10px] font-bold transition">
                       <Loader2 className="w-3 h-3" /> Load (3s)
                     </button>
-                    <button onClick={() => toast(toastText, toastConfig.custom)} className="flex items-center gap-1.5 px-2 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded text-[10px] font-bold transition">
+                    <button onClick={() => showCustomToast(toastText)} className="flex items-center gap-1.5 px-2 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded text-[10px] font-bold transition">
                       <Info className="w-3 h-3" /> Custom
                     </button>
                   </div>
