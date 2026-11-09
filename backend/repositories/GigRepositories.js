@@ -1383,9 +1383,34 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 
             for (const resp of orderData.responses) {
 
-                if (resp.requirementId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resp.requirementId)) {
+                let reqId = resp.requirementId;
 
-                    await client.query(responseQuery, [requestId, resp.requirementId, resp.response]);
+                // Resolve pseudo-IDs (workflow-portfolio / workflow-nda) to real gig_requirement_id
+                if (reqId === 'workflow-portfolio' || reqId === 'workflow-nda') {
+                    const isPort = reqId === 'workflow-portfolio';
+                    const findReq = await client.query(
+                        `SELECT gig_requirement_id FROM gig_requirements
+                         WHERE gig_id = $1 AND (${isPort ? "question ILIKE '%portfolio%' OR question ILIKE '%showcase%'" : "question ILIKE '%nda%' OR question ILIKE '%confidentiality%'"})
+                         AND deleted_at IS NULL
+                         ORDER BY gig_requirement_id ASC LIMIT 1`,
+                        [gigId]
+                    );
+                    if (findReq.rows.length > 0) {
+                        reqId = findReq.rows[0].gig_requirement_id;
+                    } else {
+                        const createdReq = await client.query(
+                            `INSERT INTO gig_requirements (gig_id, type, question, is_required)
+                             VALUES ($1, 'choice', $2, true)
+                             RETURNING gig_requirement_id`,
+                            [gigId, isPort ? 'Do you allow us to display the final work in our Freelancer/Studio Portfolio after completion (up to 30s showcase)?' : 'Do you require confidentiality (NDA) for this project?']
+                        );
+                        reqId = createdReq.rows[0].gig_requirement_id;
+                    }
+                }
+
+                if (reqId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reqId)) {
+
+                    await client.query(responseQuery, [requestId, reqId, resp.response]);
 
                 }
 
@@ -3228,9 +3253,10 @@ async function editGigOrderRepository(orderId, accountIds, orderData) {
 
         const checkQuery = `
 
-            SELECT status FROM gig_requests 
-
-            WHERE gig_request_id = $1 AND client_account_id = ANY($2::uuid[])
+            SELECT gr.status, gt.gig_id 
+            FROM gig_requests gr
+            JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+            WHERE gr.gig_request_id = $1 AND gr.client_account_id = ANY($2::uuid[])
 
         `;
 
@@ -3318,6 +3344,8 @@ async function editGigOrderRepository(orderId, accountIds, orderData) {
 
         if (orderData.responses && orderData.responses.length > 0) {
 
+            const gigId = checkRes.rows[0]?.gig_id;
+
             const insertRespQuery = `
 
                 INSERT INTO gig_responses (gig_request_id, gig_requirement_id, response)
@@ -3328,9 +3356,34 @@ async function editGigOrderRepository(orderId, accountIds, orderData) {
 
             for (const resp of orderData.responses) {
 
-                if (resp.requirementId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resp.requirementId)) {
+                let reqId = resp.requirementId;
 
-                    await client.query(insertRespQuery, [orderId, resp.requirementId, resp.response]);
+                // Resolve pseudo-IDs (workflow-portfolio / workflow-nda) to real gig_requirement_id
+                if (gigId && (reqId === 'workflow-portfolio' || reqId === 'workflow-nda')) {
+                    const isPort = reqId === 'workflow-portfolio';
+                    const findReq = await client.query(
+                        `SELECT gig_requirement_id FROM gig_requirements
+                         WHERE gig_id = $1 AND (${isPort ? "question ILIKE '%portfolio%' OR question ILIKE '%showcase%'" : "question ILIKE '%nda%' OR question ILIKE '%confidentiality%'"})
+                         AND deleted_at IS NULL
+                         ORDER BY gig_requirement_id ASC LIMIT 1`,
+                        [gigId]
+                    );
+                    if (findReq.rows.length > 0) {
+                        reqId = findReq.rows[0].gig_requirement_id;
+                    } else {
+                        const createdReq = await client.query(
+                            `INSERT INTO gig_requirements (gig_id, type, question, is_required)
+                             VALUES ($1, 'choice', $2, true)
+                             RETURNING gig_requirement_id`,
+                            [gigId, isPort ? 'Do you allow us to display the final work in our Freelancer/Studio Portfolio after completion (up to 30s showcase)?' : 'Do you require confidentiality (NDA) for this project?']
+                        );
+                        reqId = createdReq.rows[0].gig_requirement_id;
+                    }
+                }
+
+                if (reqId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reqId)) {
+
+                    await client.query(insertRespQuery, [orderId, reqId, resp.response]);
 
                 }
 

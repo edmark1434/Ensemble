@@ -11,9 +11,9 @@ function formatBytes(bytes) {
 function buildCloudfrontUrl(path) {
     if (!path) return null;
     if (path.startsWith('http')) return path;
-    if (!process.env.CLOUDFRONT_URL) return path;
+    const base = String(process.env.CLOUDFRONT_URL || process.env.AWS_CLOUDFRONT_URL || 'https://d2dl0agwn9kque.cloudfront.net').replace(/\/$/, '');
     const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    return `${process.env.CLOUDFRONT_URL}/${cleanPath}`;
+    return `${base}/${cleanPath}`;
 }
 
 async function getProjectsController(req, res) {

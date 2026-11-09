@@ -41,6 +41,18 @@ export const OrderQuestions: React.FC<OrderQuestionsProps> = ({
     return !isNda && !isPortfolio;
   });
 
+  // Extract the maximum portfolio showcase duration requested by the freelancer from questionnaires
+  const portfolioReq = questionnaires.find((q) => {
+    const text = (q.question || "").toLowerCase();
+    return text.includes("portfolio") || text.includes("showcase");
+  });
+  const portMatch = (portfolioReq?.question || "").match(/\(up to (\d+)s showcase\)/i);
+  const maxRequestedDuration = portMatch ? parseInt(portMatch[1], 10) : 30;
+
+  const durationOptions = [5, 10, 15, 20, 30, 45, 60].filter(
+    (secs) => secs <= maxRequestedDuration
+  );
+
   // Validation
   const isFormValid = () => {
     if (!requireNda || !allowPortfolio) return false;
@@ -139,7 +151,7 @@ export const OrderQuestions: React.FC<OrderQuestionsProps> = ({
         <div className="space-y-2.5 pt-3 border-t border-gray-100 dark:border-white/5">
           <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
             <span>
-              Do you allow us to display the final work in our Freelancer/Studio Portfolio after completion (up to 30s showcase)?
+              Do you allow us to display the final work in our Freelancer/Studio Portfolio after completion (up to {maxRequestedDuration}s showcase)?
             </span>
             <span className="text-red-500">*</span>
           </label>
@@ -206,7 +218,7 @@ export const OrderQuestions: React.FC<OrderQuestionsProps> = ({
                 Choose the maximum video length the editor is allowed to include in their portfolio.
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
-                {[5, 10, 15, 20, 30].map((secs) => (
+                {(durationOptions.length > 0 ? durationOptions : [5, 10, 15, 20, 30]).map((secs) => (
                   <button
                     key={secs}
                     type="button"

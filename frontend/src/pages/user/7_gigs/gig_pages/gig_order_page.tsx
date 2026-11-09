@@ -165,6 +165,17 @@ const GigOrderPage: React.FC = () => {
               "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
           });
 
+          // Sync default portfolio duration to freelancer's requested showcase limit
+          const portReq = g.questionnaires?.find((q: any) => {
+            const t = (q.question || "").toLowerCase();
+            return t.includes("portfolio") || t.includes("showcase");
+          });
+          const pMatch = (portReq?.question || "").match(/\(up to (\d+)s showcase\)/i);
+          const defaultMax = pMatch ? parseInt(pMatch[1], 10) : (g.portfolio_use_duration_seconds || g.portfolioDuration || 30);
+          if (!editOrderId && !localStorage.getItem(`ensemble_gig_order_draft_${id}`)) {
+            setPortfolioDuration(defaultMax);
+          }
+
           if (!editOrderId && g.hasPendingOrder && g.pendingOrderId) {
             showErrorToast("You already have an active order for this service.");
             navigate(`/gigs/orders/sent/${g.pendingOrderId}`, { replace: true });
@@ -379,13 +390,22 @@ const GigOrderPage: React.FC = () => {
       const responses: Array<{ requirementId: string; response: string }> = [];
 
       // 1. Workflow responses
+      const ndaReq = (gig.questionnaires || []).find((q) => {
+        const t = (q.question || "").toLowerCase();
+        return t.includes("confidentiality") || t.includes("nda");
+      });
+      const portfolioReq = (gig.questionnaires || []).find((q) => {
+        const t = (q.question || "").toLowerCase();
+        return t.includes("portfolio") || t.includes("showcase");
+      });
+
       responses.push({
-        requirementId: "workflow-nda",
+        requirementId: ndaReq?.id || "workflow-nda",
         response: requireNda === "Yes" ? "Yes, I require an NDA" : "No, standard confidentiality",
       });
 
       responses.push({
-        requirementId: "workflow-portfolio",
+        requirementId: portfolioReq?.id || "workflow-portfolio",
         response:
           allowPortfolio === "Yes"
             ? `Yes, portfolio showcase allowed (Up to ${portfolioDuration} seconds)`

@@ -11,20 +11,35 @@ const PROJECT_PORTFOLIO_DETAILS_SQL = `
         p.updated_at AS "lastUpdated",
         COALESCE(pm.role, 'Editor') AS role,
         tf.path AS "thumbnailPath",
-        (
-            SELECT COALESCE(pf.path, of.path)
-            FROM media_assets ma
-            LEFT JOIN files pf ON pf.file_id = ma.proxy_file_id AND pf.deleted_at IS NULL
-            LEFT JOIN files of ON of.file_id = ma.original_file_id AND of.deleted_at IS NULL
-            WHERE ma.project_id = p.project_id
-              AND ma.deleted_at IS NULL
-              AND (
-                  ma.type ILIKE 'video%'
-                  OR of.mime_type ILIKE 'video%'
-                  OR pf.mime_type ILIKE 'video%'
-              )
-            ORDER BY ma.created_at DESC
-            LIMIT 1
+        COALESCE(
+            (
+                SELECT COALESCE(pf.path, of.path)
+                FROM media_assets ma
+                LEFT JOIN files pf ON pf.file_id = ma.proxy_file_id AND pf.deleted_at IS NULL
+                LEFT JOIN files of ON of.file_id = ma.original_file_id AND of.deleted_at IS NULL
+                WHERE ma.project_id = p.project_id
+                  AND ma.deleted_at IS NULL
+                  AND (
+                      ma.type ILIKE 'video%'
+                      OR of.mime_type ILIKE 'video%'
+                      OR pf.mime_type ILIKE 'video%'
+                  )
+                ORDER BY ma.created_at DESC
+                LIMIT 1
+            ),
+            (
+                SELECT f.path
+                FROM team_workspace_projects twp
+                JOIN team_contract_workspaces tcw ON tcw.workspace_id = twp.workspace_id
+                JOIN contract_milestones cm ON cm.contract_id = tcw.contract_id
+                JOIN milestone_submits ms ON ms.contract_milestone_id = cm.contract_milestone_id
+                JOIN submit_attachments sa ON sa.milestone_submit_id = ms.milestone_submit_id
+                JOIN files f ON f.file_id = sa.file_id AND f.deleted_at IS NULL
+                WHERE twp.project_id = p.project_id
+                  AND f.mime_type ILIKE 'video%'
+                ORDER BY ms.submitted_at DESC
+                LIMIT 1
+            )
         ) AS "videoPath",
         (
             SELECT COALESCE( NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), a_owner.display_name, a_owner.handle )
@@ -94,12 +109,38 @@ const PROJECT_PORTFOLIO_DETAILS_SQL = `
             g.title AS gig_title,
             client_acc.display_name AS client_name,
             gr.client_account_id,
-            true AS portfolio_use_allowed,
-            60 AS portfolio_use_duration_seconds
+            COALESCE(gig_port.portfolio_use_allowed, true) AS portfolio_use_allowed,
+            COALESCE(
+                gig_port.portfolio_use_duration_seconds,
+                NULLIF(SUBSTRING(COALESCE(gt.description, '') FROM '(?i)up to\\s*(\\d+)\\s*s'), '')::integer,
+                60
+            ) AS portfolio_use_duration_seconds
         FROM gig_requests gr
         JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
         JOIN gigs g ON g.gig_id = gt.gig_id
         JOIN accounts client_acc ON client_acc.account_id = gr.client_account_id
+        LEFT JOIN LATERAL (
+            SELECT
+                CASE
+                    WHEN grp.response IS NOT NULL AND (
+                        grp.response ILIKE '%no%' OR grp.response ILIKE '%private%' OR grp.response ILIKE '%restricted%'
+                    ) THEN false
+                    ELSE true
+                END AS portfolio_use_allowed,
+                COALESCE(
+                    NULLIF(SUBSTRING(COALESCE(grp.response, req.question, '') FROM '(?i)up to\\s*(\\d+)\\s*s'), '')::integer,
+                    NULLIF(SUBSTRING(COALESCE(req.question, '') FROM '(?i)(\\d+)\\s*s(?:ec|econds)?'), '')::integer
+                ) AS portfolio_use_duration_seconds
+            FROM gig_requirements req
+            LEFT JOIN gig_responses grp
+              ON grp.gig_requirement_id = req.gig_requirement_id
+             AND grp.gig_request_id = gr.gig_request_id
+            WHERE req.gig_id = g.gig_id
+              AND (req.question ILIKE '%portfolio%' OR req.question ILIKE '%showcase%')
+              AND req.deleted_at IS NULL
+            ORDER BY req.gig_requirement_id ASC
+            LIMIT 1
+        ) gig_port ON true
         WHERE (
             gr.linked_project_id = p.project_id
             OR EXISTS (
@@ -182,7 +223,7 @@ async function getProjectsForUser(userId) {
 
 async function getProjectForPortfolioByAccount(accountId, projectId) {
     const userRes = await pool.query(
-        `SELECT user_id FROM users WHERE account_id = $1 AND deleted_at IS NULL LIMIT 1`,
+        `SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.account_id = $1 AND a.deleted_at IS NULL LIMIT 1`,
         [accountId]
     );
     const userId = userRes.rows[0]?.user_id;

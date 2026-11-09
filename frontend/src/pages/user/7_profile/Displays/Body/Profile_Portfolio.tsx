@@ -22,6 +22,10 @@ import {
   Users,
   User,
   Play,
+  Pause,
+  RotateCcw,
+  GripVertical,
+  Sparkles,
   ArrowLeft,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -71,6 +75,14 @@ interface SelectableProject {
   thumbnailUrl?: string | null;
   videoUrl?: string | null;
 }
+
+const resolveMediaUrl = (url?: string | null): string => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+  const cf = String(import.meta.env.VITE_CLOUDFRONT_URL || "https://d2dl0agwn9kque.cloudfront.net").replace(/\/$/, "");
+  const clean = url.startsWith("/") ? url.slice(1) : url;
+  return `${cf}/${clean}`;
+};
 
 interface ProfilePortfolioProps {
   portfolioItems?: PortfolioItem[];
@@ -154,12 +166,32 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
     setMounted(true);
   }, []);
 
+  const handleOpenInEditor = async (projectId: string) => {
+    const editorUrl = import.meta.env.VITE_EDITOR_URL || "http://localhost:3000";
+    try {
+      const { data } = await api.get("/api/editor/handoff-token");
+      const handoffToken = data?.handoffToken;
+      const targetUrl = handoffToken
+        ? `${editorUrl}/editor/${projectId}?token=${encodeURIComponent(handoffToken)}`
+        : `${editorUrl}/editor/${projectId}`;
+      window.open(targetUrl, "_blank");
+    } catch (err) {
+      console.error("Failed to get editor handoff token:", err);
+      window.open(`${editorUrl}/editor/${projectId}`, "_blank");
+    }
+  };
+
   const loadUserProjects = async () => {
     setIsLoadingProjects(true);
     try {
       const response = await api.get("/api/projects");
       if (response.data?.success && Array.isArray(response.data.projects)) {
-        setProjects(response.data.projects);
+        const normalized = response.data.projects.map((p: any) => ({
+          ...p,
+          videoUrl: p.videoUrl ? resolveMediaUrl(p.videoUrl) : null,
+          thumbnailUrl: p.thumbnailUrl ? resolveMediaUrl(p.thumbnailUrl) : null,
+        }));
+        setProjects(normalized);
       } else {
         setProjects([]);
       }
@@ -241,6 +273,121 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
       setClipStart(adjustedStart);
     }
     setClipEnd(nextEnd);
+  };
+
+  // Video timeline interactive scrubber states
+  const [isPlayingClip, setIsPlayingClip] = useState<boolean>(false);
+  const [currentVideoTime, setCurrentVideoTime] = useState<number>(0);
+  const [timelineDragging, setTimelineDragging] = useState<'start' | 'end' | 'window' | null>(null);
+  const [hoverTimestamp, setHoverTimestamp] = useState<number | null>(null);
+  const timelineTrackRef = useRef<HTMLDivElement>(null);
+  const dragInfoRef = useRef<{ clientX: number; start: number; end: number }>({ clientX: 0, start: 0, end: 0 });
+
+  useEffect(() => {
+    if (!timelineDragging) return;
+
+    const handlePointerMove = (e: MouseEvent | TouchEvent) => {
+      if (!timelineTrackRef.current || !timelineDragging) return;
+      const rect = timelineTrackRef.current.getBoundingClientRect();
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const deltaX = clientX - dragInfoRef.current.clientX;
+      const deltaSec = (deltaX / rect.width) * totalProjectDuration;
+
+      if (timelineDragging === 'start') {
+        let newStart = dragInfoRef.current.start + deltaSec;
+        newStart = Math.max(0, Math.min(dragInfoRef.current.end - 1, newStart));
+        if (dragInfoRef.current.end - newStart > maxAllowedForSelected) {
+          newStart = dragInfoRef.current.end - maxAllowedForSelected;
+        }
+        newStart = Math.max(0, Math.round(newStart));
+        setClipStart(newStart);
+        if (configVideoRef.current) {
+          configVideoRef.current.currentTime = newStart;
+          setCurrentVideoTime(newStart);
+        }
+      } else if (timelineDragging === 'end') {
+        let newEnd = dragInfoRef.current.end + deltaSec;
+        newEnd = Math.min(totalProjectDuration, Math.max(dragInfoRef.current.start + 1, newEnd));
+        if (newEnd - dragInfoRef.current.start > maxAllowedForSelected) {
+          newEnd = dragInfoRef.current.start + maxAllowedForSelected;
+        }
+        newEnd = Math.round(newEnd);
+        setClipEnd(newEnd);
+      } else if (timelineDragging === 'window') {
+        const windowLength = dragInfoRef.current.end - dragInfoRef.current.start;
+        let newStart = dragInfoRef.current.start + deltaSec;
+        newStart = Math.max(0, Math.min(totalProjectDuration - windowLength, newStart));
+        newStart = Math.round(newStart);
+        const newEnd = newStart + windowLength;
+        setClipStart(newStart);
+        setClipEnd(newEnd);
+        if (configVideoRef.current) {
+          configVideoRef.current.currentTime = newStart;
+          setCurrentVideoTime(newStart);
+        }
+      }
+    };
+
+    const handlePointerUp = () => {
+      setTimelineDragging(null);
+    };
+
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    window.addEventListener('touchmove', handlePointerMove);
+    window.addEventListener('touchend', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove);
+      window.removeEventListener('mouseup', handlePointerUp);
+      window.removeEventListener('touchmove', handlePointerMove);
+      window.removeEventListener('touchend', handlePointerUp);
+    };
+  }, [timelineDragging, totalProjectDuration, maxAllowedForSelected]);
+
+  const handleTimelineTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (timelineDragging || !timelineTrackRef.current) return;
+    const rect = timelineTrackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const targetSec = Math.round(ratio * totalProjectDuration);
+
+    const windowLength = Math.max(1, clipEnd - clipStart);
+    let newStart = Math.round(targetSec - windowLength / 2);
+    newStart = Math.max(0, Math.min(totalProjectDuration - windowLength, newStart));
+    const newEnd = newStart + windowLength;
+    setClipStart(newStart);
+    setClipEnd(newEnd);
+    if (configVideoRef.current) {
+      configVideoRef.current.currentTime = newStart;
+      setCurrentVideoTime(newStart);
+    }
+  };
+
+  const togglePlayConfigClip = () => {
+    if (!configVideoRef.current) return;
+    if (configVideoRef.current.paused) {
+      if (configVideoRef.current.currentTime < clipStart || configVideoRef.current.currentTime >= clipEnd) {
+        configVideoRef.current.currentTime = clipStart;
+      }
+      configVideoRef.current.play().then(() => setIsPlayingClip(true)).catch(() => {});
+    } else {
+      configVideoRef.current.pause();
+      setIsPlayingClip(false);
+    }
+  };
+
+  const jumpToClipStart = () => {
+    if (configVideoRef.current) {
+      configVideoRef.current.currentTime = clipStart;
+      setCurrentVideoTime(clipStart);
+    }
+  };
+
+  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineTrackRef.current) return;
+    const rect = timelineTrackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setHoverTimestamp(Math.round(ratio * totalProjectDuration));
   };
 
   const submitProjectAttachment = async (e: React.FormEvent) => {
@@ -461,13 +608,13 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                       <div className="relative h-full w-full">
                         {item.thumbnail ? (
                           <img
-                            src={item.thumbnail}
+                            src={resolveMediaUrl(item.thumbnail)}
                             alt={item.title}
                             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                           />
                         ) : (
                           <video
-                            src={`${item.videoUrl}#t=${clipStartSec},${clipEndSec || 30}`}
+                            src={`${resolveMediaUrl(item.videoUrl)}#t=${clipStartSec},${clipEndSec || 30}`}
                             className="h-full w-full object-cover"
                             preload="metadata"
                             muted
@@ -735,25 +882,55 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                         <h3 className="text-base font-bold text-gray-900 dark:text-white">
                           {selectedProject ? "Configure Portfolio Clip" : "Select Existing Project"}
                         </h3>
-                        <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
-                          {selectedProject
-                            ? selectedProject.portfolioUseDurationSeconds
-                              ? `Client allowed up to ${selectedProject.portfolioUseDurationSeconds} seconds for portfolio showcase.`
-                              : "Select the timestamp window to showcase on your profile."
-                            : "Select one of your projects or a shared project where the client permitted portfolio use."}
-                        </p>
+                        {selectedProject ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+                            <span className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-300">
+                              <Clock className="h-3.5 w-3.5 text-blue-500" />
+                              Total Duration: <strong className="font-mono text-gray-900 dark:text-white">{formatSeconds(totalProjectDuration)}</strong> ({totalProjectDuration}s)
+                            </span>
+                            <span>•</span>
+                            {selectedProject.portfolioUseDurationSeconds ? (
+                              <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Client Allowed: Up to <strong className="font-mono">{selectedProject.portfolioUseDurationSeconds}s</strong>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Full Duration Showcase Permitted
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
+                            Select one of your projects or a shared project where the client permitted portfolio use.
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProjectModal(false);
-                        setSelectedProject(null);
-                      }}
-                      className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white cursor-pointer"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedProject && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenInEditor(String(selectedProject.id))}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-200 border border-gray-200 dark:border-white/10 transition-colors cursor-pointer"
+                          title="Open project in full video editor"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open in Video Editor</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowProjectModal(false);
+                          setSelectedProject(null);
+                        }}
+                        className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {!selectedProject ? (
@@ -894,95 +1071,309 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                       onSubmit={submitProjectAttachment}
                       className="flex-1 overflow-y-auto space-y-4 pt-4 pr-1 [scrollbar-width:thin]"
                     >
-                      {/* Video / Thumbnail Preview */}
-                      <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-black relative">
+                      {/* Video / Thumbnail Preview Player */}
+                      <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-white/10 bg-black relative shadow-lg">
                         {selectedProject.videoUrl ? (
-                          <video
-                            ref={configVideoRef}
-                            src={selectedProject.videoUrl}
-                            controls
-                            className="w-full max-h-56 object-contain mx-auto"
-                            onLoadedMetadata={(e) => {
-                              e.currentTarget.currentTime = clipStart;
-                            }}
-                            onTimeUpdate={(e) => {
-                              if (e.currentTarget.currentTime < clipStart) {
+                          <div className="relative group">
+                            <video
+                              ref={configVideoRef}
+                              src={resolveMediaUrl(selectedProject.videoUrl)}
+                              className="w-full max-h-60 object-contain mx-auto bg-black"
+                              preload="auto"
+                              playsInline
+                              onError={(e) => {
+                                console.error("Error loading video preview in config:", e);
+                              }}
+                              onLoadedMetadata={(e) => {
+                                const dur = Math.round(e.currentTarget.duration);
+                                if (dur > 0 && dur !== selectedProject.duration_seconds) {
+                                  setSelectedProject((prev) => (prev ? { ...prev, duration_seconds: dur } : null));
+                                }
                                 e.currentTarget.currentTime = clipStart;
-                              } else if (e.currentTarget.currentTime >= clipEnd) {
-                                e.currentTarget.pause();
-                                e.currentTarget.currentTime = clipStart;
-                              }
-                            }}
-                          />
+                                setCurrentVideoTime(clipStart);
+                              }}
+                              onPlay={() => setIsPlayingClip(true)}
+                              onPause={() => setIsPlayingClip(false)}
+                              onTimeUpdate={(e) => {
+                                const curr = e.currentTarget.currentTime;
+                                setCurrentVideoTime(curr);
+                                if (curr < clipStart) {
+                                  e.currentTarget.currentTime = clipStart;
+                                } else if (curr >= clipEnd) {
+                                  e.currentTarget.currentTime = clipStart;
+                                }
+                              }}
+                            />
+                            {/* Floating Video Overlay Bar */}
+                            <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between pointer-events-none">
+                              <div className="pointer-events-auto flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={togglePlayConfigClip}
+                                  className="h-8 px-3 rounded-lg bg-zinc-900/80 hover:bg-zinc-900 text-white text-xs font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1.5 shadow cursor-pointer"
+                                >
+                                  {isPlayingClip ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                                  <span>{isPlayingClip ? "Pause" : "Play Clip"}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={jumpToClipStart}
+                                  className="h-8 px-2.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-900 text-white text-xs font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1 shadow cursor-pointer"
+                                  title="Jump to start of clip"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>{formatSeconds(clipStart)}</span>
+                                </button>
+                              </div>
+
+                              <span className="pointer-events-auto px-2.5 py-1 rounded-lg bg-zinc-900/80 text-white text-[10px] font-mono font-bold backdrop-blur-md border border-white/20 shadow">
+                                {formatSeconds(Math.floor(currentVideoTime))} / {formatSeconds(totalProjectDuration)}
+                              </span>
+                            </div>
+                          </div>
                         ) : selectedProject.thumbnailUrl ? (
                           <img
-                            src={selectedProject.thumbnailUrl}
+                            src={resolveMediaUrl(selectedProject.thumbnailUrl)}
                             alt={selectedProject.name}
-                            className="w-full max-h-52 object-contain mx-auto"
+                            className="w-full max-h-56 object-contain mx-auto"
                           />
                         ) : (
-                          <div className="h-40 flex flex-col items-center justify-center text-zinc-500 gap-2">
-                            <Film className="h-8 w-8" />
-                            <span className="text-xs">{selectedProject.name}</span>
+                          <div className="h-44 flex flex-col items-center justify-center text-zinc-500 gap-3 p-4 text-center">
+                            <Film className="h-8 w-8 text-zinc-600" />
+                            <div>
+                              <span className="text-xs font-semibold block text-zinc-300">{selectedProject.name}</span>
+                              <span className="text-[11px] text-zinc-500 block mt-1">No rendered video deliverable linked yet. You can open and edit in the Video Editor.</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInEditor(String(selectedProject.id))}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition-colors cursor-pointer"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Open in Video Editor</span>
+                            </button>
                           </div>
                         )}
                       </div>
 
-                      {/* Timestamp Range Selector */}
-                      <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 space-y-3">
+                      {/* Interactive Visual Timeline Selector */}
+                      <div className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.02] space-y-3.5 select-none shadow-xs">
+                        {/* Timeline Header Status */}
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-white">
-                            <Scissors className="h-3.5 w-3.5 text-blue-500" />
-                            <span>Showcase Timestamp Window</span>
+                            <Scissors className="h-4 w-4 text-blue-500" />
+                            <span>Visual Clip Timeline Scrubber</span>
                           </div>
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-600 text-white">
-                            {formatSeconds(clipStart)} – {formatSeconds(clipEnd)} ({Math.round(clipEnd - clipStart)}s
-                            {selectedProject.portfolioUseDurationSeconds
-                              ? ` / Max ${selectedProject.portfolioUseDurationSeconds}s`
-                              : ""}
-                            )
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-600 text-white shadow-xs font-mono">
+                              {formatSeconds(clipStart)} – {formatSeconds(clipEnd)} ({Math.round(clipEnd - clipStart)}s
+                              {selectedProject.portfolioUseDurationSeconds ? ` / Max ${selectedProject.portfolioUseDurationSeconds}s` : ""})
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <div className="flex items-center justify-between text-[11px] font-semibold text-gray-600 dark:text-zinc-300 mb-1">
-                              <span>Start Time ({formatSeconds(clipStart)})</span>
-                              <span className="font-mono">{clipStart}s</span>
-                            </div>
-                            <input
-                              type="range"
-                              min={0}
-                              max={Math.max(0, totalProjectDuration - 1)}
-                              step={1}
-                              value={clipStart}
-                              onChange={(e) => handleClipStartChange(Number(e.target.value))}
-                              className="w-full accent-blue-600 cursor-pointer"
-                            />
+                        {/* Timeline Track & Ruler */}
+                        <div className="space-y-1">
+                          {/* Ruler Timestamps Header */}
+                          <div className="flex justify-between text-[10px] font-mono text-gray-400 dark:text-zinc-500 px-1">
+                            <span>0:00</span>
+                            <span>{formatSeconds(Math.round(totalProjectDuration * 0.25))}</span>
+                            <span>{formatSeconds(Math.round(totalProjectDuration * 0.5))}</span>
+                            <span>{formatSeconds(Math.round(totalProjectDuration * 0.75))}</span>
+                            <span>{formatSeconds(totalProjectDuration)}</span>
                           </div>
 
-                          <div>
-                            <div className="flex items-center justify-between text-[11px] font-semibold text-gray-600 dark:text-zinc-300 mb-1">
-                              <span>End Time ({formatSeconds(clipEnd)})</span>
-                              <span className="font-mono">{clipEnd}s</span>
+                          {/* Visual Timeline Track */}
+                          <div
+                            ref={timelineTrackRef}
+                            onClick={handleTimelineTrackClick}
+                            onMouseMove={handleTimelineMouseMove}
+                            onMouseLeave={() => setHoverTimestamp(null)}
+                            className="relative h-14 w-full rounded-xl bg-gray-900 dark:bg-black border border-gray-700 dark:border-zinc-800 overflow-hidden cursor-pointer"
+                          >
+                            {/* Background Grid Lines / Ticks */}
+                            <div className="absolute inset-0 flex justify-between px-2 pointer-events-none opacity-20">
+                              {Array.from({ length: 21 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-px bg-white ${i % 5 === 0 ? "h-full opacity-60" : "h-1/2 self-end opacity-30"}`}
+                                />
+                              ))}
                             </div>
-                            <input
-                              type="range"
-                              min={1}
-                              max={totalProjectDuration}
-                              step={1}
-                              value={clipEnd}
-                              onChange={(e) => handleClipEndChange(Number(e.target.value))}
-                              className="w-full accent-blue-600 cursor-pointer"
+
+                            {/* Dimmed Left Mask */}
+                            <div
+                              className="absolute top-0 bottom-0 left-0 bg-black/60 backdrop-blur-[0.5px] pointer-events-none"
+                              style={{ width: `${(clipStart / totalProjectDuration) * 100}%` }}
                             />
+
+                            {/* Dimmed Right Mask */}
+                            <div
+                              className="absolute top-0 bottom-0 right-0 bg-black/60 backdrop-blur-[0.5px] pointer-events-none"
+                              style={{ width: `${Math.max(0, 100 - (clipEnd / totalProjectDuration) * 100)}%` }}
+                            />
+
+                            {/* Active Selection Box Window */}
+                            <div
+                              className="absolute top-0 bottom-0 bg-blue-600/30 border-y-2 border-blue-500 flex items-stretch cursor-grab active:cursor-grabbing group shadow-inner"
+                              style={{
+                                left: `${(clipStart / totalProjectDuration) * 100}%`,
+                                width: `${Math.max(2, ((clipEnd - clipStart) / totalProjectDuration) * 100)}%`,
+                              }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                dragInfoRef.current = { clientX: e.clientX, start: clipStart, end: clipEnd };
+                                setTimelineDragging('window');
+                              }}
+                              onTouchStart={(e) => {
+                                e.stopPropagation();
+                                if (e.touches[0]) {
+                                  dragInfoRef.current = { clientX: e.touches[0].clientX, start: clipStart, end: clipEnd };
+                                  setTimelineDragging('window');
+                                }
+                              }}
+                            >
+                              {/* Left Start Handle */}
+                              <div
+                                title={`Start: ${formatSeconds(clipStart)}`}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  dragInfoRef.current = { clientX: e.clientX, start: clipStart, end: clipEnd };
+                                  setTimelineDragging('start');
+                                }}
+                                onTouchStart={(e) => {
+                                  e.stopPropagation();
+                                  if (e.touches[0]) {
+                                    dragInfoRef.current = { clientX: e.touches[0].clientX, start: clipStart, end: clipEnd };
+                                    setTimelineDragging('start');
+                                  }
+                                }}
+                                className="w-4 h-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center cursor-ew-resize rounded-l-md shadow-md transition-colors shrink-0 z-20"
+                              >
+                                <GripVertical className="w-3 h-3 text-white pointer-events-none" />
+                              </div>
+
+                              {/* Center Drag Area */}
+                              <div className="flex-1 flex items-center justify-center overflow-hidden pointer-events-none select-none">
+                                <span className="text-[10px] font-bold font-mono text-white/90 px-1.5 py-0.5 rounded bg-blue-900/70 border border-blue-400/30 truncate">
+                                  {Math.round(clipEnd - clipStart)}s clip (drag to slide)
+                                </span>
+                              </div>
+
+                              {/* Right End Handle */}
+                              <div
+                                title={`End: ${formatSeconds(clipEnd)}`}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  dragInfoRef.current = { clientX: e.clientX, start: clipStart, end: clipEnd };
+                                  setTimelineDragging('end');
+                                }}
+                                onTouchStart={(e) => {
+                                  e.stopPropagation();
+                                  if (e.touches[0]) {
+                                    dragInfoRef.current = { clientX: e.touches[0].clientX, start: clipStart, end: clipEnd };
+                                    setTimelineDragging('end');
+                                  }
+                                }}
+                                className="w-4 h-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center cursor-ew-resize rounded-r-md shadow-md transition-colors shrink-0 z-20"
+                              >
+                                <GripVertical className="w-3 h-3 text-white pointer-events-none" />
+                              </div>
+                            </div>
+
+                            {/* Playhead Needle */}
+                            <div
+                              className="absolute top-0 bottom-0 w-0.5 bg-red-500 shadow-sm pointer-events-none z-30 transition-[left] duration-75"
+                              style={{ left: `${(currentVideoTime / totalProjectDuration) * 100}%` }}
+                            >
+                              <div className="w-2.5 h-2.5 -ml-1 bg-red-500 rounded-full shadow-md" />
+                            </div>
+
+                            {/* Hover Timestamp Tooltip Indicator */}
+                            {hoverTimestamp !== null && !timelineDragging && (
+                              <div
+                                className="absolute top-1 pointer-events-none z-40 px-1.5 py-0.5 rounded bg-zinc-900 text-[9px] font-mono font-bold text-white shadow border border-white/20 -translate-x-1/2"
+                                style={{ left: `${(hoverTimestamp / totalProjectDuration) * 100}%` }}
+                              >
+                                {formatSeconds(hoverTimestamp)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Toolbar: Nudge Buttons & Controls */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-gray-200/60 dark:border-white/5">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const win = Math.min(maxAllowedForSelected, totalProjectDuration);
+                                setClipStart(0);
+                                setClipEnd(win);
+                                if (configVideoRef.current) {
+                                  configVideoRef.current.currentTime = 0;
+                                  setCurrentVideoTime(0);
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer"
+                            >
+                              Reset to Start
+                            </button>
+                          </div>
+
+                          {/* Precision Nudge controls */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 text-[11px]">
+                              <span className="font-semibold text-gray-500 dark:text-zinc-400">Start:</span>
+                              <button
+                                type="button"
+                                onClick={() => handleClipStartChange(clipStart - 1)}
+                                className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-300 dark:hover:bg-zinc-700 font-mono font-bold cursor-pointer"
+                                title="-1 second"
+                              >
+                                -1s
+                              </button>
+                              <span className="font-mono font-bold text-gray-900 dark:text-white px-1">{formatSeconds(clipStart)}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleClipStartChange(clipStart + 1)}
+                                className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-300 dark:hover:bg-zinc-700 font-mono font-bold cursor-pointer"
+                                title="+1 second"
+                              >
+                                +1s
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-1 text-[11px]">
+                              <span className="font-semibold text-gray-500 dark:text-zinc-400">End:</span>
+                              <button
+                                type="button"
+                                onClick={() => handleClipEndChange(clipEnd - 1)}
+                                className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-300 dark:hover:bg-zinc-700 font-mono font-bold cursor-pointer"
+                                title="-1 second"
+                              >
+                                -1s
+                              </button>
+                              <span className="font-mono font-bold text-gray-900 dark:text-white px-1">{formatSeconds(clipEnd)}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleClipEndChange(clipEnd + 1)}
+                                className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-300 dark:hover:bg-zinc-700 font-mono font-bold cursor-pointer"
+                                title="+1 second"
+                              >
+                                +1s
+                              </button>
+                            </div>
                           </div>
                         </div>
 
                         {selectedProject.portfolioUseDurationSeconds && (
-                          <p className="text-[11px] text-blue-600 dark:text-blue-300">
-                            Client permission restricts portfolio playback to a maximum of{" "}
-                            <strong>{selectedProject.portfolioUseDurationSeconds} seconds</strong>. Adjusting the sliders automatically keeps your clip within this limit.
-                          </p>
+                          <div className="flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-300 pt-1">
+                            <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                            <span>
+                              Timeline selection is locked to a maximum of <strong>{selectedProject.portfolioUseDurationSeconds} seconds</strong> per client agreement.
+                            </span>
+                          </div>
                         )}
                       </div>
 
@@ -1165,7 +1556,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                           <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-black">
                             <video
                               ref={previewVideoRef}
-                              src={activeViewItem.videoUrl}
+                              src={resolveMediaUrl(activeViewItem.videoUrl)}
                               controls
                               autoPlay
                               className="w-full max-h-[460px] object-contain mx-auto"

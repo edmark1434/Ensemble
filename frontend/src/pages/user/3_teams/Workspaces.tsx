@@ -231,12 +231,16 @@ export default function Workspaces() {
   ];
 
   // Grid View Card
-  const renderWorkspaceCard = (team: WorkspaceTeam) => (
-    <article
-      key={team.team_id}
-      onClick={() => navigate(`/team-project/${team.team_id}`)}
-      className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs hover:border-gray-300 dark:hover:border-white/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between"
-    >
+  const renderWorkspaceCard = (team: WorkspaceTeam) => {
+    const isArchivedOnAllTab = activeTab === "all" && team.is_archived;
+    return (
+      <article
+        key={team.team_id}
+        onClick={() => navigate(`/team-project/${team.team_id}`)}
+        className={`group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs hover:border-gray-300 dark:hover:border-white/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between ${
+          isArchivedOnAllTab ? "opacity-50 grayscale-[35%] hover:opacity-95 hover:grayscale-0" : ""
+        }`}
+      >
       <div>
         {/* Card Thumbnail Banner */}
         <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-gray-100 dark:bg-zinc-800">
@@ -349,14 +353,19 @@ export default function Workspaces() {
       </div>
     </article>
   );
+};
 
   // Compact List View Card
-  const renderCompactWorkspaceCard = (team: WorkspaceTeam) => (
-    <div
-      key={team.team_id}
-      onClick={() => navigate(`/team-project/${team.team_id}`)}
-      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-3.5 transition-all duration-200 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-xs cursor-pointer group"
-    >
+  const renderCompactWorkspaceCard = (team: WorkspaceTeam) => {
+    const isArchivedOnAllTab = activeTab === "all" && team.is_archived;
+    return (
+      <div
+        key={team.team_id}
+        onClick={() => navigate(`/team-project/${team.team_id}`)}
+        className={`flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-3.5 transition-all duration-200 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-xs cursor-pointer group ${
+          isArchivedOnAllTab ? "opacity-50 grayscale-[35%] hover:opacity-95 hover:grayscale-0" : ""
+        }`}
+      >
       <div className="relative h-18 w-28 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-zinc-800">
         {/* Review Status & Timer Overlay Badge - Upper Left */}
         {!team.is_archived && team.review_status?.needs_review && (
@@ -452,6 +461,7 @@ export default function Workspaces() {
       </div>
     </div>
   );
+};
 
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base">

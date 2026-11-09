@@ -2,15 +2,25 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  Copy,
   ExternalLink,
+  FileText,
+  Film,
   Flag,
   MessageCircle,
+  MoreHorizontal,
+  Pin,
+  PinOff,
   RefreshCw,
+  Reply,
   Send,
+  Smile,
+  Trash2,
   User,
   UserCheck,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import socket from '@/lib/socket';
@@ -19,6 +29,23 @@ import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import useGlobalState from '@/lib/global_state';
 import useChatState from '@/components/ui/chat_bubble/chat_state';
 import ReportMemberModal from '../team_modals/ReportMemberModal';
+import {
+  chatAttachmentUrl,
+  uploadChatAttachment,
+  useInboxUploadMedia,
+  InboxUploadMediaButton,
+  InboxUploadMediaPreview,
+} from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
+import {
+  InboxEmojiPicker,
+  InboxReactionBadges,
+} from '@/components/ui/inbox/inbox_functions/inbox_emoji_picker';
+import {
+  InboxReplyQuote,
+  scrollToRepliedMessage,
+} from '@/components/ui/inbox/inbox_functions/inbox_reply_message';
+import { InboxUnsentMessage } from '@/components/ui/inbox/inbox_functions/inbox_unsend_message';
+import { ChatImagePreview } from '@/components/ui/inbox/inbox_functions/chat_image_preview';
 
 interface ProjectChatTabProps {
   teamId: string;
@@ -51,13 +78,35 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
       setIsFloatingChatHidden(false);
     };
   }, [setIsFloatingChatHidden]);
+
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
+  const [pinnedMessages, setPinnedMessages] = useState<any[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Replying & Hover toolbars
+  const [replyToMessage, setReplyToMessage] = useState<any | null>(null);
+  const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false);
+  const [activeEmojiMessageId, setActiveEmojiMessageId] = useState<string | null>(null);
+  const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
+  const [expandedMedia, setExpandedMedia] = useState<{ url: string; type?: string } | null>(null);
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Media upload hook (supports images and videos up to 3 files, 250MB limit)
+  const {
+    mediaList,
+    fileInputRef,
+    openFilePicker,
+    handleFileChange,
+    removeMedia,
+    clearMedia,
+  } = useInboxUploadMedia(3, 250);
 
   // Profile options menu state
   const [profileMenuTarget, setProfileMenuTarget] = useState<ProfileMenuTarget | null>(null);
@@ -66,11 +115,14 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
   const [isLoadingFollow, setIsLoadingFollow] = useState(false);
   const [reportTarget, setReportTarget] = useState<ProfileMenuTarget | null>(null);
 
-  // Close profile menu on ESC key press
+  // Close menus on ESC key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setProfileMenuTarget(null);
+        setActiveEmojiMessageId(null);
+        setActiveMenuMessageId(null);
+        setShowInputEmojiPicker(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -100,6 +152,12 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
         [];
       setMessages(Array.isArray(rawMessages) ? rawMessages : []);
 
+      const rawPins =
+        convoRes.data?.Inbox?.pinned_messages ||
+        convoRes.data?.pinned_messages ||
+        [];
+      setPinnedMessages(Array.isArray(rawPins) ? rawPins : []);
+
       // Check for incoming prefill message from deliverable/milestone feedback
       const prefill = sessionStorage.getItem('team_chat_prefill');
       if (prefill) {
@@ -119,7 +177,7 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
     initChat();
   }, [initChat]);
 
-  // Socket listener for new messages & room management
+  // Socket listener for new messages, replies, reactions, deletions, and pins
   useEffect(() => {
     if (!conversationId) return;
 
@@ -141,16 +199,51 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
         setMessages((prev) => {
           const payloadId = String(payload._id || payload.id || '');
           if (payloadId && prev.some((m) => String(m._id || m.id) === payloadId)) {
-            return prev;
+            return prev.map((m) => String(m._id || m.id) === payloadId ? payload : m);
           }
           return [...prev, payload];
         });
       }
     };
 
+    const handleReactionUpdated = (payload: any) => {
+      if (String(payload?.conversation_id || payload?.conversationId) === String(conversationId)) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            String(m._id || m.id) === String(payload._id || payload.id)
+              ? { ...m, message_react: payload.message_react }
+              : m
+          )
+        );
+      }
+    };
+
+    const handleMessageDeleted = ({ conversation_id, message_id }: any) => {
+      if (String(conversation_id) === String(conversationId)) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            String(m._id || m.id) === String(message_id)
+              ? { ...m, is_deleted: true, is_unsent: true, message_content: '', attachments: [] }
+              : m
+          )
+        );
+      }
+    };
+
+    const handlePinsUpdated = (payload: any) => {
+      if (String(payload?.conversation_id || payload?.conversationId) === String(conversationId)) {
+        setPinnedMessages(payload.pinned_messages || []);
+      }
+    };
+
     socket.on('newMessage', handleNewMessage);
     socket.on('receiveMessage', handleNewMessage);
     socket.on('messageReplied', handleNewMessage);
+    socket.on('messageReactionUpdated', handleReactionUpdated);
+    socket.on('messageDeleted', handleMessageDeleted);
+    socket.on('pinnedMessagesUpdated', handlePinsUpdated);
+    socket.on('messagePinned', handlePinsUpdated);
+    socket.on('messageUnpinned', handlePinsUpdated);
 
     return () => {
       socket.off('connect', join);
@@ -158,39 +251,70 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
       socket.off('newMessage', handleNewMessage);
       socket.off('receiveMessage', handleNewMessage);
       socket.off('messageReplied', handleNewMessage);
+      socket.off('messageReactionUpdated', handleReactionUpdated);
+      socket.off('messageDeleted', handleMessageDeleted);
+      socket.off('pinnedMessagesUpdated', handlePinsUpdated);
+      socket.off('messagePinned', handlePinsUpdated);
+      socket.off('messageUnpinned', handlePinsUpdated);
     };
   }, [conversationId]);
 
   // Scroll to bottom on new message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages.length]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputMessage.trim() || !conversationId || isSending) return;
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if ((!inputMessage.trim() && mediaList.length === 0) || !conversationId || isSending) return;
 
     const messageText = inputMessage.trim();
     setInputMessage('');
     setIsSending(true);
 
     try {
-      const res = await api.post('/api/inbox/message', {
-        conversation_id: conversationId,
-        message_content: messageText,
-        message: messageText,
-        message_type: 'text',
-      });
+      const uploadedAttachments = await Promise.all(
+        mediaList.map((media) => uploadChatAttachment(media, 'chat-attachments'))
+      );
+      clearMedia();
 
-      const newMsg = res.data?.data || res.data;
-      if (newMsg && (newMsg._id || newMsg.id || newMsg.conversation_id)) {
-        setMessages((prev) => {
-          const msgId = String(newMsg._id || newMsg.id || '');
-          if (msgId && prev.some((m) => String(m._id || m.id) === msgId)) {
-            return prev;
-          }
-          return [...prev, newMsg];
-        });
+      if (replyToMessage) {
+        const parentId = String(replyToMessage._id || replyToMessage.id);
+        try {
+          await useChatState.getState().replyMessage(
+            conversationId,
+            parentId,
+            messageText,
+            uploadedAttachments as any
+          );
+        } catch {
+          await api.post('/api/inbox/message', {
+            conversation_id: conversationId,
+            message_content: messageText,
+            message: messageText,
+            message_id_reply: parentId,
+            parent_message_id: parentId,
+            attachments: uploadedAttachments,
+            message_type: uploadedAttachments.length > 0 ? uploadedAttachments[0].attachment_type : 'text',
+          });
+        }
+        setReplyToMessage(null);
+      } else {
+        try {
+          await useChatState.getState().sendMessage(
+            conversationId,
+            messageText,
+            uploadedAttachments as any
+          );
+        } catch {
+          await api.post('/api/inbox/message', {
+            conversation_id: conversationId,
+            message_content: messageText,
+            message: messageText,
+            attachments: uploadedAttachments,
+            message_type: uploadedAttachments.length > 0 ? uploadedAttachments[0].attachment_type : 'text',
+          });
+        }
       }
     } catch (err: any) {
       showErrorToast(
@@ -201,6 +325,110 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    const targetId = String(messageId);
+    const msg = messages.find((m) => String(m._id || m.id) === targetId);
+    const alreadyReacted = Boolean(
+      msg?.message_react?.some(
+        (r: any) => String(r.account_id) === String(myAccountId) && r.react_type === emoji
+      )
+    );
+
+    // Optimistic UI update
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (String(m._id || m.id) !== targetId) return m;
+        const currentReacts = m.message_react || [];
+        const updated = alreadyReacted
+          ? currentReacts.filter(
+              (r: any) => !(String(r.account_id) === String(myAccountId) && r.react_type === emoji)
+            )
+          : [...currentReacts, { account_id: myAccountId, react_type: emoji, created_at: new Date() }];
+        return { ...m, message_react: updated };
+      })
+    );
+    setActiveEmojiMessageId(null);
+
+    try {
+      await useChatState.getState().reactMessage(targetId, emoji, alreadyReacted);
+    } catch {
+      if (alreadyReacted) {
+        await api.delete(`/api/inbox/message/${targetId}/reaction`, { data: { react_type: emoji } }).catch(() => {});
+      } else {
+        await api.put(`/api/inbox/message/${targetId}/reaction`, { react_type: emoji }).catch(() => {});
+      }
+    }
+  };
+
+  const handleTogglePin = async (messageId: string) => {
+    const targetId = String(messageId);
+    const isCurrentlyPinned = pinnedMessages.some(
+      (p: any) => String(p.message_id || p._id || p.id) === targetId
+    );
+    setActiveMenuMessageId(null);
+
+    try {
+      if (conversationId) {
+        await useChatState.getState().pinMessage(conversationId, targetId, isCurrentlyPinned);
+        showSuccessToast(isCurrentlyPinned ? 'Message unpinned' : 'Message pinned to channel');
+      }
+    } catch {
+      try {
+        if (isCurrentlyPinned) {
+          await api.delete(`/api/inbox/conversation/${conversationId}/pin/${targetId}`);
+          setPinnedMessages((prev) =>
+            prev.filter((p: any) => String(p.message_id || p._id || p.id) !== targetId)
+          );
+        } else {
+          await api.post(`/api/inbox/conversation/${conversationId}/pin/${targetId}`);
+          setPinnedMessages((prev) => [
+            ...prev,
+            { message_id: targetId, pinned_by: myAccountId, pinned_at: new Date() },
+          ]);
+        }
+      } catch (e: any) {
+        showErrorToast(e?.message || 'Failed to update pin');
+      }
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    const targetId = String(messageId);
+    setActiveMenuMessageId(null);
+
+    // Optimistic update
+    setMessages((prev) =>
+      prev.map((m) =>
+        String(m._id || m.id) === targetId
+          ? { ...m, is_deleted: true, is_unsent: true, message_content: '', attachments: [] }
+          : m
+      )
+    );
+
+    try {
+      await useChatState.getState().deleteMessage(targetId);
+      showSuccessToast('Message deleted');
+    } catch {
+      try {
+        await api.delete(`/api/inbox/message/${targetId}`);
+        showSuccessToast('Message deleted');
+      } catch (e: any) {
+        showErrorToast(e?.message || 'Failed to delete message');
+      }
+    }
+  };
+
+  const handleCopyText = (content: string) => {
+    setActiveMenuMessageId(null);
+    if (!content) return;
+    navigator.clipboard.writeText(content);
+    showSuccessToast('Message copied to clipboard');
+  };
+
+  const handleJumpToMessage = (messageId: string) => {
+    scrollToRepliedMessage(messagesContainerRef as any, messageId);
   };
 
   const openDedicatedInbox = () => {
@@ -330,7 +558,7 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
       {/* Main Chat Box (3 cols) */}
       <div className="lg:col-span-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col h-[650px] overflow-hidden">
         {/* Chat Header */}
-        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/30">
+        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/30 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg">
               <MessageCircle className="w-4 h-4" />
@@ -355,8 +583,47 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
           </button>
         </div>
 
-        {/* Message Thread Body */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-zinc-50/20 dark:bg-zinc-950/20">
+        {/* Top Pinned Message Banner */}
+        {pinnedMessages.length > 0 && (
+          <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 shrink-0">
+            <div
+              onClick={() => {
+                const firstPin = pinnedMessages[0];
+                if (firstPin) handleJumpToMessage(firstPin.message_id || firstPin._id);
+              }}
+              className="flex items-center gap-2 cursor-pointer hover:underline truncate"
+            >
+              <Pin className="w-3.5 h-3.5 text-amber-500 shrink-0 fill-amber-500/20" />
+              <span className="font-semibold shrink-0">Pinned ({pinnedMessages.length}):</span>
+              <span className="truncate opacity-90">
+                {(() => {
+                  const firstPin = pinnedMessages[0];
+                  const found = messages.find(
+                    (m) => String(m._id || m.id) === String(firstPin?.message_id || firstPin?._id)
+                  );
+                  return found?.message_content || 'Jump to pinned message';
+                })()}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const firstPin = pinnedMessages[0];
+                if (firstPin) handleTogglePin(firstPin.message_id || firstPin._id);
+              }}
+              className="p-1 hover:bg-amber-500/20 rounded text-amber-600 dark:text-amber-400 transition cursor-pointer"
+              title="Unpin"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Message Thread Body with Thin Seamless Scrollbar */}
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 p-4 overflow-y-auto space-y-4 bg-zinc-50/20 dark:bg-zinc-950/20 inbox-scroll-thin custom-scrollbar"
+        >
           {isLoading ? (
             <div className="h-full flex items-center justify-center flex-col gap-2 text-zinc-400">
               <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
@@ -385,6 +652,7 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
             </div>
           ) : (
             messages.map((msg, idx) => {
+              const msgId = String(msg._id || msg.id || idx);
               const senderAccountId = String(
                 msg.sender_id || msg.sender_account_id || msg.sender?._id || msg.sender?.account_id || ''
               );
@@ -407,9 +675,18 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
               const senderAvatarUrl = constructAvatarUrl(rawAvatar, rawName);
               const senderName = isMe ? `${rawName} (You)` : rawName;
               const content = msg.message_content || msg.message || msg.content || '';
+              const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+              const hasText = Boolean(content && content.trim());
               const timeString = msg.created_at
                 ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : '';
+              const isDeleted = Boolean(msg.is_deleted || msg.is_unsent);
+              const isPinned = pinnedMessages.some(
+                (p: any) => String(p.message_id || p._id || p.id) === msgId
+              );
+
+              const isEmojiOpen = activeEmojiMessageId === msgId;
+              const isMenuOpen = activeMenuMessageId === msgId;
 
               const profileTarget: ProfileMenuTarget = {
                 account_id: senderAccountId,
@@ -420,11 +697,142 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
                 milestone_role: memberInfo?.milestone_role,
               };
 
+              // Message Hover Actions (Match User Screenshot: Emoji, Reply, 3-dots)
+              const renderHoverActions = () => {
+                if (isDeleted) return null;
+                return (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mb-2 shrink-0">
+                    {/* 1. Emoji Reaction Button */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveEmojiMessageId(isEmojiOpen ? null : msgId);
+                          setActiveMenuMessageId(null);
+                        }}
+                        title="React"
+                        className="rounded-full p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                      >
+                        <Smile className="w-4 h-4" />
+                      </button>
+
+                      {isEmojiOpen && (
+                        <InboxEmojiPicker
+                          isSender={isMe}
+                          onSelectEmoji={(emoji) => handleToggleReaction(msgId, emoji)}
+                          onClose={() => setActiveEmojiMessageId(null)}
+                        />
+                      )}
+                    </div>
+
+                    {/* 2. Reply Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplyToMessage(msg);
+                        setActiveEmojiMessageId(null);
+                        setActiveMenuMessageId(null);
+                        inputRef.current?.focus();
+                      }}
+                      title="Reply"
+                      className="rounded-full p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                    >
+                      <Reply className="w-4 h-4" />
+                    </button>
+
+                    {/* 3. More Options Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveMenuMessageId(isMenuOpen ? null : msgId);
+                          setActiveEmojiMessageId(null);
+                        }}
+                        title="More options"
+                        className="rounded-full p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+
+                      {isMenuOpen && (
+                        <div
+                          className={`absolute bottom-full mb-1 ${
+                            isMe ? 'right-0' : 'left-0'
+                          } z-30 w-36 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1 shadow-xl text-xs space-y-0.5`}
+                        >
+                          {/* Pin / Unpin */}
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePin(msgId)}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer text-left"
+                          >
+                            {isPinned ? (
+                              <>
+                                <PinOff className="w-3.5 h-3.5 text-amber-500" />
+                                <span>Unpin</span>
+                              </>
+                            ) : (
+                              <>
+                                <Pin className="w-3.5 h-3.5 text-zinc-400" />
+                                <span>Pin</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Copy Text */}
+                          {content && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(content)}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer text-left"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                              <span>Copy Text</span>
+                            </button>
+                          )}
+
+                          {/* Delete / Unsend */}
+                          {isMe && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMessage(msgId)}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer text-left"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          )}
+
+                          {/* Report */}
+                          {!isMe && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMenuMessageId(null);
+                                setReportTarget(profileTarget);
+                              }}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer text-left"
+                            >
+                              <Flag className="w-3.5 h-3.5" />
+                              <span>Report</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              };
+
               return (
                 <div
-                  key={msg._id || msg.id || idx}
-                  className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}
+                  key={msgId}
+                  data-message-id={msgId}
+                  className={`group relative flex items-end gap-2 ${
+                    isMe ? 'justify-end' : 'justify-start'
+                  }`}
                 >
+                  {/* Sender Avatar (!isMe) */}
                   {!isMe && (
                     <img
                       src={senderAvatarUrl}
@@ -438,8 +846,19 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
                     />
                   )}
 
-                  <div className={`max-w-md space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                  {/* Hover Actions when isMe (placed to the left of the bubble) */}
+                  {isMe && renderHoverActions()}
+
+                  {/* Message Bubble Column */}
+                  <div className={`max-w-md sm:max-w-lg space-y-1 flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                    {/* Header info (Name + Timestamp + Pinned indicator) */}
                     <div className={`flex items-center gap-2 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      {isPinned && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                          <Pin className="w-3 h-3 fill-amber-500/20" />
+                          Pinned
+                        </span>
+                      )}
                       <span
                         onClick={(e) => {
                           if (!isMe && senderAccountId) {
@@ -462,17 +881,109 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
                       )}
                     </div>
 
-                    <div
-                      className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap break-words ${
-                        isMe
-                          ? 'bg-blue-600 text-white rounded-br-xs shadow-xs'
-                          : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700 rounded-bl-xs shadow-2xs'
-                      }`}
-                    >
-                      {content}
-                    </div>
+                    {/* Bubble Content */}
+                    {isDeleted ? (
+                      <InboxUnsentMessage isSender={isMe} />
+                    ) : (
+                      <div
+                        className={`relative p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                          isMe
+                            ? 'bg-blue-600 text-white rounded-br-xs shadow-xs'
+                            : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700 rounded-bl-xs shadow-2xs'
+                        } ${isPinned ? 'ring-1 ring-amber-400/50' : ''}`}
+                      >
+                        {/* Parent Message Reply Quote */}
+                        {msg.message_id_reply && (
+                          <InboxReplyQuote
+                            replyToMessageId={msg.message_id_reply}
+                            messages={messages}
+                            currentUserId={myAccountId}
+                            onJumpToReply={handleJumpToMessage}
+                          />
+                        )}
+
+                        {/* Attachments (Images, Videos, Files) */}
+                        {attachments.length > 0 && (
+                          <div
+                            className={`gap-1.5 grid ${hasText ? 'mb-2' : ''} ${
+                              attachments.length === 1
+                                ? 'grid-cols-1 w-56 sm:w-64'
+                                : attachments.length === 2
+                                ? 'grid-cols-2 w-64 sm:w-72'
+                                : 'grid-cols-3 w-72 sm:w-80'
+                            }`}
+                          >
+                            {attachments.map((a: any, aIdx: number) => {
+                              const attachmentKey = a.attachment_key || a.attachment_url;
+                              const attachmentUrl = chatAttachmentUrl(attachmentKey);
+                              const isFile = a.attachment_type === 'file';
+                              const isVideo = a.attachment_type === 'video';
+
+                              return (
+                                <div
+                                  key={a.attachment_id || aIdx}
+                                  onClick={() => {
+                                    if (!isFile) {
+                                      setExpandedMedia({
+                                        url: attachmentUrl,
+                                        type: a.attachment_type || (isVideo ? 'video' : 'image'),
+                                      });
+                                    }
+                                  }}
+                                  className="relative min-h-20 w-full rounded-xl overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90 transition group/media shadow-2xs ring-1 ring-black/5 dark:ring-white/5 bg-zinc-900/10 dark:bg-black/40"
+                                >
+                                  {isFile ? (
+                                    <a
+                                      href={attachmentUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className={`flex w-full items-center gap-2 p-2.5 text-xs truncate ${
+                                        isMe ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                                      }`}
+                                    >
+                                      <FileText className="w-4 h-4 shrink-0" />
+                                      <span className="truncate">{a.attachment_name || 'Download file'}</span>
+                                    </a>
+                                  ) : isVideo ? (
+                                    <div className="relative w-full h-28 bg-black flex items-center justify-center">
+                                      <video src={attachmentUrl} className="w-full h-full object-cover" muted />
+                                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                        <Film className="w-6 h-6 text-white" />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={attachmentUrl}
+                                      alt="Attachment"
+                                      className="w-full h-28 object-cover rounded-xl"
+                                      loading="lazy"
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Text Message */}
+                        {hasText && <span>{content}</span>}
+
+                        {/* Reaction Badges */}
+                        <InboxReactionBadges
+                          reactions={msg.message_react || []}
+                          currentUserId={myAccountId}
+                          isSender={isMe}
+                          onToggleReaction={(emoji) => handleToggleReaction(msgId, emoji)}
+                        />
+                      </div>
+                    )}
                   </div>
 
+                  {/* Hover Actions when !isMe (placed to the right of the bubble) */}
+                  {!isMe && renderHoverActions()}
+
+                  {/* My Own Avatar */}
                   {isMe && (
                     <img
                       src={senderAvatarUrl}
@@ -480,7 +991,9 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = getFallbackAvatarUrl(rawName);
                       }}
-                      className="w-8 h-8 rounded-full object-cover border border-blue-500 shrink-0 self-end"
+                      onClick={(e) => handleProfileClick(e, profileTarget)}
+                      className="w-8 h-8 rounded-full object-cover border border-blue-500 shrink-0 self-end cursor-pointer hover:opacity-85 transition"
+                      title="View your profile"
                     />
                   )}
                 </div>
@@ -490,32 +1003,113 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Message Input Footer */}
-        <form
-          onSubmit={handleSendMessage}
-          className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2"
-        >
-          <input
-            type="text"
-            placeholder="Type a team update or message..."
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            disabled={!conversationId || isLoading}
-            className="flex-1 px-4 py-2 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          />
+        {/* Message Input Footer (Match User Screenshot: Blue Pill + Inside Smile + Outside Clip + Send) */}
+        <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
+          {/* Replying Quote Bar */}
+          {replyToMessage && (
+            <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+                <Reply className="w-3.5 h-3.5 text-blue-500" />
+                <span>
+                  Replying to:{' '}
+                  <span className="font-semibold text-zinc-900 dark:text-white">
+                    {replyToMessage.message_content
+                      ? replyToMessage.message_content.substring(0, 50) +
+                        (replyToMessage.message_content.length > 50 ? '...' : '')
+                      : replyToMessage.attachments?.length
+                      ? 'Attachment'
+                      : 'Message'}
+                  </span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyToMessage(null)}
+                className="p-1 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={isSending || !inputMessage.trim() || !conversationId}
-            className="p-2.5 rounded-xl text-white bg-blue-600 hover:bg-blue-500 active:scale-95 transition shadow-xs disabled:opacity-50 cursor-pointer"
+          {/* Attachment Preview Chips */}
+          {mediaList.length > 0 && (
+            <InboxUploadMediaPreview
+              mediaList={mediaList}
+              onRemove={removeMedia}
+              batchLimitMB={250}
+            />
+          )}
+
+          {/* Input Form matching user screenshot 1 */}
+          <form
+            onSubmit={handleSendMessage}
+            className="p-3 flex items-center gap-2 bg-white dark:bg-zinc-900"
           >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
+            {/* Blue Pill Input */}
+            <div className="relative flex-1 flex items-center rounded-full border border-blue-500 bg-white dark:bg-zinc-800/60 px-4 py-2 transition focus-within:ring-2 focus-within:ring-blue-500/20 shadow-2xs">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Type a message..."
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                disabled={!conversationId || isLoading}
+                className="flex-1 bg-transparent text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none pr-8"
+              />
+
+              {/* Inside Smile Button */}
+              <button
+                type="button"
+                onClick={() => setShowInputEmojiPicker((v) => !v)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition p-0.5 cursor-pointer shrink-0"
+                aria-label="Add emoji"
+              >
+                <Smile className="w-5 h-5 text-zinc-400" />
+              </button>
+
+              {showInputEmojiPicker && (
+                <InboxEmojiPicker
+                  isSender
+                  onSelectEmoji={(emoji) => {
+                    setInputMessage((prev) => prev + emoji);
+                    inputRef.current?.focus();
+                  }}
+                  onClose={() => setShowInputEmojiPicker(false)}
+                />
+              )}
+            </div>
+
+            {/* Paperclip Button outside */}
+            <InboxUploadMediaButton
+              fileInputRef={fileInputRef}
+              onFileChange={handleFileChange}
+              onClick={openFilePicker}
+              disabled={mediaList.length >= 3}
+              title="Attach media (images or videos)"
+            />
+
+            {/* Send Button */}
+            <button
+              type="submit"
+              disabled={isSending || (!inputMessage.trim() && mediaList.length === 0) || !conversationId}
+              className="p-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center transition shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+              aria-label="Send message"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Member Roster Sidebar (1 col) */}
-      <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4 h-[650px] overflow-y-auto">
+      <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4 h-[650px] overflow-y-auto inbox-scroll-thin custom-scrollbar">
         <div className="flex items-center gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800">
           <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
@@ -678,6 +1272,13 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
         </>
       )}
 
+      {/* Lightbox / Fullscreen Image or Video Preview */}
+      <ChatImagePreview
+        url={expandedMedia?.url || null}
+        type={expandedMedia?.type || 'image'}
+        onClose={() => setExpandedMedia(null)}
+      />
+
       {/* Report Member Modal */}
       {reportTarget && (
         <ReportMemberModal
@@ -690,3 +1291,5 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
     </div>
   );
 };
+
+export default ProjectChatTab;

@@ -542,14 +542,22 @@ async function main() {
         await client.query('INSERT INTO user_platform_purpose (plpu_id, user_id) VALUES ($1, $2)', [roleId, userId]);
       }
 
-      // 2. Subscription Plan
+      // 2. Subscription Plan (Update existing trigger-created subscription to avoid duplicate rows)
       const planId = planMap.get(persona.sub) || planMap.get('Free');
       if (planId) {
-        await client.query(
-          `INSERT INTO subscriptions (status, plan_id, user_id, cancel_at_period_end, created_at, updated_at)
-           VALUES ('active', $1, $2, FALSE, NOW(), NOW())`,
+        const updated = await client.query(
+          `UPDATE subscriptions
+            SET plan_id = $1, status = 'ACTIVE', updated_at = NOW()
+            WHERE user_id = $2`,
           [planId, userId]
         );
+        if (updated.rowCount === 0) {
+          await client.query(
+            `INSERT INTO subscriptions (status, plan_id, user_id, cancel_at_period_end, created_at, updated_at)
+             VALUES ('ACTIVE', $1, $2, FALSE, NOW(), NOW())`,
+            [planId, userId]
+          );
+        }
       }
 
       // 3. Verification

@@ -86,8 +86,30 @@ async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
                               P.DAYS_OF_TRIALS, (P.AMOUNT_PHP_CENTS / 100) AS PRICE
                        FROM SUBSCRIPTIONS S
                        JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
-                       WHERE S.USER_ID = $1`;
-        const result = await pool.query(query, [userId]);
+                       WHERE S.USER_ID = $1
+                         AND (S.STATUS IS NULL OR UPPER(S.STATUS) IN ('ACTIVE', 'TRIALING'))
+                         AND (S.CURRENT_PERIOD_END IS NULL OR S.CURRENT_PERIOD_END > CURRENT_TIMESTAMP)
+                       ORDER BY
+                         CASE
+                           WHEN LOWER(P.NAME) = 'business' THEN 1
+                           WHEN LOWER(P.NAME) = 'premium' THEN 2
+                           ELSE 3
+                         END,
+                         S.UPDATED_AT DESC, S.CREATED_AT DESC
+                       LIMIT 1`;
+        let result = await pool.query(query, [userId]);
+        if (!result.rows || result.rows.length === 0) {
+            const fallbackQuery = `SELECT P.NAME AS PLAN_NAME, S.STATUS, S.CURRENT_PERIOD_END AS RENEWS_AT,
+                                          S.CANCEL_AT_PERIOD_END, S.CANCELED_AT,
+                                          S.TRIAL_STARTS_AT, S.TRIAL_ENDS_AT, S.XENDIT_PLAN_ID, S.PLAN_ID,
+                                          P.DAYS_OF_TRIALS, (P.AMOUNT_PHP_CENTS / 100) AS PRICE
+                                   FROM SUBSCRIPTIONS S
+                                   JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
+                                   WHERE S.USER_ID = $1
+                                   ORDER BY S.UPDATED_AT DESC, S.CREATED_AT DESC
+                                   LIMIT 1`;
+            result = await pool.query(fallbackQuery, [userId]);
+        }
         return result.rows[0];
     }catch(err){
         console.error("Error fetching subscription plan details:", err);

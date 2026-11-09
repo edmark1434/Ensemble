@@ -54,67 +54,71 @@ body {
   background-color: #3b82f6;
 }
 
+/* Universal Scrollbar Button Suppression for Chromium on Windows */
+*::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Thin Scrollbar Utility */
-.inbox-scroll-thin::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+.inbox-scroll-thin,
+.custom-scrollbar,
+.scroll-thin {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent !important;
 }
 
-.inbox-scroll-thin::-webkit-scrollbar-track {
-  background: transparent;
+.dark .inbox-scroll-thin,
+.dark .custom-scrollbar,
+.dark .scroll-thin {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent !important;
 }
 
-.inbox-scroll-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 9999px;
+.inbox-scroll-thin::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
+.scroll-thin::-webkit-scrollbar {
+  width: 5px !important;
+  height: 5px !important;
 }
 
-.inbox-scroll-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+.inbox-scroll-thin::-webkit-scrollbar-button,
+.custom-scrollbar::-webkit-scrollbar-button,
+.scroll-thin::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-/* Firefox support */
-.inbox-scroll-thin {
-  /* Uses ::-webkit-scrollbar below so Chromium hides top/bottom arrow buttons */
-  /* dark thumb via .dark ::-webkit-scrollbar-thumb */
+.inbox-scroll-thin::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track,
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent !important;
 }
 
-/* Thin, theme-aware scrollbar that stays hidden or subtle */
-.scroll-thin, .custom-scrollbar {
-  /* Uses ::-webkit-scrollbar below so Chromium hides top/bottom arrow buttons */
-  /* theme-aware thumb via ::-webkit-scrollbar-thumb */
+.inbox-scroll-thin::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4) !important;
+  border-radius: 9999px !important;
 }
 
-.dark .scroll-thin, .dark .custom-scrollbar {
-  /* dark thumb via .dark ::-webkit-scrollbar-thumb */
+.inbox-scroll-thin::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.6) !important;
 }
 
-.scroll-thin::-webkit-scrollbar, .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+.dark .inbox-scroll-thin::-webkit-scrollbar-thumb,
+.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+.dark .scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
-.scroll-thin::-webkit-scrollbar-track,
-.scroll-thin::-webkit-scrollbar-button, .custom-scrollbar::-webkit-scrollbar-track, .custom-scrollbar::-webkit-scrollbar-button {
-  display: none;
-  background: transparent;
-}
-
-.scroll-thin::-webkit-scrollbar-thumb, .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 9999px;
-}
-
-.dark .scroll-thin::-webkit-scrollbar-thumb, .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.scroll-thin:hover::-webkit-scrollbar-thumb, .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.dark .scroll-thin:hover::-webkit-scrollbar-thumb, .dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
+.dark .inbox-scroll-thin::-webkit-scrollbar-thumb:hover,
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.dark .scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
 }
 
 /* Hide scrollbar utility */
