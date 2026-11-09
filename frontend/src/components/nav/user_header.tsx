@@ -215,6 +215,422 @@ async function fetchHeaderData(accountId: string): Promise<HeaderFetchData | nul
 // Cache of recent notification IDs to prevent duplicate toasts across renders or re-mounts
 const recentToastNotificationKeys = new Set<string>();
 
+export function useRealtimeNotifications(onWalletUpdated?: (nextBalance: number) => void) {
+  const navigate = useNavigate();
+  const userInfo = useGlobalState((state) => state.user);
+  const setNotifications = useNotificationStore((state) => state.setNotifications) as React.Dispatch<React.SetStateAction<Notification[]>>;
+  const onWalletUpdatedRef = useRef(onWalletUpdated);
+  onWalletUpdatedRef.current = onWalletUpdated;
+
+  useEffect(() => {
+    if (!userInfo?.account_id) return;
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.emit("joinRoom", userInfo.account_id);
+
+    const handleNotificationRead = ({
+      notificationId,
+      is_read,
+    }: {
+      notificationId: string;
+      is_read: boolean;
+    }) => {
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.notification_id === notificationId
+            ? { ...notification, is_read }
+            : notification
+        )
+      );
+    };
+
+    const handleAllNotificationsRead = (
+      updatedNotifications: Notification[]
+    ) => {
+      setNotifications(updatedNotifications);
+    };
+
+    const handleNewNotification = (notification: Notification) => {
+      if (!notification) return;
+
+      const notifKey = notification.notification_id
+        ? String(notification.notification_id)
+        : (notification.reference_id && notification.reference_prefix)
+          ? `${notification.reference_prefix}:${notification.reference_id}:${notification.message || ''}`
+          : (notification.message ? `${notification.message}:${notification.created_at || ''}` : null);
+
+      // Deduplicate side effects (toasts and audio): if we already processed this notification recently, abort
+      if (notifKey) {
+        if (recentToastNotificationKeys.has(notifKey)) {
+          return;
+        }
+        recentToastNotificationKeys.add(notifKey);
+        if (recentToastNotificationKeys.size > 200) {
+          const oldestKey = recentToastNotificationKeys.values().next().value;
+          if (oldestKey) recentToastNotificationKeys.delete(oldestKey);
+        }
+      }
+
+      // Suppress toasts for actions triggered by the current user themselves
+      if (notification.actor_account_id && userInfo?.account_id && String(notification.actor_account_id) === String(userInfo.account_id)) {
+        setNotifications((prev) => {
+          const exists = prev.some(
+            (item) => item.notification_id && item.notification_id === notification.notification_id
+          );
+          if (exists) return prev;
+          return [notification, ...prev];
+        });
+        return;
+      }
+
+      const markReadAndNavigate = (targetPath?: string) => {
+        if (notification.notification_id) {
+          setNotifications((prev) =>
+            prev.map((item) =>
+              item.notification_id === notification.notification_id
+                ? { ...item, is_read: true }
+                : item
+            )
+          );
+          api.patch(`/api/notifications/${notification.notification_id}/read`).catch(() => {});
+          if (socket.connected) {
+            socket.emit("markMessageAsRead", notification.notification_id);
+          }
+        }
+        if (targetPath) {
+          navigate(targetPath);
+        }
+      };
+
+      // Display visual toast alert (executed purely OUTSIDE setState to avoid StrictMode double-execution)
+      if (notification.message) {
+        const toastOptions = notifKey ? { id: `notif-${notifKey}` } : {};
+
+        if (notification.chatMessage && notification.userName) {
+          const getActionLabel = (action?: string) => {
+            switch (action) {
+              case 'progress': return 'Update';
+              case 'submitted_for_review': return 'Submission';
+              case 'revision_request': return 'Request For Revision';
+              case 'approval': return 'Approval';
+              case 'client_message': return 'Message';
+              default: return 'Message';
+            }
+          };
+          const typeLabel = notification.taskType ? notification.taskType.charAt(0).toUpperCase() + notification.taskType.slice(1) : 'Job';
+          const tagText = `${typeLabel} | ${getActionLabel(notification.chatAction)}`;
+
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={5000}
+              fuseColor="#3b82f6"
+              className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
+            >
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                  {tagText}
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start text-right justify-end">
+                <div className="mr-3 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {notification.userName}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                    {notification.chatMessage}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                  <img src={notification.userAvatar ? constructAvatarUrl(notification.userAvatar) : "/images/default_avatar.png"} alt={notification.userName} className="h-10 w-10 rounded-full object-cover" />
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        } else if (notification.reference_prefix === 'MILESTONE_FUNDS_RELEASED') {
+          const creditsMatch = notification.message.match(/^([\d,]+)\s+credits/);
+          const creditsAmount = creditsMatch ? creditsMatch[1] : '';
+          const milestoneMatch = notification.message.match(/milestone\s+"([^"]+)"/);
+          const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
+
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={6000}
+              fuseColor="#10b981"
+              className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 flex"
+            >
+              <div className="flex-1 w-0 flex items-start">
+                <div className="flex-shrink-0 pt-0.5">
+                  <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                    <span className="text-xl">💰</span>
+                  </div>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    You Received {creditsAmount ? `${creditsAmount} Credits!` : 'Credits!'}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-gray-500 dark:text-zinc-400">
+                    {milestoneName ? `From milestone "${milestoneName}"` : 'Funds released to your wallet'}
+                  </p>
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        } else if (notification.reference_prefix === 'MILESTONE_REVISION_PURCHASED') {
+          const milestoneMatch = notification.message.match(/revision for "([^"]+)"/);
+          const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
+          const nameMatch = notification.message.match(/^([^]+?) purchased/);
+          const buyerName = nameMatch ? nameMatch[1] : 'Client';
+          
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={6000}
+              fuseColor="#3b82f6"
+              className="w-[356px] max-w-[calc(100vw-32px)] border-blue-200 dark:border-blue-500/20 p-4 pt-7 flex"
+            >
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                  Revision Purchased
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start text-right justify-end">
+                <div className="mr-3 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {buyerName}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                    Purchased an additional revision.
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium text-gray-400 dark:text-zinc-500 line-clamp-1">
+                    {milestoneName ? `For milestone "${milestoneName}"` : ''}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                   <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
+                    <span className="text-xl">🔄</span>
+                  </div>
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
+          const isSealed = Boolean(notification.is_sealed || !notification.reviewStars || !notification.contractCompleted);
+          const stars = notification.reviewStars || 5;
+          const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
+          
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={6000}
+              fuseColor={isSealed ? "#f5a524" : "#3b82f6"}
+              onClick={() => {
+                toast.dismiss(t.id);
+                markReadAndNavigate(notification.reference_path);
+              }}
+              className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
+            >
+              <div className="absolute top-2 left-3">
+                <span className={`text-[9px] font-bold tracking-wider uppercase ${isSealed ? 'text-amber-600 dark:text-amber-400' : 'text-blue-500 dark:text-blue-400'}`}>
+                  {isSealed ? 'REVIEW RECEIVED' : 'NEW REVIEW'}
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-center justify-between">
+                <div className="flex-shrink-0 pl-1 mr-2">
+                  {isSealed ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+                      <span className="text-sm">🔒</span>
+                      <span className="text-[10px] uppercase tracking-wider font-bold">Sealed</span>
+                    </div>
+                  ) : (
+                    <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
+                  )}
+                </div>
+                <div className="flex flex-1 items-start justify-end text-right">
+                  <div className="mr-3 flex-1">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">
+                      {notification.reviewerName || "User"}
+                    </p>
+                    <p className="mt-1 text-xs sm:text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
+                      {isSealed
+                        ? "Submitted a review. Ratings and feedback remain sealed until both reviews are submitted."
+                        : `"${notification.reviewFeedback || notification.message}"`}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 pt-0.5">
+                    <img src={notification.reviewerAvatar ? constructAvatarUrl(notification.reviewerAvatar) : "/images/default_avatar.png"} alt={notification.reviewerName || "User"} className="h-10 w-10 rounded-full object-cover" />
+                  </div>
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        } else if (notification.reference_prefix === 'follow') {
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={5000}
+              fuseColor="#10b981"
+              onClick={() => {
+                toast.dismiss(t.id);
+                const target = notification.reference_path || (notification.reference_id ? `/profile/${notification.reference_id}` : '/notifications');
+                markReadAndNavigate(target);
+              }}
+              className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 flex"
+            >
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
+                  NEW FOLLOWER
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start justify-between">
+                <div className="mr-3 flex-1 text-left mt-2">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {notification.followerName || 'Someone'}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200">
+                    started following you
+                  </p>
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                  <AccountAvatar url={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : null} name={notification.followerName} />
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
+          showAccountWarningToast({
+            violationId: notification.reference_id,
+            type: 'Account Warning',
+            message: notification.message,
+            onNavigate: () => navigate('/notifications'),
+          });
+        } else if (notification.reference_prefix === 'TICKET_INVITE' && notification.reference_id) {
+          const def = getNotificationIcon(notification.reference_prefix);
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={12000}
+              fuseColor="#f5a524"
+              className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7"
+            >
+              <div className="absolute top-2 left-3">
+                <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                  {getNotificationLabel(notification.reference_prefix)}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{notification.message}</p>
+              <TicketInviteActions
+                ticketId={notification.reference_id}
+                compact
+                onDone={(result, chatId) => {
+                  toast.dismiss(t.id);
+                  if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
+                }}
+              />
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        } else {
+          const isOrderAccepted =
+            notification.reference_prefix === 'order_accepted' ||
+            (notification.message?.includes('Your gig order for') && notification.message?.includes('has been accepted'));
+          const def = getNotificationIcon(isOrderAccepted ? 'order_accepted' : notification.reference_prefix);
+          const fuseColor = isOrderAccepted ? "#10b981" : "#f5a524";
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={5000}
+              fuseColor={fuseColor}
+              onClick={() => {
+                toast.dismiss(t.id);
+                markReadAndNavigate(notification.reference_path);
+              }}
+              className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
+            >
+              <div className="absolute top-2 left-3">
+                <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                  {isOrderAccepted ? 'ORDER ACCEPTED' : getNotificationLabel(notification.reference_prefix)}
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start justify-between">
+                <p className="mr-3 flex-1 mt-2 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                  {notification.message}
+                </p>
+                <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
+                  {def.icon}
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
+        }
+      }
+
+      // Play notification sound
+      try {
+        const audio = new Audio("/sounds/notification.mp3");
+        audio.play().catch(e => console.log("Audio play blocked:", e));
+      } catch {
+        // Notification audio is optional and may be blocked by the browser.
+      }
+
+      // Pure state updater
+      setNotifications((prev) => {
+        const exists = prev.some(
+          (item) => item.notification_id && item.notification_id === notification.notification_id
+        );
+
+        if (exists) {
+          return prev;
+        }
+
+        return [notification, ...prev];
+      });
+    };
+
+    const handleWalletBalanceUpdated = ({ balance_credits }: { balance_credits: number }) => {
+      const nextBalance = Number(balance_credits);
+      if (Number.isFinite(nextBalance)) {
+        onWalletUpdatedRef.current?.(nextBalance);
+        if (cachedHeaderData) {
+          cachedHeaderData.credits = nextBalance;
+        }
+        const currentUser = useGlobalState.getState().user;
+        if (currentUser) {
+          useGlobalState.getState().setUser({
+            ...currentUser,
+            wallet: {
+              ...(currentUser.wallet || {}),
+              balance_credits: nextBalance,
+            },
+          });
+        }
+      }
+    };
+
+    socket.on("notificationRead", handleNotificationRead);
+    socket.on("allNotificationsRead", handleAllNotificationsRead);
+    socket.on("notification", handleNewNotification);
+    socket.on("walletBalanceUpdated", handleWalletBalanceUpdated);
+
+    return () => {
+      socket.off("notificationRead", handleNotificationRead);
+      socket.off("allNotificationsRead", handleAllNotificationsRead);
+      socket.off("notification", handleNewNotification);
+      socket.off("walletBalanceUpdated", handleWalletBalanceUpdated);
+    };
+  }, [userInfo?.account_id, navigate, setNotifications]);
+}
+
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
   credits: propCredits,
@@ -463,388 +879,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   }, []);
 
 
-useEffect(() => {
-  if (!userInfo?.account_id) return;
-
-  if (!socket.connected) {
-    socket.connect();
-  }
-
-  socket.emit("joinRoom", userInfo.account_id);
-
-  const handleNotificationRead = ({
-    notificationId,
-    is_read,
-  }: {
-    notificationId: string;
-    is_read: boolean;
-  }) => {
-    setNotifications((prev) =>
-      prev.map((notification) =>
-        notification.notification_id === notificationId
-          ? { ...notification, is_read }
-          : notification
-      )
-    );
-  };
-
-  const handleAllNotificationsRead = (
-    updatedNotifications: Notification[]
-  ) => {
-    setNotifications(updatedNotifications);
-  };
-
-  const handleNewNotification = (notification: Notification) => {
-    if (!notification) return;
-
-    const notifKey = notification.notification_id
-      ? String(notification.notification_id)
-      : (notification.reference_id && notification.reference_prefix)
-        ? `${notification.reference_prefix}:${notification.reference_id}:${notification.message || ''}`
-        : (notification.message ? `${notification.message}:${notification.created_at || ''}` : null);
-
-    // Deduplicate side effects (toasts and audio): if we already processed this notification recently, abort
-    if (notifKey) {
-      if (recentToastNotificationKeys.has(notifKey)) {
-        return;
-      }
-      recentToastNotificationKeys.add(notifKey);
-      if (recentToastNotificationKeys.size > 200) {
-        const oldestKey = recentToastNotificationKeys.values().next().value;
-        if (oldestKey) recentToastNotificationKeys.delete(oldestKey);
-      }
-    }
-
-    // Suppress toasts for actions triggered by the current user themselves
-    if (notification.actor_account_id && userInfo?.account_id && String(notification.actor_account_id) === String(userInfo.account_id)) {
-      setNotifications((prev) => {
-        const exists = prev.some(
-          (item) => item.notification_id && item.notification_id === notification.notification_id
-        );
-        if (exists) return prev;
-        return [notification, ...prev];
-      });
-      return;
-    }
-
-    // Display visual toast alert (executed purely OUTSIDE setState to avoid StrictMode double-execution)
-    if (notification.message) {
-      const toastOptions = notifKey ? { id: `notif-${notifKey}` } : {};
-
-      if (notification.chatMessage && notification.userName) {
-        const getActionLabel = (action?: string) => {
-          switch (action) {
-            case 'progress': return 'Update';
-            case 'submitted_for_review': return 'Submission';
-            case 'revision_request': return 'Request For Revision';
-            case 'approval': return 'Approval';
-            case 'client_message': return 'Message';
-            default: return 'Message';
-          }
-        };
-        const typeLabel = notification.taskType ? notification.taskType.charAt(0).toUpperCase() + notification.taskType.slice(1) : 'Job';
-        const tagText = `${typeLabel} | ${getActionLabel(notification.chatAction)}`;
-
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={5000}
-            fuseColor="#3b82f6"
-            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
-          >
-            <div className="absolute top-2 left-3">
-              <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
-                {tagText}
-              </span>
-            </div>
-            <div className="flex-1 w-0 flex items-start text-right justify-end">
-              <div className="mr-3 flex-1">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">
-                  {notification.userName}
-                </p>
-                <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
-                  {notification.chatMessage}
-                </p>
-
-              </div>
-              <div className="flex-shrink-0 pt-0.5">
-                <img src={notification.userAvatar ? constructAvatarUrl(notification.userAvatar) : "/images/default_avatar.png"} alt={notification.userName} className="h-10 w-10 rounded-full object-cover" />
-              </div>
-            </div>
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      } else if (notification.reference_prefix === 'MILESTONE_FUNDS_RELEASED') {
-        const creditsMatch = notification.message.match(/^([\d,]+)\s+credits/);
-        const creditsAmount = creditsMatch ? creditsMatch[1] : '';
-        const milestoneMatch = notification.message.match(/milestone\s+"([^"]+)"/);
-        const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
-
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={6000}
-            fuseColor="#10b981"
-            className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 flex"
-          >
-            <div className="flex-1 w-0 flex items-start">
-              <div className="flex-shrink-0 pt-0.5">
-                <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-                  <span className="text-xl">💰</span>
-                </div>
-              </div>
-              <div className="ml-3 flex-1">
-                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                  You Received {creditsAmount ? `${creditsAmount} Credits!` : 'Credits!'}
-                </p>
-                <p className="mt-1 text-xs font-medium text-gray-500 dark:text-zinc-400">
-                  {milestoneName ? `From milestone "${milestoneName}"` : 'Funds released to your wallet'}
-                </p>
-              </div>
-            </div>
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      } else if (notification.reference_prefix === 'MILESTONE_REVISION_PURCHASED') {
-        const milestoneMatch = notification.message.match(/revision for "([^"]+)"/);
-        const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
-        const nameMatch = notification.message.match(/^([^]+?) purchased/);
-        const buyerName = nameMatch ? nameMatch[1] : 'Client';
-        
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={6000}
-            fuseColor="#3b82f6"
-            className="w-[356px] max-w-[calc(100vw-32px)] border-blue-200 dark:border-blue-500/20 p-4 pt-7 flex"
-          >
-            <div className="absolute top-2 left-3">
-              <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
-                Revision Purchased
-              </span>
-            </div>
-            <div className="flex-1 w-0 flex items-start text-right justify-end">
-              <div className="mr-3 flex-1">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">
-                  {buyerName}
-                </p>
-                <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
-                  Purchased an additional revision.
-                </p>
-                <p className="mt-2 text-[11px] font-medium text-gray-400 dark:text-zinc-500 line-clamp-1">
-                  {milestoneName ? `For milestone "${milestoneName}"` : ''}
-                </p>
-              </div>
-              <div className="flex-shrink-0 pt-0.5">
-                 <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
-                  <span className="text-xl">🔄</span>
-                </div>
-              </div>
-            </div>
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
-        const isSealed = Boolean(notification.is_sealed || !notification.reviewStars || !notification.contractCompleted);
-        const stars = notification.reviewStars || 5;
-        const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
-        
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={6000}
-            fuseColor={isSealed ? "#f5a524" : "#3b82f6"}
-            onClick={() => {
-              if (notification.reference_path) navigate(notification.reference_path);
-            }}
-            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
-          >
-            <div className="absolute top-2 left-3">
-              <span className={`text-[9px] font-bold tracking-wider uppercase ${isSealed ? 'text-amber-600 dark:text-amber-400' : 'text-blue-500 dark:text-blue-400'}`}>
-                {isSealed ? 'REVIEW RECEIVED' : 'NEW REVIEW'}
-              </span>
-            </div>
-            <div className="flex-1 w-0 flex items-center justify-between">
-              <div className="flex-shrink-0 pl-1 mr-2">
-                {isSealed ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-                    <span className="text-sm">🔒</span>
-                    <span className="text-[10px] uppercase tracking-wider font-bold">Sealed</span>
-                  </div>
-                ) : (
-                  <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
-                )}
-              </div>
-              <div className="flex flex-1 items-start justify-end text-right">
-                <div className="mr-3 flex-1">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">
-                    {notification.reviewerName || "User"}
-                  </p>
-                  <p className="mt-1 text-xs sm:text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
-                    {isSealed
-                      ? "Submitted a review. Ratings and feedback remain sealed until both reviews are submitted."
-                      : `"${notification.reviewFeedback || notification.message}"`}
-                  </p>
-                </div>
-                <div className="flex-shrink-0 pt-0.5">
-                  <img src={notification.reviewerAvatar ? constructAvatarUrl(notification.reviewerAvatar) : "/images/default_avatar.png"} alt={notification.reviewerName || "User"} className="h-10 w-10 rounded-full object-cover" />
-                </div>
-              </div>
-            </div>
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      } else if (notification.reference_prefix === 'follow') {
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={5000}
-            fuseColor="#10b981"
-            onClick={() => {
-              const target = notification.reference_path || (notification.reference_id ? `/profile/${notification.reference_id}` : '/notifications');
-              navigate(target);
-            }}
-            className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 flex"
-          >
-            <div className="absolute top-2 left-3">
-              <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
-                NEW FOLLOWER
-              </span>
-            </div>
-            <div className="flex-1 w-0 flex items-start justify-between">
-              <div className="mr-3 flex-1 text-left mt-2">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">
-                  {notification.followerName || 'Someone'}
-                </p>
-                <p className="mt-1 text-sm text-gray-800 dark:text-gray-200">
-                  started following you
-                </p>
-              </div>
-              <div className="flex-shrink-0 pt-0.5">
-                <AccountAvatar url={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : null} name={notification.followerName} />
-              </div>
-            </div>
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
-        showAccountWarningToast({
-          violationId: notification.reference_id,
-          type: 'Account Warning',
-          message: notification.message,
-          onNavigate: () => navigate('/notifications'),
-        });
-      } else if (notification.reference_prefix === 'TICKET_INVITE' && notification.reference_id) {
-        const def = getNotificationIcon(notification.reference_prefix);
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={12000}
-            fuseColor="#f5a524"
-            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7"
-          >
-            <div className="absolute top-2 left-3">
-              <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
-                {getNotificationLabel(notification.reference_prefix)}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{notification.message}</p>
-            <TicketInviteActions
-              ticketId={notification.reference_id}
-              compact
-              onDone={(result, chatId) => {
-                toast.dismiss(t.id);
-                if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
-              }}
-            />
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      } else {
-        const def = getNotificationIcon(notification.reference_prefix);
-        toast.custom((t) => (
-          <SwipeToast
-            open={t.visible}
-            onClose={() => toast.dismiss(t.id)}
-            duration={5000}
-            fuseColor="#f5a524"
-            onClick={() => {
-              if (notification.reference_path) navigate(notification.reference_path);
-            }}
-            className="w-[356px] max-w-[calc(100vw-32px)] p-4 pt-7 flex"
-          >
-            <div className="absolute top-2 left-3">
-              <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
-                {getNotificationLabel(notification.reference_prefix)}
-              </span>
-            </div>
-            <div className="flex-1 w-0 flex items-start justify-between">
-              <p className="mr-3 flex-1 mt-2 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
-                {notification.message}
-              </p>
-              <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
-                {def.icon}
-              </div>
-            </div>
-          </SwipeToast>
-        ), { ...toastOptions, duration: Infinity });
-      }
-    }
-
-    // Play notification sound
-    try {
-      const audio = new Audio("/sounds/notification.mp3");
-      audio.play().catch(e => console.log("Audio play blocked:", e));
-    } catch {
-      // Notification audio is optional and may be blocked by the browser.
-    }
-
-    // Pure state updater
-    setNotifications((prev) => {
-      const exists = prev.some(
-        (item) => item.notification_id && item.notification_id === notification.notification_id
-      );
-
-      if (exists) {
-        return prev;
-      }
-
-      return [notification, ...prev];
-    });
-  };
-
-  const handleWalletBalanceUpdated = ({ balance_credits }: { balance_credits: number }) => {
-    const nextBalance = Number(balance_credits);
-    if (Number.isFinite(nextBalance)) {
-      setCredits(nextBalance);
-      if (cachedHeaderData) {
-        cachedHeaderData.credits = nextBalance;
-      }
-      const currentUser = useGlobalState.getState().user;
-      if (currentUser) {
-        useGlobalState.getState().setUser({
-          ...currentUser,
-          wallet: {
-            ...(currentUser.wallet || {}),
-            balance_credits: nextBalance,
-          },
-        });
-      }
-    }
-  };
-
-  socket.on("notificationRead", handleNotificationRead);
-  socket.on("allNotificationsRead", handleAllNotificationsRead);
-  socket.on("notification", handleNewNotification);
-  socket.on("walletBalanceUpdated", handleWalletBalanceUpdated);
-
-  return () => {
-    socket.off("notificationRead", handleNotificationRead);
-    socket.off("allNotificationsRead", handleAllNotificationsRead);
-    socket.off("notification", handleNewNotification);
-    socket.off("walletBalanceUpdated", handleWalletBalanceUpdated);
-  };
-}, [userInfo?.account_id]);
+  useRealtimeNotifications((nextBalance) => {
+    setCredits(nextBalance);
+  });
   
 useEffect(() => {
   if (isGuestView || isAppealLimitedMember(userInfo)) {

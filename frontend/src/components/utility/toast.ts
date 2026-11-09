@@ -24,7 +24,7 @@ const getClassName = (type: 'success' | 'error' | 'loading' | 'custom'): string 
   return `${baseClassName} ${themes[type]}`;
 };
 
-const ToastLottieIcon = ({ src }: { src: string }) => {
+export const ToastLottieIcon = ({ src }: { src: string }) => {
   return React.createElement(
     'div',
     { className: "h-7 w-7 shrink-0 flex items-center justify-center -ml-1" },

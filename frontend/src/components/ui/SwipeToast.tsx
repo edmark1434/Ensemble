@@ -141,6 +141,8 @@ export const SwipeToast: React.FC<SwipeToastProps> = ({
     setPhase('open');
   };
 
+  const showFuse = fuse !== 'none' && duration > 0 && Number.isFinite(duration);
+
   useEffect(() => {
     if (!open) close('programmatic');
     else if (phaseRef.current !== 'open') rescue();
@@ -150,7 +152,7 @@ export const SwipeToast: React.FC<SwipeToastProps> = ({
     if (!HAS_STARTING_STYLE) requestAnimationFrame(() => setMounted(true));
   }, []);
   useEffect(() => {
-    if (phase !== 'open' || duration <= 0 || !Number.isFinite(duration) || !fuseRef.current) return undefined;
+    if (phase !== 'open' || !showFuse || !fuseRef.current) return undefined;
     anim.current?.cancel();
     const a = fuseRef.current.animate(BURN, { duration, easing: 'linear', fill: 'forwards' });
     a.onfinish = () => close('timeout');
@@ -161,7 +163,7 @@ export const SwipeToast: React.FC<SwipeToastProps> = ({
       a.pause();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, duration]);
+  }, [phase, duration, showFuse, fuseColor]);
   useEffect(() => {
     if (!pauseOnHover) {
       flags.current.hover = false;
@@ -322,8 +324,6 @@ export const SwipeToast: React.FC<SwipeToastProps> = ({
     }
   };
 
-  const showFuse = fuse !== 'none' && duration > 0 && Number.isFinite(duration);
-
   if (phase === 'gone' && !inline) return null;
 
   const isClosing = phase === 'closing';
@@ -385,8 +385,8 @@ export const SwipeToast: React.FC<SwipeToastProps> = ({
             </span>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            {title ? <div className="truncate font-semibold text-gray-900 dark:text-[#f5f5f5]">{title}</div> : null}
-            {description ? <div className="truncate text-[12px] text-gray-500 dark:text-zinc-400">{description}</div> : null}
+            {title ? <div className="line-clamp-2 break-words font-semibold text-gray-900 dark:text-[#f5f5f5]">{title}</div> : null}
+            {description ? <div className="line-clamp-2 break-words text-[12px] text-gray-500 dark:text-zinc-400">{description}</div> : null}
           </div>
           {closeButton ? (
             <button
