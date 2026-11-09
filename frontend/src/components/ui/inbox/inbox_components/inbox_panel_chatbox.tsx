@@ -79,14 +79,14 @@ uploadLimitMB = 250,
   };
 
   return (
-    <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface flex-shrink-0">
+    <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base flex-shrink-0">
       {typingNames.length > 0 && (
         <div className="px-4 pt-2 text-xs text-gray-500 dark:text-zinc-500">
           {formatTypingIndicator()}
         </div>
       )}
       {(replyToMessage || editingMessage) && (
-        <div className="px-4 py-2 bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
+        <div className="px-4 py-2 bg-white dark:bg-dark-base border-b border-gray-200 dark:border-white/[0.08] flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
             {replyToMessage ? (
               <>
@@ -129,7 +129,7 @@ uploadLimitMB = 250,
                 : "Type a message..."
             }
             rows={1}
-            className="w-full rounded-2xl border border-gray-300 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 pl-4 pr-11 text-sm text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition inbox-scroll-thin max-h-[18rem] overflow-y-auto"
+            className="w-full rounded-2xl border border-gray-300 dark:border-white/[0.08] bg-gray-50 dark:bg-white/[0.03] py-2.5 pl-4 pr-11 text-sm text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition inbox-scroll-thin max-h-[18rem] overflow-y-auto"
             style={{
               fontFamily: "'Plus Jakarta Sans', sans-serif",
               lineHeight: "1.25rem",

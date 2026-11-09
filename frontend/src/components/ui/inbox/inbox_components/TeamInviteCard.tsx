@@ -76,7 +76,7 @@ export const TeamInviteCard: React.FC<TeamInviteCardProps> = ({
       } ${
         isSender
           ? "bg-blue-900/40 border border-white/20 text-white"
-          : "bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-sm"
+          : "bg-white dark:bg-[#14151a] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-sm"
       }`}
     >
       {/* Header with Team Icon */}

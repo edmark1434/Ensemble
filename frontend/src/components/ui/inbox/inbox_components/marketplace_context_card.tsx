@@ -91,7 +91,7 @@ export function MarketplaceContextCard({
       className={
         variant === "details"
           ? "mx-3 mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.03]"
-          : "border-b border-gray-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-dark-surface"
+          : "border-b border-gray-200 bg-white px-4 py-3 dark:border-white/[0.08] dark:bg-dark-base"
       }
       aria-label={typeLabel}
     >

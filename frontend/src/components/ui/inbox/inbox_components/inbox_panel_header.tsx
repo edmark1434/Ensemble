@@ -109,7 +109,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     : "";
 
   return (
-    <div className="sticky top-0 z-10 bg-white dark:bg-dark-surface/95 backdrop-blur-sm border-b border-gray-200 dark:border-white/10 p-4 flex items-center justify-between flex-shrink-0">
+    <div className="sticky top-0 z-10 bg-white dark:bg-dark-base/95 backdrop-blur-sm border-b border-gray-200 dark:border-white/[0.08] p-4 flex items-center justify-between flex-shrink-0">
       <div className="flex min-w-0 items-center gap-3">
         <div className="relative flex-shrink-0">
           {name.startsWith("User ") && name.length === 13 ? (
@@ -130,7 +130,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
           )}
           {selectedConversation.conversation_type === "direct" && (
             <span
-              className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${
+              className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-base ${
                 isOnline ? "bg-green-500" : "bg-gray-400 dark:bg-zinc-500"
               }`}
             />

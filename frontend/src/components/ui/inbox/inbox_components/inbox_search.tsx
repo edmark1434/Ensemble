@@ -20,7 +20,7 @@ export const InboxSearch: React.FC<InboxSearchProps> = ({
   if (isCollapsed) return null;
 
   return (
-    <div className="px-3 pt-5 pb-3 border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface flex items-center gap-2">
+    <div className="px-3 pt-5 pb-3 border-b border-gray-200 dark:border-white/[0.08] flex-shrink-0 bg-white dark:bg-dark-base flex items-center gap-2">
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-zinc-500" />
         <input
@@ -32,7 +32,7 @@ export const InboxSearch: React.FC<InboxSearchProps> = ({
           }
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-300 dark:border-white/15 bg-gray-50 dark:bg-white/5 pl-10 pr-4 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+          className="w-full rounded-xl border border-gray-300 dark:border-white/[0.08] bg-gray-50 dark:bg-white/[0.03] pl-10 pr-4 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         />
       </div>
@@ -42,7 +42,7 @@ export const InboxSearch: React.FC<InboxSearchProps> = ({
         <button
           onClick={onCreateGroup}
           title="Create Group Chat"
-          className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition flex-shrink-0"
+          className="p-2.5 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-gray-50 dark:bg-white/[0.03] text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/[0.06] transition flex-shrink-0"
         >
           <UserPlus className="h-4 w-4" />
         </button>

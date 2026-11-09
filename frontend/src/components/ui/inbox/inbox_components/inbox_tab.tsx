@@ -40,7 +40,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
   return (
     <>
       <div
-        className={`flex border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface transition-all duration-300 ease-in-out overflow-hidden ${
+        className={`flex border-b border-gray-200 dark:border-white/[0.08] flex-shrink-0 bg-white dark:bg-dark-base transition-all duration-300 ease-in-out overflow-hidden ${
           isCollapsed ? "flex-col py-3 gap-3 items-center px-2" : "flex-row items-center px-3"
         }`}
       >

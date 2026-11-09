@@ -243,7 +243,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
 
   return (
     <div
-      className={`h-full bg-white dark:bg-dark-surface border-l border-gray-200 dark:border-white/10 flex flex-col flex-shrink-0 overflow-y-auto inbox-scroll-thin text-gray-900 dark:text-white transition-all duration-300 ease-in-out ${
+      className={`h-full bg-white dark:bg-dark-base border-l border-gray-200 dark:border-white/[0.08] flex flex-col flex-shrink-0 overflow-y-auto inbox-scroll-thin text-gray-900 dark:text-white transition-all duration-300 ease-in-out ${
         isOpen
           ? "w-72 md:w-80 opacity-100"
           : "w-0 opacity-0 overflow-hidden border-l-0"
@@ -252,7 +252,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
     >
       <div className="w-72 md:w-80 flex flex-col min-h-full">
         {/* Header Close Bar */}
-        <div className="flex items-center justify-between px-4 h-[73px] shrink-0 border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
+        <div className="flex items-center justify-between px-4 h-[73px] shrink-0 border-b border-gray-200 dark:border-white/[0.08] sticky top-0 bg-white dark:bg-dark-base/95 backdrop-blur-sm z-10">
           <h3 className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}
@@ -263,7 +263,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
         </div>
 
         {/* Main Profile / Group Info Header */}
-        <div className="flex flex-col items-center p-6 shrink-0 border-b border-gray-200 dark:border-white/10 text-center">
+        <div className="flex flex-col items-center p-6 shrink-0 border-b border-gray-200 dark:border-white/[0.08] text-center">
           <div className="relative mb-3">
             <img
               src={avatar}
@@ -283,7 +283,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                   type="button"
                   disabled={isUploadingGroupImage}
                   onClick={() => groupImageInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 transition disabled:opacity-80"
+                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-white dark:ring-dark-base hover:bg-blue-500 transition disabled:opacity-80"
                   title="Change group image"
                 >
                   {isUploadingGroupImage ? (
@@ -294,7 +294,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                 </button>
               </>
             ) : (
-              <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-dark-surface" />
+              <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-dark-base" />
             )}
           </div>
           <h2 className="text-base font-bold text-gray-900 dark:text-white mb-0.5">{name}</h2>
@@ -371,7 +371,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
         <div className="p-2 space-y-2 flex-1">
           {/* 1. Customize Chat (Group Rename) */}
           {isGroup && (
-            <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+            <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/[0.025] border border-gray-100 dark:border-white/[0.07]">
               <button
                 onClick={() => setIsCustomizeOpen((prev) => !prev)}
                 className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
@@ -426,7 +426,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
 
           {/* 2. Group Members Section */}
           {isGroup && (
-            <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+            <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/[0.025] border border-gray-100 dark:border-white/[0.07]">
               <div
                 onClick={() => setIsMembersOpen((prev) => !prev)}
                 className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
@@ -469,7 +469,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         value={memberSearch}
                         onChange={(event) => setMemberSearch(event.target.value)}
                         placeholder="Search by @handle"
-                        className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                        className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
                       />
                       {isSearchingMembers && (
                         <p className="px-2 text-[10px] text-gray-500 dark:text-zinc-500">Searching...</p>
@@ -565,7 +565,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                                         })
                                       )
                                     }
-                                    className="rounded bg-white dark:bg-dark-surface p-1 text-[9px]"
+                                    className="rounded bg-white dark:bg-dark-base p-1 text-[9px]"
                                   >
                                     <option value="member">Member</option>
                                     {currentMember?.role === "owner" && (
@@ -597,7 +597,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
 
           {/* 3. Pinned Messages Section */}
           {!hasRestrictedMessageTools && (
-          <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+          <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/[0.025] border border-gray-100 dark:border-white/[0.07]">
             <button
               onClick={() => setIsPinnedOpen((prev) => !prev)}
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
@@ -641,7 +641,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           )}
 
           {/* 4. Shared Links Section */}
-          <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+          <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/[0.025] border border-gray-100 dark:border-white/[0.07]">
             <button
               onClick={() => setIsLinksOpen((prev) => !prev)}
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
@@ -684,7 +684,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           </div>
 
           {/* 5. Attachments Section */}
-          <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+          <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/[0.025] border border-gray-100 dark:border-white/[0.07]">
             <button
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
@@ -839,7 +839,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
       {/* Add Member Confirmation Modal */}
       {memberToAdd && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-dark-surface p-6 shadow-xl border border-gray-100 dark:border-white/10 animate-fade-in-up">
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-dark-base p-6 shadow-xl border border-gray-100 dark:border-white/10 animate-fade-in-up">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Add Member</h3>
             <p className="text-sm text-gray-600 dark:text-zinc-300 mb-6">
               Are you sure you want to add <strong className="text-gray-900 dark:text-white">{memberToAdd.username}</strong> to this group chat?

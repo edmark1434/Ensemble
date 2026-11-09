@@ -40,7 +40,7 @@ export const InboxList: React.FC<InboxListProps> = ({
   if (loading) {
     if (isCollapsed) {
       return (
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface p-3 space-y-4 animate-pulse">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-base p-3 space-y-4 animate-pulse">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="flex justify-center">
               <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800" />
@@ -51,7 +51,7 @@ export const InboxList: React.FC<InboxListProps> = ({
     }
 
     return (
-      <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface px-2 pt-3 pb-2 space-y-1 animate-pulse">
+      <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-base px-2 pt-3 pb-2 space-y-1 animate-pulse">
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
@@ -105,7 +105,7 @@ export const InboxList: React.FC<InboxListProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface inbox-scroll-thin pt-3">
+    <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-base inbox-scroll-thin pt-3">
       {conversations.map((inbox) => {
         const viewerAccountId = String(
           inbox.viewer_account_id || currentAccountId || ""
@@ -155,11 +155,11 @@ export const InboxList: React.FC<InboxListProps> = ({
             key={inbox._id}
             onClick={() => onSelectConversation(inbox)}
             title={isCollapsed ? name : undefined}
-            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-200 ${
+            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all duration-200 ${
               isCollapsed ? "p-3 justify-center" : "p-4"
             } ${
               isActive
-                ? "bg-gradient-to-r from-blue-500/20 to-transparent border-l-2 border-blue-500"
+                ? "bg-blue-50/70 dark:bg-blue-500/10 border-l-2 border-blue-500"
                 : ""
             }`}
           >
@@ -182,13 +182,13 @@ export const InboxList: React.FC<InboxListProps> = ({
               )}
               {inbox.conversation_type === "direct" && (
                 <span
-                  className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${
+                  className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-base ${
                     isOnline ? "bg-green-500" : "bg-zinc-600"
                   }`}
                 />
               )}
               {isCollapsed && unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />
+                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-base" />
               )}
             </div>
 

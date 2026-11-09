@@ -215,7 +215,7 @@ export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = (
   if (!mediaList || mediaList.length === 0) return null;
 
   return (
-    <div className="flex flex-col border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#1a1b23]/50">
+    <div className="flex flex-col border-b border-gray-200 dark:border-white/[0.08] bg-gray-50/50 dark:bg-dark-base">
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">Attached files</span>
         <div className="flex items-center gap-1.5 relative group">

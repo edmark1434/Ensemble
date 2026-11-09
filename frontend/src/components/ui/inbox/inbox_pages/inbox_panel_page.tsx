@@ -58,7 +58,7 @@ onUpdateGroupName,
 
   if (!selectedConversation) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-white dark:bg-dark-surface text-gray-500 dark:text-zinc-500">
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-[#0d0e11] text-gray-500 dark:text-zinc-500">
         Select a conversation to start messaging
       </div>
     );
@@ -90,7 +90,7 @@ onUpdateGroupName,
     String(disputeDetails?.status || "").toLowerCase() === "closed";
 
   return (
-    <div className="flex h-full max-h-full w-full overflow-hidden bg-gray-50 dark:bg-dark-base relative">
+    <div className="flex h-full max-h-full w-full overflow-hidden bg-gray-50 dark:bg-[#0d0e11] relative">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         <InboxPanelHeader
@@ -131,19 +131,19 @@ onUpdateGroupName,
           />
 
           {cannotSendToGroup ? (
-            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+            <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               You cannot send messages to this group chat anymore.
             </div>
           ) : ticketClosed ? (
-            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+            <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               This ticket is closed. You cannot reply.
             </div>
           ) : disputeClosed ? (
-            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+            <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               This dispute is closed. You cannot reply.
             </div>
           ) : disputeReplyBlocked ? (
-            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+            <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               This dispute is not public yet. Only the person who filed it can add information for staff.
             </div>
           ) : (

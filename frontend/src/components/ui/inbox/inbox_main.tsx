@@ -999,7 +999,7 @@ const InboxMain = () => {
                 } ${
                   isSender
                     ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none"
-                    : "bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded-bl-none border border-gray-100 dark:border-zinc-700/50"
+                    : "bg-gray-100 dark:bg-[#18191e] text-gray-900 dark:text-zinc-100 rounded-bl-none border border-gray-100 dark:border-white/[0.08]"
                 } ${pinned ? "ring-1 ring-yellow-400/40" : ""}`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
@@ -1297,10 +1297,10 @@ const InboxMain = () => {
     <div className="w-full h-full bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" />
 
-      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative" data-tour="inbox-container">
+      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/[0.08] relative" data-tour="inbox-container">
         {/* Animated Left Conversation Sidebar (Transitions smoothly between w-80/w-96 and compact w-20) */}
         <div
-          className={`flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 ease-in-out ${
+          className={`flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base transition-all duration-300 ease-in-out ${
             isSidebarCollapsed ? "w-20" : "w-80 md:w-96"
           }`}
         >
