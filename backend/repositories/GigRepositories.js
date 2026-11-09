@@ -1427,7 +1427,141 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 
 
 
+async function expireStaleAcceptedGigOrders() {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Send < 2-hour confirmation reminder notifications (once per order acceptance window)
+        const reminderRes = await client.query(`
+            SELECT 
+                gr.gig_request_id,
+                gr.client_account_id,
+                gt.gig_id,
+                g.freelancer_account_id,
+                g.title as gig_title
+            FROM gig_requests gr
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+            WHERE gr.status = 'Accepted'
+              AND gr.updated_at <= NOW() - INTERVAL '22 hours'
+              AND gr.updated_at > NOW() - INTERVAL '24 hours'
+              AND NOT EXISTS (
+                  SELECT 1 FROM notifications n
+                  WHERE n.reference_table = 'gig_requests'
+                    AND n.reference_id = gr.gig_request_id
+                    AND n.reference_prefix = 'order_confirm_reminder'
+                    AND n.created_at > gr.updated_at
+              )
+        `);
+
+        const sentReminders = [];
+        for (const row of reminderRes.rows) {
+            try {
+                const notif = await createNotification({
+                    account_id: row.client_account_id,
+                    message: `Less than 2 hours left to confirm and fund your accepted gig order for '${row.gig_title}' before it expires. Unconfirmed orders after acceptance may affect your Platform Merit.`,
+                    reference_table: 'gig_requests',
+                    reference_prefix: 'order_confirm_reminder',
+                    reference_path: `/gigs/orders/sent/${row.gig_request_id}`,
+                    reference_id: row.gig_request_id
+                });
+                if (notif) {
+                    sentReminders.push({
+                        account_id: row.client_account_id,
+                        notif,
+                    });
+                }
+            } catch (remErr) {
+                console.error('Error sending <2h order confirmation reminder notification:', remErr);
+            }
+        }
+
+        // 2. Expire accepted orders that have exceeded the 24-hour confirmation window
+        const staleRes = await client.query(`
+            SELECT 
+                gr.gig_request_id,
+                gr.client_account_id,
+                gt.gig_id,
+                g.freelancer_account_id,
+                g.title as gig_title,
+                gc.contract_id
+            FROM gig_requests gr
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+            LEFT JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+            WHERE gr.status = 'Accepted'
+              AND gr.updated_at < NOW() - INTERVAL '24 hours'
+            FOR UPDATE OF gr SKIP LOCKED
+        `);
+
+        const expiredOrders = [];
+        if (staleRes.rows.length > 0) {
+            for (const row of staleRes.rows) {
+                await client.query(
+                    `UPDATE gig_requests SET status = 'Cancelled', updated_at = NOW() WHERE gig_request_id = $1`,
+                    [row.gig_request_id]
+                );
+                if (row.contract_id) {
+                    await client.query(
+                        `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) = 'pending'`,
+                        [row.contract_id]
+                    );
+                }
+
+                // Planned Flow Hook (Merit deduction not active yet):
+                // Failing to confirm & fund an accepted gig order within 24 hours will deduct Platform Merit from the client.
+                let clientNotif = null;
+                let freelancerNotif = null;
+                try {
+                    clientNotif = await createNotification({
+                        account_id: row.client_account_id,
+                        message: `Your accepted gig order for '${row.gig_title}' expired and was cancelled because escrow was not funded within 24 hours.`,
+                        reference_table: 'gig_requests',
+                        reference_prefix: 'GIGR',
+                        reference_path: `/gigs/orders/sent/${row.gig_request_id}`,
+                        reference_id: row.gig_request_id
+                    });
+                    freelancerNotif = await createNotification({
+                        account_id: row.freelancer_account_id,
+                        message: `Accepted gig order for '${row.gig_title}' expired and was cancelled because the client did not fund escrow within 24 hours.`,
+                        reference_table: 'gig_requests',
+                        reference_prefix: 'GIGR',
+                        reference_path: `/gigs/orders/incoming/${row.gig_id}/order/${row.gig_request_id}`,
+                        reference_id: row.gig_request_id
+                    });
+                } catch (notifErr) {
+                    console.error('Error sending stale order expiration notification:', notifErr);
+                }
+
+                expiredOrders.push({
+                    orderId: row.gig_request_id,
+                    client_account_id: row.client_account_id,
+                    freelancer_account_id: row.freelancer_account_id,
+                    clientNotif,
+                    freelancerNotif,
+                });
+            }
+        }
+
+        await client.query('COMMIT');
+        return {
+            remindedCount: sentReminders.length,
+            expiredCount: expiredOrders.length,
+            sentReminders,
+            expiredOrders,
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in expireStaleAcceptedGigOrders:', err);
+        return { remindedCount: 0, expiredCount: 0, sentReminders: [], expiredOrders: [] };
+    } finally {
+        client.release();
+    }
+}
+
 async function getIncomingOrdersRepository(accountIds) {
+    await expireStaleAcceptedGigOrders();
 
     const query = `
 
@@ -1445,7 +1579,10 @@ async function getIncomingOrdersRepository(accountIds) {
 
             END as status,
 
-            r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.created_at,
+            r.updated_at,
+            CASE WHEN r.status = 'Accepted' THEN (r.updated_at + INTERVAL '24 hours') ELSE NULL END as acceptance_expires_at,
+            (to_jsonb(r)->>'project_brief') as project_brief,
 
               g.gig_id, g.title as gig_title,
 
@@ -1488,6 +1625,7 @@ async function getIncomingOrdersRepository(accountIds) {
 
 
 async function getMyOrdersRepository(accountIds) {
+    await expireStaleAcceptedGigOrders();
 
     const query = `
 
@@ -1505,7 +1643,10 @@ async function getMyOrdersRepository(accountIds) {
 
             END as status,
 
-            r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.created_at,
+            r.updated_at,
+            CASE WHEN r.status = 'Accepted' THEN (r.updated_at + INTERVAL '24 hours') ELSE NULL END as acceptance_expires_at,
+            (to_jsonb(r)->>'project_brief') as project_brief,
 
             g.gig_id, g.title as gig_title,
 
@@ -1546,6 +1687,7 @@ async function getMyOrdersRepository(accountIds) {
 
 
 async function getOrderByIdRepository(orderId, accountIds) {
+    await expireStaleAcceptedGigOrders();
 
     const query = `
 
@@ -1563,7 +1705,10 @@ async function getOrderByIdRepository(orderId, accountIds) {
 
             END as status,
 
-            r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.created_at,
+            r.updated_at,
+            CASE WHEN r.status = 'Accepted' THEN (r.updated_at + INTERVAL '24 hours') ELSE NULL END as acceptance_expires_at,
+            (to_jsonb(r)->>'project_brief') as project_brief,
 
             g.gig_id, g.title as gig_title,
 
@@ -2236,13 +2381,39 @@ async function updateGigRepository(gigId, accountIds, gigData) {
 
 
 
-        if (gigData.galleryFileIds && gigData.galleryFileIds.length > 0) {
+        if (Array.isArray(gigData.keptGalleryUrls) || (gigData.galleryFileIds && gigData.galleryFileIds.length > 0)) {
+            const finalGalleryFileIds = [];
+
+            if (Array.isArray(gigData.keptGalleryUrls)) {
+                const existingGalleryRes = await client.query(
+                    `SELECT ga.file_id, f.path
+                     FROM gig_attachments ga
+                     JOIN files f ON ga.file_id = f.file_id
+                     WHERE ga.gig_id = $1 AND ga.index > 0
+                     ORDER BY ga.index ASC`,
+                    [gigId]
+                );
+                const keptSet = new Set(gigData.keptGalleryUrls.filter(Boolean));
+                for (const row of existingGalleryRes.rows) {
+                    if (keptSet.has(row.path) && !finalGalleryFileIds.includes(row.file_id)) {
+                        finalGalleryFileIds.push(row.file_id);
+                    }
+                }
+            }
+
+            if (Array.isArray(gigData.galleryFileIds) && gigData.galleryFileIds.length > 0) {
+                for (const gId of gigData.galleryFileIds) {
+                    if (gId && !finalGalleryFileIds.includes(gId)) {
+                        finalGalleryFileIds.push(gId);
+                    }
+                }
+            }
 
             await client.query('DELETE FROM gig_attachments WHERE gig_id = $1 AND index > 0', [gigId]);
 
             let gIndex = 1;
 
-            for (const gId of gigData.galleryFileIds) {
+            for (const gId of finalGalleryFileIds) {
 
                 await client.query('INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1, $2, $3)', [gigId, gId, gIndex++]);
 
@@ -2547,6 +2718,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
 
 async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
+    await expireStaleAcceptedGigOrders();
 
     const client = await pool.connect();
 
@@ -2938,17 +3110,19 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
 
 
 
-        // Verify the order exists, is Pending, and belongs to the freelancer
+        // Verify the order exists, is Pending/Shortlisted/Accepted, and belongs to the freelancer
 
         const reqCheckQuery = `
 
-            SELECT gr.gig_request_id, gr.status, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            SELECT gr.gig_request_id, gr.status, gr.client_account_id, g.freelancer_account_id, g.title as gig_title, gc.contract_id
 
             FROM gig_requests gr
 
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
 
             JOIN gigs g ON gt.gig_id = g.gig_id
+
+            LEFT JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
 
             WHERE gr.gig_request_id = $1 AND g.freelancer_account_id = ANY($2::uuid[])
 
@@ -2962,13 +3136,15 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
 
         }
 
-        if (reqCheck.rows[0].status !== 'Pending' && reqCheck.rows[0].status !== 'Shortlisted') {
+        const currentStatus = reqCheck.rows[0].status;
+        if (currentStatus !== 'Pending' && currentStatus !== 'Shortlisted' && currentStatus !== 'Accepted') {
 
-            throw new Error('Gig order is not in Pending or Shortlisted status');
+            throw new Error('Gig order is not in Pending, Shortlisted, or Accepted status');
 
         }
 
-        const { client_account_id, gig_title } = reqCheck.rows[0];
+        const { client_account_id, gig_title, contract_id } = reqCheck.rows[0];
+        const wasAccepted = currentStatus === 'Accepted';
 
 
 
@@ -2980,17 +3156,22 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
 
         );
 
-        // Note: we might want to store the reason somewhere if gig_requests gets a reject_reason column,
+        if (contract_id) {
+            await client.query(
+                "UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) = 'pending'",
+                [contract_id]
+            );
+        }
 
-        // but currently there's no such column in gig_requests (unlike proposals).
 
 
-
-        await createNotification({
+        const notif = await createNotification({
 
             account_id: client_account_id,
 
-            message: `Your gig order for '${gig_title}' was rejected by the freelancer. Reason: ${reason || 'No reason provided'}`,
+            message: wasAccepted
+                ? `Your accepted gig order for '${gig_title}' was cancelled by the freelancer before escrow was funded. Reason: ${reason || 'No reason provided'}`
+                : `Your gig order for '${gig_title}' was rejected by the freelancer. Reason: ${reason || 'No reason provided'}`,
 
             reference_table: 'gig_requests',
 
@@ -3006,7 +3187,12 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
 
         await client.query('COMMIT');
 
-        return true;
+        return {
+            success: true,
+            client_account_id,
+            notif,
+            wasAccepted,
+        };
 
     } catch (err) {
 
@@ -3177,37 +3363,77 @@ async function editGigOrderRepository(orderId, accountIds, orderData) {
 
 
 async function withdrawGigOrderRepository(orderId, accountIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
 
-    const result = await pool.query(
+        const reqCheck = await client.query(
+            `SELECT gr.gig_request_id, gr.status, gr.client_account_id, gt.gig_id, g.freelancer_account_id, g.title as gig_title, gc.contract_id
+             FROM gig_requests gr
+             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+             JOIN gigs g ON gt.gig_id = g.gig_id
+             LEFT JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+             WHERE gr.gig_request_id = $1
+               AND gr.client_account_id = ANY($2::uuid[])
+               AND gr.status IN ('Pending', 'Shortlisted', 'Accepted')
+             FOR UPDATE OF gr`,
+            [orderId, accountIds]
+        );
 
-        `UPDATE gig_requests
+        if (!reqCheck.rows.length) {
+            const error = new Error('Pending, shortlisted, or accepted gig order not found or unauthorized');
+            error.statusCode = 404;
+            throw error;
+        }
 
-         SET status = 'Withdrawn', updated_at = NOW()
+        const { status: currentStatus, gig_id, freelancer_account_id, gig_title, contract_id } = reqCheck.rows[0];
+        const wasAccepted = currentStatus === 'Accepted';
+        const nextStatus = wasAccepted ? 'Cancelled' : 'Withdrawn';
 
-         WHERE gig_request_id = $1
+        await client.query(
+            `UPDATE gig_requests
+             SET status = $1, updated_at = NOW()
+             WHERE gig_request_id = $2`,
+            [nextStatus, orderId]
+        );
 
-           AND client_account_id = ANY($2::uuid[])
+        if (contract_id) {
+            await client.query(
+                `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) = 'pending'`,
+                [contract_id]
+            );
+        }
 
-           AND status IN ('Pending', 'Shortlisted')
+        let notif = null;
+        if (wasAccepted) {
+            try {
+                notif = await createNotification({
+                    account_id: freelancer_account_id,
+                    message: `The client declined confirmation and cancelled their accepted order for '${gig_title}'.`,
+                    reference_table: 'gig_requests',
+                    reference_prefix: 'GIGR',
+                    reference_path: `/gigs/orders/incoming/${gig_id}/order/${orderId}`,
+                    reference_id: orderId
+                });
+            } catch (notifErr) {
+                console.error('Error creating withdraw notification:', notifErr);
+            }
+        }
 
-         RETURNING gig_request_id`,
-
-        [orderId, accountIds]
-
-    );
-
-    if (!result.rows.length) {
-
-        const error = new Error('Pending or shortlisted gig order not found or unauthorized');
-
-        error.statusCode = 404;
-
-        throw error;
-
+        await client.query('COMMIT');
+        return {
+            success: true,
+            status: nextStatus,
+            wasAccepted,
+            freelancer_account_id,
+            notif,
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
     }
-
-    return true;
-
 }
 
 
@@ -3414,6 +3640,7 @@ async function toggleGigStatusRepository(gigId, accountIds, targetStatus = null)
 }
 
 module.exports = {
+    expireStaleAcceptedGigOrders,
     toggleGigStatusRepository,
 
     updateGigRepository,

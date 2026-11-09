@@ -22,6 +22,7 @@ async function shortlistGigOrderService(orderId, actorIds, options = {}) {
         const io = getIo();
         if (io) {
             io.to(String(result.client_account_id)).emit('notification', notif);
+            io.emit('gigOrderUpdated', { orderId, status: 'Shortlisted' });
         }
     } catch (notifErr) {
         console.error('Error sending gig shortlist notification:', notifErr);
@@ -113,6 +114,7 @@ async function unshortlistGigOrderService(orderId, actorIds) {
         const io = getIo();
         if (io) {
             io.to(String(result.client_account_id)).emit('notification', notif);
+            io.emit('gigOrderUpdated', { orderId, status: 'Pending' });
         }
     } catch (notifErr) {
         console.error('Error sending gig unshortlist notification:', notifErr);
@@ -122,24 +124,36 @@ async function unshortlistGigOrderService(orderId, actorIds) {
 
 async function acceptGigOrderService(orderId, actorIds) {
     const result = await acceptGigOrderRepository(orderId, actorIds);
+    const acceptedAt = new Date().toISOString();
+    const acceptanceExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     try {
         const notif = await createNotificationServices({
             account_id: result.client_account_id,
-            message: `Your gig order for '${result.gig_title}' has been accepted! The contract is waiting for your escrow deposit to begin work.`,
-            reference_table: 'contracts',
-            reference_prefix: 'CON',
-            reference_path: result.contractId ? `/contracts/${result.contractId}` : `/gigs/orders/sent/${orderId}`,
-            reference_id: result.contractId || orderId
+            message: `Your gig order for '${result.gig_title}' has been accepted! Confirm and fund escrow within 24 hours to start the contract.`,
+            reference_table: 'gig_requests',
+            reference_prefix: 'order_accepted',
+            reference_path: `/gigs/orders/sent/${orderId}`,
+            reference_id: orderId
         });
         const io = getIo();
         if (io) {
             io.to(String(result.client_account_id)).emit('notification', notif);
-            io.emit('gigOrderUpdated', { orderId, status: 'Accepted', contractId: result.contractId });
+            io.emit('gigOrderUpdated', {
+                orderId,
+                status: 'Accepted',
+                contractId: result.contractId,
+                updated_at: acceptedAt,
+                acceptance_expires_at: acceptanceExpiresAt,
+            });
         }
     } catch (notifErr) {
         console.error('Error sending gig accept notification:', notifErr);
     }
-    return result;
+    return {
+        ...result,
+        updated_at: acceptedAt,
+        acceptance_expires_at: acceptanceExpiresAt,
+    };
 }
 
 async function confirmGigOrderContractService(orderId, actorIds) {
@@ -189,10 +203,36 @@ async function toggleGigStatusService(gigId, accountIds, targetStatus = null) {
     return result;
 }
 
+async function reconcileAcceptedGigOrdersService() {
+    const { expireStaleAcceptedGigOrders } = require('../repositories/GigRepositories');
+    const result = await expireStaleAcceptedGigOrders();
+    const io = getIo();
+    if (io) {
+        for (const rem of result.sentReminders || []) {
+            if (rem.account_id && rem.notif) {
+                io.to(String(rem.account_id)).emit('notification', rem.notif);
+            }
+        }
+        for (const exp of result.expiredOrders || []) {
+            if (exp.client_account_id && exp.clientNotif) {
+                io.to(String(exp.client_account_id)).emit('notification', exp.clientNotif);
+            }
+            if (exp.freelancer_account_id && exp.freelancerNotif) {
+                io.to(String(exp.freelancer_account_id)).emit('notification', exp.freelancerNotif);
+            }
+            if (exp.orderId) {
+                io.emit('gigOrderUpdated', { orderId: exp.orderId, status: 'Cancelled' });
+            }
+        }
+    }
+    return result;
+}
+
 module.exports = {
     shortlistGigOrderService,
     unshortlistGigOrderService,
     acceptGigOrderService,
     confirmGigOrderContractService,
-    toggleGigStatusService
+    toggleGigStatusService,
+    reconcileAcceptedGigOrdersService
 };

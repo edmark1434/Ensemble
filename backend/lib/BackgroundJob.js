@@ -600,6 +600,24 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Job 8: Accepted gig orders < 2h confirmation reminder & 24h auto-expiration — runs every 5 minutes
+    let isAcceptedGigOrderReconcileRunning = false;
+    cron.schedule("*/5 * * * *", async () => {
+        if (isAcceptedGigOrderReconcileRunning) return;
+        isAcceptedGigOrderReconcileRunning = true;
+        try {
+            const { reconcileAcceptedGigOrdersService } = require('../services/GigServices');
+            const result = await reconcileAcceptedGigOrdersService();
+            if (result && (result.remindedCount > 0 || result.expiredCount > 0)) {
+                console.log(`Accepted gig orders reconciled: ${result.remindedCount} reminder(s), ${result.expiredCount} expired`);
+            }
+        } catch (err) {
+            console.error("Accepted gig order reconciliation failed:", err.message);
+        } finally {
+            isAcceptedGigOrderReconcileRunning = false;
+        }
+    });
+
 }
 
 async function purgeExpiredAuditLogsServices() {

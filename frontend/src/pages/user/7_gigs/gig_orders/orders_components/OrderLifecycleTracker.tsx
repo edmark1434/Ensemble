@@ -1,8 +1,11 @@
-import React from "react";
-import { Check } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Check, Clock } from "lucide-react";
 
 export interface OrderLifecycleTrackerProps {
   currentStatus: string;
+  acceptedAt?: string | null;
+  acceptanceExpiresAt?: string | null;
+  onAcceptanceExpired?: () => void;
   className?: string;
   compact?: boolean;
 }
@@ -24,7 +27,7 @@ export const ORDER_LIFECYCLE_STAGES = [
     badgeColor: "border-blue-400/70 text-blue-600 dark:text-blue-400 bg-blue-500/10",
     activeRing: "ring-2 ring-blue-500/40 border-blue-500/60 dark:border-blue-400/60",
     title: "Seller Accepted",
-    description: "Seller confirmed capacity and timeline. Awaiting client escrow confirmation.",
+    description: "Seller confirmed capacity and timeline. Client has 24 hours to confirm & fund escrow.",
   },
   {
     step: "03",
@@ -54,16 +57,94 @@ export const getOrderStageIndex = (status: string): number => {
   return 1; // Pending
 };
 
+export const computeAcceptanceDeadlineMs = (
+  acceptedAt?: string | null,
+  acceptanceExpiresAt?: string | null
+): number | null => {
+  if (acceptanceExpiresAt) {
+    const t = new Date(acceptanceExpiresAt).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  if (acceptedAt) {
+    const t = new Date(acceptedAt).getTime();
+    if (!Number.isNaN(t)) return t + 24 * 60 * 60 * 1000;
+  }
+  return null;
+};
+
+export const formatRemainingDuration = (remainingMs: number): string => {
+  if (remainingMs <= 0) return "00h 00m 00s";
+  const totalSec = Math.floor(remainingMs / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`;
+};
+
+export const useAcceptanceCountdown = (
+  status?: string | null,
+  acceptedAt?: string | null,
+  acceptanceExpiresAt?: string | null,
+  onExpired?: () => void
+) => {
+  const isAccepted = (status || "").toLowerCase() === "accepted";
+  const deadlineMs = isAccepted ? computeAcceptanceDeadlineMs(acceptedAt, acceptanceExpiresAt) : null;
+
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const [hasTriggeredExpired, setHasTriggeredExpired] = useState(false);
+
+  useEffect(() => {
+    setHasTriggeredExpired(false);
+  }, [deadlineMs, isAccepted]);
+
+  useEffect(() => {
+    if (!isAccepted || !deadlineMs) return;
+    setNowMs(Date.now());
+    const id = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [isAccepted, deadlineMs]);
+
+  const remainingMs = deadlineMs ? Math.max(0, deadlineMs - nowMs) : null;
+  const isExpired = remainingMs !== null && remainingMs <= 0;
+
+  useEffect(() => {
+    if (isAccepted && isExpired && !hasTriggeredExpired && onExpired) {
+      setHasTriggeredExpired(true);
+      onExpired();
+    }
+  }, [isAccepted, isExpired, hasTriggeredExpired, onExpired]);
+
+  return {
+    isAccepted,
+    deadlineMs,
+    remainingMs,
+    isExpired,
+    formatted: remainingMs !== null ? formatRemainingDuration(remainingMs) : null,
+  };
+};
+
 export const OrderLifecycleTracker: React.FC<OrderLifecycleTrackerProps> = ({
   currentStatus,
+  acceptedAt,
+  acceptanceExpiresAt,
+  onAcceptanceExpired,
   className = "",
-  compact = false,
 }) => {
   const isRejected = (currentStatus || "").toLowerCase() === "rejected";
   const isWithdrawn = (currentStatus || "").toLowerCase() === "withdrawn";
   const isCancelled = (currentStatus || "").toLowerCase() === "cancelled";
   const isInactive = isRejected || isWithdrawn || isCancelled;
   const activeStage = getOrderStageIndex(currentStatus);
+
+  const countdown = useAcceptanceCountdown(
+    currentStatus,
+    acceptedAt,
+    acceptanceExpiresAt,
+    onAcceptanceExpired
+  );
 
   return (
     <div className={`space-y-3 font-['Plus_Jakarta_Sans'] ${className}`}>
@@ -74,6 +155,7 @@ export const OrderLifecycleTracker: React.FC<OrderLifecycleTrackerProps> = ({
           const isCurrent = !isInactive && activeStage === stepNumber;
           const isPast = !isInactive && activeStage > stepNumber;
           const isFuture = !isInactive && activeStage < stepNumber;
+          const showStepTimer = isCurrent && stage.key === "Accepted" && countdown.formatted;
 
           return (
             <div
@@ -109,7 +191,7 @@ export const OrderLifecycleTracker: React.FC<OrderLifecycleTrackerProps> = ({
               </div>
 
               {/* Title & Description */}
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <h4
                   className={`text-xs font-bold ${
                     isCurrent
@@ -122,6 +204,13 @@ export const OrderLifecycleTracker: React.FC<OrderLifecycleTrackerProps> = ({
                 <p className="text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed line-clamp-2">
                   {stage.description}
                 </p>
+
+                {showStepTimer && (
+                  <div className="pt-1 flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 font-mono">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>{countdown.formatted} left</span>
+                  </div>
+                )}
               </div>
 
               {/* Bottom Progress Line */}
@@ -149,7 +238,7 @@ export const OrderLifecycleTracker: React.FC<OrderLifecycleTrackerProps> = ({
               ? "This order was declined by the seller."
               : isWithdrawn
               ? "This order was withdrawn by the client."
-              : "This order was cancelled."}
+              : "This order was cancelled or expired after 24 hours without escrow confirmation."}
           </span>
           <span className="uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 rounded bg-rose-200/50 dark:bg-rose-500/20">
             {currentStatus}

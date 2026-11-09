@@ -52,6 +52,8 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   rejected:                   tone("red", i(XCircle)),
   // Gigs
   new_order:                  tone("blue", i(Package)),
+  order_accepted:             tone("green", i(CheckCircle2)),
+  order_confirm_reminder:     tone("orange", i(Clock)),
   GIGR:                       tone("amber", i(Star)),
   // Contracts
   offer_sent:                 tone("indigo", i(FileText)),
@@ -148,7 +150,7 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   create: "Job Posted", save: "Job Saved", JOB_INVITATION: "Job Invitation",
   shortlisted: "Shortlisted", unshortlisted: "Removed from Shortlist",
   accepted: "Proposal Accepted", rejected: "Proposal Rejected",
-  new_order: "New Gig Order", GIGR: "Gig Review",
+  new_order: "New Gig Order", order_accepted: "Order Accepted", order_confirm_reminder: "Confirmation Reminder", GIGR: "Gig Review",
   offer_sent: "Offer Sent", offer_received: "Offer Received", offer_accepted: "Offer Accepted",
   CON: "Contract Event", JOB: "Job Contract", PRP: "Proposal Contract",
   CONTRACT_REVIEW: "New Review", CONTRACT_CLOSED: "Contract Closed",

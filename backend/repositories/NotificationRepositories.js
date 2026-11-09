@@ -95,12 +95,31 @@ async function createCashoutNotificationOnce(notification) {
 async function getNotificationsByAccountId(accountIds) {
     try {
         const query = `
-            SELECT * FROM notifications
-            WHERE account_id = ANY($1::uuid[])
-            ORDER BY created_at DESC;
+            SELECT
+                n.*,
+                gc.gig_request_id AS linked_gig_request_id
+            FROM notifications n
+            LEFT JOIN gig_contracts gc
+                ON gc.contract_id = n.reference_id
+            WHERE n.account_id = ANY($1::uuid[])
+            ORDER BY n.created_at DESC;
         `;
         const { rows } = await pool.query(query, [accountIds]);
-        return rows;
+        return rows.map((row) => {
+            if (
+                row.linked_gig_request_id &&
+                typeof row.reference_path === 'string' &&
+                row.reference_path.startsWith('/contracts/') &&
+                typeof row.message === 'string' &&
+                row.message.includes('Your gig order for') &&
+                row.message.includes('has been accepted')
+            ) {
+                row.reference_path = `/gigs/orders/sent/${row.linked_gig_request_id}`;
+                row.reference_id = row.linked_gig_request_id;
+            }
+            delete row.linked_gig_request_id;
+            return row;
+        });
     } catch (err) {
         console.error("Error fetching notifications:", err);
         throw err;
@@ -146,4 +165,4 @@ module.exports = {
     getNotificationsByAccountId,
     markNotificationAsRead,
     markAllNotificationsAsRead
-}
+};

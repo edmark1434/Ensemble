@@ -1,17 +1,15 @@
-# Current Task: SwipeToast with Bottom Fuse Timer & Notification Click Navigation
+# Current Task: Accepted Gig Order 24-Hour Confirmation Timer, < 2h Reminder & Merit Policy Notice
 
 ## Objectives
-1. Adapt `@react-bits/SwipeToast-JS-TW` (`SwipeToast`) with:
-   - Bottom burning fuse timer (`scaleX(1) -> scaleX(0)` that pauses on hover/drag/blur).
-   - Horizontal **swipe-right** (`dx > 0`) to dismiss immediately (with rubberband resistance when dragging left).
-   - No Undo / action button.
-   - Upper-right placement where new toasts appear at the top and push older toasts downward.
-2. Apply `SwipeToast` to both real-time notification toasts (`user_header.tsx`, `AccountStanding.tsx`) and general app toasts (`showSuccessToast`, `showErrorToast`, `showCustomToast` in `toast.ts`).
-3. Fix clicking notifications in the floating Notifications popup (`UserNotificationModal`) and Full View (`notifications_page.tsx`) so clicking a notification row (especially `NEW FOLLOWER` notifications) reliably navigates to the person's profile (`/profile/${notification.reference_id}`) without being swallowed by `SwipeRow` pointer capture or blocked by the mark-as-read request.
+1. **< 2-Hour Confirmation Reminder Notification (`GigRepositories.js`, `GigServices.js`, `BackgroundJob.js`, `notificationTypes.tsx`)**:
+   - In `expireStaleAcceptedGigOrders` (`backend/repositories/GigRepositories.js`), detect any `Accepted` gig order with less than 2 hours remaining on its 24-hour confirmation window (`gr.updated_at <= NOW() - INTERVAL '22 hours' AND gr.updated_at > NOW() - INTERVAL '24 hours'`) that has not yet received an `order_confirm_reminder` notification.
+   - Create and emit a real-time notification (`reference_prefix: 'order_confirm_reminder'`, pointing to `/gigs/orders/sent/:orderId`) reminding the client that less than 2 hours remain to confirm & fund escrow before the order expires.
+   - Add a 5-minute cron schedule (`reconcileAcceptedGigOrdersService`) in `backend/lib/BackgroundJob.js` so `< 2h` reminders and `24h` expirations fire proactively in real time via WebSocket (`notification` + `gigOrderUpdated`).
+2. **Client Platform Merit Policy Flow (Without Active Deduction Yet) (`sent_order_detail.tsx`, `GigRepositories.js`)**:
+   - Update the 24-hour confirmation banner, decline confirmation modal, and `< 2h` reminder message so the client is clearly informed that failing to confirm/fund an accepted order (or declining after acceptance) may result in a Platform Merit deduction, while keeping actual warning point / merit deduction disabled for now as requested.
 
 ## Acceptance Criteria
-- [x] `SwipeRow` only calls `setPointerCapture` after crossing the drag hysteresis (`HYST = 8px`) in `onPointerMove`, allowing normal clicks on child notification cards to fire reliably.
-- [x] `UserNotificationModal` and `notifications_page.tsx` mark notifications as read optimistically without blocking navigation if the `PATCH` request fails, and resolve `follow` notifications to `/profile/${notification.reference_id}`.
-- [x] `SwipeToast` component created in `frontend/src/components/ui/SwipeToast.tsx` with bottom burning fuse timer and swipe-right dismissal.
-- [x] Applied `SwipeToast` to `toast.ts` (`showSuccessToast`, `showErrorToast`, `showCustomToast`), `user_header.tsx` notification toasts, and `AccountStanding.tsx` warning toasts, positioned at the upper-right (`top: 16, right: 20`).
+- [x] Accepted orders with `< 2 hours` left on the 24-hour confirmation clock send a one-time `order_confirm_reminder` notification (in DB and real-time fuse toast via WebSocket).
+- [x] Background cron job in `backend/lib/BackgroundJob.js` runs every 5 minutes to dispatch `< 2h` reminders and `24h` auto-expirations.
+- [x] Client UI and reminder copy reflect the Platform Merit policy flow without deducting Merit points yet.
 - [x] `cd frontend && npm run build` passes with zero errors.

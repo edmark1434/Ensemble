@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import {
   Loader2,
   ArrowLeft,
@@ -19,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import type { OrdersMainContext } from "./orders_main";
 import { stripMarkdown } from "@/lib/markdownPaste";
+import { computeAcceptanceDeadlineMs, formatRemainingDuration } from "./orders_components/OrderLifecycleTracker";
 
 type OrderSubTab = "all" | "pending" | "inContract" | "inactive";
 
@@ -127,6 +129,7 @@ export const IncomingOrders: React.FC = () => {
 
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [targetGig, setTargetGig] = useState<any>(null);
   const [activeSubTab, setActiveSubTab] = useState<OrderSubTab>("all");
   const [showLifecycleGuide, setShowLifecycleGuide] = useState<boolean>(() => {
@@ -157,34 +160,73 @@ export const IncomingOrders: React.FC = () => {
         .catch(console.error);
     }
 
-    api
-      .get("/api/gigs/orders/incoming")
-      .then((res) => {
-        const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
-        let fetchedOrders = res.data.data || [];
-        if (gigId) {
-          fetchedOrders = fetchedOrders.filter((o: any) => o.gig_id === gigId);
-        }
+    const fetchIncomingOrders = () => {
+      api
+        .get("/api/gigs/orders/incoming")
+        .then((res) => {
+          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
+          let fetchedOrders = res.data.data || [];
+          if (gigId) {
+            fetchedOrders = fetchedOrders.filter((o: any) => o.gig_id === gigId);
+          }
 
-        const formatAvatarUrl = (url: string) => {
-          if (!url) return "";
-          if (url.startsWith("http")) return url;
-          return `${cloudFrontUrl}/${url.replace(/^\//, "")}`;
-        };
+          const formatAvatarUrl = (url: string) => {
+            if (!url) return "";
+            if (url.startsWith("http")) return url;
+            return `${cloudFrontUrl}/${url.replace(/^\//, "")}`;
+          };
 
-        const mappedOrders = fetchedOrders.map((o: any) => ({
-          ...o,
-          client_avatar: formatAvatarUrl(o.client_avatar),
-        }));
+          const mappedOrders = fetchedOrders.map((o: any) => ({
+            ...o,
+            client_avatar: formatAvatarUrl(o.client_avatar),
+          }));
 
-        setOrders(mappedOrders);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load incoming orders:", err);
-        setLoading(false);
-      });
+          setOrders(mappedOrders);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Failed to load incoming orders:", err);
+          setLoading(false);
+        });
+    };
+
+    fetchIncomingOrders();
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleGigOrderUpdated = (payload: { orderId?: string; status?: string }) => {
+      if (!payload?.orderId) return;
+      if (payload.status) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            String(o.id) === String(payload.orderId) ? { ...o, status: payload.status } : o
+          )
+        );
+      }
+      fetchIncomingOrders();
+    };
+
+    socket.on("gigOrderUpdated", handleGigOrderUpdated);
+    return () => {
+      socket.off("gigOrderUpdated", handleGigOrderUpdated);
+    };
   }, [gigId]);
+
+  useEffect(() => {
+    const hasAccepted = orders.some((o) => (o.status || "").toLowerCase() === "accepted");
+    if (!hasAccepted) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [orders]);
+
+  const getAcceptedCountdownLabel = (order: any): string | null => {
+    if ((order.status || "").toLowerCase() !== "accepted") return null;
+    const deadline = computeAcceptanceDeadlineMs(order.updated_at, order.acceptance_expires_at);
+    if (!deadline) return null;
+    return formatRemainingDuration(Math.max(0, deadline - nowMs));
+  };
 
   // Sub-tab counts calculation
   const subTabCounts = useMemo(() => {
@@ -463,6 +505,12 @@ export const IncomingOrders: React.FC = () => {
                       >
                         {badge.label}
                       </span>
+                      {getAcceptedCountdownLabel(order) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">
+                          <Clock className="h-2.5 w-2.5 shrink-0" />
+                          <span>{getAcceptedCountdownLabel(order)} left for client escrow</span>
+                        </span>
+                      )}
                       <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">
                         Received {new Date(order.created_at).toLocaleDateString()}
                       </span>
@@ -532,12 +580,20 @@ export const IncomingOrders: React.FC = () => {
               >
                 <div className="space-y-4">
                   {/* Top Status & Date */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.className}`}
-                    >
-                      {badge.label}
-                    </span>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.className}`}
+                      >
+                        {badge.label}
+                      </span>
+                      {getAcceptedCountdownLabel(order) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">
+                          <Clock className="h-2.5 w-2.5 shrink-0" />
+                          <span>{getAcceptedCountdownLabel(order)}</span>
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">
                       {new Date(order.created_at).toLocaleDateString()}
                     </span>

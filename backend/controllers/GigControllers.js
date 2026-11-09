@@ -294,7 +294,7 @@ async function updateGigController(req, res) {
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
             additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
-            thumbnailFileId, galleryFileIds
+            thumbnailFileId, galleryFileIds, keptGalleryUrls
         } = req.body;
 
         if (!title || !description || !tiers) {
@@ -308,7 +308,7 @@ async function updateGigController(req, res) {
         const gigData = {
             freelancer_account_id, title, description, category, slots, termsOfService,
             firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
-            skills, thumbnailFileId, galleryFileIds
+            skills, thumbnailFileId, galleryFileIds, keptGalleryUrls
         };
 
         await updateGigRepository(gigId, actorIds, gigData);
@@ -386,7 +386,21 @@ async function rejectGigOrderController(req, res) {
         }
 
         const actorIds = await getAuthorizedActorAccountIds(freelancer_account_id);
-        await rejectGigOrderRepository(orderId, actorIds, reason);
+        const result = await rejectGigOrderRepository(orderId, actorIds, reason);
+        try {
+            const io = getIo();
+            if (io) {
+                if (result?.notif && result?.client_account_id) {
+                    io.to(String(result.client_account_id)).emit('notification', result.notif);
+                }
+                io.emit('gigOrderUpdated', {
+                    orderId,
+                    status: 'Rejected',
+                });
+            }
+        } catch (wsErr) {
+            console.error('Error emitting rejectGigOrder WebSocket events:', wsErr);
+        }
         res.status(200).json({ success: true, message: 'Gig order rejected successfully' });
     } catch (error) {
         console.error("Error in rejectGigOrderController:", error);
@@ -404,8 +418,22 @@ async function withdrawGigOrderController(req, res) {
         }
 
         const actorIds = await getAuthorizedActorAccountIds(client_account_id);
-        await withdrawGigOrderRepository(orderId, actorIds);
-        res.status(200).json({ success: true, message: 'Gig order withdrawn successfully' });
+        const result = await withdrawGigOrderRepository(orderId, actorIds);
+        try {
+            const io = getIo();
+            if (io) {
+                if (result?.notif && result?.freelancer_account_id) {
+                    io.to(String(result.freelancer_account_id)).emit('notification', result.notif);
+                }
+                io.emit('gigOrderUpdated', {
+                    orderId,
+                    status: result?.status || 'Withdrawn',
+                });
+            }
+        } catch (wsErr) {
+            console.error('Error emitting withdrawGigOrder WebSocket events:', wsErr);
+        }
+        res.status(200).json({ success: true, message: 'Gig order withdrawn successfully', status: result?.status || 'Withdrawn' });
     } catch (error) {
         console.error("Error in withdrawGigOrderController:", error);
         res.status(500).json({ success: false, message: error.message || 'Failed to withdraw gig order' });

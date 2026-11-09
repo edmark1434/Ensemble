@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 
 import { CreditIcon } from "@/components/ui/credit-icon";
 
@@ -54,7 +55,7 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
-import OrderLifecycleTracker from "./orders_components/OrderLifecycleTracker";
+import OrderLifecycleTracker, { useAcceptanceCountdown } from "./orders_components/OrderLifecycleTracker";
 
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -166,39 +167,67 @@ export const SentOrderDetail = () => {
 
 
 
-  useEffect(() => {
-
+  const fetchOrderData = React.useCallback(() => {
     api
-
       .get(`/api/gigs/orders/${orderId}`)
-
       .then((res) => {
-
         const fetched = res.data.data;
-
         if (fetched) {
-
           fetched.freelancer_avatar = formatAvatarUrl(fetched.freelancer_avatar);
-
           fetched.client_avatar = formatAvatarUrl(fetched.client_avatar);
-
         }
-
         setOrder(fetched);
-
         setLoading(false);
-
       })
-
       .catch((err) => {
-
         console.error("Failed to load sent order:", err);
-
         setLoading(false);
-
       });
-
   }, [orderId]);
+
+  useEffect(() => {
+    fetchOrderData();
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleGigOrderUpdated = (payload: {
+      orderId?: string;
+      status?: string;
+      contractId?: string;
+      updated_at?: string;
+      acceptance_expires_at?: string;
+    }) => {
+      if (!payload || String(payload.orderId) !== String(orderId)) return;
+      if (payload.status) {
+        setOrder((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                status: payload.status,
+                ...(payload.contractId ? { contract_id: payload.contractId } : {}),
+                ...(payload.updated_at ? { updated_at: payload.updated_at } : {}),
+                ...(payload.acceptance_expires_at ? { acceptance_expires_at: payload.acceptance_expires_at } : {}),
+              }
+            : prev
+        );
+      }
+      fetchOrderData();
+    };
+
+    socket.on("gigOrderUpdated", handleGigOrderUpdated);
+    return () => {
+      socket.off("gigOrderUpdated", handleGigOrderUpdated);
+    };
+  }, [orderId, fetchOrderData]);
+
+  const acceptanceCountdown = useAcceptanceCountdown(
+    order?.status,
+    order?.updated_at,
+    order?.acceptance_expires_at,
+    fetchOrderData
+  );
 
 
 
@@ -254,11 +283,22 @@ export const SentOrderDetail = () => {
 
     try {
 
-      await api.put(`/api/gigs/orders/${orderId}/withdraw`);
+      const res = await api.put(`/api/gigs/orders/${orderId}/withdraw`);
 
-      showSuccessToast("Order cancelled.");
+      const nextStatus = res.data?.status || (order?.status === "Accepted" ? "Cancelled" : "Withdrawn");
+      showSuccessToast(
+        order?.status === "Accepted"
+          ? "Accepted order declined and cancelled."
+          : "Order withdrawn."
+      );
+      setShowWithdrawConfirm(false);
 
-      navigate("/gigs/orders/sent");
+      if (order?.status === "Accepted") {
+        setOrder((prev: any) => (prev ? { ...prev, status: nextStatus } : prev));
+        setIsWithdrawing(false);
+      } else {
+        navigate("/gigs/orders/sent");
+      }
 
     } catch (err) {
 
@@ -634,8 +674,57 @@ export const SentOrderDetail = () => {
 
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-4 sm:p-5 shadow-2xs">
 
-          <OrderLifecycleTracker currentStatus={order.status || "Pending"} />
+          <OrderLifecycleTracker
+            currentStatus={order.status || "Pending"}
+            acceptedAt={order.updated_at}
+            acceptanceExpiresAt={order.acceptance_expires_at}
+            onAcceptanceExpired={fetchOrderData}
+          />
         </div>
+
+        {/* 24-Hour Confirmation Countdown Banner for Accepted Orders */}
+        {order.status === "Accepted" && (
+          <div className="rounded-2xl border border-blue-200 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-xs sm:text-sm font-bold text-blue-950 dark:text-blue-200">
+                    Seller Accepted Your Order — Confirm & Fund Within 24 Hours
+                  </h4>
+                  {acceptanceCountdown.formatted && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-500/30">
+                      {acceptanceCountdown.formatted} left
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-blue-900/80 dark:text-blue-200/80 leading-relaxed max-w-2xl">
+                  Please confirm the contract terms and lock the escrow deposit within 24 hours of acceptance so production can begin. Failing to confirm or decline within 24 hours will automatically expire the order and may result in a Platform Merit deduction.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowWithdrawConfirm(true)}
+                className="px-3.5 py-2 rounded-xl border border-red-200 dark:border-red-500/30 bg-white dark:bg-zinc-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <XCircle className="w-4 h-4" />
+                <span>Decline</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Confirm & Fund</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Queue Full Indicator Banner for Pending Orders */}
         {order.status === "Pending" && Number(order.max_slots || 0) > 0 && Number(order.active_orders_count || 0) >= Number(order.max_slots || 0) && (
@@ -1711,16 +1800,20 @@ export const SentOrderDetail = () => {
 
 
             {order.status === "Accepted" && (
-              <div className="flex items-center gap-2">
-                {order.contract_id && (
-                  <button
-                    onClick={() => navigate(`/contracts/${order.contract_id}`)}
-                    className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-blue-200 dark:border-blue-500/30"
-                  >
-                    <span>View Contract</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {acceptanceCountdown.formatted && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold font-mono">
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    <span>{acceptanceCountdown.formatted} left</span>
+                  </span>
                 )}
+                <button
+                  onClick={() => setShowWithdrawConfirm(true)}
+                  className="px-4 py-2 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>Decline Order</span>
+                </button>
                 <button
                   onClick={() => setShowConfirmModal(true)}
                   className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
@@ -1901,12 +1994,14 @@ export const SentOrderDetail = () => {
 
           <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl">
 
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Withdraw Gig Order</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              {order.status === "Accepted" ? "Decline & Cancel Accepted Order" : "Withdraw Gig Order"}
+            </h3>
 
             <p className="text-xs text-gray-500 dark:text-zinc-400 mb-6">
-
-              Are you sure you want to cancel and withdraw this order? The seller will no longer be able to accept it.
-
+              {order.status === "Accepted"
+                ? "Are you sure you want to decline confirmation and cancel this order? No credits have been deducted from your wallet, and the seller will be notified. Note: declining an accepted order may affect your Platform Merit."
+                : "Are you sure you want to cancel and withdraw this order? The seller will no longer be able to accept it."}
             </p>
 
             <div className="flex items-center justify-end gap-3">
@@ -1935,7 +2030,7 @@ export const SentOrderDetail = () => {
 
                 {isWithdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
 
-                <span>Confirm Withdraw</span>
+                <span>{order.status === "Accepted" ? "Confirm Decline" : "Confirm Withdraw"}</span>
 
               </button>
 
