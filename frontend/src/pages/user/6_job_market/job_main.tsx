@@ -44,6 +44,7 @@ export interface JobMainContext {
   filteredJobs: Job[];
   loading: boolean;
   viewType: ViewType;
+  showFilters?: boolean;
   toggleSaveJob: (e: React.MouseEvent, jobId: string) => void;
   handleReportJob: (job: Job) => void;
 }
@@ -524,6 +525,7 @@ const JobMain: React.FC = () => {
                   filteredJobs,
                   loading,
                   viewType,
+                  showFilters,
                   toggleSaveJob,
                   handleReportJob,
                 } satisfies JobMainContext

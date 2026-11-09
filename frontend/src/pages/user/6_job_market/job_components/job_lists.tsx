@@ -1,7 +1,7 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
 import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp, Check, Sparkles } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
@@ -81,6 +81,7 @@ interface JobListProps {
   loading?: boolean;
   activeJobId?: string;
   viewType?: ViewType;
+  showFilters?: boolean;
   onToggleSave: (e: React.MouseEvent, jobId: string) => void;
   onReportJob?: (job: Job) => void;
   baseRoute: string;
@@ -145,11 +146,17 @@ const JobList: React.FC<JobListProps> = ({
   loading,
   activeJobId,
   viewType = "list",
+  showFilters,
   onToggleSave,
   onReportJob,
   baseRoute,
 }) => {
   const navigate = useNavigate();
+  const outletCtx = useOutletContext<{ showFilters?: boolean } | null>();
+  const isFiltersOpen = showFilters ?? outletCtx?.showFilters ?? false;
+  const gridColsClass = isFiltersOpen
+    ? "grid grid-cols-1 md:grid-cols-2 min-[1600px]:grid-cols-3 gap-4"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
     const [currentPage, setCurrentPage] = useState(1);
@@ -177,7 +184,7 @@ const JobList: React.FC<JobListProps> = ({
       <div
         className={
           viewType === "grid"
-            ? "grid grid-cols-2 xl:grid-cols-3 gap-4"
+            ? gridColsClass
             : "space-y-4"
         }
       >
@@ -213,7 +220,7 @@ const JobList: React.FC<JobListProps> = ({
             transition={{ duration: 0.2 }}
             className={`flex-1 ${
               viewType === "grid"
-                ? "grid grid-cols-2 xl:grid-cols-3 gap-4 content-start"
+                ? `${gridColsClass} content-start`
                 : "flex flex-col gap-4"
             }`}
           >

@@ -58,6 +58,7 @@ export interface GigMainContext {
   gigsList: Gig[];
   filteredGigs: Gig[];
   viewType: ViewType;
+  showFilters?: boolean;
   toggleSaveGig: (e: React.MouseEvent, gigId: string) => void;
   getBudgetStatus: (gig: Gig) => GigBudgetStatus;
   handleClearFilters: () => void;
@@ -625,6 +626,7 @@ const GigMain: React.FC = () => {
     filteredGigs,
     loading,
     viewType,
+    showFilters,
     toggleSaveGig,
     getBudgetStatus,
     handleClearFilters,

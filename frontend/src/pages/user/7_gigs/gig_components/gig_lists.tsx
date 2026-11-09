@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp, Layers, Check, Sparkles } from "lucide-react";
 import { computeGigRankingBreakdown } from "../gig_ranking";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
@@ -37,6 +37,7 @@ interface GigListProps {
   gigs: Gig[];
   activeGigId?: string;
   viewType?: ViewType;
+  showFilters?: boolean;
   loading?: boolean;
   onToggleSave: (e: React.MouseEvent, gigId: string) => void;
   baseRoute: string;
@@ -93,12 +94,18 @@ export const GigList: React.FC<GigListProps> = ({
   gigs,
   activeGigId,
   viewType = "grid",
+  showFilters,
   loading,
   onToggleSave,
   baseRoute,
   getBudgetStatus,
 }) => {
   const navigate = useNavigate();
+  const outletCtx = useOutletContext<{ showFilters?: boolean } | null>();
+  const isFiltersOpen = showFilters ?? outletCtx?.showFilters ?? false;
+  const gridColsClass = isFiltersOpen
+    ? "grid grid-cols-1 md:grid-cols-2 min-[1600px]:grid-cols-3 gap-4"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isDevModeOpen = useGlobalState((state) => state.isDevModeOpen);
   const [reportingGig, setReportingGig] = useState<Gig | null>(null);
@@ -131,7 +138,7 @@ export const GigList: React.FC<GigListProps> = ({
 
   if (loading) {
     return (
-      <div className={viewType === "grid" ? "grid grid-cols-2 xl:grid-cols-3 gap-4" : "flex flex-col gap-4"}>
+      <div className={viewType === "grid" ? gridColsClass : "flex flex-col gap-4"}>
         {[1, 2, 3, 4, 5, 6].map((n) => (
           <GigCardSkeleton key={n} viewType={viewType} />
         ))}
@@ -164,7 +171,7 @@ export const GigList: React.FC<GigListProps> = ({
             transition={{ duration: 0.2 }}
             className={`flex-1 ${
               viewType === "grid"
-                ? "grid grid-cols-2 xl:grid-cols-3 gap-4 content-start"
+                ? `${gridColsClass} content-start`
                 : "flex flex-col gap-4"
             }`}
           >
