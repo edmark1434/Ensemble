@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import api from "@/lib/axios";
+import ShapeGrid from "@/components/ui/ShapeGrid";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
+import { convertGigPresetUrlToFile } from "@/lib/defaultGigBanners";
+import { getImageUrl } from "@/lib/utils";
 import useGlobalState from "@/lib/global_state";
 import { GigCreateHeader } from "../gig_components/gig_creation_components/gig_create_header";
 import { GigIdentity } from "../gig_components/gig_creation_components/0_gig_identity";
@@ -18,12 +24,22 @@ export const GigEditPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
+  const theme = useGlobalState((state) => state.theme);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitializingEditor, setIsInitializingEditor] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(2);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializingEditor(false);
+    }, 750);
+    return () => clearTimeout(timer);
+  }, []);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Step 1: Representation & Identity
   const [postingAs, setPostingAs] = useState<"self" | "team">("self");
@@ -97,7 +113,7 @@ export const GigEditPage: React.FC = () => {
           setTitle(data.title || "");
           setCategory(data.category || "");
           setDescription(data.description || "");
-          setThumbnailUrl(data.thumbnail || null);
+          setThumbnailUrl(data.thumbnail ? getImageUrl(data.thumbnail) : null);
           setSlots(Number(data.slots) || 3);
           setTermsOfService(data.termsOfService || data.terms_of_service || "");
           setFirstDraftDelivery(data.firstDraftDelivery || "3 Days");
@@ -184,20 +200,41 @@ export const GigEditPage: React.FC = () => {
             );
           }
 
-          // Load questionnaires
+          // Load questionnaires and separate synthetic NDA / Portfolio flags
           if (Array.isArray(data.questionnaires) && data.questionnaires.length > 0) {
-            setQuestionnaires(
-              data.questionnaires.map((q: any, idx: number) => ({
+            let detectedNDA = false;
+            let detectedPortfolio = false;
+            let detectedDuration = "30";
+            const customQuestions: Questionnaire[] = [];
+
+            data.questionnaires.forEach((q: any, idx: number) => {
+              const qText = String(q.question || "");
+              if (/confidentiality \(NDA\)/i.test(qText)) {
+                detectedNDA = true;
+                return;
+              }
+              const portMatch = qText.match(/Freelancer\/Studio Portfolio.*?\(up to (\d+)s showcase\)/i);
+              if (portMatch) {
+                detectedPortfolio = true;
+                if (portMatch[1]) detectedDuration = portMatch[1];
+                return;
+              }
+              customQuestions.push({
                 id: String(q.id || idx + 1),
                 type: q.type || "text",
-                question: q.question || "",
+                question: qText,
                 isRequired: q.isRequired !== undefined ? Boolean(q.isRequired) : true,
                 multipleAnswer: Boolean(q.multipleAnswer),
                 fileLimit: q.fileLimit || undefined,
                 fileTypes: Array.isArray(q.fileTypes) ? q.fileTypes : [],
                 options: Array.isArray(q.options) ? q.options : [],
-              }))
-            );
+              });
+            });
+
+            setAskNDA(detectedNDA);
+            setAskPortfolio(detectedPortfolio);
+            setPortfolioDuration(detectedDuration);
+            setQuestionnaires(customQuestions);
           }
         }
       } catch (err) {
@@ -221,7 +258,7 @@ export const GigEditPage: React.FC = () => {
       const plainDesc = description.replace(/<[^>]+>/g, "").trim();
       if (!plainDesc) newErrors.description = "Description is required.";
       else if (plainDesc.length < 30) newErrors.description = "Please provide a more detailed description.";
-      if (!thumbnailUrl) newErrors.thumbnail = "Thumbnail image is required.";
+      if (!thumbnailUrl && !thumbnailFile) newErrors.thumbnail = "Thumbnail image is required.";
       if (skills.length === 0) newErrors.skills = "Select at least one skill.";
     } else if (stepToValidate === 3) {
       if (slots < 1) newErrors.slots = "Slots must be at least 1.";
@@ -281,33 +318,50 @@ export const GigEditPage: React.FC = () => {
       let uploadedThumbnailId: string | null = null;
       const uploadedGalleryIds: string[] = [];
 
-      // Upload new thumbnail if file selected
-      if (thumbnailFile) {
-        const upRes = await uploadFileWithIntent(thumbnailFile, "gig_thumbnails");
-        uploadedThumbnailId = upRes?.fileId || null;
-      } else if (thumbnailUrl && (thumbnailUrl.startsWith("/gig_banners/") || thumbnailUrl.startsWith("http"))) {
-        const regRes = await api.post("/api/files/register-url", {
-          url: thumbnailUrl,
-          filename: thumbnailUrl.split("/").pop() || "preset_banner.png",
-        });
-        uploadedThumbnailId = regRes.data?.file?.file_id || null;
-      }
-
-      // Upload or register gallery items (only overwrite gallery if new files uploaded or existing gallery modified)
-      for (const gUrl of galleryUrls) {
-        if (gUrl) {
-          const regRes = await api.post("/api/files/register-url", {
-            url: gUrl,
-            filename: gUrl.split("/").pop() || "gallery_sample.png",
-          });
-          if (regRes.data?.file?.file_id) {
-            uploadedGalleryIds.push(regRes.data.file.file_id);
-          }
+      // Upload new thumbnail if a new file or preset banner was selected
+      let fileToUpload = thumbnailFile;
+      if (!fileToUpload && thumbnailUrl && thumbnailUrl.startsWith("/gig_banners/")) {
+        try {
+          fileToUpload = await convertGigPresetUrlToFile(
+            thumbnailUrl,
+            thumbnailUrl.split("/").pop() || "preset_banner.png"
+          );
+        } catch (e) {
+          console.warn("Could not convert preset banner to file:", e);
         }
       }
+
+      if (fileToUpload) {
+        const upRes = await uploadFileWithIntent(fileToUpload, "gig_thumbnails");
+        uploadedThumbnailId = upRes?.fileId || null;
+      }
+
+      // Upload any newly added work sample files
       for (const gFile of workSampleFiles) {
-        const upRes = await uploadFileWithIntent(gFile, "gig_samples");
+        const upRes = await uploadFileWithIntent(gFile, "gig_galleries");
         if (upRes?.fileId) uploadedGalleryIds.push(upRes.fileId);
+      }
+
+      const finalQuestionnaires = [...questionnaires];
+      if (askNDA) {
+        finalQuestionnaires.push({
+          id: "req-nda-" + Date.now(),
+          type: "choice",
+          question: "Do you require confidentiality (NDA) for this project?",
+          isRequired: true,
+          multipleAnswer: false,
+          options: ["Yes, I require an NDA", "No, standard confidentiality is fine"],
+        });
+      }
+      if (askPortfolio) {
+        finalQuestionnaires.push({
+          id: "req-port-" + Date.now(),
+          type: "choice",
+          question: `Do you allow us to display the final work in our Freelancer/Studio Portfolio after completion (up to ${portfolioDuration || "30"}s showcase)?`,
+          isRequired: true,
+          multipleAnswer: false,
+          options: ["Yes, you can use it", "No, please keep it private"],
+        });
       }
 
       const gigPayload = {
@@ -316,14 +370,20 @@ export const GigEditPage: React.FC = () => {
         description,
         slots,
         termsOfService,
-        firstDraftDelivery,
+        firstDraftDelivery:
+          tiers.length > 0
+            ? tiers[0].daysOfDelivery === 1
+              ? "1 Day"
+              : `${tiers[0].daysOfDelivery} Days`
+            : firstDraftDelivery,
         additionalWorkRate,
         tiers,
         addOns,
         milestones,
-        questionnaires,
+        questionnaires: finalQuestionnaires,
         skills,
         thumbnailFileId: uploadedThumbnailId,
+        keptGalleryUrls: galleryUrls,
         galleryFileIds: uploadedGalleryIds.length > 0 ? uploadedGalleryIds : undefined,
       };
 
@@ -344,147 +404,291 @@ export const GigEditPage: React.FC = () => {
     navigate(`/gigs/services/${id}/page`);
   };
 
-  if (isLoading) {
+  if (isLoading || isInitializingEditor) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        {/* Background Grid */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Loading Service Editor
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Retrieving your service specifications, milestones, and pricing packages...
+            </p>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-colors duration-300 font-['Plus_Jakarta_Sans',sans-serif]">
-      <div className="pointer-events-none fixed inset-0 z-0 opacity-60 dark:opacity-30">
-        <div className="absolute -top-40 left-1/2 h-96 w-[60rem] -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12 font-['Plus_Jakarta_Sans',sans-serif] transition-colors duration-300">
+      {/* Background Grid Animation */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+        <ShapeGrid
+          shape="square"
+          squareSize={48}
+          direction="diagonal"
+          speed={0.4}
+          borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+          hoverTrailAmount={3}
+        />
       </div>
+
+      <FloatingCreditsPill />
 
       {/* Wide container matching gig_create_page.tsx */}
-      <div className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6">
-        <GigCreateHeader
-          currentStep={currentSlide}
-          maxReachedStep={6}
-          hasReachedReview={true}
-          onStepClick={(stepId) => handleStepJump(stepId)}
-        />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6"
+      >
+        {/* Title Heading Display */}
+        <motion.div
+          initial={{ opacity: 0, y: -15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+        >
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+            Editing Service Post
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
+            Update the details below to modify your service offering on the marketplace.
+          </p>
+        </motion.div>
 
-        <div className="mt-2">
-          {currentSlide === 1 && (
-            <GigIdentity
-              postingAs={postingAs}
-              setPostingAs={setPostingAs}
-              actingTeamId={actingTeamId}
-              setActingTeamId={setActingTeamId}
-              includedMemberIds={includedMemberIds}
-              setIncludedMemberIds={setIncludedMemberIds}
-              onNext={() => handleNext(2)}
-              isEditMode={true}
-            />
-          )}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
+        >
+          <GigCreateHeader
+            currentSlide={currentSlide}
+            onReturn={() => navigate(`/gigs/services/${id}/page`)}
+            maxReachedStep={6}
+            hasReachedReview={true}
+            onJumpToReview={() => handleStepJump(6)}
+            onStepClick={(stepId) => handleStepJump(stepId)}
+          />
+        </motion.div>
 
-          {currentSlide === 2 && (
-            <CreateCoreInfo
-              title={title}
-              setTitle={setTitle}
-              category={category}
-              setCategory={setCategory}
-              description={description}
-              setDescription={setDescription}
-              thumbnailUrl={thumbnailUrl}
-              setThumbnailUrl={setThumbnailUrl}
-              setThumbnailFile={setThumbnailFile}
-              skills={skills}
-              setSkills={setSkills}
-              errors={errors}
-              setErrors={setErrors}
-              onNext={() => handleNext(3)}
-            />
-          )}
+        {/* Form Box Wrapper with Slide Transition */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 lg:p-10 backdrop-blur-xl shadow-2xl space-y-6 w-full"
+        >
+          <AnimatePresence mode="wait">
+            {currentSlide === 1 && (
+              <motion.div
+                key="slide1"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <GigIdentity
+                  postingAs={postingAs}
+                  setPostingAs={setPostingAs}
+                  actingTeamId={actingTeamId}
+                  setActingTeamId={setActingTeamId}
+                  includedMemberIds={includedMemberIds}
+                  setIncludedMemberIds={setIncludedMemberIds}
+                  onNext={() => handleNext(2)}
+                  isEditMode={true}
+                />
+              </motion.div>
+            )}
 
-          {currentSlide === 3 && (
-            <GigTerms
-              termsOfService={termsOfService}
-              setTermsOfService={setTermsOfService}
-              selectedTosId={selectedTosId}
-              setSelectedTosId={setSelectedTosId}
-              workSampleFiles={workSampleFiles}
-              setWorkSampleFiles={setWorkSampleFiles}
-              galleryUrls={galleryUrls}
-              setGalleryUrls={setGalleryUrls}
-              slots={slots}
-              setSlots={setSlots}
-              additionalWorkRate={additionalWorkRate}
-              setAdditionalWorkRate={setAdditionalWorkRate}
-              askNDA={askNDA}
-              setAskNDA={setAskNDA}
-              askPortfolio={askPortfolio}
-              setAskPortfolio={setAskPortfolio}
-              portfolioDuration={portfolioDuration}
-              setPortfolioDuration={setPortfolioDuration}
-              questionnaires={questionnaires}
-              setQuestionnaires={setQuestionnaires}
-              errors={errors}
-              setErrors={setErrors}
-              onNext={() => handleNext(4)}
-              onBack={handleBack}
-            />
-          )}
+            {currentSlide === 2 && (
+              <motion.div
+                key="slide2"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CreateCoreInfo
+                  title={title}
+                  setTitle={setTitle}
+                  category={category}
+                  setCategory={setCategory}
+                  description={description}
+                  setDescription={setDescription}
+                  previewUrl={thumbnailUrl}
+                  setPreviewUrl={setThumbnailUrl}
+                  setThumbnailFile={setThumbnailFile}
+                  isDragging={isDragging}
+                  setIsDragging={setIsDragging}
+                  skills={skills}
+                  setSkills={setSkills}
+                  errors={errors}
+                  setErrors={setErrors}
+                  postingAs={postingAs}
+                  onNext={() => handleNext(3)}
+                  onBack={() => handleNext(1)}
+                  onDiscard={() => navigate(`/gigs/services/${id}/page`)}
+                />
+              </motion.div>
+            )}
 
-          {currentSlide === 4 && (
-            <GigMilestones
-              milestones={milestones}
-              setMilestones={setMilestones}
-              errors={errors}
-              setErrors={setErrors}
-              onNext={() => handleNext(5)}
-              onBack={handleBack}
-            />
-          )}
+            {currentSlide === 3 && (
+              <motion.div
+                key="slide3"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <GigTerms
+                  termsOfService={termsOfService}
+                  setTermsOfService={setTermsOfService}
+                  selectedTosId={selectedTosId}
+                  setSelectedTosId={setSelectedTosId}
+                  workSampleFiles={workSampleFiles}
+                  setWorkSampleFiles={setWorkSampleFiles}
+                  galleryUrls={galleryUrls}
+                  setGalleryUrls={setGalleryUrls}
+                  slots={slots}
+                  setSlots={setSlots}
+                  additionalWorkRate={additionalWorkRate}
+                  setAdditionalWorkRate={setAdditionalWorkRate}
+                  askNDA={askNDA}
+                  setAskNDA={setAskNDA}
+                  askPortfolio={askPortfolio}
+                  setAskPortfolio={setAskPortfolio}
+                  portfolioDuration={portfolioDuration}
+                  setPortfolioDuration={setPortfolioDuration}
+                  questionnaires={questionnaires}
+                  setQuestionnaires={setQuestionnaires}
+                  errors={errors}
+                  setErrors={setErrors}
+                  onNext={() => handleNext(4)}
+                  onBack={handleBack}
+                />
+              </motion.div>
+            )}
 
-          {currentSlide === 5 && (
-            <CreateTiers
-              tiers={tiers}
-              setTiers={setTiers}
-              addOns={addOns}
-              setAddOns={setAddOns}
-              errors={errors}
-              setErrors={setErrors}
-              onNext={() => handleNext(6)}
-              onBack={handleBack}
-            />
-          )}
+            {currentSlide === 4 && (
+              <motion.div
+                key="slide4"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <GigMilestones
+                  milestones={milestones}
+                  setMilestones={setMilestones}
+                  tiers={tiers}
+                  setTiers={setTiers}
+                  additionalWorkRate={additionalWorkRate}
+                  setAdditionalWorkRate={setAdditionalWorkRate}
+                  errors={errors}
+                  setErrors={setErrors}
+                  onNext={() => handleNext(5)}
+                  onBack={handleBack}
+                />
+              </motion.div>
+            )}
 
-          {currentSlide === 6 && (
-            <CreateReview
-              title={title}
-              description={description}
-              category={category}
-              thumbnailUrl={thumbnailUrl}
-              slots={slots}
-              termsOfService={termsOfService}
-              skills={skills}
-              firstDraftDelivery={firstDraftDelivery}
-              workSampleFiles={workSampleFiles}
-              galleryUrls={galleryUrls}
-              tiers={tiers}
-              addOns={addOns}
-              milestones={milestones}
-              additionalWorkRate={additionalWorkRate}
-              questionnaires={questionnaires}
-              askNDA={askNDA}
-              askPortfolio={askPortfolio}
-              portfolioDuration={portfolioDuration}
-              postingAs={postingAs}
-              actingTeamId={actingTeamId}
-              includedMemberIds={includedMemberIds}
-              onBack={handleBack}
-              onSubmit={handleSubmit}
-              onEditStep={(step) => handleStepJump(step)}
-              isSubmitting={isSubmitting}
-              isEditMode={true}
-            />
-          )}
-        </div>
-      </div>
+            {currentSlide === 5 && (
+              <motion.div
+                key="slide5"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CreateTiers
+                  tiers={tiers}
+                  setTiers={setTiers}
+                  addOns={addOns}
+                  setAddOns={setAddOns}
+                  gigTitle={title}
+                  gigDescription={description}
+                  gigCategory={category}
+                  gigSkills={skills}
+                  isTeam={postingAs === "team"}
+                  additionalWorkRate={additionalWorkRate}
+                  setAdditionalWorkRate={setAdditionalWorkRate}
+                  errors={errors}
+                  setErrors={setErrors}
+                  onNext={() => handleNext(6)}
+                  onBack={handleBack}
+                />
+              </motion.div>
+            )}
+
+            {currentSlide === 6 && (
+              <motion.div
+                key="slide6"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CreateReview
+                  title={title}
+                  description={description}
+                  category={category}
+                  thumbnailUrl={thumbnailUrl}
+                  slots={slots}
+                  termsOfService={termsOfService}
+                  skills={skills}
+                  firstDraftDelivery={firstDraftDelivery}
+                  workSampleFiles={workSampleFiles}
+                  galleryUrls={galleryUrls}
+                  tiers={tiers}
+                  addOns={addOns}
+                  milestones={milestones}
+                  additionalWorkRate={additionalWorkRate}
+                  questionnaires={questionnaires}
+                  askNDA={askNDA}
+                  askPortfolio={askPortfolio}
+                  portfolioDuration={portfolioDuration}
+                  postingAs={postingAs}
+                  actingTeamId={actingTeamId}
+                  includedMemberIds={includedMemberIds}
+                  onBack={handleBack}
+                  onSubmit={handleSubmit}
+                  onEditStep={(step) => handleStepJump(step)}
+                  isSubmitting={isSubmitting}
+                  isEditMode={true}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
 
       <CreationSuccess
         isOpen={isSuccessOpen}

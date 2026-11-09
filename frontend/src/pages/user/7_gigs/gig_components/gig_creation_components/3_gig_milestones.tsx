@@ -472,19 +472,20 @@ export const GigMilestones: React.FC<GigMilestonesProps> = ({
   const [isBalanceCollapsed, setIsBalanceCollapsed] = useState(false);
 
   // Selected Reference Tier for budget transfer & timeline preview (defaults to Standard or first tier)
+  const safeTiers = Array.isArray(tiers) ? tiers : [];
   const [selectedTierIdx, setSelectedTierIdx] = useState<number>(() => {
-    const stdIdx = tiers.findIndex((t) => t.tierName.toLowerCase() === "standard");
+    const stdIdx = safeTiers.findIndex((t) => t?.tierName?.toLowerCase() === "standard");
     return stdIdx >= 0 ? stdIdx : 0;
   });
 
-  const activeTier = tiers[selectedTierIdx] || tiers[0] || { price: 150, daysOfDelivery: 4, tierName: "Standard" };
+  const activeTier = safeTiers[selectedTierIdx] || safeTiers[0] || { price: 150, daysOfDelivery: 4, tierName: "Standard" };
   const activeBudget = Number(activeTier.price) || 150;
   const totalTimelineDays = Math.max(1, Number(activeTier.daysOfDelivery) || 4);
   const totalTimelineHours = totalTimelineDays * 24;
 
-  const bDays = Number(tiers[0]?.daysOfDelivery) || 2;
-  const sDays = Number(tiers[1]?.daysOfDelivery) || 4;
-  const pDays = Number(tiers[2]?.daysOfDelivery) || 7;
+  const bDays = Number(safeTiers[0]?.daysOfDelivery) || 2;
+  const sDays = Number(safeTiers[1]?.daysOfDelivery) || 4;
+  const pDays = Number(safeTiers[2]?.daysOfDelivery) || 7;
 
   // Initialize with 2-Phase default if empty
   useEffect(() => {

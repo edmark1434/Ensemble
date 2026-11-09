@@ -12,6 +12,7 @@ import { SkillsAutocomplete } from "../../../6_job_market/job_components/job_cre
 import { JobRichText } from "../../../6_job_market/job_components/JobRichText";
 import { handleRichTextPaste, autoFormatDescription } from "@/lib/markdownPaste";
 import { DEFAULT_GIG_BANNERS, type DefaultGigBanner, convertGigPresetUrlToFile } from "@/lib/defaultGigBanners";
+import { getImageUrl } from "@/lib/utils";
 import api from "@/lib/axios";
 
 export const categories = [
@@ -709,7 +710,14 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
               {previewUrl ? (
                 <>
                   <img
-                    src={previewUrl}
+                    src={
+                      previewUrl.startsWith("blob:") ||
+                      previewUrl.startsWith("data:") ||
+                      previewUrl.startsWith("/") ||
+                      previewUrl.startsWith("http")
+                        ? previewUrl
+                        : getImageUrl(previewUrl)
+                    }
                     alt="Thumbnail preview"
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />

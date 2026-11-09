@@ -15,6 +15,7 @@ import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
 import { GigsOtherServices } from "./gigs_other_services";
+import { JobRichText } from "../../6_job_market/job_components/JobRichText";
 import useGlobalState from "@/lib/global_state";
 import { formatDistanceToNow } from "date-fns";
 
@@ -940,10 +941,9 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 {/* 4. ABOUT THIS SERVICE */}
                 <section className="pt-2">
                   <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">About This Service</h3>
-                  <div
-                    className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
-                  />
+                  <div className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] text-sm text-gray-700 dark:text-zinc-300 leading-relaxed shadow-sm">
+                    <JobRichText content={gig.description} />
+                  </div>
                 </section>
 
                 {/* 5. RATES & REVIEWS */}

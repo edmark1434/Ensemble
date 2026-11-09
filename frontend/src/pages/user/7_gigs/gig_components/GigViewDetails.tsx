@@ -12,6 +12,7 @@ import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
+import { JobRichText } from "../../6_job_market/job_components/JobRichText";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -517,10 +518,9 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
                   About This Service
                 </h4>
-                <div
-                  className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
-                  dangerouslySetInnerHTML={{ __html: selectedGig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
-                />
+                <div className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl">
+                  <JobRichText content={selectedGig.description} />
+                </div>
               </div>
 
               {/* Skills Applied */}
