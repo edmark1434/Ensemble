@@ -6,6 +6,7 @@ import useGlobalState from "@/lib/global_state";
 import { ArrowLeft, Send, ExternalLink, LoaderCircle, Star, Check, Lock, RotateCcw, ShieldCheck, ListChecks } from 'lucide-react';
 import { MilestoneActivityFeed } from './MilestoneActivityFeed';
 import UserHeader from "@/components/nav/user_header";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import { RateReviewModal } from './RateReviewModal';
 import socket from '@/lib/socket';
 
@@ -13,7 +14,7 @@ export const DashboardTaskDetail = () => {
     const { id } = useParams(); // contractId
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useGlobalState();
+    const { user, isGuestMode, isVerified } = useGlobalState();
     
     const [task, setTask] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -147,8 +148,9 @@ export const DashboardTaskDetail = () => {
             : 'bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 font-bold';
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
+        <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base">
             <UserHeader pageTitle={isFreelancer ? "My Task" : "To Review"} />
+            {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="deliveries and tasks" />}
             
             <div className="mx-auto flex min-h-[calc(100dvh-100px)] max-w-7xl flex-col p-4 sm:p-6 md:p-8 lg:h-[calc(100vh-100px)] lg:min-h-0">
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:flex-1 lg:min-h-0 lg:gap-8">

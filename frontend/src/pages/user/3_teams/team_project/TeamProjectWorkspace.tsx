@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/axios';
 import UserHeader from '@/components/nav/user_header';
+import { UnverifiedOverlay } from '@/components/ui/UnverifiedOverlay';
 import useGlobalState from '@/lib/global_state';
 import socket from '@/lib/socket';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
@@ -110,7 +111,7 @@ export const TeamProjectWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, setIsFloatingChatHidden } = useGlobalState();
+  const { user, isGuestMode, isVerified, setIsFloatingChatHidden } = useGlobalState();
   const currentUserAccountId = user?.account_id || user?.id || '';
 
   const rawTab = searchParams.get('tab');
@@ -473,8 +474,9 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
+      <div className="relative min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
         <UserHeader />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="workspaces" />}
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-36 space-y-6">
           {/* Navigation Skeleton */}
           <div className="flex items-center justify-between">
@@ -573,8 +575,9 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-dark-base flex flex-col">
+      <div className="relative min-h-screen bg-zinc-50 dark:bg-dark-base flex flex-col">
         <UserHeader />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="workspaces" />}
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-sm">
             <Lock className="w-12 h-12 text-zinc-400 dark:text-zinc-500 mx-auto" />
@@ -627,8 +630,9 @@ export const TeamProjectWorkspace: React.FC = () => {
   const isLockedOrArchived = isArchived || Boolean(pendingReviewContract) || Boolean(awaitingCounterpartyContract);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
+    <div className="relative min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
       <UserHeader />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="workspaces" />}
 
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-36 space-y-6">
         {/* Navigation & Breadcrumbs: Return to Workspaces + Go to Deliveries */}

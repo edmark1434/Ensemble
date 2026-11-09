@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
+import useGlobalState from "@/lib/global_state";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import { showErrorToast } from "@/components/utility/toast";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { WorkspaceInfoTab } from "./WorkspaceInfoTab";
@@ -102,6 +104,7 @@ const WorkspaceCardSkeleton = () => (
 export default function Workspaces() {
   const navigate = useNavigate();
   const [workspaces, setWorkspaces] = useState<WorkspaceTeam[]>([]);
+  const { isGuestMode, isVerified } = useGlobalState();
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -451,8 +454,9 @@ export default function Workspaces() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Workspaces" />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="workspaces" />}
 
       <div data-tour="workspaces-container" className="mx-auto max-w-7xl p-6 md:p-8">
         {/* Top Search & Filter Bar (Only shown on workspace tabs, hidden on Info tab) */}

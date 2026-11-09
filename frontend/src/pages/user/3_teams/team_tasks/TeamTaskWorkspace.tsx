@@ -4,6 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
+import useGlobalState from "@/lib/global_state";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import TeamTaskModal from "./TeamTaskModal";
 import WorkspaceMembersModal from "./WorkspaceMembersModal";
@@ -39,6 +41,7 @@ function activityText(action: string) {
 
 export default function TeamTaskWorkspace() {
   const { id = "", contractId = "" } = useParams();
+  const { isGuestMode, isVerified } = useGlobalState();
   const navigate = useNavigate();
   const [data, setData] = useState<TeamWorkspaceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,15 +175,16 @@ export default function TeamTaskWorkspace() {
   };
 
   if (loading || !data) {
-    return <div className="min-h-screen"><UserHeader pageTitle="Team Workspace" /><div className="space-y-5 p-6"><div className="h-24 animate-pulse rounded-xl bg-white/5" /><div className="grid gap-4 lg:grid-cols-4">{[0,1,2,3].map((item) => <div key={item} className="h-96 animate-pulse rounded-xl bg-white/5" />)}</div></div></div>;
+    return <div className="relative min-h-screen"><UserHeader pageTitle="Team Workspace" />{!isGuestMode && !isVerified && <UnverifiedOverlay featureName="workspaces" />}<div className="space-y-5 p-6"><div className="h-24 animate-pulse rounded-xl bg-white/5" /><div className="grid gap-4 lg:grid-cols-4">{[0,1,2,3].map((item) => <div key={item} className="h-96 animate-pulse rounded-xl bg-white/5" />)}</div></div></div>;
   }
 
   const completed = data.tasks.filter((task) => task.status === "completed").length;
   const progress = data.tasks.length ? Math.round((completed / data.tasks.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
+    <div className="relative min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Team Workspace" />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="workspaces" />}
       <main className="mx-auto max-w-[1800px] p-4 sm:p-6">
         <button type="button" onClick={() => navigate(`/teams/${id}`)} className="mb-4 inline-flex cursor-pointer items-center gap-2 text-sm text-zinc-500 hover:text-blue-400"><ArrowLeft className="h-4 w-4" />Back to Team</button>
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none">
