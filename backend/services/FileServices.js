@@ -22,7 +22,7 @@ dotenv.config();
 // Read from environment variables with defaults
 const DEFAULT_UPLOAD_FOLDERS = ['profile', 'documents', 'assets', 'asset-originals', 'forum', 'gallery', 'jobs', 'proposals', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers', 'gig_orders', 'gig_thumbnails', 'gig_galleries', 'ticket-attachments'];
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS
-    ? [...new Set([...process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim()), 'ticket-attachments', 'proposals', 'jobs'])]
+    ? [...new Set([...process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim()), 'ticket-attachments', 'proposals', 'jobs', 'gig_thumbnails', 'gig_galleries', 'gig_orders'])]
     : DEFAULT_UPLOAD_FOLDERS;
 
 const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES

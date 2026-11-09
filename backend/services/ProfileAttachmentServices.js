@@ -4,6 +4,7 @@ const {
   createProfileAttachmentRepository,
   deleteProfileAttachmentRepository,
 } = require('../repositories/ProfileAttachmentRepositories');
+const { getProjectForPortfolioByAccount } = require('../repositories/ProjectRepositories');
 
 class ProfileAttachmentError extends Error {
   constructor(message, statusCode = 400) {
@@ -59,11 +60,68 @@ async function createProfileAttachmentService(accountId, payload) {
   const description = String(payload?.description || '').trim().slice(0, 2000) || null;
   let externalUrl = null;
   let file = null;
+  let metadata = payload?.metadata && typeof payload.metadata === 'object' ? { ...payload.metadata } : {};
 
   if (kind === 'file') {
     const fileId = String(payload.file_id || '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(fileId)) throw new ProfileAttachmentError('Verified file is required');
     file = validateFile(await getOwnedFinalizedFileRepository(accountId, fileId));
+  } else if (type === 'project') {
+    const projectId = String(payload.project_id || metadata.project_id || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(projectId)) {
+      throw new ProfileAttachmentError('Valid project is required');
+    }
+
+    const project = await getProjectForPortfolioByAccount(accountId, projectId);
+    if (!project) {
+      throw new ProfileAttachmentError('Project not found or you do not have access to it', 403);
+    }
+
+    if (!project.portfolioUseAllowed) {
+      throw new ProfileAttachmentError('Client did not permit portfolio use for this project', 403);
+    }
+
+    const projectDuration = Math.max(1, Number(project.duration_seconds) || 60);
+    const maxAllowedSeconds = project.portfolioUseDurationSeconds
+      ? Math.min(Number(project.portfolioUseDurationSeconds), projectDuration)
+      : projectDuration;
+
+    const clipStart = Math.max(0, Number(payload.clip_start_seconds ?? metadata.clip_start_seconds ?? 0));
+    const clipEnd = Number(
+      payload.clip_end_seconds ?? metadata.clip_end_seconds ?? Math.min(clipStart + maxAllowedSeconds, projectDuration)
+    );
+
+    if (!Number.isFinite(clipStart) || !Number.isFinite(clipEnd) || clipEnd <= clipStart) {
+      throw new ProfileAttachmentError('End timestamp must be greater than start timestamp');
+    }
+    if (clipEnd > projectDuration + 0.5) {
+      throw new ProfileAttachmentError(`Selected timestamp exceeds project duration (${projectDuration}s)`);
+    }
+    if (project.portfolioUseDurationSeconds && (clipEnd - clipStart) > Number(project.portfolioUseDurationSeconds) + 0.5) {
+      throw new ProfileAttachmentError(
+        `Selected clip duration (${Math.round(clipEnd - clipStart)}s) exceeds the client's allowed limit of ${project.portfolioUseDurationSeconds}s`
+      );
+    }
+
+    externalUrl = `https://ensemble.local/projects/${project.id}`;
+    metadata = {
+      ...metadata,
+      project_id: project.id,
+      project_name: project.name,
+      role: project.role,
+      shared_by: project.clientName || project.sharedBy || null,
+      contract_title: project.contractTitle || null,
+      is_shared_project: Boolean(project.isSharedProject),
+      portfolio_use_allowed: true,
+      max_allowed_seconds: project.portfolioUseDurationSeconds ? Number(project.portfolioUseDurationSeconds) : null,
+      project_duration_seconds: projectDuration,
+      clip_start_seconds: Math.round(clipStart * 10) / 10,
+      clip_end_seconds: Math.round(clipEnd * 10) / 10,
+      thumbnail_path: project.thumbnailPath || null,
+      video_path: project.videoPath || null,
+      width: project.width || null,
+      height: project.height || null,
+    };
   } else {
     try {
       const parsed = new URL(String(payload.external_url || '').trim());
@@ -83,7 +141,7 @@ async function createProfileAttachmentService(accountId, payload) {
     external_url: externalUrl,
     is_public: payload.is_public !== false,
     display_order: Number.isInteger(payload.display_order) ? payload.display_order : 0,
-    metadata: payload.metadata,
+    metadata,
   });
   const attachments = await getProfileAttachmentsRepository(accountId, true);
   return attachments.find((item) => String(item.account_attachment_id) === String(attachmentId));

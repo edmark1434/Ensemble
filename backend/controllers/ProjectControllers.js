@@ -8,6 +8,14 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function buildCloudfrontUrl(path) {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    if (!process.env.CLOUDFRONT_URL) return path;
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${process.env.CLOUDFRONT_URL}/${cleanPath}`;
+}
+
 async function getProjectsController(req, res) {
     try {
         const userId = req.user.userId || req.user.user_id;
@@ -21,14 +29,17 @@ async function getProjectsController(req, res) {
                 status: p.status,
                 width: p.width,
                 height: p.height,
-                duration_seconds: p.duration_seconds,
+                duration_seconds: Number(p.duration_seconds) || 60,
                 lastUpdated: p.lastUpdated,
                 role: p.role,
-                sharedBy: p.role === 'Owner' ? null : p.sharedBy,
+                sharedBy: p.role === 'Owner' && !p.isSharedProject ? null : (p.clientName || p.sharedBy),
+                isSharedProject: Boolean(p.isSharedProject),
+                portfolioUseAllowed: Boolean(p.portfolioUseAllowed),
+                portfolioUseDurationSeconds: p.portfolioUseDurationSeconds ? Number(p.portfolioUseDurationSeconds) : null,
+                contractTitle: p.contractTitle || null,
                 size: formatBytes(Number(p.size_bytes)),
-                thumbnailUrl: p.thumbnailPath && process.env.CLOUDFRONT_URL
-                    ? `${process.env.CLOUDFRONT_URL}/${p.thumbnailPath}`
-                    : null
+                thumbnailUrl: buildCloudfrontUrl(p.thumbnailPath),
+                videoUrl: buildCloudfrontUrl(p.videoPath),
             }))
         });
     } catch (error) {

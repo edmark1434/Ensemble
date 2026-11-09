@@ -688,7 +688,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                 <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase">
-                      Featured Work
+                      Latest Gallery
                     </h3>
                     {onViewMoreGallery && (
                       <button

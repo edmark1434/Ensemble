@@ -76,12 +76,11 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
           const mapUrl = (path?: string) => {
             if (!path) return "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80";
             if (path.startsWith("http") || path.startsWith("/")) return path;
-            return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+            return `${cloudFrontUrl}${path.startsWith("/") ? "" : "/"}${path}`;
           };
 
           const userGigs = response.data.data
             .filter((g: any) => {
-              // g.freelancerAccountId is returned by getAllGigsRepository
               const creatorId =
                 g.freelancerAccountId ??
                 g.freelancer_account_id ??
@@ -149,30 +148,33 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
       </div>
 
       {isLoading ? (
-        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-4">
           {Array.from({ length: 3 }).map((_, idx) => (
             <div
               key={idx}
-              className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 animate-pulse"
+              className="flex flex-col sm:flex-row gap-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 animate-pulse"
             >
-              <div>
-                <div className="mb-3 h-36 w-full rounded-xl bg-gray-200 dark:bg-zinc-800" />
-                <div className="mb-2 flex items-center gap-1.5">
-                  <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
-                  <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+              <div className="h-36 sm:h-32 sm:w-48 shrink-0 rounded-xl bg-gray-200 dark:bg-zinc-800" />
+              <div className="flex flex-1 flex-col justify-between min-w-0">
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
+                      <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                    </div>
+                    <div className="h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
+                  </div>
+                  <div className="mb-1.5 h-4 w-2/3 rounded bg-gray-200 dark:bg-zinc-800" />
+                  <div className="mb-1 h-3 w-full rounded bg-gray-200 dark:bg-zinc-800" />
+                  <div className="mb-3 h-3 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
                 </div>
-                <div className="mb-2 h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
-                <div className="mb-1.5 h-4 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
-                <div className="mb-1 h-3 w-full rounded bg-gray-200 dark:bg-zinc-800" />
-                <div className="mb-3 h-3 w-2/3 rounded bg-gray-200 dark:bg-zinc-800" />
-                <div className="flex gap-1.5 mb-1">
-                  <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
-                  <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                <div className="pt-2 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
+                  <div className="flex gap-1.5">
+                    <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                    <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                  </div>
+                  <div className="h-4 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
                 </div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
-                <div className="h-3 w-20 rounded bg-gray-200 dark:bg-zinc-800" />
-                <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
               </div>
             </div>
           ))}
@@ -192,7 +194,7 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="flex flex-col gap-4">
           {services.map((gig) => (
             <div
               key={gig.id}
@@ -200,100 +202,106 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
                 navigate(`/gigs/services/${gig.id}/page`);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 p-4 transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
+              className="group relative flex flex-col sm:flex-row cursor-pointer gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 p-4 transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
             >
-              <button
-                onClick={(e) => handleToggleSave(e, gig.id)}
-                className={`absolute top-4 right-4 z-10 p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center justify-center ${
-                  gig.isSaved
-                    ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30"
-                    : "bg-black/30 text-white/80 hover:bg-black/50 hover:text-white"
-                }`}
-                title="Save Gig"
-              >
-                <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
-              </button>
-
-              <div className="flex-1">
-                <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
-                  <img
-                    src={gig.thumbnail}
-                    alt={gig.title}
-                    className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
-                </div>
-
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  <span
-                    className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
-                      gig.status?.toLowerCase() === "closed"
-                        ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
-                        : "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-                    }`}
-                  >
-                    {gig.status}
-                  </span>
-                  {gig.category && (
-                    <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                      {gig.category}
-                    </span>
-                  )}
-                  {gig.tiersCount > 0 && (
-                    <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                      {gig.tiersCount} Package{gig.tiersCount !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-
-                <div className="mb-1 flex items-center gap-1 text-base font-black text-yellow-500">
-                  <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
-                  <span>{gig.price.toLocaleString()}</span>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wide ml-1">
-                    Starting at
-                  </span>
-                </div>
-
-                <h3
-                  className="mb-1 line-clamp-1 text-sm font-bold text-gray-900 dark:text-white transition-colors group-hover:text-blue-500 dark:group-hover:text-blue-400"
-                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              {/* Left Thumbnail */}
+              <div className="relative h-40 sm:h-36 sm:w-52 shrink-0 overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
+                <img
+                  src={gig.thumbnail}
+                  alt={gig.title}
+                  className="h-full w-full object-cover opacity-85 transition-transform duration-300 group-hover:scale-105"
+                />
+                <button
+                  onClick={(e) => handleToggleSave(e, gig.id)}
+                  className={`absolute top-2.5 right-2.5 z-10 p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center justify-center ${
+                    gig.isSaved
+                      ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30"
+                      : "bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
+                  }`}
+                  title="Save Gig"
                 >
-                  {gig.title}
-                </h3>
+                  <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
+                </button>
+              </div>
 
-                <div className="mb-3">
-                  <p className="line-clamp-2 text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed">
+              {/* Right Content */}
+              <div className="flex flex-1 flex-col justify-between min-w-0">
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
+                          gig.status?.toLowerCase() === "closed"
+                            ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                            : "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                        }`}
+                      >
+                        {gig.status}
+                      </span>
+                      {gig.category && (
+                        <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
+                          {gig.category}
+                        </span>
+                      )}
+                      {gig.tiersCount > 0 && (
+                        <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
+                          {gig.tiersCount} Package{gig.tiersCount !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 text-base font-black text-yellow-500">
+                      <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+                      <span>{gig.price.toLocaleString()}</span>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wide ml-1">
+                        Starting at
+                      </span>
+                    </div>
+                  </div>
+
+                  <h3
+                    className="mb-1 line-clamp-1 text-sm sm:text-base font-bold text-gray-900 dark:text-white transition-colors group-hover:text-blue-500 dark:group-hover:text-blue-400"
+                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    {gig.title}
+                  </h3>
+
+                  <p className="mb-3 line-clamp-2 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
                     {gig.description.replace(/[*#_`]/g, "")}
                   </p>
                 </div>
 
-                {Array.isArray(gig.skills) && gig.skills.length > 0 && (
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                    <Wrench className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-400" />
-                    {gig.skills.slice(0, 3).map((skill: string) => (
-                      <span
-                        key={skill}
-                        className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                    {gig.skills.length > 3 && (
-                      <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
-                        +{gig.skills.length - 3}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
+                <div className="pt-2.5 border-t border-gray-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-2">
+                  {Array.isArray(gig.skills) && gig.skills.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Wrench className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-400" />
+                      {gig.skills.slice(0, 4).map((skill: string) => (
+                        <span
+                          key={skill}
+                          className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {gig.skills.length > 4 && (
+                        <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
+                          +{gig.skills.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div />
+                  )}
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-500">
-                  <Clock className="h-3 w-3" />
-                  <span>{gig.timeAgo ? `Listed ${gig.timeAgo}` : `${gig.slots} Slots available`}</span>
-                </div>
-                <div className="text-[11px] font-bold text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md">
-                  {gig.savesCount} Saves
+                  <div className="flex items-center gap-3 ml-auto">
+                    <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-500">
+                      <Clock className="h-3 w-3" />
+                      <span>{gig.timeAgo ? `Listed ${gig.timeAgo}` : `${gig.slots} Slots available`}</span>
+                    </div>
+                    <div className="text-[11px] font-bold text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md">
+                      {gig.savesCount} Saves
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

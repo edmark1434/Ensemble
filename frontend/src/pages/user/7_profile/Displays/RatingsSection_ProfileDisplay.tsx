@@ -623,42 +623,6 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
               </div>
             </div>
 
-            {viewMode === "ratings" && (
-              <div className="space-y-2 pt-1">
-                {isOwner ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsRecordModalOpen(true)}
-                      className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all cursor-pointer"
-                      title="View your account standing and moderation record"
-                    >
-                      Record
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/contracts/disputes')}
-                      className="flex items-center justify-center py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 dark:bg-white/5 dark:hover:bg-white/10 text-gray-800 dark:text-zinc-200 hover:text-gray-900 dark:hover:text-white text-xs font-bold transition-all cursor-pointer"
-                      title="View your dispute history"
-                    >
-                      Dispute History
-                    </button>
-                  </div>
-                ) : null}
-                {publicDisputes.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsDisputeModalOpen(true)}
-                    className="w-full py-2 px-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    title="Open public dispute discussions linked to this profile"
-                  >
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span>Public disputes ({publicDisputes.length})</span>
-                  </button>
-                ) : null}
-              </div>
-            )}
-
           </div>        </div>
         )}
       </div>

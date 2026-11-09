@@ -17,7 +17,9 @@ const selectFields = `
   f.name AS file_name,
   f.path AS file_path,
   f.mime_type,
-  f.size_bytes
+  f.size_bytes,
+  COALESCE(ptf.path, aa.metadata->>'thumbnail_path') AS project_thumbnail_path,
+  COALESCE(pvf.video_path, aa.metadata->>'video_path') AS project_video_path
 `;
 
 async function getProfileAttachmentsRepository(accountId, includePrivate = false) {
@@ -25,6 +27,24 @@ async function getProfileAttachmentsRepository(accountId, includePrivate = false
     `SELECT ${selectFields}
      FROM account_attachments aa
      LEFT JOIN files f ON f.file_id = aa.file_id AND f.deleted_at IS NULL
+     LEFT JOIN projects p
+       ON aa.attachment_type = 'project'
+      AND (aa.metadata->>'project_id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      AND p.project_id = (aa.metadata->>'project_id')::uuid
+      AND p.deleted_at IS NULL
+     LEFT JOIN files ptf ON ptf.file_id = p.thumbnail_file_id AND ptf.deleted_at IS NULL
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(pf.path, of.path) AS video_path
+       FROM media_assets ma
+       LEFT JOIN files pf ON pf.file_id = ma.proxy_file_id AND pf.deleted_at IS NULL
+       LEFT JOIN files of ON of.file_id = ma.original_file_id AND of.deleted_at IS NULL
+       WHERE p.project_id IS NOT NULL
+         AND ma.project_id = p.project_id
+         AND ma.deleted_at IS NULL
+         AND (ma.type ILIKE 'video%' OR of.mime_type ILIKE 'video%' OR pf.mime_type ILIKE 'video%')
+       ORDER BY ma.created_at DESC
+       LIMIT 1
+     ) pvf ON true
      WHERE aa.account_id = $1
        AND aa.deleted_at IS NULL
        AND ($2::boolean OR aa.is_public = true)

@@ -62,11 +62,15 @@ interface SocialLink {
 interface ProfileAttachmentResponse {
   account_attachment_id: string;
   attachment_kind: "file" | "link";
+  attachment_type?: string;
   name: string;
   description?: string | null;
   external_url?: string | null;
   file_name?: string | null;
   file_path?: string | null;
+  metadata?: Record<string, any> | null;
+  project_thumbnail_path?: string | null;
+  project_video_path?: string | null;
   created_at?: string;
 }
 
@@ -202,21 +206,41 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const mapAttachmentToPortfolioItem = (
     attachment: ProfileAttachmentResponse
-  ): PortfolioItem => ({
-    id: String(attachment.account_attachment_id),
-    type: attachment.attachment_kind === "link" ? "link" : "document",
-    title: attachment.name,
-    description:
-      attachment.description ||
-      (attachment.attachment_kind === "link"
-        ? attachment.external_url
-        : attachment.file_name || "PDF document"),
-    fileUrl: attachment.file_path
-      ? constructAvatarUrl(attachment.file_path)
-      : undefined,
-    externalUrl: attachment.external_url || undefined,
-    createdAt: attachment.created_at,
-  });
+  ): PortfolioItem => {
+    const isProject = attachment.attachment_type === "project";
+    const meta = attachment.metadata || {};
+    const thumbPath = attachment.project_thumbnail_path || meta.thumbnail_path || undefined;
+    const videoPath = attachment.project_video_path || meta.video_path || undefined;
+
+    return {
+      id: String(attachment.account_attachment_id),
+      type: isProject ? "project" : attachment.attachment_kind === "link" ? "link" : "document",
+      title: attachment.name,
+      description:
+        attachment.description ||
+        (isProject
+          ? meta.contract_title || "Studio Project Showcase"
+          : attachment.attachment_kind === "link"
+          ? attachment.external_url || "Website"
+          : attachment.file_name || "PDF document"),
+      thumbnail: thumbPath ? constructAvatarUrl(thumbPath) : undefined,
+      videoUrl: videoPath ? constructAvatarUrl(videoPath) : undefined,
+      fileUrl: attachment.file_path
+        ? constructAvatarUrl(attachment.file_path)
+        : undefined,
+      externalUrl: attachment.external_url || undefined,
+      createdAt: attachment.created_at,
+      projectId: meta.project_id ? String(meta.project_id) : undefined,
+      clipStartSeconds: meta.clip_start_seconds !== undefined ? Number(meta.clip_start_seconds) : undefined,
+      clipEndSeconds: meta.clip_end_seconds !== undefined ? Number(meta.clip_end_seconds) : undefined,
+      maxAllowedSeconds: meta.max_allowed_seconds ? Number(meta.max_allowed_seconds) : null,
+      projectDurationSeconds: meta.project_duration_seconds ? Number(meta.project_duration_seconds) : undefined,
+      isSharedProject: Boolean(meta.is_shared_project),
+      sharedBy: meta.shared_by || null,
+      contractTitle: meta.contract_title || null,
+      memberName: meta.shared_by ? `Shared by ${meta.shared_by}` : undefined,
+    };
+  };
 
   const handleOpenChat = () => {
     if (!userDetails || !id) return;
@@ -320,6 +344,35 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       toast.success("Website added to your profile.");
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Unable to add website.");
+      throw error;
+    }
+  };
+
+  const handleAddProject = async (data: {
+    projectId: string;
+    name: string;
+    description: string;
+    clipStartSeconds: number;
+    clipEndSeconds: number;
+  }) => {
+    if (!isOwner) return;
+    try {
+      const response = await api.post("/api/accounts/profile/attachments", {
+        attachment_kind: "link",
+        attachment_type: "project",
+        name: data.name,
+        description: data.description,
+        project_id: data.projectId,
+        clip_start_seconds: data.clipStartSeconds,
+        clip_end_seconds: data.clipEndSeconds,
+      });
+      setPortfolioItems((current) => [
+        mapAttachmentToPortfolioItem(response.data.attachment),
+        ...current,
+      ]);
+      toast.success("Project added to your portfolio.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Unable to add project to portfolio.");
       throw error;
     }
   };
@@ -1113,6 +1166,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               isOwner={isOwner}
               onUploadPDF={handleUploadResume}
               onAddExternalLink={handleAddWebsite}
+              onAddProject={handleAddProject}
               onDeletePortfolioItem={handleDeletePortfolioItem}
               onUpdateIntroduction={(intro) => {
                 setUserDetails(prev => prev ? { ...prev, introduction: intro } : null);
