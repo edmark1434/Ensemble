@@ -31,6 +31,9 @@ export function archivePopupNotification(notificationId: string, accountId?: str
     if (!current.archivedIds.includes(notificationId)) {
       current.archivedIds.push(notificationId);
       localStorage.setItem(getKey(accountId), JSON.stringify(current));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ensemble:popup-archive-changed"));
+      }
     }
   } catch {
     // ignore localStorage errors
@@ -44,6 +47,9 @@ export function archiveAllPopupNotifications(accountId?: string): void {
       archivedBefore: new Date().toISOString(),
     };
     localStorage.setItem(getKey(accountId), JSON.stringify(data));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ensemble:popup-archive-changed"));
+    }
   } catch {
     // ignore localStorage errors
   }

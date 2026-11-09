@@ -33,6 +33,12 @@ import useGlobalState from "@/lib/global_state";
 import { useTourStore } from "@/lib/tour_state";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { formatUnreadBadge, useInboxUnreadTotals } from "@/components/ui/chat_bubble/useInboxUnreadTotals";
+import {
+    getActiveNavBadgeRoute,
+    markSectionNotificationsAsRead,
+    useNavNotificationCounts,
+    type NavBadgeRoute,
+} from "@/lib/notification_state";
 
 type NavItem = {
     label: string;
@@ -149,6 +155,46 @@ const UserNav: React.FC<UserNavProps> = () => {
         }
     }, [isTourActive, currentTourStep]);
     const inboxUnread = useInboxUnreadTotals().total;
+    const navCounts = useNavNotificationCounts();
+
+    useEffect(() => {
+        if (hidePersonalNav) return;
+        const activeSection = getActiveNavBadgeRoute(location.pathname, location.search);
+        if (activeSection && navCounts[activeSection] > 0) {
+            void markSectionNotificationsAsRead(activeSection);
+        }
+    }, [hidePersonalNav, location.pathname, location.search, navCounts]);
+
+    const getBadgeCount = (to: string): number => {
+        if (hidePersonalNav) return 0;
+        if (to === "/inbox") {
+            return Math.max(inboxUnread, navCounts["/inbox"]);
+        }
+        if (to in navCounts) {
+            return navCounts[to as NavBadgeRoute] || 0;
+        }
+        return 0;
+    };
+
+    const renderNavBadge = (to: string) => {
+        const count = getBadgeCount(to);
+        if (count <= 0) return null;
+        return (
+            <span className="relative z-10 ml-auto inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white shadow-xs">
+                {formatUnreadBadge(count)}
+            </span>
+        );
+    };
+
+    const renderCollapsedNavBadge = (to: string) => {
+        const count = getBadgeCount(to);
+        if (count <= 0) return null;
+        return (
+            <span className="absolute -top-1 -right-1 z-20 inline-flex min-w-[16px] h-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-dark-base">
+                {formatUnreadBadge(count)}
+            </span>
+        );
+    };
 
     const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
     const marketplaceTopState = marketplaceTopInitial;
@@ -289,6 +335,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            )}
                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                            <span className="relative z-10 text-sm">{label}</span>
+                                           {renderNavBadge(to)}
                                         </div>
                                      )}
                                   </NavLink>
@@ -310,13 +357,14 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  />
                                               )}
                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                              {renderCollapsedNavBadge(to)}
                                            </div>
                                         )}
                                      </NavLink>
 
                                      {/* Floating Title Display */}
                                      <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
-                                        <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                        <div className="rounded-lg border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
                                            <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
                                         </div>
                                      </div>
@@ -359,6 +407,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                             )}
                                             <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                             <span className="relative z-10 text-sm">{label}</span>
+                                            {renderNavBadge(to)}
                                          </div>
                                       )}
                                    </NavLink>
@@ -379,11 +428,12 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                   />
                                                )}
                                                <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                               {renderCollapsedNavBadge(to)}
                                             </div>
                                          )}
                                       </NavLink>
                                       <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
-                                         <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                         <div className="rounded-lg border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
                                             <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
                                          </div>
                                       </div>
@@ -559,6 +609,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                             )}
                                             <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                             <span className="relative z-10 text-sm">{label}</span>
+                                            {renderNavBadge(to)}
                                          </div>
                                       </NavLink>
                                    ) : (
@@ -578,12 +629,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                   />
                                                )}
                                                <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                               {renderCollapsedNavBadge(to)}
                                             </div>
                                          </NavLink>
 
                                          {/* Floating Title Display */}
                                          <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
-                                            <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                            <div className="rounded-lg border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
                                                <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
                                             </div>
                                          </div>
@@ -627,6 +679,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            )}
                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                            <span className="relative z-10 text-sm">{label}</span>
+                                           {renderNavBadge(to)}
                                            
                                         </div>
                                      )}
@@ -649,6 +702,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  />
                                               )}
                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                              {renderCollapsedNavBadge(to)}
                                               
                                            </div>
                                         )}
@@ -656,7 +710,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 
                                      {/* Floating Title Display */}
                                      <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
-                                        <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                        <div className="rounded-lg border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
                                            <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
                                         </div>
                                      </div>
