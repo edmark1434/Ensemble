@@ -720,9 +720,9 @@ async function getContractsByUserId(accountIds) {
             COALESCE(gr.initiator_role, 'client') as initiator_role,
             CASE WHEN gr.linked_project_id IS NOT NULL THEN true ELSE false END as is_existing_project,
             gr.linked_project_id as existing_project_id,
-            false as require_nda,
-            true as portfolio_use_allowed,
-            60 as portfolio_use_duration_seconds,
+            COALESCE(gig_port.require_nda, false) as require_nda,
+            COALESCE(gig_port.portfolio_use_allowed, true) as portfolio_use_allowed,
+            COALESCE(gig_port.portfolio_use_duration_seconds, 60) as portfolio_use_duration_seconds,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
@@ -740,6 +740,38 @@ async function getContractsByUserId(accountIds) {
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' AND is_default = true LIMIT 1) t ON true
         LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id IS NULL AND terms_type = 'gigs' LIMIT 1) global_t ON true
+        LEFT JOIN LATERAL (
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM gig_requirements req_nda
+                        JOIN gig_responses grp_nda ON grp_nda.gig_requirement_id = req_nda.gig_requirement_id AND grp_nda.gig_request_id = gr.gig_request_id
+                        WHERE req_nda.gig_id = g.gig_id AND (req_nda.question ILIKE '%nda%' OR req_nda.question ILIKE '%confidentiality%')
+                          AND (grp_nda.response ILIKE '%yes%' OR grp_nda.response ILIKE '%require%')
+                    ) THEN true
+                    ELSE false
+                END AS require_nda,
+                CASE
+                    WHEN grp.response IS NOT NULL AND (
+                        grp.response ILIKE '%no%' OR grp.response ILIKE '%private%' OR grp.response ILIKE '%restricted%'
+                    ) THEN false
+                    ELSE true
+                END AS portfolio_use_allowed,
+                COALESCE(
+                    NULLIF(SUBSTRING(COALESCE(grp.response, req.question, '') FROM '(?i)up to\\s*(\\d+)\\s*s'), '')::integer,
+                    NULLIF(SUBSTRING(COALESCE(req.question, '') FROM '(?i)(\\d+)\\s*s(?:ec|econds)?'), '')::integer,
+                    60
+                ) AS portfolio_use_duration_seconds
+            FROM gig_requirements req
+            LEFT JOIN gig_responses grp
+              ON grp.gig_requirement_id = req.gig_requirement_id
+             AND grp.gig_request_id = gr.gig_request_id
+            WHERE req.gig_id = g.gig_id
+              AND (req.question ILIKE '%portfolio%' OR req.question ILIKE '%showcase%')
+              AND req.deleted_at IS NULL
+            ORDER BY req.gig_requirement_id ASC
+            LIMIT 1
+        ) gig_port ON true
         WHERE gr.client_account_id = ANY($1::uuid[]) OR g.freelancer_account_id = ANY($1::uuid[])
         ORDER BY created_at DESC
     `;
