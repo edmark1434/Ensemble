@@ -1529,7 +1529,7 @@ async function expireStaleAcceptedGigOrders() {
                 );
                 if (row.contract_id) {
                     await client.query(
-                        `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) = 'pending'`,
+                        `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) IN ('pending', 'waiting', 'pending signature')`,
                         [row.contract_id]
                     );
                 }
@@ -3183,7 +3183,7 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
 
         if (contract_id) {
             await client.query(
-                "UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) = 'pending'",
+                "UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) IN ('pending', 'waiting', 'pending signature')",
                 [contract_id]
             );
         }
@@ -3452,7 +3452,7 @@ async function withdrawGigOrderRepository(orderId, accountIds) {
 
         if (contract_id) {
             await client.query(
-                `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) = 'pending'`,
+                `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) IN ('pending', 'waiting', 'pending signature')`,
                 [contract_id]
             );
         }
