@@ -1310,7 +1310,7 @@ async function buyRevision({
                      WHERE ct.destination_wallet_id = $1
                        AND ct.reference_table = 'contracts'
                        AND ct.type = 'Escrow Release'
-                       AND LOWER(ct.status) = 'completed'
+                       AND LOWER(ct.status::text) = 'completed'
                      GROUP BY ct.reference_id
                  ),
                  contract_dists AS (

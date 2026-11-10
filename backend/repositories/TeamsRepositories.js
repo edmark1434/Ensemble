@@ -232,7 +232,7 @@ async function wallet(teamId){
         JOIN credit_transactions ct ON ct.destination_wallet_id = tw.wallet_id
        WHERE ct.reference_table = 'contracts'
          AND ct.type = 'Escrow Release'
-         AND LOWER(ct.status) = 'completed'
+         AND LOWER(ct.status::text) = 'completed'
        GROUP BY ct.reference_id
     ),
     contract_dists AS (
@@ -370,7 +370,7 @@ async function distributeTeamFunds(teamId, recipients) {
          WHERE ct.destination_wallet_id = $1
            AND ct.reference_table = 'contracts'
            AND ct.type = 'Escrow Release'
-           AND LOWER(ct.status) = 'completed'
+           AND LOWER(ct.status::text) = 'completed'
          GROUP BY ct.reference_id
       ),
       contract_dists AS (

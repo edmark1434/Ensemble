@@ -1360,7 +1360,7 @@ async function fetchPlatformTransactionsList({ page = 1, limit = 50, type, statu
   }
 
   if (status && status !== 'all') {
-    conditions.push(`LOWER(ct.status) = LOWER($${pIdx})`);
+    conditions.push(`LOWER(ct.status::text) = LOWER($${pIdx})`);
     params.push(status);
     pIdx++;
   }
@@ -1473,7 +1473,7 @@ async function fetchUserTransactionsList({ page = 1, limit = 50, type, status, s
   }
 
   if (status && status !== 'all') {
-    conditions.push(`LOWER(ct.status) = LOWER($${pIdx})`);
+    conditions.push(`LOWER(ct.status::text) = LOWER($${pIdx})`);
     params.push(status);
     pIdx++;
   }

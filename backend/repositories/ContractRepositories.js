@@ -989,7 +989,7 @@ async function getContractSubcontractTeam(contractId) {
         SELECT COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
         FROM credit_transactions ct
         WHERE ct.type = 'Escrow Release'
-          AND LOWER(ct.status) = 'completed'
+          AND LOWER(ct.status::text) = 'completed'
           AND (
             (ct.reference_table = 'contracts' AND ct.reference_id = $1)
             OR ct.reference_id IN (SELECT contract_milestone_id FROM contract_milestones WHERE contract_id = $1)
@@ -1058,7 +1058,7 @@ async function distributeContractSubcontractFunds({ contractId, distributorAccou
             SELECT COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
             FROM credit_transactions ct
             WHERE ct.type = 'Escrow Release'
-              AND LOWER(ct.status) = 'completed'
+              AND LOWER(ct.status::text) = 'completed'
               AND (
                 (ct.reference_table = 'contracts' AND ct.reference_id = $1)
                 OR ct.reference_id IN (SELECT contract_milestone_id FROM contract_milestones WHERE contract_id = $1)
