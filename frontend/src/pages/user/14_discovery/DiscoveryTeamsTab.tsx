@@ -14,6 +14,8 @@ import {
   Shuffle,
   Sparkles,
   Dices,
+  Globe,
+  Lock,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { constructAvatarUrl, resolveAvatarPath } from "@/lib/accountAvatars";
@@ -393,6 +395,25 @@ export const DiscoveryTeamsTab: React.FC = () => {
                   )}
                   <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
+                  {/* Visibility Icon Indicator with Tooltip */}
+                  <div className="absolute top-2.5 left-2.5 z-20 group/vis">
+                    <div
+                      className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-zinc-300 cursor-pointer shadow-xs transition hover:scale-110"
+                    >
+                      {team.visibility === "Private" ? (
+                        <Lock className="w-3 h-3 text-zinc-300" />
+                      ) : (
+                        <Globe className="w-3 h-3 text-zinc-300" />
+                      )}
+                    </div>
+
+                    {/* Tooltip: Light on light mode, Dark on dark mode */}
+                    <div className="absolute top-full left-0 mt-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 border border-zinc-200 dark:border-white/10 text-[11px] font-semibold whitespace-nowrap shadow-xl opacity-0 invisible group-hover/vis:opacity-100 group-hover/vis:visible transition-all duration-150 pointer-events-none z-50">
+                      {team.visibility === "Private" ? "Private" : "Public"}
+                      <div className="absolute -top-1 left-2.5 w-2 h-2 bg-white dark:bg-zinc-800 border-l border-t border-zinc-200 dark:border-white/10 rotate-45" />
+                    </div>
+                  </div>
+
                   {/* Category Pill */}
                   {team.category && (
                     <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
@@ -402,7 +423,7 @@ export const DiscoveryTeamsTab: React.FC = () => {
 
                   {/* Join Policy Pill */}
                   {team.join_policy === "Open" && (
-                    <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white flex items-center gap-1 shadow-xs">
+                    <span className="absolute top-2.5 left-10 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white flex items-center gap-1 shadow-xs">
                       <CheckCircle2 className="w-3 h-3" /> Open
                     </span>
                   )}

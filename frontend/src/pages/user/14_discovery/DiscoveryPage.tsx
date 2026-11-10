@@ -861,7 +861,7 @@ export default function DiscoveryPage() {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <div
-          className="mx-auto max-w-6xl p-6 md:p-8 space-y-8"
+          className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 w-full"
           data-tour="discovery-container"
         >
           {/* MODERN SEGMENTED CAPSULE TABS */}

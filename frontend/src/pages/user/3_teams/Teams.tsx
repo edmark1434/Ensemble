@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Briefcase, CheckCircle2, ChevronRight, Clock, Crown, Grid3x3, List, MapPin, Plus, Search, ShieldCheck, Star, UserPlus, Users } from "lucide-react";
+import { ArrowUpRight, Briefcase, CheckCircle2, ChevronRight, Clock, Crown, Grid3x3, List, MapPin, Plus, Search, ShieldCheck, Star, UserPlus, Users, Globe, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -8,6 +8,7 @@ import { uploadFileToIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import EditTeamModal, { type TeamFormValues } from "./team_modals/EditTeamModal";
+import SuccessModal from "@/components/ui/SuccessModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 
@@ -178,6 +179,8 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
   const [createProgress, setCreateProgress] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [createdTeamInfo, setCreatedTeamInfo] = useState<{ id: string; name: string } | null>(null);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [eligibility, setEligibility] = useState<TeamCreationEligibility | null>(null);
@@ -448,6 +451,25 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
           )}
           <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
+          {/* Visibility Icon Indicator with Tooltip */}
+          <div className="absolute top-2.5 left-2.5 z-20 group/vis">
+            <div
+              className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-zinc-300 cursor-pointer shadow-xs transition hover:scale-110"
+            >
+              {team.visibility === "Private" ? (
+                <Lock className="w-3 h-3 text-zinc-300" />
+              ) : (
+                <Globe className="w-3 h-3 text-zinc-300" />
+              )}
+            </div>
+
+            {/* Tooltip: Light on light mode, Dark on dark mode */}
+            <div className="absolute top-full left-0 mt-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 border border-zinc-200 dark:border-white/10 text-[11px] font-semibold whitespace-nowrap shadow-xl opacity-0 invisible group-hover/vis:opacity-100 group-hover/vis:visible transition-all duration-150 pointer-events-none z-50">
+              {team.visibility === "Private" ? "Private" : "Public"}
+              <div className="absolute -top-1 left-2.5 w-2 h-2 bg-white dark:bg-zinc-800 border-l border-t border-zinc-200 dark:border-white/10 rotate-45" />
+            </div>
+          </div>
+
           {/* Category Pill */}
           {team.category && (
             <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
@@ -457,7 +479,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
           {/* Join Policy Pill */}
           {team.join_policy === "Open" && (
-            <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white flex items-center gap-1 shadow-xs">
+            <span className="absolute top-2.5 left-10 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white flex items-center gap-1 shadow-xs">
               <CheckCircle2 className="w-3 h-3" /> Open
             </span>
           )}
@@ -531,16 +553,23 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
                 {team.member_count === 1 ? "member" : "members"}
               </span>
 
-              <span
-                className="flex items-center gap-1 font-semibold text-zinc-900 dark:text-white"
-                title={`${avgRating > 0 ? avgRating.toFixed(1) : "5.0"} rating (${team.review_count || 0} reviews)`}
-              >
-                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
-                <span>{avgRating > 0 ? avgRating.toFixed(1) : "5.0"}</span>
-                <span className="text-[11px] text-zinc-400 font-normal">
-                  ({team.review_count || 0})
+              {avgRating > 0 && (team.review_count || 0) > 0 ? (
+                <span
+                  className="flex items-center gap-1 font-semibold text-zinc-900 dark:text-white"
+                  title={`${avgRating.toFixed(1)} rating (${team.review_count} reviews)`}
+                >
+                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                  <span>{avgRating.toFixed(1)}</span>
+                  <span className="text-[11px] text-zinc-400 font-normal">
+                    ({team.review_count})
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                  <Star className="w-3 h-3 text-zinc-300 dark:text-zinc-600 shrink-0" />
+                  <span>No Rating</span>
+                </span>
+              )}
             </div>
 
             {team.location && (
@@ -616,9 +645,25 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
         <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-              {team.display_name}
-            </h3>
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                {team.display_name}
+              </h3>
+              <div className="relative group/vis inline-flex items-center shrink-0">
+                <div className="cursor-pointer text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition">
+                  {team.visibility === "Private" ? (
+                    <Lock className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
+                  ) : (
+                    <Globe className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
+                  )}
+                </div>
+                {/* Tooltip: Light on light mode, Dark on dark mode */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 rounded-md bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 border border-zinc-200 dark:border-white/10 text-[10px] font-semibold whitespace-nowrap shadow-md opacity-0 invisible group-hover/vis:opacity-100 group-hover/vis:visible transition-all duration-150 pointer-events-none z-50">
+                  {team.visibility === "Private" ? "Private" : "Public"}
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white dark:bg-zinc-800 border-r border-b border-zinc-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+            </div>
             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:underline shrink-0">
               Open Space &rarr;
             </span>
@@ -915,6 +960,23 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
         savingLabel={createProgress}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={createTeam}
+      />
+
+      {/* Team Creation Success Popup Modal (matching Job post Success) */}
+      <SuccessModal
+        isOpen={isSuccessModalOpen}
+        title="Team Workspace Created!"
+        message={`"${createdTeamInfo?.name || "Your Team"}" is live. Your collaborative workspace is ready for members and projects.`}
+        buttonText="Open Team Workspace"
+        loadingText="Deploying Team Workspace..."
+        loadingSubtext="Configuring members, roles, and project channels"
+        onConfirm={() => {
+          setIsSuccessModalOpen(false);
+          if (createdTeamInfo?.id) {
+            navigate(`/teams/${createdTeamInfo.id}`);
+          }
+        }}
+        standalone={true}
       />
 
       {/* Join Team Modal */}
