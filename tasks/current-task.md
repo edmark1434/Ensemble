@@ -1,4 +1,23 @@
-# Current Task: Dispute Chat — Moderation, Replies, Indicators, Attachments & Rulings
+# Current Task: Dispute Chat — Moderation, Replies, Indicators, Attachments, Rulings & Reading UX
+
+## Objective (8) — rulings must read as rulings, not as an admin's chat line
+- [x] `DisputeDecisionCard` renders a verdict panel: coloured header bar with a gavel, the case number, the outcome as a large headline, the finding, the staff note in its own box, a "Dispute Resolution · Ensemble platform decision" signature, and the appeal boilerplate small at the foot. Indigo for a decision, sky for a reopen.
+- [x] No avatar, no author name, no role chip, no reply button on a ruling.
+- [x] `isDisputeDecision` also matches rulings written **before** the system author existed (legacy "This dispute is resolved…", "This dispute has been reopened.", "… has been permanently banned."), but only on staff-authored messages, so a member cannot fake one.
+- [x] `parseDisputeRuling` splits heading / reference / outcome / finding / note / closing, falling back to one paragraph for old free-text rulings.
+- [x] Permanent bans now post the same formal ruling, as the system author.
+- [x] Logic lives in `disputeRuling.ts` (no JSX) so it can be exercised directly — 23 checks pass, including the two legacy rows from the user's screenshot.
+
+## Objective (9) — reading a public dispute
+- [x] No auto-scroll on load: a public dispute is read from the top, not jumped to the bottom.
+- [x] New replies follow only when the reader is already at the foot or just posted; otherwise a "N new replies" pill offers the jump.
+- [x] Discussion header is sticky below the site header, with a "Jump to latest" control once the thread is long.
+- [x] `scroll-mt-36` on messages so jump-to-parent lands clear of both sticky headers.
+- [x] Switching disputes resets to the top.
+
+---
+
+# Previously: Dispute Chat — Moderation, Replies, Indicators, Attachments & Rulings
 
 ## Objective (5) — attachments for every side
 Members could not upload or see images and files on a dispute. The community, the disputer,
