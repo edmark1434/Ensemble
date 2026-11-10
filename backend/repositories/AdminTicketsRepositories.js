@@ -34,6 +34,7 @@ const {
   ensureStaffMemberOnChat,
   notifyDisputeParties,
   resolveDisputeReplyTarget,
+  emitDisputeState,
 } = require('./DisputeChatRepositories');
 const {
   DISPUTE_RESOLUTION_KEYS,
@@ -956,6 +957,70 @@ async function fetchRecentActivity() {
     status: displayLabel(r.status),
     at: r.at,
   }));
+}
+
+/**
+ * Push a ticket's status onto its inbox conversation and tell the requester.
+ * Without this a member's ticket thread keeps its old status — and a live composer
+ * on a closed ticket — until they reload.
+ */
+async function announceTicketState(ticketId) {
+  if (!ticketId) return null;
+  let row = null;
+  try {
+    const result = await pool.query(
+      `SELECT ticket_id, ticket_number, status, priority, type, account_id
+       FROM tickets WHERE ticket_id = $1`,
+      [ticketId]
+    );
+    row = result.rows[0] || null;
+  } catch (error) {
+    console.warn('Ticket state broadcast skipped:', error.message);
+    return null;
+  }
+  if (!row) return null;
+
+  const chatId = await getTicketChatId(ticketId);
+  const payload = {
+    ticketId: String(row.ticket_id),
+    ticketNumber: row.ticket_number || null,
+    conversationId: chatId ? String(chatId) : null,
+    status: row.status || null,
+    priority: row.priority || null,
+    closed: isClosedStatus(row.status),
+  };
+
+  // Keep the stored conversation in step, so a later load agrees with the live event.
+  try {
+    const db = mongoDb();
+    if (db && chatId && ObjectId.isValid(String(chatId))) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(String(chatId)) },
+        {
+          $set: {
+            'ticket_details.status': row.status || null,
+            'ticket_details.priority': row.priority || null,
+            updated_at: new Date(),
+          },
+        }
+      );
+    }
+  } catch (error) {
+    console.warn('Ticket conversation status sync skipped:', error.message);
+  }
+
+  try {
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (!io) return payload;
+    const rooms = new Set();
+    if (chatId) rooms.add(String(chatId));
+    if (row.account_id) rooms.add(String(row.account_id));
+    if (rooms.size) io.to([...rooms]).emit('ticketStateChanged', payload);
+  } catch (error) {
+    console.warn('Ticket state emit skipped:', error.message);
+  }
+  return payload;
 }
 
 async function getTicketChatId(ticketId) {
@@ -2859,6 +2924,10 @@ async function updateTicket(ticketId, patch, staffSession) {
     }
   }
 
+  if (patch.status !== undefined || patch.priority !== undefined) {
+    await announceTicketState(ticketId);
+  }
+
   if (patch.note) {
     await addTicketMessage(ticketId, patch.note, staffSession, Boolean(patch.internalNote));
     return getTicketDetail(ticketId, staffSession);
@@ -3510,6 +3579,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     } catch (err) {
       console.warn('Dispute public notice skipped:', err.message);
     }
+    await emitDisputeState(disputeId);
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3555,6 +3625,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     } catch (err) {
       console.warn('Dispute private notice skipped:', err.message);
     }
+    await emitDisputeState(disputeId);
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3630,6 +3701,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     } catch (err) {
       console.warn('Dispute resolution notice skipped:', err.message);
     }
+    await emitDisputeState(disputeId);
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3655,6 +3727,7 @@ async function updateDispute(disputeId, patch, staffSession) {
       actorStaffId: staff.staff_id,
       metadata: { status: 'closed' },
     });
+    await emitDisputeState(disputeId);
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3759,6 +3832,7 @@ async function updateDispute(disputeId, patch, staffSession) {
       onlyFiler: true,
     });
   }
+  await emitDisputeState(disputeId);
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -4426,6 +4500,7 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
     metadata: { status: 'closed', sanctionType: 'ban', reason },
   });
 
+  await emitDisputeState(disputeId);
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -4508,6 +4583,7 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms, patch =
     console.warn('Dispute reopen notice skipped:', err.message);
   }
 
+  await emitDisputeState(disputeId);
   return getDisputeDetail(disputeId, staffSession);
 }
 

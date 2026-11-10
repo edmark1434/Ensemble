@@ -338,6 +338,48 @@ function emitDisputeChat(
   }
 }
 
+/**
+ * Tell both parties — and anyone reading the public page — that a dispute's state moved.
+ * Covers approve / hide / resolve / reopen / dismiss / ban and plain status patches, so a
+ * party's view updates without a reload.
+ *
+ * Deliberately selects only long-standing columns: it must not break if a newer
+ * migration has not been applied yet.
+ */
+async function emitDisputeState(disputeId) {
+  if (!disputeId) return null;
+  let row = null;
+  try {
+    const result = await pool.query(
+      `SELECT dispute_id, dispute_number, status, visibility, by_account_id, for_account_id
+       FROM disputes WHERE dispute_id = $1 AND deleted_at IS NULL`,
+      [disputeId]
+    );
+    row = result.rows[0] || null;
+  } catch (error) {
+    console.warn('Dispute state broadcast skipped:', error.message);
+    return null;
+  }
+  if (!row) return null;
+
+  const status = String(row.status || '').toLowerCase();
+  const payload = {
+    disputeId: String(row.dispute_id),
+    number: row.dispute_number || null,
+    status,
+    visibility: Boolean(row.visibility),
+    closed: status === 'closed',
+  };
+
+  emitDisputeChat('disputeUpdated', {
+    disputeId: payload.disputeId,
+    payload,
+    accountIds: [row.by_account_id, row.for_account_id].filter(Boolean),
+    includePublicRoom: true,
+  });
+  return payload;
+}
+
 async function listDisputeChatMemberAccountIds(chatId, { roles = null } = {}) {
   if (!chatId || !ObjectId.isValid(String(chatId))) return [];
   const db = mongoDb();
@@ -1050,6 +1092,7 @@ module.exports = {
   postPublicDisputeComment,
   notifyDisputeParties,
   notifyDisputeHandler,
+  emitDisputeState,
   createDisputeMessage,
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,

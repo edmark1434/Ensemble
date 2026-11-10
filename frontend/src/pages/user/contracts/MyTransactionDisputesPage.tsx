@@ -537,6 +537,48 @@ export default function MyTransactionDisputesPage() {
     };
   }, []);
 
+  // Staff decisions land here without a reload: resolved, reopened, made public, closed.
+  useEffect(() => {
+    const onState = (payload: {
+      disputeId?: string;
+      status?: string;
+      visibility?: boolean;
+      closed?: boolean;
+    }) => {
+      if (!payload?.disputeId) return;
+      setRows((current) => {
+        const known = current.some((row) => String(row.id) === String(payload.disputeId));
+        if (!known) {
+          // A case that just became visible to this member isn't in the list yet.
+          api.get("/api/users/disputes")
+            .then((res) => setRows(Array.isArray(res.data?.data) ? res.data.data : []))
+            .catch(() => undefined);
+          return current;
+        }
+        return current.map((row) =>
+          String(row.id) === String(payload.disputeId)
+            ? {
+                ...row,
+                status: payload.status ?? row.status,
+                visibility: payload.visibility ?? row.visibility,
+                canAddInformation:
+                  payload.closed || payload.visibility
+                    ? false
+                    : row.canAddInformation,
+                updatedAt: new Date().toISOString(),
+              }
+            : row
+        );
+      });
+    };
+
+    if (!socket.connected) socket.connect();
+    socket.on("disputeUpdated", onState);
+    return () => {
+      socket.off("disputeUpdated", onState);
+    };
+  }, []);
+
   const transactionDisputes = rows.filter(isTransactionDispute);
   const active = transactionDisputes.filter(isOpen);
   const closed = transactionDisputes.filter((row) => !isOpen(row));

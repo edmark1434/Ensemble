@@ -94,6 +94,10 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
     );
   }
 
+  // Settling or reversing auto-closes the case, so both parties' views must hear about it.
+  const { emitDisputeState } = require('../repositories/DisputeChatRepositories');
+  await emitDisputeState(disputeId);
+
   const detail = await getDisputeDetail(disputeId, staffSession);
   return { ...detail, financialResult: result };
 }

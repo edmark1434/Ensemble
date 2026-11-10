@@ -885,6 +885,38 @@ function bindSocketListeners() {
     reconcileMessage(message)
   );
 
+  // Staff moved a ticket (closed, reopened, re-prioritised). Patch the conversation so
+  // the member's thread reflects it right away instead of after a reload.
+  socket.on(
+    "ticketStateChanged",
+    ({
+      conversationId,
+      status,
+      priority,
+    }: {
+      ticketId?: string;
+      conversationId?: string | null;
+      status?: string | null;
+      priority?: string | null;
+    }) => {
+      if (!conversationId) return;
+      useChatState.setState((state) => ({
+        conversations: state.conversations.map((conversation) =>
+          String(conversation._id) === String(conversationId)
+            ? {
+                ...conversation,
+                ticket_details: {
+                  ...(conversation.ticket_details || {}),
+                  ...(status != null ? { status } : {}),
+                  ...(priority != null ? { priority } : {}),
+                },
+              }
+            : conversation
+        ),
+      }));
+    }
+  );
+
   socket.on(
     "messageDeleted",
     ({

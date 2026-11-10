@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowDown,
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
   CornerUpLeft,
   Loader2,
   Lock,
@@ -194,6 +196,8 @@ export default function PublicDisputePage() {
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [newReplies, setNewReplies] = useState(0);
+  const [showDetails, setShowDetails] = useState(true);
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   /** True while the reader is parked at the foot of the thread. */
@@ -307,6 +311,31 @@ export default function PublicDisputePage() {
       setError("Staff made this dispute private. The public discussion is no longer available.");
     };
 
+    // Status moved under us — resolved, reopened, closed, made private.
+    const onState = (payload: {
+      disputeId?: string;
+      status?: string;
+      visibility?: boolean;
+      closed?: boolean;
+    }) => {
+      if (!payload?.disputeId || String(payload.disputeId) !== String(id)) return;
+      if (payload.visibility === false) {
+        onVisibility(payload);
+        return;
+      }
+      setDiscussion((current) => {
+        if (!current) return current;
+        const status = String(payload.status || current.status || "").toLowerCase();
+        const closed = payload.closed ?? status === "closed";
+        return {
+          ...current,
+          status,
+          // A closed dispute is read-only for everyone.
+          canComment: closed ? false : current.canComment,
+        };
+      });
+    };
+
     const join = () => socket.emit("joinDisputeDiscussion", { disputeId: String(id) });
 
     if (!socket.connected) socket.connect();
@@ -315,32 +344,35 @@ export default function PublicDisputePage() {
     socket.on("disputeMessage", onLive);
     socket.on("disputeMessageUpdated", onLive);
     socket.on("disputeVisibilityChanged", onVisibility);
+    socket.on("disputeUpdated", onState);
     return () => {
       socket.off("connect", join);
       socket.off("disputeMessage", onLive);
       socket.off("disputeMessageUpdated", onLive);
       socket.off("disputeVisibilityChanged", onVisibility);
+      socket.off("disputeUpdated", onState);
       socket.emit("leaveDisputeDiscussion", { disputeId: String(id) });
     };
   }, [id, viewerAccountId]);
 
-  // Track whether the reader is at the foot of the page, so arriving replies never
-  // yank them away from what they were reading.
+  // Track whether the reader is at the foot of the thread pane, so arriving replies
+  // never yank them away from what they were reading.
   useEffect(() => {
+    const pane = threadRef.current;
+    if (!pane) return;
     const onScroll = () => {
-      const scrolled = window.innerHeight + window.scrollY;
-      const atBottom = scrolled >= document.documentElement.scrollHeight - 180;
+      const atBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
       atBottomRef.current = atBottom;
       if (atBottom) setNewReplies(0);
     };
     onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    pane.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      pane.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, []);
+  }, [loading, discussion?.id]);
 
   /**
    * A public dispute is read from the top, so the first load never auto-scrolls.
@@ -355,23 +387,27 @@ export default function PublicDisputePage() {
     if (previous === 0) return;
     if (followRef.current || atBottomRef.current) {
       followRef.current = false;
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      const pane = threadRef.current;
+      if (pane) pane.scrollTo({ top: pane.scrollHeight, behavior: "smooth" });
       return;
     }
     if (count > previous) setNewReplies((current) => current + (count - previous));
   }, [discussion?.messages?.length]);
 
-  // A different dispute starts fresh at the top.
+  // A different dispute starts fresh at the top of the thread.
   useEffect(() => {
     lastCountRef.current = 0;
     setNewReplies(0);
     followRef.current = false;
-    window.scrollTo({ top: 0, behavior: "auto" });
+    setShowDetails(true);
+    if (threadRef.current) threadRef.current.scrollTop = 0;
   }, [id]);
 
   const jumpToLatest = () => {
     setNewReplies(0);
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const pane = threadRef.current;
+    if (!pane) return;
+    pane.scrollTo({ top: pane.scrollHeight, behavior: "smooth" });
   };
 
   const sendComment = async () => {
@@ -497,14 +533,15 @@ export default function PublicDisputePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 font-['Plus_Jakarta_Sans'] dark:bg-dark-base">
+    /* The page itself never grows: only the thread scrolls, so a 300-reply case is
+       the same height as a 3-reply one. */
+    <div className="flex h-dvh flex-col overflow-hidden bg-gray-50 font-['Plus_Jakarta_Sans'] dark:bg-dark-base">
       <UserHeader pageTitle="Dispute" />
-      {/* The sticky composer keeps its place in flow, so it only overlays while scrolling. */}
-      <main className="mx-auto w-full max-w-3xl space-y-4 px-4 pb-10 pt-6 text-gray-900 dark:text-white">
+      <main className="mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-3 px-4 pb-4 pt-4 text-gray-900 dark:text-white">
         <button
           type="button"
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/home"))}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 transition hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"
+          className="inline-flex shrink-0 items-center gap-1.5 self-start text-xs font-semibold text-gray-500 transition hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
@@ -528,7 +565,7 @@ export default function PublicDisputePage() {
 
         {!loading && discussion ? (
           <>
-            <Card className="space-y-4 p-5">
+            <Card className="shrink-0 space-y-3 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">
                   {discussion.number || "Dispute"}
@@ -541,28 +578,46 @@ export default function PublicDisputePage() {
                 </span>
               </div>
 
-              <h1 className="text-xl font-bold leading-snug sm:text-2xl">{discussion.title || "Dispute"}</h1>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <PartyCard role="disputer" person={discussion.initiator} />
-                <PartyCard role="disputee" person={discussion.respondent} />
+              <div className="flex items-start justify-between gap-3">
+                <h1 className="text-lg font-bold leading-snug sm:text-xl">{discussion.title || "Dispute"}</h1>
+                <button
+                  type="button"
+                  onClick={() => setShowDetails((current) => !current)}
+                  aria-expanded={showDetails}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-500 transition hover:bg-gray-50 hover:text-gray-900 dark:border-white/10 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  {showDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showDetails ? "Hide details" : "Details"}
+                </button>
               </div>
 
-              {discussion.description ? (
-                <div className="rounded-xl bg-gray-50 px-4 py-3 dark:bg-white/[0.03]">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">
-                    Original complaint
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
-                    {discussion.description}
-                  </p>
-                </div>
-              ) : null}
+              {showDetails ? (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <PartyCard role="disputer" person={discussion.initiator} />
+                    <PartyCard role="disputee" person={discussion.respondent} />
+                  </div>
+
+                  {discussion.description ? (
+                    <div className="max-h-32 overflow-y-auto rounded-xl bg-gray-50 px-4 py-3 custom-scrollbar dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">
+                        Original complaint
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
+                        {discussion.description}
+                      </p>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="truncate text-xs text-gray-500 dark:text-zinc-400">
+                  {discussion.initiator?.name || "Disputer"} vs {discussion.respondent?.name || "Disputee"}
+                </p>
+              )}
             </Card>
 
-            <Card>
-              {/* Sits below the site header, which is itself sticky at top-0. */}
-              <div className="sticky top-[72px] z-10 flex items-center justify-between gap-2 rounded-t-2xl border-b border-gray-100 bg-white/95 px-5 py-3 backdrop-blur dark:border-white/5 dark:bg-dark-surface/95">
+            <Card className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-5 py-3 dark:border-white/5">
                 <h2 className="flex items-center gap-2 text-sm font-bold">
                   <MessagesSquare className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
                   Discussion
@@ -583,6 +638,7 @@ export default function PublicDisputePage() {
                 </span>
               </div>
 
+              <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
               {messages.length === 0 ? (
                 <p className="px-5 py-10 text-center text-sm text-gray-500 dark:text-zinc-400">
                   No replies yet. {discussion.canComment ? "Start the discussion below." : ""}
@@ -605,7 +661,7 @@ export default function PublicDisputePage() {
                         <li
                           key={message.id}
                           id={`dispute-message-${message.id}`}
-                          className={`scroll-mt-36 px-4 py-5 ${pending ? "opacity-60" : ""}`}
+                          className={`scroll-mt-4 px-4 py-5 ${pending ? "opacity-60" : ""}`}
                         >
                           <DisputeDecisionCard
                             body={message.body}
@@ -624,7 +680,7 @@ export default function PublicDisputePage() {
                       <li
                         key={message.id}
                         id={`dispute-message-${message.id}`}
-                        className={`group flex scroll-mt-36 gap-3 rounded-lg px-5 py-4 transition ${pending ? "opacity-60" : ""} ${
+                        className={`group flex scroll-mt-4 gap-3 rounded-lg px-5 py-4 transition ${pending ? "opacity-60" : ""} ${
                           heldForReview || notice ? "bg-amber-50/60 dark:bg-amber-500/[0.06]" : ""
                         }`}
                       >
@@ -687,23 +743,24 @@ export default function PublicDisputePage() {
                   })}
                 </ol>
               )}
-              <div ref={threadEndRef} className="h-px scroll-mb-4" />
+                <div ref={threadEndRef} className="h-px" />
+              </div>
+
+              {newReplies > 0 ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={jumpToLatest}
+                    className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg transition hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                    {newReplies} new {newReplies === 1 ? "reply" : "replies"}
+                  </button>
+                </div>
+              ) : null}
             </Card>
 
-            {newReplies > 0 ? (
-              <div className="pointer-events-none sticky bottom-32 z-20 -mb-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={jumpToLatest}
-                  className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg transition hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                  {newReplies} new {newReplies === 1 ? "reply" : "replies"}
-                </button>
-              </div>
-            ) : null}
-
-            <Card className="sticky bottom-4 border-gray-300 p-4 shadow-lg dark:border-white/15">
+            <Card className="shrink-0 p-3">
               {!isAuthenticated ? (
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-gray-600 dark:text-zinc-400">Sign in to join this discussion.</p>
@@ -757,7 +814,7 @@ export default function PublicDisputePage() {
                       }
                     }}
                     maxLength={MAX_LENGTH}
-                    rows={3}
+                    rows={2}
                     placeholder={replyToId ? `Reply to ${replyingTo?.authorName || "this message"}…` : "Write a reply…"}
                     className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-white/30"
                   />
