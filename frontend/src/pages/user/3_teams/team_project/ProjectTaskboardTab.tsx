@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   AlertCircle,
   AlignLeft,
@@ -208,6 +208,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   projectTitle,
   isReadOnly = false,
 }) => {
+  // Pending optimistic updates tracker to prevent stale background polls/socket refreshes from rubber-banding the UI
+  const pendingStatusUpdatesRef = useRef<Map<string, { status: TaskItem['status']; timestamp: number }>>(new Map());
+
   // Local optimistic state for zero-latency seamless taskboard updates
   const [localTasks, setLocalTasks] = useState<TaskItem[]>(() =>
     (tasks || []).map((t) => {
@@ -226,12 +229,29 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   );
 
   useEffect(() => {
+    const now = Date.now();
     setLocalTasks(
       (tasks || []).map((t) => {
-        if (t.status !== 'completed' && isTaskMilestoneCompleted(t)) {
+        const pending = pendingStatusUpdatesRef.current.get(t.task_id);
+        let effectiveStatus = t.status;
+
+        if (pending) {
+          // If update is less than 5 seconds old and server hasn't caught up yet, preserve optimistic status
+          if (now - pending.timestamp < 5000) {
+            if (t.status === pending.status) {
+              pendingStatusUpdatesRef.current.delete(t.task_id);
+            } else {
+              effectiveStatus = pending.status;
+            }
+          } else {
+            pendingStatusUpdatesRef.current.delete(t.task_id);
+          }
+        }
+
+        if (effectiveStatus !== 'completed' && isTaskMilestoneCompleted({ ...t, status: effectiveStatus })) {
           return { ...t, status: 'completed' };
         }
-        return t;
+        return { ...t, status: effectiveStatus };
       })
     );
   }, [tasks, milestones]);
@@ -279,6 +299,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
   const [activePriorityMenuTaskId, setActivePriorityMenuTaskId] = useState<string | null>(null);
+
 
   // Kanban 4 Selection & Drag-and-Drop state
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -472,9 +493,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     return false;
   };
 
-  const handleDropOnColumn = (targetColId: 'todo' | 'in_progress' | 'review' | 'completed') => {
-    if (!draggingTaskId) return;
-    const task = localTasks.find((t) => t.task_id === draggingTaskId);
+  const handleDropOnColumn = (targetColId: 'todo' | 'in_progress' | 'review' | 'completed', e?: React.DragEvent) => {
+    const taskIdToMove = e?.dataTransfer?.getData('text/plain') || draggingTaskId;
+    if (!taskIdToMove) return;
+    const task = localTasks.find((t) => t.task_id === taskIdToMove);
     setDraggingTaskId(null);
     setDragOverColumnId(null);
     if (!task) return;
@@ -796,6 +818,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     }
 
     const prevStatus = task.status;
+    // Register pending update to protect against race conditions
+    pendingStatusUpdatesRef.current.set(task.task_id, { status: newStatus, timestamp: Date.now() });
+
     // Optimistic seamless update
     setLocalTasks((prev) =>
       prev.map((t) => (t.task_id === task.task_id ? { ...t, status: newStatus } : t))
@@ -810,6 +835,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       onTasksUpdated?.(true);
     } catch (err: any) {
       // Revert optimistic update
+      pendingStatusUpdatesRef.current.delete(task.task_id);
       setLocalTasks((prev) =>
         prev.map((t) => (t.task_id === task.task_id ? { ...t, status: prevStatus } : t))
       );
@@ -1358,7 +1384,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-48 sm:pb-64">
+    <div className="space-y-4 pb-48 sm:pb-64 font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Scoped Subcontractor Access Banner */}
       {isSubcontractor && (
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 shadow-2xs">
@@ -1827,8 +1853,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             </p>
           </div>
 
-          {/* Kanban Main Stage: Columns (Always maintain full-width 4-column layout) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start w-full">
+          {/* Kanban Main Stage: Horizontal Scrollable Columns Container */}
+          <div className="flex gap-4.5 overflow-x-auto pb-6 pt-1 items-start w-full custom-scrollbar min-h-[580px]">
               {COLUMNS.map((col) => {
                 const colTasks = filteredTasks.filter((t) => normalizeStatus(t.status) === col.id);
                 const isDragOver = dragOverColumnId === col.id;
@@ -1846,12 +1872,22 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     key={col.id}
                     onDragOver={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       e.dataTransfer.dropEffect = 'move';
                       if (dragOverColumnId !== col.id) {
                         setDragOverColumnId(col.id);
                       }
                     }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (dragOverColumnId !== col.id) {
+                        setDragOverColumnId(col.id);
+                      }
+                    }}
                     onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                       if (dragOverColumnId === col.id) {
                         setDragOverColumnId(null);
@@ -1859,21 +1895,22 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      handleDropOnColumn(col.id as any);
+                      e.stopPropagation();
+                      handleDropOnColumn(col.id as any, e);
                     }}
-                    className={`bg-zinc-50/70 dark:bg-dark-base rounded-2xl border transition-all duration-150 p-3.5 flex flex-col min-h-[520px] ${
+                    className={`w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#0c0d12] rounded-[4px] border transition-all duration-150 p-4 flex flex-col min-h-[560px] ${
                       isDragOver
-                        ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/10'
-                        : 'border-zinc-200 dark:border-zinc-800'
+                        ? 'border-zinc-900 dark:border-white ring-2 ring-zinc-900/10 dark:ring-white/10 bg-zinc-100/80 dark:bg-zinc-900/80'
+                        : 'border-zinc-200 dark:border-white/10'
                     }`}
                   >
                     {/* Column Header */}
-                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-zinc-200/80 dark:border-white/10">
+                      <div className="flex items-center gap-2.5">
                         <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                           {colLabel}
                         </span>
-                        <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-[2px] bg-zinc-200/70 dark:bg-white/10 text-zinc-700 dark:text-zinc-300">
                           {colTasks.length}
                         </span>
                       </div>
@@ -1883,7 +1920,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           <button
                             type="button"
                             onClick={() => openAddTaskModal(col.id as any)}
-                            className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition cursor-pointer"
+                            className="p-1 rounded-[2px] text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-white/5 transition cursor-pointer"
                             title="Add Task"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -1895,7 +1932,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     {/* Cards Container */}
                     <div className="space-y-3 flex-1">
                       {colTasks.length === 0 && !isDragOver && (
-                        <div className="h-28 flex items-center justify-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                        <div className="h-28 flex items-center justify-center border border-dashed border-zinc-200 dark:border-white/10 rounded-[2px] text-xs text-zinc-400 dark:text-zinc-500 font-medium">
                           No tasks in {colLabel}
                         </div>
                       )}
@@ -1910,7 +1947,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         const isLocked = isTaskActuallyLocked(task);
                         const canDrag = !isReadOnly && !isLocked && (isOwner || isClient);
 
-                        // Dot color by column status (Screenshot 1)
+                        // Dot color by column status
                         const dotColor =
                           col.id === 'todo'
                             ? 'bg-zinc-400 dark:bg-zinc-500'
@@ -1938,31 +1975,35 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               setDragOverColumnId(null);
                             }}
                             onClick={() => handleCardClick(task)}
-                            className={`group/card bg-white dark:bg-zinc-900 p-3.5 rounded-xl border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
+                            className={`group/card bg-white dark:bg-[#12141a] p-4 rounded-[2px] border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
                               isDragging
-                                ? 'opacity-30 scale-95 border-blue-500'
+                                ? 'opacity-40 scale-[0.98] border-zinc-900 dark:border-white pointer-events-none'
                                 : isSelected
-                                ? 'ring-2 ring-zinc-900 dark:ring-white border-transparent shadow-md'
-                                : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xs'
-                            } ${isLocked ? 'opacity-80' : ''}`}
+                                ? 'ring-2 ring-zinc-900 dark:ring-white border-zinc-900 dark:border-white shadow-md'
+                                : 'border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/25 hover:shadow-xs hover:bg-zinc-50/70 dark:hover:bg-[#161822]'
+                            } ${isLocked ? 'opacity-85' : ''}`}
                           >
                             {/* Top Row: Dot + Task Code + Locked Badge + Drag Grip */}
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-                                <span className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 truncate">
+                                <span className={`w-2 h-2 rounded-[1px] shrink-0 ${dotColor}`} />
+                                <span className="text-[11px] font-bold tracking-wider text-zinc-600 dark:text-zinc-300 truncate">
                                   {taskCode}
                                 </span>
                                 {isLocked && (
-                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 font-bold ml-1" title="Locked waiting for earlier milestone">
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 font-bold ml-1 px-1 py-0.5 rounded-[2px] bg-amber-500/10 border border-amber-500/20"
+                                    title="Locked waiting for earlier milestone"
+                                  >
                                     <Lock className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Locked</span>
                                   </span>
                                 )}
                               </div>
 
                               <div
                                 className={`text-zinc-400 dark:text-zinc-500 ${
-                                  canDrag ? 'cursor-grab active:cursor-grabbing group-hover/card:text-zinc-600 dark:group-hover/card:text-zinc-300' : 'opacity-30 cursor-not-allowed'
+                                  canDrag ? 'cursor-grab active:cursor-grabbing group-hover/card:text-zinc-700 dark:group-hover/card:text-zinc-200' : 'opacity-25 cursor-not-allowed'
                                 }`}
                                 title={canDrag ? 'Drag to move column' : 'Locked or View Only'}
                               >
@@ -1971,24 +2012,24 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             </div>
 
                             {/* Task Title */}
-                            <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-white leading-snug mb-1 line-clamp-2">
+                            <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-snug mb-1.5 line-clamp-2">
                               {task.title}
                             </h4>
 
                             {/* Task Description Preview */}
                             {task.description && (
-                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
+                              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
                                 {task.description}
                               </p>
                             )}
 
                             {/* Card Footer: Metadata Badges + Assignee Avatar */}
-                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 text-[11px] text-zinc-500 dark:text-zinc-400">
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-zinc-100 dark:border-white/5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                              <div className="flex items-center gap-2 min-w-0">
                                 {/* Milestone Badge */}
                                 {task.milestone_title ? (
                                   <span
-                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 max-w-[100px] truncate"
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold bg-zinc-100 text-zinc-700 dark:bg-white/5 dark:text-zinc-300 border border-zinc-200/80 dark:border-white/10 shrink-0"
                                     title={task.milestone_title}
                                   >
                                     M{getMilestoneOrder(task)}
@@ -1997,7 +2038,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                                 {/* Checklist Counter */}
                                 {checklist.length > 0 && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500 dark:text-zinc-400 shrink-0">
                                     <MessageSquare className="w-3 h-3" />
                                     <span>{completedCount}/{checklist.length}</span>
                                   </span>
@@ -2005,7 +2046,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                                 {/* Due Date Preview */}
                                 {task.due_at && (
-                                  <span className="text-[10px] text-zinc-400">
+                                  <span className="text-[10px] text-zinc-400 shrink-0">
                                     {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                                   </span>
                                 )}
@@ -2066,9 +2107,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         );
                       })}
 
-                      {/* Dashed Drop Target Placeholder (Screenshot 1) */}
+                      {/* Dashed Drop Target Placeholder */}
                       {isDragOver && (
-                        <div className="h-24 rounded-xl border-2 border-dashed border-zinc-400 dark:border-zinc-700 bg-zinc-100/50 dark:bg-zinc-800/30 flex items-center justify-center text-xs font-semibold text-zinc-500 dark:text-zinc-400 transition-all duration-150 animate-pulse">
+                        <div className="h-24 rounded-[2px] border-2 border-dashed border-zinc-400 dark:border-zinc-600 bg-zinc-100/50 dark:bg-zinc-800/30 flex items-center justify-center text-xs font-semibold text-zinc-500 dark:text-zinc-400 transition-all duration-150 animate-pulse">
                           Drop to move to {colLabel}
                         </div>
                       )}
@@ -2079,7 +2120,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       <button
                         type="button"
                         onClick={() => openAddTaskModal(col.id as any)}
-                        className="mt-3 w-full flex items-center justify-center gap-1.5 p-2 rounded-xl text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition cursor-pointer"
+                        className="mt-3 w-full py-2 px-3 rounded-[2px] border border-dashed border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/25 hover:bg-white dark:hover:bg-white/5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add task</span>
