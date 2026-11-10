@@ -21,6 +21,7 @@ const {
     getAllInboxesByAccountIdController,
     checkInboxByTwoAccountIdsController,
     getInboxByTwoAccountIdsController,
+    markConversationReadController,
 } = require('../controllers/InboxControllers');
 const router = require('express').Router();
 const checkSession = require('../middleware/CheckSession');
@@ -58,6 +59,7 @@ router.get(
     '/conversation/direct/:accountId',
     getInboxByTwoAccountIdsController
 );
+router.post('/conversation/:conversationId/read', markConversationReadController);
 router.get('/conversation/:convoId', getConversationByConvoIdController);
 
 router.patch('/inbox/:inboxId', updateInboxController);

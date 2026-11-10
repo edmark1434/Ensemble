@@ -21,6 +21,7 @@ const {
     getAllInboxesByAccountIdServices,
     checkInboxByTwoAccountIdsServices,
     getInboxByTwoAccountIdsServices,
+    markConversationReadServices,
 } = require('../services/InboxServices');
 const { getIo, emitConversationMessage } = require('../lib/WebSocket');
 
@@ -361,6 +362,27 @@ async function deleteConversationController(req, res) {
     }
 }
 
+async function markConversationReadController(req, res) {
+    try {
+        const seen = await markConversationReadServices(
+            req.params.conversationId,
+            accountId(req)
+        );
+        const io = getIo();
+        if (io) {
+            io.to(seen.conversation_id).emit('messagesSeen', seen);
+            if (Array.isArray(seen.member_account_ids)) {
+                seen.member_account_ids.forEach((memberId) => {
+                    io.to(String(memberId)).emit('messagesSeen', seen);
+                });
+            }
+        }
+        return res.json({ success: true, ...seen });
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
 module.exports = {
     deleteConversationController,
     updateLimitController,
@@ -386,4 +408,5 @@ module.exports = {
     getAllInboxesByAccountIdController,
     checkInboxByTwoAccountIdsController,
     getInboxByTwoAccountIdsController,
+    markConversationReadController,
 };

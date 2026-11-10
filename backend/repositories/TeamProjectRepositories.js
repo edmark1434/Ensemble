@@ -642,7 +642,27 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
   const query = `
     SELECT t.team_id, t.account_id as team_account_id, t.team_type, t.job_id, t.gig_id,
            CASE WHEN t.gig_id IS NOT NULL THEN 'Gig' ELSE 'Job' END as workspace_type,
-           t.is_archived, t.archived_at, t.created_at as project_created_at,
+           (t.is_archived = TRUE OR (
+             t.team_type = 'contractual' AND EXISTS (
+               SELECT 1 FROM team_contract_workspaces tcw_arch WHERE tcw_arch.team_id = t.team_id
+             ) AND NOT EXISTS (
+               SELECT 1 FROM team_contract_workspaces tcw_arch
+               JOIN contracts c_arch ON c_arch.contract_id = tcw_arch.contract_id
+               WHERE tcw_arch.team_id = t.team_id
+                 AND c_arch.status NOT IN ('Completed', 'Cancelled', 'Closed')
+             )
+           )) as is_archived,
+           COALESCE(t.archived_at, CASE
+             WHEN t.team_type = 'contractual' AND EXISTS (
+               SELECT 1 FROM team_contract_workspaces tcw_arch WHERE tcw_arch.team_id = t.team_id
+             ) AND NOT EXISTS (
+               SELECT 1 FROM team_contract_workspaces tcw_arch
+               JOIN contracts c_arch ON c_arch.contract_id = tcw_arch.contract_id
+               WHERE tcw_arch.team_id = t.team_id
+                 AND c_arch.status NOT IN ('Completed', 'Cancelled', 'Closed')
+             ) THEN NOW()
+             ELSE NULL
+           END) as archived_at, t.created_at as project_created_at,
            a.display_name as project_title, a.handle as project_handle,
            a.tagline, a.description as project_description,
            f.path as thumbnail_path,
@@ -685,7 +705,18 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
   `;
   const res = await pool.query(query, [String(projectIdentifier), viewerAccountId]);
   if (res.rows.length === 0) return null;
-  return res.rows[0];
+  const project = res.rows[0];
+  if (project.is_archived) {
+    if (!project.archived_at) {
+      project.archived_at = new Date();
+    }
+    pool.query(`
+      UPDATE teams
+         SET is_archived = TRUE, archived_at = COALESCE(archived_at, NOW())
+       WHERE team_id = $1 AND is_archived = FALSE
+    `, [project.team_id]).catch((err) => console.error('Self-healing workspace archive failed:', err));
+  }
+  return project;
 }
 
 /**
@@ -1195,29 +1226,62 @@ async function unlockSequentialMilestones(dbClient, contractId, completedMilesto
     `, [workspace_id, clientAccId, JSON.stringify({ unlocked_milestone_order: nextOrder })]);
   }
 
-  // Check if all contracts in this team are complete
-  const pendingContractsRes = await dbClient.query(`
+  // Check if all contracts in this team are complete or cancelled
+  await syncTeamWorkspaceArchivedStatus(dbClient, team_id, clientAccId, 'All milestones and contracts finished');
+}
+
+
+/**
+ * Check if all contracts in a contractual team workspace are completed, cancelled, or closed.
+ * If so, marks the team workspace as archived (is_archived = TRUE, archived_at = NOW()).
+ */
+async function syncTeamWorkspaceArchivedStatus(dbClientOrPool, teamId, actorAccountId = null, reason = 'All contracts finished or cancelled') {
+  const db = dbClientOrPool || pool;
+  const pendingContractsRes = await db.query(`
     SELECT COUNT(*) as count
       FROM team_contract_workspaces tcw
       JOIN contracts c ON c.contract_id = tcw.contract_id
      WHERE tcw.team_id = $1
-       AND c.status NOT IN ('Completed', 'Cancelled')
-  `, [team_id]);
+       AND c.status NOT IN ('Completed', 'Cancelled', 'Closed')
+  `, [teamId]);
 
   const pendingCount = parseInt(pendingContractsRes.rows[0]?.count || '0', 10);
   if (pendingCount === 0) {
-    await dbClient.query(`
+    const updateRes = await db.query(`
       UPDATE teams
-         SET is_archived = TRUE, archived_at = NOW()
+         SET is_archived = TRUE, archived_at = COALESCE(archived_at, NOW())
        WHERE team_id = $1 AND is_archived = FALSE
-    `, [team_id]);
+       RETURNING team_id
+    `, [teamId]);
 
-    if (clientAccId) {
-      await dbClient.query(`
-        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
-        VALUES ($1, $2, 'team_project_archived', $3)
-      `, [workspace_id, clientAccId, JSON.stringify({ reason: 'All milestones and contracts finished' })]);
+    if (updateRes.rows.length > 0) {
+      const wsRes = await db.query(`SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1`, [teamId]);
+      const workspace_id = wsRes.rows[0]?.workspace_id;
+      if (workspace_id) {
+        await db.query(`
+          INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+          VALUES ($1, $2, 'team_project_archived', $3)
+        `, [workspace_id, actorAccountId || null, JSON.stringify({ reason })]).catch(() => {});
+      }
+      return true;
     }
+  }
+  return false;
+}
+
+/**
+ * Given a contract_id, sync the archived status of all contractual team workspaces linked to it.
+ */
+async function syncContractWorkspacesArchived(dbClientOrPool, contractId, actorAccountId = null, reason = 'Contract cancelled or finished') {
+  const db = dbClientOrPool || pool;
+  const teamRes = await db.query(`
+    SELECT DISTINCT team_id
+      FROM team_contract_workspaces
+     WHERE contract_id = $1
+  `, [contractId]);
+
+  for (const row of teamRes.rows) {
+    await syncTeamWorkspaceArchivedStatus(db, row.team_id, actorAccountId, reason);
   }
 }
 
@@ -2692,6 +2756,8 @@ module.exports = {
   unlockSequentialMilestones,
   updateProjectDetails,
   deleteProject,
+  syncTeamWorkspaceArchivedStatus,
+  syncContractWorkspacesArchived,
   getProjectContracts,
   getTeamContractContext,
   getProjectHistory,
