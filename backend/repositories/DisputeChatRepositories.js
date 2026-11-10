@@ -86,15 +86,20 @@ function resolveDisputeMessageAudience(m) {
 
 function mapMongoDisputeMessage(m) {
   const audience = resolveDisputeMessageAudience(m);
+  const authorRole = m.author_role || (m.author_type === 'staff' ? 'staff' : null);
   return {
     id: String(m._id),
     authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
     authorName: m.author_name || 'Unknown',
-    authorRole: m.author_role || (m.author_type === 'staff' ? 'staff' : null),
+    authorRole,
     senderAccountId: m.sender_id || m.senderId || null,
     body: m.message_content || m.body || '',
     isInternal: Boolean(m.is_internal) || audience === 'staff' || audience === 'author_and_staff',
     audience,
+    replyToId: m.message_id_reply ? String(m.message_id_reply) : null,
+    // Community (non-party) replies are held private until staff or an admin publishes them.
+    pendingReview:
+      String(authorRole || '').toLowerCase() === 'community' && !isPublishedAudience(audience),
     publishedAt: m.published_at || null,
     createdAt: m.created_at || m.createdAt || null,
   };
@@ -119,7 +124,11 @@ function canViewerSeeMessage(
 ) {
   const audience = message.audience || 'author_and_staff';
   if (audience === 'public') return true;
-  if (audience === 'parties') return Boolean(visibility && isParty);
+  if (audience === 'parties') {
+    // Staff read the whole case file, so a party-visible message is visible to them too.
+    if (isStaff) return true;
+    return Boolean(visibility && isParty);
+  }
   if (audience === 'disputer') {
     if (isStaff) return true;
     return Boolean(isFiler);
@@ -150,6 +159,42 @@ async function listDisputeMessages(chatId) {
     .filter((m) => !m.is_deleted && !m.deleted_at)
     .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
     .map(mapMongoDisputeMessage);
+}
+
+/** One stored dispute message, mapped. Used to validate reply targets. */
+async function getDisputeMessage(chatId, messageId) {
+  if (!chatId || !messageId || !isMongoReady()) return null;
+  if (!ObjectId.isValid(String(messageId))) return null;
+  const db = mongoDb();
+  if (!db) return null;
+  const doc = await db.collection('messages').findOne({
+    _id: new ObjectId(String(messageId)),
+    conversation_id: String(chatId),
+  });
+  if (!doc || doc.is_deleted || doc.deleted_at) return null;
+  return mapMongoDisputeMessage(doc);
+}
+
+/**
+ * Validate a reply target for a dispute message.
+ * The parent must live on the same chat and be one the author is allowed to see,
+ * so nobody can quote a message that was never shown to them.
+ * @returns {Promise<object|null>} the mapped parent message, or null when no reply was requested
+ */
+async function resolveDisputeReplyTarget(chatId, replyToId, viewer = {}) {
+  if (replyToId === null || replyToId === undefined || replyToId === '') return null;
+  const parent = await getDisputeMessage(chatId, replyToId);
+  if (!parent) {
+    const error = new Error('The message you replied to is no longer available.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!canViewerSeeMessage(parent, viewer)) {
+    const error = new Error('You cannot reply to that message.');
+    error.statusCode = 403;
+    throw error;
+  }
+  return parent;
 }
 
 async function ensureStaffMemberOnChat(chatId, accountId, now = new Date()) {
@@ -341,6 +386,7 @@ async function createDisputeMessage({
   isInternal = false,
   notifyAccountIds = [],
   disputeId = null,
+  replyToId = null,
 }) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot send dispute chat messages');
@@ -352,6 +398,7 @@ async function createDisputeMessage({
     await ensureStaffMemberOnChat(chatId, accountId, now);
   }
 
+  const normalizedReplyToId = replyToId ? String(replyToId) : null;
   const normalizedAudience = String(audience || 'author_and_staff').toLowerCase();
   const audienceList =
     Array.isArray(audiences) && audiences.length
@@ -364,7 +411,7 @@ async function createDisputeMessage({
     sender_id: accountId,
     message_type: 'text',
     message_content: body,
-    message_id_reply: null,
+    message_id_reply: normalizedReplyToId,
     attachments: [],
     links: [],
     message_react: [],
@@ -395,6 +442,7 @@ async function createDisputeMessage({
     body,
     isInternal: Boolean(isInternal) || privateToAuthorAndStaff,
     audience: normalizedAudience,
+    replyToId: normalizedReplyToId,
     publishedAt: isPublishedAudience(normalizedAudience) ? now : null,
     createdAt: now,
   };
@@ -683,6 +731,8 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     },
     isParty,
     canComment: Boolean(viewerAccountId) && !closed,
+    // Replies from people outside the dispute are held for staff review before they appear.
+    commentsNeedApproval: Boolean(viewerAccountId) && !isParty,
     chatId,
     messages,
   };
@@ -721,7 +771,7 @@ async function getAccountDispute(disputeId, accountId) {
   return { ...mapDisputeSummary(row, accountId), chatId, messages };
 }
 
-async function postPublicDisputeComment(disputeId, accountId, body) {
+async function postPublicDisputeComment(disputeId, accountId, body, { replyToId = null } = {}) {
   if (!DISPUTE_UUID.test(String(disputeId || ''))) {
     const error = new Error('This dispute is not public.');
     error.statusCode = 404;
@@ -741,7 +791,8 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
 
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, visibility, status, by_account_id, for_account_id
+    SELECT dispute_id, dispute_number, visibility, status, by_account_id, for_account_id,
+           handled_by_staff_id
     FROM disputes
     WHERE dispute_id = $1 AND deleted_at IS NULL
     `,
@@ -787,11 +838,24 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
   const profile = account.rows[0] || {};
   const authorName = profile.display_name || profile.handle || 'Member';
   const authorRole = isFiler ? 'disputer' : isRespondent ? 'disputee' : 'community';
-  const forStaff = !row.visibility && isFiler;
-  // Hidden filer notes stay private. Once visible, replies join the public forum thread.
-  const audience = forStaff ? 'author_and_staff' : 'public';
+  // Hidden filer notes stay private. Replies from people who are not part of the dispute
+  // are held private to the author and staff until a staff member or admin publishes them.
+  const pendingReview = !isParty;
 
   const chatId = await ensureDisputeChat(disputeId, row);
+  const replyTarget = await resolveDisputeReplyTarget(chatId, replyToId, {
+    accountId,
+    isParty,
+    isFiler,
+    isRespondent,
+    visibility: Boolean(row.visibility),
+  });
+  // Replying to a message that was never published keeps the reply private too,
+  // so a quote can never drag private context into the public thread.
+  const quotesPrivate = Boolean(replyTarget && !isPublishedAudience(replyTarget.audience));
+  const forStaff = (!row.visibility && isFiler) || pendingReview || quotesPrivate;
+  const audience = forStaff ? 'author_and_staff' : 'public';
+
   const notifyAccountIds = forStaff
     ? []
     : [row.by_account_id, row.for_account_id].filter(
@@ -809,9 +873,16 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
     isInternal: forStaff,
     notifyAccountIds,
     disputeId,
+    replyToId: replyTarget ? replyTarget.id : null,
   });
-  if (row.visibility) {
-    const number = row.dispute_number || 'Dispute';
+  const number = row.dispute_number || 'Dispute';
+  if (pendingReview) {
+    // Parties learn nothing about a held comment; the handler gets the review prompt.
+    await notifyDisputeHandler(row, {
+      message: `A community reply on dispute ${number} is waiting for review.`,
+      path: `/disputes/${disputeId}`,
+    });
+  } else if (row.visibility) {
     await notifyDisputeParties(row, {
       message: `New reply on dispute ${number}.`,
       path: `/disputes/${disputeId}`,
@@ -821,10 +892,45 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
   return {
     private: forStaff,
     forStaff,
+    pendingReview,
+    quotesPrivate,
     audience,
     chatId,
+    replyToId: replyTarget ? replyTarget.id : null,
     message,
   };
+}
+
+/** Notify the staff handler assigned to a dispute, when there is one. */
+async function notifyDisputeHandler(row, { message, path } = {}) {
+  if (!row?.dispute_id || !row?.handled_by_staff_id || !message) return;
+  try {
+    const staffAccount = await pool.query(
+      `SELECT account_id FROM staff WHERE staff_id = $1`,
+      [row.handled_by_staff_id]
+    );
+    const accountId = staffAccount.rows[0]?.account_id;
+    if (!accountId) return;
+
+    const NotificationRepositories = require('./NotificationRepositories');
+    const notification = await NotificationRepositories.createNotification({
+      account_id: accountId,
+      message,
+      reference_table: 'disputes',
+      reference_prefix: 'DIS',
+      reference_path: path || `/disputes/${row.dispute_id}`,
+      reference_id: row.dispute_id,
+    });
+    let io = null;
+    try {
+      io = require('../lib/WebSocket').getIo();
+    } catch {
+      io = null;
+    }
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+  } catch (err) {
+    console.warn('Dispute handler notification skipped:', err.message);
+  }
 }
 
 async function notifyDisputeParties(row, { message, path, excludeAccountId = null, onlyFiler = false } = {}) {
@@ -873,12 +979,15 @@ module.exports = {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  getDisputeMessage,
+  resolveDisputeReplyTarget,
   listAccountDisputes,
   listVisibleAccountDisputes,
   getPublicDisputeDiscussion,
   getAccountDispute,
   postPublicDisputeComment,
   notifyDisputeParties,
+  notifyDisputeHandler,
   createDisputeMessage,
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,

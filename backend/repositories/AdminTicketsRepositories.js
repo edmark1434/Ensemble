@@ -33,6 +33,7 @@ const {
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,
   notifyDisputeParties,
+  resolveDisputeReplyTarget,
 } = require('./DisputeChatRepositories');
 const {
   ROLE_TO_TICKET_TYPES,
@@ -4032,6 +4033,10 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
 
   const normalizedAudience = String(audience || 'staff').toLowerCase();
   const chatId = await ensureDisputeChat(disputeId, row);
+  // Staff see every message on the case, so any message on this chat is a valid reply target.
+  const replyTarget = await resolveDisputeReplyTarget(chatId, options.replyToId ?? null, {
+    isStaff: true,
+  });
   const audiences = mayPublish && Array.isArray(options.audiences)
     ? options.audiences.map((a) => String(a).toLowerCase())
     : [normalizedAudience];
@@ -4059,6 +4064,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
       (id) => id && String(id) !== String(actorAccountId || '')
     ),
     disputeId,
+    replyToId: replyTarget ? replyTarget.id : null,
   });
 
   const number = row.dispute_number || 'Dispute';

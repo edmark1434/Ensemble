@@ -155,12 +155,19 @@ async function postPublicDisputeCommentController(req, res) {
             return res.status(401).json({ success: false, message: 'Sign in to comment.' });
         }
         const { postPublicDisputeComment } = require('../repositories/DisputeChatRepositories');
-        const posted = await postPublicDisputeComment(req.params.disputeId, accountId, req.body?.body);
+        const replyToId = req.body?.replyToId ?? req.body?.replyTo ?? null;
+        const posted = await postPublicDisputeComment(req.params.disputeId, accountId, req.body?.body, {
+            replyToId: replyToId ? String(replyToId) : null,
+        });
         return res.status(201).json({
             success: true,
-            message: posted?.forStaff
-              ? 'Sent to staff. The other party cannot see this until the dispute is public.'
-              : 'Comment posted to the discussion.',
+            message: posted?.pendingReview
+              ? 'Sent for review. Only you and staff can see it until staff make it public.'
+              : posted?.quotesPrivate
+                ? 'Sent to staff. Replies to a private message stay private.'
+                : posted?.forStaff
+                  ? 'Sent to staff. The other party cannot see this until the dispute is public.'
+                  : 'Comment posted to the discussion.',
             data: posted,
         });
     } catch (err) {

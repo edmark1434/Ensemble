@@ -135,7 +135,7 @@ async function patchDispute(req, res) {
 
 async function postDisputeMessage(req, res) {
   try {
-    const { body, isInternal, audience, visibleToParties, visibleToPublic } = req.body;
+    const { body, isInternal, audience, visibleToParties, visibleToPublic, replyToId } = req.body;
     if (!body?.trim()) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
@@ -144,6 +144,7 @@ async function postDisputeMessage(req, res) {
       audience,
       visibleToParties: Boolean(visibleToParties),
       visibleToPublic: Boolean(visibleToPublic),
+      replyToId: replyToId ? String(replyToId) : null,
     });
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });

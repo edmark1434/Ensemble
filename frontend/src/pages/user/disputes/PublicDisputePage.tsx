@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2, Lock, MessagesSquare, Send } from "lucide-react";
+import { ArrowLeft, CornerUpLeft, Loader2, Lock, MessagesSquare, Send, X } from "lucide-react";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import toast from "react-hot-toast";
@@ -24,6 +24,8 @@ type DiscussionMessage = {
   body?: string;
   createdAt?: string | null;
   audience?: string;
+  pendingReview?: boolean;
+  replyToId?: string | null;
 };
 
 type DiscussionPerson = {
@@ -43,11 +45,51 @@ type Discussion = {
   respondent?: DiscussionPerson;
   isParty?: boolean;
   canComment?: boolean;
+  commentsNeedApproval?: boolean;
   chatId?: string | null;
   messages: DiscussionMessage[];
 };
 
 const MAX_LENGTH = 2000;
+
+function quoteSnippet(body?: string, limit = 160) {
+  const text = String(body || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+}
+
+/** The quoted message as shown above a reply. Null when the viewer can't see the parent. */
+function QuotedMessage({
+  parent,
+  onJump,
+}: {
+  parent?: DiscussionMessage;
+  onJump?: () => void;
+}) {
+  if (!parent) {
+    return (
+      <p className="mb-2 flex items-center gap-1.5 rounded-lg border-l-2 border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] italic text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-500">
+        <CornerUpLeft className="h-3 w-3 shrink-0" />
+        Replying to a message you can’t see
+      </p>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onJump}
+      className="mb-2 block w-full rounded-lg border-l-2 border-gray-300 bg-gray-50 px-2.5 py-1.5 text-left transition hover:bg-gray-100 dark:border-white/20 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+    >
+      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 dark:text-zinc-300">
+        <CornerUpLeft className="h-3 w-3 shrink-0" />
+        {parent.authorName || "Member"}
+      </span>
+      <span className="mt-0.5 block truncate text-[11px] text-gray-500 dark:text-zinc-400">
+        {quoteSnippet(parent.body)}
+      </span>
+    </button>
+  );
+}
 
 function upsertDiscussionMessage(list: DiscussionMessage[], next: DiscussionMessage) {
   const idx = list.findIndex((item) => String(item.id) === String(next.id));
@@ -97,12 +139,17 @@ export default function PublicDisputePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isAuthenticated = useGlobalState((state) => state.isAuthenticated);
+  const viewerAccountId = useGlobalState(
+    (state) => state.user?.account_id ?? state.user?.accountId ?? null
+  );
   const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -145,12 +192,21 @@ export default function PublicDisputePage() {
       createdAt?: string;
       created_at?: string;
       audience?: string;
+      senderAccountId?: string | null;
+      sender_id?: string | null;
+      replyToId?: string | null;
+      message_id_reply?: string | null;
     }) => {
       if (!payload?.disputeId || String(payload.disputeId) !== String(id)) return;
       const messageId = payload?.id || payload?._id;
       if (!messageId) return;
       const audience = String(payload.audience || "").toLowerCase();
-      if (!["parties", "public"].includes(audience)) {
+      const senderId = payload.senderAccountId ?? payload.sender_id ?? null;
+      const published = ["parties", "public"].includes(audience);
+      const ownHeldComment =
+        !published &&
+        Boolean(viewerAccountId && senderId && String(senderId) === String(viewerAccountId));
+      if (!published && !ownHeldComment) {
         // A message moved back to a private audience leaves the public thread.
         setDiscussion((current) =>
           current
@@ -164,15 +220,24 @@ export default function PublicDisputePage() {
       }
       setDiscussion((current) => {
         if (!current) return current;
+        const existing = (current.messages || []).find(
+          (item) => String(item.id) === String(messageId)
+        );
+        if (ownHeldComment && !existing && !(payload.body || payload.message_content)) return current;
         return {
           ...current,
           messages: upsertDiscussionMessage(current.messages || [], {
             id: String(messageId),
-            authorName: payload.authorName || payload.author_name || "Member",
-            authorRole: payload.authorRole || payload.author_role || null,
-            body: payload.body || payload.message_content || "",
-            createdAt: payload.createdAt || payload.created_at || new Date().toISOString(),
+            authorName: payload.authorName || payload.author_name || existing?.authorName || "Member",
+            authorRole:
+              payload.authorRole || payload.author_role || existing?.authorRole || null,
+            body: payload.body || payload.message_content || existing?.body || "",
+            createdAt:
+              payload.createdAt || payload.created_at || existing?.createdAt || new Date().toISOString(),
             audience: payload.audience,
+            pendingReview: !published,
+            replyToId:
+              payload.replyToId ?? payload.message_id_reply ?? existing?.replyToId ?? null,
           }),
         };
       });
@@ -199,7 +264,7 @@ export default function PublicDisputePage() {
       socket.off("disputeVisibilityChanged", onVisibility);
       socket.emit("leaveDisputeDiscussion", { disputeId: String(id) });
     };
-  }, [id]);
+  }, [id, viewerAccountId]);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -209,6 +274,8 @@ export default function PublicDisputePage() {
     if (!id || !comment.trim() || sending) return;
     const text = comment.trim();
     const pendingId = `pending-${Date.now()}`;
+    const parentId = replyToId;
+    const heldForReview = discussion?.commentsNeedApproval ?? !discussion?.isParty;
     setDiscussion((current) =>
       current
         ? {
@@ -221,19 +288,30 @@ export default function PublicDisputePage() {
                 authorRole: current.isParty ? undefined : "community",
                 body: text,
                 createdAt: new Date().toISOString(),
-                audience: "public",
+                audience: heldForReview ? "author_and_staff" : "public",
+                pendingReview: heldForReview,
+                replyToId: parentId,
               },
             ],
           }
         : current
     );
     setComment("");
+    setReplyToId(null);
     setSending(true);
     try {
-      const res = await api.post(`/api/accounts/disputes/${id}/messages`, { body: text });
+      const res = await api.post(`/api/accounts/disputes/${id}/messages`, {
+        body: text,
+        ...(parentId ? { replyToId: parentId } : {}),
+      });
       toast.success(res.data?.message || "Comment posted to the discussion.");
       const saved = res.data?.data?.message as DiscussionMessage | undefined;
       const nextChatId = res.data?.data?.chatId;
+      const savedAudience = String(
+        saved?.audience || (heldForReview ? "author_and_staff" : "public")
+      ).toLowerCase();
+      const savedPending =
+        res.data?.data?.pendingReview ?? !["parties", "public"].includes(savedAudience);
       setDiscussion((current) => {
         if (!current) return current;
         const withoutPending = (current.messages || []).filter((item) => String(item.id) !== pendingId);
@@ -247,7 +325,9 @@ export default function PublicDisputePage() {
                 authorRole: saved.authorRole || null,
                 body: saved.body || text,
                 createdAt: saved.createdAt || new Date().toISOString(),
-                audience: saved.audience || "public",
+                audience: savedAudience,
+                pendingReview: savedPending,
+                replyToId: saved.replyToId ?? res.data?.data?.replyToId ?? parentId,
               })
             : withoutPending,
         };
@@ -266,6 +346,7 @@ export default function PublicDisputePage() {
           : current
       );
       setComment(text);
+      setReplyToId(parentId);
       toast.error(err?.response?.data?.message || "Could not send that comment.");
     } finally {
       setSending(false);
@@ -274,6 +355,23 @@ export default function PublicDisputePage() {
 
   const closed = isClosedStatus(discussion?.status);
   const messages = discussion?.messages || [];
+  const messageById = new Map(messages.map((item) => [String(item.id), item]));
+  const replyingTo = replyToId ? messageById.get(String(replyToId)) : undefined;
+
+  const jumpToMessage = (messageId: string) => {
+    const node = document.getElementById(`dispute-message-${messageId}`);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.classList.add("ring-2", "ring-gray-400", "dark:ring-white/30");
+    window.setTimeout(() => {
+      node.classList.remove("ring-2", "ring-gray-400", "dark:ring-white/30");
+    }, 1200);
+  };
+
+  const startReply = (messageId: string) => {
+    setReplyToId(String(messageId));
+    composerRef.current?.focus();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-['Plus_Jakarta_Sans'] dark:bg-dark-base">
@@ -357,8 +455,18 @@ export default function PublicDisputePage() {
                 <ol className="divide-y divide-gray-100 dark:divide-white/5">
                   {messages.map((message) => {
                     const pending = String(message.id).startsWith("pending-");
+                    const heldForReview = Boolean(message.pendingReview);
+                    const parent = message.replyToId
+                      ? messageById.get(String(message.replyToId))
+                      : undefined;
                     return (
-                      <li key={message.id} className={`flex gap-3 px-5 py-4 ${pending ? "opacity-60" : ""}`}>
+                      <li
+                        key={message.id}
+                        id={`dispute-message-${message.id}`}
+                        className={`group flex gap-3 rounded-lg px-5 py-4 transition ${pending ? "opacity-60" : ""} ${
+                          heldForReview ? "bg-amber-50/60 dark:bg-amber-500/[0.06]" : ""
+                        }`}
+                      >
                         <Avatar name={message.authorName} role={message.authorRole} />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -366,13 +474,42 @@ export default function PublicDisputePage() {
                               {message.authorName || "Member"}
                             </span>
                             <RoleChip role={message.authorRole} />
+                            {heldForReview ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                                <Lock className="h-2.5 w-2.5" />
+                                Awaiting staff review
+                              </span>
+                            ) : null}
                             <span className="ml-auto text-[11px] text-gray-400 dark:text-zinc-500">
                               {pending ? "Sending…" : formatWhen(message.createdAt)}
                             </span>
                           </div>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
-                            {message.body}
-                          </p>
+                          {heldForReview ? (
+                            <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/80">
+                              Only you and staff can see this reply until a staff member or admin makes it public.
+                            </p>
+                          ) : null}
+                          <div className="mt-1.5">
+                            {message.replyToId ? (
+                              <QuotedMessage
+                                parent={parent}
+                                onJump={parent ? () => jumpToMessage(String(parent.id)) : undefined}
+                              />
+                            ) : null}
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
+                              {message.body}
+                            </p>
+                          </div>
+                          {discussion.canComment && !pending ? (
+                            <button
+                              type="button"
+                              onClick={() => startReply(String(message.id))}
+                              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-400 opacity-0 transition hover:text-gray-700 focus:opacity-100 group-hover:opacity-100 dark:text-zinc-500 dark:hover:text-white"
+                            >
+                              <CornerUpLeft className="h-3 w-3" />
+                              Reply
+                            </button>
+                          ) : null}
                         </div>
                       </li>
                     );
@@ -395,7 +532,29 @@ export default function PublicDisputePage() {
                 </div>
               ) : discussion.canComment ? (
                 <div className="space-y-2">
+                  {replyToId ? (
+                    <div className="flex items-start gap-2 rounded-xl border-l-2 border-gray-300 bg-gray-50 px-3 py-2 dark:border-white/20 dark:bg-white/[0.04]">
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 dark:text-zinc-300">
+                          <CornerUpLeft className="h-3 w-3 shrink-0" />
+                          Replying to {replyingTo?.authorName || "a message"}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-gray-500 dark:text-zinc-400">
+                          {replyingTo ? quoteSnippet(replyingTo.body) : "This message is no longer in the thread."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReplyToId(null)}
+                        aria-label="Cancel reply"
+                        className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-200 hover:text-gray-700 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-white"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
                   <textarea
+                    ref={composerRef}
                     value={comment}
                     onChange={(event) => setComment(event.target.value)}
                     onKeyDown={(event) => {
@@ -403,17 +562,21 @@ export default function PublicDisputePage() {
                         event.preventDefault();
                         void sendComment();
                       }
+                      if (event.key === "Escape" && replyToId) {
+                        event.preventDefault();
+                        setReplyToId(null);
+                      }
                     }}
                     maxLength={MAX_LENGTH}
                     rows={3}
-                    placeholder="Write a reply…"
+                    placeholder={replyToId ? `Reply to ${replyingTo?.authorName || "this message"}…` : "Write a reply…"}
                     className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-white/30"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] text-gray-500 dark:text-zinc-500">
-                      {discussion.isParty
-                        ? "You’re a party on this dispute. Your reply is public."
-                        : "Your reply is public and visible to everyone viewing this dispute."}
+                      {(discussion.commentsNeedApproval ?? !discussion.isParty)
+                        ? "You’re not part of this dispute, so your reply stays private to you and staff until a staff member or admin makes it public."
+                        : "You’re a party on this dispute. Your reply is public."}
                       <span className="ml-2 tabular-nums text-gray-400 dark:text-zinc-600">
                         {comment.length}/{MAX_LENGTH}
                       </span>

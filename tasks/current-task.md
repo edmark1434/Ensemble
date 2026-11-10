@@ -1,4 +1,25 @@
-# Current Task: Workspace Chat Redesign, Portfolio Video Scrubber & Project Duration Enforcement
+# Current Task: Dispute Comment Moderation & Threaded Replies
+
+## Objective
+On a public dispute, a reply from anyone who is not the disputer or disputee must be held private
+(author + staff) until a staff member or admin publishes it. Add quote-replies to the dispute chat
+for every side: community, disputer, disputee, staff/admin.
+
+## Acceptance criteria
+- [x] Non-party replies store as `author_and_staff` with `pendingReview`; parties still post straight to the public thread.
+- [x] A held comment is visible to its author and staff only — no party notifications, no public-room broadcast.
+- [x] The assigned handler is notified when a community reply is waiting for review.
+- [x] Staff/admin publish a held comment with the per-message audience select or a "Make public" button; the thread flags it "Awaiting review".
+- [x] `POST .../messages` accepts `replyToId` on both the member and the five staff routes; messages return `replyToId`.
+- [x] A reply target must be on the same chat and visible to its author (400 missing / 403 hidden).
+- [x] A member reply quoting a non-published message is itself held, so a quote cannot leak private text.
+- [x] Reply UI (quote banner, quoted parent, jump-to-parent, Esc to cancel) on the public dispute page, the staff/admin dispute modal, and the disputer's private-notes panel.
+- [x] `cd frontend && npm run build` (tsc + vite) passes; backend files pass `node --check`; dispute visibility/mapping logic checked against the real module.
+- [ ] Not verified against a live PostgreSQL/MongoDB instance — handler notification and reply-target lookups still need a runtime pass.
+
+---
+
+# History: Workspace Chat Redesign, Portfolio Video Scrubber & Project Duration Enforcement
 
 ## Objectives & Completed Work
 

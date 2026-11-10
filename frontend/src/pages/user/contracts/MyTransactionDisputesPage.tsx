@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Check, Loader2, Lock, Plus, Send } from "lucide-react";
+import { AlertCircle, Check, CornerUpLeft, Loader2, Lock, Plus, Send, X } from "lucide-react";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
@@ -22,6 +22,7 @@ type DisputeMessage = {
   body?: string;
   createdAt?: string | null;
   conversationId?: string;
+  replyToId?: string | null;
 };
 
 type DisputeRow = {
@@ -39,6 +40,12 @@ type DisputeRow = {
 };
 
 const MAX_LENGTH = 2000;
+
+function quoteSnippet(body?: string, limit = 140) {
+  const text = String(body || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+}
 
 function upsertNote(list: DisputeMessage[], next: DisputeMessage) {
   const idx = list.findIndex((item) => String(item.id) === String(next.id));
@@ -111,6 +118,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const [notes, setNotes] = useState<DisputeMessage[]>([]);
   const [chatId, setChatId] = useState<string | null>(dispute.chatId || null);
   const [draft, setDraft] = useState("");
+  const [replyToId, setReplyToId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(Boolean(dispute.canAddInformation));
 
@@ -145,6 +153,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
       message_content?: string;
       created_at?: string;
       audience?: string;
+      message_id_reply?: string | null;
     }) => {
       const room = payload?.conversationId || payload?.conversation_id;
       if (room && String(room) !== String(chatId)) return;
@@ -160,6 +169,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           authorType: payload.authorType || payload.author_type,
           body: payload.body || payload.message_content || "",
           createdAt: payload.createdAt || payload.created_at || new Date().toISOString(),
+          replyToId: payload.replyToId ?? payload.message_id_reply ?? null,
         })
       );
     };
@@ -181,15 +191,27 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const sendMoreInformation = async () => {
     const text = draft.trim();
     if (!text || sending) return;
+    const parentId = replyToId;
     const pendingId = `pending-${Date.now()}`;
     setNotes((current) => [
       ...current,
-      { id: pendingId, authorName: "You", authorType: "user", body: text, createdAt: new Date().toISOString() },
+      {
+        id: pendingId,
+        authorName: "You",
+        authorType: "user",
+        body: text,
+        createdAt: new Date().toISOString(),
+        replyToId: parentId,
+      },
     ]);
     setDraft("");
+    setReplyToId(null);
     setSending(true);
     try {
-      const res = await api.post(`/api/accounts/disputes/${dispute.id}/messages`, { body: text });
+      const res = await api.post(`/api/accounts/disputes/${dispute.id}/messages`, {
+        body: text,
+        ...(parentId ? { replyToId: parentId } : {}),
+      });
       toast.success(res.data?.message || "Sent to staff. The other party cannot see this yet.");
       const saved = res.data?.data?.message as DisputeMessage | undefined;
       if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
@@ -203,6 +225,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
               authorType: saved.authorType || "user",
               body: saved.body || text,
               createdAt: saved.createdAt || new Date().toISOString(),
+              replyToId: saved.replyToId ?? parentId,
             }
           )
         );
@@ -214,6 +237,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
     } catch (err: any) {
       setNotes((current) => current.filter((item) => String(item.id) !== pendingId));
       setDraft(text);
+      setReplyToId(parentId);
       toast.error(err?.response?.data?.message || "Could not send that information.");
     } finally {
       setSending(false);
@@ -293,10 +317,13 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
               notes.map((message) => {
                 const fromStaff = String(message.authorType || "").toLowerCase() === "staff";
                 const pending = String(message.id).startsWith("pending-");
+                const parent = message.replyToId
+                  ? notes.find((item) => String(item.id) === String(message.replyToId))
+                  : undefined;
                 return (
                   <div
                     key={message.id}
-                    className={`flex gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-dark-surface ${
+                    className={`group flex gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-dark-surface ${
                       pending ? "opacity-60" : ""
                     }`}
                   >
@@ -311,9 +338,29 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                           {pending ? "Sending…" : formatWhen(message.createdAt)}
                         </span>
                       </div>
+                      {message.replyToId ? (
+                        <p className="mt-1 flex items-center gap-1.5 rounded-lg border-l-2 border-gray-300 bg-gray-50 px-2 py-1 text-[11px] text-gray-500 dark:border-white/20 dark:bg-white/[0.04] dark:text-zinc-400">
+                          <CornerUpLeft className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            {parent
+                              ? `${parent.authorType === "staff" ? parent.authorName || "Staff" : "You"}: ${quoteSnippet(parent.body)}`
+                              : "Replying to an earlier note"}
+                          </span>
+                        </p>
+                      ) : null}
                       <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-zinc-300">
                         {message.body}
                       </p>
+                      {!pending ? (
+                        <button
+                          type="button"
+                          onClick={() => setReplyToId(String(message.id))}
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-400 opacity-0 transition hover:text-gray-700 focus:opacity-100 group-hover:opacity-100 dark:text-zinc-500 dark:hover:text-white"
+                        >
+                          <CornerUpLeft className="h-3 w-3" />
+                          Reply
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -322,6 +369,26 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           </div>
 
           <div className="mt-3 space-y-2">
+            {replyToId ? (
+              <div className="flex items-start gap-2 rounded-xl border-l-2 border-gray-300 bg-gray-50 px-3 py-2 dark:border-white/20 dark:bg-white/[0.04]">
+                <p className="min-w-0 flex-1 truncate text-[11px] text-gray-600 dark:text-zinc-300">
+                  <CornerUpLeft className="mr-1 inline h-3 w-3" />
+                  Replying to{" "}
+                  {quoteSnippet(
+                    notes.find((item) => String(item.id) === String(replyToId))?.body,
+                    80
+                  ) || "an earlier note"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReplyToId(null)}
+                  aria-label="Cancel reply"
+                  className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-200 hover:text-gray-700 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : null}
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -330,10 +397,14 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                   event.preventDefault();
                   void sendMoreInformation();
                 }
+                if (event.key === "Escape" && replyToId) {
+                  event.preventDefault();
+                  setReplyToId(null);
+                }
               }}
               maxLength={MAX_LENGTH}
               rows={3}
-              placeholder="Add a note for staff…"
+              placeholder={replyToId ? "Reply to this note…" : "Add a note for staff…"}
               className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 dark:border-white/10 dark:bg-dark-surface dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-white/30"
             />
             <div className="flex items-center justify-between gap-2">

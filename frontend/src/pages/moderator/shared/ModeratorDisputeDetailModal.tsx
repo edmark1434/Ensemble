@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
+  CornerUpLeft,
   Eye,
   EyeOff,
   FileText,
@@ -40,6 +41,8 @@ type DisputeSocketMessage = {
   isInternal?: boolean;
   is_internal?: boolean;
   audience?: string;
+  replyToId?: string | null;
+  message_id_reply?: string | null;
   publishedAt?: string | null;
   published_at?: string | null;
   createdAt?: string | null;
@@ -67,6 +70,7 @@ function mapDisputeSocketMessage(raw: DisputeSocketMessage | null | undefined): 
         audience === "author_and_staff"
     ),
     audience,
+    replyToId: raw.replyToId ?? raw.message_id_reply ?? null,
     publishedAt: raw.publishedAt || raw.published_at || null,
     createdAt: String(raw.createdAt || raw.created_at || new Date().toISOString()),
   };
@@ -195,6 +199,22 @@ function isPrivateAudience(audience?: string) {
   return a === "staff" || a === "author_and_staff" || a === "disputer" || a === "disputee";
 }
 
+/**
+ * A reply from someone who is not a party on the dispute. These land private to the
+ * author and staff and stay hidden from the public page until staff publish them.
+ */
+function isPendingCommunityComment(message: TicketMessage) {
+  const role = String(message.authorRole || "").toLowerCase();
+  if (role !== "community" && role !== "public") return false;
+  return isPrivateAudience(normalizeAudience(message.audience, message.isInternal));
+}
+
+function quoteSnippet(body?: string, limit = 140) {
+  const text = String(body || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+}
+
 function authorRoleLabel(message: TicketMessage) {
   const role = String(message.authorRole || message.authorType || "").toLowerCase();
   if (role === "staff") return "Staff";
@@ -279,6 +299,7 @@ export default function ModeratorDisputeDetailModal({
   const [sending, setSending] = useState(false);
   const [tab, setTab] = useState<"discussion" | "case">("discussion");
   const [message, setMessage] = useState("");
+  const [replyToId, setReplyToId] = useState<string | null>(null);
   const [replyAudience, setReplyAudience] = useState<DisputeAudience>("staff");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
@@ -296,6 +317,7 @@ export default function ModeratorDisputeDetailModal({
   const [reverseAmount, setReverseAmount] = useState("");
   const [reverseNotes, setReverseNotes] = useState("");
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const applyDetail = (d: DisputeDetail, { syncForm = true }: { syncForm?: boolean } = {}) => {
     setDetail(d);
@@ -322,6 +344,7 @@ export default function ModeratorDisputeDetailModal({
 
   useEffect(() => {
     setTab("discussion");
+    setReplyToId(null);
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeId]);
@@ -551,6 +574,7 @@ export default function ModeratorDisputeDetailModal({
     const text = message.trim();
     if (!text || sending) return;
     const audience = canAct ? replyAudience : "staff";
+    const parentId = replyToId;
     const pendingId = `pending-${Date.now()}`;
     const optimistic: TicketMessage = {
       id: pendingId,
@@ -560,12 +584,14 @@ export default function ModeratorDisputeDetailModal({
       body: text,
       isInternal: isPrivateAudience(audience),
       audience,
+      replyToId: parentId,
       createdAt: new Date().toISOString(),
     };
     setDetail((current) =>
       current ? { ...current, messages: [...(current.messages || []), optimistic] } : current
     );
     setMessage("");
+    setReplyToId(null);
     setSending(true);
     try {
       const res = await api.post(`${endpointBase}/${disputeId}/messages`, {
@@ -575,6 +601,7 @@ export default function ModeratorDisputeDetailModal({
         visibleToPublic: audience === "public",
         audience,
         audiences: [audience],
+        ...(parentId ? { replyToId: parentId } : {}),
       });
       if (res.data?.success && res.data.data) {
         applyDetail(res.data.data as DisputeDetail, { syncForm: false });
@@ -599,6 +626,7 @@ export default function ModeratorDisputeDetailModal({
           : current
       );
       setMessage(text);
+      setReplyToId(parentId);
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         "Failed to send message";
@@ -672,6 +700,21 @@ export default function ModeratorDisputeDetailModal({
     dispute && canDecide && !closed && !dispute.financialResolution && Number(dispute.creditAmount || 0) > 0
   );
   const selectedAudience = replyAudienceOptions.find((option) => option.value === replyAudience);
+  const messageById = new Map((detail?.messages || []).map((item) => [String(item.id), item]));
+  const replyingTo = replyToId ? messageById.get(String(replyToId)) : undefined;
+
+  const jumpToMessage = (messageId: string) => {
+    const node = document.getElementById(`dispute-msg-${messageId}`);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.classList.add("ring-1", "ring-white/40");
+    window.setTimeout(() => node.classList.remove("ring-1", "ring-white/40"), 1200);
+  };
+
+  const startReply = (messageId: string) => {
+    setReplyToId(String(messageId));
+    composerRef.current?.focus();
+  };
 
   const viewOnlyMessage = !perms?.staffId
     ? "Your login isn’t linked to a staff profile. Sign in again as Admin or Support Moderator."
@@ -811,10 +854,15 @@ export default function ModeratorDisputeDetailModal({
                       const pending = String(m.id).startsWith("pending-");
                       const canChangeAudience = adminMode && canAct && !pending;
                       const listed = replyAudienceOptions.some((option) => option.value === currentAudience);
+                      const awaitingReview = !pending && isPendingCommunityComment(m);
+                      const parent = m.replyToId ? messageById.get(String(m.replyToId)) : undefined;
                       return (
                         <article
                           key={m.id}
-                          className={`rounded-xl border border-l-2 border-white/[0.08] bg-white/[0.02] px-4 py-3 ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""}`}
+                          id={`dispute-msg-${m.id}`}
+                          className={`group rounded-xl border border-l-2 border-white/[0.08] px-4 py-3 transition ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""} ${
+                            awaitingReview ? "border-l-amber-400/70 bg-amber-500/[0.06]" : "bg-white/[0.02]"
+                          }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
@@ -822,6 +870,11 @@ export default function ModeratorDisputeDetailModal({
                               {role && (
                                 <span className="rounded border border-white/10 px-1.5 py-px text-[10px] text-zinc-400">
                                   {role}
+                                </span>
+                              )}
+                              {awaitingReview && (
+                                <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] font-semibold text-amber-200">
+                                  Awaiting review
                                 </span>
                               )}
                               <span className="text-zinc-500">{pending ? "Sending…" : formatDateTime(m.createdAt)}</span>
@@ -853,7 +906,64 @@ export default function ModeratorDisputeDetailModal({
                               </span>
                             )}
                           </div>
+                          {m.replyToId ? (
+                            parent ? (
+                              <button
+                                type="button"
+                                onClick={() => jumpToMessage(String(parent.id))}
+                                className="mt-2 block w-full rounded-lg border-l-2 border-white/20 bg-white/[0.04] px-2.5 py-1.5 text-left transition hover:bg-white/[0.08]"
+                              >
+                                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300">
+                                  <CornerUpLeft className="h-3 w-3 shrink-0" />
+                                  {parent.authorName}
+                                  <span className={`rounded-full border px-1.5 text-[9px] ${audienceBadge(parent.audience, parent.isInternal).className}`}>
+                                    {audienceBadge(parent.audience, parent.isInternal).label}
+                                  </span>
+                                </span>
+                                <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
+                                  {quoteSnippet(parent.body)}
+                                </span>
+                              </button>
+                            ) : (
+                              <p className="mt-2 flex items-center gap-1.5 rounded-lg border-l-2 border-white/10 bg-white/[0.02] px-2.5 py-1.5 text-[11px] italic text-zinc-500">
+                                <CornerUpLeft className="h-3 w-3 shrink-0" />
+                                The quoted message is no longer on this case
+                              </p>
+                            )
+                          ) : null}
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{m.body}</p>
+                          {canReply && !pending && (
+                            <button
+                              type="button"
+                              onClick={() => startReply(String(m.id))}
+                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-500 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover:opacity-100"
+                            >
+                              <CornerUpLeft className="h-3 w-3" />
+                              Reply
+                            </button>
+                          )}
+                          {awaitingReview && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-2">
+                              <p className="text-[11px] text-amber-200/80">
+                                Held because {m.authorName} is not a party on this dispute. Only they and staff can see it.
+                              </p>
+                              {canChangeAudience && (
+                                <button
+                                  type="button"
+                                  disabled={saving || !dispute.visibility}
+                                  title={
+                                    dispute.visibility
+                                      ? "Publish this comment on the public dispute page"
+                                      : "Make the dispute public before publishing community comments"
+                                  }
+                                  onClick={() => void setMessageAudience(m.id, "public")}
+                                  className="ml-auto rounded-md border border-violet-500/40 bg-violet-500/15 px-2 py-1 text-[11px] font-semibold text-violet-100 transition hover:bg-violet-500/25 disabled:opacity-40"
+                                >
+                                  Make public
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </article>
                       );
                     })}
@@ -867,6 +977,29 @@ export default function ModeratorDisputeDetailModal({
                   </div>
 
                   <div className="border-t border-white/10 bg-[#0f1016] px-5 py-3">
+                    {replyToId && (
+                      <div className="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-white/20 bg-white/[0.04] px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300">
+                            <CornerUpLeft className="h-3 w-3 shrink-0" />
+                            Replying to {replyingTo?.authorName || "a message"}
+                          </p>
+                          <p className="mt-0.5 truncate text-[11px] text-zinc-400">
+                            {replyingTo
+                              ? quoteSnippet(replyingTo.body)
+                              : "That message is no longer on this case."}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReplyToId(null)}
+                          aria-label="Cancel reply"
+                          className="rounded p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
                     {canReply && canAct && (
                       <div className="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Reply visibility">
                         <span className="mr-1 text-[11px] text-zinc-500">Visible to</span>
@@ -894,21 +1027,28 @@ export default function ModeratorDisputeDetailModal({
                     )}
                     <div className="flex items-end gap-2">
                       <textarea
+                        ref={composerRef}
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         rows={2}
                         placeholder={
                           !canReply
                             ? "You cannot reply on this dispute"
-                            : canAct
-                              ? "Write a reply"
-                              : "Write a staff-only reply"
+                            : replyToId
+                              ? `Reply to ${replyingTo?.authorName || "this message"}`
+                              : canAct
+                                ? "Write a reply"
+                                : "Write a staff-only reply"
                         }
                         disabled={detail.chatAvailable === false || !canReply || sending}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
                             void sendMessage();
+                          }
+                          if (e.key === "Escape" && replyToId) {
+                            e.preventDefault();
+                            setReplyToId(null);
                           }
                         }}
                         className={`${FIELD} resize-none`}
