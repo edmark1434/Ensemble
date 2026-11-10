@@ -10,6 +10,8 @@ interface SuccessModalProps {
   buttonText?: string;
   onConfirm: () => void;
   standalone?: boolean;
+  loadingText?: string;
+  loadingSubtext?: string;
 }
 
 const SuccessModal: React.FC<SuccessModalProps> = ({
@@ -19,6 +21,8 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
   buttonText = "Okay, got it!",
   onConfirm,
   standalone = false,
+  loadingText,
+  loadingSubtext,
 }) => {
   const [status, setStatus] = useState<"loading" | "success">("loading");
   const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
@@ -86,10 +90,10 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
             </div>
             <div>
               <p className="text-sm font-bold text-gray-700 dark:text-zinc-200 tracking-wide">
-                Syncing with Marketplace...
+                {loadingText || "Syncing with Marketplace..."}
               </p>
               <p className="text-[11px] text-gray-500 dark:text-zinc-500 mt-1">
-                Deploying platform structural data parameters
+                {loadingSubtext || "Deploying platform structural data parameters"}
               </p>
             </div>
           </div>
