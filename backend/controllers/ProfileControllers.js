@@ -158,6 +158,7 @@ async function postPublicDisputeCommentController(req, res) {
         const replyToId = req.body?.replyToId ?? req.body?.replyTo ?? null;
         const posted = await postPublicDisputeComment(req.params.disputeId, accountId, req.body?.body, {
             replyToId: replyToId ? String(replyToId) : null,
+            attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         });
         return res.status(201).json({
             success: true,

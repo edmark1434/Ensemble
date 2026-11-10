@@ -10,15 +10,26 @@ import {
   AudiencePill,
   Avatar,
   Card,
+  DECISION_CARD_CLASS,
+  DecisionHeader,
+  DisputeAttachments,
   RoleChip,
   StatusPill,
   VisibilityPill,
   audienceNotice,
   formatWhen,
   isClosedStatus,
+  isDisputeDecision,
   titleCase,
 } from "./disputeUi";
-import type { ViewerRole } from "./disputeUi";
+import type { DisputeAttachment, ViewerRole } from "./disputeUi";
+import {
+  InboxUploadMediaButton,
+  InboxUploadMediaPreview,
+  uploadChatAttachment,
+  useInboxUploadMedia,
+} from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
+import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 
 type DiscussionMessage = {
   id: string;
@@ -29,6 +40,8 @@ type DiscussionMessage = {
   audience?: string;
   pendingReview?: boolean;
   replyToId?: string | null;
+  authorType?: string | null;
+  attachments?: DisputeAttachment[];
 };
 
 type DiscussionPerson = {
@@ -171,8 +184,11 @@ export default function PublicDisputePage() {
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const { mediaList, fileInputRef, openFilePicker, handleFileChange, removeMedia, clearMedia } =
+    useInboxUploadMedia(4, 100);
 
   useEffect(() => {
     if (!id) return;
@@ -219,6 +235,9 @@ export default function PublicDisputePage() {
       sender_id?: string | null;
       replyToId?: string | null;
       message_id_reply?: string | null;
+      authorType?: string | null;
+      author_type?: string | null;
+      attachments?: DisputeAttachment[];
     }) => {
       if (!payload?.disputeId || String(payload.disputeId) !== String(id)) return;
       const messageId = payload?.id || payload?._id;
@@ -261,6 +280,8 @@ export default function PublicDisputePage() {
               ).toLowerCase() === "community",
             replyToId:
               payload.replyToId ?? payload.message_id_reply ?? existing?.replyToId ?? null,
+            authorType: payload.authorType ?? payload.author_type ?? existing?.authorType ?? null,
+            attachments: payload.attachments ?? existing?.attachments ?? [],
           }),
         };
       });
@@ -294,8 +315,9 @@ export default function PublicDisputePage() {
   }, [discussion?.messages?.length]);
 
   const sendComment = async () => {
-    if (!id || !comment.trim() || sending) return;
     const text = comment.trim();
+    const pendingFiles = mediaList;
+    if (!id || sending || (!text && !pendingFiles.length)) return;
     const pendingId = `pending-${Date.now()}`;
     const parentId = replyToId;
     const heldForReview = discussion?.commentsNeedApproval ?? !discussion?.isParty;
@@ -314,6 +336,14 @@ export default function PublicDisputePage() {
                 audience: heldForReview ? "author_and_staff" : "public",
                 pendingReview: heldForReview,
                 replyToId: parentId,
+                attachments: pendingFiles.map((media) => ({
+                  attachment_id: media.id,
+                  attachment_type: media.type,
+                  attachment_key: media.previewUrl,
+                  attachment_url: media.previewUrl,
+                  attachment_name: media.file.name,
+                  attachment_size: media.file.size,
+                })),
               },
             ],
           }
@@ -323,9 +353,14 @@ export default function PublicDisputePage() {
     setReplyToId(null);
     setSending(true);
     try {
+      const uploaded = pendingFiles.length
+        ? await Promise.all(pendingFiles.map((media) => uploadChatAttachment(media)))
+        : [];
+      clearMedia();
       const res = await api.post(`/api/accounts/disputes/${id}/messages`, {
         body: text,
         ...(parentId ? { replyToId: parentId } : {}),
+        ...(uploaded.length ? { attachments: uploaded } : {}),
       });
       toast.success(res.data?.message || "Comment posted to the discussion.");
       const saved = res.data?.data?.message as DiscussionMessage | undefined;
@@ -351,6 +386,7 @@ export default function PublicDisputePage() {
                 audience: savedAudience,
                 pendingReview: savedPending,
                 replyToId: saved.replyToId ?? res.data?.data?.replyToId ?? parentId,
+                attachments: saved.attachments || [],
               })
             : withoutPending,
         };
@@ -370,7 +406,9 @@ export default function PublicDisputePage() {
       );
       setComment(text);
       setReplyToId(parentId);
-      toast.error(err?.response?.data?.message || "Could not send that comment.");
+      toast.error(
+        err?.response?.data?.message || err?.message || "Could not send that comment."
+      );
     } finally {
       setSending(false);
     }
@@ -485,21 +523,37 @@ export default function PublicDisputePage() {
                     const notice = heldForReview
                       ? null
                       : audienceNotice(message.audience, discussion.viewerRole);
+                    const decision = isDisputeDecision(message);
                     return (
                       <li
                         key={message.id}
                         id={`dispute-message-${message.id}`}
                         className={`group flex gap-3 rounded-lg px-5 py-4 transition ${pending ? "opacity-60" : ""} ${
-                          heldForReview || notice ? "bg-amber-50/60 dark:bg-amber-500/[0.06]" : ""
+                          decision
+                            ? DECISION_CARD_CLASS
+                            : heldForReview || notice
+                              ? "bg-amber-50/60 dark:bg-amber-500/[0.06]"
+                              : ""
                         }`}
                       >
-                        <Avatar name={message.authorName} role={message.authorRole} />
+                        {decision ? null : (
+                          <Avatar name={message.authorName} role={message.authorRole} />
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {decision ? (
+                              <DecisionHeader
+                                title={
+                                  /reopen/i.test(message.body || "") ? "Case reopened" : "Final decision"
+                                }
+                              />
+                            ) : null}
+                            <span
+                              className={`text-sm font-semibold text-gray-900 dark:text-white ${decision ? "sr-only" : ""}`}
+                            >
                               {message.authorName || "Member"}
                             </span>
-                            <RoleChip role={message.authorRole} />
+                            {decision ? null : <RoleChip role={message.authorRole} />}
                             {heldForReview ? (
                               <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
                                 <Lock className="h-2.5 w-2.5" />
@@ -528,11 +582,21 @@ export default function PublicDisputePage() {
                                 onJump={parent ? () => jumpToMessage(String(parent.id)) : undefined}
                               />
                             ) : null}
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
+                            <p
+                              className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
+                                decision
+                                  ? "font-medium text-gray-900 dark:text-white"
+                                  : "text-gray-700 dark:text-zinc-300"
+                              }`}
+                            >
                               {message.body}
                             </p>
+                            <DisputeAttachments
+                              attachments={message.attachments}
+                              onPreview={(url) => setPreviewUrl(url)}
+                            />
                           </div>
-                          {discussion.canComment && !pending ? (
+                          {discussion.canComment && !pending && !decision ? (
                             <button
                               type="button"
                               onClick={() => startReply(String(message.id))}
@@ -585,6 +649,11 @@ export default function PublicDisputePage() {
                       </button>
                     </div>
                   ) : null}
+                  {mediaList.length ? (
+                    <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10">
+                      <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
+                    </div>
+                  ) : null}
                   <textarea
                     ref={composerRef}
                     value={comment}
@@ -613,15 +682,24 @@ export default function PublicDisputePage() {
                         {comment.length}/{MAX_LENGTH}
                       </span>
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => void sendComment()}
-                      disabled={sending || !comment.trim()}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
-                    >
-                      {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                      {sending ? "Sending" : "Post reply"}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <InboxUploadMediaButton
+                        fileInputRef={fileInputRef}
+                        onFileChange={handleFileChange}
+                        onClick={openFilePicker}
+                        disabled={sending || mediaList.length >= 4}
+                        title="Attach images or files (max 4)"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void sendComment()}
+                        disabled={sending || (!comment.trim() && !mediaList.length)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
+                      >
+                        {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                        {sending ? "Sending" : "Post reply"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -636,6 +714,7 @@ export default function PublicDisputePage() {
           </>
         ) : null}
       </main>
+      <ChatImagePreview url={previewUrl} onClose={() => setPreviewUrl(null)} />
     </div>
   );
 }

@@ -1,4 +1,33 @@
-# Current Task: Dispute Comment Moderation, Threaded Replies, Audience Indicators & Resolve Outcomes
+# Current Task: Dispute Chat — Moderation, Replies, Indicators, Attachments & Rulings
+
+## Objective (5) — attachments for every side
+Members could not upload or see images and files on a dispute. The community, the disputer,
+the disputee and staff/admin all need to attach evidence and view what others attached.
+
+## Acceptance criteria (5)
+- [x] `POST .../messages` takes `attachments` (max 4) on the member route and all five staff routes; body may be empty when a file is attached.
+- [x] Only server-issued `chat-attachments/` / `ticket-attachments/` keys are accepted — outside folders, traversal and absolute URLs are dropped (`normalizeDisputeAttachments`).
+- [x] Uploads reuse the existing presigned flow and inbox upload kit; no new endpoint.
+- [x] Images open in a lightbox, video plays inline, other files download — on the public dispute page, the disputer's notes panel, and the staff/admin modal.
+- [x] Attachment-only messages get a sensible inbox preview rather than blank text.
+
+## Objective (6) — rulings posted by the platform, and reopen parity
+A resolution should not look like a personal message from an admin, and reopening should ask
+for a reason the same way resolving does.
+
+## Acceptance criteria (6)
+- [x] Resolve and reopen messages post as `Dispute Resolution` (`author_type: system`, `author_role: resolution`) with no `sender_id`; the acting staff id stays in the activity log.
+- [x] Formal structure: `Final decision — DIS-xxxx` / `Case reopened — DIS-xxxx`, an `Outcome:` / `Reason:` line, the finding, optional staff note, and a closing line about appeals.
+- [x] Rendered as a highlighted ruling card with a gavel badge in all three views; reply is disabled on a ruling.
+- [x] Reopen prompt mirrors the resolve prompt: new evidence / appeal granted / party now responding / closed in error, with required notes where blame or error is asserted, and a live preview.
+- [x] Reply works for the community, the disputer and the disputee — all three use the public-page composer; the disputer also has it in the private notes panel.
+
+## Objective (7) — profile dispute indicator
+- [x] The "Dispute History" subtab is gone; the record now sits at the foot of the Performance panel as a collapsed indicator ("Dispute record · Clear" or "· N public cases") that expands to the case list.
+
+---
+
+# Previously: Dispute Comment Moderation, Threaded Replies, Audience Indicators & Resolve Outcomes
 
 ## Objective (3) — audience indicators
 Each party must be able to tell who else can read a message: a staff reply sent to the disputee only,

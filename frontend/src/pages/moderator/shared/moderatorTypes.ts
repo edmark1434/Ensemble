@@ -94,6 +94,7 @@ export type DisputeDetail = {
   permissions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputePermissions;
   assignableStaff: { staffId: number | string; name: string; role: string }[];
   resolutionOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
+  reopenOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
 };
 
 export type Alert = {

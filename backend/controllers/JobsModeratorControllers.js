@@ -135,16 +135,21 @@ async function patchDispute(req, res) {
 
 async function postDisputeMessage(req, res) {
   try {
-    const { body, isInternal, audience, visibleToParties, visibleToPublic, replyToId } = req.body;
-    if (!body?.trim()) {
-      return res.status(400).json({ success: false, message: 'Message body is required' });
+    const { body, isInternal, audience, visibleToParties, visibleToPublic, replyToId, attachments } =
+      req.body;
+    const files = Array.isArray(attachments) ? attachments : [];
+    if (!body?.trim() && !files.length) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Write a message or attach a file' });
     }
-    const data = await addDisputeMessage(req.params.id, body.trim(), req.session, {
+    const data = await addDisputeMessage(req.params.id, String(body || '').trim(), req.session, {
       isInternal: Boolean(isInternal),
       audience,
       visibleToParties: Boolean(visibleToParties),
       visibleToPublic: Boolean(visibleToPublic),
       replyToId: replyToId ? String(replyToId) : null,
+      attachments: files,
     });
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });

@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Download, FileText, Gavel } from "lucide-react";
+import { chatAttachmentUrl } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
 
 export function titleCase(value?: string | null, fallback = "") {
   const text = String(value || fallback)
@@ -188,6 +190,122 @@ export function Avatar({ name, role }: { name?: string | null; role?: string | n
     </span>
   );
 }
+
+export type DisputeAttachment = {
+  attachment_id?: string;
+  attachment_type?: string;
+  attachment_key?: string;
+  attachment_url?: string;
+  attachment_name?: string;
+  attachment_size?: number;
+};
+
+function formatBytes(size?: number) {
+  const bytes = Number(size || 0);
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Images, video and files posted with a dispute message. */
+export function DisputeAttachments({
+  attachments,
+  onPreview,
+}: {
+  attachments?: DisputeAttachment[] | null;
+  onPreview?: (url: string, type: string) => void;
+}) {
+  const files = (attachments || []).filter((file) => file?.attachment_key || file?.attachment_url);
+  if (!files.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {files.map((file, index) => {
+        const key = file.attachment_key || file.attachment_url || "";
+        const url = chatAttachmentUrl(key);
+        const type = String(file.attachment_type || "file").toLowerCase();
+        const name = file.attachment_name || "Attachment";
+        const id = file.attachment_id || `${key}-${index}`;
+
+        if (type === "image" || type === "gif") {
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onPreview?.(url, "image")}
+              title={name}
+              className="group relative h-24 w-24 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/30"
+            >
+              <img src={url} alt={name} loading="lazy" className="h-full w-full object-cover" />
+            </button>
+          );
+        }
+
+        if (type === "video") {
+          return (
+            <video
+              key={id}
+              src={url}
+              controls
+              preload="metadata"
+              className="h-32 max-w-full rounded-xl border border-gray-200 bg-black dark:border-white/10"
+            />
+          );
+        }
+
+        return (
+          <a
+            key={id}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            download={name}
+            className="flex max-w-full items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs transition hover:border-gray-400 hover:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/30 dark:hover:bg-white/10"
+          >
+            <FileText className="h-4 w-4 shrink-0 text-gray-400 dark:text-zinc-400" />
+            <span className="min-w-0">
+              <span className="block max-w-[14rem] truncate font-semibold text-gray-800 dark:text-zinc-200">
+                {name}
+              </span>
+              {file.attachment_size ? (
+                <span className="block text-[10px] text-gray-500 dark:text-zinc-500">
+                  {formatBytes(file.attachment_size)}
+                </span>
+              ) : null}
+            </span>
+            <Download className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A ruling posted by the platform when a case is resolved or reopened.
+ * Attributed to the Dispute Resolution service, never to an individual staff member.
+ */
+export function isDisputeDecision(message?: {
+  authorRole?: string | null;
+  authorType?: string | null;
+}) {
+  const role = String(message?.authorRole || "").toLowerCase();
+  const type = String(message?.authorType || "").toLowerCase();
+  return role === "resolution" || type === "system";
+}
+
+/** Header strip for a decision message, so the outcome reads as final, not as a chat line. */
+export function DecisionHeader({ title = "Final decision" }: { title?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-300 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:border-indigo-400/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+      <Gavel className="h-3 w-3" />
+      {title}
+    </span>
+  );
+}
+
+export const DECISION_CARD_CLASS =
+  "border-l-4 border-l-indigo-500 bg-indigo-50/70 dark:border-l-indigo-400 dark:bg-indigo-500/[0.08]";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (

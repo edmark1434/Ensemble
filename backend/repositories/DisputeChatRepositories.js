@@ -13,6 +13,43 @@ const {
 
 const CONVERSATION_TYPE = 'dispute';
 
+const DISPUTE_ATTACHMENT_LIMIT = 4;
+/** Staging folders the presigned upload flow writes to. Anything else is rejected. */
+const DISPUTE_ATTACHMENT_KEY = /^(?:chat-attachments|ticket-attachments)\/[A-Za-z0-9._/-]+$/;
+
+function disputeAttachmentType(name, hinted) {
+  const hint = String(hinted || '').toLowerCase();
+  if (['image', 'gif', 'video', 'file'].includes(hint)) return hint;
+  if (hint.startsWith('video') || /\.(mp4|webm|mov|m4v)$/i.test(name)) return 'video';
+  if (/\.gif$/i.test(name)) return 'gif';
+  if (hint.startsWith('image') || /\.(png|jpe?g|webp|avif|bmp)$/i.test(name)) return 'image';
+  return 'file';
+}
+
+/**
+ * Validate attachments posted with a dispute message.
+ * Only server-issued staging keys are accepted, so a client cannot point a message
+ * at an arbitrary object in the bucket.
+ */
+function normalizeDisputeAttachments(raw) {
+  if (!Array.isArray(raw) || !raw.length) return [];
+  const out = [];
+  for (const item of raw.slice(0, DISPUTE_ATTACHMENT_LIMIT)) {
+    const key = String(item?.attachment_key || item?.key || '').replace(/^\/+/, '').trim();
+    if (!DISPUTE_ATTACHMENT_KEY.test(key) || key.includes('..')) continue;
+    const name = String(item?.attachment_name || item?.name || 'Attachment').slice(0, 180);
+    out.push({
+      attachment_id: String(item?.attachment_id || item?.id || '').slice(0, 64) || `att-${out.length + 1}`,
+      attachment_type: disputeAttachmentType(name, item?.attachment_type || item?.type || item?.mime),
+      attachment_key: key,
+      attachment_url: key,
+      attachment_name: name,
+      attachment_size: Number(item?.attachment_size || item?.size || 0) || 0,
+    });
+  }
+  return out;
+}
+
 function mongoDb() {
   const client = getMongoClient();
   return client ? client.db('ensemble') : null;
@@ -97,6 +134,7 @@ function mapMongoDisputeMessage(m) {
     isInternal: Boolean(m.is_internal) || audience === 'staff' || audience === 'author_and_staff',
     audience,
     replyToId: m.message_id_reply ? String(m.message_id_reply) : null,
+    attachments: Array.isArray(m.attachments) ? m.attachments : [],
     // Community (non-party) replies are held private until staff or an admin publishes them.
     pendingReview:
       String(authorRole || '').toLowerCase() === 'community' && !isPublishedAudience(audience),
@@ -387,6 +425,7 @@ async function createDisputeMessage({
   notifyAccountIds = [],
   disputeId = null,
   replyToId = null,
+  attachments = [],
 }) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot send dispute chat messages');
@@ -399,6 +438,7 @@ async function createDisputeMessage({
   }
 
   const normalizedReplyToId = replyToId ? String(replyToId) : null;
+  const normalizedAttachments = normalizeDisputeAttachments(attachments);
   const normalizedAudience = String(audience || 'author_and_staff').toLowerCase();
   const audienceList =
     Array.isArray(audiences) && audiences.length
@@ -412,7 +452,7 @@ async function createDisputeMessage({
     message_type: 'text',
     message_content: body,
     message_id_reply: normalizedReplyToId,
-    attachments: [],
+    attachments: normalizedAttachments,
     links: [],
     message_react: [],
     read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
@@ -429,7 +469,12 @@ async function createDisputeMessage({
     updated_at: now,
   });
 
-  await touchDisputeInbox(chatId, body, now, { audience: normalizedAudience });
+  const preview =
+    body ||
+    (normalizedAttachments.length
+      ? `Sent ${normalizedAttachments.length} attachment${normalizedAttachments.length === 1 ? '' : 's'}`
+      : '');
+  await touchDisputeInbox(chatId, preview, now, { audience: normalizedAudience });
 
   const mapped = {
     id: String(insertedId),
@@ -443,6 +488,7 @@ async function createDisputeMessage({
     isInternal: Boolean(isInternal) || privateToAuthorAndStaff,
     audience: normalizedAudience,
     replyToId: normalizedReplyToId,
+    attachments: normalizedAttachments,
     publishedAt: isPublishedAudience(normalizedAudience) ? now : null,
     createdAt: now,
   };
@@ -778,15 +824,21 @@ async function getAccountDispute(disputeId, accountId) {
   return { ...mapDisputeSummary(row, accountId), chatId, messages };
 }
 
-async function postPublicDisputeComment(disputeId, accountId, body, { replyToId = null } = {}) {
+async function postPublicDisputeComment(
+  disputeId,
+  accountId,
+  body,
+  { replyToId = null, attachments = [] } = {}
+) {
   if (!DISPUTE_UUID.test(String(disputeId || ''))) {
     const error = new Error('This dispute is not public.');
     error.statusCode = 404;
     throw error;
   }
   const text = String(body || '').trim();
-  if (!text) {
-    const error = new Error('Write a comment before sending.');
+  const files = normalizeDisputeAttachments(attachments);
+  if (!text && !files.length) {
+    const error = new Error('Write a comment or attach a file before sending.');
     error.statusCode = 400;
     throw error;
   }
@@ -881,6 +933,7 @@ async function postPublicDisputeComment(disputeId, accountId, body, { replyToId 
     notifyAccountIds,
     disputeId,
     replyToId: replyTarget ? replyTarget.id : null,
+    attachments: files,
   });
   const number = row.dispute_number || 'Dispute';
   if (pendingReview) {
@@ -988,6 +1041,8 @@ module.exports = {
   listDisputeMessages,
   getDisputeMessage,
   resolveDisputeReplyTarget,
+  normalizeDisputeAttachments,
+  DISPUTE_ATTACHMENT_LIMIT,
   listAccountDisputes,
   listVisibleAccountDisputes,
   getPublicDisputeDiscussion,

@@ -37,10 +37,15 @@ const {
 } = require('./DisputeChatRepositories');
 const {
   DISPUTE_RESOLUTION_KEYS,
+  DISPUTE_REOPEN_KEYS,
+  DISPUTE_DECISION_AUTHOR,
   findDisputeResolution,
+  findDisputeReopenReason,
   disputeResolutionLabel,
   listDisputeResolutionOptions,
+  listDisputeReopenOptions,
   buildDisputeResolutionMessage,
+  buildDisputeReopenMessage,
 } = require('../lib/DisputeResolutions');
 const {
   ROLE_TO_TICKET_TYPES,
@@ -3601,6 +3606,7 @@ async function updateDispute(disputeId, patch, staffSession) {
         ? `@${refreshed.respondent_handle}`
         : refreshed.respondent_name || 'The disputee',
       notes,
+      disputeNumber: refreshed.dispute_number || null,
     });
     try {
       // A hidden case has no public page, and its `parties` messages are unreadable
@@ -3608,6 +3614,7 @@ async function updateDispute(disputeId, patch, staffSession) {
       await postDisputeDecisionMessage(refreshed, staffSession, body, {
         audience: refreshed.visibility ? 'public' : 'disputer',
         notify: false,
+        asSystem: true,
       });
     } catch (err) {
       console.warn('Dispute resolution message skipped:', err.message);
@@ -3655,7 +3662,7 @@ async function updateDispute(disputeId, patch, staffSession) {
   }
 
   if (action === 'reopen') {
-    return reopenDispute(disputeId, refreshed, staff, staffSession, actPerms);
+    return reopenDispute(disputeId, refreshed, staff, staffSession, actPerms, patch);
   }
 
   // Generic field updates
@@ -4077,8 +4084,9 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     permissions,
     assignableQueue: 'disputes',
     assignableStaff,
-    // Drives the Resolve prompt, so the console never hardcodes the outcome list.
+    // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
     resolutionOptions: listDisputeResolutionOptions(),
+    reopenOptions: listDisputeReopenOptions(),
   };
 }
 
@@ -4151,6 +4159,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     ),
     disputeId,
     replyToId: replyTarget ? replyTarget.id : null,
+    attachments: options.attachments || [],
   });
 
   const number = row.dispute_number || 'Dispute';
@@ -4312,7 +4321,7 @@ async function postDisputeDecisionMessage(
   row,
   staffSession,
   body,
-  { audience = 'public', notify = true } = {}
+  { audience = 'public', notify = true, asSystem = false } = {}
 ) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot post the decision in the discussion.');
@@ -4328,10 +4337,12 @@ async function postDisputeDecisionMessage(
   await createDisputeMessage({
     chatId,
     body,
-    senderId: sessionAccountId(staffSession),
-    authorName: sessionDisplayName(staffSession) || 'Staff',
-    authorType: 'staff',
-    authorRole: 'staff',
+    // A final decision is the platform's, not one staff member's: it posts under the
+    // Dispute Resolution name with no account attached. Who acted stays in the audit log.
+    senderId: asSystem ? null : sessionAccountId(staffSession),
+    authorName: asSystem ? DISPUTE_DECISION_AUTHOR.name : sessionDisplayName(staffSession) || 'Staff',
+    authorType: asSystem ? DISPUTE_DECISION_AUTHOR.type : 'staff',
+    authorRole: asSystem ? DISPUTE_DECISION_AUTHOR.role : 'staff',
     audience: normalizedAudience,
     audiences: normalizedAudience === 'public' ? ['public', 'parties'] : [normalizedAudience],
     isInternal: false,
@@ -4413,13 +4424,25 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
   return getDisputeDetail(disputeId, staffSession);
 }
 
-async function reopenDispute(disputeId, row, staff, staffSession, perms) {
+async function reopenDispute(disputeId, row, staff, staffSession, perms, patch = {}) {
   if (!perms.canAct) {
     throw disputeDecisionError('Assign yourself to this dispute before you can reopen it.');
   }
   if (String(row.status || '').toLowerCase() !== 'closed') {
     throw disputeDecisionError('Cannot reopen a dispute that is not closed.');
   }
+
+  const reason = findDisputeReopenReason(patch?.reopenReason ?? patch?.reopen_reason);
+  if (!reason) {
+    throw disputeDecisionError(
+      `Pick why this case is being reopened. Use one of: ${DISPUTE_REOPEN_KEYS.join(', ')}.`
+    );
+  }
+  const notes = String(patch?.resolution_notes || patch?.reason || '').trim();
+  if (reason.requiresNote && !notes) {
+    throw disputeDecisionError(`"${reason.label}" needs a short note explaining what changed.`);
+  }
+  if (notes.length > 2000) throw disputeDecisionError('The note is too long.');
 
   await pool.query(
     `
@@ -4434,26 +4457,51 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms) {
   );
 
   const banned = String(row.sanction_type || '').toLowerCase() === 'ban';
-  const message = banned
-    ? 'This dispute has been reopened for appeal. The permanent ban stays in place until a staff member lifts it.'
-    : 'This dispute has been reopened.';
+  let message = buildDisputeReopenMessage(reason, {
+    disputer: row.initiator_handle ? `@${row.initiator_handle}` : row.initiator_name || 'The disputer',
+    disputee: row.respondent_handle ? `@${row.respondent_handle}` : row.respondent_name || 'The disputee',
+    notes,
+    disputeNumber: row.dispute_number || null,
+  });
+  if (banned) {
+    message += '\n\nThe permanent ban from the earlier decision stays in place until a staff member lifts it.';
+  }
 
   try {
-    await postDisputeDecisionMessage(row, staffSession, message);
+    await postDisputeDecisionMessage(row, staffSession, message, {
+      audience: row.visibility ? 'public' : 'disputer',
+      notify: false,
+      asSystem: true,
+    });
   } catch (err) {
     console.error('Dispute reopened without a discussion message:', err.message);
   }
 
   await recordAccountActivity({
     accountId: row.for_account_id || row.by_account_id,
-    action: `Dispute ${row.dispute_number || disputeId} reopened`,
+    action: `Dispute ${row.dispute_number || disputeId} reopened — ${reason.label}`,
     eventCode: 'DISPUTE_REOPENED',
     referenceTable: 'disputes',
     referencePrefix: 'DIS',
     referenceId: disputeId,
     actorStaffId: staff.staff_id,
-    metadata: { status: 'under_review', sanctionType: row.sanction_type || null },
+    metadata: {
+      status: 'under_review',
+      reopenReason: reason.key,
+      sanctionType: row.sanction_type || null,
+    },
   });
+
+  try {
+    const number = row.dispute_number || 'Dispute';
+    await notifyDisputeParties(row, {
+      message: `Dispute ${number} ${reason.notifyMessage}`,
+      path: row.visibility ? `/disputes/${disputeId}` : '/contracts/disputes',
+      onlyFiler: !row.visibility,
+    });
+  } catch (err) {
+    console.warn('Dispute reopen notice skipped:', err.message);
+  }
 
   return getDisputeDetail(disputeId, staffSession);
 }

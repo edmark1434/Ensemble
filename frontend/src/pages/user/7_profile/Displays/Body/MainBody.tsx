@@ -28,7 +28,8 @@ import { AccountRecordSection, StandingBadges } from "../AccountStanding";
 import { RoleChip, StatusPill } from "@/pages/user/disputes/disputeUi";
 
 export type TabType = "introduction" | "portfolio" | "gallery" | "services" | "job-posts" | "assets" | "performance";
-type PerformanceSubTab = "ratings" | "reviews" | "history" | "records" | "dispute-history";
+/** The dispute record is no longer a tab — it sits at the foot of the Performance panel. */
+type PerformanceSubTab = "ratings" | "reviews" | "history" | "records";
 
 interface DetailsListBodyProps {
   loading?: boolean;
@@ -212,16 +213,6 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                   >
                     Records
                   </button>
-                  <button
-                    onClick={() => setPerformanceTab("dispute-history")}
-                    className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                      performanceTab === "dispute-history"
-                        ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                        : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-                    }`}
-                  >
-                    Dispute History
-                  </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
@@ -342,21 +333,39 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                     </div>
                   )}
 
-                  {performanceTab === "dispute-history" && (
-                    <div className="pt-2">
-                      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-xs space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
-                          <div>
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                              <ShieldAlert className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
-                              Dispute History
-                            </h4>
-                            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                              {isOwner
-                                ? "Your public and contract dispute records on the platform."
-                                : "Public dispute cases associated with this account."}
-                            </p>
-                          </div>
+                  {/* Dispute record sits at the foot of Performance, not behind its own tab. */}
+                  <div className="pt-4">
+                    <details className="group rounded-2xl border border-gray-200 bg-white shadow-xs dark:border-white/10 dark:bg-dark-surface">
+                      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-5 py-3.5">
+                        {publicDisputes.length ? (
+                          <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />
+                        ) : (
+                          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                        )}
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">Dispute record</span>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            publicDisputes.length
+                              ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                              : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                          }`}
+                        >
+                          {publicDisputes.length
+                            ? `${publicDisputes.length} public ${publicDisputes.length === 1 ? "case" : "cases"}`
+                            : "Clear"}
+                        </span>
+                        <span className="ml-auto text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
+                          <span className="group-open:hidden">Show</span>
+                          <span className="hidden group-open:inline">Hide</span>
+                        </span>
+                      </summary>
+                      <div className="space-y-4 border-t border-gray-100 px-5 py-4 dark:border-white/5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-xs text-gray-500 dark:text-zinc-400">
+                            {isOwner
+                              ? "Your public and contract dispute records on the platform."
+                              : "Public dispute cases associated with this account."}
+                          </p>
                           {isOwner && (
                             <button
                               type="button"
@@ -370,10 +379,10 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                         </div>
 
                         {publicDisputes.length === 0 ? (
-                          <div className="py-10 text-center space-y-1.5">
-                            <ShieldCheck className="h-8 w-8 text-emerald-500/80 mx-auto" />
+                          <div className="py-6 text-center space-y-1.5">
+                            <ShieldCheck className="h-7 w-7 text-emerald-500/80 mx-auto" />
                             <p className="text-sm font-bold text-gray-900 dark:text-white">
-                              No Disputes on Record
+                              No disputes on record
                             </p>
                             <p className="text-xs text-gray-500 dark:text-zinc-400">
                               There are no public dispute cases linked to this profile.
@@ -412,8 +421,8 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                           </div>
                         )}
                       </div>
-                    </div>
-                  )}
+                    </details>
+                  </div>
                 </div>
               </div>
             )}

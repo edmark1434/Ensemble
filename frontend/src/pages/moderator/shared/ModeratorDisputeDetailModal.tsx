@@ -24,6 +24,19 @@ import type {
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
+import {
+  InboxUploadMediaButton,
+  InboxUploadMediaPreview,
+  uploadChatAttachment,
+  useInboxUploadMedia,
+} from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
+import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
+import {
+  DECISION_CARD_CLASS,
+  DecisionHeader,
+  DisputeAttachments,
+  isDisputeDecision,
+} from "@/pages/user/disputes/disputeUi";
 import { BTN, BTN_BASE, ConfirmDialog, FIELD, Pill, SidebarSection } from "./staffCaseUi";
 
 type DisputeSocketMessage = {
@@ -46,6 +59,7 @@ type DisputeSocketMessage = {
   audience?: string;
   replyToId?: string | null;
   message_id_reply?: string | null;
+  attachments?: TicketMessage["attachments"];
   publishedAt?: string | null;
   published_at?: string | null;
   createdAt?: string | null;
@@ -74,6 +88,7 @@ function mapDisputeSocketMessage(raw: DisputeSocketMessage | null | undefined): 
     ),
     audience,
     replyToId: raw.replyToId ?? raw.message_id_reply ?? null,
+    attachments: raw.attachments ?? [],
     publishedAt: raw.publishedAt || raw.published_at || null,
     createdAt: String(raw.createdAt || raw.created_at || new Date().toISOString()),
   };
@@ -275,6 +290,77 @@ function resolutionPreview(
   return note ? `${body} — Staff notes: ${note}` : body;
 }
 
+/** Preview of the reopen notice. Mirrors DISPUTE_REOPEN_REASONS `finding` builders. */
+function reopenPreview(key: string, notes: string) {
+  const bodies: Record<string, string> = {
+    new_evidence:
+      "New evidence has been submitted on this case. The earlier decision is set aside and the matter is under review again.",
+    appeal_granted:
+      "An appeal against the decision on this case has been granted. The matter is under review again.",
+    party_now_responding:
+      "This case was closed because a party had stopped responding. They have since replied, so the review is resuming.",
+    staff_error:
+      "This case was closed in error. The earlier decision is withdrawn and the matter is being reviewed again.",
+  };
+  const body = bodies[key] || "This case has been reopened.";
+  const note = notes.trim();
+  return note ? `${body} — Reviewing staff noted: ${note}` : body;
+}
+
+/** Shared radio list for the Resolve and Reopen prompts. */
+function OutcomePicker({
+  options,
+  value,
+  onChange,
+  disabled,
+  label,
+  activeClassName,
+}: {
+  options: DisputeResolutionOption[];
+  value: string;
+  onChange: (key: string) => void;
+  disabled?: boolean;
+  label: string;
+  activeClassName: string;
+}) {
+  return (
+    <div className="space-y-1.5" role="radiogroup" aria-label={label}>
+      {options.map((option) => {
+        const active = value === option.key;
+        return (
+          <button
+            key={option.key}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(option.key)}
+            className={`w-full rounded-lg border px-3 py-2 text-left transition disabled:opacity-50 ${
+              active ? activeClassName : "border-white/10 hover:border-white/25 hover:bg-white/[0.04]"
+            }`}
+          >
+            <span className={`block text-xs font-semibold ${active ? "text-white" : "text-zinc-200"}`}>
+              {option.label}
+              {option.requiresNote ? (
+                <span className="ml-1.5 text-[10px] font-normal text-zinc-500">note required</span>
+              ) : null}
+            </span>
+            <span className="mt-0.5 block text-[11px] text-zinc-400">{option.hint}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Mirrors DISPUTE_REOPEN_REASONS in backend/lib/DisputeResolutions.js. */
+const FALLBACK_REOPEN_REASONS: DisputeResolutionOption[] = [
+  { key: "new_evidence", label: "New evidence submitted", hint: "A party produced something the original review did not have.", requiresNote: true },
+  { key: "appeal_granted", label: "Appeal granted", hint: "A party appealed and the appeal was accepted for review.", requiresNote: true },
+  { key: "party_now_responding", label: "Party is now responding", hint: "A case closed for inactivity, and the missing side came back." },
+  { key: "staff_error", label: "Closed in error", hint: "The case was resolved by mistake or on the wrong facts.", requiresNote: true },
+];
+
 const STATUS_OPTIONS = [
   "pending_review",
   "open",
@@ -351,6 +437,8 @@ export default function ModeratorDisputeDetailModal({
   const [banPromptOpen, setBanPromptOpen] = useState(false);
   const [banReason, setBanReason] = useState("");
   const [reopenPromptOpen, setReopenPromptOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenNotes, setReopenNotes] = useState("");
   const [resolvePromptOpen, setResolvePromptOpen] = useState(false);
   const [resolveOutcome, setResolveOutcome] = useState("");
   const [resolveNotes, setResolveNotes] = useState("");
@@ -362,8 +450,11 @@ export default function ModeratorDisputeDetailModal({
   const [reverseTxn, setReverseTxn] = useState<DisputeCaseTransaction | null>(null);
   const [reverseAmount, setReverseAmount] = useState("");
   const [reverseNotes, setReverseNotes] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const { mediaList, fileInputRef, openFilePicker, handleFileChange, removeMedia, clearMedia } =
+    useInboxUploadMedia(4, 100);
 
   const applyDetail = (d: DisputeDetail, { syncForm = true }: { syncForm?: boolean } = {}) => {
     setDetail(d);
@@ -618,7 +709,8 @@ export default function ModeratorDisputeDetailModal({
 
   const sendMessage = async () => {
     const text = message.trim();
-    if (!text || sending) return;
+    const pendingFiles = mediaList;
+    if (sending || (!text && !pendingFiles.length)) return;
     const audience = canAct ? replyAudience : "staff";
     const parentId = replyToId;
     const pendingId = `pending-${Date.now()}`;
@@ -631,6 +723,13 @@ export default function ModeratorDisputeDetailModal({
       isInternal: isPrivateAudience(audience),
       audience,
       replyToId: parentId,
+      attachments: pendingFiles.map((media) => ({
+        attachment_id: media.id,
+        attachment_type: media.type,
+        attachment_key: media.previewUrl,
+        attachment_url: media.previewUrl,
+        attachment_name: media.file.name,
+      })),
       createdAt: new Date().toISOString(),
     };
     setDetail((current) =>
@@ -640,6 +739,10 @@ export default function ModeratorDisputeDetailModal({
     setReplyToId(null);
     setSending(true);
     try {
+      const uploaded = pendingFiles.length
+        ? await Promise.all(pendingFiles.map((media) => uploadChatAttachment(media)))
+        : [];
+      clearMedia();
       const res = await api.post(`${endpointBase}/${disputeId}/messages`, {
         body: text,
         isInternal: isPrivateAudience(audience),
@@ -648,6 +751,7 @@ export default function ModeratorDisputeDetailModal({
         audience,
         audiences: [audience],
         ...(parentId ? { replyToId: parentId } : {}),
+        ...(uploaded.length ? { attachments: uploaded } : {}),
       });
       if (res.data?.success && res.data.data) {
         applyDetail(res.data.data as DisputeDetail, { syncForm: false });
@@ -733,10 +837,30 @@ export default function ModeratorDisputeDetailModal({
     setBanReason("");
   };
 
+  const openReopen = () => {
+    setReopenReason("");
+    setReopenNotes("");
+    setReopenPromptOpen(true);
+  };
+
   const confirmReopen = async () => {
-    const ok = await runAction({ action: "reopen" }, "Dispute reopened");
+    const choice = reopenOptions.find((option) => option.key === reopenReason);
+    if (!choice) {
+      showErrorToast("Pick why this case is being reopened");
+      return;
+    }
+    const notes = reopenNotes.trim();
+    if (choice.requiresNote && !notes) {
+      showErrorToast(`"${choice.label}" needs a short note`);
+      return;
+    }
+    const ok = await runAction(
+      { action: "reopen", reopenReason: choice.key, resolution_notes: notes || null },
+      `Dispute reopened — ${choice.label.toLowerCase()}`
+    );
     if (!ok) return;
     setReopenPromptOpen(false);
+    setReopenReason("");
   };
 
   const openResolve = () => {
@@ -775,7 +899,12 @@ export default function ModeratorDisputeDetailModal({
     detail?.resolutionOptions && detail.resolutionOptions.length
       ? detail.resolutionOptions
       : FALLBACK_RESOLUTIONS;
+  const reopenOptions =
+    detail?.reopenOptions && detail.reopenOptions.length
+      ? detail.reopenOptions
+      : FALLBACK_REOPEN_REASONS;
   const selectedResolution = resolutionOptions.find((option) => option.key === resolveOutcome);
+  const selectedReopen = reopenOptions.find((option) => option.key === reopenReason);
   const selectedAudience = replyAudienceOptions.find((option) => option.value === replyAudience);
   const messageById = new Map((detail?.messages || []).map((item) => [String(item.id), item]));
   const replyingTo = replyToId ? messageById.get(String(replyToId)) : undefined;
@@ -933,18 +1062,28 @@ export default function ModeratorDisputeDetailModal({
                       const listed = replyAudienceOptions.some((option) => option.value === currentAudience);
                       const awaitingReview = !pending && isPendingCommunityComment(m);
                       const parent = m.replyToId ? messageById.get(String(m.replyToId)) : undefined;
+                      const decision = isDisputeDecision(m);
                       return (
                         <article
                           key={m.id}
                           id={`dispute-msg-${m.id}`}
                           className={`group rounded-xl border border-l-2 border-white/[0.08] px-4 py-3 transition ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""} ${
-                            awaitingReview ? "border-l-amber-400/70 bg-amber-500/[0.06]" : "bg-white/[0.02]"
+                            decision
+                              ? DECISION_CARD_CLASS
+                              : awaitingReview
+                                ? "border-l-amber-400/70 bg-amber-500/[0.06]"
+                                : "bg-white/[0.02]"
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+                              {decision ? (
+                                <DecisionHeader
+                                  title={/reopen/i.test(m.body || "") ? "Case reopened" : "Final decision"}
+                                />
+                              ) : null}
                               <span className="font-medium text-zinc-100">{m.authorName}</span>
-                              {role && (
+                              {role && !decision && (
                                 <span className="rounded border border-white/10 px-1.5 py-px text-[10px] text-zinc-400">
                                   {role}
                                 </span>
@@ -1008,8 +1147,18 @@ export default function ModeratorDisputeDetailModal({
                               </p>
                             )
                           ) : null}
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{m.body}</p>
-                          {canReply && !pending && (
+                          <p
+                            className={`mt-2 whitespace-pre-wrap text-sm leading-relaxed ${
+                              decision ? "font-medium text-white" : "text-zinc-200"
+                            }`}
+                          >
+                            {m.body}
+                          </p>
+                          <DisputeAttachments
+                            attachments={m.attachments}
+                            onPreview={(url) => setPreviewUrl(url)}
+                          />
+                          {canReply && !pending && !decision && (
                             <button
                               type="button"
                               onClick={() => startReply(String(m.id))}
@@ -1102,7 +1251,21 @@ export default function ModeratorDisputeDetailModal({
                         })}
                       </div>
                     )}
+                    {mediaList.length ? (
+                      <div className="mb-2 overflow-hidden rounded-lg border border-white/10">
+                        <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
+                      </div>
+                    ) : null}
                     <div className="flex items-end gap-2">
+                      <InboxUploadMediaButton
+                        fileInputRef={fileInputRef}
+                        onFileChange={handleFileChange}
+                        onClick={openFilePicker}
+                        disabled={
+                          detail.chatAvailable === false || !canReply || sending || mediaList.length >= 4
+                        }
+                        title="Attach images or files (max 4)"
+                      />
                       <textarea
                         ref={composerRef}
                         value={message}
@@ -1133,7 +1296,12 @@ export default function ModeratorDisputeDetailModal({
                       <button
                         type="button"
                         onClick={() => void sendMessage()}
-                        disabled={sending || !message.trim() || detail.chatAvailable === false || !canReply}
+                        disabled={
+                          sending ||
+                          (!message.trim() && !mediaList.length) ||
+                          detail.chatAvailable === false ||
+                          !canReply
+                        }
                         className={`${BTN_BASE} h-[58px] border-transparent px-4 text-white ${ACCENT_BTN[accent]}`}
                       >
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1408,7 +1576,7 @@ export default function ModeratorDisputeDetailModal({
                       <button
                         type="button"
                         disabled={saving}
-                        onClick={() => setReopenPromptOpen(true)}
+                        onClick={openReopen}
                         className={BTN.neutral}
                       >
                         Reopen case
@@ -1482,36 +1650,14 @@ export default function ModeratorDisputeDetailModal({
             onCancel={() => setResolvePromptOpen(false)}
             onConfirm={() => void confirmResolve()}
           >
-            <div className="space-y-1.5" role="radiogroup" aria-label="How this dispute ended">
-              {resolutionOptions.map((option) => {
-                const active = resolveOutcome === option.key;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    disabled={saving}
-                    onClick={() => setResolveOutcome(option.key)}
-                    className={`w-full rounded-lg border px-3 py-2 text-left transition disabled:opacity-50 ${
-                      active
-                        ? "border-emerald-500/40 bg-emerald-500/15"
-                        : "border-white/10 hover:border-white/25 hover:bg-white/[0.04]"
-                    }`}
-                  >
-                    <span
-                      className={`block text-xs font-semibold ${active ? "text-emerald-100" : "text-zinc-200"}`}
-                    >
-                      {option.label}
-                      {option.requiresNote ? (
-                        <span className="ml-1.5 font-normal text-[10px] text-zinc-500">note required</span>
-                      ) : null}
-                    </span>
-                    <span className="mt-0.5 block text-[11px] text-zinc-400">{option.hint}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <OutcomePicker
+              options={resolutionOptions}
+              value={resolveOutcome}
+              onChange={setResolveOutcome}
+              disabled={saving}
+              label="How this dispute ended"
+              activeClassName="border-emerald-500/40 bg-emerald-500/15"
+            />
 
             <label className="block space-y-1 text-[11px] text-zinc-500">
               <span>
@@ -1542,17 +1688,54 @@ export default function ModeratorDisputeDetailModal({
           </ConfirmDialog>
         )}
 
-        {reopenPromptOpen && (
+        {reopenPromptOpen && dispute && (
           <ConfirmDialog
             title="Reopen this case"
-            description="The dispute goes back to under review so you can hear an appeal. A permanent ban stays until you lift it from the account."
+            description="Pick why the case is coming back. The reason is recorded and posted in the discussion, and the dispute returns to under review."
             confirmLabel="Reopen case"
             busyLabel="Reopening…"
             busy={saving}
+            confirmDisabled={!selectedReopen || (selectedReopen.requiresNote && !reopenNotes.trim())}
             confirmClassName={BTN.neutral}
             onCancel={() => setReopenPromptOpen(false)}
             onConfirm={() => void confirmReopen()}
-          />
+          >
+            <OutcomePicker
+              options={reopenOptions}
+              value={reopenReason}
+              onChange={setReopenReason}
+              disabled={saving}
+              label="Why this case is being reopened"
+              activeClassName="border-sky-500/40 bg-sky-500/15"
+            />
+
+            <label className="block space-y-1 text-[11px] text-zinc-500">
+              <span>
+                Note for both parties
+                {selectedReopen?.requiresNote ? " (required)" : " (optional)"}
+              </span>
+              <textarea
+                value={reopenNotes}
+                onChange={(event) => setReopenNotes(event.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="What changed since the case was closed. Both parties can read this."
+                className={`${FIELD} resize-none`}
+              />
+            </label>
+
+            {selectedReopen && (
+              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                <span className="font-semibold text-zinc-300">Posted in the discussion:</span>{" "}
+                {reopenPreview(selectedReopen.key, reopenNotes)}
+                {banned ? (
+                  <span className="mt-1 block text-amber-200/80">
+                    The permanent ban stays in place until you lift it from the account.
+                  </span>
+                ) : null}
+              </p>
+            )}
+          </ConfirmDialog>
         )}
 
         {settleOpen && dispute && (
@@ -1643,6 +1826,7 @@ export default function ModeratorDisputeDetailModal({
             </label>
           </ConfirmDialog>
         )}
+        <ChatImagePreview url={previewUrl} onClose={() => setPreviewUrl(null)} />
       </div>
     </div>
   );
