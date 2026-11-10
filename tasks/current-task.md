@@ -1,4 +1,20 @@
-# Current Task: Dispute Chat — Moderation, Replies, Indicators, Attachments, Rulings & Reading UX
+# Current Task: Dispute Chat — Moderation, Replies, Indicators, Attachments, Rulings, Reading UX & Realtime
+
+## Objective (10) — the public thread must not make the page endless
+- [x] The page is a fixed-height shell (`h-dvh`, `overflow-hidden`): only the thread pane scrolls, so a 300-reply case is the same page height as a 3-reply one.
+- [x] Summary card collapses behind a "Details" toggle so it can't starve the thread; the complaint box caps at `max-h-32` with its own scroll.
+- [x] Composer is a flex sibling under the pane (no more sticky overlay), textarea down to 2 rows.
+- [x] "N new replies" pill floats inside the pane; scroll tracking reads the pane, not the window.
+
+## Objective (11) — realtime for the disputer and disputee
+- [x] `emitDisputeState(disputeId)` broadcasts `disputeUpdated` (status, visibility, closed) to both parties' account rooms and the public dispute room. Wired into approve, hide, resolve, dismiss, ban, reopen, generic status patches, and the financial settle/reverse auto-close. It selects only long-standing columns so it is safe before the `resolution_outcome` migration runs.
+- [x] `MyTransactionDisputesPage` patches the affected row live (status, visibility, whether notes are still accepted) and refetches when a case first becomes visible to the member.
+- [x] `PublicDisputePage` updates the status pill live and locks the composer the moment a case closes.
+- [x] Tickets: `announceTicketState(ticketId)` syncs `ticket_details.status/priority` onto the inbox conversation and emits `ticketStateChanged` to the ticket room and the requester; `chat_state.ts` patches the conversation, so a member's ticket composer locks on close without a reload. Ticket *messages* were already realtime through the shared inbox.
+
+---
+
+# Previously: Dispute Chat — Moderation, Replies, Indicators, Attachments, Rulings & Reading UX
 
 ## Objective (8) — rulings must read as rulings, not as an admin's chat line
 - [x] `DisputeDecisionCard` renders a verdict panel: coloured header bar with a gavel, the case number, the outcome as a large headline, the finding, the staff note in its own box, a "Dispute Resolution · Ensemble platform decision" signature, and the appeal boilerplate small at the foot. Indigo for a decision, sky for a reopen.
