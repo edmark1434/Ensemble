@@ -55,4 +55,9 @@ Serve the admin console at `admin.ensemble.software` and the staff portal at `st
 - [x] `ensemble.software` / `www.ensemble.software` do the same for `admin.ensemble.software` and `staff.ensemble.software`.
 - [x] API CORS allows the console origins derived from `FRONTEND_URL`.
 - [x] Local console hosts proxy `/api` and `/socket.io` so login cookies stay on that host.
-- [ ] DNS and the production web server still need to point both hosts at this frontend and fall back to `index.html`.
+- [x] Admin routes require the Admin role on the client; signed-out visitors land on the portal login.
+- [x] Logout and refresh failures clear cookies with matching Secure/SameSite attributes.
+- [x] Platform view frames member pages from the console host (same origin, staff session, view-only guard); cross-origin framing renders nothing.
+- [x] Verified with a stub API: login, session reload, CSRF rejection/acceptance, logout revocation, CORS allow/deny.
+- [ ] DNS and the production web server still need to point both hosts at this frontend, fall back to `index.html`, and send `frame-ancestors 'self'`.
+- [ ] Sign in against the real backend once it is safe to run locally.

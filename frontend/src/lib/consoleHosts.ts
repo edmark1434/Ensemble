@@ -7,6 +7,10 @@
  * Prod:   https://admin.ensemble.software  and  https://staff.ensemble.software
  *
  * Moderator desks stay on the main site for now.
+ *
+ * Platform view frames member pages from the console host itself, so the
+ * preview keeps the staff session and same-origin messaging. Inside that
+ * frame no path mapping or cross-host redirect applies.
  */
 
 export type ConsoleId = 'admin' | 'staff';
@@ -159,42 +163,32 @@ export function consoleEntryUrl(id: ConsoleId): string {
   return id === 'admin' ? '/admin' : '/staff';
 }
 
-export function isTrustedAppOrigin(origin: string): boolean {
-  const allowed = new Set<string>();
-  if (typeof window !== 'undefined') {
-    allowed.add(window.location.origin);
-    allowed.add(mainSiteOrigin());
-    const admin = consoleOrigin('admin');
-    const staff = consoleOrigin('staff');
-    if (admin) allowed.add(admin);
-    if (staff) allowed.add(staff);
+function isFramed(): boolean {
+  return window.self !== window.top;
+}
+
+function hasSameOriginParent(): boolean {
+  try {
+    return window.parent.location.origin === window.location.origin;
+  } catch {
+    return false;
   }
-  return allowed.has(origin);
 }
 
-export function memberPreviewUrl(path: string): string {
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  if (typeof window === 'undefined') return normalized;
-  const origin = mainSiteOrigin();
-  if (origin === window.location.origin) return normalized;
-  return `${origin}${normalized}`;
-}
-
-export function memberPreviewTargetOrigin(): string {
-  if (typeof window === 'undefined') return '';
-  return mainSiteOrigin();
+/** Console host serving the address bar, not a platform-view frame. */
+export function activeConsoleId(): ConsoleId | null {
+  if (typeof window === 'undefined' || isFramed()) return null;
+  return consoleIdFromHostname(window.location.hostname);
 }
 
 export function isConsoleLoginPath(pathname: string): boolean {
   const path = pathname.replace(/\/$/, '') || '/';
   if (path === '/login' || path === '/admin' || path === '/staff') return true;
-  if (typeof window === 'undefined') return false;
-  return Boolean(consoleIdFromHostname(window.location.hostname)) && path === '/';
+  return Boolean(activeConsoleId()) && path === '/';
 }
 
 export function authFailureHref(): string {
-  if (typeof window !== 'undefined' && consoleIdFromHostname(window.location.hostname)) return '/';
-  return '/login';
+  return activeConsoleId() ? '/' : '/login';
 }
 
 function canonicalizeConsoleLocation(id: ConsoleId) {
@@ -209,6 +203,11 @@ function canonicalizeConsoleLocation(id: ConsoleId) {
 /** Run before the app renders. Returns true when the browser is leaving this page. */
 export function bootConsoleHost(): boolean {
   if (typeof window === 'undefined') return false;
+  if (consoleIdFromHostname(window.location.hostname) && isFramed()) {
+    // Only the console's own platform view may frame it. Anything else is clickjacking.
+    return !hasSameOriginParent();
+  }
+  if (isFramed()) return false;
   const away = legacyConsoleRedirect(window.location);
   if (away) {
     window.location.replace(away);

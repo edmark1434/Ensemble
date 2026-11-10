@@ -36,7 +36,8 @@ async function requireAdmin(req, res, next) {
           : [];
 
       if (allowedList.length > 0) {
-        const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress;
+        // req.ip honours TRUST_PROXY; the first X-Forwarded-For entry is client-controlled.
+        const rawIp = req.ip || req.socket?.remoteAddress;
         const clientIp = normalizeIp(rawIp);
         const isAllowed = allowedList.some((allowed) => normalizeIp(allowed) === clientIp);
 

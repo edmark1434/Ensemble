@@ -66,7 +66,7 @@ export function isStaffPortalDashboardPath(pathname: string): boolean {
 }
 
 export function getStaffRoleForPath(pathname: string): string | undefined {
-  if (pathname === '/admin/platform-view' || pathname.startsWith('/admin/platform-view/')) {
+  if (pathname.startsWith('/admin/')) {
     return 'Admin';
   }
   if (pathname === '/staff/platform-view' || pathname.startsWith('/staff/platform-view/')) {

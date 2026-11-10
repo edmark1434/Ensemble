@@ -28,6 +28,18 @@ const dotenv = require('dotenv');
 const redis = require('../lib/Redis');
 dotenv.config();
 
+// Browsers only clear a cookie when the clear uses the same Secure/SameSite attributes it was set with.
+function clearAuthCookies(res) {
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+    };
+    res.clearCookie('sessionId', options);
+    res.clearCookie('accessToken', options);
+    res.clearCookie('refreshToken', options);
+}
+
 function setAccessTokenCookie(res, accessToken) {
     res.cookie('accessToken', accessToken, {
         httpOnly: true,
@@ -392,9 +404,7 @@ async function refreshToken(req, res) {
         if (!credentials) {
             // Clear dead session identifiers since the user profile no longer exists
             await logout(req.cookies?.sessionId);
-            res.clearCookie('sessionId');
-            res.clearCookie('accessToken');
-            res.clearCookie('refreshToken');
+            clearAuthCookies(res);
             
             return res.status(401).json({
                 success: false,
@@ -437,9 +447,7 @@ async function refreshToken(req, res) {
         // 3. FIX: If JWT verification fails (JsonWebTokenError / TokenExpiredError), 
         // return a 401 instead of a 500 so the frontend interceptor breaks the loop!
         if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-            res.clearCookie('sessionId');
-            res.clearCookie('accessToken');
-            res.clearCookie('refreshToken');
+            clearAuthCookies(res);
             return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
         }
 
@@ -457,12 +465,8 @@ async function LogoutUsers(req, res) {
 
         if (sessionId) {
             await logout(sessionId);
-            res.clearCookie('sessionId');
         }
-
-        // Clear auth cookies with same options used when creating them
-        res.clearCookie('accessToken');
-        res.clearCookie('refreshToken');
+        clearAuthCookies(res);
 
         return res.status(200).json({
             success: true,

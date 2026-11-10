@@ -11,6 +11,9 @@
 
 - Authentication alone is not authorization. Verify ownership, membership, role, and resource access in backend middleware/services.
 - Use secure, HTTP-only cookies where established and keep CORS origins explicit with credentials enabled only for trusted origins. Admin and staff console origins are added from `FRONTEND_URL` (`admin.` / `staff.` on `ensemble.software`, and `admin.localhost` / `staff.localhost` in development). Do not replace that list with a wildcard.
+- Clear auth cookies with the same `httpOnly`, `secure`, and `sameSite` options used to set them. Otherwise browsers keep the old cookie (`clearAuthCookies` in `UserControllers.js`, `clearAuthSession` in `lib/AccountRestriction.js`).
+- Use `req.ip` for client IPs, never the raw `X-Forwarded-For` header. Set `TRUST_PROXY` to the number of proxies in front of the API (`2` for Cloudflare → Nginx Proxy Manager), and only accept origin traffic from Cloudflare.
+- Serve `admin.ensemble.software` and `staff.ensemble.software` with `Content-Security-Policy: frame-ancestors 'self'` (or `X-Frame-Options: SAMEORIGIN`). The app also refuses to render when framed cross-origin, but the header is the real clickjacking defense. Do not send `X-Frame-Options: DENY`; platform view frames its own host.
 - OAuth `state` must be unpredictable, signed/verified, short-lived, and bound to the initiating user/session.
 - OAuth redirect URIs must exactly match provider configuration.
 

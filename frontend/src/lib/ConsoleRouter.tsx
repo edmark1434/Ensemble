@@ -9,7 +9,7 @@ import {
   type To,
 } from 'react-router-dom';
 import {
-  consoleIdFromHostname,
+  activeConsoleId,
   isConsolePublicPath,
   joinUrl,
   legacyConsoleRedirect,
@@ -32,20 +32,9 @@ function toPublic(id: ConsoleId, to: To): To {
 function leaveConsole(id: ConsoleId, currentPathname: string, to: To): boolean {
   const parsed = typeof to === 'string' ? parsePath(to) : to;
   const pathname = parsed.pathname ? publicPathFromRouter(parsed.pathname, id) : currentPathname;
-  if (!pathname.startsWith('/') || pathname.startsWith('//')) {
-    window.location.assign(typeof to === 'string' ? to : pathname);
-    return true;
-  }
+  if (!pathname.startsWith('/') || pathname.startsWith('//')) return false;
   if (isConsolePublicPath(id, pathname)) return false;
-  const search = parsed.pathname ? (parsed.search || '') : (parsed.search ?? '');
-  const hash = parsed.pathname ? (parsed.hash || '') : (parsed.hash ?? '');
-  const current = window.location;
-  window.location.assign(joinUrl(
-    mainSiteOrigin(),
-    pathname,
-    parsed.pathname ? search : (parsed.search ?? current.search),
-    parsed.pathname ? hash : (parsed.hash ?? current.hash),
-  ));
+  window.location.assign(joinUrl(mainSiteOrigin(), pathname, parsed.search || '', parsed.hash || ''));
   return true;
 }
 
@@ -93,6 +82,7 @@ function createConsoleHistory(id: ConsoleId): History {
 
 function LegacyConsoleRedirect() {
   useLayoutEffect(() => {
+    if (window.self !== window.top) return;
     const target = legacyConsoleRedirect(window.location);
     if (target) window.location.replace(target);
   });
@@ -100,7 +90,7 @@ function LegacyConsoleRedirect() {
 }
 
 export default function ConsoleRouter({ children }: { children: ReactNode }) {
-  const id = typeof window === 'undefined' ? null : consoleIdFromHostname(window.location.hostname);
+  const id = activeConsoleId();
   const historyRef = useRef<History | null>(null);
   if (id && historyRef.current == null) {
     historyRef.current = createConsoleHistory(id);
