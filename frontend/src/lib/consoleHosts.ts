@@ -98,12 +98,21 @@ export function consoleOrigin(id: ConsoleId, loc: LocationLike = window.location
   return null;
 }
 
-/** Same-origin API on local console hosts so session cookies stay first-party. */
-export function devConsoleApiOrigin(): string | null {
+export function isAdminConsoleHost(hostname: string = window.location.hostname): boolean {
+  return consoleIdFromHostname(hostname) === 'admin';
+}
+
+/**
+ * Hosts that call /api on their own origin, so their session cookie is separate.
+ * The admin console never shares the member site's session. The staff portal does
+ * in production because moderator desks live on the main site; locally it cannot,
+ * since staff.localhost and localhost are different sites for cookies.
+ */
+export function consoleApiOrigin(): string | null {
   if (typeof window === 'undefined') return null;
   const host = bareHost(window.location.hostname);
-  if (host !== 'admin.localhost' && host !== 'staff.localhost') return null;
-  return window.location.origin;
+  if (isAdminConsoleHost(host) || host === 'staff.localhost') return window.location.origin;
+  return null;
 }
 
 export function stripConsolePrefix(pathname: string, id: ConsoleId): string | null {

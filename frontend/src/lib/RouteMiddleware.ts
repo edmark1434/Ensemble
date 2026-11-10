@@ -2,7 +2,8 @@ import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "./global_state";
 import api from "./axios";
-import { getStaffHomePath, getStaffPlatformViewPath } from "./staffRoutes";
+import { getStaffHomePath, getStaffPlatformViewPath, isAdminAccount } from "./staffRoutes";
+import { isAdminConsoleHost } from "./consoleHosts";
 import { ONBOARDING_COMPLETED_EVENT, ONBOARDING_STEP_CHANGED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
 import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -187,6 +188,11 @@ export default function RouteMiddleware() {
                 if (!cancelled && result.status === 200) {
                     const responseData = result.data as { user?: unknown } | undefined;
                     const currentUser = responseData?.user ?? result.data;
+                    if (isAdminAccount(currentUser as { type?: string; role?: string }) && !isAdminConsoleHost()) {
+                        void api.post('/api/users/logout').catch(() => {});
+                        setResolvedUser(null);
+                        return;
+                    }
                     useGlobalState.getState().setUser(currentUser);
                     setResolvedUser(currentUser);
                 }

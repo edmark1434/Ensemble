@@ -11,7 +11,9 @@
 ## Staff consoles
 
 - Admin lives on `admin.ensemble.software` (`admin.localhost:5173` in dev). Staff lives on `staff.ensemble.software` (`staff.localhost:5173`). The main site redirects `/admin` and `/staff` to those hosts. Browser paths omit the prefix (`/dashboard`); route code still uses `/admin` and `/staff`. Moderator desks stay on the main site.
-- Point both console hosts at this same frontend build, and serve `index.html` for their client-side paths. The API allows those origins from `FRONTEND_URL`. Local console hosts call `/api` through the Vite proxy so the session cookie stays on that host.
+- Point both console hosts at this same frontend build, and serve `index.html` for their client-side paths. The API allows those origins from `FRONTEND_URL`.
+- The admin console has its own session. It calls `/api` and `/socket.io` on its own host (the Vite proxy locally; the production proxy must forward both paths on `admin.ensemble.software`), so its cookies never reach the member site. The member site signs out any admin session it finds and refuses admin logins.
+- The staff portal shares the member site's session in production because moderator desks still live on the main site. Locally `staff.localhost` uses the Vite proxy, since it cannot share cookies with `localhost`.
 - Platform view and reported-item previews frame member pages from the console host itself (for example `admin.ensemble.software/forums`). Inside that same-origin frame no prefix mapping or redirect applies, so the preview keeps the staff session and the view-only guard. A console host framed by any other origin renders nothing.
 - `StaffMiddleware` requires the Admin role for every `/admin/*` route. The backend remains the authority: every admin API route uses `checkSession` + `requireAdmin`.
 - Admin, moderator, and staff portal pages are registered in `frontend/src/pages/staff/staffPages.ts` with `lazyWithPreload`. Add new console pages there and to the matching console list, not as `lazyPage` entries in `App.tsx`. New admin pages also need their first path segment added in `frontend/src/lib/consoleHosts.ts`.

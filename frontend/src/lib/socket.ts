@@ -1,8 +1,8 @@
 import { io, Socket } from "socket.io-client";
-import { devConsoleApiOrigin } from "./consoleHosts";
+import { consoleApiOrigin } from "./consoleHosts";
 
 const SOCKET_URL =
-  devConsoleApiOrigin() ||
+  consoleApiOrigin() ||
   import.meta.env.VITE_WEBSOCKET_URL ||
   import.meta.env.VITE_BASE_URL ||
   "http://localhost:4000";

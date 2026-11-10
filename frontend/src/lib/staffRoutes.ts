@@ -24,6 +24,10 @@ export const STAFF_HOME_BY_ROLE: Record<string, string> = {
   'Jobs N Gigs Moderator': '/moderator/jobs',
 };
 
+export function isAdminAccount(user: { type?: string | null; role?: string | null } | null | undefined): boolean {
+  return user?.type === 'Staff' && user.role === 'Admin';
+}
+
 export function getStaffHomePath(role?: string | null): string {
   if (!role) {
     return STAFF_LOGIN_PATH;

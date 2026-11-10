@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Eye, EyeOff, Gem, Lock, Mail, Shield } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
+import api from '@/lib/axios';
 import { API_BASE_URL } from '@/lib/api';
 import { getStaffHomePath } from '@/lib/staffRoutes';
 import { consoleEntryUrl, mainSiteOrigin } from '@/lib/consoleHosts';
@@ -147,18 +148,17 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
       const credentials = normalizeCredentials(result.data.credentials ?? {});
       const { type, role } = credentials;
 
-      if (type !== 'Staff' || !role) {
-        setError('This portal is for staff accounts only. Use the main site login for user accounts.');
-        return;
-      }
-
-      if (portal === 'admin' && role !== 'Admin') {
-        setError('This portal is for administrators only. Use the staff portal for moderator access.');
-        return;
-      }
-
-      if (portal === 'staff' && role === 'Admin') {
-        setError('Administrators should sign in through the admin portal.');
+      const rejection =
+        type !== 'Staff' || !role
+          ? 'This portal is for staff accounts only. Use the main site login for user accounts.'
+          : portal === 'admin' && role !== 'Admin'
+            ? 'This portal is for administrators only. Use the staff portal for moderator access.'
+            : portal === 'staff' && role === 'Admin'
+              ? 'Administrators should sign in through the admin portal.'
+              : '';
+      if (rejection) {
+        await api.post('/api/users/logout').catch(() => {});
+        setError(rejection);
         return;
       }
 
