@@ -193,8 +193,19 @@ export type Dispute = {
   updatedAt: string;
   resolvedAt: string | null;
   resolutionNotes: string | null;
+  /** Why the case closed, from backend/lib/DisputeResolutions.js. */
+  resolutionOutcome?: string | null;
+  resolutionOutcomeLabel?: string | null;
   isClosed?: boolean;
   financialResolution?: DisputeFinancialResolution | null;
+};
+
+/** One choice in the Resolve prompt, served by the dispute detail payload. */
+export type DisputeResolutionOption = {
+  key: string;
+  label: string;
+  hint: string;
+  requiresNote?: boolean;
 };
 
 export type UserReport = {

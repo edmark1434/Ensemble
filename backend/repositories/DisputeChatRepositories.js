@@ -583,9 +583,13 @@ async function broadcastInboxDisputeMessage(io, event, message) {
 
 function mapDisputeSummary(row, accountId) {
   const filedByMe = Boolean(accountId && String(row.by_account_id) === String(accountId));
+  const namesMe = Boolean(
+    accountId && row.for_account_id && String(row.for_account_id) === String(accountId)
+  );
   const closed = String(row.status || '').toLowerCase() === 'closed';
   const visibility = Boolean(row.visibility);
   return {
+    viewerRole: filedByMe ? 'disputer' : namesMe ? 'disputee' : null,
     id: row.dispute_id,
     number: row.dispute_number,
     title: row.title || row.description,
@@ -604,7 +608,7 @@ async function listAccountDisputes(accountId) {
   const result = await pool.query(
     `
     SELECT dispute_id, dispute_number, title, type, status, description, visibility,
-           by_account_id, created_at, updated_at
+           by_account_id, for_account_id, created_at, updated_at
     FROM disputes
     WHERE deleted_at IS NULL
       AND (
@@ -699,10 +703,11 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     viewerAccountId && String(row.for_account_id) === String(viewerAccountId)
   );
   const closed = String(row.status || '').toLowerCase() === 'closed';
+  // Forum view: everyone sees the open discussion. A staff reply aimed at one party or at
+  // `parties` stays with its audience, so the "only you and staff" badge means what it says.
   const messages = (await listDisputeMessages(chatId)).filter((message) => {
     const audience = String(message.audience || '').toLowerCase();
-    // Forum view: everyone sees the open discussion (parties + public).
-    if (audience === 'public' || audience === 'parties') return true;
+    if (audience === 'public') return true;
     return canViewerSeeMessage(message, {
       accountId: viewerAccountId,
       isParty,
@@ -730,6 +735,8 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
       handle: row.respondent_handle || null,
     },
     isParty,
+    // Lets the client say who else can read each message it was given.
+    viewerRole: isFiler ? 'disputer' : isRespondent ? 'disputee' : viewerAccountId ? 'community' : null,
     canComment: Boolean(viewerAccountId) && !closed,
     // Replies from people outside the dispute are held for staff review before they appear.
     commentsNeedApproval: Boolean(viewerAccountId) && !isParty,

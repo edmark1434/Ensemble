@@ -93,6 +93,7 @@ export type DisputeDetail = {
   chatAvailable?: boolean;
   permissions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputePermissions;
   assignableStaff: { staffId: number | string; name: string; role: string }[];
+  resolutionOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
 };
 
 export type Alert = {

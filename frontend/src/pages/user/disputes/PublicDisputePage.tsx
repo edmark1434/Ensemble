@@ -7,15 +7,18 @@ import toast from "react-hot-toast";
 import useGlobalState from "@/lib/global_state";
 import UserHeader from "@/components/nav/user_header";
 import {
+  AudiencePill,
   Avatar,
   Card,
   RoleChip,
   StatusPill,
   VisibilityPill,
+  audienceNotice,
   formatWhen,
   isClosedStatus,
   titleCase,
 } from "./disputeUi";
+import type { ViewerRole } from "./disputeUi";
 
 type DiscussionMessage = {
   id: string;
@@ -44,6 +47,7 @@ type Discussion = {
   initiator?: DiscussionPerson;
   respondent?: DiscussionPerson;
   isParty?: boolean;
+  viewerRole?: ViewerRole;
   canComment?: boolean;
   commentsNeedApproval?: boolean;
   chatId?: string | null;
@@ -89,6 +93,25 @@ function QuotedMessage({
       </span>
     </button>
   );
+}
+
+/**
+ * Mirrors the backend audience rules so a live message lands with the right people.
+ * A staff reply aimed at one party must reach that party and nobody else.
+ */
+function canViewerSeeAudience(
+  audience: string,
+  viewerRole: ViewerRole,
+  { senderId, viewerAccountId }: { senderId?: string | null; viewerAccountId?: string | null }
+) {
+  if (audience === "public") return true;
+  if (audience === "parties") return viewerRole === "disputer" || viewerRole === "disputee";
+  if (audience === "disputer") return viewerRole === "disputer";
+  if (audience === "disputee") return viewerRole === "disputee";
+  if (audience === "author_and_staff") {
+    return Boolean(viewerAccountId && senderId && String(senderId) === String(viewerAccountId));
+  }
+  return false;
 }
 
 function upsertDiscussionMessage(list: DiscussionMessage[], next: DiscussionMessage) {
@@ -201,29 +224,25 @@ export default function PublicDisputePage() {
       const messageId = payload?.id || payload?._id;
       if (!messageId) return;
       const audience = String(payload.audience || "").toLowerCase();
+      if (!audience) return;
       const senderId = payload.senderAccountId ?? payload.sender_id ?? null;
-      const published = ["parties", "public"].includes(audience);
-      const ownHeldComment =
-        !published &&
-        Boolean(viewerAccountId && senderId && String(senderId) === String(viewerAccountId));
-      if (!published && !ownHeldComment) {
-        // A message moved back to a private audience leaves the public thread.
-        setDiscussion((current) =>
-          current
-            ? {
-                ...current,
-                messages: (current.messages || []).filter((item) => String(item.id) !== String(messageId)),
-              }
-            : current
-        );
-        return;
-      }
       setDiscussion((current) => {
         if (!current) return current;
+        const visible = canViewerSeeAudience(audience, current.viewerRole, {
+          senderId,
+          viewerAccountId,
+        });
+        if (!visible) {
+          // Either it was never for this viewer, or staff narrowed its audience.
+          return {
+            ...current,
+            messages: (current.messages || []).filter((item) => String(item.id) !== String(messageId)),
+          };
+        }
         const existing = (current.messages || []).find(
           (item) => String(item.id) === String(messageId)
         );
-        if (ownHeldComment && !existing && !(payload.body || payload.message_content)) return current;
+        if (!existing && !(payload.body || payload.message_content)) return current;
         return {
           ...current,
           messages: upsertDiscussionMessage(current.messages || [], {
@@ -235,7 +254,11 @@ export default function PublicDisputePage() {
             createdAt:
               payload.createdAt || payload.created_at || existing?.createdAt || new Date().toISOString(),
             audience: payload.audience,
-            pendingReview: !published,
+            pendingReview:
+              audience === "author_and_staff" &&
+              String(
+                payload.authorRole || payload.author_role || existing?.authorRole || ""
+              ).toLowerCase() === "community",
             replyToId:
               payload.replyToId ?? payload.message_id_reply ?? existing?.replyToId ?? null,
           }),
@@ -459,12 +482,15 @@ export default function PublicDisputePage() {
                     const parent = message.replyToId
                       ? messageById.get(String(message.replyToId))
                       : undefined;
+                    const notice = heldForReview
+                      ? null
+                      : audienceNotice(message.audience, discussion.viewerRole);
                     return (
                       <li
                         key={message.id}
                         id={`dispute-message-${message.id}`}
                         className={`group flex gap-3 rounded-lg px-5 py-4 transition ${pending ? "opacity-60" : ""} ${
-                          heldForReview ? "bg-amber-50/60 dark:bg-amber-500/[0.06]" : ""
+                          heldForReview || notice ? "bg-amber-50/60 dark:bg-amber-500/[0.06]" : ""
                         }`}
                       >
                         <Avatar name={message.authorName} role={message.authorRole} />
@@ -480,6 +506,9 @@ export default function PublicDisputePage() {
                                 Awaiting staff review
                               </span>
                             ) : null}
+                            {notice ? (
+                              <AudiencePill audience={message.audience} viewerRole={discussion.viewerRole} />
+                            ) : null}
                             <span className="ml-auto text-[11px] text-gray-400 dark:text-zinc-500">
                               {pending ? "Sending…" : formatWhen(message.createdAt)}
                             </span>
@@ -488,6 +517,9 @@ export default function PublicDisputePage() {
                             <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/80">
                               Only you and staff can see this reply until a staff member or admin makes it public.
                             </p>
+                          ) : null}
+                          {notice ? (
+                            <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/80">{notice.detail}</p>
                           ) : null}
                           <div className="mt-1.5">
                             {message.replyToId ? (

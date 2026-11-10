@@ -36,6 +36,13 @@ const {
   resolveDisputeReplyTarget,
 } = require('./DisputeChatRepositories');
 const {
+  DISPUTE_RESOLUTION_KEYS,
+  findDisputeResolution,
+  disputeResolutionLabel,
+  listDisputeResolutionOptions,
+  buildDisputeResolutionMessage,
+} = require('../lib/DisputeResolutions');
+const {
   ROLE_TO_TICKET_TYPES,
   TICKET_TYPES,
   TICKET_STATUSES,
@@ -504,6 +511,8 @@ function mapDisputeRow(row) {
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
+    resolutionOutcome: row.resolution_outcome || null,
+    resolutionOutcomeLabel: disputeResolutionLabel(row.resolution_outcome),
     isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
     financialResolution: row.financial_resolution_at
       ? {
@@ -3543,6 +3552,79 @@ async function updateDispute(disputeId, patch, staffSession) {
     return getDisputeDetail(disputeId, staffSession);
   }
 
+  if (action === 'resolve') {
+    if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before resolving it.');
+    if (String(refreshed.status || '').toLowerCase() === 'closed') {
+      throw new Error('This dispute is already closed. Reopen it first.');
+    }
+    const resolution = findDisputeResolution(patch.outcome ?? patch.resolution_outcome);
+    if (!resolution) {
+      throw new Error(
+        `Pick how this dispute ended. Use one of: ${DISPUTE_RESOLUTION_KEYS.join(', ')}.`
+      );
+    }
+    const notes = String(patch.resolution_notes || '').trim();
+    if (resolution.requiresNote && !notes) {
+      throw new Error(`"${resolution.label}" needs a short note explaining what happened.`);
+    }
+    if (notes.length > 2000) throw new Error('Resolution notes are too long.');
+
+    await pool.query(
+      `
+      UPDATE disputes
+      SET status = 'closed',
+          resolution_outcome = $1,
+          resolution_notes = COALESCE(NULLIF($2, ''), resolution_notes),
+          resolved_at = NOW(),
+          updated_at = NOW()
+      WHERE dispute_id = $3
+      `,
+      [resolution.key, notes, disputeId]
+    );
+
+    await recordAccountActivity({
+      accountId: refreshed.by_account_id || refreshed.for_account_id,
+      action: `Dispute ${refreshed.dispute_number || disputeId} closed — ${resolution.label}`,
+      eventCode: 'DISPUTE_RESOLVED',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: { status: 'closed', outcome: resolution.key },
+    });
+
+    const body = buildDisputeResolutionMessage(resolution, {
+      disputer: refreshed.initiator_handle
+        ? `@${refreshed.initiator_handle}`
+        : refreshed.initiator_name || 'The disputer',
+      disputee: refreshed.respondent_handle
+        ? `@${refreshed.respondent_handle}`
+        : refreshed.respondent_name || 'The disputee',
+      notes,
+    });
+    try {
+      // A hidden case has no public page, and its `parties` messages are unreadable
+      // while visibility is false — the filer is the only party with access.
+      await postDisputeDecisionMessage(refreshed, staffSession, body, {
+        audience: refreshed.visibility ? 'public' : 'disputer',
+        notify: false,
+      });
+    } catch (err) {
+      console.warn('Dispute resolution message skipped:', err.message);
+    }
+    try {
+      const number = refreshed.dispute_number || 'Dispute';
+      await notifyDisputeParties(refreshed, {
+        message: `Dispute ${number} ${resolution.notifyMessage}`,
+        path: refreshed.visibility ? `/disputes/${disputeId}` : '/contracts/disputes',
+        onlyFiler: !refreshed.visibility,
+      });
+    } catch (err) {
+      console.warn('Dispute resolution notice skipped:', err.message);
+    }
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
   if (action === 'dismiss') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     await pool.query(
@@ -3603,6 +3685,8 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (normalized.status && normalized.status !== 'closed') {
     sets.push(`resolved_at = NULL`);
+    // A case moved back out of closed no longer has a resolution.
+    sets.push(`resolution_outcome = NULL`);
   }
 
   if (normalized.handled_by_staff_id !== undefined && (actPerms.canAct || actPerms.canAssignOthers)) {
@@ -3993,6 +4077,8 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     permissions,
     assignableQueue: 'disputes',
     assignableStaff,
+    // Drives the Resolve prompt, so the console never hardcodes the outcome list.
+    resolutionOptions: listDisputeResolutionOptions(),
   };
 }
 
@@ -4222,11 +4308,23 @@ function decisionReason(patch) {
   return reason;
 }
 
-async function postDisputeDecisionMessage(row, staffSession, body) {
+async function postDisputeDecisionMessage(
+  row,
+  staffSession,
+  body,
+  { audience = 'public', notify = true } = {}
+) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot post the decision in the discussion.');
   }
   const chatId = await ensureDisputeChat(row.dispute_id, row);
+  const normalizedAudience = String(audience || 'public').toLowerCase();
+  const partyIds =
+    normalizedAudience === 'disputer'
+      ? [row.by_account_id]
+      : normalizedAudience === 'disputee'
+        ? [row.for_account_id]
+        : [row.by_account_id, row.for_account_id];
   await createDisputeMessage({
     chatId,
     body,
@@ -4234,11 +4332,15 @@ async function postDisputeDecisionMessage(row, staffSession, body) {
     authorName: sessionDisplayName(staffSession) || 'Staff',
     authorType: 'staff',
     authorRole: 'staff',
-    audience: 'public',
-    audiences: ['public', 'parties'],
+    audience: normalizedAudience,
+    audiences: normalizedAudience === 'public' ? ['public', 'parties'] : [normalizedAudience],
     isInternal: false,
+    notifyAccountIds: partyIds.filter(
+      (id) => id && String(id) !== String(sessionAccountId(staffSession) || '')
+    ),
     disputeId: row.dispute_id,
   });
+  if (!notify) return;
   const number = row.dispute_number || 'Dispute';
   await notifyDisputeParties(row, {
     message: `New reply on dispute ${number}.`,
@@ -4324,6 +4426,7 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms) {
     UPDATE disputes
     SET status = 'under_review',
         resolved_at = NULL,
+        resolution_outcome = NULL,
         updated_at = NOW()
     WHERE dispute_id = $1
     `,

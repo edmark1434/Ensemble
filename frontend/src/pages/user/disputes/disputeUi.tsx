@@ -92,6 +92,85 @@ export function VisibilityPill({ isPublic }: { isPublic: boolean }) {
   );
 }
 
+export type ViewerRole = "disputer" | "disputee" | "community" | null | undefined;
+
+/**
+ * Who can read a dispute message, written from the reader's own point of view.
+ * `null` means the message carries no restriction worth announcing (it is public).
+ */
+export function audienceNotice(audience?: string | null, viewerRole?: ViewerRole) {
+  const value = String(audience || "").toLowerCase();
+  const otherParty = viewerRole === "disputee" ? "the disputer" : "the disputee";
+  if (value === "public" || value === "") return null;
+  if (value === "staff") {
+    return { label: "Staff only", detail: "Only staff can see this message.", private: true };
+  }
+  if (value === "author_and_staff") {
+    return {
+      label: "Only you and staff",
+      detail: `Only you and staff can see this. ${
+        viewerRole === "community" ? "It stays hidden until staff publish it." : "The other party can’t read it."
+      }`,
+      private: true,
+    };
+  }
+  if (value === "disputer" || value === "disputee") {
+    const aimedAtViewer =
+      (value === "disputer" && viewerRole === "disputer") ||
+      (value === "disputee" && viewerRole === "disputee");
+    if (aimedAtViewer) {
+      return {
+        label: "Only you and staff",
+        detail: `Staff sent this to you alone. ${titleCase(otherParty)} can’t see it.`,
+        private: true,
+      };
+    }
+    return {
+      label: value === "disputer" ? "Disputer and staff" : "Disputee and staff",
+      detail: `Staff sent this to ${value === "disputer" ? "the disputer" : "the disputee"} only.`,
+      private: true,
+    };
+  }
+  if (value === "parties") {
+    return {
+      label: "Both parties and staff",
+      detail: "The disputer, the disputee, and staff can see this. It is not on the public page.",
+      private: true,
+    };
+  }
+  return null;
+}
+
+/** Badge naming who can read a message. Renders nothing for public messages. */
+export function AudiencePill({
+  audience,
+  viewerRole,
+}: {
+  audience?: string | null;
+  viewerRole?: ViewerRole;
+}) {
+  const notice = audienceNotice(audience, viewerRole);
+  if (!notice) return null;
+  return (
+    <span
+      title={notice.detail}
+      className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+    >
+      <LockIcon />
+      {notice.label}
+    </span>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
 export function Avatar({ name, role }: { name?: string | null; role?: string | null }) {
   const key = roleKey(role);
   const initial = String(name || "?").trim().charAt(0).toUpperCase() || "?";

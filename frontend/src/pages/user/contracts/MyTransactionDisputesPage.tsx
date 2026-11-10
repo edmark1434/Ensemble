@@ -6,14 +6,17 @@ import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import toast from "react-hot-toast";
 import {
+  AudiencePill,
   Avatar,
   Card,
   RoleChip,
   StatusPill,
   VisibilityPill,
+  audienceNotice,
   formatWhen,
   isClosedStatus,
 } from "@/pages/user/disputes/disputeUi";
+import type { ViewerRole } from "@/pages/user/disputes/disputeUi";
 
 type DisputeMessage = {
   id: string;
@@ -23,6 +26,7 @@ type DisputeMessage = {
   createdAt?: string | null;
   conversationId?: string;
   replyToId?: string | null;
+  audience?: string;
 };
 
 type DisputeRow = {
@@ -34,6 +38,7 @@ type DisputeRow = {
   reason?: string;
   visibility?: boolean;
   filedByMe?: boolean;
+  viewerRole?: ViewerRole;
   canAddInformation?: boolean;
   updatedAt?: string;
   chatId?: string | null;
@@ -170,6 +175,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           body: payload.body || payload.message_content || "",
           createdAt: payload.createdAt || payload.created_at || new Date().toISOString(),
           replyToId: payload.replyToId ?? payload.message_id_reply ?? null,
+          audience,
         })
       );
     };
@@ -320,6 +326,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                 const parent = message.replyToId
                   ? notes.find((item) => String(item.id) === String(message.replyToId))
                   : undefined;
+                const notice = audienceNotice(message.audience, dispute.viewerRole);
                 return (
                   <div
                     key={message.id}
@@ -334,10 +341,14 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                           {fromStaff ? message.authorName || "Staff" : "You"}
                         </span>
                         {fromStaff ? <RoleChip role="staff" /> : null}
+                        <AudiencePill audience={message.audience} viewerRole={dispute.viewerRole} />
                         <span className="ml-auto text-[11px] text-gray-400 dark:text-zinc-500">
                           {pending ? "Sending…" : formatWhen(message.createdAt)}
                         </span>
                       </div>
+                      {notice ? (
+                        <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300/80">{notice.detail}</p>
+                      ) : null}
                       {message.replyToId ? (
                         <p className="mt-1 flex items-center gap-1.5 rounded-lg border-l-2 border-gray-300 bg-gray-50 px-2 py-1 text-[11px] text-gray-500 dark:border-white/20 dark:bg-white/[0.04] dark:text-zinc-400">
                           <CornerUpLeft className="h-3 w-3 shrink-0" />

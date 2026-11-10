@@ -1,4 +1,30 @@
-# Current Task: Dispute Comment Moderation & Threaded Replies
+# Current Task: Dispute Comment Moderation, Threaded Replies, Audience Indicators & Resolve Outcomes
+
+## Objective (3) — audience indicators
+Each party must be able to tell who else can read a message: a staff reply sent to the disputee only,
+to the disputer only, to both parties, or to the public.
+
+## Acceptance criteria (3)
+- [x] Party payloads carry `viewerRole`; `audienceNotice` / `AudiencePill` in `disputeUi.tsx` label each message from the reader's point of view.
+- [x] Badge + one-line explanation on the public dispute page and the disputer's private-notes panel.
+- [x] A staff reply aimed at `disputer` / `disputee` / `parties` is no longer shown to everyone on the public page, so the labels are truthful. **Behavior change**: legacy staff messages with no stored audience resolve to `parties`, so on existing public disputes they become party-only.
+- [x] Live updates respect the same audience rules (a targeted reply reaches that party and is dropped for everyone else).
+
+## Objective (4) — Resolve prompt and automatic outcome message
+Pressing Resolve asks how the case ended, records it, and posts the outcome in the discussion.
+
+## Acceptance criteria (4)
+- [x] `backend/lib/DisputeResolutions.js` holds the catalog: resolved by both parties, disputee/disputer refused to cooperate, disputer/disputee inactive, withdrawn, no violation found — each with the sentence it posts.
+- [x] `PATCH .../disputes/:id` `action: "resolve"` with `outcome` + optional `resolution_notes` writes `status = closed` + `resolution_outcome` + `resolved_at`, posts the message, and notifies the parties.
+- [x] Note required for "refused to cooperate" (both) and "no violation found".
+- [x] Message audience is `public` on a visible case, `disputer` on a hidden one; resolve never forces a private case public.
+- [x] Reopen (and any status patch off `closed`) clears `resolution_outcome`.
+- [x] Resolve opens a popup with the options, a notes box and a live preview of the message; the sidebar shows "Closed as …" afterwards.
+- [ ] Migration `1828000000000_dispute-resolution-outcome` is **written but not applied** — run migrations before deploying this code, and re-check the Resolve action against a real database.
+
+---
+
+# Previously: Dispute Comment Moderation & Threaded Replies
 
 ## Objective
 On a public dispute, a reply from anyone who is not the disputer or disputee must be held private

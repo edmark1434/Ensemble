@@ -17,7 +17,10 @@ import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { DisputeCaseTransaction, DisputeDetail } from "./moderatorTypes";
-import type { TicketMessage } from "@/pages/admin/ticketManagement/ticketTypes";
+import type {
+  DisputeResolutionOption,
+  TicketMessage,
+} from "@/pages/admin/ticketManagement/ticketTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
@@ -232,6 +235,46 @@ const ACCENT_BTN: Record<Accent, string> = {
   rose: "bg-rose-500/90 hover:bg-rose-500",
 };
 
+/**
+ * Mirrors backend/lib/DisputeResolutions.js. Only used if the detail payload
+ * omits `resolutionOptions`; the server list always wins.
+ */
+const FALLBACK_RESOLUTIONS: DisputeResolutionOption[] = [
+  { key: "resolved_both_parties", label: "Resolved by both parties", hint: "Both sides agreed on an outcome." },
+  { key: "disputee_refused", label: "Disputee refused to cooperate", hint: "The person named in the dispute would not take part.", requiresNote: true },
+  { key: "disputer_refused", label: "Disputer refused to cooperate", hint: "The person who filed would not take part.", requiresNote: true },
+  { key: "disputer_inactive", label: "Disputer inactive", hint: "The person who filed stopped responding." },
+  { key: "disputee_inactive", label: "Disputee inactive", hint: "The person named in the dispute stopped responding." },
+  { key: "withdrawn", label: "Withdrawn by the disputer", hint: "The person who filed asked to drop the case." },
+  { key: "no_violation", label: "No violation found", hint: "The review found nothing to act on.", requiresNote: true },
+];
+
+/**
+ * Preview of the message the backend posts on resolve. Mirrors the `body` builders in
+ * backend/lib/DisputeResolutions.js — keep the two in step when the catalog changes.
+ */
+function resolutionPreview(
+  key: string,
+  dispute: { initiator: { username: string }; respondent: { username: string } },
+  notes: string
+) {
+  const disputer = `@${dispute.initiator.username}`;
+  const disputee = `@${dispute.respondent.username}`;
+  const bodies: Record<string, string> = {
+    resolved_both_parties: `This dispute is resolved. ${disputer} and ${disputee} reached an agreement, and staff have closed the case.`,
+    disputee_refused: `Staff have closed this dispute. ${disputee} refused to cooperate with the review.`,
+    disputer_refused: `Staff have closed this dispute. ${disputer} refused to cooperate with the review.`,
+    disputer_inactive: `Staff have closed this dispute for inactivity. ${disputer} stopped responding to the review.`,
+    disputee_inactive: `Staff have closed this dispute for inactivity. ${disputee} stopped responding to the review.`,
+    withdrawn: `${disputer} withdrew this dispute, so staff have closed it.`,
+    no_violation:
+      "Staff have closed this dispute. The review found no violation of the platform rules.",
+  };
+  const body = bodies[key] || "Staff have closed this dispute.";
+  const note = notes.trim();
+  return note ? `${body} — Staff notes: ${note}` : body;
+}
+
 const STATUS_OPTIONS = [
   "pending_review",
   "open",
@@ -308,6 +351,9 @@ export default function ModeratorDisputeDetailModal({
   const [banPromptOpen, setBanPromptOpen] = useState(false);
   const [banReason, setBanReason] = useState("");
   const [reopenPromptOpen, setReopenPromptOpen] = useState(false);
+  const [resolvePromptOpen, setResolvePromptOpen] = useState(false);
+  const [resolveOutcome, setResolveOutcome] = useState("");
+  const [resolveNotes, setResolveNotes] = useState("");
   const [settleOpen, setSettleOpen] = useState(false);
   const [settleClientCredits, setSettleClientCredits] = useState("0");
   const [settleFreelancerCredits, setSettleFreelancerCredits] = useState("0");
@@ -693,12 +739,43 @@ export default function ModeratorDisputeDetailModal({
     setReopenPromptOpen(false);
   };
 
+  const openResolve = () => {
+    setResolveOutcome("");
+    setResolveNotes(resolutionNotes || "");
+    setResolvePromptOpen(true);
+  };
+
+  const confirmResolve = async () => {
+    const choice = resolutionOptions.find((option) => option.key === resolveOutcome);
+    if (!choice) {
+      showErrorToast("Pick how this dispute ended");
+      return;
+    }
+    const notes = resolveNotes.trim();
+    if (choice.requiresNote && !notes) {
+      showErrorToast(`"${choice.label}" needs a short note`);
+      return;
+    }
+    const ok = await runAction(
+      { action: "resolve", outcome: choice.key, resolution_notes: notes || null },
+      `Dispute closed — ${choice.label.toLowerCase()}`
+    );
+    if (!ok) return;
+    setResolvePromptOpen(false);
+    setResolveOutcome("");
+  };
+
   const dispute = detail?.dispute;
   const closed = dispute ? isDisputeClosed(toApiToken(dispute.status)) || Boolean(dispute.isClosed) : false;
   const banned = String(dispute?.sanctionType || "").toLowerCase() === "ban";
   const canSettle = Boolean(
     dispute && canDecide && !closed && !dispute.financialResolution && Number(dispute.creditAmount || 0) > 0
   );
+  const resolutionOptions =
+    detail?.resolutionOptions && detail.resolutionOptions.length
+      ? detail.resolutionOptions
+      : FALLBACK_RESOLUTIONS;
+  const selectedResolution = resolutionOptions.find((option) => option.key === resolveOutcome);
   const selectedAudience = replyAudienceOptions.find((option) => option.value === replyAudience);
   const messageById = new Map((detail?.messages || []).map((item) => [String(item.id), item]));
   const replyingTo = replyToId ? messageById.get(String(replyToId)) : undefined;
@@ -1216,6 +1293,12 @@ export default function ModeratorDisputeDetailModal({
                     ))}
                   </select>
                 </label>
+                {closed && dispute.resolutionOutcomeLabel && (
+                  <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-100">
+                    Closed as <span className="font-semibold">{dispute.resolutionOutcomeLabel}</span>
+                    {dispute.resolvedAt ? ` on ${formatDateTime(dispute.resolvedAt)}` : ""}.
+                  </p>
+                )}
                 <label className="block space-y-1 text-[11px] text-zinc-500">
                   <span>Resolution notes</span>
                   <textarea
@@ -1240,9 +1323,10 @@ export default function ModeratorDisputeDetailModal({
                     {!closed && (
                       <button
                         type="button"
-                        onClick={() => void saveChanges(CLOSED_STATUS)}
+                        onClick={openResolve}
                         disabled={saving}
                         className={BTN.success}
+                        title="Pick how this dispute ended, then close it"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Resolve
@@ -1381,6 +1465,80 @@ export default function ModeratorDisputeDetailModal({
                 className={`${FIELD} resize-none`}
               />
             </label>
+          </ConfirmDialog>
+        )}
+
+        {resolvePromptOpen && dispute && (
+          <ConfirmDialog
+            title="Resolve this dispute"
+            description="Pick how the case ended. The outcome is recorded on the dispute and posted in the discussion so both sides see why it closed."
+            confirmLabel="Close dispute"
+            busyLabel="Closing…"
+            busy={saving}
+            confirmDisabled={
+              !selectedResolution || (selectedResolution.requiresNote && !resolveNotes.trim())
+            }
+            confirmClassName={BTN.success}
+            onCancel={() => setResolvePromptOpen(false)}
+            onConfirm={() => void confirmResolve()}
+          >
+            <div className="space-y-1.5" role="radiogroup" aria-label="How this dispute ended">
+              {resolutionOptions.map((option) => {
+                const active = resolveOutcome === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={saving}
+                    onClick={() => setResolveOutcome(option.key)}
+                    className={`w-full rounded-lg border px-3 py-2 text-left transition disabled:opacity-50 ${
+                      active
+                        ? "border-emerald-500/40 bg-emerald-500/15"
+                        : "border-white/10 hover:border-white/25 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <span
+                      className={`block text-xs font-semibold ${active ? "text-emerald-100" : "text-zinc-200"}`}
+                    >
+                      {option.label}
+                      {option.requiresNote ? (
+                        <span className="ml-1.5 font-normal text-[10px] text-zinc-500">note required</span>
+                      ) : null}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-zinc-400">{option.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <label className="block space-y-1 text-[11px] text-zinc-500">
+              <span>
+                Resolution notes
+                {selectedResolution?.requiresNote ? " (required)" : " (optional)"}
+              </span>
+              <textarea
+                value={resolveNotes}
+                onChange={(event) => setResolveNotes(event.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="What happened, in a sentence or two. Both parties can read this."
+                className={`${FIELD} resize-none`}
+              />
+            </label>
+
+            {selectedResolution && (
+              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                <span className="font-semibold text-zinc-300">Posted in the discussion:</span>{" "}
+                {resolutionPreview(selectedResolution.key, dispute, resolveNotes)}
+                {!dispute.visibility ? (
+                  <span className="mt-1 block text-amber-200/80">
+                    This case is private, so the message goes to the disputer and staff only.
+                  </span>
+                ) : null}
+              </p>
+            )}
           </ConfirmDialog>
         )}
 
