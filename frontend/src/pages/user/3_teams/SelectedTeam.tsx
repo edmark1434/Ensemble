@@ -605,10 +605,15 @@ export default function SelectedTeam() {
     || member.handle.toLowerCase().includes(normalizedRequestSearch)
   );
 
-  const teamRating =
+  const reviewCount = reviews.length > 0 ? reviews.length : Number(team.review_count || 0);
+  const numericRating =
     reviews.length > 0
-      ? (reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)
-      : (team.average_rating ? Number(team.average_rating).toFixed(1) : "5.0");
+      ? reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / reviews.length
+      : team.average_rating
+      ? Number(team.average_rating)
+      : 0;
+  const hasRating = reviewCount > 0 && numericRating > 0;
+  const teamRating = hasRating ? numericRating.toFixed(1) : null;
 
   return (
     <Page title={team.display_name}>
@@ -715,16 +720,12 @@ export default function SelectedTeam() {
                 </div>
               )}
               <div
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
-                  team.visibility === "Private"
-                    ? "border-amber-400/25 bg-amber-500/10 text-amber-300"
-                    : "border-white/10 bg-white/5 text-zinc-300"
-                }`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 px-3 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-300"
               >
                 {team.visibility === "Private" ? (
-                  <Lock className="h-3.5 w-3.5" />
+                  <Lock className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-400" />
                 ) : (
-                  <Globe className="h-3.5 w-3.5" />
+                  <Globe className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-400" />
                 )}
                 {team.visibility === "Private" ? "Private Team" : "Public Team"}
               </div>
@@ -735,13 +736,20 @@ export default function SelectedTeam() {
               <span>·</span>
               <span>{team.member_count} {team.member_count === 1 ? 'member' : 'members'}</span>
               <span>·</span>
-              <span className="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-white">
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400 shrink-0" />
-                <span>{teamRating}</span>
-                <span className="text-xs text-zinc-400 font-normal">
-                  ({reviews.length || team.review_count || 0})
+              {hasRating ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-white">
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-400 shrink-0" />
+                  <span>{teamRating}</span>
+                  <span className="text-xs text-zinc-400 font-normal">
+                    ({reviewCount})
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                  <Star className="h-3.5 w-3.5 text-zinc-300 dark:text-zinc-600 shrink-0" />
+                  <span>No Rating</span>
+                </span>
+              )}
               <span>·</span>
               <span>Team Leader: <strong className="text-zinc-800 dark:text-zinc-200">{team.owner_name}</strong></span>
               {wallet && (permissions.can_view_wallet || isOwnerOrAdminOrLeader) && (
@@ -1199,11 +1207,27 @@ function TeamServicesSection({
     if (!isMember) return;
     let mounted = true;
     setLoadingOrders(true);
-    api.get("/api/gigs/orders/incoming")
+    api.get("/api/gigs/orders/incoming", {
+      params: {
+        teamId: team.team_id,
+        teamAccountId: team.account_id,
+      },
+    })
       .then((res) => {
         if (mounted) {
           const records = Array.isArray(res.data.data) ? res.data.data : [];
-          setOrders(records);
+          // Double filter to guarantee only orders for this team's services or account
+          const teamGigIds = new Set(services.map((s) => String(s.id)));
+          const filtered = records.filter((ord: any) => {
+            if (team.account_id && ord.freelancer_account_id) {
+              return String(ord.freelancer_account_id) === String(team.account_id);
+            }
+            if (teamGigIds.size > 0) {
+              return teamGigIds.has(String(ord.gig_id));
+            }
+            return true;
+          });
+          setOrders(filtered);
         }
       })
       .catch(() => {})
@@ -1211,7 +1235,7 @@ function TeamServicesSection({
         if (mounted) setLoadingOrders(false);
       });
     return () => { mounted = false; };
-  }, [isMember, team.account_id]);
+  }, [isMember, team.team_id, team.account_id, services]);
 
   return (
     <div className="space-y-6 font-['Plus_Jakarta_Sans',sans-serif]">
@@ -1416,7 +1440,7 @@ function TeamServicesSection({
                   {isOwner && (
                     <button
                       type="button"
-                      onClick={() => navigate(`/gigs/orders/incoming/${ord.gig_id || ''}`)}
+                      onClick={() => navigate(ord.gig_id && ord.id ? `/gigs/orders/incoming/${ord.gig_id}/order/${ord.id}` : `/gigs/orders/incoming/${ord.gig_id || ''}`)}
                       className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold transition hover:opacity-90 shrink-0 cursor-pointer"
                     >
                       Manage Order

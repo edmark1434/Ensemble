@@ -1610,6 +1610,7 @@ async function getIncomingOrdersRepository(accountIds) {
             (to_jsonb(r)->>'project_brief') as project_brief,
 
               g.gig_id, g.title as gig_title,
+              g.freelancer_account_id,
 
               (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as gig_banner,
 

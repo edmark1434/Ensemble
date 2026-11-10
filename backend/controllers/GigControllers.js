@@ -237,7 +237,34 @@ async function submitGigOrderController(req, res) {
 async function getIncomingOrdersController(req, res) {
     try {
         const actorIds = await getAuthorizedActorAccountIds(req.user.account_id);
-        const orders = await getIncomingOrdersRepository(actorIds);
+        const { teamId, teamAccountId } = req.query;
+        let targetActorIds = actorIds;
+
+        if (teamId) {
+            const teamRes = await pool.query(
+                `SELECT account_id FROM teams WHERE team_id = $1 AND deleted_at IS NULL`,
+                [teamId]
+            );
+            if (teamRes.rows.length === 0) {
+                return res.status(404).json({ success: false, message: 'Team not found' });
+            }
+            const teamAccId = teamRes.rows[0].account_id;
+            const actorIdStrs = (actorIds || []).map(String);
+            if (actorIdStrs.includes(String(teamAccId))) {
+                targetActorIds = [teamAccId];
+            } else {
+                return res.status(403).json({ success: false, message: 'Not authorized for this team' });
+            }
+        } else if (teamAccountId) {
+            const actorIdStrs = (actorIds || []).map(String);
+            if (actorIdStrs.includes(String(teamAccountId))) {
+                targetActorIds = [teamAccountId];
+            } else {
+                return res.status(403).json({ success: false, message: 'Not authorized for this team account' });
+            }
+        }
+
+        const orders = await getIncomingOrdersRepository(targetActorIds);
         res.status(200).json({ success: true, data: orders });
     } catch (error) {
         console.error("Error in getIncomingOrdersController:", error);

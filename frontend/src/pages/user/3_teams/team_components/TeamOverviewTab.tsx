@@ -74,10 +74,10 @@ export const TeamOverviewTab: React.FC<TeamOverviewTabProps> = ({
   copyTeamCode,
   codeCopied,
 }) => {
-  const avgRating =
-    reviews.length > 0
-      ? (reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)
-      : "5.0";
+  const hasReviews = reviews.length > 0;
+  const avgRating = hasReviews
+    ? (reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)
+    : null;
 
   const teamLeader = members.find((m) => m.role === "Owner") || members[0];
 
@@ -144,18 +144,30 @@ export const TeamOverviewTab: React.FC<TeamOverviewTabProps> = ({
 
         {/* Rating Stat */}
         <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4.5 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/20 flex items-center justify-center shrink-0 text-amber-500">
-            <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+            hasReviews
+              ? "bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/20 text-amber-500"
+              : "bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-400 dark:text-zinc-500"
+          }`}>
+            <Star className={`w-5 h-5 ${hasReviews ? "fill-amber-400 text-amber-400" : "text-gray-400 dark:text-zinc-500"}`} />
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
               Rating
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-xl font-black text-gray-900 dark:text-white">
-                {avgRating}
-              </span>
-              <span className="text-xs text-gray-400">({reviews.length} reviews)</span>
+              {hasReviews ? (
+                <>
+                  <span className="text-xl font-black text-gray-900 dark:text-white">
+                    {avgRating}
+                  </span>
+                  <span className="text-xs text-gray-400">({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})</span>
+                </>
+              ) : (
+                <span className="text-base font-bold text-gray-700 dark:text-zinc-300">
+                  No Rating
+                </span>
+              )}
             </div>
           </div>
         </div>
