@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, ExternalLink, MessageSquareText } from "lucide-react";
+import { BriefcaseBusiness, CheckCircle2, ExternalLink, Lock, MessageSquareText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Inbox } from "../inbox_dataset";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -16,26 +16,54 @@ export function MarketplaceContextCard({
 }: MarketplaceContextCardProps) {
   const navigate = useNavigate();
   const isRevision = conversation.conversation_type === "revision";
+  const isEngagement = conversation.conversation_type === "engagement" || Boolean(conversation.team_id);
+  const resolvedListingType =
+    (conversation.gig_id || conversation.listing_type === "gig")
+      ? "gig"
+      : (conversation.job_id || conversation.listing_type === "job")
+      ? "job"
+      : conversation.listing_type || "";
   const isJob =
     conversation.conversation_type === "marketplace_job" ||
-    (isRevision && conversation.listing_type === "job");
+    (isRevision && conversation.listing_type === "job") ||
+    (isEngagement && resolvedListingType === "job");
   const isGig =
     conversation.conversation_type === "marketplace_gig" ||
-    (isRevision && conversation.listing_type === "gig");
-  if (!isJob && !isGig) return null;
+    (isRevision && conversation.listing_type === "gig") ||
+    (isEngagement && (resolvedListingType === "gig" || !isJob));
+  if (!isJob && !isGig && !isEngagement) return null;
 
   const isClient =
     String(conversation.client_account_id || "") === String(currentUserId);
-  const contextPath = isClient
+  const contextPath = isEngagement && conversation.team_id
+    ? `/teams/${conversation.team_id}`
+    : isClient
     ? conversation.client_context_path
     : conversation.freelancer_context_path;
-  const contextLabel = isRevision ? "View task" : isJob ? "View proposal" : "View order";
+  const contextLabel = isEngagement
+    ? "View workspace"
+    : isRevision
+    ? "View task"
+    : isJob
+    ? "View proposal"
+    : "View order";
   const listingLabel = isJob ? "View job" : "View gig";
-  const typeLabel = isRevision
+  const typeLabel = isEngagement
+    ? `${isGig ? "Gig" : "Job"} workspace channel`
+    : isRevision
     ? `${isJob ? "Job" : "Gig"} revision discussion`
     : isJob
     ? "Job proposal discussion"
     : "Gig order discussion";
+  const contractStatus = String(
+    conversation.contract_status ||
+    conversation.marketplace_status ||
+    ""
+  ).toLowerCase();
+  const isCompleted =
+    Boolean(conversation.is_contract_completed) ||
+    ["completed", "closed", "cancelled"].includes(contractStatus);
+  const isDone = contractStatus === "completed";
   const amount = Number(conversation.marketplace_amount_credits || 0);
 
   if (variant === "compact") {
@@ -56,11 +84,20 @@ export function MarketplaceContextCard({
             <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               {typeLabel}
             </span>
-            {conversation.marketplace_status && (
+            {isCompleted ? (
+              <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold border ${
+                isDone
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                  : 'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+              }`}>
+                {isDone ? <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" /> : <Lock className="h-2.5 w-2.5" />}
+                {isDone ? "Done (View Only)" : "Closed (View Only)"}
+              </span>
+            ) : conversation.marketplace_status ? (
               <span className="shrink-0 rounded-full border border-gray-200 px-1.5 text-[9px] font-medium text-gray-500 dark:border-white/10 dark:text-zinc-400">
                 {conversation.marketplace_status}
               </span>
-            )}
+            ) : null}
           </div>
           <p className="truncate text-xs font-medium text-gray-900 dark:text-zinc-100">
             {conversation.listing_title || conversation.conversation_name}
@@ -109,11 +146,20 @@ export function MarketplaceContextCard({
             <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               {typeLabel}
             </span>
-            {conversation.marketplace_status && (
+            {isCompleted ? (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                isDone
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                  : 'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+              }`}>
+                {isDone ? <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> : <Lock className="h-3 w-3" />}
+                {isDone ? "Contract Completed • Read Only" : "Contract Closed • Read Only"}
+              </span>
+            ) : conversation.marketplace_status ? (
               <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:border-white/10 dark:text-zinc-400">
                 {conversation.marketplace_status}
               </span>
-            )}
+            ) : null}
           </div>
 
           <h3 className="mt-1 truncate text-sm font-semibold text-gray-900 dark:text-white">

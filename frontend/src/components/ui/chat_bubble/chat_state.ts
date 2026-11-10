@@ -669,38 +669,29 @@ function reconcileMessage(message: Message, isNewMessage = false) {
       let targetId = conversationId;
 
       if (!alreadyFloating) {
-        let targetName = conv?.conversation_name || conv?.listing_title || (conv?.conversation_type === "group" ? "Group Chat" : "Discussion");
-        let targetAvatar = conv?.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv?.profile_image || undefined;
-        
-        if (conv?.conversation_type === "direct") {
-          targetName = "User";
-          const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
-          if (other) {
-            targetName = other.name || other.username || targetName;
-            targetAvatar = other.avatar_preset_url || targetAvatar;
-            targetId = String(other.account_id);
-            if (targetName === "User") {
-              api.get(`/api/accounts/profile/${targetId}`).then(res => {
-                const profile = res.data?.data || res.data;
-                if (profile) {
-                  useChatState.setState(s => ({
-                    floatingWindows: s.floatingWindows.map(fw =>
-                      String(fw.id) === String(targetId)
-                        ? { ...fw, name: profile.name || profile.username || fw.name, avatarUrl: profile.avatar_preset_url || profile.avatarUrl || fw.avatarUrl }
-                        : fw
-                    )
-                  }));
-                }
-              }).catch(() => {});
+        let targetName = message.author_name || "User";
+        let targetAvatar: string | undefined = undefined;
+
+        if (conv) {
+          const isGroup = Boolean(conv.is_group || conv.conversation_type === "group" || conv.team_id);
+          if (isGroup) {
+            targetName = conv.conversation_name || conv.title || "Group Chat";
+            targetAvatar = conv.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv.profile_image || undefined;
+            targetId = conversationId;
+          } else {
+            const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
+            if (other) {
+              targetName = other.name || other.display_name || other.username || message.author_name || "User";
+              targetAvatar = other.avatar_preset_url || other.avatar_url || other.avatar || (conv.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv.profile_image);
+              targetId = String(other.account_id);
+            } else {
+              targetName = message.author_name || conv.conversation_name || conv.listing_title || "User";
+              targetId = String(message.sender_id || conversationId);
             }
           }
-        } else if (conv?.conversation_type?.startsWith("marketplace") || conv?.conversation_type === "marketplace") {
-          const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
-          if (other) {
-            targetName = other.name || other.username || conv.conversation_name || conv.listing_title || "Discussion";
-            targetAvatar = other.avatar_preset_url || targetAvatar;
-            targetId = String(other.account_id);
-          }
+        } else {
+          targetName = message.author_name || "User";
+          targetId = String(message.sender_id || conversationId);
         }
 
         newFloatingWindows.push({
@@ -712,30 +703,11 @@ function reconcileMessage(message: Message, isNewMessage = false) {
           listingType: conv?.listing_type,
           listingTitle: conv?.listing_title,
         });
-        
-        // Fetch conversation history so the new window isn't empty
+
+        // Fetch conversation history so the new window isn't empty & enrich details
         setTimeout(() => {
-          useChatState.getState().loadConversation(conversationId).catch(() => {});
-          if (!conv) {
-            api.get<{ inbox: Inbox }>(`/api/inbox/conversation/${conversationId}`).then(res => {
-              if (res.data?.inbox) {
-                useChatState.setState(s => ({
-                  conversations: upsertConversation(s.conversations, res.data.inbox),
-                  floatingWindows: s.floatingWindows.map(fw =>
-                    String(fw.inbox_id || fw.id) === conversationId
-                      ? {
-                          ...fw,
-                          name: res.data.inbox.conversation_name || res.data.inbox.listing_title || fw.name,
-                          avatarUrl: res.data.inbox.conversation_image_key ? chatMediaUrl(res.data.inbox.conversation_image_key) : fw.avatarUrl,
-                          conversationType: res.data.inbox.conversation_type,
-                        }
-                      : fw
-                  )
-                }));
-              }
-            }).catch(() => {});
-          }
-        }, 100);
+          useChatState.getState().loadConversation(conversationId, true).catch(() => {});
+        }, 50);
       } else if (alreadyFloating) {
          const existing = newFloatingWindows.find(fw => String(fw.inbox_id || fw.id) === conversationId);
          if (existing) targetId = String(existing.id);
@@ -1057,22 +1029,17 @@ function bindSocketListeners() {
         } catch {}
       }
 
-      let targetName =
-        inbox?.conversation_name || inbox?.listing_title || "Discussion";
-      let targetAvatar =
-        inbox?.conversation_image_key ? chatMediaUrl(inbox.conversation_image_key) : undefined;
-      let targetAccountId: string | undefined = undefined;
-
-      if (inbox?.members) {
-        const other = inbox.members.find(
-          (m: any) => String(m.account_id) !== authenticatedAccountId
-        );
-        if (other) {
-          targetName = other.name || other.username || targetName;
-          targetAvatar = other.avatar_preset_url || targetAvatar;
-          targetAccountId = String(other.account_id);
-        }
-      }
+      const other = (inbox?.members || []).find(
+        (m: any) => String(m.account_id) !== authenticatedAccountId
+      );
+      const isGroup = Boolean(inbox?.is_group || inbox?.conversation_type === "group" || inbox?.team_id);
+      let targetName = isGroup
+        ? (inbox?.conversation_name || inbox?.title || "Group Chat")
+        : (other?.name || other?.display_name || other?.username || inbox?.conversation_name || inbox?.listing_title || "Chat");
+      let targetAvatar = isGroup
+        ? (inbox?.conversation_image_key ? chatMediaUrl(inbox.conversation_image_key) : undefined)
+        : (other?.avatar_preset_url || other?.avatar_url || other?.avatar || (inbox?.conversation_image_key ? chatMediaUrl(inbox.conversation_image_key) : undefined));
+      let targetAccountId: string | undefined = other ? String(other.account_id) : undefined;
 
       await useChatState.getState().openFloatingConversation({
         id: convId,
@@ -1607,12 +1574,19 @@ const initialFloatingState = (() => {
     if (data) {
       const parsed = JSON.parse(data);
       const validFloatingWindows = Array.isArray(parsed?.floatingWindows)
-        ? parsed.floatingWindows.filter((item: any) =>
-            item &&
-            typeof item.id === "string" &&
-            !item.id.startsWith("dummy") &&
-            !item.name?.toLowerCase().includes("dummy")
-          )
+        ? parsed.floatingWindows
+            .filter((item: any) =>
+              item &&
+              typeof item.id === "string" &&
+              !item.id.startsWith("dummy") &&
+              !item.name?.toLowerCase().includes("dummy")
+            )
+            .map((item: any) => {
+              if (item.name === "Discussion") {
+                return { ...item, name: "Chat" };
+              }
+              return item;
+            })
         : [];
       return {
         floatingWindows: validFloatingWindows,
@@ -1723,42 +1697,45 @@ const useChatState = create<ChatState>((set, get) => ({
           const newUnreads = conversations.filter(c => (c.unread_count || 0) > 0);
           const currentFloatingIds = new Set(state.floatingWindows.map(fw => String(fw.inbox_id || fw.id)));
           
-          let newFloatingWindows = [...state.floatingWindows];
+          let newFloatingWindows = state.floatingWindows.map(fw => {
+            const conv = conversations.find(c => String(c._id) === String(fw.inbox_id || fw.id));
+            if (!conv) return fw;
+            const isGroup = Boolean(conv.is_group || conv.conversation_type === "group" || conv.team_id);
+            const other = (conv.members || []).find((m: any) => String(m.account_id) !== String(authenticatedAccountId));
+            const freshName = isGroup
+              ? (conv.conversation_name || conv.title)
+              : (other?.name || other?.display_name || other?.username || conv.conversation_name || conv.listing_title);
+            const freshAvatar = isGroup
+              ? (conv.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv.profile_image)
+              : (other?.avatar_preset_url || other?.avatar_url || (conv.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv.profile_image));
+            return {
+              ...fw,
+              name: freshName || fw.name,
+              avatarUrl: freshAvatar || fw.avatarUrl,
+            };
+          });
+
           newUnreads.forEach(conv => {
             const id = String(conv._id);
             if (!currentFloatingIds.has(id)) {
-              let targetName = conv.title || "User";
-              let targetAvatar = conv.profile_image || undefined;
-              let targetId = id;
-              
-              if (conv.conversation_type === "direct") {
-                const other = (conv.members || []).find(m => String(m.account_id) !== authenticatedAccountId);
-                if (other) {
-                  targetName = other.name || other.username || targetName;
-                  targetAvatar = other.avatar_preset_url || targetAvatar;
-                  targetId = String(other.account_id);
-                  if (targetName === "User") {
-                    api.get(`/api/accounts/profile/${targetId}`).then(res => {
-                      const profile = res.data?.data || res.data;
-                      if (profile) {
-                        useChatState.setState(s => ({
-                          floatingWindows: s.floatingWindows.map(fw =>
-                            String(fw.id) === String(targetId)
-                              ? { ...fw, name: profile.name || profile.username || fw.name, avatarUrl: profile.avatar_preset_url || profile.avatarUrl || fw.avatarUrl }
-                              : fw
-                          )
-                        }));
-                      }
-                    }).catch(() => {});
-                  }
-                }
-              }
+              const isGroup = Boolean(conv.is_group || conv.conversation_type === "group" || conv.team_id);
+              const other = (conv.members || []).find(m => String(m.account_id) !== authenticatedAccountId);
+              let targetName = isGroup
+                ? (conv.conversation_name || conv.title || "Group Chat")
+                : (other?.name || other?.display_name || other?.username || conv.conversation_name || conv.listing_title || "User");
+              let targetAvatar = isGroup
+                ? (conv.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv.profile_image || undefined)
+                : (other?.avatar_preset_url || other?.avatar_url || (conv.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv.profile_image || undefined));
+              let targetId = isGroup ? id : String(other?.account_id || id);
 
               newFloatingWindows.push({
                 id: targetId,
                 inbox_id: id,
                 name: targetName,
                 avatarUrl: targetAvatar,
+                conversationType: conv.conversation_type,
+                listingType: conv.listing_type,
+                listingTitle: conv.listing_title,
               });
             }
           });
@@ -1829,21 +1806,66 @@ const useChatState = create<ChatState>((set, get) => ({
       }));
       try {
         const response = await api.get<{
-          Inbox: Inbox;
+          Inbox?: Inbox;
+          inbox?: Inbox;
           Messages: Message[];
         }>(`/api/inbox/conversation/${id}`);
-        set((state) => ({
-          conversations: response.data.Inbox
-            ? upsertConversation(state.conversations, response.data.Inbox)
-            : state.conversations,
-          messagesByConversation: {
-            ...state.messagesByConversation,
-            [id]: (response.data.Messages || []).reduce<Message[]>(
-              (messages, message) => upsertMessage(messages, message),
-              state.messagesByConversation[id] || []
-            ),
-          },
-        }));
+        const fetchedInbox = response.data?.Inbox || response.data?.inbox;
+        set((state) => {
+          let updatedFloatingWindows = state.floatingWindows;
+          if (fetchedInbox) {
+            const isGroup = Boolean(
+              fetchedInbox.is_group ||
+              fetchedInbox.conversation_type === "group" ||
+              fetchedInbox.team_id
+            );
+            const otherMember = (fetchedInbox.members || []).find(
+              (m: any) =>
+                String(m.account_id) !== String(authenticatedAccountId) &&
+                !["left", "removed"].includes(m.status || "active")
+            );
+            const resolvedName = isGroup
+              ? (fetchedInbox.conversation_name || fetchedInbox.title || "Group Chat")
+              : (otherMember?.name || otherMember?.display_name || otherMember?.username || fetchedInbox.conversation_name || fetchedInbox.listing_title || "User");
+            const resolvedAvatar = isGroup
+              ? (fetchedInbox.conversation_image_key ? chatMediaUrl(fetchedInbox.conversation_image_key) : fetchedInbox.profile_image)
+              : (otherMember?.avatar_preset_url || otherMember?.avatar_url || otherMember?.avatar || (fetchedInbox.conversation_image_key ? chatMediaUrl(fetchedInbox.conversation_image_key) : fetchedInbox.profile_image));
+            const resolvedTargetId = isGroup ? id : String(otherMember?.account_id || id);
+
+            updatedFloatingWindows = state.floatingWindows.map((fw) => {
+              if (
+                String(fw.inbox_id || fw.id) === id ||
+                (otherMember && String(fw.id) === String(otherMember.account_id))
+              ) {
+                return {
+                  ...fw,
+                  id: resolvedTargetId,
+                  inbox_id: id,
+                  name: resolvedName || fw.name,
+                  avatarUrl: resolvedAvatar || fw.avatarUrl,
+                  conversationType: fetchedInbox.conversation_type || fw.conversationType,
+                  listingType: fetchedInbox.listing_type || fw.listingType,
+                  listingTitle: fetchedInbox.listing_title || fw.listingTitle,
+                };
+              }
+              return fw;
+            });
+          }
+
+          return {
+            conversations: fetchedInbox
+              ? upsertConversation(state.conversations, fetchedInbox)
+              : state.conversations,
+            floatingWindows: updatedFloatingWindows,
+            messagesByConversation: {
+              ...state.messagesByConversation,
+              [id]: (response.data.Messages || []).reduce<Message[]>(
+                (messages, message) => upsertMessage(messages, message),
+                state.messagesByConversation[id] || []
+              ),
+            },
+          };
+        });
         loadedConversationIds.add(id);
         socket.emit("joinRoom", { conversation_id: id });
         const activeGoogleMeeting = await api
@@ -2291,17 +2313,19 @@ const useChatState = create<ChatState>((set, get) => ({
   },
 
   markConversationRead: (conversationId) => {
+    const id = String(conversationId);
     set((state) => ({
-      unreadCounts: { ...state.unreadCounts, [conversationId]: 0 },
+      unreadCounts: { ...state.unreadCounts, [id]: 0 },
       conversations: state.conversations.map((conversation) =>
-        String(conversation._id) === String(conversationId)
+        String(conversation._id) === id
           ? { ...conversation, unread_count: 0 }
           : conversation
       ),
     }));
     socket.emit("markConversationRead", {
-      conversation_id: String(conversationId),
+      conversation_id: id,
     });
+    api.post(`/api/inbox/conversation/${id}/read`).catch(() => {});
   },
 
   startCall: async (conversationId, targetAccountId, peer = {}) => {

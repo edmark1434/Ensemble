@@ -1,6 +1,6 @@
 // src/components/ui/inbox/inbox_components/inbox_list.tsx
 import React from "react";
-import { AlertCircle, MessageCircle } from "lucide-react";
+import { AlertCircle, Lock, MessageCircle } from "lucide-react";
 import type { Inbox } from "../inbox_dataset";
 import useGlobalState from "@/lib/global_state";
 import useChatState from "../../chat_bubble/chat_state";
@@ -104,9 +104,44 @@ export const InboxList: React.FC<InboxListProps> = ({
     );
   }
 
+  const seenTeamIds = new Set<string>();
+  const isMarketplaceTab = conversations.some(c =>
+    ["marketplace", "marketplace_job", "marketplace_gig", "revision", "engagement"].includes(c.conversation_type || "")
+  );
+
+  const isDimmed = (ib: Inbox) => {
+    const status = String(ib.contract_status || ib.marketplace_status || "").toLowerCase();
+    return Boolean(ib.is_contract_completed) || (isMarketplaceTab && ["completed", "closed", "cancelled"].includes(status));
+  };
+
+  const filteredList = conversations
+    .filter((inbox) => {
+      if (inbox.team_id) {
+        const key = String(inbox.team_id);
+        if (seenTeamIds.has(key)) return false;
+        seenTeamIds.add(key);
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const aDim = isDimmed(a);
+      const bDim = isDimmed(b);
+      if (aDim !== bDim) {
+        return aDim ? 1 : -1; // Move all dim ones below all open ones!
+      }
+      const aTime = new Date(a.last_message_time || a.updated_at || 0).getTime();
+      const bTime = new Date(b.last_message_time || b.updated_at || 0).getTime();
+      return bTime - aTime;
+    });
+
+  const firstDimmedIndex = filteredList.findIndex(item => isDimmed(item));
+  const hasOpenAbove = firstDimmedIndex > 0;
+  const dimmedCount = firstDimmedIndex !== -1 ? filteredList.length - firstDimmedIndex : 0;
+
   return (
     <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-base inbox-scroll-thin pt-3">
-      {conversations.map((inbox) => {
+      {filteredList.map((inbox, index) => {
+        const isFirstDimmed = index === firstDimmedIndex && hasOpenAbove;
         const viewerAccountId = String(
           inbox.viewer_account_id || currentAccountId || ""
         );
@@ -142,6 +177,35 @@ export const InboxList: React.FC<InboxListProps> = ({
           : "No messages yet";
         const time = formatTime(inbox.last_message_time || inbox.updated_at);
         const unreadCount = inbox.unread_count || 0;
+        const isMarketplace = [
+          "marketplace",
+          "marketplace_job",
+          "marketplace_gig",
+          "revision",
+          "engagement",
+        ].includes(inbox.conversation_type || "");
+
+        const contractStatus = String(
+          inbox.contract_status ||
+          inbox.marketplace_status ||
+          ""
+        ).toLowerCase();
+
+        const isContractCompleted =
+          Boolean(inbox.is_contract_completed) ||
+          (isMarketplace && ["completed", "closed", "cancelled"].includes(contractStatus));
+        const isCancelled = contractStatus === "cancelled";
+        const isContractualWorkspace =
+          inbox.conversation_type === "engagement" ||
+          (Boolean(inbox.team_id) && (Boolean(inbox.gig_id) || Boolean(inbox.job_id) || Boolean(inbox.contract_id)));
+        const isRegularTeam = !isContractualWorkspace && (inbox.conversation_type === "group" || Boolean(inbox.team_id));
+        const resolvedListingType =
+          (inbox.gig_id || inbox.listing_type === "gig")
+            ? "gig"
+            : (inbox.job_id || inbox.listing_type === "job")
+            ? "job"
+            : inbox.listing_type || "";
+
         const otherMember = inbox.members?.find(
           (member) =>
             String(member.account_id) !== viewerAccountId
@@ -151,18 +215,29 @@ export const InboxList: React.FC<InboxListProps> = ({
           : false;
 
         return (
-          <button
-            key={inbox._id}
-            onClick={() => onSelectConversation(inbox)}
-            title={isCollapsed ? name : undefined}
-            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all duration-200 ${
-              isCollapsed ? "p-3 justify-center" : "p-4"
-            } ${
-              isActive
-                ? "bg-blue-50/70 dark:bg-blue-500/10 border-l-2 border-blue-500"
-                : ""
-            }`}
-          >
+          <React.Fragment key={inbox._id}>
+            {isFirstDimmed && !isCollapsed && (
+              <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+                <div className="h-px flex-1 bg-gray-200 dark:bg-zinc-800" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                  Closed ({dimmedCount})
+                </span>
+                <div className="h-px flex-1 bg-gray-200 dark:bg-zinc-800" />
+              </div>
+            )}
+            <button
+              onClick={() => onSelectConversation(inbox)}
+              title={isCollapsed ? name : undefined}
+              className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-all duration-200 ${
+                isCollapsed ? "p-3 justify-center" : "p-4"
+              } ${
+                isActive
+                  ? "bg-blue-50/70 dark:bg-blue-500/10 border-l-2 border-blue-500"
+                  : ""
+              } ${
+                isContractCompleted ? "opacity-60 hover:opacity-90" : ""
+              }`}
+            >
             <div className="relative flex-shrink-0">
               {name.startsWith("User ") && name.length === 13 ? (
                 <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-700 animate-pulse" />
@@ -199,12 +274,35 @@ export const InboxList: React.FC<InboxListProps> = ({
                     {name.startsWith("User ") && name.length === 13 ? (
                       <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 animate-pulse rounded" />
                     ) : (
-                      <p
-                        className="font-medium text-gray-900 dark:text-white truncate text-sm mr-2 text-left"
-                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                      >
-                        {name}
-                      </p>
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0 mr-2">
+                        <p
+                          className="font-medium text-gray-900 dark:text-white truncate text-sm text-left"
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                          {name}
+                        </p>
+                        {isContractualWorkspace ? (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${
+                            resolvedListingType === "gig"
+                              ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
+                              : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                          }`}>
+                            {resolvedListingType === "gig" ? "Gig Workspace" : "Job Workspace"}
+                          </span>
+                        ) : isRegularTeam ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                            Team
+                          </span>
+                        ) : inbox.conversation_type === "marketplace_gig" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                            Gig Order
+                          </span>
+                        ) : inbox.conversation_type === "marketplace_job" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            Job Proposal
+                          </span>
+                        ) : null}
+                      </div>
                     )}
                     <p
                       className="text-[10px] text-gray-500 dark:text-zinc-400 flex-shrink-0"
@@ -213,6 +311,16 @@ export const InboxList: React.FC<InboxListProps> = ({
                       {time}
                     </p>
                   </div>
+
+                  {inbox.listing_title &&
+                    inbox.listing_title.trim().toLowerCase() !== name.trim().toLowerCase() && (
+                    <p
+                      className="text-[11px] text-gray-500 dark:text-zinc-400 truncate text-left mb-0.5 font-normal"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      {inbox.listing_title}
+                    </p>
+                  )}
                   
                   <div className="flex justify-between items-center">
                     <p
@@ -221,7 +329,12 @@ export const InboxList: React.FC<InboxListProps> = ({
                     >
                       {lastMessage}
                     </p>
-                    {unreadCount > 0 ? (
+                    {isContractCompleted ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 shrink-0 whitespace-nowrap">
+                        <Lock className="w-2.5 h-2.5 text-zinc-400 dark:text-zinc-500" />
+                        {isCancelled ? "Cancelled (View Only)" : "Closed Chat (View Only)"}
+                      </span>
+                    ) : unreadCount > 0 ? (
                       <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-white px-1 flex-shrink-0">
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
@@ -233,6 +346,7 @@ export const InboxList: React.FC<InboxListProps> = ({
               </>
             )}
           </button>
+        </React.Fragment>
         );
       })}
     </div>

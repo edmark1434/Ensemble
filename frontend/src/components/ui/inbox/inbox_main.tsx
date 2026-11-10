@@ -475,12 +475,25 @@ const InboxMain = () => {
 
   const isMarketplace = location.pathname.includes("/marketplace");
   const tabConversations = useMemo(
-    () =>
-      inboxList.filter((inbox) =>
+    () => {
+      const list = inboxList.filter((inbox) =>
         isMarketplace
           ? isMarketplaceConversation(inbox)
           : !isMarketplaceConversation(inbox)
-      ),
+      );
+      return list.sort((a, b) => {
+        const aStatus = String(a.contract_status || a.marketplace_status || "").toLowerCase();
+        const bStatus = String(b.contract_status || b.marketplace_status || "").toLowerCase();
+        const aDim = Boolean(a.is_contract_completed) || (isMarketplace && ["completed", "closed", "cancelled"].includes(aStatus));
+        const bDim = Boolean(b.is_contract_completed) || (isMarketplace && ["completed", "closed", "cancelled"].includes(bStatus));
+        if (aDim !== bDim) {
+          return aDim ? 1 : -1;
+        }
+        const aTime = new Date(a.last_message_time || a.updated_at || 0).getTime();
+        const bTime = new Date(b.last_message_time || b.updated_at || 0).getTime();
+        return bTime - aTime;
+      });
+    },
     [inboxList, isMarketplace]
   );
 
@@ -582,22 +595,35 @@ const InboxMain = () => {
   }, [tabConversations, searchQuery, getConversationName]);
 
   const visibleConversations = useMemo(() => {
-    if (!selectedConversation) return filteredConversations;
+    let list = filteredConversations;
+    if (selectedConversation) {
+      const selectedBelongsToTab = isMarketplace
+        ? isMarketplaceConversation(selectedConversation)
+        : !isMarketplaceConversation(selectedConversation);
 
-    const selectedBelongsToTab = isMarketplace
-      ? isMarketplaceConversation(selectedConversation)
-      : !isMarketplaceConversation(selectedConversation);
+      if (selectedBelongsToTab) {
+        const selectedIsAlreadyVisible = filteredConversations.some(
+          (conversation) =>
+            String(conversation._id) === String(selectedConversation._id)
+        );
+        if (!selectedIsAlreadyVisible) {
+          list = [selectedConversation, ...filteredConversations];
+        }
+      }
+    }
 
-    if (!selectedBelongsToTab) return filteredConversations;
-
-    const selectedIsAlreadyVisible = filteredConversations.some(
-      (conversation) =>
-        String(conversation._id) === String(selectedConversation._id)
-    );
-
-    if (selectedIsAlreadyVisible) return filteredConversations;
-
-    return [selectedConversation, ...filteredConversations];
+    return [...list].sort((a, b) => {
+      const aStatus = String(a.contract_status || a.marketplace_status || "").toLowerCase();
+      const bStatus = String(b.contract_status || b.marketplace_status || "").toLowerCase();
+      const aDim = Boolean(a.is_contract_completed) || (isMarketplace && ["completed", "closed", "cancelled"].includes(aStatus));
+      const bDim = Boolean(b.is_contract_completed) || (isMarketplace && ["completed", "closed", "cancelled"].includes(bStatus));
+      if (aDim !== bDim) {
+        return aDim ? 1 : -1;
+      }
+      const aTime = new Date(a.last_message_time || a.updated_at || 0).getTime();
+      const bTime = new Date(b.last_message_time || b.updated_at || 0).getTime();
+      return bTime - aTime;
+    });
   }, [filteredConversations, isMarketplace, selectedConversation]);
 
   useEffect(() => {
