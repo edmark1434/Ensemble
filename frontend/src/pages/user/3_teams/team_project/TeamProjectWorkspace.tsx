@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/axios';
 import UserHeader from '@/components/nav/user_header';
+import SmartTabBar from '@/components/ui/SmartTabBar';
 import { UnverifiedOverlay } from '@/components/ui/UnverifiedOverlay';
 import useGlobalState from '@/lib/global_state';
 import socket from '@/lib/socket';
@@ -610,7 +611,13 @@ export const TeamProjectWorkspace: React.FC = () => {
   }
 
   const isClient = Boolean(project.is_client);
-  const isArchived = Boolean(project.is_archived);
+  const allContractsCancelled =
+    contracts.length > 0 &&
+    contracts.every(
+      (c: any) =>
+        String(c.contract_status || c.status || '').toLowerCase() === 'cancelled'
+    );
+  const isArchived = Boolean(project.is_archived) || allContractsCancelled;
 
   const pendingReviewContract = contracts.find(
     (c: any) =>
@@ -779,10 +786,10 @@ export const TeamProjectWorkspace: React.FC = () => {
         )}
 
         {/* Project Header Banner Card */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden transition-all duration-300">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs transition-all duration-300">
           {/* Top banner visual (Collapsible) */}
           <div
-            className={`w-full bg-zinc-900 dark:bg-zinc-950 relative overflow-hidden transition-all duration-300 ease-in-out ${
+            className={`w-full bg-zinc-900 dark:bg-zinc-950 relative rounded-t-2xl overflow-hidden transition-all duration-300 ease-in-out ${
               isBannerCollapsed ? 'max-h-0 opacity-0' : 'h-36 sm:h-48 opacity-100'
             }`}
           >
@@ -970,70 +977,50 @@ export const TeamProjectWorkspace: React.FC = () => {
             {/* Read-only Archived Banner */}
             {isArchived && (
               <div className="mt-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 text-xs text-purple-900 dark:text-purple-200 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                {allContractsCancelled ? (
+                  <AlertCircle className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                )}
                 <span>
-                  All contractual milestones and payouts for this team project have been fully approved. The project is now preserved in read-only archived status.
+                  {allContractsCancelled
+                    ? 'The contract for this team workspace has been cancelled. The workspace is preserved in read-only archived status and will be auto-deleted in 30 days.'
+                    : 'All contractual milestones and payouts for this team project have been fully approved. The project is now preserved in read-only archived status.'}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Navigation Tabs (Single Clean Unified Row) */}
-          <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-            <div className="flex items-center overflow-x-auto scrollbar-none px-4 sm:px-6">
-              {[
-                { id: 'overview' as TabType, label: 'Overview', icon: FileText },
-                { id: 'taskboard' as TabType, label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
-                {
-                  id: 'submissions' as TabType,
-                  label: 'Submissions',
-                  icon: FileCheck,
-                  badge: milestones.filter(
-                    (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
-                  ).length,
-                },
-                { id: 'chat' as TabType, label: 'Chat', icon: MessageCircle },
-                {
-                  id: 'project' as TabType,
-                  label: 'Video Projects',
-                  icon: Film,
-                  badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
-                },
-                { id: 'contract' as TabType, label: 'Contract & Members', icon: Briefcase, badge: members.length },
-                { id: 'history' as TabType, label: 'History', icon: Clock, badge: history.length },
-                { id: 'info' as TabType, label: 'Project Info', icon: Info },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => handleTabChange(tab.id)}
-                    className={`flex items-center gap-2 py-3 px-3.5 sm:px-4 text-xs font-semibold border-b-2 transition-all shrink-0 cursor-pointer ${
-                      isActive
-                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-bold bg-white dark:bg-zinc-900'
-                        : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="whitespace-nowrap">{tab.label}</span>
-                    {tab.badge !== undefined && tab.badge > 0 && (
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
-                          isActive
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                            : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-                        }`}
-                      >
-                        {tab.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Navigation Tabs (Smart Tab Bar with Scroll Chevrons & Quick Jump) */}
+          <SmartTabBar<TabType>
+            activeTab={activeTab}
+            onSelectTab={handleTabChange}
+            jumpMenuTitle="Workspace Tabs"
+            tabs={[
+              { id: 'overview', label: 'Overview', icon: FileText, group: 'Workspace' },
+              { id: 'taskboard', label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length, group: 'Workspace' },
+              {
+                id: 'submissions',
+                label: 'Submissions',
+                icon: FileCheck,
+                badge: milestones.filter(
+                  (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
+                ).length,
+                group: 'Workspace',
+              },
+              { id: 'chat', label: 'Chat', icon: MessageCircle, group: 'Workspace' },
+              {
+                id: 'project',
+                label: 'Video Projects',
+                icon: Film,
+                badge: linkedProjects.length > 0 ? linkedProjects.length : undefined,
+                group: 'Workspace',
+              },
+              { id: 'contract', label: 'Contract & Members', icon: Briefcase, badge: members.length, group: 'Records' },
+              { id: 'history', label: 'History', icon: Clock, badge: history.length, group: 'Records' },
+              { id: 'info', label: 'Project Info', icon: Info, group: 'Records' },
+            ]}
+          />
         </div>
 
         {/* Tab Content Rendering */}

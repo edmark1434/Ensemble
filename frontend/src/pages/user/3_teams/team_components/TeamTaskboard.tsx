@@ -239,6 +239,126 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
     return options;
   }, [members]);
 
+  // Priority options for Create/Edit Modal
+  const priorityModalOptions: GlideSelectOption[] = useMemo(() => [
+    {
+      value: "low",
+      label: "Low",
+      icon: <span className="w-2 h-2 rounded-full bg-zinc-400 inline-block shrink-0" />,
+    },
+    {
+      value: "normal",
+      label: "Normal",
+      icon: <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />,
+    },
+    {
+      value: "high",
+      label: "High",
+      icon: <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shrink-0" />,
+    },
+    {
+      value: "urgent",
+      label: "Urgent",
+      icon: <span className="w-2 h-2 rounded-full bg-rose-500 inline-block shrink-0" />,
+    },
+  ], []);
+
+  // Status options for Create/Edit Modal
+  const statusModalOptions: GlideSelectOption[] = useMemo(() => [
+    {
+      value: "todo",
+      label: "To Do",
+      icon: <span className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-500 inline-block shrink-0" />,
+    },
+    {
+      value: "in_progress",
+      label: "In Progress",
+      icon: <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />,
+    },
+    {
+      value: "in_review",
+      label: "In Review",
+      icon: <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shrink-0" />,
+    },
+    {
+      value: "completed",
+      label: "Done",
+      icon: <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shrink-0" />,
+    },
+  ], []);
+
+  // Assignee options for Create/Edit Modal with avatars, handles, and role tags
+  const modalAssigneeOptions: GlideSelectOption[] = useMemo(() => {
+    const options: GlideSelectOption[] = [
+      {
+        value: "",
+        label: "Unassigned",
+        icon: (
+          <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 flex items-center justify-center shrink-0">
+            <UserIcon className="w-3 h-3" />
+          </div>
+        ),
+      },
+    ];
+
+    members.forEach((m) => {
+      options.push({
+        value: m.account_id,
+        label: `${m.display_name} (@${m.handle})`,
+        tag: m.role,
+        icon: (
+          <div className="w-5 h-5 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+            {m.avatar_path ? (
+              <img
+                src={getAvatarUrl(m.avatar_path)}
+                alt={m.display_name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/placeholders/avatar.png";
+                }}
+              />
+            ) : (
+              <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
+                {getInitials(m.display_name)}
+              </span>
+            )}
+          </div>
+        ),
+      });
+    });
+
+    if (
+      editingTask?.assignee_account_id &&
+      !options.some((o) => o.value === editingTask.assignee_account_id)
+    ) {
+      options.push({
+        value: editingTask.assignee_account_id,
+        label: `${editingTask.assignee_name || "Assigned Member"} (@${editingTask.assignee_handle || "member"})`,
+        tag: "Member",
+        icon: (
+          <div className="w-5 h-5 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+            {editingTask.assignee_avatar_path ? (
+              <img
+                src={getAvatarUrl(editingTask.assignee_avatar_path)}
+                alt={editingTask.assignee_name || "User"}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/placeholders/avatar.png";
+                }}
+              />
+            ) : (
+              <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
+                {getInitials(editingTask.assignee_name || "User")}
+              </span>
+            )}
+          </div>
+        ),
+      });
+    }
+
+    return options;
+  }, [members, editingTask]);
+
   // Open modal for Create
   const handleOpenCreateModal = (defaultStatus: TeamTask["status"] = "todo") => {
     setEditingTask(null);
@@ -893,23 +1013,17 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
 
       {/* Create / Edit Task Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4 font-['Plus_Jakarta_Sans',sans-serif]">
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
-            onClick={() => !isSubmitting && setIsModalOpen(false)}
-          />
-
-          <div className="relative w-full max-w-lg rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#0e1017] p-6 shadow-2xl space-y-4 z-10">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-white/10">
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span>{editingTask ? "Edit Team Task" : "Create Team Task"}</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs font-['Plus_Jakarta_Sans',sans-serif]">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                {editingTask ? "Edit Team Task" : "Create Team Task"}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
                 disabled={isSubmitting}
-                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition cursor-pointer"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -918,8 +1032,8 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
             <form onSubmit={handleSubmitTask} className="space-y-4">
               {/* Task Title */}
               <div>
-                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Title <span className="text-red-500">*</span>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
+                  Task Title *
                 </label>
                 <input
                   type="text"
@@ -928,109 +1042,116 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
                   value={taskTitle}
                   onChange={(e) => setTaskTitle(e.target.value)}
                   placeholder="e.g. Rough cut review for Intro scene"
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#12141a] text-xs text-zinc-900 dark:text-white outline-none focus:border-indigo-500 transition"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   autoFocus
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Description
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={taskDescription}
                   onChange={(e) => setTaskDescription(e.target.value)}
-                  placeholder="Add details, notes, or deliverable expectations..."
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#12141a] text-xs text-zinc-900 dark:text-white outline-none focus:border-indigo-500 transition resize-none leading-relaxed"
+                  placeholder="Task details and instructions..."
+                  className="w-full text-xs p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
 
               {/* Status & Priority */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={taskStatus}
-                    onChange={(e) => setTaskStatus(e.target.value as TeamTask["status"])}
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#12141a] text-xs text-zinc-900 dark:text-white outline-none cursor-pointer"
-                  >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="in_review">In Review</option>
-                    <option value="completed">Done</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Priority
                   </label>
-                  <select
+                  <GlideSelect
+                    options={priorityModalOptions}
                     value={taskPriority}
-                    onChange={(e) => setTaskPriority(e.target.value as TeamTask["priority"])}
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#12141a] text-xs text-zinc-900 dark:text-white outline-none cursor-pointer"
-                  >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Assignee & Due Date */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                    Assignee
-                  </label>
-                  <select
-                    value={taskAssignee}
-                    onChange={(e) => setTaskAssignee(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#12141a] text-xs text-zinc-900 dark:text-white outline-none cursor-pointer"
-                  >
-                    <option value="">Unassigned</option>
-                    {members.map((m) => (
-                      <option key={m.account_id} value={m.account_id}>
-                        {m.display_name} ({m.role})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setTaskPriority(val as TeamTask["priority"])}
+                    size="sm"
+                    fullWidth={true}
+                    radius={12}
+                    surfaceColor={isDark ? "#18181b" : "#ffffff"}
+                    highlightColor={isDark ? "#27272a" : "#f4f4f5"}
+                    textColor={isDark ? "#f4f4f5" : "#09090b"}
+                    borderColor={isDark ? "#27272a" : "#e4e4e7"}
+                    accentColor={isDark ? "#ffffff" : "#09090b"}
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                    Due Date
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
+                    Status
                   </label>
-                  <input
-                    type="date"
-                    value={taskDueDate}
-                    onChange={(e) => setTaskDueDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#12141a] text-xs text-zinc-900 dark:text-white outline-none cursor-pointer"
+                  <GlideSelect
+                    options={statusModalOptions}
+                    value={taskStatus}
+                    onChange={(val) => setTaskStatus(val as TeamTask["status"])}
+                    size="sm"
+                    fullWidth={true}
+                    radius={12}
+                    surfaceColor={isDark ? "#18181b" : "#ffffff"}
+                    highlightColor={isDark ? "#27272a" : "#f4f4f5"}
+                    textColor={isDark ? "#f4f4f5" : "#09090b"}
+                    borderColor={isDark ? "#27272a" : "#e4e4e7"}
+                    accentColor={isDark ? "#ffffff" : "#09090b"}
                   />
                 </div>
               </div>
 
+              {/* Assignee */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
+                  Assignee
+                </label>
+                <GlideSelect
+                  options={modalAssigneeOptions}
+                  value={taskAssignee}
+                  onChange={(val) => setTaskAssignee(val)}
+                  placeholder="Select Assignee..."
+                  size="sm"
+                  fullWidth={true}
+                  radius={12}
+                  surfaceColor={isDark ? "#18181b" : "#ffffff"}
+                  highlightColor={isDark ? "#27272a" : "#f4f4f5"}
+                  textColor={isDark ? "#f4f4f5" : "#09090b"}
+                  borderColor={isDark ? "#27272a" : "#e4e4e7"}
+                  accentColor={isDark ? "#ffffff" : "#09090b"}
+                />
+              </div>
+
+              {/* Due Date */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  value={taskDueDate}
+                  onChange={(e) => setTaskDueDate(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
+                />
+              </div>
+
               {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-white/10">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || !taskTitle.trim()}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-98"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 transition shadow-xs disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? "Saving..." : editingTask ? "Update Task" : "Create Task"}
+                  {isSubmitting ? (editingTask ? "Saving..." : "Creating...") : editingTask ? "Save Changes" : "Create Task"}
                 </button>
               </div>
             </form>

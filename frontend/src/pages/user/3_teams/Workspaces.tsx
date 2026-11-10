@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Briefcase, CheckCircle2, Clock, Grid3x3, Info, List, Search, Star, Users } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUpDown, Briefcase, Check, CheckCircle2, Clock, Grid3x3, Info, List, Search, Star, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
@@ -109,6 +109,21 @@ export default function Workspaces() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sortMethod, setSortMethod] = useState<"default" | "az" | "members">("default");
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+        setIsSortMenuOpen(false);
+      }
+    };
+    if (isSortMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSortMenuOpen]);
+
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
   const [activeTab, setActiveTab] = useState<"all" | "active" | "review" | "archived" | "info">("all");
 
@@ -224,7 +239,7 @@ export default function Workspaces() {
     },
     {
       id: "info" as const,
-      label: "Workspace Info",
+      label: "Info",
       icon: <Info className="h-4 w-4" />,
       count: null,
     },
@@ -536,39 +551,75 @@ export default function Workspaces() {
 
           {/* Sort & View Mode Controls (Hidden on info tab) */}
           {activeTab !== "info" && (
-            <div className="py-2 flex items-center gap-3">
-              <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
-                <span className="text-xs font-medium text-gray-400 dark:text-zinc-500 px-2">Sort by:</span>
+            <div className="py-2 flex items-center gap-2">
+              {/* Icon-only Sort Dropdown with Click-to-Expand */}
+              <div className="relative" ref={sortDropdownRef}>
                 <button
-                  onClick={() => setSortMethod("default")}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                    sortMethod === "default"
-                      ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                      : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                  type="button"
+                  onClick={() => setIsSortMenuOpen((prev) => !prev)}
+                  title={`Sort by: ${sortMethod === "default" ? "Default" : sortMethod === "az" ? "A-Z" : "Members"}`}
+                  className={`flex items-center justify-center h-9 w-9 rounded-lg border transition-all duration-200 cursor-pointer ${
+                    isSortMenuOpen || sortMethod !== "default"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shadow-xs"
+                      : "border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10"
                   }`}
+                  aria-label="Sort options"
                 >
-                  Default
+                  <ArrowUpDown className="h-4 w-4" />
                 </button>
-                <button
-                  onClick={() => setSortMethod("az")}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                    sortMethod === "az"
-                      ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                      : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                  }`}
-                >
-                  A-Z
-                </button>
-                <button
-                  onClick={() => setSortMethod("members")}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                    sortMethod === "members"
-                      ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                      : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                  }`}
-                >
-                  Members
-                </button>
+
+                {isSortMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1.5 shadow-xl z-30 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
+                    <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                      Sort Workspaces
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMethod("default");
+                        setIsSortMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                        sortMethod === "default"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>Default</span>
+                      {sortMethod === "default" && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMethod("az");
+                        setIsSortMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                        sortMethod === "az"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>Alphabetical (A-Z)</span>
+                      {sortMethod === "az" && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMethod("members");
+                        setIsSortMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                        sortMethod === "members"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>Most Members</span>
+                      {sortMethod === "members" && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
