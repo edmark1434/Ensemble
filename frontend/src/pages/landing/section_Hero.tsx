@@ -11,10 +11,11 @@ interface HeroProps {
 import TrueFocus from "@/components/ui/TrueFocus";
 import GradientBlinds from "@/components/ui/GradientBlinds";
 import TechText from "@/components/ui/TechText";
+import StarBorder from "@/components/ui/StarBorder";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 
-const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
+const INTENT_INDEX = { edit: 0, hire: 1, work: 2 } as const;
 
 const HERO_VIDEOS = [
   "/clip/hero_vid.mp4",
@@ -33,7 +34,7 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
   const [isMobile, setIsMobile] = useState<boolean>(
     typeof window !== "undefined" ? window.innerWidth <= 640 : false
   );
-  const [intent, setIntent] = useState<"hire" | "work" | "edit">("hire");
+  const [intent, setIntent] = useState<"hire" | "work" | "edit">("edit");
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [searchVal, setSearchVal] = useState("");
@@ -206,10 +207,10 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
       .dark .hero-search-btn { background: #fff; color: #000; }
       .dark .hero-search-btn:hover { background: #dde3ed; }
 
-      .hero-action-btn { background: #111827; color: #fff; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
-      .hero-action-btn:hover { background: #1f2937; transform: scale(1.02); }
-      .dark .hero-action-btn { background: #fff; color: #121214; box-shadow: 0 10px 25px -5px rgba(255,255,255,0.2); }
-      .dark .hero-action-btn:hover { background: #dde3ed; transform: scale(1.02); }
+      .hero-action-btn { box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); }
+      .hero-action-btn:hover { transform: scale(1.02); }
+      .dark .hero-action-btn { box-shadow: 0 10px 25px -5px rgba(255,255,255,0.15); }
+      .dark .hero-action-btn:hover { transform: scale(1.02); }
 
       .hero-tag { background: #fff; border-color: #e5e7eb; color: #4b5563; }
       .hero-tag:hover { background: #f3f4f6; border-color: #d1d5db; color: #111827; }
@@ -574,7 +575,7 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
 
           {/* FADING BUTTONS */}
           <div className="hero-intent-bar bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/10">
-            {(["hire", "work", "edit"] as const).map((mode) => (
+            {(["edit", "hire", "work"] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleIntentTransition(mode)}
@@ -657,10 +658,25 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
                 </button>
               </div>
             ) : (
-              <button
+              <StarBorder
+                as="button"
                 onClick={handleSearchAction}
                 onMouseEnter={playHoverSound}
                 className="hero-action-btn"
+                theme="dark"
+                backgroundColor={theme === "dark" ? "#0c0c0f" : "#111827"}
+                textColor="#ffffff"
+                borderColor={theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.2)"}
+                color={theme === "dark" ? "#60a5fa" : "#ffffff"}
+                trailColor={theme === "dark" ? "#818cf8" : "#93c5fd"}
+                duration={3.5}
+                radius={14}
+                thickness={1.5}
+                stars={2}
+                glow={0.8}
+                sparkle={true}
+                hover="lap"
+                clickPulse={true}
                 style={{
                   border: "none",
                   padding: "18px 42px",
@@ -668,7 +684,6 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
                   fontWeight: 700,
                   fontSize: 16,
                   cursor: "pointer",
-                  transition: "all 0.2s ease",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
@@ -688,7 +703,7 @@ const SectionHero: FC<HeroProps> = ({ onStart: _onStart, isMuted = false }) => {
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                   <polyline points="12 5 19 12 12 19"></polyline>
                 </svg>
-              </button>
+              </StarBorder>
             )}
           </div>
 
