@@ -46,6 +46,7 @@ const {
   listDisputeReopenOptions,
   buildDisputeResolutionMessage,
   buildDisputeReopenMessage,
+  buildDisputeSanctionMessage,
 } = require('../lib/DisputeResolutions');
 const {
   ROLE_TO_TICKET_TYPES,
@@ -4375,7 +4376,11 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
 
   const handle = row.respondent_handle ? `@${row.respondent_handle}` : 'the respondent';
   const name = row.respondent_name || 'The respondent';
-  const message = `${name} (${handle}) has been permanently banned.\nReason: ${reason}`;
+  const message = buildDisputeSanctionMessage({
+    disputee: row.respondent_handle ? `@${row.respondent_handle}` : name,
+    reason,
+    disputeNumber: row.dispute_number || null,
+  });
 
   const { updateAccountStatus } = require('./AdminUserTeamRepositories');
   await updateAccountStatus(accountId, 'ban', staff.staff_id, {
@@ -4401,7 +4406,7 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
   );
 
   try {
-    await postDisputeDecisionMessage(row, staffSession, message);
+    await postDisputeDecisionMessage(row, staffSession, message, { asSystem: true });
   } catch (err) {
     const wrapped = new Error(
       `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`

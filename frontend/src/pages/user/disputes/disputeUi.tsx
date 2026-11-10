@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { Download, FileText, Gavel } from "lucide-react";
 import { chatAttachmentUrl } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
+import { isDisputeDecision, parseDisputeRuling } from "./disputeRuling";
+export { isDisputeDecision, parseDisputeRuling } from "./disputeRuling";
+export type { ParsedRuling } from "./disputeRuling";
 
 export function titleCase(value?: string | null, fallback = "") {
   const text = String(value || fallback)
@@ -282,30 +285,121 @@ export function DisputeAttachments({
 }
 
 /**
- * A ruling posted by the platform when a case is resolved or reopened.
- * Attributed to the Dispute Resolution service, never to an individual staff member.
+ * A ruling, rendered as a verdict panel rather than a chat bubble: the outcome is the
+ * headline, the author is the platform, and the boilerplate sits quietly at the foot.
  */
-export function isDisputeDecision(message?: {
-  authorRole?: string | null;
-  authorType?: string | null;
+export function DisputeDecisionCard({
+  body,
+  when,
+  dark = false,
+  children,
+}: {
+  body?: string | null;
+  when?: string | null;
+  /** Force the dark palette for the staff console, which is dark regardless of theme. */
+  dark?: boolean;
+  children?: ReactNode;
 }) {
-  const role = String(message?.authorRole || "").toLowerCase();
-  const type = String(message?.authorType || "").toLowerCase();
-  return role === "resolution" || type === "system";
-}
+  const ruling = parseDisputeRuling(body);
+  const reopen = ruling.kind === "reopen";
 
-/** Header strip for a decision message, so the outcome reads as final, not as a chat line. */
-export function DecisionHeader({ title = "Final decision" }: { title?: string }) {
+  const shell = dark
+    ? `border-2 ${reopen ? "border-sky-400/40 bg-sky-500/[0.07]" : "border-indigo-400/40 bg-indigo-500/[0.07]"}`
+    : `border-2 ${
+        reopen
+          ? "border-sky-300 bg-sky-50/80 dark:border-sky-400/40 dark:bg-sky-500/[0.07]"
+          : "border-indigo-300 bg-indigo-50/80 dark:border-indigo-400/40 dark:bg-indigo-500/[0.07]"
+      }`;
+  const bar = dark
+    ? reopen
+      ? "bg-sky-500/20 text-sky-100"
+      : "bg-indigo-500/20 text-indigo-100"
+    : reopen
+      ? "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100"
+      : "bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-100";
+  const strong = dark
+    ? "text-white"
+    : "text-gray-900 dark:text-white";
+  const muted = dark ? "text-zinc-400" : "text-gray-500 dark:text-zinc-400";
+  const bodyText = dark ? "text-zinc-200" : "text-gray-700 dark:text-zinc-200";
+  const rule = dark ? "border-white/10" : "border-gray-200 dark:border-white/10";
+
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-300 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:border-indigo-400/30 dark:bg-indigo-500/10 dark:text-indigo-200">
-      <Gavel className="h-3 w-3" />
-      {title}
-    </span>
+    <article className={`overflow-hidden rounded-2xl shadow-sm ${shell}`}>
+      <header className={`flex flex-wrap items-center gap-2 px-4 py-2.5 ${bar}`}>
+        <Gavel className="h-4 w-4 shrink-0" />
+        <span className="text-xs font-black uppercase tracking-[0.14em]">{ruling.title}</span>
+        {ruling.reference ? (
+          <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold tracking-wide dark:bg-white/10">
+            {ruling.reference}
+          </span>
+        ) : null}
+        {when ? <span className="ml-auto text-[11px] font-semibold opacity-80">{when}</span> : null}
+      </header>
+
+      <div className="space-y-3 px-5 py-4">
+        {ruling.outcome ? (
+          <div>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>
+              {ruling.outcomeLabel}
+            </p>
+            <p className={`mt-0.5 text-lg font-extrabold leading-snug sm:text-xl ${strong}`}>
+              {ruling.outcome}
+            </p>
+          </div>
+        ) : null}
+
+        {ruling.paragraphs.map((paragraph, index) => (
+          <p
+            key={index}
+            className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${bodyText}`}
+          >
+            {paragraph}
+          </p>
+        ))}
+
+        {ruling.note ? (
+          <div className={`rounded-xl border px-3 py-2 ${rule} ${dark ? "bg-white/[0.03]" : "bg-white/70 dark:bg-white/[0.03]"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>
+              Reviewing staff noted
+            </p>
+            <p className={`mt-0.5 whitespace-pre-wrap break-words text-sm ${bodyText}`}>{ruling.note}</p>
+          </div>
+        ) : null}
+
+        {children}
+
+        <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2.5 ${rule}`}>
+          <ShieldCheckIcon className={reopen ? "text-sky-500" : "text-indigo-500"} />
+          <span className={`text-[11px] font-bold ${strong}`}>Dispute Resolution</span>
+          <span className={`text-[11px] ${muted}`}>· Ensemble platform decision</span>
+        </div>
+
+        {ruling.closing ? (
+          <p className={`whitespace-pre-wrap text-[11px] leading-relaxed ${muted}`}>{ruling.closing}</p>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
-export const DECISION_CARD_CLASS =
-  "border-l-4 border-l-indigo-500 bg-indigo-50/70 dark:border-l-indigo-400 dark:bg-indigo-500/[0.08]";
+function ShieldCheckIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3l7 3v6c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (

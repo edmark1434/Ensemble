@@ -32,9 +32,8 @@ import {
 } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 import {
-  DECISION_CARD_CLASS,
-  DecisionHeader,
   DisputeAttachments,
+  DisputeDecisionCard,
   isDisputeDecision,
 } from "@/pages/user/disputes/disputeUi";
 import { BTN, BTN_BASE, ConfirmDialog, FIELD, Pill, SidebarSection } from "./staffCaseUi";
@@ -1063,27 +1062,38 @@ export default function ModeratorDisputeDetailModal({
                       const awaitingReview = !pending && isPendingCommunityComment(m);
                       const parent = m.replyToId ? messageById.get(String(m.replyToId)) : undefined;
                       const decision = isDisputeDecision(m);
+
+                      if (decision) {
+                        return (
+                          <div key={m.id} id={`dispute-msg-${m.id}`} className={pending ? "opacity-60" : ""}>
+                            <DisputeDecisionCard
+                              dark
+                              body={m.body}
+                              when={pending ? "Sending…" : formatDateTime(m.createdAt)}
+                            >
+                              <DisputeAttachments
+                                attachments={m.attachments}
+                                onPreview={(url) => setPreviewUrl(url)}
+                              />
+                            </DisputeDecisionCard>
+                          </div>
+                        );
+                      }
+
                       return (
                         <article
                           key={m.id}
                           id={`dispute-msg-${m.id}`}
                           className={`group rounded-xl border border-l-2 border-white/[0.08] px-4 py-3 transition ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""} ${
-                            decision
-                              ? DECISION_CARD_CLASS
-                              : awaitingReview
-                                ? "border-l-amber-400/70 bg-amber-500/[0.06]"
-                                : "bg-white/[0.02]"
+                            awaitingReview
+                              ? "border-l-amber-400/70 bg-amber-500/[0.06]"
+                              : "bg-white/[0.02]"
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-                              {decision ? (
-                                <DecisionHeader
-                                  title={/reopen/i.test(m.body || "") ? "Case reopened" : "Final decision"}
-                                />
-                              ) : null}
                               <span className="font-medium text-zinc-100">{m.authorName}</span>
-                              {role && !decision && (
+                              {role && (
                                 <span className="rounded border border-white/10 px-1.5 py-px text-[10px] text-zinc-400">
                                   {role}
                                 </span>
@@ -1147,18 +1157,14 @@ export default function ModeratorDisputeDetailModal({
                               </p>
                             )
                           ) : null}
-                          <p
-                            className={`mt-2 whitespace-pre-wrap text-sm leading-relaxed ${
-                              decision ? "font-medium text-white" : "text-zinc-200"
-                            }`}
-                          >
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">
                             {m.body}
                           </p>
                           <DisputeAttachments
                             attachments={m.attachments}
                             onPreview={(url) => setPreviewUrl(url)}
                           />
-                          {canReply && !pending && !decision && (
+                          {canReply && !pending && (
                             <button
                               type="button"
                               onClick={() => startReply(String(m.id))}

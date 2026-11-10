@@ -9,9 +9,8 @@ import {
   AudiencePill,
   Avatar,
   Card,
-  DECISION_CARD_CLASS,
-  DecisionHeader,
   DisputeAttachments,
+  DisputeDecisionCard,
   RoleChip,
   StatusPill,
   VisibilityPill,
@@ -364,31 +363,40 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                   : undefined;
                 const notice = audienceNotice(message.audience, dispute.viewerRole);
                 const decision = isDisputeDecision(message);
+
+                if (decision) {
+                  return (
+                    <div key={message.id} className={pending ? "opacity-60" : ""}>
+                      <DisputeDecisionCard
+                        body={message.body}
+                        when={pending ? "Sending…" : formatWhen(message.createdAt)}
+                      >
+                        <DisputeAttachments
+                          attachments={message.attachments}
+                          onPreview={(url) => setPreviewUrl(url)}
+                        />
+                      </DisputeDecisionCard>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={message.id}
                     className={`group flex gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-dark-surface ${
                       pending ? "opacity-60" : ""
-                    } ${decision ? DECISION_CARD_CLASS : ""}`}
+                    }`}
                   >
-                    {decision ? null : (
-                      <Avatar
-                        name={fromStaff ? message.authorName : "You"}
-                        role={fromStaff ? "staff" : "disputer"}
-                      />
-                    )}
+                    <Avatar
+                      name={fromStaff ? message.authorName : "You"}
+                      role={fromStaff ? "staff" : "disputer"}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        {decision ? (
-                          <DecisionHeader
-                            title={/reopen/i.test(message.body || "") ? "Case reopened" : "Final decision"}
-                          />
-                        ) : (
-                          <span className="text-xs font-semibold text-gray-900 dark:text-white">
-                            {fromStaff ? message.authorName || "Staff" : "You"}
-                          </span>
-                        )}
-                        {fromStaff && !decision ? <RoleChip role="staff" /> : null}
+                        <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                          {fromStaff ? message.authorName || "Staff" : "You"}
+                        </span>
+                        {fromStaff ? <RoleChip role="staff" /> : null}
                         <AudiencePill audience={message.audience} viewerRole={dispute.viewerRole} />
                         <span className="ml-auto text-[11px] text-gray-400 dark:text-zinc-500">
                           {pending ? "Sending…" : formatWhen(message.createdAt)}
@@ -407,20 +415,14 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                           </span>
                         </p>
                       ) : null}
-                      <p
-                        className={`mt-0.5 whitespace-pre-wrap break-words text-sm ${
-                          decision
-                            ? "font-medium text-gray-900 dark:text-white"
-                            : "text-gray-700 dark:text-zinc-300"
-                        }`}
-                      >
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-zinc-300">
                         {message.body}
                       </p>
                       <DisputeAttachments
                         attachments={message.attachments}
                         onPreview={(url) => setPreviewUrl(url)}
                       />
-                      {!pending && !decision ? (
+                      {!pending ? (
                         <button
                           type="button"
                           onClick={() => setReplyToId(String(message.id))}

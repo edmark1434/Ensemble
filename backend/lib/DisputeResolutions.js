@@ -186,6 +186,26 @@ function buildDisputeResolutionMessage(
   });
 }
 
+/** The ruling posted when a dispute ends in a permanent ban. */
+function buildDisputeSanctionMessage({ disputee, reason, disputeNumber } = {}) {
+  return buildDisputeRulingMessage(
+    {
+      label: 'Permanent ban',
+      finding: ({ disputee: name }) =>
+        `${name} has been permanently banned from the platform as a result of this dispute.`,
+    },
+    {
+      disputee,
+      notes: reason,
+      disputeNumber,
+      heading: 'Final decision',
+      outcomeLabel: 'Outcome',
+      closing:
+        'This case is now closed and the discussion is final. The ban stays in place until a staff member lifts it. To appeal, contact Support.',
+    }
+  );
+}
+
 /** The notice posted when a closed dispute is reopened. */
 function buildDisputeReopenMessage(reason, { disputer, disputee, notes, disputeNumber } = {}) {
   return buildDisputeRulingMessage(reason, {
@@ -235,4 +255,5 @@ module.exports = {
   listDisputeReopenOptions,
   buildDisputeResolutionMessage,
   buildDisputeReopenMessage,
+  buildDisputeSanctionMessage,
 };
