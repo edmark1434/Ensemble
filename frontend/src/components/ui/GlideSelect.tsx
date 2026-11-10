@@ -41,6 +41,11 @@ export interface GlideSelectProps {
   className?: string;
   error?: boolean;
   defaultOpen?: boolean;
+  triggerLabel?: ReactNode;
+  triggerIcon?: ReactNode;
+  menuHeader?: ReactNode;
+  rowHeight?: number;
+  chipHeight?: number;
 }
 
 type Phase = 'closed' | 'open' | 'closing';
@@ -56,22 +61,30 @@ const MENU_GAP = 6;
 const DEFAULT_OPTIONS: (string | GlideSelectOption)[] = ['One', 'Two', 'Three'];
 const STYLE = `
 @keyframes gs-swap{from{opacity:.6;filter:blur(2px)}}
-.gs-listbox-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--gs-scrollbar-thumb, rgba(255, 255, 255, 0.2)) transparent;
-}
 .gs-listbox-scroll::-webkit-scrollbar {
-  width: 5px;
+  width: 5px !important;
+  height: 5px !important;
+}
+.gs-listbox-scroll::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 .gs-listbox-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: transparent !important;
 }
 .gs-listbox-scroll::-webkit-scrollbar-thumb {
-  background: var(--gs-scrollbar-thumb, rgba(255, 255, 255, 0.2));
-  border-radius: 9999px;
+  background: var(--gs-scrollbar-thumb, rgba(156, 163, 175, 0.4)) !important;
+  border-radius: 9999px !important;
 }
 .gs-listbox-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--gs-scrollbar-thumb-hover, rgba(255, 255, 255, 0.35));
+  background: var(--gs-scrollbar-thumb-hover, rgba(156, 163, 175, 0.6)) !important;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .gs-listbox-scroll {
+    scrollbar-width: thin !important;
+    scrollbar-color: var(--gs-scrollbar-thumb, rgba(156, 163, 175, 0.4)) transparent !important;
+  }
 }
 `;
 
@@ -122,6 +135,11 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   className = '',
   error = false,
   defaultOpen = false,
+  triggerLabel,
+  triggerIcon,
+  menuHeader,
+  rowHeight: customRowHeight,
+  chipHeight: customChipHeight,
 }) => {
   const globalTheme = useGlobalState((state) => state.theme);
   const isDark = (explicitTheme || globalTheme) === 'dark';
@@ -153,7 +171,9 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
 
   const id = useId();
   const S = SIZES[size] ?? SIZES.lg;
-  const step = S.row + GAP;
+  const effectiveRowHeight = customRowHeight ?? S.row;
+  const effectiveChipHeight = customChipHeight ?? S.chip;
+  const step = effectiveRowHeight + GAP;
   const popOut = Math.round((popDuration * 2) / 3);
   const listMaxHeight = menuMaxHeight
     ? (typeof menuMaxHeight === 'number' ? `${menuMaxHeight}px` : menuMaxHeight)
@@ -359,17 +379,17 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
           '--gs-border': error ? '#ef4444' : borderColor,
           '--gs-radius': `${radius}px`,
           '--gs-inner-radius': `${Math.max(4, radius - 3)}px`,
-          '--gs-chip': `${S.chip}px`,
-          '--gs-row': `${S.row}px`,
+          '--gs-chip': `${effectiveChipHeight}px`,
+          '--gs-row': `${effectiveRowHeight}px`,
           '--gs-font': `${S.font}px`,
-          '--gs-menu-w': fullWidth ? '100%' : menuWidth ? `${menuWidth}px` : 'auto',
+          '--gs-menu-w': fullWidth ? '100%' : menuWidth ? (typeof menuWidth === 'number' ? `${menuWidth}px` : menuWidth) : 'auto',
           '--gs-pop': `${popDuration}ms`,
           '--gs-pop-out': `${popOut}ms`,
           '--gs-glide': `${glideDuration}ms`,
           '--gs-origin': origin,
           '--gs-shadow': isDark ? '0 16px 40px rgba(0, 0, 0, 0.55)' : '0 12px 30px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08)',
-          '--gs-scrollbar-thumb': isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.18)',
-          '--gs-scrollbar-thumb-hover': isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.3)',
+          '--gs-scrollbar-thumb': isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(156, 163, 175, 0.4)',
+          '--gs-scrollbar-thumb-hover': isDark ? 'rgba(255, 255, 255, 0.38)' : 'rgba(156, 163, 175, 0.6)',
         } as CSSProperties
       }
       onAnimationEnd={(e) => {
@@ -389,7 +409,11 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
         disabled={disabled}
         className={`group/trigger relative m-0 ${
           fullWidth ? 'w-full flex' : 'inline-flex'
-        } cursor-pointer touch-manipulation items-center justify-between gap-2.5 px-3.5 leading-none font-medium outline-none select-none [-webkit-tap-highlight-color:transparent] [font-family:inherit] [height:var(--gs-chip)] [border-radius:var(--gs-inner-radius)] [background:var(--gs-surface)] [color:var(--gs-text)] [border:1px_solid_var(--gs-border)] [font-size:var(--gs-font)] [transition:background-color_150ms_ease,border-color_150ms_ease,box-shadow_150ms_ease] disabled:cursor-default enabled:active:scale-[0.99] focus-visible:[border-color:var(--gs-accent)] focus-visible:[box-shadow:0_0_0_2px_color-mix(in_srgb,var(--gs-accent)_25%,transparent)] aria-expanded:[border-color:var(--gs-accent)]`}
+        } cursor-pointer touch-manipulation items-center justify-between gap-2.5 px-3.5 group-data-[size=sm]:px-2.5 leading-none font-medium outline-none select-none [-webkit-tap-highlight-color:transparent] [font-family:inherit] [height:var(--gs-chip)] [border-radius:var(--gs-inner-radius)] [background:var(--gs-surface)] [color:var(--gs-text)] [border:1px_solid_var(--gs-border)] [font-size:var(--gs-font)] [transition:background-color_150ms_ease,border-color_150ms_ease,box-shadow_150ms_ease] disabled:cursor-default enabled:active:scale-[0.99] focus-visible:[border-color:var(--gs-accent)] focus-visible:[box-shadow:0_0_0_2px_color-mix(in_srgb,var(--gs-accent)_25%,transparent)] aria-expanded:[border-color:var(--gs-accent)]`}
+        style={{
+          paddingLeft: size === 'sm' ? 10 : 14,
+          paddingRight: size === 'sm' ? 10 : 14,
+        }}
         onPointerDown={(e) => {
           if (e.button !== 0 || disabled) return;
           e.currentTarget.focus({ preventScroll: true });
@@ -398,18 +422,22 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
         }}
         onKeyDown={onTriggerKey}
       >
-        <div className="flex min-w-0 items-center gap-2.5">
-          {selectedItem?.icon && (
+        <div className="flex min-w-0 items-center gap-2">
+          {triggerIcon ? (
+            <span className="shrink-0 opacity-80" aria-hidden="true">
+              {triggerIcon}
+            </span>
+          ) : selectedItem?.icon ? (
             <span className="shrink-0 text-[16px] opacity-80" aria-hidden="true">
               {selectedItem.icon}
             </span>
-          )}
+          ) : null}
           <span
             className="truncate text-left data-[empty]:opacity-50 group-data-[swap]:animate-[gs-swap_160ms_ease]"
             key={current}
-            data-empty={selected < 0 ? '' : undefined}
+            data-empty={!triggerLabel && selected < 0 ? '' : undefined}
           >
-            {selectedItem ? selectedItem.label : placeholder}
+            {triggerLabel !== undefined ? triggerLabel : (selectedItem ? selectedItem.label : placeholder)}
           </span>
         </div>
         <span
@@ -423,19 +451,25 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
       {phase !== 'closed' ? (
         <div
           ref={menuRef}
+          style={{ padding: 6 }}
           className={`absolute z-50 ${
             fullWidth ? 'w-full' : 'min-w-full [width:var(--gs-menu-w)]'
-          } scale-95 p-1 opacity-0 [border-radius:var(--gs-radius)] [background:var(--gs-surface)] [border:1px_solid_var(--gs-border)] [box-shadow:var(--gs-shadow)] [transform-origin:var(--gs-origin)] [transition:opacity_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1),transform_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1)] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:pointer-events-none data-[state=closed]:[transition-duration:var(--gs-pop-out)] data-[side=bottom]:top-[calc(100%+6px)] data-[side=top]:bottom-[calc(100%+6px)] left-0`}
+          } scale-95 p-1 opacity-0 [border-radius:var(--gs-radius)] [background:var(--gs-surface)] [border:1px_solid_var(--gs-border)] [box-shadow:var(--gs-shadow)] [transform-origin:var(--gs-origin)] [transition:opacity_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1),transform_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1)] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:pointer-events-none data-[state=closed]:[transition-duration:var(--gs-pop-out)] data-[side=bottom]:top-[calc(100%+6px)] data-[side=top]:bottom-[calc(100%+6px)] data-[align=right]:right-0 data-[align=right]:left-auto data-[align=left]:left-0 data-[align=left]:right-auto max-w-[calc(100vw-24px)] font-[inherit]`}
           data-state="open"
           data-side={side}
           data-align={align}
         >
+          {menuHeader && (
+            <div className="px-2 py-1.5 border-b border-zinc-100 dark:border-zinc-800/80 mb-1">
+              {menuHeader}
+            </div>
+          )}
           <div
             id={`${id}-list`}
             ref={listRef}
             role="listbox"
             aria-label={ariaLabel}
-            className="group/list gs-listbox-scroll relative grid touch-none gap-0.5 overflow-y-auto overflow-x-hidden p-1 pr-1.5"
+            className="group/list gs-listbox-scroll relative grid touch-none gap-0.5 overflow-y-auto overflow-x-hidden p-0.5 font-[inherit]"
             style={{ maxHeight: listMaxHeight }}
             data-live={active !== null ? '' : undefined}
             onPointerOver={onListOver}
@@ -462,9 +496,13 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
                 aria-selected={i === selected}
                 data-index={i}
                 onClick={() => pick(i, false)}
-                className="relative z-[1] flex cursor-pointer items-center justify-between gap-2.5 px-3 py-1 select-none [-webkit-tap-highlight-color:transparent] [height:var(--gs-row)] [border-radius:var(--gs-inner-radius)] [color:var(--gs-text)] [font-size:var(--gs-font)] [transition:background-color_150ms_ease] aria-selected:[background:color-mix(in_srgb,var(--gs-highlight)_60%,transparent)] group-data-[live]/list:aria-selected:bg-transparent"
+                style={{
+                  paddingLeft: 10,
+                  paddingRight: 10,
+                }}
+                className="relative z-[1] flex cursor-pointer items-center justify-between gap-2 px-2.5 py-0.5 select-none [-webkit-tap-highlight-color:transparent] [height:var(--gs-row)] [border-radius:var(--gs-inner-radius)] [color:var(--gs-text)] [font-size:var(--gs-font)] font-[inherit] [transition:background-color_150ms_ease] aria-selected:[background:color-mix(in_srgb,var(--gs-highlight)_60%,transparent)] group-data-[live]/list:aria-selected:bg-transparent"
               >
-                <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   {it.icon && (
                     <span className="shrink-0 text-[15px] opacity-75" aria-hidden="true">
                       {it.icon}
@@ -472,9 +510,9 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
                   )}
                   <span className="min-w-0 truncate font-medium">{it.label}</span>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1.5 ml-2">
                   {showTags && it.tag ? (
-                    <span className="text-[11px] opacity-50 font-normal">
+                    <span className="text-[10px] tracking-wide uppercase font-semibold text-zinc-400 dark:text-zinc-500 shrink-0">
                       {it.tag}
                     </span>
                   ) : null}
