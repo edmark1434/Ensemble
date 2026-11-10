@@ -284,6 +284,30 @@ export function DisputeAttachments({
   );
 }
 
+const RULING_TONES = {
+  decision: {
+    shell: "border-indigo-300 bg-indigo-50/80 dark:border-indigo-400/40 dark:bg-indigo-500/[0.07]",
+    shellDark: "border-indigo-400/40 bg-indigo-500/[0.07]",
+    bar: "bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-100",
+    barDark: "bg-indigo-500/20 text-indigo-100",
+    icon: "text-indigo-500",
+  },
+  reopen: {
+    shell: "border-sky-300 bg-sky-50/80 dark:border-sky-400/40 dark:bg-sky-500/[0.07]",
+    shellDark: "border-sky-400/40 bg-sky-500/[0.07]",
+    bar: "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100",
+    barDark: "bg-sky-500/20 text-sky-100",
+    icon: "text-sky-500",
+  },
+  parties: {
+    shell: "border-amber-300 bg-amber-50/80 dark:border-amber-400/40 dark:bg-amber-500/[0.07]",
+    shellDark: "border-amber-400/40 bg-amber-500/[0.07]",
+    bar: "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
+    barDark: "bg-amber-500/20 text-amber-100",
+    icon: "text-amber-500",
+  },
+} as const;
+
 /**
  * A ruling, rendered as a verdict panel rather than a chat bubble: the outcome is the
  * headline, the author is the platform, and the boilerplate sits quietly at the foot.
@@ -301,22 +325,10 @@ export function DisputeDecisionCard({
   children?: ReactNode;
 }) {
   const ruling = parseDisputeRuling(body);
-  const reopen = ruling.kind === "reopen";
+  const tone = RULING_TONES[ruling.kind];
 
-  const shell = dark
-    ? `border-2 ${reopen ? "border-sky-400/40 bg-sky-500/[0.07]" : "border-indigo-400/40 bg-indigo-500/[0.07]"}`
-    : `border-2 ${
-        reopen
-          ? "border-sky-300 bg-sky-50/80 dark:border-sky-400/40 dark:bg-sky-500/[0.07]"
-          : "border-indigo-300 bg-indigo-50/80 dark:border-indigo-400/40 dark:bg-indigo-500/[0.07]"
-      }`;
-  const bar = dark
-    ? reopen
-      ? "bg-sky-500/20 text-sky-100"
-      : "bg-indigo-500/20 text-indigo-100"
-    : reopen
-      ? "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100"
-      : "bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-100";
+  const shell = `border-2 ${dark ? tone.shellDark : tone.shell}`;
+  const bar = dark ? tone.barDark : tone.bar;
   const strong = dark
     ? "text-white"
     : "text-gray-900 dark:text-white";
@@ -370,9 +382,11 @@ export function DisputeDecisionCard({
         {children}
 
         <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2.5 ${rule}`}>
-          <ShieldCheckIcon className={reopen ? "text-sky-500" : "text-indigo-500"} />
+          <ShieldCheckIcon className={tone.icon} />
           <span className={`text-[11px] font-bold ${strong}`}>Dispute Resolution</span>
-          <span className={`text-[11px] ${muted}`}>· Ensemble platform decision</span>
+          <span className={`text-[11px] ${muted}`}>
+            · {ruling.kind === "parties" ? "Ensemble platform notice" : "Ensemble platform decision"}
+          </span>
         </div>
 
         {ruling.closing ? (

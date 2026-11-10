@@ -416,8 +416,8 @@ export default function PublicDisputePage() {
     if (!id || sending || (!text && !pendingFiles.length)) return;
     const pendingId = `pending-${Date.now()}`;
     const parentId = replyToId;
-    const heldForReview = discussion?.commentsNeedApproval ?? !discussion?.isParty;
-    // Your own reply always pulls the view down to it.
+    // Party and community replies stay private to author + staff until staff publishes.
+    const heldForReview = !(discussion?.isParty);
     followRef.current = true;
     setDiscussion((current) =>
       current
@@ -431,7 +431,7 @@ export default function PublicDisputePage() {
                 authorRole: current.isParty ? undefined : "community",
                 body: text,
                 createdAt: new Date().toISOString(),
-                audience: heldForReview ? "author_and_staff" : "public",
+                audience: "author_and_staff",
                 pendingReview: heldForReview,
                 replyToId: parentId,
                 attachments: pendingFiles.map((media) => ({
@@ -463,9 +463,7 @@ export default function PublicDisputePage() {
       toast.success(res.data?.message || "Comment posted to the discussion.");
       const saved = res.data?.data?.message as DiscussionMessage | undefined;
       const nextChatId = res.data?.data?.chatId;
-      const savedAudience = String(
-        saved?.audience || (heldForReview ? "author_and_staff" : "public")
-      ).toLowerCase();
+      const savedAudience = String(saved?.audience || "author_and_staff").toLowerCase();
       const savedPending =
         res.data?.data?.pendingReview ?? !["parties", "public"].includes(savedAudience);
       setDiscussion((current) => {
@@ -820,9 +818,9 @@ export default function PublicDisputePage() {
                   />
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] text-gray-500 dark:text-zinc-500">
-                      {(discussion.commentsNeedApproval ?? !discussion.isParty)
-                        ? "You’re not part of this dispute, so your reply stays private to you and staff until a staff member or admin makes it public."
-                        : "You’re a party on this dispute. Your reply is public."}
+                      {discussion.isParty
+                        ? "Your reply stays private to you and staff until a staff member or admin makes it visible to the other party or the public."
+                        : "You’re not part of this dispute, so your reply stays private to you and staff until a staff member or admin makes it public."}
                       <span className="ml-2 tabular-nums text-gray-400 dark:text-zinc-600">
                         {comment.length}/{MAX_LENGTH}
                       </span>

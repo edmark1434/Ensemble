@@ -549,7 +549,8 @@ async function openDisputesForContracts(contractIds, viewerAccountIds) {
             contract_id,
             status,
             visibility,
-            by_account_id
+            by_account_id,
+            for_account_id
         FROM disputes
         WHERE contract_id = ANY($1::uuid[])
           AND deleted_at IS NULL
@@ -559,12 +560,19 @@ async function openDisputesForContracts(contractIds, viewerAccountIds) {
 
     for (const row of result.rows) {
         const filedByViewer = viewers.has(String(row.by_account_id));
-        if (!filedByViewer && !row.visibility) continue;
+        const namesViewer = !filedByViewer && viewers.has(String(row.for_account_id));
+        const visibility = Boolean(row.visibility);
+        // Each contract allows one open dispute. The other party must know it exists so they
+        // do not try to file a second one, but a private case's id and number stay with the
+        // filer and staff until it is made public.
+        const canOpen = filedByViewer || visibility;
         map.set(String(row.contract_id), {
-            id: row.dispute_id,
-            number: row.dispute_number || null,
-            visibility: Boolean(row.visibility),
+            id: canOpen ? row.dispute_id : null,
+            number: canOpen ? row.dispute_number || null : null,
+            visibility,
             status: row.status,
+            viewerRole: filedByViewer ? 'disputer' : namesViewer ? 'disputee' : null,
+            filedByViewer,
         });
     }
     return map;
@@ -830,7 +838,9 @@ async function createContractDispute(accountIds, contractId, { reason, details }
     const disputeNumber = `DIS-${Date.now().toString().slice(-6)}`;
     const creditAmount = Math.max(0, parseInt(contract.rate_credits, 10) || 0);
     const openDisputeError = () => {
-        const error = new Error('This contract already has an open dispute.');
+        const error = new Error(
+            'This contract is already under dispute. Only one dispute can be open per contract, so share your side in the existing case.'
+        );
         error.statusCode = 409;
         return error;
     };

@@ -36,7 +36,7 @@ export function isDisputeDecision(message?: {
 }
 
 export type ParsedRuling = {
-  kind: "decision" | "reopen";
+  kind: "decision" | "reopen" | "parties";
   title: string;
   reference: string | null;
   outcomeLabel: string;
@@ -57,14 +57,24 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
     .map((block) => block.trim())
     .filter(Boolean);
   const head = blocks[0] || "";
-  const headMatch = head.match(/^(Final decision|Case reopened)(?:\s+[—-]\s+(.+))?$/i);
-  const reopened = headMatch ? /case reopened/i.test(headMatch[1]) : /reopen/i.test(text);
+  const headMatch = head.match(
+    /^(Final decision|Case reopened|Parties swapped)(?:\s+[—-]\s+(.+))?$/i
+  );
+  const kind: ParsedRuling["kind"] = headMatch
+    ? /parties swapped/i.test(headMatch[1])
+      ? "parties"
+      : /case reopened/i.test(headMatch[1])
+        ? "reopen"
+        : "decision"
+    : /reopen/i.test(text)
+      ? "reopen"
+      : "decision";
 
   const result: ParsedRuling = {
-    kind: reopened ? "reopen" : "decision",
-    title: reopened ? "Case reopened" : "Final decision",
+    kind,
+    title: kind === "parties" ? "Parties swapped" : kind === "reopen" ? "Case reopened" : "Final decision",
     reference: headMatch?.[2]?.trim() || null,
-    outcomeLabel: reopened ? "Reason" : "Outcome",
+    outcomeLabel: kind === "parties" ? "Change" : kind === "reopen" ? "Reason" : "Outcome",
     outcome: null,
     paragraphs: [],
     note: null,
@@ -73,7 +83,7 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
 
   const rest = headMatch ? blocks.slice(1) : blocks;
   for (const block of rest) {
-    const outcome = block.match(/^(Outcome|Reason):\s*(.+)$/i);
+    const outcome = block.match(/^(Outcome|Reason|Change):\s*(.+)$/i);
     if (outcome) {
       result.outcomeLabel = outcome[1];
       result.outcome = outcome[2].trim();
@@ -84,7 +94,7 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
       result.note = note[1].trim();
       continue;
     }
-    if (/^(This case is now closed|The case is open again)/i.test(block)) {
+    if (/^(This case is now closed|The case is open again|The case stays open)/i.test(block)) {
       result.closing = result.closing ? `${result.closing}\n\n${block}` : block;
       continue;
     }

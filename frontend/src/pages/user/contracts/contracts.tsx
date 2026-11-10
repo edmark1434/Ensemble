@@ -28,6 +28,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import {
+  type ContractActiveDispute,
+  contractDisputeHeadline,
+  contractDisputePath,
+} from "./contractDispute";
 import useGlobalState from "@/lib/global_state";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { ContractsTerminologyGuide } from "./ContractsTerminologyGuide";
@@ -125,12 +130,7 @@ export interface DetailedContract {
 
   // Milestones
   milestones: MilestoneItem[];
-  activeDispute?: {
-    id: string;
-    number?: string | null;
-    visibility: boolean;
-    status?: string;
-  } | null;
+  activeDispute?: ContractActiveDispute | null;
 }
 
 // ============================================================================
@@ -877,29 +877,32 @@ export const Contracts: React.FC = () => {
                             </h3>
                           </div>
 
-                          {contract.activeDispute ? (
-                            <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-500/30 dark:bg-rose-500/10">
-                              <p className="text-xs font-semibold text-rose-800 dark:text-rose-200">
-                                {contract.activeDispute.visibility
-                                  ? (contract.activeDispute.number
-                                    ? `Dispute ${contract.activeDispute.number} is open`
-                                    : "This dispute is open")
-                                  : "Dispute filed. Waiting for staff to open it."}
-                              </p>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  navigate(contract.activeDispute?.visibility
-                                    ? `/disputes/${contract.activeDispute.id}`
-                                    : "/contracts/disputes");
-                                }}
-                                className="shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-rose-700"
-                              >
-                                View dispute
-                              </button>
-                            </div>
-                          ) : null}
+                          {contract.activeDispute ? (() => {
+                            const disputePath = contractDisputePath(contract.activeDispute);
+                            return (
+                              <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-500/30 dark:bg-rose-500/10">
+                                <p className="text-xs font-semibold text-rose-800 dark:text-rose-200">
+                                  {contractDisputeHeadline(contract.activeDispute)}
+                                </p>
+                                {disputePath ? (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      navigate(disputePath);
+                                    }}
+                                    className="shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-rose-700"
+                                  >
+                                    View dispute
+                                  </button>
+                                ) : (
+                                  <span className="shrink-0 rounded-lg border border-rose-300 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:border-rose-500/40 dark:text-rose-300">
+                                    Can't dispute again
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })() : null}
 
                           {/* Stats Grid: Value, Milestones, Deadline */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-zinc-50/90 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">

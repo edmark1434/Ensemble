@@ -7,6 +7,11 @@ import api from "@/lib/axios";
 import toast from "react-hot-toast";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import {
+  type ContractActiveDispute,
+  contractDisputeDetail,
+  contractDisputePath,
+} from "./contractDispute";
 
 // Same interface as in contracts.tsx
 interface DetailedContract {
@@ -20,6 +25,7 @@ interface DetailedContract {
   freelancerAvatar?: string;
   totalValueCredits: number;
   milestones?: any[];
+  activeDispute?: ContractActiveDispute | null;
 }
 
 export const DisputeFormPage: React.FC = () => {
@@ -94,6 +100,7 @@ export const DisputeFormPage: React.FC = () => {
               status: derivedStatus,
               totalValueCredits: parseFloat(c.rate_credits) || 0,
               milestones: mappedMilestones,
+              activeDispute: c.active_dispute || null,
             };
           });
           
@@ -112,6 +119,8 @@ export const DisputeFormPage: React.FC = () => {
   }, []);
 
   const selectedContract = activeContracts.find(c => c.id === selectedContractId);
+  const existingDispute = selectedContract?.activeDispute || null;
+  const existingDisputePath = contractDisputePath(existingDispute);
   const contestedMilestone = selectedContract?.milestones?.find((m: any) => String(m.id) === String(paramMilestoneId));
   
   let opponentName = "Unknown";
@@ -135,7 +144,7 @@ export const DisputeFormPage: React.FC = () => {
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
-    if (!selectedContractId || !reason || !details) return;
+    if (!selectedContractId || !reason || !details || existingDispute) return;
     submittingRef.current = true;
     setIsSubmitting(true);
     
@@ -218,12 +227,44 @@ export const DisputeFormPage: React.FC = () => {
                     >
                       <option className="bg-white dark:bg-[#1E1E24]" value="" disabled>Choose an active contract...</option>
                       {activeContracts.map(c => (
-                        <option className="bg-white dark:bg-[#1E1E24]" key={c.id} value={c.id}>{c.title}</option>
+                        <option
+                          className="bg-white dark:bg-[#1E1E24]"
+                          key={c.id}
+                          value={c.id}
+                          disabled={Boolean(c.activeDispute) && c.id !== selectedContractId}
+                        >
+                          {c.activeDispute ? `${c.title} (already under dispute)` : c.title}
+                        </option>
                       ))}
                     </select>
                     <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
+
+                {existingDispute && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-500/40 dark:bg-rose-500/10 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-300" />
+                      <div>
+                        <p className="text-sm font-bold text-rose-900 dark:text-rose-100">
+                          This contract is already under dispute
+                        </p>
+                        <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
+                          {contractDisputeDetail(existingDispute)}
+                        </p>
+                      </div>
+                    </div>
+                    {existingDisputePath ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(existingDisputePath)}
+                        className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                      >
+                        View dispute
+                      </button>
+                    ) : null}
+                  </div>
+                )}
 
                 <AnimatePresence mode="popLayout">
                   {selectedContract && (
@@ -335,7 +376,7 @@ export const DisputeFormPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!selectedContractId || !reason || !details || isSubmitting}
+              disabled={!selectedContractId || !reason || !details || isSubmitting || Boolean(existingDispute)}
               className="flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-8 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(220,38,38,0.3)]"
             >
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit Dispute"}

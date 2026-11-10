@@ -1976,12 +1976,12 @@ async function assertMemberCanReplyOnDispute(inbox, accountId) {
 
 
 
-/** Audience fields for a party message written through the inbox. Hidden cases keep it staff + sender. */
-function disputeMessageFields(dispute, now) {
+/** Audience fields for a party message written through the inbox.
+ * Disputer/disputee replies stay private to author + staff until staff widens them.
+ */
+function disputeMessageFields(dispute, _now) {
 
     if (!dispute) return {};
-
-    const audience = dispute.visible ? 'parties' : 'author_and_staff';
 
     return {
 
@@ -1989,13 +1989,13 @@ function disputeMessageFields(dispute, now) {
 
         author_role: dispute.isFiler ? 'disputer' : dispute.isRespondent ? 'disputee' : 'member',
 
-        audience,
+        audience: 'author_and_staff',
 
-        audiences: [audience],
+        audiences: ['author_and_staff'],
 
-        is_internal: !dispute.visible,
+        is_internal: true,
 
-        published_at: dispute.visible ? now : null,
+        published_at: null,
 
     };
 
@@ -2051,7 +2051,8 @@ async function buildMessage(payload, accountId) {
 
         inbox,
 
-        privateDisputeNote: Boolean(dispute && !dispute.visible),
+        // Party dispute replies are private to author + staff by default.
+        privateDisputeNote: Boolean(dispute),
 
         document: {
 

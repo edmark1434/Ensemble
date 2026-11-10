@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ExternalLink,
+  History,
 } from "lucide-react";
 
 // Sub-component Imports
@@ -25,10 +26,18 @@ import { Profile_Introduction } from "./Profile_Introduction";
 import { Profile_Gallery } from "./Profile_Gallery";
 import { RatingsSection_ProfileDisplay, type PublicProfileDispute } from "../RatingsSection_ProfileDisplay";
 import { AccountRecordSection, StandingBadges } from "../AccountStanding";
-import { RoleChip, StatusPill } from "@/pages/user/disputes/disputeUi";
+import { isClosedStatus, RoleChip, StatusPill } from "@/pages/user/disputes/disputeUi";
 
-export type TabType = "introduction" | "portfolio" | "gallery" | "services" | "job-posts" | "assets" | "performance";
-/** The dispute record is no longer a tab — it sits at the foot of the Performance panel. */
+export type TabType =
+  | "introduction"
+  | "portfolio"
+  | "gallery"
+  | "services"
+  | "job-posts"
+  | "assets"
+  | "performance"
+  | "active-history"
+  | "dispute-history";
 type PerformanceSubTab = "ratings" | "reviews" | "history" | "records";
 
 interface DetailsListBodyProps {
@@ -61,6 +70,8 @@ const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
   { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
   { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
   { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
+  { key: "active-history", label: "Active History", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
+  { key: "dispute-history", label: "Dispute History", icon: <History className="h-3.5 w-3.5" /> },
 ];
 
 function disputeStatusLabel(status?: string) {
@@ -74,6 +85,82 @@ function disputeWhen(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function ProfileDisputeList({
+  title,
+  disputes,
+  isOwner,
+  emptyTitle,
+  emptyDetail,
+  description,
+  onOpenCenter,
+}: {
+  title: string;
+  disputes: PublicProfileDispute[];
+  isOwner: boolean;
+  emptyTitle: string;
+  emptyDetail: string;
+  description: string;
+  onOpenCenter: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h4>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">{description}</p>
+        </div>
+        {isOwner && (
+          <button
+            type="button"
+            onClick={onOpenCenter}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-gray-800 dark:text-zinc-200 transition cursor-pointer"
+          >
+            <span>Open Dispute Center</span>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {disputes.length === 0 ? (
+        <div className="py-10 text-center space-y-1.5">
+          <ShieldCheck className="h-7 w-7 text-emerald-500/80 mx-auto" />
+          <p className="text-sm font-bold text-gray-900 dark:text-white">{emptyTitle}</p>
+          <p className="text-xs text-gray-500 dark:text-zinc-400">{emptyDetail}</p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {disputes.map((dispute) => (
+            <Link
+              key={dispute.id}
+              to={`/disputes/${dispute.id}`}
+              className="block rounded-xl border border-gray-200 px-4 py-3 transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.03]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                    {dispute.title || dispute.number || "Dispute"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-gray-500 dark:text-zinc-400">
+                    {dispute.number || "Dispute"} · {disputeStatusLabel(dispute.type || "General")}
+                  </p>
+                </div>
+                <StatusPill status={dispute.status} />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
+                <span className="flex items-center gap-2">
+                  <RoleChip role={dispute.role === "filed" ? "disputer" : "disputee"} />
+                  Updated {disputeWhen(dispute.updatedAt)}
+                </span>
+                <span className="font-semibold text-gray-800 dark:text-zinc-200">View discussion →</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export const DetailsListBodySkeleton: React.FC = () => (
@@ -110,6 +197,9 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   const publicDisputes: PublicProfileDispute[] = Array.isArray(userDetails?.disputes)
     ? userDetails.disputes
     : [];
+  const activeDisputes = publicDisputes.filter((dispute) => !isClosedStatus(dispute.status));
+  const closedDisputes = publicDisputes.filter((dispute) => isClosedStatus(dispute.status));
+  const openDisputeCenter = () => navigate("/contracts/disputes");
 
   return (
     <div className="space-y-5 font-['Plus Jakarta Sans',sans-serif]">
@@ -319,8 +409,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                               <StandingBadges standing={userDetails?.standing} />
                               {(!userDetails?.standing?.status ||
                                 String(userDetails.standing.status).toLowerCase() === "active") &&
-                                !userDetails?.standing?.forumTimeout &&
-                                !userDetails?.standing?.underDispute && (
+                                !userDetails?.standing?.forumTimeout && (
                                   <div className="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-zinc-300">
                                     <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
                                     <span>Active standing. No public restrictions, suspensions, or bans on record.</span>
@@ -332,99 +421,38 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                       </div>
                     </div>
                   )}
-
-                  {/* Dispute record sits at the foot of Performance, not behind its own tab. */}
-                  <div className="pt-4">
-                    <details className="group rounded-2xl border border-gray-200 bg-white shadow-xs dark:border-white/10 dark:bg-dark-surface">
-                      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-5 py-3.5">
-                        {publicDisputes.length ? (
-                          <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />
-                        ) : (
-                          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
-                        )}
-                        <span className="text-sm font-bold text-gray-900 dark:text-white">Dispute record</span>
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                            publicDisputes.length
-                              ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                              : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
-                          }`}
-                        >
-                          {publicDisputes.length
-                            ? `${publicDisputes.length} public ${publicDisputes.length === 1 ? "case" : "cases"}`
-                            : "Clear"}
-                        </span>
-                        <span className="ml-auto text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
-                          <span className="group-open:hidden">Show</span>
-                          <span className="hidden group-open:inline">Hide</span>
-                        </span>
-                      </summary>
-                      <div className="space-y-4 border-t border-gray-100 px-5 py-4 dark:border-white/5">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-xs text-gray-500 dark:text-zinc-400">
-                            {isOwner
-                              ? "Your public and contract dispute records on the platform."
-                              : "Public dispute cases associated with this account."}
-                          </p>
-                          {isOwner && (
-                            <button
-                              type="button"
-                              onClick={() => navigate("/contracts/disputes")}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-gray-800 dark:text-zinc-200 transition cursor-pointer"
-                            >
-                              <span>Open Dispute Center</span>
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        {publicDisputes.length === 0 ? (
-                          <div className="py-6 text-center space-y-1.5">
-                            <ShieldCheck className="h-7 w-7 text-emerald-500/80 mx-auto" />
-                            <p className="text-sm font-bold text-gray-900 dark:text-white">
-                              No disputes on record
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-zinc-400">
-                              There are no public dispute cases linked to this profile.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-2.5">
-                            {publicDisputes.map((dispute) => (
-                              <Link
-                                key={dispute.id}
-                                to={`/disputes/${dispute.id}`}
-                                className="block rounded-xl border border-gray-200 px-4 py-3 transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.03]"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-                                      {dispute.title || dispute.number || "Dispute"}
-                                    </p>
-                                    <p className="mt-0.5 text-[11px] text-gray-500 dark:text-zinc-400">
-                                      {dispute.number || "Dispute"} · {disputeStatusLabel(dispute.type || "General")}
-                                    </p>
-                                  </div>
-                                  <StatusPill status={dispute.status} />
-                                </div>
-                                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
-                                  <span className="flex items-center gap-2">
-                                    <RoleChip role={dispute.role === "filed" ? "disputer" : "disputee"} />
-                                    Updated {disputeWhen(dispute.updatedAt)}
-                                  </span>
-                                  <span className="font-semibold text-gray-800 dark:text-zinc-200">
-                                    View discussion →
-                                  </span>
-                                </div>
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </details>
-                  </div>
                 </div>
               </div>
+            )}
+            {activeTab === "active-history" && (
+              <ProfileDisputeList
+                title="Active disputes"
+                disputes={activeDisputes}
+                isOwner={isOwner}
+                description={
+                  isOwner
+                    ? "Open public dispute cases linked to your profile."
+                    : "Open public dispute cases linked to this profile."
+                }
+                emptyTitle="No active disputes"
+                emptyDetail="There are no open public dispute cases on this profile."
+                onOpenCenter={openDisputeCenter}
+              />
+            )}
+            {activeTab === "dispute-history" && (
+              <ProfileDisputeList
+                title="Dispute history"
+                disputes={closedDisputes}
+                isOwner={isOwner}
+                description={
+                  isOwner
+                    ? "Closed public dispute cases linked to your profile."
+                    : "Closed public dispute cases linked to this profile."
+                }
+                emptyTitle="No dispute history"
+                emptyDetail="There are no closed public dispute cases on this profile."
+                onOpenCenter={openDisputeCenter}
+              />
             )}
             {activeTab === "portfolio" && (
               <div data-tour="profile-portfolio" className="flex-1 flex flex-col">

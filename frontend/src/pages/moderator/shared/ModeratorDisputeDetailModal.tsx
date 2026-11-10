@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowLeftRight,
   CheckCircle2,
   CornerUpLeft,
   Eye,
@@ -10,7 +11,6 @@ import {
   Loader2,
   MessageSquare,
   Send,
-  ShieldAlert,
   X,
 } from "lucide-react";
 import api from "@/lib/axios";
@@ -269,11 +269,11 @@ const FALLBACK_RESOLUTIONS: DisputeResolutionOption[] = [
  */
 function resolutionPreview(
   key: string,
-  dispute: { initiator: { username: string }; respondent: { username: string } },
+  dispute: { initiator: { username?: string }; respondent: { username?: string } },
   notes: string
 ) {
-  const disputer = `@${dispute.initiator.username}`;
-  const disputee = `@${dispute.respondent.username}`;
+  const disputer = dispute.initiator.username ? `@${dispute.initiator.username}` : "The disputer";
+  const disputee = dispute.respondent.username ? `@${dispute.respondent.username}` : "The disputee";
   const bodies: Record<string, string> = {
     resolved_both_parties: `This dispute is resolved. ${disputer} and ${disputee} reached an agreement, and staff have closed the case.`,
     disputee_refused: `Staff have closed this dispute. ${disputee} refused to cooperate with the review.`,
@@ -433,18 +433,21 @@ export default function ModeratorDisputeDetailModal({
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState("");
-  const [banPromptOpen, setBanPromptOpen] = useState(false);
   const [banReason, setBanReason] = useState("");
   const [reopenPromptOpen, setReopenPromptOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [reopenNotes, setReopenNotes] = useState("");
   const [resolvePromptOpen, setResolvePromptOpen] = useState(false);
+  const [resolveMode, setResolveMode] = useState<"choose" | "outcome" | "settle" | "ban" | "dismiss">(
+    "choose"
+  );
   const [resolveOutcome, setResolveOutcome] = useState("");
   const [resolveNotes, setResolveNotes] = useState("");
-  const [settleOpen, setSettleOpen] = useState(false);
   const [settleClientCredits, setSettleClientCredits] = useState("0");
   const [settleFreelancerCredits, setSettleFreelancerCredits] = useState("0");
   const [settleNotes, setSettleNotes] = useState("");
+  const [swapPromptOpen, setSwapPromptOpen] = useState(false);
+  const [swapNotes, setSwapNotes] = useState("");
   const [reverseOpen, setReverseOpen] = useState(false);
   const [reverseTxn, setReverseTxn] = useState<DisputeCaseTransaction | null>(null);
   const [reverseAmount, setReverseAmount] = useState("");
@@ -586,14 +589,6 @@ export default function ModeratorDisputeDetailModal({
     }
   };
 
-  const openSettle = () => {
-    const remaining = Number(detail?.dispute?.creditAmount || 0);
-    setSettleClientCredits(String(remaining));
-    setSettleFreelancerCredits("0");
-    setSettleNotes(resolutionNotes || "");
-    setSettleOpen(true);
-  };
-
   const openReverse = (tx: DisputeCaseTransaction) => {
     setReverseTxn(tx);
     setReverseAmount(String(tx.amount || 0));
@@ -621,7 +616,8 @@ export default function ModeratorDisputeDetailModal({
         resolutionNotes: settleNotes.trim(),
       });
       showSuccessToast("Escrow settled and dispute closed");
-      setSettleOpen(false);
+      setResolvePromptOpen(false);
+      setResolveMode("choose");
       await load();
       onUpdated();
     } catch (err: unknown) {
@@ -832,8 +828,26 @@ export default function ModeratorDisputeDetailModal({
     }
     const ok = await runAction({ action: "convict", reason }, "Permanent ban applied");
     if (!ok) return;
-    setBanPromptOpen(false);
+    setResolvePromptOpen(false);
+    setResolveMode("choose");
     setBanReason("");
+  };
+
+  const confirmDismiss = async () => {
+    const ok = await runAction({ action: "dismiss" }, "Dispute dismissed");
+    if (!ok) return;
+    setResolvePromptOpen(false);
+    setResolveMode("choose");
+  };
+
+  const confirmSwapParties = async () => {
+    const ok = await runAction(
+      { action: "swap_parties", reason: swapNotes.trim() || null },
+      "Disputer and disputee swapped"
+    );
+    if (!ok) return;
+    setSwapPromptOpen(false);
+    setSwapNotes("");
   };
 
   const openReopen = () => {
@@ -863,9 +877,23 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const openResolve = () => {
+    const remaining = Number(detail?.dispute?.creditAmount || 0);
+    setResolveMode("choose");
     setResolveOutcome("");
     setResolveNotes(resolutionNotes || "");
+    setSettleClientCredits(String(remaining));
+    setSettleFreelancerCredits("0");
+    setSettleNotes(resolutionNotes || "");
+    setBanReason("");
     setResolvePromptOpen(true);
+  };
+
+  const closeResolvePrompt = () => {
+    if (saving) return;
+    setResolvePromptOpen(false);
+    setResolveMode("choose");
+    setResolveOutcome("");
+    setBanReason("");
   };
 
   const confirmResolve = async () => {
@@ -885,6 +913,7 @@ export default function ModeratorDisputeDetailModal({
     );
     if (!ok) return;
     setResolvePromptOpen(false);
+    setResolveMode("choose");
     setResolveOutcome("");
   };
 
@@ -894,6 +923,29 @@ export default function ModeratorDisputeDetailModal({
   const canSettle = Boolean(
     dispute && canDecide && !closed && !dispute.financialResolution && Number(dispute.creditAmount || 0) > 0
   );
+  const canDismiss = Boolean(
+    dispute && canDecide && adminMode && !closed && toApiToken(dispute.status) === "pending_review"
+  );
+  const canBan = Boolean(dispute && canDecide && !closed && !banned);
+  const canSwapParties = Boolean(
+    dispute &&
+      canDecide &&
+      !closed &&
+      dispute.initiator?.accountId &&
+      dispute.respondent?.accountId
+  );
+  // Label each side as client or freelancer from the contract the dispute is linked to.
+  const linkedContract =
+    detail?.caseFile?.contracts?.find((item) => item.linked) || detail?.caseFile?.contracts?.[0];
+  const contractRoleOf = (handle?: string | null) => {
+    if (!linkedContract || !handle) return null;
+    const h = handle.toLowerCase();
+    if (linkedContract.clientHandle && linkedContract.clientHandle.toLowerCase() === h) return "Client";
+    if (linkedContract.freelancerHandle && linkedContract.freelancerHandle.toLowerCase() === h) {
+      return "Freelancer";
+    }
+    return null;
+  };
   const resolutionOptions =
     detail?.resolutionOptions && detail.resolutionOptions.length
       ? detail.resolutionOptions
@@ -1494,13 +1546,13 @@ export default function ModeratorDisputeDetailModal({
                     >
                       Save changes
                     </button>
-                    {!closed && (
+                    {!closed && canDecide && (
                       <button
                         type="button"
                         onClick={openResolve}
                         disabled={saving}
                         className={BTN.success}
-                        title="Pick how this dispute ended, then close it"
+                        title="Settle escrow, ban, dismiss, or record how the case ended"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Resolve
@@ -1508,6 +1560,58 @@ export default function ModeratorDisputeDetailModal({
                     )}
                   </div>
                 )}
+              </SidebarSection>
+
+              <SidebarSection title="Parties">
+                {(
+                  [
+                    { label: "Disputer", person: dispute.initiator },
+                    { label: "Disputee", person: dispute.respondent },
+                  ] as const
+                ).map(({ label, person }) => {
+                  const contractRole = contractRoleOf(person.username);
+                  return (
+                    <div key={label} className="flex items-center justify-between gap-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-zinc-500">{label}</p>
+                        <p className="truncate text-white">
+                          {person.name}
+                          {person.username && person.username !== "—" ? (
+                            <span className="text-zinc-500"> @{person.username}</span>
+                          ) : null}
+                        </p>
+                      </div>
+                      {contractRole ? (
+                        <span
+                          className={`shrink-0 rounded border px-1.5 py-px text-[10px] ${
+                            contractRole === "Client"
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                              : "border-sky-500/30 bg-sky-500/10 text-sky-200"
+                          }`}
+                        >
+                          {contractRole}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {canSwapParties ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setSwapNotes("");
+                      setSwapPromptOpen(true);
+                    }}
+                    className={BTN.neutral}
+                    title="Use this when the case was filed by the wrong side"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    Swap disputer and disputee
+                  </button>
+                ) : canDecide && closed ? (
+                  <p className="text-[11px] text-zinc-500">Reopen the case to swap the parties.</p>
+                ) : null}
               </SidebarSection>
 
               {adminMode && (
@@ -1547,67 +1651,21 @@ export default function ModeratorDisputeDetailModal({
                 </SidebarSection>
               )}
 
-              {canDecide && (
-                <SidebarSection title="Decision">
-                  {canSettle && (
-                    <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-                      <p className="text-xs text-amber-100">
-                        {dispute.creditAmount.toLocaleString()} credits are frozen in escrow.
-                      </p>
-                      <button type="button" disabled={saving} onClick={openSettle} className={BTN.warn}>
-                        Settle escrow
-                      </button>
-                    </div>
-                  )}
-
-                  {adminMode && toApiToken(dispute.status) === "pending_review" && (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => void runAction({ action: "dismiss" }, "Dispute dismissed")}
-                      className={BTN.neutral}
-                    >
-                      <ShieldAlert className="h-3.5 w-3.5" />
-                      Dismiss dispute
-                    </button>
-                  )}
-
-                  {closed ? (
-                    <>
-                      <p className="text-xs leading-relaxed text-zinc-400">
-                        {banned
-                          ? `Closed with a permanent ban on @${dispute.respondent.username}. Reopening does not lift the ban.`
-                          : "This case is closed. Reopen it to review an appeal."}
-                      </p>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={openReopen}
-                        className={BTN.neutral}
-                      >
-                        Reopen case
-                      </button>
-                    </>
-                  ) : banned ? (
-                    <p className="text-xs leading-relaxed text-zinc-400">
-                      @{dispute.respondent.username} is permanently banned from this dispute until staff lift it on the account.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-xs leading-relaxed text-zinc-400">
-                        If the disputer is right, permanently ban @{dispute.respondent.username}. The reason is posted in
-                        the discussion and the case becomes public.
-                      </p>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => setBanPromptOpen(true)}
-                        className={BTN.danger}
-                      >
-                        Permanent ban
-                      </button>
-                    </>
-                  )}
+              {canDecide && closed && (
+                <SidebarSection title="Case closed">
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    {banned
+                      ? `Closed with a permanent ban on @${dispute.respondent.username}. Reopening does not lift the ban.`
+                      : "This case is closed. Reopen it to review an appeal."}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={openReopen}
+                    className={BTN.neutral}
+                  >
+                    Reopen case
+                  </button>
                 </SidebarSection>
               )}
             </aside>
@@ -1616,81 +1674,263 @@ export default function ModeratorDisputeDetailModal({
           <p className="flex flex-1 items-center justify-center text-zinc-500">Dispute not found.</p>
         )}
 
-        {banPromptOpen && dispute && (
-          <ConfirmDialog
-            title="Permanent ban"
-            description={`This bans @${dispute.respondent.username} permanently, posts the reason in the discussion, and closes the case.`}
-            confirmLabel="Ban permanently"
-            busyLabel="Banning…"
-            busy={saving}
-            confirmDisabled={!banReason.trim()}
-            confirmClassName={BTN.danger}
-            onCancel={() => setBanPromptOpen(false)}
-            onConfirm={() => void confirmBan()}
-          >
-            <label className="block space-y-1 text-[11px] text-zinc-500">
-              <span>Reason</span>
-              <textarea
-                value={banReason}
-                onChange={(event) => setBanReason(event.target.value)}
-                rows={4}
-                required
-                placeholder="Why this ban is being applied"
-                className={`${FIELD} resize-none`}
-              />
-            </label>
-          </ConfirmDialog>
-        )}
-
         {resolvePromptOpen && dispute && (
           <ConfirmDialog
-            title="Resolve this dispute"
-            description="Pick how the case ended. The outcome is recorded on the dispute and posted in the discussion so both sides see why it closed."
-            confirmLabel="Close dispute"
-            busyLabel="Closing…"
-            busy={saving}
-            confirmDisabled={
-              !selectedResolution || (selectedResolution.requiresNote && !resolveNotes.trim())
+            title={
+              resolveMode === "settle"
+                ? "Settle frozen escrow"
+                : resolveMode === "ban"
+                  ? "Permanent ban"
+                  : resolveMode === "dismiss"
+                    ? "Dismiss this dispute"
+                    : resolveMode === "outcome"
+                      ? "Record how this dispute ended"
+                      : "Resolve this dispute"
             }
-            confirmClassName={BTN.success}
-            onCancel={() => setResolvePromptOpen(false)}
-            onConfirm={() => void confirmResolve()}
+            description={
+              resolveMode === "settle" ? (
+                <>
+                  Split up to {Number(dispute.creditAmount || 0).toLocaleString()} remaining escrow
+                  credits. The refund goes to the client and the release goes to the freelancer. This
+                  closes the dispute.
+                </>
+              ) : resolveMode === "ban" ? (
+                <>
+                  This bans @{dispute.respondent.username} permanently, posts the reason in the
+                  discussion, and closes the case.
+                </>
+              ) : resolveMode === "dismiss" ? (
+                <>
+                  Dismiss means the dispute is closed without a money move or a ban. Use this when the
+                  claim should not proceed.
+                </>
+              ) : resolveMode === "outcome" ? (
+                <>
+                  Pick how the case ended. The outcome is recorded on the dispute and posted in the
+                  discussion so both sides see why it closed.
+                </>
+              ) : (
+                <>
+                  Choose how to close this case. Escrow settlement and permanent ban live here — they
+                  are not separate sidebar actions anymore.
+                </>
+              )
+            }
+            confirmLabel={
+              resolveMode === "settle"
+                ? "Settle and close"
+                : resolveMode === "ban"
+                  ? "Ban permanently"
+                  : resolveMode === "dismiss"
+                    ? "Dismiss dispute"
+                    : resolveMode === "outcome"
+                      ? "Close dispute"
+                      : "Continue"
+            }
+            busyLabel={
+              resolveMode === "settle"
+                ? "Settling…"
+                : resolveMode === "ban"
+                  ? "Banning…"
+                  : resolveMode === "dismiss"
+                    ? "Dismissing…"
+                    : resolveMode === "outcome"
+                      ? "Closing…"
+                      : "Working…"
+            }
+            busy={saving}
+            hideConfirm={resolveMode === "choose"}
+            cancelLabel={resolveMode === "choose" ? "Cancel" : "Back"}
+            confirmDisabled={
+              resolveMode === "settle"
+                ? settleNotes.trim().length < 8
+                : resolveMode === "ban"
+                  ? !banReason.trim()
+                  : resolveMode === "outcome"
+                    ? !selectedResolution ||
+                      (Boolean(selectedResolution?.requiresNote) && !resolveNotes.trim())
+                    : false
+            }
+            confirmClassName={
+              resolveMode === "settle"
+                ? BTN.warn
+                : resolveMode === "ban"
+                  ? BTN.danger
+                  : resolveMode === "dismiss"
+                    ? BTN.neutral
+                    : BTN.success
+            }
+            onCancel={
+              resolveMode === "choose"
+                ? closeResolvePrompt
+                : () => setResolveMode("choose")
+            }
+            onConfirm={() => {
+              if (resolveMode === "settle") void confirmSettleEscrow();
+              else if (resolveMode === "ban") void confirmBan();
+              else if (resolveMode === "dismiss") void confirmDismiss();
+              else if (resolveMode === "outcome") void confirmResolve();
+            }}
           >
-            <OutcomePicker
-              options={resolutionOptions}
-              value={resolveOutcome}
-              onChange={setResolveOutcome}
-              disabled={saving}
-              label="How this dispute ended"
-              activeClassName="border-emerald-500/40 bg-emerald-500/15"
-            />
-
-            <label className="block space-y-1 text-[11px] text-zinc-500">
-              <span>
-                Resolution notes
-                {selectedResolution?.requiresNote ? " (required)" : " (optional)"}
-              </span>
-              <textarea
-                value={resolveNotes}
-                onChange={(event) => setResolveNotes(event.target.value)}
-                rows={3}
-                maxLength={2000}
-                placeholder="What happened, in a sentence or two. Both parties can read this."
-                className={`${FIELD} resize-none`}
-              />
-            </label>
-
-            {selectedResolution && (
-              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                <span className="font-semibold text-zinc-300">Posted in the discussion:</span>{" "}
-                {resolutionPreview(selectedResolution.key, dispute, resolveNotes)}
-                {!dispute.visibility ? (
-                  <span className="mt-1 block text-amber-200/80">
-                    This case is private, so the message goes to the disputer and staff only.
-                  </span>
+            {resolveMode === "choose" ? (
+              <div className="space-y-2">
+                {canSettle ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setResolveMode("settle")}
+                    className="w-full rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-3 text-left transition hover:bg-amber-500/15"
+                  >
+                    <p className="text-sm font-medium text-amber-100">Settle escrow</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                      {dispute.creditAmount.toLocaleString()} credits are still frozen. Split them
+                      between client refund and freelancer release, then close.
+                    </p>
+                  </button>
                 ) : null}
+
+                {canBan ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setResolveMode("ban")}
+                    className="w-full rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-3 text-left transition hover:bg-red-500/15"
+                  >
+                    <p className="text-sm font-medium text-red-100">Permanent ban</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-red-100/70">
+                      If the disputer is right, permanently ban @{dispute.respondent.username}. The
+                      reason is posted in the discussion and the case becomes public.
+                    </p>
+                  </button>
+                ) : null}
+
+                {canDismiss ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setResolveMode("dismiss")}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.06]"
+                  >
+                    <p className="text-sm font-medium text-zinc-100">Dismiss dispute</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                      Close without settling money or banning anyone.
+                    </p>
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setResolveMode("outcome")}
+                  className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/15"
+                >
+                  <p className="text-sm font-medium text-emerald-100">Record an outcome</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/70">
+                    Close the case with a written outcome for both parties. Use this when money was
+                    already handled or no escrow split is needed.
+                  </p>
+                </button>
+              </div>
+            ) : null}
+
+            {resolveMode === "outcome" ? (
+              <>
+                <OutcomePicker
+                  options={resolutionOptions}
+                  value={resolveOutcome}
+                  onChange={setResolveOutcome}
+                  disabled={saving}
+                  label="How this dispute ended"
+                  activeClassName="border-emerald-500/40 bg-emerald-500/15"
+                />
+
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>
+                    Resolution notes
+                    {selectedResolution?.requiresNote ? " (required)" : " (optional)"}
+                  </span>
+                  <textarea
+                    value={resolveNotes}
+                    onChange={(event) => setResolveNotes(event.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="What happened, in a sentence or two. Both parties can read this."
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+
+                {selectedResolution ? (
+                  <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                    <span className="font-semibold text-zinc-300">Posted in the discussion:</span>{" "}
+                    {resolutionPreview(selectedResolution.key, dispute, resolveNotes)}
+                    {!dispute.visibility ? (
+                      <span className="mt-1 block text-amber-200/80">
+                        This case is private, so the message goes to the disputer and staff only.
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+
+            {resolveMode === "settle" ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block space-y-1 text-[11px] text-zinc-500">
+                    <span>Client refund</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={settleClientCredits}
+                      onChange={(event) => setSettleClientCredits(event.target.value)}
+                      className={FIELD}
+                    />
+                  </label>
+                  <label className="block space-y-1 text-[11px] text-zinc-500">
+                    <span>Freelancer release</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={settleFreelancerCredits}
+                      onChange={(event) => setSettleFreelancerCredits(event.target.value)}
+                      className={FIELD}
+                    />
+                  </label>
+                </div>
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Resolution notes (at least 8 characters)</span>
+                  <textarea
+                    value={settleNotes}
+                    onChange={(event) => setSettleNotes(event.target.value)}
+                    rows={3}
+                    placeholder="Why this split is correct"
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {resolveMode === "ban" ? (
+              <label className="block space-y-1 text-[11px] text-zinc-500">
+                <span>Reason</span>
+                <textarea
+                  value={banReason}
+                  onChange={(event) => setBanReason(event.target.value)}
+                  rows={4}
+                  required
+                  placeholder="Why this ban is being applied"
+                  className={`${FIELD} resize-none`}
+                />
+              </label>
+            ) : null}
+
+            {resolveMode === "dismiss" ? (
+              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                Confirm dismiss only if the claim should end with no escrow move and no sanction.
               </p>
-            )}
+            ) : null}
           </ConfirmDialog>
         )}
 
@@ -1744,49 +1984,45 @@ export default function ModeratorDisputeDetailModal({
           </ConfirmDialog>
         )}
 
-        {settleOpen && dispute && (
+        {swapPromptOpen && dispute && (
           <ConfirmDialog
-            title="Settle frozen escrow"
-            description={`Split up to ${Number(dispute.creditAmount || 0).toLocaleString()} remaining escrow credits. The refund goes to the client and the release goes to the freelancer. This closes the dispute.`}
-            confirmLabel="Settle and close"
-            busyLabel="Settling…"
+            title="Swap disputer and disputee"
+            description={
+              <>
+                @{dispute.respondent.username} becomes the disputer and @{dispute.initiator.username}{" "}
+                becomes the disputee. Escrow is untouched — it follows the contract, not the parties.
+              </>
+            }
+            confirmLabel="Swap parties"
+            busyLabel="Swapping…"
             busy={saving}
-            confirmDisabled={settleNotes.trim().length < 8}
             confirmClassName={BTN.warn}
-            onCancel={() => setSettleOpen(false)}
-            onConfirm={() => void confirmSettleEscrow()}
+            onCancel={() => {
+              if (saving) return;
+              setSwapPromptOpen(false);
+            }}
+            onConfirm={() => void confirmSwapParties()}
           >
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block space-y-1 text-[11px] text-zinc-500">
-                <span>Client refund</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={settleClientCredits}
-                  onChange={(event) => setSettleClientCredits(event.target.value)}
-                  className={FIELD}
-                />
-              </label>
-              <label className="block space-y-1 text-[11px] text-zinc-500">
-                <span>Freelancer release</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={settleFreelancerCredits}
-                  onChange={(event) => setSettleFreelancerCredits(event.target.value)}
-                  className={FIELD}
-                />
-              </label>
-            </div>
+            <ul className="space-y-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+              <li>
+                Replies shared with only one side stay with that same person; their labels flip to
+                match the new roles.
+              </li>
+              <li>
+                {dispute.visibility
+                  ? "A notice is posted in the public discussion and both parties are notified."
+                  : `This case is private, so only the new disputer (@${dispute.respondent.username}) can see it. @${dispute.initiator.username} loses access until you make it public.`}
+              </li>
+              <li>A permanent ban, if you use one later, targets the new disputee.</li>
+            </ul>
             <label className="block space-y-1 text-[11px] text-zinc-500">
-              <span>Resolution notes (at least 8 characters)</span>
+              <span>Note for the discussion (optional)</span>
               <textarea
-                value={settleNotes}
-                onChange={(event) => setSettleNotes(event.target.value)}
+                value={swapNotes}
+                onChange={(event) => setSwapNotes(event.target.value)}
                 rows={3}
-                placeholder="Why this split is correct"
+                maxLength={2000}
+                placeholder="Why the roles were the wrong way round."
                 className={`${FIELD} resize-none`}
               />
             </label>

@@ -164,11 +164,7 @@ async function postPublicDisputeCommentController(req, res) {
             success: true,
             message: posted?.pendingReview
               ? 'Sent for review. Only you and staff can see it until staff make it public.'
-              : posted?.quotesPrivate
-                ? 'Sent to staff. Replies to a private message stay private.'
-                : posted?.forStaff
-                  ? 'Sent to staff. The other party cannot see this until the dispute is public.'
-                  : 'Comment posted to the discussion.',
+              : 'Sent to staff. Only you and staff can see this until staff make it visible to the other party or the public.',
             data: posted,
         });
     } catch (err) {

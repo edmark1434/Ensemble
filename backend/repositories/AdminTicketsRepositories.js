@@ -29,6 +29,7 @@ const {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  swapDisputePartyLabels,
   createDisputeMessage,
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,
@@ -48,6 +49,7 @@ const {
   buildDisputeResolutionMessage,
   buildDisputeReopenMessage,
   buildDisputeSanctionMessage,
+  buildDisputePartySwapMessage,
 } = require('../lib/DisputeResolutions');
 const {
   ROLE_TO_TICKET_TYPES,
@@ -3739,6 +3741,10 @@ async function updateDispute(disputeId, patch, staffSession) {
     return reopenDispute(disputeId, refreshed, staff, staffSession, actPerms, patch);
   }
 
+  if (action === 'swap_parties') {
+    return swapDisputeParties(disputeId, refreshed, staff, staffSession, actPerms, patch);
+  }
+
   // Generic field updates
   if (!actPerms.canAct) {
     throw new Error('View only — assign yourself to this dispute to make changes.');
@@ -4581,6 +4587,145 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms, patch =
     });
   } catch (err) {
     console.warn('Dispute reopen notice skipped:', err.message);
+  }
+
+  await emitDisputeState(disputeId);
+  return getDisputeDetail(disputeId, staffSession);
+}
+
+/**
+ * Swap the disputer (by_account_id) and disputee (for_account_id) on an open case.
+ *
+ * The Postgres swap and the Mongo relabel commit together: message audiences are stored
+ * as role words, so a half-applied swap would show one person's private notes to the other.
+ * The Mongo write runs inside the open transaction and is undone if the commit fails.
+ */
+async function swapDisputeParties(disputeId, row, staff, staffSession, perms, patch = {}) {
+  if (!perms.canAct) {
+    throw disputeDecisionError('Assign yourself to this dispute before swapping the parties.');
+  }
+  if (String(row.status || '').toLowerCase() === 'closed') {
+    throw disputeDecisionError('Cannot swap the parties on a closed dispute. Reopen it first.');
+  }
+  if (!row.by_account_id || !row.for_account_id) {
+    throw disputeDecisionError('Cannot swap: this dispute needs both a disputer and a disputee.');
+  }
+  const notes = String(patch?.reason || patch?.resolution_notes || '').trim();
+  if (notes.length > 2000) throw disputeDecisionError('The note is too long.');
+
+  const chatId = await getDisputeChatId(disputeId);
+  if (chatId && !isMongoReady()) {
+    const error = new Error(
+      'MongoDB is not connected — the discussion cannot be relabelled, so the parties were not swapped.'
+    );
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const client = await pool.connect();
+  let labelsSwapped = false;
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      `SELECT by_account_id, for_account_id, status
+       FROM disputes
+       WHERE dispute_id = $1 AND deleted_at IS NULL
+       FOR UPDATE`,
+      [disputeId]
+    );
+    const current = locked.rows[0];
+    if (!current) throw disputeDecisionError('Dispute not found.');
+    if (
+      String(current.by_account_id) !== String(row.by_account_id) ||
+      String(current.for_account_id) !== String(row.for_account_id)
+    ) {
+      const error = new Error('The parties on this dispute just changed. Refresh and try again.');
+      error.statusCode = 409;
+      throw error;
+    }
+    if (String(current.status || '').toLowerCase() === 'closed') {
+      throw disputeDecisionError('Cannot swap the parties on a closed dispute. Reopen it first.');
+    }
+
+    // Postgres evaluates every SET expression against the old row, so this is a true swap.
+    await client.query(
+      `UPDATE disputes
+       SET by_account_id = for_account_id,
+           for_account_id = by_account_id,
+           updated_at = NOW()
+       WHERE dispute_id = $1`,
+      [disputeId]
+    );
+    if (chatId) {
+      await swapDisputePartyLabels(chatId);
+      labelsSwapped = true;
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (labelsSwapped) {
+      try {
+        await swapDisputePartyLabels(chatId);
+      } catch (revertErr) {
+        console.error('Dispute party swap: Mongo labels could not be reverted:', revertErr.message);
+      }
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const swapped = await loadDisputeRow(disputeId);
+  const disputer = swapped.initiator_handle
+    ? `@${swapped.initiator_handle}`
+    : swapped.initiator_name || 'The disputer';
+  const disputee = swapped.respondent_handle
+    ? `@${swapped.respondent_handle}`
+    : swapped.respondent_name || 'The disputee';
+
+  try {
+    // A hidden case is readable only by its filer — now the new disputer.
+    await postDisputeDecisionMessage(
+      swapped,
+      staffSession,
+      buildDisputePartySwapMessage({
+        disputer,
+        disputee,
+        notes,
+        disputeNumber: swapped.dispute_number || null,
+      }),
+      { audience: swapped.visibility ? 'public' : 'disputer', notify: false, asSystem: true }
+    );
+  } catch (err) {
+    console.error('Dispute parties swapped without a discussion message:', err.message);
+  }
+
+  for (const accountId of [swapped.by_account_id, swapped.for_account_id]) {
+    await recordAccountActivity({
+      accountId,
+      action: `Dispute ${swapped.dispute_number || disputeId}: disputer and disputee swapped`,
+      eventCode: 'DISPUTE_PARTIES_SWAPPED',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: {
+        disputerAccountId: String(swapped.by_account_id),
+        disputeeAccountId: String(swapped.for_account_id),
+        previousDisputerAccountId: String(row.by_account_id),
+        note: notes || null,
+      },
+    });
+  }
+
+  try {
+    const number = swapped.dispute_number || 'Dispute';
+    await notifyDisputeParties(swapped, {
+      message: `Staff updated dispute ${number}: ${disputer} is now the disputer and ${disputee} is now the disputee.`,
+      path: swapped.visibility ? `/disputes/${disputeId}` : '/contracts/disputes',
+    });
+  } catch (err) {
+    console.warn('Dispute party swap notice skipped:', err.message);
   }
 
   await emitDisputeState(disputeId);

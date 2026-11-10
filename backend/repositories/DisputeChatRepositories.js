@@ -640,6 +640,62 @@ async function updateDisputeMessageAudience(
   return mapped;
 }
 
+const PARTY_LABEL_SWAP = { disputer: 'disputee', disputee: 'disputer' };
+
+function swappedPartyLabelExpr(field) {
+  return {
+    $switch: {
+      branches: Object.entries(PARTY_LABEL_SWAP).map(([from, to]) => ({
+        case: { $eq: [field, from] },
+        then: to,
+      })),
+      default: field,
+    },
+  };
+}
+
+/**
+ * Flip disputer/disputee labels on every message of a dispute chat.
+ *
+ * Audiences and author roles are stored as role words, not account ids. When staff swap
+ * the parties, each message must follow the person it was written for or by — otherwise
+ * a note shared only with the old disputer would show up for the new one. The swap is its
+ * own inverse, so running it twice restores the original labels.
+ * @returns {Promise<number>} messages changed
+ */
+async function swapDisputePartyLabels(chatId) {
+  if (!chatId) return 0;
+  const db = mongoDb();
+  if (!db) throw new Error('MongoDB is not connected — cannot relabel the dispute discussion.');
+  const roles = Object.keys(PARTY_LABEL_SWAP);
+  const result = await db.collection('messages').updateMany(
+    {
+      conversation_id: String(chatId),
+      $or: [
+        { audience: { $in: roles } },
+        { audiences: { $in: roles } },
+        { author_role: { $in: roles } },
+      ],
+    },
+    [
+      {
+        $set: {
+          audience: swappedPartyLabelExpr('$audience'),
+          author_role: swappedPartyLabelExpr('$author_role'),
+          audiences: {
+            $cond: [
+              { $isArray: '$audiences' },
+              { $map: { input: '$audiences', as: 'a', in: swappedPartyLabelExpr('$$a') } },
+              '$audiences',
+            ],
+          },
+        },
+      },
+    ]
+  );
+  return result.modifiedCount || 0;
+}
+
 /**
  * Realtime fan-out for dispute messages written through the shared inbox.
  * Private notes reach only the sender and staff; published ones reach the chat room and public page.
@@ -939,8 +995,8 @@ async function postPublicDisputeComment(
   const profile = account.rows[0] || {};
   const authorName = profile.display_name || profile.handle || 'Member';
   const authorRole = isFiler ? 'disputer' : isRespondent ? 'disputee' : 'community';
-  // Hidden filer notes stay private. Replies from people who are not part of the dispute
-  // are held private to the author and staff until a staff member or admin publishes them.
+  // Disputer/disputee replies stay private to the author and staff by default.
+  // Community replies also stay private until staff publishes them.
   const pendingReview = !isParty;
 
   const chatId = await ensureDisputeChat(disputeId, row);
@@ -951,17 +1007,12 @@ async function postPublicDisputeComment(
     isRespondent,
     visibility: Boolean(row.visibility),
   });
-  // Replying to a message that was never published keeps the reply private too,
-  // so a quote can never drag private context into the public thread.
+  // Party and community replies are staff-private by default. Staff can widen
+  // audience later. Quoting a private message also never leaks into public.
   const quotesPrivate = Boolean(replyTarget && !isPublishedAudience(replyTarget.audience));
-  const forStaff = (!row.visibility && isFiler) || pendingReview || quotesPrivate;
-  const audience = forStaff ? 'author_and_staff' : 'public';
+  const forStaff = true;
+  const audience = 'author_and_staff';
 
-  const notifyAccountIds = forStaff
-    ? []
-    : [row.by_account_id, row.for_account_id].filter(
-        (id) => id && String(id) !== String(accountId)
-      );
   const message = await createDisputeMessage({
     chatId,
     body: text,
@@ -971,24 +1022,22 @@ async function postPublicDisputeComment(
     authorRole,
     audience,
     audiences: [audience],
-    isInternal: forStaff,
-    notifyAccountIds,
+    isInternal: true,
+    notifyAccountIds: [],
     disputeId,
     replyToId: replyTarget ? replyTarget.id : null,
     attachments: files,
   });
   const number = row.dispute_number || 'Dispute';
   if (pendingReview) {
-    // Parties learn nothing about a held comment; the handler gets the review prompt.
     await notifyDisputeHandler(row, {
       message: `A community reply on dispute ${number} is waiting for review.`,
       path: `/disputes/${disputeId}`,
     });
-  } else if (row.visibility) {
-    await notifyDisputeParties(row, {
-      message: `New reply on dispute ${number}.`,
+  } else {
+    await notifyDisputeHandler(row, {
+      message: `New private reply from the ${authorRole} on dispute ${number}.`,
       path: `/disputes/${disputeId}`,
-      excludeAccountId: accountId,
     });
   }
   return {
@@ -1081,6 +1130,7 @@ module.exports = {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  swapDisputePartyLabels,
   getDisputeMessage,
   resolveDisputeReplyTarget,
   normalizeDisputeAttachments,

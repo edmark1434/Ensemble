@@ -50,6 +50,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DetailedContract, MilestoneItem, MilestoneStatus, ContractStatus, CancellationRequest } from "./contracts";
 import { ActiveMilestoneTimerCard } from "./ActiveMilestoneTimerCard";
+import { contractDisputeDetail, contractDisputePath } from "./contractDispute";
 
 export interface ContractTeamMember {
   account_id: string;
@@ -1405,18 +1406,27 @@ export const ContractDetailsPage: React.FC = () => {
                     <div className="border-t border-zinc-100 dark:border-white/5 my-1" />
 
                     {contract.activeDispute ? (
-                      <button
-                        onClick={() => {
-                          setActionsMenuOpen(false);
-                          navigate(contract.activeDispute?.visibility
-                            ? `/disputes/${contract.activeDispute.id}`
-                            : "/contracts/disputes");
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition"
-                      >
-                        <AlertCircle className="w-4 h-4 text-rose-500" />
-                        <span>View active dispute</span>
-                      </button>
+                      contractDisputePath(contract.activeDispute) ? (
+                        <button
+                          onClick={() => {
+                            setActionsMenuOpen(false);
+                            const path = contractDisputePath(contract.activeDispute);
+                            if (path) navigate(path);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition"
+                        >
+                          <AlertCircle className="w-4 h-4 text-rose-500" />
+                          <span>View active dispute</span>
+                        </button>
+                      ) : (
+                        <div
+                          title="The other party already filed a dispute on this contract."
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          <span>Already disputed by the other party</span>
+                        </div>
+                      )
                     ) : (
                       <button
                         onClick={() => {
@@ -1569,24 +1579,23 @@ export const ContractDetailsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-bold text-rose-900 dark:text-rose-100">This contract is under dispute</p>
                     <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
-                      Remaining escrow is frozen. Credits cannot be released or refunded until staff close the case.
-                      {contract.activeDispute.visibility
-                        ? (contract.activeDispute.number
-                          ? ` Dispute ${contract.activeDispute.number} is open to both parties.`
-                          : " This dispute is open to both parties.")
-                        : " You filed this dispute. Add more information for staff until they open it to the other party."}
+                      Remaining escrow is frozen. Credits cannot be released or refunded until staff close the case.{" "}
+                      {contractDisputeDetail(contract.activeDispute)}
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => navigate(contract.activeDispute?.visibility
-                    ? `/disputes/${contract.activeDispute.id}`
-                    : "/contracts/disputes")}
-                  className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
-                >
-                  View dispute
-                </button>
+                {contractDisputePath(contract.activeDispute) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const path = contractDisputePath(contract.activeDispute);
+                      if (path) navigate(path);
+                    }}
+                    className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                  >
+                    View dispute
+                  </button>
+                ) : null}
               </div>
             ) : null}
 

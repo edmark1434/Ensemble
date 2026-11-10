@@ -220,6 +220,27 @@ function buildDisputeReopenMessage(reason, { disputer, disputee, notes, disputeN
   });
 }
 
+/** The notice posted when staff swap who is the disputer and who is the disputee. */
+function buildDisputePartySwapMessage({ disputer, disputee, notes, disputeNumber } = {}) {
+  return buildDisputeRulingMessage(
+    {
+      label: 'Disputer and disputee swapped',
+      finding: ({ disputer: filer, disputee: named }) =>
+        `${filer} is now the disputer and ${named} is now the disputee. Staff found the roles on this case were the wrong way round.`,
+    },
+    {
+      disputer,
+      disputee,
+      notes,
+      disputeNumber,
+      heading: 'Parties swapped',
+      outcomeLabel: 'Change',
+      closing:
+        'The case stays open. Replies that were shared with one side still go to the same person.',
+    }
+  );
+}
+
 function buildDisputeRulingMessage(
   entry,
   { disputer, disputee, notes, disputeNumber, heading, outcomeLabel, closing } = {}
@@ -256,4 +277,5 @@ module.exports = {
   buildDisputeResolutionMessage,
   buildDisputeReopenMessage,
   buildDisputeSanctionMessage,
+  buildDisputePartySwapMessage,
 };

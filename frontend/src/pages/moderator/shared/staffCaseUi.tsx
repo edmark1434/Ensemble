@@ -85,6 +85,8 @@ export function ConfirmDialog({
   busy,
   confirmDisabled,
   confirmClassName,
+  hideConfirm = false,
+  cancelLabel = "Cancel",
   onCancel,
   onConfirm,
 }: {
@@ -96,6 +98,8 @@ export function ConfirmDialog({
   busy: boolean;
   confirmDisabled?: boolean;
   confirmClassName: string;
+  hideConfirm?: boolean;
+  cancelLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -109,16 +113,18 @@ export function ConfirmDialog({
         {children}
         <div className="flex justify-end gap-2">
           <button type="button" disabled={busy} onClick={onCancel} className={BTN.neutral}>
-            Cancel
+            {cancelLabel}
           </button>
-          <button
-            type="button"
-            disabled={busy || confirmDisabled}
-            onClick={onConfirm}
-            className={confirmClassName}
-          >
-            {busy ? busyLabel : confirmLabel}
-          </button>
+          {!hideConfirm ? (
+            <button
+              type="button"
+              disabled={busy || confirmDisabled}
+              onClick={onConfirm}
+              className={confirmClassName}
+            >
+              {busy ? busyLabel : confirmLabel}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
