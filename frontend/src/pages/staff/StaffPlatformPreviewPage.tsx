@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Eye } from "lucide-react";
 import { memberPreviewPath, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
+import { memberPreviewTargetOrigin, memberPreviewUrl } from "@/lib/consoleHosts";
 
 const SECTIONS = [
   { label: "Home", path: "/home" },
@@ -41,7 +42,7 @@ export default function StaffPlatformPreviewPage() {
     }
     frameWindow.postMessage(
       { type: STAFF_PREVIEW_NAV_MESSAGE, path },
-      window.location.origin,
+      memberPreviewTargetOrigin(),
     );
   };
 
@@ -105,7 +106,7 @@ export default function StaffPlatformPreviewPage() {
             key={requestedPath}
             ref={frameRef}
             title="Member platform preview"
-            src={requestedPath}
+            src={memberPreviewUrl(requestedPath)}
             onLoad={(event) => {
               syncShownPath(event.currentTarget);
               const nextPath = pendingPath.current;
@@ -113,7 +114,7 @@ export default function StaffPlatformPreviewPage() {
               pendingPath.current = null;
               event.currentTarget.contentWindow?.postMessage(
                 { type: STAFF_PREVIEW_NAV_MESSAGE, path: nextPath },
-                window.location.origin,
+                memberPreviewTargetOrigin(),
               );
             }}
             className="min-h-0 w-full flex-1 bg-white"

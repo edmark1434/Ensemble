@@ -31,7 +31,21 @@ function marketplaceSpaFallback(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   server: {
-    allowedHosts: ['.trycloudflare.com'],
+    allowedHosts: ['.trycloudflare.com', '.localhost'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
+  preview: {
+    allowedHosts: ['.trycloudflare.com', '.localhost'],
   },
   plugins: [
     marketplaceSpaFallback(),

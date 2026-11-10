@@ -10,7 +10,9 @@
 
 ## Staff consoles
 
-- Admin, moderator, and staff portal pages are registered in `frontend/src/pages/staff/staffPages.ts` with `lazyWithPreload`. Add new console pages there and to the matching console list, not as `lazyPage` entries in `App.tsx`.
+- Admin lives on `admin.ensemble.software` (`admin.localhost:5173` in dev). Staff lives on `staff.ensemble.software` (`staff.localhost:5173`). The main site redirects `/admin` and `/staff` to those hosts. Browser paths omit the prefix (`/dashboard`); route code still uses `/admin` and `/staff`. Moderator desks stay on the main site.
+- Point both console hosts at this same frontend build, and serve `index.html` for their client-side paths. The API allows those origins from `FRONTEND_URL`. Local console hosts call `/api` through the Vite proxy so the session cookie stays on that host.
+- Admin, moderator, and staff portal pages are registered in `frontend/src/pages/staff/staffPages.ts` with `lazyWithPreload`. Add new console pages there and to the matching console list, not as `lazyPage` entries in `App.tsx`. New admin pages also need their first path segment added in `frontend/src/lib/consoleHosts.ts`.
 - Console layouts render `StaffOutlet`. It keeps the sidebar mounted behind a content-area loader and preloads the console's other pages once the browser is idle.
 - Staff page and tab list/overview loads use `staffGet` and seed state from `peekStaffGet` (see `docs/caching.md`). Show the blocking spinner only when nothing is cached; a failed background refetch keeps the shown data. Add new mount-time GETs to `lib/staffPrefetch.ts`.
 

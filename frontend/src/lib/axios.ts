@@ -3,6 +3,7 @@ import { API_BASE_URL } from "./api";
 import useGlobalState from "./global_state";
 import { showErrorToast } from "@/components/utility/toast";
 import { isStaffPreviewFrame } from "./staffPlatformView";
+import { authFailureHref } from "./consoleHosts";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
   "ACCOUNT_DELETED",
@@ -150,7 +151,7 @@ api.interceptors.response.use(
                     return api(originalRequest);
                 }
 
-                window.location.href = '/login';
+                window.location.href = authFailureHref();
                 return Promise.reject(err);
             } catch (refreshError) {
                 return Promise.reject(refreshError);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { memberPreviewPath, STAFF_PREVIEW_NAV_MESSAGE } from '@/lib/staffPlatformView';
+import { memberPreviewTargetOrigin, memberPreviewUrl } from '@/lib/consoleHosts';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -35,7 +36,7 @@ export default function ReportedItemPreviewOverlay({
     setSession((value) => value + 1);
     setReady(false);
     loadedPath.current = null;
-    const timer = window.setTimeout(() => setIframeSrc(openPath.current), 180);
+    const timer = window.setTimeout(() => setIframeSrc(memberPreviewUrl(openPath.current)), 180);
     return () => window.clearTimeout(timer);
   }, [open]);
 
@@ -58,7 +59,7 @@ export default function ReportedItemPreviewOverlay({
     loadedPath.current = safePath;
     frameWindow.postMessage(
       { type: STAFF_PREVIEW_NAV_MESSAGE, path: safePath },
-      window.location.origin
+      memberPreviewTargetOrigin()
     );
   }, [open, ready, safePath, iframeSrc]);
 

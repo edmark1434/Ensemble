@@ -42,3 +42,17 @@
 - **Video Sourcing in Portfolio Modal**: The modal plays the project's rendered `.mp4` video. When a user creates a new project or submits a milestone, they upload/render the `.mp4` deliverable, which is automatically picked up by `ProjectRepositories.js` via `media_assets` or `submit_attachments`.
 - **Timestamp Playback on Profile**: The portfolio displays items via `#t=start,end` on the video player and loops it, ensuring instantaneous playback without requiring server-side re-renders.
 - **Clean Architecture**: Preserved controller $\rightarrow$ service $\rightarrow$ repository separation across Express backend and verified with `npm --prefix frontend run build`.
+
+---
+
+## Also in progress: Admin and staff console hosts
+
+### Objective
+Serve the admin console at `admin.ensemble.software` and the staff portal at `staff.ensemble.software`, instead of `ensemble.software/admin` and `ensemble.software/staff`. Keep the existing `/admin` and `/staff` route modules. Moderator desks stay on the main site.
+
+### Acceptance Criteria
+- [x] `localhost:5173/admin` and `/staff` redirect to `admin.localhost` and `staff.localhost`. On those hosts the address bar omits the prefix.
+- [x] `ensemble.software` / `www.ensemble.software` do the same for `admin.ensemble.software` and `staff.ensemble.software`.
+- [x] API CORS allows the console origins derived from `FRONTEND_URL`.
+- [x] Local console hosts proxy `/api` and `/socket.io` so login cookies stay on that host.
+- [ ] DNS and the production web server still need to point both hosts at this frontend and fall back to `index.html`.

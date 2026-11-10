@@ -2,7 +2,7 @@
 
 ## Runtime components
 
-- The frontend is a React/Vite single-page application served separately from the API.
+- The frontend is a React/Vite single-page application served separately from the API. The same build serves the member site, `admin.ensemble.software`, and `staff.ensemble.software`. See `docs/frontend.md` for the host split.
 - `backend/Server.js` creates one HTTP server shared by Express and Socket.IO.
 - The API is mounted at `/api` through `backend/routes/Api.js` and normally listens on port `4000`.
 - The local frontend normally runs on port `5173`; production origins come from environment configuration.

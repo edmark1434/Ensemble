@@ -10,7 +10,7 @@
 ## Authentication and authorization
 
 - Authentication alone is not authorization. Verify ownership, membership, role, and resource access in backend middleware/services.
-- Use secure, HTTP-only cookies where established and keep CORS origins explicit with credentials enabled only for trusted origins.
+- Use secure, HTTP-only cookies where established and keep CORS origins explicit with credentials enabled only for trusted origins. Admin and staff console origins are added from `FRONTEND_URL` (`admin.` / `staff.` on `ensemble.software`, and `admin.localhost` / `staff.localhost` in development). Do not replace that list with a wildcard.
 - OAuth `state` must be unpredictable, signed/verified, short-lived, and bound to the initiating user/session.
 - OAuth redirect URIs must exactly match provider configuration.
 

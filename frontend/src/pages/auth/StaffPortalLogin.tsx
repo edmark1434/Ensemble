@@ -1,14 +1,11 @@
-import { useEffect, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Eye, EyeOff, Gem, Lock, Mail, Shield } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
 import { API_BASE_URL } from '@/lib/api';
-import {
-  ADMIN_LOGIN_PATH,
-  STAFF_LOGIN_PATH,
-  getStaffHomePath,
-} from '@/lib/staffRoutes';
+import { getStaffHomePath } from '@/lib/staffRoutes';
+import { consoleEntryUrl, mainSiteOrigin } from '@/lib/consoleHosts';
 import {
   AccountRestrictionCard,
   standingFromPayload,
@@ -24,7 +21,6 @@ type PortalConfig = {
   allowedRole: 'Admin' | 'moderator';
   redirectPath: (role?: string | null) => string;
   alternateLabel: string;
-  alternatePath: string;
   accent: string;
   accentMuted: string;
   glow: string;
@@ -38,7 +34,6 @@ const PORTAL_CONFIG: Record<PortalKind, PortalConfig> = {
     allowedRole: 'Admin',
     redirectPath: () => getStaffHomePath('Admin'),
     alternateLabel: 'Moderator or support staff?',
-    alternatePath: STAFF_LOGIN_PATH,
     accent: '#f87171',
     accentMuted: 'rgba(248, 113, 113, 0.15)',
     glow: 'rgba(239, 68, 68, 0.22)',
@@ -50,12 +45,28 @@ const PORTAL_CONFIG: Record<PortalKind, PortalConfig> = {
     allowedRole: 'moderator',
     redirectPath: (role) => getStaffHomePath(role),
     alternateLabel: 'Administrator?',
-    alternatePath: ADMIN_LOGIN_PATH,
     accent: '#34d399',
     accentMuted: 'rgba(52, 211, 153, 0.15)',
     glow: 'rgba(16, 185, 129, 0.2)',
   },
 };
+
+function PortalLink({
+  href,
+  className,
+  style,
+  children,
+}: {
+  href: string;
+  className?: string;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  if (href.startsWith('http://') || href.startsWith('https://')) {
+    return <a href={href} className={className} style={style}>{children}</a>;
+  }
+  return <Link to={href} className={className} style={style}>{children}</Link>;
+}
 
 function normalizeCredentials(credentials: Record<string, unknown>) {
   return {
@@ -177,6 +188,8 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
   };
 
   const PortalIcon = portal === 'admin' ? Shield : Gem;
+  const alternateHref = consoleEntryUrl(portal === 'admin' ? 'staff' : 'admin');
+  const memberHome = mainSiteOrigin();
 
   return (
     <div
@@ -291,20 +304,20 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
 
           <p className="mt-6 text-center text-sm text-zinc-500">
             {config.alternateLabel}{' '}
-            <Link
-              to={config.alternatePath}
+            <PortalLink
+              href={alternateHref}
               className="font-medium transition hover:text-white"
               style={{ color: config.accent }}
             >
               Sign in here
-            </Link>
+            </PortalLink>
           </p>
         </div>
 
         <p className="mt-6 text-center text-xs text-zinc-600">
-          <Link to="/" className="transition hover:text-zinc-400">
+          <PortalLink href={memberHome === window.location.origin ? '/' : `${memberHome}/`} className="transition hover:text-zinc-400">
             ← Back to Ensemble
-          </Link>
+          </PortalLink>
         </p>
       </div>
     </div>

@@ -7,6 +7,7 @@ import socket from '@/lib/socket';
 import api from '@/lib/axios';
 import { showSuccessToast } from '@/components/utility/toast';
 import { SwipeToast } from '@/components/ui/SwipeToast';
+import { isConsoleLoginPath } from '@/lib/consoleHosts';
 
 export type AccountViolation = {
   type?: string | null;
@@ -355,7 +356,7 @@ export function AccountRestrictionHost() {
       if (!standing) return;
       if (standing.suspended || standing.code === 'ACCOUNT_SUSPENDED' || String(standing.status || '').toLowerCase() === 'suspended') return;
       const path = window.location.pathname;
-      if (path === '/login' || path === '/admin' || path === '/staff') return;
+      if (isConsoleLoginPath(path)) return;
       setBlocked(standing);
     };
     window.addEventListener('ensemble:account-restricted', onRestricted);
@@ -431,7 +432,7 @@ export function AccountRestrictionHost() {
         violations: payload?.restriction?.violations || payload?.violations || [],
       };
       const path = window.location.pathname;
-      if (path === '/login' || path === '/admin' || path === '/staff') return;
+      if (isConsoleLoginPath(path)) return;
       setBlocked(standing);
       useGlobalState.getState().setIsAuthenticated(false);
       window.dispatchEvent(new CustomEvent('ensemble:account-restricted', { detail: payload }));
