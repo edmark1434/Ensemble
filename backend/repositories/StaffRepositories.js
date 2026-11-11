@@ -171,7 +171,7 @@ async function getStaffByUsername(username){
 async function getStaffEmailAndPasswordHashByEmail(email){
     try{
         const result = await pool.query(
-            "SELECT STAFF.staff_id, STAFF.email_address, STAFF.password_hash, ACCOUNTS.account_id, ACCOUNTS.handle, ACCOUNTS.type, STAFF.role FROM STAFF JOIN ACCOUNTS ON STAFF.account_id = ACCOUNTS.account_id WHERE STAFF.email_address = $1",
+            "SELECT STAFF.staff_id, STAFF.email_address, STAFF.password_hash, ACCOUNTS.account_id, ACCOUNTS.handle, ACCOUNTS.type, STAFF.role FROM STAFF JOIN ACCOUNTS ON STAFF.account_id = ACCOUNTS.account_id WHERE LOWER(STAFF.email_address) = LOWER($1)",
             [email]
         );
         return result.rows[0];
@@ -183,7 +183,7 @@ async function getStaffEmailAndPasswordHashByEmail(email){
 async function getStaffEmailAndPasswordHashByUsername(username){
     try{
         const result = await pool.query(
-            "SELECT STAFF.staff_id, STAFF.email_address, STAFF.password_hash, ACCOUNTS.account_id, ACCOUNTS.handle, ACCOUNTS.type, STAFF.role FROM STAFF JOIN ACCOUNTS ON STAFF.account_id = ACCOUNTS.account_id WHERE ACCOUNTS.handle = $1",
+            "SELECT STAFF.staff_id, STAFF.email_address, STAFF.password_hash, ACCOUNTS.account_id, ACCOUNTS.handle, ACCOUNTS.type, STAFF.role FROM STAFF JOIN ACCOUNTS ON STAFF.account_id = ACCOUNTS.account_id WHERE LOWER(ACCOUNTS.handle) = LOWER($1)",
             [username]
         );
         return result.rows[0];

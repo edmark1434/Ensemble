@@ -1,4 +1,20 @@
-# Active Task: One dispute per contract + staff party swap
+# Active Task: IP + Canonical Account Scoped Login Lockout
+
+## Implementation Objective
+
+Fix the login lockout mechanism so failed login attempts and lockouts are scoped by `(Client IP + Canonical Account / Identifier)` rather than globally by the input string alone. This prevents an attacker who knows a user's username or email from locking out the legitimate account owner on another IP, and prevents an attacker on the same IP from getting extra attempts by alternating between username and email.
+
+## Acceptance Criteria
+
+- [x] Failed login attempts and lockout keys in Redis are scoped by normalized client IP (`normalizeLockoutIp`) and canonical target (`acc:<account_id>` for existing accounts, `raw:<identifier>` for unknown identifiers).
+- [x] Case-insensitive username and email lookups in `UserRepositories` and `StaffRepositories` resolve consistently to the canonical account.
+- [x] Attacker exceeding max attempts from IP A is locked out on IP A for both username and email of that account.
+- [x] Legitimate user logging in from IP B is unaffected when IP A is locked out.
+- [x] Successful login clears attempt and lockout keys for that IP + account target.
+
+---
+
+# Task History: One dispute per contract + staff party swap
 
 ## Implementation Objective
 
