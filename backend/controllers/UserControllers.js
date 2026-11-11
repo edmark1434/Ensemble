@@ -182,7 +182,7 @@ async function loginCredentials(req, res) {
     const { loginIdentifier, email, username, password, twoFactorCode, recoveryCode, twoFactorPendingToken } = req.body;
     const resolvedIdentifier = loginIdentifier ?? email ?? username;
     const requestContext = {
-        ip: req.ip,
+        ip: req.ip || req.socket?.remoteAddress || 'unknown',
         userAgent: req.get('user-agent') || 'unknown',
     };
 

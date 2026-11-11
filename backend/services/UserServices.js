@@ -82,6 +82,16 @@ function detectDeviceType(userAgent = '') {
     return 'desktop';
 }
 
+function normalizeLockoutIp(ip) {
+    return (
+        String(ip || 'unknown')
+            .trim()
+            .replace(/^::ffff:/i, '')
+            .replace(/[^a-fA-F0-9:._-]/g, '_')
+            .slice(0, 80) || 'unknown'
+    );
+}
+
 //function to validate email format using a regular expression
 function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -331,51 +341,32 @@ async function registerUser(signupPayload = {}, options = {}) {
 
 //function to handle user login by validating the provided login identifier (email or username) and password, checking for account lockout due to failed attempts, verifying credentials, and returning the user credentials if successful or throwing appropriate ServiceErrors for various failure cases
 async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
-    let credentialsSession = null;
-    if (isValidEmail(loginIdentifier)) { 
-        credentialsSession = await getEmailandPasswordHashByEmail(loginIdentifier.toLowerCase());
-    } else {
-        credentialsSession = await getEmailandPasswordHashByUsername(loginIdentifier);
-    }
-    if (!credentialsSession && isValidEmail(loginIdentifier)) { 
-        const credentialsInSession = await redisClient.get(`sessionCredentials:${loginIdentifier.toLowerCase()}`);
-        if (credentialsInSession) {
-            credentialsSession = JSON.parse(credentialsInSession);
-            if (credentialsSession.passwordHash && loginIdentifier.toLowerCase() === credentialsSession.email.toLowerCase() && await bcrypt.compare(password, credentialsSession.passwordHash)) {
-                const verifyCodeSession = await redisClient.get(`verificationCode:${credentialsSession.email}`);
-                if (!verifyCodeSession) {
-                    const verificationCode = await sendVerificationEmail(credentialsSession.email, credentialsSession.firstName, credentialsSession.lastName);
-                    await redisClient.set(`verificationCode:${credentialsSession.email}`, verificationCode, { EX: 10 * 60 });
-                }
-                return {
-                    email: credentialsSession.email,
-                    firstName: credentialsSession.firstName,
-                    lastName: credentialsSession.lastName,
-                    username: credentialsSession.username,
-                    existSession: true,
-                };
-            }
-        }
-    }
-        
     //trim the login identifier and validate that both the identifier and password are provided, throwing a ServiceError if not
     const loginIdentifierTrimmed = loginIdentifier?.trim();
     const lockoutIdentifier = loginIdentifierTrimmed?.toLowerCase();
     const sourceIp = context.ip || 'unknown';
+    const clientIp = normalizeLockoutIp(sourceIp);
     const sourceUserAgent = context.userAgent || 'unknown';
     const sourceDevice = detectDeviceType(sourceUserAgent);
     if (!loginIdentifierTrimmed || !password) {
         throw new ServiceError('Login identifier and password are required', 400);
     }
 
-    const attemptsKey = `attempts:${lockoutIdentifier}`;
-    const lockoutKey = `lockout:${lockoutIdentifier}`;
-    const lockoutMetaKey = `lockout_meta:${lockoutIdentifier}`;
     const { maxAttempts: MAX_ATTEMPTS, lockoutDurationMs: LOCKOUT_DURATION } =
         await getLoginLockoutPolicy();
 
     // Get credentials if the login identifier is an email, fetch by email, otherwise fetch by username. This allows users to log in using either their email address or their account handle (username). The repository functions will return the email and password hash for the provided identifier, which will be used for credential verification. If no credentials are found, it will be handled in the subsequent logic to throw an invalid credentials error.
     const credentials = await getCredentials(lockoutIdentifier);
+
+    // Scope failed login attempts and lockouts by (Client IP + Canonical Account / Identifier)
+    // so an attacker knowing a username/email cannot lock out the legitimate account owner on another IP,
+    // and an attacker on the same IP cannot get double attempts by switching between username and email.
+    const lockoutTarget = credentials?.account_id
+        ? `acc:${credentials.account_id}`
+        : `raw:${lockoutIdentifier}`;
+    const attemptsKey = `attempts:${clientIp}:${lockoutTarget}`;
+    const lockoutKey = `lockout:${clientIp}:${lockoutTarget}`;
+    const lockoutMetaKey = `lockout_meta:${clientIp}:${lockoutTarget}`;
 
     // Check lockout
     const ttl = await redisClient.pTTL(lockoutKey);
@@ -399,6 +390,31 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
             }
         );
     }
+
+    if (!credentials && isValidEmail(loginIdentifierTrimmed)) {
+        const credentialsInSession = await redisClient.get(`sessionCredentials:${lockoutIdentifier}`);
+        if (credentialsInSession) {
+            const credentialsSession = JSON.parse(credentialsInSession);
+            if (credentialsSession.passwordHash && lockoutIdentifier === credentialsSession.email?.toLowerCase() && await bcrypt.compare(password, credentialsSession.passwordHash)) {
+                const verifyCodeSession = await redisClient.get(`verificationCode:${credentialsSession.email}`);
+                if (!verifyCodeSession) {
+                    const verificationCode = await sendVerificationEmail(credentialsSession.email, credentialsSession.firstName, credentialsSession.lastName);
+                    await redisClient.set(`verificationCode:${credentialsSession.email}`, verificationCode, { EX: 10 * 60 });
+                }
+                await redisClient.del(attemptsKey);
+                await redisClient.del(lockoutKey);
+                await redisClient.del(lockoutMetaKey);
+                return {
+                    email: credentialsSession.email,
+                    firstName: credentialsSession.firstName,
+                    lastName: credentialsSession.lastName,
+                    username: credentialsSession.username,
+                    existSession: true,
+                };
+            }
+        }
+    }
+
     // If no credentials are found or if the password hash is missing (which could indicate an issue with the user record), throw an invalid credentials error. This prevents further processing and ensures that only valid login attempts proceed to password verification.
     if (!credentials || !credentials.password_hash) {
         let attempts = await redisClient.incr(attemptsKey);
@@ -478,6 +494,7 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
     }
 
     await redisClient.del(attemptsKey);
+    await redisClient.del(lockoutKey);
     await redisClient.del(lockoutMetaKey);
     return credentials;
 }
