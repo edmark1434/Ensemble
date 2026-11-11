@@ -50,6 +50,7 @@ export async function canUploadToProject(userId: string, projectId: string) {
     .innerJoin("projects as project", "project.project_id", "member.project_id")
     .where("member.user_id", "=", userId).where("member.project_id", "=", projectId)
     .where("member.deleted_at", "is", null).where("project.deleted_at", "is", null)
+    .where("project.trashed_at", "is", null)
     .where("member.role", "in", ["Owner", "Manager", "Editor"])
     .select("member.user_id").executeTakeFirst();
 }

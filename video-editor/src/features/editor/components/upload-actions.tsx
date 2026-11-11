@@ -29,15 +29,17 @@ export function UploadActions({ item, permanent = false }: { item: Upload; perma
   const update = async (action: "delete" | "restore") => {
     if (pending) return;
     setPending(true);
+    const toastId = toast.info(action === "restore" ? "Restoring upload…" : "Moving upload to Trash…");
     try {
       if (action === "restore") await axios.patch(`/api/media-assets/${item.id}`, { action: "restore" });
       else await axios.delete(`/api/media-assets/${item.id}${permanent ? "?permanent=true" : ""}`);
+      toast.success(action === "restore" ? "Upload restored" : "Upload moved to Trash", { id: toastId });
       await Promise.all([
         client.invalidateQueries({ queryKey: ["media-assets"] }),
         client.invalidateQueries({ queryKey: ["media-storage-usage"] }),
         client.invalidateQueries({ queryKey: ["upload-availability"] }),
       ]);
-    } catch { toast.error(`Unable to ${action} this upload. Please try again.`); }
+    } catch { toast.error(`Unable to ${action} this upload. Please try again.`, { id: toastId }); }
     finally { setPending(false); }
   };
   return <div onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>

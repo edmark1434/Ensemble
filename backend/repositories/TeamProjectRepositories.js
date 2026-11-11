@@ -2466,7 +2466,7 @@ async function getWorkspaceProjects(teamId) {
         OR p.project_id = tcw.project_id 
         OR (j.existing_project_id IS NOT NULL AND p.project_id = j.existing_project_id)
         OR (gr.linked_project_id IS NOT NULL AND p.project_id = gr.linked_project_id)
-      ) AND p.deleted_at IS NULL
+      ) AND p.deleted_at IS NULL AND p.trashed_at IS NULL
       LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id
       LEFT JOIN accounts link_acc ON link_acc.account_id = twp.linked_by_account_id
      WHERE tcw.team_id = $1
@@ -2571,7 +2571,7 @@ async function linkWorkspaceProject(teamId, viewerAccountId, projectId) {
   const workspaceId = wsRes.rows[0].workspace_id;
 
   const projCheck = await pool.query(`
-    SELECT project_id, name FROM projects WHERE project_id = $1 AND deleted_at IS NULL
+    SELECT project_id, name FROM projects WHERE project_id = $1 AND deleted_at IS NULL AND trashed_at IS NULL
   `, [projectId]);
 
   if (projCheck.rows.length === 0) {
@@ -2666,6 +2666,7 @@ async function getAvailableProjectsForLinking(teamId, viewerAccountId) {
       LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id AND tf.deleted_at IS NULL
      WHERE pm.user_id = $1
        AND p.deleted_at IS NULL
+       AND p.trashed_at IS NULL
        AND pm.deleted_at IS NULL
        AND p.project_id NOT IN (
          SELECT COALESCE(twp.project_id, '00000000-0000-0000-0000-000000000000'::uuid)

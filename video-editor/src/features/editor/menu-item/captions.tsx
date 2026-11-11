@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -97,8 +98,10 @@ const PaidCaptions = () => {
   };
 
   const createCaptions = async (selectedMedia: string) => {
+    if (isGenerating) return;
     setGeneratingMedia(selectedMedia);
     setErrorMessage(null);
+    const toastId = toast.info("Caption generation started");
     try {
       const trackItem = mediaTrackItems.find(
         (m) => m.details.src === selectedMedia
@@ -111,6 +114,7 @@ const PaidCaptions = () => {
       const transcribeData = await transcribeMedia(selectedMedia, "ES");
       if (!transcribeData) {
         setErrorMessage("No speech was detected in this media.");
+        toast.info("No speech was detected in this media.", { id: toastId });
         return;
       }
 
@@ -141,6 +145,10 @@ const PaidCaptions = () => {
         options
       );
 
+      if (!captions.length) {
+        toast.info("No speech was detected in this media.", { id: toastId });
+        return;
+      }
       dispatch(ADD_ITEMS, {
         payload: {
           trackItems: captions,
@@ -154,9 +162,11 @@ const PaidCaptions = () => {
           ]
         }
       });
+      toast.success("Caption generation finished", { id: toastId });
     } catch (error: any) {
       console.error("Error generating captions:", error);
       setErrorMessage(error.message || "Failed to generate captions.");
+      toast.error(error.message || "Failed to generate captions.", { id: toastId });
     } finally {
       setGeneratingMedia(undefined);
     }

@@ -48,6 +48,7 @@ import useUpdateAnsestors from "../hooks/use-update-ansestors";
 import { ITimelineScaleState, ITrackItem } from "@designcombo/types";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
+import { seekTimelineToFrame } from "../utils/timeline-scroll";
 import { timeMsToUnits } from "@designcombo/timeline";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
@@ -71,6 +72,7 @@ import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { startComment } from "@/features/editor/comments/start-comment";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
+import commentColors from "@/features/editor/comments/comment-colors.module.css";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 
 const IconAddMarker = ({ size }: { size: number }) => (
@@ -171,7 +173,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
   // same behavior as clicking a comment marker in the ruler
   const openActiveComment = () => {
     if (!activeCommentThread || activeCommentThread.timeMs == null) return;
-    playerRef?.current?.seekTo(Math.round((activeCommentThread.timeMs * fps) / 1000));
+    seekTimelineToFrame((activeCommentThread.timeMs * fps) / 1000, timelineOffsetX);
     setFocusedCommentId(activeCommentThread.id);
     setActiveRightItem("comments");
   };
@@ -906,7 +908,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                     </TooltipTrigger>
                     <TooltipContent
                       side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                      className={"flex gap-2 items-center"}
+                      className={cn("flex gap-2 items-center", commentColors.tooltip)}
                     >
                       {isCommentActive ? "Open comments" : <>Add comment <Kbd>C</Kbd></>}
                     </TooltipContent>

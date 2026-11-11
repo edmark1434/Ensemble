@@ -35,8 +35,7 @@ Read this file before changing the repository. Load only the relevant document u
 
 ## Verification
 
-- Frontend: `cd frontend && npm run build`
-- Backend: no complete automated test command currently exists. Run focused scripts/checks and start the server when safe.
-- Database: inspect migration status and test new migrations against a non-production database.
+- User preference: do not run builds, type checks, lint, or other verification commands unless explicitly requested. The user handles verification with `pnpm typecheck`.
+- Keep changes focused and stop once the requested fix is applied; do not start extra verification work. This preference overrides automatic verification instructions in `docs/`.
 
 Document the current implementation objective and acceptance criteria in `tasks/current-task.md`; clear or replace it when the task changes.

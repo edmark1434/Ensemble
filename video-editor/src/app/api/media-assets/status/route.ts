@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { db } from "@/lib/db";
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     )
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     const member = await db
-      .selectFrom("project_members")
+      .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
       .innerJoin("projects", "projects.project_id", "project_members.project_id")
       .select("projects.project_id")
       .where("projects.project_id", "=", projectId)

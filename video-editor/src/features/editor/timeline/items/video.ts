@@ -1,4 +1,5 @@
 import { drawMissingMedia } from "./missing-media";
+import { getStickyLabelOffset } from "./sticky-label";
 import { isMissingMediaSource } from "../../utils/missing-media";
 import {
   Control,
@@ -505,7 +506,7 @@ class Video extends Trimmable {
 
     const iconCount =
       (isLoading ? 1 : 0) + (this.hidden ? 1 : 0) + (this.volume === 0 ? 1 : 0);
-    const textX = 12 + iconCount * 24;
+    const textX = getStickyLabelOffset(this) + 12 + iconCount * 24;
 
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
@@ -544,7 +545,7 @@ class Video extends Trimmable {
       ctx.restore();
     }
 
-    let iconX = 12;
+    let iconX = getStickyLabelOffset(this) + 12;
 
     if (isLoading) {
       ctx.save();

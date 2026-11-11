@@ -1,4 +1,4 @@
-const { getProjectsForUser } = require('../repositories/ProjectRepositories');
+const { listProjects, changeProjectTrashState } = require('../services/ProjectServices');
 
 function formatBytes(bytes) {
     if (bytes === 0 || !bytes) return '0 Bytes';
@@ -19,7 +19,7 @@ function buildCloudfrontUrl(path) {
 async function getProjectsController(req, res) {
     try {
         const userId = req.user.userId || req.user.user_id;
-        const projects = await getProjectsForUser(userId);
+        const projects = await listProjects(userId, req.query.scope);
         
         return res.status(200).json({
             success: true,
@@ -27,6 +27,8 @@ async function getProjectsController(req, res) {
                 id: p.id,
                 name: p.name,
                 status: p.status,
+                trashedAt: p.trashedAt,
+                expiresAt: p.expiresAt,
                 width: p.width,
                 height: p.height,
                 duration_seconds: Number(p.duration_seconds) || 60,
@@ -43,6 +45,7 @@ async function getProjectsController(req, res) {
             }))
         });
     } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
         console.error('Error in getProjectsController:', error);
         return res.status(500).json({
             success: false,
@@ -55,10 +58,26 @@ async function deleteProjectController(req, res) {
     try {
         const userId = req.user.userId || req.user.user_id;
         const { id } = req.params;
-        await require('../repositories/ProjectRepositories').softDeleteProject(id, userId);
-        return res.status(200).json({ success: true, message: 'Project deleted successfully' });
+        if (req.query.permanent !== undefined && req.query.permanent !== 'true') {
+            return res.status(400).json({ success: false, message: 'Invalid permanent deletion option' });
+        }
+        const permanent = req.query.permanent === 'true';
+        await changeProjectTrashState(id, userId, permanent ? 'permanent' : 'trash');
+        return res.status(200).json({ success: true, message: permanent ? 'Project permanently deleted' : 'Project moved to Trash' });
     } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
         console.error('Error in deleteProjectController:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+}
+
+async function restoreProjectController(req, res) {
+    try {
+        await changeProjectTrashState(req.params.id, req.user.userId || req.user.user_id, 'restore');
+        return res.json({ success: true, message: 'Project restored' });
+    } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+        console.error('Error in restoreProjectController:', error);
         return res.status(500).json({ success: false, message: 'Internal server error' });
     }
 }
@@ -105,5 +124,6 @@ async function renameProjectController(req, res) {
 module.exports = {
     getProjectsController,
     deleteProjectController,
+    restoreProjectController,
     renameProjectController
 };

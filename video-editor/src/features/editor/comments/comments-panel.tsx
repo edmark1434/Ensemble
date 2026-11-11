@@ -35,6 +35,8 @@ import { COMMENT_MAX_IMAGES, COMMENT_MAX_IMAGE_BYTES } from "@/features/editor/c
 import useStore from "../store/use-store";
 import useLayoutStore from "../store/use-layout-store";
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
+import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
+import { seekTimelineToFrame } from "../utils/timeline-scroll";
 import { millisecondsToHHMMSS } from "../utils/format";
 import {
   useCommentsStore,
@@ -85,7 +87,8 @@ function useNow(intervalMs = 30_000) {
 export function usePlayheadControls() {
   const playerRef = useStore((s) => s.playerRef);
   const fps = useStore((s) => s.fps);
-  const seek = (ms: number) => playerRef?.current?.seekTo(Math.round((ms * fps) / 1000));
+  const timelineOffsetX = useTimelineOffsetX();
+  const seek = (ms: number) => seekTimelineToFrame((ms * fps) / 1000, timelineOffsetX);
   const currentMs = () => {
     const f = playerRef?.current?.getCurrentFrame?.();
     return f == null ? undefined : Math.round((f / fps) * 1000);
@@ -110,7 +113,7 @@ export function Tip({
         side="bottom"
         align="center"
         sideOffset={1}
-        className={cn("z-[260]", shortcut && "flex items-center gap-2")}
+        className={cn("z-[260]", commentColors.tooltip, shortcut && "flex items-center gap-2")}
       >
         {label}
         {shortcut && (
@@ -155,7 +158,7 @@ function OptionMenu<T extends string>({
           </Button>
         </PopoverTrigger>
       </Tip>
-      <PopoverContent align="end" className="z-[300] w-44 p-0">
+      <PopoverContent align="end" className={cn("z-[300] w-44 p-0", commentColors.theme)}>
         <p className="px-3 pb-1 pt-2 text-xs text-muted-foreground">{title}</p>
         {options.map((o) => (
           <div
@@ -164,10 +167,13 @@ function OptionMenu<T extends string>({
               onChange(o.value);
               setOpen(false);
             }}
-            className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+            className={cn(
+              "flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-primary/10 hover:text-primary",
+              o.value === value ? "bg-primary/10 text-primary" : "text-foreground",
+            )}
           >
             {o.label}
-            {o.value === value && <Check size={14} className="shrink-0 text-muted-foreground" />}
+            {o.value === value && <Check size={14} className="shrink-0 text-primary" />}
           </div>
         ))}
       </PopoverContent>
@@ -826,7 +832,7 @@ export function Composer({
         </PopoverTrigger>
 
         <PopoverContent
-          className="z-[300] p-0"
+          className={cn("z-[300] p-0", commentColors.theme)}
           style={{ width: "var(--radix-popover-trigger-width)" }}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
@@ -838,8 +844,8 @@ export function Composer({
               onMouseEnter={() => setActiveIdx(i)}
               onClick={() => apply(item)}
               className={cn(
-                "flex cursor-pointer items-center gap-3 px-3 py-2 text-zinc-200",
-                i === activeIdx && "bg-zinc-800/50",
+                "flex cursor-pointer items-center gap-3 px-3 py-2 text-foreground",
+                i === activeIdx && "bg-primary/10 text-primary",
               )}
             >
               {item.kind === "time" ? (
@@ -1004,7 +1010,7 @@ export function Entry({
               </PopoverTrigger>
               <PopoverContent
                 align="end"
-                className="z-[300] w-32 p-0"
+                className={cn("z-[300] w-32 p-0", commentColors.theme)}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div
@@ -1236,7 +1242,7 @@ export function CommentsPanel() {
   useEffect(() => () => setFocusedId(null), [setFocusedId]);
 
   return (
-    <div className="w-full flex-none">
+    <div className={cn("w-full flex-none", commentColors.theme)}>
       <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
         <ScrollArea className="h-full">
           <div className="m-0 flex min-w-0 flex-col gap-6 border-0 p-4">

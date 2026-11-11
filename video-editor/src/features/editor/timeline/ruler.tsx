@@ -16,6 +16,7 @@ import { useCommentMarkers } from "@/features/editor/comments/use-comment-marker
 import commentColors from "@/features/editor/comments/comment-colors.module.css";
 import { commentPreview } from "@/features/editor/comments/comments-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { seekTimelineToFrame } from "../utils/timeline-scroll";
 
 export const RULER_HEIGHT = 32;
 export const MARKER_WIDTH = 12;
@@ -57,7 +58,7 @@ const Ruler = (props: RulerProps) => {
     onScroll,
   } = props;
 
-  const { scale, markers, playerRef, fps } = useStore();
+  const { scale, markers, fps } = useStore();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasContext, setCanvasContext] =
@@ -456,7 +457,7 @@ const Ruler = (props: RulerProps) => {
   }, [commentThreads]);
 
   const openComment = (c: { id: string; timeMs: number }) => {
-    playerRef?.current?.seekTo(Math.round((c.timeMs * fps) / 1000));
+    seekTimelineToFrame((c.timeMs * fps) / 1000, timelineOffsetX);
     setFocusedId(c.id);
     setActiveRightItem("comments");
   };

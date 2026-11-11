@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 import { connection, NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildPublicUrl } from "@/lib/s3";

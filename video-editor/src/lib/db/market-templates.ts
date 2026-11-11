@@ -11,6 +11,7 @@ export async function listMarketTemplates(accountId: string, userId: string, vie
       .innerJoin("projects as project", "project.project_id", "member.project_id")
       .where("member.project_id", "=", projectId).where("member.user_id", "=", userId)
       .where("member.deleted_at", "is", null).where("project.deleted_at", "is", null)
+      .where("project.trashed_at", "is", null)
       .select("member.user_id").executeTakeFirst();
     if (!member) return null;
   }

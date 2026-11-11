@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 import { useCommentNotifications } from "@/features/editor/store/use-comment-notifications";
+import commentColors from "@/features/editor/comments/comment-colors.module.css";
 import {
   Composer,
   Entry,
@@ -44,7 +45,7 @@ export default function CommentThreadControl() {
   const resolved = thread.status === "resolved";
 
   return (
-    <div className="w-md bg-card border flex flex-col rounded-lg">
+    <div className={cn("w-md bg-card border flex flex-col rounded-lg", commentColors.theme)}>
       {/* Header */}
       <div className="handle flex cursor-grab items-center gap-2 p-4">
         <p className="text-sm font-semibold">Thread</p>

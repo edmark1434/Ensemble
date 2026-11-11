@@ -11,6 +11,7 @@ export async function isProjectFrozen(projectId: string): Promise<boolean> {
     .select(["status"])
     .where("project_id", "=", projectId)
     .where("deleted_at", "is", null)
+    .where("trashed_at", "is", null)
     .executeTakeFirst();
   return String(project?.status || "").toLowerCase() === "frozen";
 }
@@ -79,6 +80,7 @@ export async function updateProject({
     .set(updates)
     .where("project_id", "=", projectId)
     .where("deleted_at", "is", null)
+    .where("trashed_at", "is", null)
     .execute();
 
   if (pushToLiveRoom && name !== undefined) {

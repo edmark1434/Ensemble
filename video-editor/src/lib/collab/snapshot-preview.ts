@@ -79,9 +79,10 @@ export async function loadSnapshotPreview(snapshotId: number, userId: string) {
   return { snapshot, scenes, missingSources: [...missing], name: snapshot.projectName || saved.name };
 }
 
-export async function loadMarketTemplatePreview(assetId: string, snapshotId: number) {
+export async function loadMarketTemplatePreview(assetId: string, snapshotId?: number) {
   const source = await readPublishedMarketTemplate(assetId);
-  if (!source || Number(source.snapshot_id) !== snapshotId) return null;
+  // UUID links follow the current listing; legacy tokens stay bound to their snapshot.
+  if (!source || (snapshotId !== undefined && Number(source.snapshot_id) !== snapshotId)) return null;
   const { snapshot, scenes, media } = await hydrateSnapshot(source);
   const missing = new Set<string>();
   const marketCache = new Map<string, ReturnType<typeof readTemplateMarketMedia>>();

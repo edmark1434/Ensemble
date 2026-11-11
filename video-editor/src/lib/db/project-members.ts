@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // lib/db/project-members.ts
 
 import { db } from "@/lib/db";
@@ -46,7 +47,7 @@ export async function getProjectMemberRole(
   userId: string,
 ): Promise<ProjectRole | null> {
   const row = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", projectId)
     .where("user_id", "=", userId)
     .where("deleted_at", "is", null)
@@ -176,7 +177,7 @@ export async function searchAddableProjectUsers({
       "u.user_id",
       "not in",
       db
-        .selectFrom("project_members")
+        .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
         .where("project_id", "=", projectId)
         .where("deleted_at", "is", null)
         .select("user_id"),

@@ -21,7 +21,7 @@ async function getProjectById(projectId) {
         const query = `
             SELECT project_id, name, status, width, height, duration_seconds, created_at, updated_at
             FROM projects
-            WHERE project_id = $1 AND deleted_at IS NULL;
+            WHERE project_id = $1 AND deleted_at IS NULL AND trashed_at IS NULL;
         `;
         const { rows } = await pool.query(query, [projectId]);
         return rows[0] || null;

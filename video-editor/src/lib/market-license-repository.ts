@@ -5,6 +5,7 @@ export async function readProjectMarketLicenses(projectId: string, userId: strin
     .innerJoin("projects as p", "p.project_id", "pm.project_id")
     .where("pm.project_id", "=", projectId).where("pm.user_id", "=", userId)
     .where("pm.deleted_at", "is", null).where("p.deleted_at", "is", null)
+    .where("p.trashed_at", "is", null)
     .select("pm.role").executeTakeFirst();
   if (!member) return null;
   if (!ids.length) return { assets: [], images: [], media: [] };

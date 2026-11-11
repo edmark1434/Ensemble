@@ -2,6 +2,7 @@
 
 import { Resizable, ResizableProps, Control, timeMsToUnits } from "@designcombo/timeline";
 import { DEFAULT_SCENE_DURATION_MS } from "@/features/editor/types/ensemble-scene";
+import { getStickyLabelOffset } from "./sticky-label";
 
 interface SceneProps extends ResizableProps {
   hidden: boolean;
@@ -35,6 +36,7 @@ class Scene extends Resizable {
 
   constructor(props: SceneProps) {
     super(props);
+    this.objectCaching = false;
     this.id = props.id;
     this.display = props.display;
     this.tScale = props.tScale;
@@ -124,7 +126,7 @@ class Scene extends Resizable {
     ctx.restore();
 
     const iconCount = 1 + (this.hidden ? 1 : 0) + (this.volume === 0 ? 1 : 0);
-    const textX = 12 + iconCount * 24;
+    const textX = getStickyLabelOffset(this) + 12 + iconCount * 24;
 
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
@@ -152,7 +154,7 @@ class Scene extends Resizable {
       ctx.restore();
     }
 
-    let iconX = 12;
+    let iconX = getStickyLabelOffset(this) + 12;
 
     this.drawComponentIcon(ctx, iconX);
     iconX += 24;

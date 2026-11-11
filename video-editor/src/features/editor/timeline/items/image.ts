@@ -9,6 +9,7 @@ import {
   Control
 } from "@designcombo/timeline";
 import { createResizeControls } from "../controls";
+import { getStickyLabelOffset } from "./sticky-label";
 
 interface ImageProps extends ResizableProps {
   src: string;
@@ -39,6 +40,7 @@ class Image extends Resizable {
 
   constructor(props: ImageProps) {
     super(props);
+    this.objectCaching = false;
     this.id = props.id;
     this.src = props.src;
     // Template copies made before previewUrl was preserved still have a public
@@ -83,7 +85,7 @@ class Image extends Resizable {
     ctx.restore();
 
     const iconCount = (isLoading ? 1 : 0) + (this.hidden ? 1 : 0);
-    const textX = 12 + iconCount * 24;
+    const textX = getStickyLabelOffset(this) + 12 + iconCount * 24;
 
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
@@ -114,7 +116,7 @@ class Image extends Resizable {
     ctx.fillRect(0, 0, this.width, this.height);
     ctx.restore();
 
-    let iconX = 12;
+    let iconX = getStickyLabelOffset(this) + 12;
 
     if (this.isLoading && !missing) {
       ctx.save();

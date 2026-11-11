@@ -8,6 +8,7 @@ export async function getShareLinkIssuer(projectId: string, userId: string, role
     .select(["pm.role", "pm.joined_at"])
     .where("pm.project_id", "=", projectId).where("pm.user_id", "=", userId)
     .where("pm.deleted_at", "is", null).where("p.deleted_at", "is", null)
+    .where("p.trashed_at", "is", null)
     .executeTakeFirst();
   if (!member || (member.role !== "Owner" && member.role !== "Manager")
     || (role === "Manager" && member.role !== "Owner")) return null;
@@ -21,6 +22,7 @@ export async function redeemProjectShareLink(projectId: string, userId: string, 
     // Serialize redemptions for a project and check current authority inside the transaction.
     const project = await trx.selectFrom("projects").select("project_id")
       .where("project_id", "=", projectId).where("deleted_at", "is", null)
+      .where("trashed_at", "is", null)
       .forUpdate().executeTakeFirst();
     if (!project) return false;
     const issuer = await trx.selectFrom("project_members").select(["role", "joined_at"])

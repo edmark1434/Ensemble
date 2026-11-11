@@ -13,15 +13,17 @@ export function UploadDeletionDialog() {
   const confirm = async () => {
     if (!upload || pending) return;
     setPending(true);
+    const toastId = toast.info("Deleting upload forever…");
     try {
       await axios.delete(`/api/media-assets/${upload.id}?permanent=true`);
+      toast.success("Upload deleted forever", { id: toastId });
       close();
       await Promise.all([
         client.invalidateQueries({ queryKey: ["media-assets"] }),
         client.invalidateQueries({ queryKey: ["media-storage-usage"] }),
         client.invalidateQueries({ queryKey: ["upload-availability"] }),
       ]);
-    } catch { toast.error("Unable to delete this upload. Please try again."); }
+    } catch { toast.error("Unable to delete this upload. Please try again.", { id: toastId }); }
     finally { setPending(false); }
   };
   return upload ? <DeleteUploadModal id={upload.id} name={upload.fileName} source={upload.url} open={open} pending={pending} onClose={close} onConfirm={() => void confirm()} /> : null;

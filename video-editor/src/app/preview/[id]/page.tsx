@@ -5,6 +5,11 @@ import { loadMarketTemplatePreview, loadSnapshotPreview } from "@/lib/collab/sna
 import SnapshotPreview from "@/features/editor/snapshot-preview";
 import { readSnapshotPreviewToken } from "@/lib/auth/snapshot-preview-token";
 
+// Recheck publication on every visit, including public UUID links without cookies.
+export const dynamic = "force-dynamic";
+
+const MARKET_ASSET_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function PreviewUnavailable({ message }: { message: string }) {
   return <main className="flex min-h-screen items-center justify-center p-6">
     <div className="max-w-md rounded-xl border border-border bg-background p-6">
@@ -17,6 +22,12 @@ function PreviewUnavailable({ message }: { message: string }) {
 
 export default async function SnapshotPreviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (MARKET_ASSET_UUID.test(id)) {
+    const preview = await loadMarketTemplatePreview(id);
+    if (!preview) return <PreviewUnavailable message="This template is no longer available for preview." />;
+    return <SnapshotPreview {...preview} />;
+  }
+  // Keep previously issued market links and private owner previews working.
   const reference = readSnapshotPreviewToken(id);
   if (!reference) return <PreviewUnavailable message="This preview link is invalid or expired. Open a fresh preview from the asset library." />;
   let preview;

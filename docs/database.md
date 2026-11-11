@@ -62,7 +62,7 @@
 - Recently deleted uploads have a non-null `trashed_at` and a null `deleted_at`, ordered by the trash date descending. The retention period is 30 days from `trashed_at`.
 - Delete forever directly deletes unshared original/proxy/thumbnail S3 objects, then sets `media_assets.deleted_at`. The existing trash-retention job does the same after 30 days. Database records and `trashed_at` remain for history and missing-media lookup. No additional columns or migration are required.
 - Both paths use existing S3 credentials and only delete keys under `uploads/<owner_user_id>/`. Objects shared by another non-deleted media asset remain. If S3 deletion fails, the database deletion rolls back: manual deletion can be retried, and expired uploads are retried by the existing retention job. See `docs/upload-storage-cleanup.md` for S3 versioning behavior.
-- `projects` also has nullable `trashed_at`, available for project trash behavior.
+- `projects.trashed_at` provides the same 30-day recoverable lifecycle. Active lists exclude trash; the owner's Trash list excludes expired and permanently deleted entries. Restore clears `trashed_at`; Delete forever and the ten-minute retention job set `deleted_at`, retaining project history and membership records. Project deletion does not delete reusable uploaded media. Frozen projects cannot be trashed, restored, permanently deleted, or expired by the job. Moderation restore does not revive owner-deleted projects.
 
 ## Badge catalog
 

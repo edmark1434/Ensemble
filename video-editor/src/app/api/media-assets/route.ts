@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // app/api/media-assets/route.ts
 
 import { connection, NextRequest, NextResponse } from "next/server";
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   try {
     if (scope === "project" || scope === "mine-in-project") {
-      const member = await db.selectFrom("project_members").select("user_id")
+      const member = await db.selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds()).select("user_id")
         .where("project_id", "=", projectId).where("user_id", "=", userId)
         .where("deleted_at", "is", null).executeTakeFirst();
       if (!member) return NextResponse.json({ error: "Project access required." }, { status: 403 });

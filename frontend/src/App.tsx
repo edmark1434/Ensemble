@@ -263,6 +263,7 @@ function App() {
           <Route path='/projects' element={<Projects />} />
           <Route path='/projects/personal' element={<Projects />} />
           <Route path='/projects/shared' element={<Projects />} />
+          <Route path='/projects/trash' element={<Projects />} />
           <Route path='/projects/team' element={<Projects />} />
           <Route path='/projects/select' element={<Projects_Selection />} />
 

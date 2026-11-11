@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // app/api/collab/blocks/[id]/compact/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -21,7 +22,7 @@ export async function POST(
   if (!projectId) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const membership = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", projectId)
     .where("user_id", "=", decoded.userId)
     .where("deleted_at", "is", null)

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { toast } from "sonner";
 import { processUpload, type UploadCallbacks } from "@/utils/upload-service";
 import useStore from "./use-store";
 
@@ -122,9 +123,6 @@ const useUploadStore = create<IUploadStore>()(
           }));
         }
 
-        // Get updated activeUploads after moving pending ones
-        const currentActiveUploads = get().activeUploads;
-
         const callbacks: UploadCallbacks = {
           onProgress: (uploadId, progress) => {
             updateUploadProgress(uploadId, progress);
@@ -133,6 +131,12 @@ const useUploadStore = create<IUploadStore>()(
             updateUploadFileName(uploadId, fileName);
           },
           onStatus: (uploadId, status, error) => {
+            const upload = get().activeUploads.find(item => item.id === uploadId);
+            if (upload && upload.status !== status) {
+              const description = upload.fileName || upload.file?.name || upload.name;
+              if (status === "uploaded") toast.success("Upload finished", { id: `upload:${uploadId}`, description });
+              else if (status === "failed") toast.error("Upload failed", { id: `upload:${uploadId}`, description: error || description });
+            }
             setUploadStatus(uploadId, status, error);
             if (status === "uploaded") {
               setTimeout(() => removeUpload(uploadId), 3000);
@@ -142,10 +146,9 @@ const useUploadStore = create<IUploadStore>()(
           }
         };
 
-        // Process all uploading items
-        for (const upload of currentActiveUploads.filter(
-          (upload) => upload.status === "uploading"
-        )) {
+        // Only start the newly queued items; existing uploads are already running.
+        for (const upload of pendingUploads) {
+          toast.info("Upload started", { id: `upload:${upload.id}`, description: upload.fileName || upload.file?.name || upload.name });
           processUpload(
             upload.id,
             { file: upload.file, url: upload.url },

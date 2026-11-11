@@ -29,6 +29,7 @@ async function generateThumbnail(
     .selectFrom("projects")
     .where("project_id", "=", projectId)
     .where("deleted_at", "is", null)
+    .where("trashed_at", "is", null)
     .select(["thumbnail_file_id", "thumbnail_source_hash"])
     .executeTakeFirst();
   if (!project) return;

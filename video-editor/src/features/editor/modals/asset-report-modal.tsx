@@ -51,13 +51,15 @@ export function AssetReportModal({ open, onOpenChange, assetName, busy = false, 
     if (pending || description.trim().length < 20) return;
     setSubmitting(true);
     setError("");
+    const toastId = toast.info("Submitting asset report…");
     try {
       await onSubmit({ type: reason, description });
       onOpenChange(false);
       setDescription("");
-      toast.success("Report submitted to marketplace moderators.");
+      toast.success("Report submitted to marketplace moderators.", { id: toastId });
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to submit report.");
+      toast.error(error instanceof Error ? error.message : "Unable to submit report.", { id: toastId });
     } finally {
       setSubmitting(false);
     }

@@ -1,4 +1,5 @@
 import { drawMissingMedia } from "./missing-media";
+import { getStickyLabelOffset } from "./sticky-label";
 import { isMissingMediaSource } from "../../utils/missing-media";
 import {
   Control,
@@ -200,6 +201,7 @@ class Audio extends Trimmable {
     ctx.beginPath();
     ctx.roundRect(0, 0, this.width, this.height, this.rx);
     ctx.clip();
+    ctx.translate(getStickyLabelOffset(this), 0);
 
     if (isLoading) {
       ctx.save();

@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // app/api/collab/projects/[id]/updates/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
@@ -23,7 +24,7 @@ export async function POST(
   const { id: projectId } = await params;
 
   const membership = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", projectId)
     .where("user_id", "=", decoded.userId)
     .where("deleted_at", "is", null)

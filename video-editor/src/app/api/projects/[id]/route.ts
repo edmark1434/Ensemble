@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // app/api/projects/[id]/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,7 +25,7 @@ export async function GET(
   const { id } = await params;
 
   const membership = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", id)
     .where("user_id", "=", decoded.userId)
     .where("deleted_at", "is", null)
@@ -54,7 +55,7 @@ export async function PATCH(
   const { id } = await params;
 
   const membership = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", id)
     .where("user_id", "=", decoded.userId)
     .where("deleted_at", "is", null)

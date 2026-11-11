@@ -41,11 +41,21 @@ export function MarketAssetActions({ bundle, menuOnly = false }: { bundle: Marke
     const store = useMarketEngagement.getState();
     if (store.pending[id]) return;
     store.setPending(id, true);
+    const enabled = action === "like" ? !current.is_liked : !current.is_saved;
+    update(id, action === "like"
+      ? { ...current, is_liked: enabled, like_count: Math.max(0, current.like_count + (enabled ? 1 : -1)) }
+      : { ...current, is_saved: enabled });
+    const toastId = toast.success(action === "like"
+      ? enabled ? "Asset liked" : "Asset unliked"
+      : enabled ? "Asset saved" : "Asset removed from saved");
     try {
-      const result = await marketAction(id, { action, enabled: action === "like" ? !current.is_liked : !current.is_saved });
+      const result = await marketAction(id, { action, enabled });
       update(id, { ...current, ...result });
       window.dispatchEvent(new CustomEvent("market-engagement-updated"));
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to update this asset."); }
+    } catch (error) {
+      update(id, current);
+      toast.error(error instanceof Error ? error.message : "Unable to update this asset.", { id: toastId });
+    }
     finally { store.setPending(id, false); }
   };
 

@@ -42,7 +42,7 @@ import AssetOriginalModal from "./AssetOriginalModal";
 import AssetReportButton from "./AssetReportButton";
 import AssetPurchaseModal from "./AssetPurchaseModal";
 import TemplateUseModal from "./TemplateUseModal";
-import { templateSnapshotPreviewUrl } from "./templatePreview";
+import { marketTemplatePreviewUrl } from "./templatePreview";
 import { mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -182,13 +182,13 @@ export default function AssetDetails() {
   }, [asset?.market_asset_id, asset?.type]);
 
   const openTemplatePreview = async () => {
-    if (!templatePreview?.previewToken || openingTemplatePreview) return;
+    if (!asset || !templatePreview || openingTemplatePreview) return;
     const tab = window.open("about:blank", "_blank");
     if (tab) tab.opener = null;
     setOpeningTemplatePreview(true);
     try {
       const { data } = await api.get<{ handoffToken: string }>("/api/editor/handoff-token");
-      const previewUrl = templateSnapshotPreviewUrl(templatePreview.previewToken, data.handoffToken);
+      const previewUrl = marketTemplatePreviewUrl(asset.market_asset_id, data.handoffToken);
       if (tab && !tab.closed) tab.location.replace(previewUrl);
       else window.open(previewUrl, "_blank", "noopener,noreferrer");
     } catch {
@@ -667,7 +667,7 @@ export default function AssetDetails() {
           <div id="asset-deliverables" className="scroll-mt-24">
             {asset.type === "template" ? (
               <section className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:bg-white/[0.025]">
-                <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Template snapshot</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Preview the saved project snapshot.</p></div>
+                <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Template contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Preview the template contents in the editor.</p></div>
                 <button type="button" onClick={() => void openTemplatePreview()} disabled={!templatePreview || templatePreviewLoading || openingTemplatePreview} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
                   {templatePreviewLoading || openingTemplatePreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}{templatePreviewLoading ? "Loading preview…" : openingTemplatePreview ? "Opening…" : "Preview"}
                 </button>

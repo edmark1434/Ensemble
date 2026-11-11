@@ -12,9 +12,12 @@ import {
 import { LAYER_PREFIX, LAYER_SELECTION } from "@designcombo/state";
 import { TIMELINE_SEEK, TIMELINE_PREFIX } from "@designcombo/timeline";
 import { getSafeCurrentFrame } from "../utils/time";
+import { useTimelineOffsetX } from "./use-timeline-offset";
+import { seekTimelineToFrame } from "../utils/timeline-scroll";
 
 const usePlayerEvents = () => {
   const { playerRef, fps, setState } = useStore();
+  const timelineOffsetX = useTimelineOffsetX();
 
   //handle player events
   useEffect(() => {
@@ -37,7 +40,7 @@ const usePlayerEvents = () => {
       if (obj.key === PLAYER_SEEK) {
         const time = obj.value?.payload?.time;
         if (playerRef?.current && typeof time === "number") {
-          playerRef.current.seekTo((time / 1000) * fps);
+          seekTimelineToFrame((time / 1000) * fps, timelineOffsetX);
         }
       } else if (obj.key === PLAYER_PLAY) {
         playerRef?.current?.play();
@@ -53,7 +56,7 @@ const usePlayerEvents = () => {
         const frames = obj.value?.payload?.frames;
         if (playerRef?.current && typeof frames === "number") {
           const safeCurrentFrame = getSafeCurrentFrame(playerRef);
-          playerRef.current.seekTo(Math.round(safeCurrentFrame) + frames);
+          seekTimelineToFrame(Math.round(safeCurrentFrame) + frames, timelineOffsetX);
         }
       }
     });
@@ -62,7 +65,7 @@ const usePlayerEvents = () => {
       playerEventsSubscription.unsubscribe();
       timelineEventsSubscription.unsubscribe();
     };
-  }, [playerRef, fps]);
+  }, [playerRef, fps, timelineOffsetX]);
 
   // handle selection events
   useEffect(() => {

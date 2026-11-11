@@ -5,6 +5,8 @@ const PROJECT_PORTFOLIO_DETAILS_SQL = `
         p.project_id AS id,
         p.name,
         p.status,
+        p.trashed_at AS "trashedAt",
+        p.trashed_at + INTERVAL '30 days' AS "expiresAt",
         p.width,
         p.height,
         COALESCE(NULLIF(p.duration_seconds, 0), 60) AS duration_seconds,
@@ -195,11 +197,15 @@ function normalizeProjectPortfolioMetadata(row) {
     };
 }
 
-async function getProjectsForUser(userId) {
+async function getProjectsForUser(userId, trash = false) {
     try {
         const query = `
             ${PROJECT_PORTFOLIO_DETAILS_SQL}
             WHERE p.deleted_at IS NULL
+              AND (($2::boolean = false AND p.trashed_at IS NULL)
+                OR ($2::boolean = true AND p.trashed_at IS NOT NULL
+                    AND p.trashed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+                    AND pm.role = 'Owner'))
               AND (
                   pm.user_id IS NOT NULL
                   OR EXISTS (
@@ -211,9 +217,9 @@ async function getProjectsForUser(userId) {
                         AND (tcw.project_id = p.project_id OR twp.project_id = p.project_id)
                   )
               )
-            ORDER BY p.updated_at DESC
+            ORDER BY CASE WHEN $2::boolean THEN p.trashed_at ELSE p.updated_at END DESC, p.project_id
         `;
-        const result = await pool.query(query, [userId]);
+        const result = await pool.query(query, [userId, trash]);
         return result.rows.map(normalizeProjectPortfolioMetadata);
     } catch (err) {
         console.error("Error fetching projects for user:", err);
@@ -233,28 +239,55 @@ async function getProjectForPortfolioByAccount(accountId, projectId) {
     return projects.find((p) => String(p.id) === String(projectId)) || null;
 }
 
-async function softDeleteProject(projectId, userId) {
+async function withLockedProject(projectId, userId, work) {
+    const client = await pool.connect();
     try {
-        // Only allow if user is Owner
-        const verifyQuery = `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2`;
-        const verifyResult = await pool.query(verifyQuery, [projectId, userId]);
-        if (verifyResult.rows.length === 0 || verifyResult.rows[0].role !== 'Owner') {
-            throw new Error('Unauthorized or not found');
-        }
+        await client.query('BEGIN');
+        const { rows: [project] } = await client.query(`
+            SELECT p.project_id, p.name, p.status, p.trashed_at, p.deleted_at,
+                p.trashed_at <= CURRENT_TIMESTAMP - INTERVAL '30 days' AS expired,
+                pm.role
+            FROM projects p
+            LEFT JOIN project_members pm ON pm.project_id = p.project_id
+                AND pm.user_id = $2 AND pm.deleted_at IS NULL
+            WHERE p.project_id = $1 FOR UPDATE OF p`, [projectId, userId]);
+        const result = await work(project, client);
+        await client.query('COMMIT');
+        return result;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally { client.release(); }
+}
 
-        const query = `UPDATE projects SET deleted_at = NOW() WHERE project_id = $1 RETURNING *`;
-        const result = await pool.query(query, [projectId]);
-        return result.rows[0];
-    } catch (err) {
-        console.error('Error deleting project:', err);
-        throw err;
-    }
+async function updateProjectTrashState(client, projectId, action) {
+    const changes = {
+        trash: 'trashed_at = COALESCE(trashed_at, CURRENT_TIMESTAMP)',
+        restore: 'trashed_at = NULL',
+        permanent: 'deleted_at = CURRENT_TIMESTAMP',
+    };
+    if (!changes[action]) throw new Error('Invalid project trash action');
+    const { rows: [project] } = await client.query(`UPDATE projects
+        SET ${changes[action]}, updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = $1 RETURNING project_id`, [projectId]);
+    return project;
+}
+
+async function purgeExpiredProjectTrash() {
+    const { rows } = await pool.query(`WITH expired AS (
+        SELECT project_id FROM projects
+        WHERE deleted_at IS NULL AND trashed_at <= CURRENT_TIMESTAMP - INTERVAL '30 days'
+          AND LOWER(status) <> 'frozen'
+        ORDER BY trashed_at LIMIT 100 FOR UPDATE SKIP LOCKED
+    ) UPDATE projects p SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      FROM expired WHERE p.project_id = expired.project_id RETURNING p.project_id`);
+    return rows;
 }
 
 async function renameProject(projectId, userId, newName) {
     try {
         const current = await pool.query(
-            `SELECT status FROM projects WHERE project_id = $1 AND deleted_at IS NULL`,
+            `SELECT status FROM projects WHERE project_id = $1 AND deleted_at IS NULL AND trashed_at IS NULL`,
             [projectId]
         );
         if (current.rows[0] && String(current.rows[0].status).toLowerCase() === 'frozen') {
@@ -268,6 +301,7 @@ async function renameProject(projectId, userId, newName) {
             FROM project_members pm
             WHERE p.project_id = $2
               AND p.deleted_at IS NULL
+              AND p.trashed_at IS NULL
               AND pm.project_id = p.project_id
               AND pm.user_id = $3
               AND pm.deleted_at IS NULL
@@ -286,6 +320,8 @@ async function renameProject(projectId, userId, newName) {
 module.exports = {
     getProjectsForUser,
     getProjectForPortfolioByAccount,
-    softDeleteProject,
+    withLockedProject,
+    updateProjectTrashState,
+    purgeExpiredProjectTrash,
     renameProject
 };

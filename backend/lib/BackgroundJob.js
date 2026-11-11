@@ -450,6 +450,8 @@ function startPaymentReconciliationJob() {
     cron.schedule("*/10 * * * *", async () => {
         try { await require('../jobs/UploadTrashRetentionJob').purgeExpiredUploads(); }
         catch (err) { console.error("Upload trash cleanup failed:", err.message); }
+        try { await require('../services/ProjectServices').purgeExpiredProjects(); }
+        catch (err) { console.error("Project trash cleanup failed:", err.message); }
     });
 
     // Daily purge of ephemeral tasks from workspaces archived over 30 days ago

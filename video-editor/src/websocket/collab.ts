@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // video-editor/websocket/collab.ts
 
 import type { IncomingMessage } from "http";
@@ -187,7 +188,7 @@ async function resolveRoomAccess(
   userId: string,
 ): Promise<{ allowed: boolean; canWrite: boolean }> {
   const membership = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", projectId)
     .where("user_id", "=", userId)
     .where("deleted_at", "is", null)

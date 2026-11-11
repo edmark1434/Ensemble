@@ -107,6 +107,13 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       return;
     }
     if (referencePath) {
+      // Match Full View: project handoff and absolute URLs need browser navigation.
+      if (notification.reference_prefix === "PROJECT_INVITATION"
+        || notification.reference_prefix === "TOPUP"
+        || /^https?:\/\//i.test(referencePath)) {
+        window.location.href = referencePath;
+        return;
+      }
       navigate(referencePath);
     }
   };

@@ -22,6 +22,7 @@ import {
     FileCheck,
     DollarSign,
     Loader2,
+    Trash2,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -29,6 +30,8 @@ import api from "@/lib/axios.ts";
 import { formatDistanceToNow } from "date-fns";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import useGlobalState from "@/lib/global_state";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import { ProjectActions, type ProjectAction } from "./ProjectActions";
 
 interface Project {
   id: string;
@@ -45,6 +48,9 @@ interface Project {
   height?: number;
   duration_seconds?: number;
   role?: "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
+  status?: string;
+  trashedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 interface TeamProject {
@@ -62,13 +68,13 @@ const teamProjects: TeamProject[] = [];
 // With Contract Projects (projects with active contracts and progress) (placeholder)
 // const contractProjects: Project[] = [];
 
-type TabType = "recent" | "personal" | "shared";
+type TabType = "recent" | "personal" | "shared" | "trash";
 type ViewType = "grid" | "compact";
 
 const RENAME_ROLES = ["Owner", "Manager", "Editor"];
 
 const canRenameProject = (project: Project) =>
-  RENAME_ROLES.includes(project.role ?? "");
+  !project.trashedAt && RENAME_ROLES.includes(project.role ?? "");
 
 const placeholderThumbnail = (name: string) =>
   `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(name)}`;
@@ -138,9 +144,12 @@ const Projects: React.FC = () => {
   const [isRenamingProjectId, setIsRenamingProjectId] = useState<string | null>(null);
 
   const renameInFlightRef = useRef(false);
+  const mutationInFlightRef = useRef(false);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handleRenameProject = async (projectId: string) => {
-    if (renameInFlightRef.current) return;
+    if (renameInFlightRef.current || mutationInFlightRef.current) return;
 
     const nextName = editProjectName.trim();
     const project = recentProjects.find(p => p.id === projectId);
@@ -189,6 +198,7 @@ const Projects: React.FC = () => {
   const [personalProjects, setPersonalProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+  const [trashProjects, setTrashProjects] = useState<Project[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -198,6 +208,8 @@ const Projects: React.FC = () => {
     activeTab = "personal";
   } else if (location.pathname.includes("/projects/shared")) {
     activeTab = "shared";
+  } else if (location.pathname.includes("/projects/trash")) {
+    activeTab = "trash";
   }
 
   const fetchSeqRef = useRef(0);
@@ -205,29 +217,38 @@ const Projects: React.FC = () => {
 
   const loadProjects = useCallback(async () => {
     // a background refresh mid-rename could briefly flip the name back
-    if (renameInFlightRef.current) return;
+    if (renameInFlightRef.current || mutationInFlightRef.current) return;
 
     const seq = ++fetchSeqRef.current;
     try {
-      const response = await api.get("/api/projects");
+      const [response, trashResponse] = await Promise.all([
+        api.get("/api/projects"),
+        api.get("/api/projects", { params: { scope: "trash" } }),
+      ]);
       // a newer request started while this one was in flight; drop this one
       if (seq !== fetchSeqRef.current) return;
 
-      const projects = response.data.projects.map((p: any) => {
+      const formatProject = (p: any): Project => {
         return {
           ...p,
           type: "video",
           duration: p.duration_seconds ? new Date(p.duration_seconds * 1000).toISOString().substr(11, 8) : "00:00:00",
-          lastUpdated: p.lastUpdated ? formatDistanceToNow(new Date(p.lastUpdated), { addSuffix: true }) : "Unknown"
+          lastUpdated: p.trashedAt
+            ? `Deleted ${formatDistanceToNow(new Date(p.trashedAt), { addSuffix: true })}`
+            : p.lastUpdated ? formatDistanceToNow(new Date(p.lastUpdated), { addSuffix: true }) : "Unknown"
         };
-      });
+      };
+      const projects = response.data.projects.map(formatProject);
 
       setPersonalProjects(projects.filter((p: Project) => p.role === "Owner"));
       setSharedProjects(projects.filter((p: Project) => p.role !== "Owner"));
       setRecentProjects(projects);
+      setTrashProjects(trashResponse.data.projects.map(formatProject));
+      setLoadError(null);
     } catch (error) {
       // keep showing the current list if a background refresh fails
       console.error("Failed to fetch projects:", error);
+      if (seq === fetchSeqRef.current) setLoadError("Unable to refresh projects. Please try again.");
     } finally {
       if (seq === fetchSeqRef.current) {
         setLoading(false);
@@ -235,6 +256,40 @@ const Projects: React.FC = () => {
       }
     }
   }, []);
+
+  const handleProjectAction = async (project: Project, action: ProjectAction): Promise<boolean> => {
+    if (mutationInFlightRef.current || renameInFlightRef.current) return false;
+    mutationInFlightRef.current = true;
+    ++fetchSeqRef.current; // Ignore a refresh started before this change.
+    setPendingProjectId(project.id);
+    setEditingProjectId(null);
+    const previous = { personalProjects, sharedProjects, recentProjects, trashProjects };
+    const withoutProject = (items: Project[]) => items.filter(item => item.id !== project.id);
+    // Remove immediately; keep the previous lists for rollback if the request fails.
+    setPersonalProjects(withoutProject);
+    setSharedProjects(withoutProject);
+    setRecentProjects(withoutProject);
+    setTrashProjects(withoutProject);
+    setIsRefreshing(false);
+    let success = false;
+    try {
+      if (action === "restore") await api.post(`/api/projects/${project.id}/restore`);
+      else await api.delete(`/api/projects/${project.id}`, { params: action === "permanent" ? { permanent: true } : undefined });
+      showSuccessToast(action === "trash" ? "Project moved to Trash. You can restore it within 30 days." : action === "restore" ? "Project restored" : "Project permanently deleted");
+      success = true;
+    } catch (error: any) {
+      setPersonalProjects(previous.personalProjects);
+      setSharedProjects(previous.sharedProjects);
+      setRecentProjects(previous.recentProjects);
+      setTrashProjects(previous.trashProjects);
+      showErrorToast(error?.response?.data?.message || "Unable to update this project. Please try again.");
+    } finally {
+      mutationInFlightRef.current = false;
+      setPendingProjectId(null);
+      await loadProjects();
+    }
+    return success;
+  };
 
   useEffect(() => {
     loadProjects();
@@ -284,18 +339,21 @@ const Projects: React.FC = () => {
     { id: "recent" as TabType, label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { id: "personal" as TabType, label: "Personal", icon: <User className="h-4 w-4" /> },
     { id: "shared" as TabType, label: "Shared", icon: <Share2 className="h-4 w-4" /> },
-  ].filter(tab => !(isGuestMode && (tab.id === 'personal' || tab.id === 'shared')));
+    { id: "trash" as TabType, label: "Trash", icon: <Trash2 className="h-4 w-4" /> },
+  ].filter(tab => !(isGuestMode && tab.id !== 'recent'));
 
   const handleTabClick = (tabId: TabType) => {
     setOpenTeamFolderId(null);
     if (tabId === "recent") navigate("/projects");
     else if (tabId === "personal") navigate("/projects/personal");
     else if (tabId === "shared") navigate("/projects/shared");
+    else if (tabId === "trash") navigate("/projects/trash");
   };
 
   const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
 
   const handleOpenProject = async (projectId: string) => {
+    if (activeTab === "trash" || mutationInFlightRef.current) return;
     if (isGuestMode) {
       setIsModalOpen(true);
       return;
@@ -319,6 +377,7 @@ const Projects: React.FC = () => {
       case "recent": return recentProjects;
       case "personal": return personalProjects;
       case "shared": return sharedProjects;
+      case "trash": return trashProjects;
       case "team": return teamProjects;
       default: return [];
     }
@@ -329,6 +388,7 @@ const Projects: React.FC = () => {
       case "recent": return "Recent Projects";
       case "personal": return "Personal Projects";
       case "shared": return "Shared With You";
+      case "trash": return "Trash";
       case "contract": return "Projects Under Contract";
       case "team": return "Team Projects";
       default: return "Projects";
@@ -340,6 +400,7 @@ const Projects: React.FC = () => {
       case "recent": return "Recently accessed projects";
       case "personal": return "Your private workspace";
       case "shared": return "Videos shared with you by collaborators";
+      case "trash": return "Recently deleted projects. Restore them within 30 days, or delete them forever.";
       case "contract": return "Projects with active contracts and progress tracking";
       case "team": return "Collaborative workspace folders";
       default: return "";
@@ -355,6 +416,9 @@ const Projects: React.FC = () => {
       onMouseLeave={() => setHoveredProject(null)}
       onClick={() => handleOpenProject(project.id)}
     >
+      <div className="absolute right-3 top-3 z-10">
+        <ProjectActions project={project} pending={pendingProjectId === project.id} onAction={action => handleProjectAction(project, action)} />
+      </div>
       <div className="relative h-36 w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
         <ProjectThumbnail
           project={project}
@@ -592,6 +656,7 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1">
+        <ProjectActions project={project} pending={pendingProjectId === project.id} onAction={action => handleProjectAction(project, action)} />
         {/*
         <button 
           className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
@@ -952,6 +1017,10 @@ const Projects: React.FC = () => {
         </div>
 
         {/* Content */}
+        {loadError && <div role="alert" className="mb-4 flex items-center gap-3 text-sm text-red-500">
+          {loadError}
+          <button type="button" className="underline" onClick={() => void loadProjects()}>Retry</button>
+        </div>}
         <div className="pb-10">
           <AnimatePresence mode="wait">
             <motion.div
@@ -983,20 +1052,20 @@ const Projects: React.FC = () => {
         </div>
 
         {/* Empty State */}
-        {!loading && getContent().length === 0 && (
+        {!loading && !loadError && getContent().length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-12 text-center">
             <FolderKanban className="mb-3 h-12 w-12 text-gray-400 dark:text-zinc-500" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No projects found</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{activeTab === "trash" ? "Trash is empty" : "No projects found"}</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
-              Create your first project to get started
+              {activeTab === "trash" ? "Projects you delete will appear here for 30 days." : "Create your first project to get started"}
             </p>
-            <button
+            {activeTab !== "trash" && <button
               data-tour="projects-create-button"
             onClick={() => isGuestMode ? setIsModalOpen(true) : navigate("/projects/select")}
               className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600"
             >
               Create Project
-            </button>
+            </button>}
           </div>
         )}
       </div>

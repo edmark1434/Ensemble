@@ -1,6 +1,7 @@
 import { Control, Resizable, ResizableProps } from "@designcombo/timeline";
 import { IDisplay } from "@designcombo/types";
 import { createResizeControls } from "../controls";
+import { getStickyLabelOffset } from "./sticky-label";
 
 interface CaptionsProps extends ResizableProps {
   tScale: number;
@@ -24,6 +25,7 @@ class Caption extends Resizable {
 
   constructor(props: CaptionsProps) {
     super(props);
+    this.objectCaching = false;
     this.fill = "#1B272C";
     this.tScale = props.tScale;
     this.display = props.display;
@@ -49,7 +51,10 @@ class Caption extends Resizable {
     ctx.font = `400 12px ${getUIFont()}`;
     ctx.fillStyle = "rgba(255, 255, 255,1)";
     ctx.textAlign = "left";
+    ctx.beginPath();
+    ctx.rect(0, 0, this.width, this.height);
     ctx.clip();
+    ctx.translate(getStickyLabelOffset(this), 0);
 
     if (this.hidden) {
       ctx.save();

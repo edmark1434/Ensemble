@@ -1,5 +1,6 @@
 import { IDesign } from "@designcombo/types";
 import { create } from "zustand";
+import { toast } from "sonner";
 import {
   DEFAULT_AUDIO_BITRATE_KBPS,
   DEFAULT_COMPOSITION_HEIGHT,
@@ -206,6 +207,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
 
         if (!payload) throw new Error("Payload is not defined");
 
+        toast.info("Export started", { id: "editor-export" });
         const response = await fetch(`/api/render`, {
           method: "POST",
           headers: {
@@ -216,6 +218,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         });
 
         if (response.status === 409) {
+          toast.error("You already have a pending export. Refresh to see progress.", { id: "editor-export" });
           set({
             exporting: false,
             error: "You already have a pending export.\nRefresh to see progress."
@@ -236,6 +239,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         get().actions.pollJobStatus(jobId);
       } catch (error) {
         console.error(error);
+        toast.error(error instanceof Error ? error.message : "Export failed.", { id: "editor-export" });
         set({
           exporting: false,
           error: error instanceof Error ? error.message : "Export failed."
@@ -275,7 +279,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
       }
     },
     pollJobStatus: async (jobId) => {
-      if (get().cancelled) return;
+      if (get().cancelled || get().jobId !== jobId || get().output) return;
 
       try {
         const statusResponse = await fetch(`/api/render/${jobId}`, {
@@ -285,7 +289,9 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           }
         });
 
+        if (get().cancelled || get().jobId !== jobId || get().output) return;
         if (statusResponse.status === 404) {
+          toast.error("This export is no longer available.", { id: "editor-export" });
           set({ exporting: false, error: "This export is no longer available." });
           return;
         }
@@ -296,7 +302,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         const statusInfo = await statusResponse.json();
         const { status, progress, videoUrl, queuePosition, data } = statusInfo;
 
-        if (get().cancelled) return;
+        if (get().cancelled || get().jobId !== jobId || get().output) return;
 
         const wasQueued = get().queuePosition !== null;
         const justStartedRendering = wasQueued && status === "in-progress";
@@ -308,6 +314,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         });
 
         if (status === "completed") {
+          toast.success("Export finished. Your download is ready.", { id: "editor-export" });
           set({
             exporting: false,
             output: {
@@ -319,10 +326,13 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         } else if (status === "in-progress" || status === "queued") {
           setTimeout(() => get().actions.pollJobStatus(jobId), 1000);
         } else if (status === "failed") {
+          toast.error("Export failed. Please try again.", { id: "editor-export" });
           set({ exporting: false, error: "Render failed." });
         }
       } catch (error) {
+        if (get().cancelled || get().jobId !== jobId || get().output) return;
         console.error(error);
+        toast.error("Unable to check export progress.", { id: "editor-export" });
         set({ exporting: false, error: "Failed to check export status." });
       }
     },

@@ -1,3 +1,4 @@
+import { activeProjectIds } from "@/lib/db/project-availability";
 // lib/db/block-members.ts
 
 import { db } from "@/lib/db";
@@ -34,7 +35,7 @@ export async function isProjectMember(
   userId: string,
 ): Promise<boolean> {
   const row = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", projectId)
     .where("user_id", "=", userId)
     .where("deleted_at", "is", null)
@@ -62,7 +63,7 @@ export async function getProjectRole(
   userId: string,
 ): Promise<BlockRole | null> {
   const row = await db
-    .selectFrom("project_members")
+    .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
     .where("project_id", "=", projectId)
     .where("user_id", "=", userId)
     .where("deleted_at", "is", null)
@@ -118,6 +119,8 @@ export async function getEffectiveBlockRole(
     db
       .selectFrom("blocks")
       .where("block_id", "=", blockId)
+      .where("project_id", "=", projectId)
+      .where("project_id", "in", activeProjectIds())
       .where("deleted_at", "is", null)
       .select(["general_access"])
       .executeTakeFirst(),
@@ -271,7 +274,7 @@ export async function addBlockMember({
     // Only people already in the project can be added to one of its scenes.
     // Their cursor colour carries over so they look the same in both docs.
     const projectMembership = await trx
-      .selectFrom("project_members")
+      .selectFrom("project_members").where("project_members.project_id", "in", activeProjectIds())
       .where("project_id", "=", projectId)
       .where("user_id", "=", userId)
       .where("deleted_at", "is", null)

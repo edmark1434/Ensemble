@@ -1,3 +1,11 @@
+.theme {
+  --primary: #f43f5e;
+  --primary-foreground: #000;
+  --ring: #f43f5e;
+  --accent: color-mix(in srgb, #f43f5e 18%, var(--background));
+  --accent-foreground: #f43f5e;
+}
+
 .surface,
 .tooltip {
   background-color: #f43f5e;

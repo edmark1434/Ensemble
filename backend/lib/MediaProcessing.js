@@ -9,6 +9,10 @@ const MAX_SHORT_SIDE = 1080;
 const TAG_FIRST_DELAY_SECONDS = 3;
 const TAG_INTERVAL_SECONDS = [12, 18];
 const MAX_TAGS = 30;
+const TAG_VOLUME = 4;
+const TAG_BACKGROUND_VOLUME = 0.2;
+const TAG_DUCK_ATTACK_SECONDS = 0.08;
+const TAG_DUCK_RELEASE_SECONDS = 0.25;
 
 function ffmpegBinary() {
   return process.env.FFMPEG_PATH || require('ffmpeg-static');
@@ -179,19 +183,37 @@ async function processAudio({ inputPath, workDir, tagPath }) {
   // The tag clip is optional while the final producer recording is unavailable.
   const includeTag = Boolean(tagPath && fs.existsSync(tagPath));
   const delays = includeTag ? tagDelays(info.duration) : [];
+  let duckEnvelope = '0';
+  if (delays.length > 0) {
+    const tagInfo = await probe(tagPath);
+    if (!tagInfo.hasAudio || !Number.isFinite(tagInfo.duration) || tagInfo.duration <= 0) {
+      throw new Error('The audio tag has no readable audio stream');
+    }
+    // Duck for the whole tag, with short ramps to avoid abrupt volume changes.
+    // Overlapping tags share one dip instead of reducing the background twice.
+    for (const delay of delays) {
+      const start = delay / 1000;
+      const end = start + tagInfo.duration;
+      const attack = `min(1,max(0,(t-(${start - TAG_DUCK_ATTACK_SECONDS}))/${TAG_DUCK_ATTACK_SECONDS}))`;
+      const release = `min(1,max(0,(${end + TAG_DUCK_RELEASE_SECONDS}-t)/${TAG_DUCK_RELEASE_SECONDS}))`;
+      duckEnvelope = `max(${duckEnvelope},${attack}*${release})`;
+    }
+  }
   const proxyPath = path.join(workDir, 'proxy.mp3');
   const inputs = ['-i', inputPath];
   const parts = [];
   delays.forEach((delay, index) => {
     inputs.push('-i', tagPath);
-    parts.push(`[${index + 1}:a]volume=2.0,aformat=sample_rates=44100:channel_layouts=stereo,adelay=${delay}:all=1[t${index}]`);
+    parts.push(`[${index + 1}:a]aformat=sample_rates=44100:channel_layouts=stereo,asetpts=PTS-STARTPTS,volume=${TAG_VOLUME},adelay=${delay}:all=1[t${index}]`);
   });
   const args = ['-y', '-v', 'error', ...inputs];
   if (delays.length > 0) {
-    const mixInputs = ['[0:a]aformat=sample_rates=44100:channel_layouts=stereo[m]', ...parts]
+    const backgroundVolume = `1-${1 - TAG_BACKGROUND_VOLUME}*(${duckEnvelope})`;
+    const mixInputs = [`[0:a]aformat=sample_rates=44100:channel_layouts=stereo,asetpts=PTS-STARTPTS,volume='${backgroundVolume}':eval=frame[m]`, ...parts]
       .join(';');
     const labels = ['[m]', ...delays.map((_, index) => `[t${index}]`)].join('');
-    const graph = `${mixInputs};${labels}amix=inputs=${delays.length + 1}:duration=first:normalize=0[out]`;
+    // Limit summed peaks without automatic makeup gain undoing the volume dip.
+    const graph = `${mixInputs};${labels}amix=inputs=${delays.length + 1}:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[out]`;
     args.push('-filter_complex', graph, '-map', '[out]');
   } else {
     args.push('-map', '0:a:0');

@@ -22,7 +22,7 @@ import { ITimelineScaleState } from "@designcombo/types";
 import { getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel } from "@/features/editor/utils/timeline";
 import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset";
 import { TIMELINE_OFFSET_CANVAS_LEFT } from "@/features/editor/constants/constants";
-import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
+import { scrollTimelineToFrame, seekTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
 import {
   makeSceneTrackItem,
@@ -394,7 +394,7 @@ export function useKeyboardShortcuts(
         const { playerRef, fps } = useStore.getState();
         const current = playerRef?.current?.getCurrentFrame() ?? 0;
         const step = e.shiftKey ? fps : 1;
-        playerRef?.current?.seekTo(Math.max(0, current - step));
+        seekTimelineToFrame(Math.max(0, current - step), timelineOffsetXRef.current);
       }
 
       // next frame / next second
@@ -403,7 +403,7 @@ export function useKeyboardShortcuts(
         const { playerRef, fps } = useStore.getState();
         const current = playerRef?.current?.getCurrentFrame() ?? 0;
         const step = e.shiftKey ? fps : 1;
-        playerRef?.current?.seekTo(current + step);
+        seekTimelineToFrame(current + step, timelineOffsetXRef.current);
       }
 
       // nudge selected item(s) position

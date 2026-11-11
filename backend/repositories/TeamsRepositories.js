@@ -788,7 +788,7 @@ async function listTeamVideoProjects(teamId) {
              WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL
            ) as collaborators
       FROM team_video_projects tvp
-      JOIN projects p ON p.project_id = tvp.project_id AND p.deleted_at IS NULL
+      JOIN projects p ON p.project_id = tvp.project_id AND p.deleted_at IS NULL AND p.trashed_at IS NULL
       LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id
       LEFT JOIN accounts creator ON creator.account_id = tvp.created_by_account_id
      WHERE tvp.team_id = $1

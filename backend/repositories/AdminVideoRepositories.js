@@ -272,11 +272,12 @@ async function setVideoProjectRemoval(projectId, action, session) {
     throw videoError('Choose remove or restore');
   }
   const current = await pool.query(
-    `SELECT project_id, name, deleted_at FROM projects WHERE project_id = $1`,
+    `SELECT project_id, name, deleted_at, trashed_at FROM projects WHERE project_id = $1`,
     [projectId]
   );
   const project = current.rows[0];
   if (!project) throw videoError('Project not found', 404);
+  if (verb === 'restore' && project.trashed_at) throw videoError('Owner-deleted projects cannot be restored from moderation', 409);
   if (verb === 'remove' && project.deleted_at) throw videoError('This project is already removed', 409);
   if (verb === 'restore' && !project.deleted_at) throw videoError('This project is not removed', 409);
 

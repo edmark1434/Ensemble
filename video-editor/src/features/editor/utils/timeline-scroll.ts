@@ -4,6 +4,15 @@ import { TIMELINE_OFFSET_CANVAS_LEFT } from "../constants/constants";
 
 export type ScrollToFrameKind = "start" | "marker" | "end";
 
+// Use for navigation actions so the player and timeline move together.
+export function seekTimelineToFrame(frame: number, timelineOffsetX: number) {
+  const player = useStore.getState().playerRef?.current;
+  if (!player || !Number.isFinite(frame)) return;
+  player.seekTo(Math.round(frame));
+  // The player clamps seeks to its duration; reveal the frame it actually chose.
+  scrollTimelineToFrame(player.getCurrentFrame(), "marker", timelineOffsetX);
+}
+
 export function scrollTimelineToFrame(
   frame: number,
   kind: ScrollToFrameKind,
@@ -21,8 +30,8 @@ export function scrollTimelineToFrame(
   const viewportWidth = (timeline as any).width ?? 0;
   const offsetX = TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX;
 
-  const screenX = targetPx - currentScrollLeft;
-  const isOffScreen = screenX < 0 || screenX > viewportWidth;
+  const screenX = targetPx - currentScrollLeft + ((timeline as any).spacing?.left ?? offsetX);
+  const isOffScreen = screenX < 0 || screenX >= viewportWidth;
 
   if (!isOffScreen) return;
 
@@ -34,6 +43,7 @@ export function scrollTimelineToFrame(
         : Math.max(0, targetPx - viewportWidth / 2 + offsetX);
 
   Promise.resolve().then(() => {
+    if (useStore.getState().timeline !== timeline) return;
     timeline.scrollTo({ scrollLeft: newScrollLeft });
   });
 }
