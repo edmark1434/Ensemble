@@ -37,6 +37,8 @@ async function ensureDefaultSettings() {
       ]
     );
   }
+  // Automod settings section was removed from System Settings.
+  await pool.query(`DELETE FROM configuration WHERE configuration_key LIKE 'moderation.%'`);
 }
 
 /** Defaults only change with a deploy, so request paths seed them once per process. */

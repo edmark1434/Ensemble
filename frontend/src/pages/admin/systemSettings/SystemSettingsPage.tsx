@@ -12,7 +12,6 @@ import {
   Save,
   Settings2,
   Shield,
-  ShieldAlert,
 } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '@/lib/axios';
@@ -21,18 +20,16 @@ import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type {
   EconomySettings,
-  ModerationSettings,
   NotificationSettings,
   PlatformSettings,
   SecuritySettings,
   SettingsOverview,
 } from './settingsTypes';
 
-type TabId = 'platform' | 'moderation' | 'economy' | 'notifications' | 'security';
+type TabId = 'platform' | 'economy' | 'notifications' | 'security';
 
 const TABS: { id: TabId; label: string; icon: typeof Settings2 }[] = [
   { id: 'platform', label: 'Platform', icon: Globe },
-  { id: 'moderation', label: 'Moderation', icon: ShieldAlert },
   { id: 'economy', label: 'Economy', icon: Coins },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
@@ -214,7 +211,6 @@ function settingsDrafts(d: SettingsOverview) {
   }
   return {
     platform,
-    moderation: { ...d.sections.moderation.value },
     economy: JSON.parse(JSON.stringify(d.sections.economy.value)) as EconomySettings,
     notifications: { ...d.sections.notifications.value },
     security: {
@@ -228,7 +224,7 @@ export default function SystemSettingsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['platform', 'moderation', 'economy', 'notifications', 'security'];
+  const valid: TabId[] = ['platform', 'economy', 'notifications', 'security'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'platform';
 
   const [data, setData] = useState<SettingsOverview | null>(() => {
@@ -243,9 +239,6 @@ export default function SystemSettingsPage() {
 
   const [platform, setPlatform] = useState<PlatformSettings | null>(() =>
     data ? settingsDrafts(data).platform : null
-  );
-  const [moderation, setModeration] = useState<ModerationSettings | null>(() =>
-    data ? settingsDrafts(data).moderation : null
   );
   const [economy, setEconomy] = useState<EconomySettings | null>(() =>
     data ? settingsDrafts(data).economy : null
@@ -263,7 +256,6 @@ export default function SystemSettingsPage() {
     const drafts = settingsDrafts(d);
     const edited = keepEdits ? dirtyRef.current : null;
     if (!edited?.platform) setPlatform(drafts.platform);
-    if (!edited?.moderation) setModeration(drafts.moderation);
     if (!edited?.economy) setEconomy(drafts.economy);
     if (!edited?.notifications) setNotifications(drafts.notifications);
     if (!edited?.security) {
@@ -302,10 +294,9 @@ export default function SystemSettingsPage() {
   };
 
   const dirty = useMemo(() => {
-    if (!data || !platform || !moderation || !economy || !notifications || !security) {
+    if (!data || !platform || !economy || !notifications || !security) {
       return {
         platform: false,
-        moderation: false,
         economy: false,
         notifications: false,
         security: false,
@@ -313,13 +304,12 @@ export default function SystemSettingsPage() {
     }
     return {
       platform: stableStringify(platform) !== stableStringify(data.sections.platform.value),
-      moderation: stableStringify(moderation) !== stableStringify(data.sections.moderation.value),
       economy: stableStringify(economy) !== stableStringify(data.sections.economy.value),
       notifications:
         stableStringify(notifications) !== stableStringify(data.sections.notifications.value),
       security: stableStringify(security) !== stableStringify(data.sections.security.value),
     };
-  }, [data, platform, moderation, economy, notifications, security]);
+  }, [data, platform, economy, notifications, security]);
 
   const dirtyRef = useRef(dirty);
   useEffect(() => {
@@ -355,7 +345,6 @@ export default function SystemSettingsPage() {
       }
       setPlatform(plat);
     }
-    if (section === 'moderation') setModeration({ ...data.sections.moderation.value });
     if (section === 'economy') setEconomy(JSON.parse(JSON.stringify(data.sections.economy.value)));
     if (section === 'notifications') setNotifications({ ...data.sections.notifications.value });
     if (section === 'security') {
@@ -375,7 +364,7 @@ export default function SystemSettingsPage() {
     );
   }
 
-  if (!data || !platform || !moderation || !economy || !notifications || !security) {
+  if (!data || !platform || !economy || !notifications || !security) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
@@ -500,55 +489,6 @@ export default function SystemSettingsPage() {
               onChange={(v) => setPlatform({ ...platform, registrationEnabled: v })}
             />
           </SectionCard>
-        )}
-
-        {tab === 'moderation' && (
-          <div className="space-y-4">
-            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Canonical editor for automod rules. Ops status lives in{' '}
-              <Link
-                to="/admin/moderation?tab=management&section=automated"
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Moderation → Management → Automod
-              </Link>
-              . Password and lockout rules stay under{' '}
-              <button
-                type="button"
-                onClick={() => switchTab('security')}
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Security
-              </button>
-              .
-            </p>
-          <SectionCard
-            title="Automated moderation rules"
-            description="Platform-wide auto-mod behavior and dispute routing."
-            dirty={dirty.moderation}
-            saving={saving}
-            updatedAt={data.sections.moderation.updatedAt}
-            onSave={() => void saveSection('moderation', moderation)}
-            onDiscard={() => discardSection('moderation')}
-          >
-            <Toggle label="Spam filter" checked={moderation.spamFilterEnabled} onChange={(v) => setModeration({ ...moderation, spamFilterEnabled: v })} />
-            <Toggle label="Auto-flag profanity" checked={moderation.autoFlagProfanity} onChange={(v) => setModeration({ ...moderation, autoFlagProfanity: v })} />
-            <Toggle label="Hold new accounts for review" checked={moderation.autoHoldNewAccounts} onChange={(v) => setModeration({ ...moderation, autoHoldNewAccounts: v })} />
-            <Toggle label="Forum link scanning" checked={moderation.forumLinkScanning} onChange={(v) => setModeration({ ...moderation, forumLinkScanning: v })} />
-            <Toggle label="Marketplace listing review" checked={moderation.marketplaceListingReview} onChange={(v) => setModeration({ ...moderation, marketplaceListingReview: v })} />
-            <Toggle label="Auto-assign disputes" checked={moderation.disputeAutoAssign} onChange={(v) => setModeration({ ...moderation, disputeAutoAssign: v })} />
-            <Toggle label="Auto-escalate high priority" checked={moderation.autoEscalateHighPriority} onChange={(v) => setModeration({ ...moderation, autoEscalateHighPriority: v })} />
-            <Toggle label="Auto-create ticket from report" checked={moderation.reportToTicketAutoCreate} onChange={(v) => setModeration({ ...moderation, reportToTicketAutoCreate: v })} />
-            <NumberField
-              label="Active warning points before auto-suspend"
-              value={moderation.maxWarningsBeforeSuspend}
-              onChange={(v) => setModeration({ ...moderation, maxWarningsBeforeSuspend: v })}
-              min={1}
-              max={50}
-              hint="Uses the number you set. Example: 3 means auto-suspend at 3 active warning points."
-            />
-          </SectionCard>
-          </div>
         )}
 
         {tab === 'economy' && (
@@ -811,19 +751,11 @@ export default function SystemSettingsPage() {
         {tab === 'security' && (
           <div className="space-y-4">
             <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Auth and access controls — separate from Automod. Community auto-rules live under{' '}
-              <button
-                type="button"
-                onClick={() => switchTab('moderation')}
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Moderation
-              </button>
-              .
+              Auth and access controls for staff consoles and member login lockouts.
             </p>
           <SectionCard
             title="Security & compliance"
-            description="Staff auth, lockouts, HTTPS, and admin IP allowlist."
+            description="Staff auth, lockouts, and admin IP allowlist."
             dirty={dirty.security}
             saving={saving}
             updatedAt={data.sections.security.updatedAt}

@@ -14,18 +14,6 @@ export type PlatformSettings = {
   sessionTimeoutMinutes?: number;
 };
 
-export type ModerationSettings = {
-  spamFilterEnabled: boolean;
-  autoFlagProfanity: boolean;
-  autoHoldNewAccounts: boolean;
-  forumLinkScanning: boolean;
-  marketplaceListingReview: boolean;
-  disputeAutoAssign: boolean;
-  maxWarningsBeforeSuspend: number;
-  autoEscalateHighPriority: boolean;
-  reportToTicketAutoCreate: boolean;
-};
-
 export type CreditPackage = {
   id: string;
   name: string;
@@ -82,7 +70,6 @@ export type SettingsOverview = {
   lastUpdated: string;
   sections: {
     platform: SettingsSection<PlatformSettings>;
-    moderation: SettingsSection<ModerationSettings>;
     economy: SettingsSection<EconomySettings>;
     notifications: SettingsSection<NotificationSettings>;
     security: SettingsSection<SecuritySettings>;

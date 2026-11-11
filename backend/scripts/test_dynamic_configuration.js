@@ -407,55 +407,16 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
-    // Test 14: Dynamic Dispute Auto-Assignment (moderation.disputeAutoAssign)
+    // Test 14: Dispute auto-assign removed from Automod settings
     // -------------------------------------------------------------
     {
-      const { reconcileUnassignedDisputes, applyDisputeAutomations } = require('../lib/ModerationPolicy');
-      
-      const origConfig = await pool.query(
-        `SELECT current_value_literal FROM configuration WHERE configuration_key = 'moderation.disputeAutoAssign'`
+      const { reconcileUnassignedDisputes } = require('../lib/ModerationPolicy');
+      const result = await reconcileUnassignedDisputes();
+      record(
+        'Dispute auto-assign removed (reconcile is a no-op)',
+        result?.assigned === 0,
+        `assigned=${result?.assigned}`
       );
-      const origLiteral = origConfig.rows[0]?.current_value_literal ?? 'true';
-
-      try {
-        // First reset DIS-50001 to unassigned
-        await pool.query(
-          `UPDATE disputes SET handled_by_staff_id = NULL, status = 'pending_review' WHERE dispute_number = 'DIS-50001'`
-        );
-
-        // Turn OFF disputeAutoAssign
-        await pool.query(
-          `UPDATE configuration SET current_value_literal = 'false' WHERE configuration_key = 'moderation.disputeAutoAssign'`
-        );
-        const disabledResult = await reconcileUnassignedDisputes();
-        const checkDisabled = await pool.query(
-          `SELECT handled_by_staff_id FROM disputes WHERE dispute_number = 'DIS-50001'`
-        );
-        const remainedNull = checkDisabled.rows[0]?.handled_by_staff_id === null;
-
-        // Turn ON disputeAutoAssign
-        await pool.query(
-          `UPDATE configuration SET current_value_literal = 'true' WHERE configuration_key = 'moderation.disputeAutoAssign'`
-        );
-        const enabledResult = await reconcileUnassignedDisputes();
-        const checkEnabled = await pool.query(
-          `SELECT handled_by_staff_id, status FROM disputes WHERE dispute_number = 'DIS-50001'`
-        );
-        const assignedStaffId = checkEnabled.rows[0]?.handled_by_staff_id;
-        const assignedStatus = checkEnabled.rows[0]?.status;
-        const successfullyAssigned = Boolean(assignedStaffId) && assignedStatus === 'under_review';
-
-        record(
-          'Dynamic dispute auto-assignment (moderation.disputeAutoAssign)',
-          remainedNull && successfullyAssigned,
-          `Disabled: retained unassigned (assigned: ${disabledResult.assigned}), Enabled: auto-assigned to staff ${assignedStaffId} with status ${assignedStatus}`
-        );
-      } finally {
-        await pool.query(
-          `UPDATE configuration SET current_value_literal = $1 WHERE configuration_key = 'moderation.disputeAutoAssign'`,
-          [origLiteral]
-        );
-      }
     }
 
     console.log('\n=== Test Suite Summary ===');

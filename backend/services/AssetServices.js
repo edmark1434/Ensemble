@@ -482,15 +482,14 @@ async function getAssetServices(assetId, accountId) {
 async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
-    const { resolveMarketplacePublishStatus, getModerationSettings } = require('../lib/ModerationPolicy');
+    const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
     const { assertWarningAllows, listingReviewForced } = require('./WarningBandServices');
     if (String(data.status).toLowerCase() === 'published') {
       await assertWarningAllows(accountId, 'publish_asset');
     }
-    const settings = await getModerationSettings();
     const watchReview = String(data.status).toLowerCase() === 'published'
       && await listingReviewForced(accountId);
-    const reviewRequired = (settings.marketplaceListingReview || watchReview) && String(data.status).toLowerCase() === 'published';
+    const reviewRequired = watchReview && String(data.status).toLowerCase() === 'published';
 
     // When review is required, asset is created as draft while awaiting moderator approval
     const requestedStatus = data.status;

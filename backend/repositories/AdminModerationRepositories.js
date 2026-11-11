@@ -1,6 +1,5 @@
 const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
-const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositories');
 const { fetchDisputesList, fetchReportsList } = require('./AdminTicketsRepositories');
 const {
   listRecentAccountActivity,
@@ -556,7 +555,6 @@ async function getModerationOverview(staffSession = null) {
     reportStats,
     listingStats,
     violationStats,
-    moderationSettings,
     ],
     [pendingCases, recentActivity, identityReviewCount, disputes, reports],
   ] = await Promise.all([
@@ -633,7 +631,6 @@ async function getModerationOverview(staffSession = null) {
           AND (expires_at IS NULL OR expires_at > NOW())
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),
-    getSectionValue('moderation').catch(() => DEFAULT_SETTINGS.moderation),
     ]),
     Promise.all([
       fetchPendingCasesFromDb(),
@@ -731,14 +728,7 @@ async function getModerationOverview(staffSession = null) {
     })),
     forumReviewQueue: forum.groups.slice(0, 12),
     contentSnapshots: forum.flaggedDiscussions.slice(0, 8),
-    automatedSettings: (() => {
-      // Always return the persisted configuration values (same store as Settings → Moderation).
-      // Do not mutate stored flags based on Mongo connectivity — that caused false saves.
-      return {
-        ...DEFAULT_SETTINGS.moderation,
-        ...(moderationSettings || {}),
-      };
-    })(),
+    automatedSettings: {},
     forumMongoConnected: Boolean(forum.connected),
     alerts: buildModerationAlerts(
       pendingCases,

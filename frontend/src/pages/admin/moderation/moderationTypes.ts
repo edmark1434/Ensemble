@@ -115,17 +115,7 @@ export type ModerationOverview = {
   accountStatusBreakdown: { status: string; count: number }[];
   forumReviewQueue: ForumReviewItem[];
   contentSnapshots: ContentSnapshot[];
-  automatedSettings: {
-    spamFilterEnabled: boolean;
-    autoFlagProfanity: boolean;
-    autoHoldNewAccounts: boolean;
-    forumLinkScanning: boolean;
-    marketplaceListingReview: boolean;
-    disputeAutoAssign: boolean;
-    maxWarningsBeforeSuspend: number;
-    autoEscalateHighPriority: boolean;
-    reportToTicketAutoCreate: boolean;
-  };
+  automatedSettings: Record<string, never>;
   forumMongoConnected?: boolean;
   alerts: ModerationAlert[];
 };

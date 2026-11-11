@@ -1,12 +1,12 @@
-# Active Task: Honor maxWarningsBeforeSuspend as configured
+# Active Task: Remove remaining Automod settings
 
 ## Implementation Objective
 
-Stop treating moderation.maxWarningsBeforeSuspend values under 10 as 20. Use the admin-configured number as the real auto-suspend trigger threshold.
+Remove Spam filter, Auto-flag profanity, and Active warning points before auto-suspend from admin Automod/settings. Disable spam/profanity blocking. Keep auto-suspend driven only by warning thresholds (`/admin/warnings`), not a separate Automod number.
 
 ## Acceptance Criteria
 
-- [x] Configured value (including under 10) is used as the suspend gate.
-- [x] Admin UI allows values from 1–50.
-- [x] Field meta/description no longer says under-10 values become 20.
+- [x] Settings removed from defaults, UI, types, and moderation status panels.
+- [x] Forum spam/profanity automod no longer blocks posts.
+- [x] Auto-suspend uses warning thresholds only.
 - [x] Frontend typecheck passes.

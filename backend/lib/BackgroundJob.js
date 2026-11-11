@@ -463,15 +463,6 @@ function startPaymentReconciliationJob() {
         }
     });
 
-    // Periodic reconciliation of unassigned disputes based on moderation.disputeAutoAssign
-    cron.schedule("*/5 * * * *", async () => {
-        try {
-            await reconcileUnassignedDisputesServices();
-        } catch (err) {
-            console.error("Dispute auto-assign reconciliation failed:", err.message);
-        }
-    });
-
     // ── Milestone: flag overdue + send approaching-deadline reminders ──────
     // Job 1: Overdue detector — every hour at :00
     cron.schedule("0 * * * *", async () => {

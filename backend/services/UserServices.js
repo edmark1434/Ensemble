@@ -285,14 +285,11 @@ async function registerUser(signupPayload = {}, options = {}) {
         };
     }
     //create account and user in the database, hash the password if provided, and return the created user and account information
-    const { getModerationSettings } = require('../lib/ModerationPolicy');
-    const moderation = await getModerationSettings();
-    const accountStatus = moderation.autoHoldNewAccounts ? 'Locked' : 'active';
     const account = await createAccount({
         displayName: [firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || null,
         handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
         type: type ?? 'User',
-        status: accountStatus,
+        status: 'active',
     });
     //hash the password if provided, otherwise set to null for OAuth users
     const passwordHash = options.passwordHash || (password ? await bcrypt.hash(password, SALT_ROUNDS) : null);
