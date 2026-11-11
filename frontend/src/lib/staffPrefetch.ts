@@ -9,13 +9,21 @@ const ROUTE_DATA: Record<string, DataRequest[]> = {
   '/admin/dashboard': ['/api/admin/dashboard-overview'],
   '/admin/user-team': [USER_TEAM_OVERVIEW],
   '/admin/credit-economy': ['/api/admin/economy-overview'],
-  '/admin/moderation': ['/api/admin/moderation-overview'],
+  '/admin/moderation': [
+    '/api/admin/moderation-overview',
+    '/api/admin/warning-defs',
+  ],
   '/admin/analytics': ['/api/admin/analytics-overview'],
   '/admin/ticket-management': ['/api/admin/tickets-overview', '/api/admin/ticket-articles'],
   '/admin/feedbacks': ['/api/admin/feedbacks'],
   '/admin/badges': ['/api/admin/badges', '/api/admin/badge-requirement-types', '/api/admin/badge-categories'],
   '/admin/warnings': ['/api/admin/warning-defs'],
-  '/admin/system-settings': ['/api/admin/settings-overview'],
+  '/admin/system-settings': [
+    '/api/admin/settings-overview',
+    '/api/admin/badges',
+    '/api/admin/badge-requirement-types',
+    '/api/admin/badge-categories',
+  ],
 };
 
 function addModeratorDesk(desk: string, extra: Record<string, DataRequest[]>, restrictionsEndpoint?: string) {

@@ -2,7 +2,7 @@ import { AdminSubscriptionsTab } from '../creditEconomy/components/AdminSubscrip
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  Bell,
+  Award,
   CheckCircle2,
   Coins,
   Database,
@@ -17,23 +17,30 @@ import { useSearchParams, Link } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { prefetchStaffRoute } from '@/lib/staffPrefetch';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import {
+  AdminBadgesPanel,
+  type BadgesSection,
+} from '../badges/AdminBadgesPage';
 import type {
   EconomySettings,
-  NotificationSettings,
   PlatformSettings,
   SecuritySettings,
   SettingsOverview,
 } from './settingsTypes';
 
-type TabId = 'platform' | 'economy' | 'notifications' | 'security';
+type SettingsTabId = 'platform' | 'economy' | 'security';
+type TabId = SettingsTabId | 'badges';
 
 const TABS: { id: TabId; label: string; icon: typeof Settings2 }[] = [
   { id: 'platform', label: 'Platform', icon: Globe },
   { id: 'economy', label: 'Economy', icon: Coins },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
+  { id: 'badges', label: 'Badges', icon: Award },
 ];
+
+const BADGE_SECTIONS: BadgesSection[] = ['catalog', 'grant'];
 
 const fieldClass =
   'rounded-lg border border-white/10 bg-[#0c0d12] px-3 py-2 text-sm text-white outline-none transition focus:border-rose-500/40 focus:ring-2 focus:ring-rose-500/15';
@@ -212,7 +219,6 @@ function settingsDrafts(d: SettingsOverview) {
   return {
     platform,
     economy: JSON.parse(JSON.stringify(d.sections.economy.value)) as EconomySettings,
-    notifications: { ...d.sections.notifications.value },
     security: {
       ...d.sections.security.value,
       allowedAdminIps: [...(d.sections.security.value.allowedAdminIps || [])],
@@ -224,8 +230,13 @@ export default function SystemSettingsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['platform', 'economy', 'notifications', 'security'];
+  const paramSection = searchParams.get('section');
+  const valid: TabId[] = ['platform', 'economy', 'security', 'badges'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'platform';
+  const initialBadgeSection =
+    paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection)
+      ? (paramSection as BadgesSection)
+      : 'catalog';
 
   const [data, setData] = useState<SettingsOverview | null>(() => {
     const cached = peekStaffGet(SETTINGS_URL);
@@ -234,6 +245,7 @@ export default function SystemSettingsPage() {
   const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
+  const [badgeSection, setBadgeSection] = useState<BadgesSection>(initialBadgeSection);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -242,9 +254,6 @@ export default function SystemSettingsPage() {
   );
   const [economy, setEconomy] = useState<EconomySettings | null>(() =>
     data ? settingsDrafts(data).economy : null
-  );
-  const [notifications, setNotifications] = useState<NotificationSettings | null>(() =>
-    data ? settingsDrafts(data).notifications : null
   );
   const [security, setSecurity] = useState<SecuritySettings | null>(() =>
     data ? settingsDrafts(data).security : null
@@ -257,7 +266,6 @@ export default function SystemSettingsPage() {
     const edited = keepEdits ? dirtyRef.current : null;
     if (!edited?.platform) setPlatform(drafts.platform);
     if (!edited?.economy) setEconomy(drafts.economy);
-    if (!edited?.notifications) setNotifications(drafts.notifications);
     if (!edited?.security) {
       setSecurity(drafts.security);
       setIpDraft('');
@@ -286,37 +294,56 @@ export default function SystemSettingsPage() {
 
   useEffect(() => {
     if (paramTab && valid.includes(paramTab)) setTab(paramTab);
-  }, [paramTab]);
+    if (paramTab === 'badges') {
+      if (paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection)) {
+        setBadgeSection(paramSection as BadgesSection);
+      }
+      prefetchStaffRoute('/admin/badges');
+    }
+  }, [paramTab, paramSection]);
 
   const switchTab = (id: TabId) => {
     setTab(id);
+    if (id === 'badges') {
+      prefetchStaffRoute('/admin/badges');
+      setSearchParams(
+        badgeSection === 'catalog' ? { tab: id } : { tab: id, section: badgeSection },
+        { replace: true }
+      );
+      return;
+    }
     setSearchParams(id === 'platform' ? {} : { tab: id }, { replace: true });
   };
 
+  const switchBadgeSection = (section: BadgesSection) => {
+    setBadgeSection(section);
+    setSearchParams(
+      section === 'catalog' ? { tab: 'badges' } : { tab: 'badges', section },
+      { replace: true }
+    );
+  };
+
   const dirty = useMemo(() => {
-    if (!data || !platform || !economy || !notifications || !security) {
+    if (!data || !platform || !economy || !security) {
       return {
         platform: false,
         economy: false,
-        notifications: false,
         security: false,
-      };
+      } satisfies Record<SettingsTabId, boolean>;
     }
     return {
       platform: stableStringify(platform) !== stableStringify(data.sections.platform.value),
       economy: stableStringify(economy) !== stableStringify(data.sections.economy.value),
-      notifications:
-        stableStringify(notifications) !== stableStringify(data.sections.notifications.value),
       security: stableStringify(security) !== stableStringify(data.sections.security.value),
-    };
-  }, [data, platform, economy, notifications, security]);
+    } satisfies Record<SettingsTabId, boolean>;
+  }, [data, platform, economy, security]);
 
   const dirtyRef = useRef(dirty);
   useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
 
-  const saveSection = async (section: TabId, values: object) => {
+  const saveSection = async (section: SettingsTabId, values: object) => {
     setSaving(true);
     try {
       const res = await api.patch('/api/admin/settings', { section, values });
@@ -336,7 +363,7 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const discardSection = (section: TabId) => {
+  const discardSection = (section: SettingsTabId) => {
     if (!data) return;
     if (section === 'platform') {
       const plat = { ...data.sections.platform.value };
@@ -346,7 +373,6 @@ export default function SystemSettingsPage() {
       setPlatform(plat);
     }
     if (section === 'economy') setEconomy(JSON.parse(JSON.stringify(data.sections.economy.value)));
-    if (section === 'notifications') setNotifications({ ...data.sections.notifications.value });
     if (section === 'security') {
       setSecurity({
         ...data.sections.security.value,
@@ -364,7 +390,7 @@ export default function SystemSettingsPage() {
     );
   }
 
-  if (!data || !platform || !economy || !notifications || !security) {
+  if (!data || !platform || !economy || !security) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
@@ -404,15 +430,17 @@ export default function SystemSettingsPage() {
               <span>@{user?.username || 'admin'}</span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh from DB
-          </button>
+          {tab !== 'badges' && (
+            <button
+              type="button"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+              className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh from DB
+            </button>
+          )}
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
           {TABS.map(({ id, label, icon: Icon }) => (
@@ -426,7 +454,9 @@ export default function SystemSettingsPage() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {dirty[id] && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />}
+              {id !== 'badges' && dirty[id] && (
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              )}
             </button>
           ))}
         </div>
@@ -723,31 +753,6 @@ export default function SystemSettingsPage() {
           </div>
         )}
 
-        {tab === 'notifications' && (
-          <SectionCard
-            title="Email & desk notifications"
-            description="Admin and support notification preferences."
-            dirty={dirty.notifications}
-            saving={saving}
-            updatedAt={data.sections.notifications.updatedAt}
-            onSave={() => void saveSection('notifications', notifications)}
-            onDiscard={() => discardSection('notifications')}
-          >
-            <Toggle label="Email on new signups" checked={notifications.emailNewSignups} onChange={(v) => setNotifications({ ...notifications, emailNewSignups: v })} />
-            <Toggle label="Email on new tickets" checked={notifications.emailNewTickets} onChange={(v) => setNotifications({ ...notifications, emailNewTickets: v })} />
-            <Toggle label="Email when dispute opened" checked={notifications.emailDisputeOpened} onChange={(v) => setNotifications({ ...notifications, emailDisputeOpened: v })} />
-            <Toggle label="Email on high-priority reports" checked={notifications.emailHighPriorityReports} onChange={(v) => setNotifications({ ...notifications, emailHighPriorityReports: v })} />
-            <Toggle label="Notify assignee on ticket" checked={notifications.notifyAssigneeOnTicket} onChange={(v) => setNotifications({ ...notifications, notifyAssigneeOnTicket: v })} />
-            <Toggle label="Slack webhook enabled" checked={notifications.slackWebhookEnabled} onChange={(v) => setNotifications({ ...notifications, slackWebhookEnabled: v })} />
-            <TextField
-              label="Slack webhook URL"
-              value={notifications.slackWebhookUrl}
-              placeholder="https://hooks.slack.com/..."
-              onChange={(v) => setNotifications({ ...notifications, slackWebhookUrl: v })}
-            />
-          </SectionCard>
-        )}
-
         {tab === 'security' && (
           <div className="space-y-4">
             <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
@@ -830,50 +835,56 @@ export default function SystemSettingsPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-            <h2 className="font-semibold text-white">Change history</h2>
-            <p className="mt-1 text-xs text-zinc-500">Recent writes to configuration</p>
-            <ul className="mt-4 space-y-2">
-              {data.changeHistory.length ? (
-                data.changeHistory.map((h) => (
-                  <li
-                    key={h.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
-                  >
-                    <span className="capitalize text-white">{h.section}</span>
-                    <span className="shrink-0 text-right text-xs text-zinc-500">
-                      {h.updatedBy}
-                      <br />
-                      {h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '—'}
-                    </span>
-                  </li>
-                ))
-              ) : (
-                <li className="text-sm text-zinc-500">No saved changes yet.</li>
-              )}
-            </ul>
-          </section>
+        {tab === 'badges' && (
+          <AdminBadgesPanel section={badgeSection} onSectionChange={switchBadgeSection} />
+        )}
 
-          <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-            <h2 className="font-semibold text-white">Staff editors</h2>
-            <p className="mt-1 text-xs text-zinc-500">Accounts that can update these settings</p>
-            <ul className="mt-4 space-y-2">
-              {data.staffEditors.map((s) => (
-                <li
-                  key={String(s.staffId)}
-                  className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
-                >
-                  <span className="text-white">{s.name}</span>
-                  <span className="text-xs text-zinc-500">{s.role}</span>
-                </li>
-              ))}
-              {!data.staffEditors.length && (
-                <li className="text-sm text-zinc-500">No staff accounts found.</li>
-              )}
-            </ul>
-          </section>
-        </div>
+        {tab !== 'badges' && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
+              <h2 className="font-semibold text-white">Change history</h2>
+              <p className="mt-1 text-xs text-zinc-500">Recent writes to configuration</p>
+              <ul className="mt-4 space-y-2">
+                {data.changeHistory.length ? (
+                  data.changeHistory.map((h) => (
+                    <li
+                      key={h.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
+                    >
+                      <span className="capitalize text-white">{h.section}</span>
+                      <span className="shrink-0 text-right text-xs text-zinc-500">
+                        {h.updatedBy}
+                        <br />
+                        {h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '—'}
+                      </span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-zinc-500">No saved changes yet.</li>
+                )}
+              </ul>
+            </section>
+
+            <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
+              <h2 className="font-semibold text-white">Staff editors</h2>
+              <p className="mt-1 text-xs text-zinc-500">Accounts that can update these settings</p>
+              <ul className="mt-4 space-y-2">
+                {data.staffEditors.map((s) => (
+                  <li
+                    key={String(s.staffId)}
+                    className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
+                  >
+                    <span className="text-white">{s.name}</span>
+                    <span className="text-xs text-zinc-500">{s.role}</span>
+                  </li>
+                ))}
+                {!data.staffEditors.length && (
+                  <li className="text-sm text-zinc-500">No staff accounts found.</li>
+                )}
+              </ul>
+            </section>
+          </div>
+        )}
       </div>
     </main>
   );

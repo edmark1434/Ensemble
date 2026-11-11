@@ -22,8 +22,9 @@
 
 ## Component practices
 
-- Admin warning catalog, standing punishments, and point thresholds live at `/admin/warnings` (`AdminWarningsPage`). Staff warn pickers load `/api/admin/warning-catalog` (or `/api/moderator/warning-catalog`) instead of a hardcoded list. Warning duration is displayed read-only; staff cannot set it.
-- Admin badge catalog at `/admin/badges` loads `/api/admin/badge-categories` for the category dropdown. Staff pick a live category or create one inline. Do not send a free-text category on badge save. The Grant tab groups badges by category. Profile pins, the pin modal, and discovery cards hydrate catalog rows (including honorary badges) with `category` from the API.
+- Admin warning catalog, standing punishments, and point thresholds live under Moderation → Policy (`/admin/moderation?tab=policy`, `AdminWarningsPanel`). Legacy `/admin/warnings` redirects there. Staff warn pickers load `/api/admin/warning-catalog` (or `/api/moderator/warning-catalog`) instead of a hardcoded list. Warning duration is displayed read-only; staff cannot set it.
+- Admin badge catalog lives under Settings → Badges (`/admin/system-settings?tab=badges`, `AdminBadgesPanel`). Legacy `/admin/badges` redirects there. It loads `/api/admin/badge-categories` for the category dropdown. Staff pick a live category or create one inline. Do not send a free-text category on badge save. The Grant section groups badges by category. Profile pins, the pin modal, and discovery cards hydrate catalog rows (including honorary badges) with `category` from the API.
+- Admin sidebar lists Reports only inside Moderation → Pending cases (no duplicate Reports nav item).
 - Staff ban, suspend, and timeout pickers load `/api/admin/punishment-catalog` (or `/api/moderator/punishment-catalog`). The catalog duration is the default. Staff may override it and must still write a reason.
 - User-facing screens say **Platform Merit**, never “warning points.” Merit is `100 − active warning points` from standing (`frontend/src/lib/merit.ts`). Staff desks keep warning-point language.
 - Follow the existing dark Ensemble theme, spacing, typography, borders, and controls.

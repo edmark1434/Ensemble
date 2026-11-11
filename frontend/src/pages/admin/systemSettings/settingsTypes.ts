@@ -46,16 +46,6 @@ export type EconomySettings = {
   };
 };
 
-export type NotificationSettings = {
-  emailNewSignups: boolean;
-  emailNewTickets: boolean;
-  emailDisputeOpened: boolean;
-  emailHighPriorityReports: boolean;
-  slackWebhookEnabled: boolean;
-  slackWebhookUrl: string;
-  notifyAssigneeOnTicket: boolean;
-};
-
 export type SecuritySettings = {
   requireStaff2fa: boolean;
   minPasswordLength: number;
@@ -71,7 +61,6 @@ export type SettingsOverview = {
   sections: {
     platform: SettingsSection<PlatformSettings>;
     economy: SettingsSection<EconomySettings>;
-    notifications: SettingsSection<NotificationSettings>;
     security: SettingsSection<SecuritySettings>;
   };
   staffEditors: { staffId: string | number; name: string; role: string }[];

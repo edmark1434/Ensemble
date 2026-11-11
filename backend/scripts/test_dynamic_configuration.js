@@ -209,15 +209,15 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
-    // Test 6: Dynamic Ticket Notifications Configuration Lookup
+    // Test 6: Notifications settings section removed (always-on alerts)
     // -------------------------------------------------------------
     {
       const notifSettings = await getSectionValue('notifications');
-      const ok = typeof notifSettings?.notifyAssigneeOnTicket === 'boolean';
+      const ok = notifSettings == null || Object.keys(notifSettings || {}).length === 0;
       record(
-        'Dynamic notifications configuration (notifyAssigneeOnTicket)',
+        'Notifications settings section removed',
         ok,
-        `notifyAssigneeOnTicket=${notifSettings?.notifyAssigneeOnTicket}`
+        `notifications section empty/absent`
       );
     }
 
@@ -389,20 +389,20 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
-    // Test 13: Dynamic Platform Alerts (Slack & Staff Email Alerts)
+    // Test 13: Platform Alerts (always-on staff email, no Slack)
     // -------------------------------------------------------------
     {
-      const { dispatchPlatformNotification, getNotificationConfig } = require('../services/PlatformAlertServices');
-      const config = await getNotificationConfig();
+      const { dispatchPlatformNotification, getPlatformAlertConfig } = require('../services/PlatformAlertServices');
+      const config = await getPlatformAlertConfig();
       const dispatchResult = await dispatchPlatformNotification('NEW_SIGNUP', {
         email: 'test_alert@ensemble.app',
         firstName: 'TestAlert',
       });
-      const ok = dispatchResult.dispatched === true && typeof config.notifications === 'object';
+      const ok = dispatchResult.dispatched === true && typeof config.platform === 'object' && !config.notifications;
       record(
-        'Dynamic platform alert dispatcher (emailNewSignups & Slack webhook)',
+        'Platform alert dispatcher (always-on staff email)',
         ok,
-        `Dispatched NEW_SIGNUP alert successfully (slackEnabled: ${config.notifications.slackWebhookEnabled})`
+        `Dispatched NEW_SIGNUP alert successfully (supportEmail: ${config.platform?.supportEmail})`
       );
     }
 

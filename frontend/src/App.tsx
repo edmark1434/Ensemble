@@ -395,7 +395,10 @@ function App() {
           <Route path='feedbacks' element={<AdminFeedbacksPage />} />
           <Route path='badges' element={<AdminBadgesPage />} />
           <Route path='warnings' element={<AdminWarningsPage />} />
-          <Route path='badge-grant' element={<Navigate to="/admin/badges?tab=grant" replace />} />
+          <Route
+            path='badge-grant'
+            element={<Navigate to="/admin/system-settings?tab=badges&section=grant" replace />}
+          />
           <Route path='user-team' element={<UserTeamPage />} />
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />

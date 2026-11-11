@@ -37,8 +37,9 @@ async function ensureDefaultSettings() {
       ]
     );
   }
-  // Automod settings section was removed from System Settings.
+  // Removed System Settings sections.
   await pool.query(`DELETE FROM configuration WHERE configuration_key LIKE 'moderation.%'`);
+  await pool.query(`DELETE FROM configuration WHERE configuration_key LIKE 'notifications.%'`);
 }
 
 /** Defaults only change with a deploy, so request paths seed them once per process. */

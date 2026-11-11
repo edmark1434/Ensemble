@@ -32,6 +32,7 @@ import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import { prefetchStaffTab } from '@/lib/staffPrefetch';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
 import type {
   ModerationActivity,
@@ -47,6 +48,10 @@ import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
 import VideoManagementSection from './VideoManagementSection';
 import ForumManagementSection from './ForumManagementSection';
+import {
+  AdminWarningsPanel,
+  type WarningsSection,
+} from '../warnings/AdminWarningsPage';
 
 const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
 const MODERATION_OVERVIEW_URL = '/api/admin/moderation-overview';
@@ -84,17 +89,19 @@ const STAFF_ROLE_OPTIONS = [
 
 const STAFF_STATUS_OPTIONS = ['Active', 'Suspended', 'Locked', 'Banned', 'Inactive'] as const;
 
-type TabId = 'overview' | 'activity' | 'cases' | 'management';
+type TabId = 'overview' | 'activity' | 'cases' | 'policy' | 'management';
 type CaseQueue = 'mine' | 'disputes' | 'reports' | 'listings' | 'identity';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'activity', label: 'Activity log', icon: ScrollText },
   { id: 'cases', label: 'Pending cases', icon: Gavel },
+  { id: 'policy', label: 'Policy', icon: Scale },
   { id: 'management', label: 'Management', icon: Settings2 },
 ];
 
 const CASE_QUEUES: CaseQueue[] = ['mine', 'disputes', 'reports', 'listings', 'identity'];
+const POLICY_SECTIONS: WarningsSection[] = ['catalog', 'punishments', 'thresholds'];
 
 type ManagementSection = 'automated' | 'moderators' | 'video' | 'forum';
 
@@ -146,10 +153,10 @@ export default function ModerationPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
-  const paramSection = searchParams.get('section') as ManagementSection | null;
+  const paramSection = searchParams.get('section');
   const paramQueue = searchParams.get('queue') as CaseQueue | null;
-  const validTabs: TabId[] = ['overview', 'activity', 'cases', 'management'];
-  const validSections = MANAGEMENT_SECTIONS.map((s) => s.id);
+  const validTabs: TabId[] = ['overview', 'activity', 'cases', 'policy', 'management'];
+  const validMgmtSections = MANAGEMENT_SECTIONS.map((s) => s.id);
   // Legacy ?tab=disputes|reports → Pending cases sub-queues
   const legacyQueue =
     rawTab === 'disputes' || rawTab === 'reports' ? (rawTab as CaseQueue) : null;
@@ -159,8 +166,14 @@ export default function ModerationPage() {
       : rawTab && validTabs.includes(rawTab as TabId)
         ? (rawTab as TabId)
         : 'overview';
-  const initialSection =
-    paramSection && validSections.includes(paramSection) ? paramSection : 'automated';
+  const initialMgmtSection =
+    paramSection && validMgmtSections.includes(paramSection as ManagementSection)
+      ? (paramSection as ManagementSection)
+      : 'automated';
+  const initialPolicySection =
+    paramSection && POLICY_SECTIONS.includes(paramSection as WarningsSection)
+      ? (paramSection as WarningsSection)
+      : 'catalog';
   const initialCaseQueue: CaseQueue =
     legacyQueue ||
     (paramQueue && CASE_QUEUES.includes(paramQueue) ? paramQueue : 'mine');
@@ -173,7 +186,8 @@ export default function ModerationPage() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
   const [caseQueue, setCaseQueue] = useState<CaseQueue>(initialCaseQueue);
-  const [mgmtSection, setMgmtSection] = useState<ManagementSection>(initialSection);
+  const [mgmtSection, setMgmtSection] = useState<ManagementSection>(initialMgmtSection);
+  const [policySection, setPolicySection] = useState<WarningsSection>(initialPolicySection);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<ModerationActivity | null>(null);
 
@@ -207,15 +221,36 @@ export default function ModerationPage() {
     if (rawTab && validTabs.includes(rawTab as TabId)) setTab(rawTab as TabId);
     else if (!rawTab) setTab('overview');
     if (paramQueue && CASE_QUEUES.includes(paramQueue)) setCaseQueue(paramQueue);
-    if (paramSection && validSections.includes(paramSection)) setMgmtSection(paramSection);
+    if (rawTab === 'management' && paramSection && validMgmtSections.includes(paramSection as ManagementSection)) {
+      setMgmtSection(paramSection as ManagementSection);
+    }
+    if (rawTab === 'policy' && paramSection && POLICY_SECTIONS.includes(paramSection as WarningsSection)) {
+      setPolicySection(paramSection as WarningsSection);
+    }
   }, [rawTab, paramSection, paramQueue]);
 
-  const switchTab = (id: TabId, section?: ManagementSection, queue?: CaseQueue) => {
+  const switchTab = (id: TabId, section?: ManagementSection | WarningsSection, queue?: CaseQueue) => {
     setTab(id);
     if (id === 'management') {
-      const nextSection = section || mgmtSection;
+      const nextSection =
+        section && validMgmtSections.includes(section as ManagementSection)
+          ? (section as ManagementSection)
+          : mgmtSection;
       setMgmtSection(nextSection);
       setSearchParams({ tab: id, section: nextSection }, { replace: true });
+      return;
+    }
+    if (id === 'policy') {
+      const nextSection =
+        section && POLICY_SECTIONS.includes(section as WarningsSection)
+          ? (section as WarningsSection)
+          : policySection;
+      setPolicySection(nextSection);
+      prefetchStaffTab('warnings', nextSection);
+      setSearchParams(
+        nextSection === 'catalog' ? { tab: id } : { tab: id, section: nextSection },
+        { replace: true }
+      );
       return;
     }
     if (id === 'cases') {
@@ -241,6 +276,15 @@ export default function ModerationPage() {
   const switchMgmtSection = (section: ManagementSection) => {
     setMgmtSection(section);
     setSearchParams({ tab: 'management', section }, { replace: true });
+  };
+
+  const switchPolicySection = (section: WarningsSection) => {
+    setPolicySection(section);
+    prefetchStaffTab('warnings', section);
+    setSearchParams(
+      section === 'catalog' ? { tab: 'policy' } : { tab: 'policy', section },
+      { replace: true }
+    );
   };
 
   if (loading) {
@@ -369,6 +413,9 @@ export default function ModerationPage() {
             onRefresh={() => void load(true)}
           />
         )}
+        {tab === 'policy' && (
+          <AdminWarningsPanel section={policySection} onSectionChange={switchPolicySection} />
+        )}
         {tab === 'management' && (
           <ManagementTab
             data={data}
@@ -400,14 +447,14 @@ function OverviewTab({
 }: {
   data: ModerationOverview;
   onViewActivity: (a: ModerationActivity) => void;
-  onGoTab: (t: TabId, section?: ManagementSection, queue?: CaseQueue) => void;
+  onGoTab: (t: TabId, section?: ManagementSection | WarningsSection, queue?: CaseQueue) => void;
 }) {
   const s = data.summary;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
       <div className="space-y-6">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Your pending cases"
             value={s.yourPendingCases}
@@ -426,6 +473,13 @@ function OverviewTab({
             value={s.activeModerators}
             sub={`${s.nonActiveAccounts} non-active accounts`}
             icon={Users}
+          />
+          <StatCard
+            label="Policy & standing"
+            value="Rules"
+            sub="Warnings · punishments · thresholds"
+            icon={Scale}
+            onClick={() => onGoTab('policy')}
           />
         </div>
 
@@ -1205,8 +1259,11 @@ function AutomatedSettingsSection() {
         </div>
         <p className="mt-2 text-sm text-zinc-500">
           Platform Automod toggles were removed from System Settings. Auto-suspend thresholds now live under{' '}
-          <Link to="/admin/warnings" className="font-medium text-rose-400 hover:underline">
-            Warnings
+          <Link
+            to="/admin/moderation?tab=policy&section=thresholds"
+            className="font-medium text-rose-400 hover:underline"
+          >
+            Moderation → Policy
           </Link>
           .
         </p>

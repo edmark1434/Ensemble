@@ -1,64 +1,82 @@
 import { Award, Library } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import BadgeCatalogTab from './BadgeCatalogTab';
 import BadgeGrantTab from './BadgeGrantTab';
 
-type TabId = 'catalog' | 'grant';
+export type BadgesSection = 'catalog' | 'grant';
 
-const TABS: { id: TabId; label: string; icon: typeof Library }[] = [
-  { id: 'catalog', label: 'Catalog', icon: Library },
-  { id: 'grant', label: 'Grant', icon: Award },
+export const BADGE_SETTINGS_SECTIONS: {
+  id: BadgesSection;
+  label: string;
+  title: string;
+  description: string;
+  icon: typeof Library;
+}[] = [
+  {
+    id: 'catalog',
+    label: 'Catalog',
+    title: 'Badge catalog',
+    description: 'Each badge stores one unlock and belongs to a category.',
+    icon: Library,
+  },
+  {
+    id: 'grant',
+    label: 'Grant',
+    title: 'Grant & revoke',
+    description: 'Issue pending badges or revoke holders. Users claim pending badges in Notifications.',
+    icon: Award,
+  },
 ];
 
-export default function AdminBadgesPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get('tab') as TabId | null;
-  const initialTab = paramTab === 'grant' ? 'grant' : 'catalog';
-  const [tab, setTab] = useState<TabId>(initialTab);
-
-  useEffect(() => {
-    setTab(paramTab === 'grant' ? 'grant' : 'catalog');
-  }, [paramTab]);
-
-  const switchTab = (id: TabId) => {
-    setTab(id);
-    setSearchParams(id === 'catalog' ? {} : { tab: id }, { replace: true });
-  };
+/** Badges content for System Settings → Badges. */
+export function AdminBadgesPanel({
+  section,
+  onSectionChange,
+}: {
+  section: BadgesSection;
+  onSectionChange: (section: BadgesSection) => void;
+}) {
+  const meta = BADGE_SETTINGS_SECTIONS.find((s) => s.id === section) || BADGE_SETTINGS_SECTIONS[0];
 
   return (
-    <main className="min-h-screen md:pl-[260px]">
-      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
-        <div className="px-6 py-4 md:px-8">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Admin</p>
-          <h1 className="text-xl font-bold text-white">Badges</h1>
-          <p className="mt-1 text-xs text-zinc-500">
-            Each badge stores one unlock and belongs to a category. Grant or revoke from the Grant tab. Users claim pending badges in Notifications.
-          </p>
-        </div>
-        <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => switchTab(id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
-                tab === id
-                  ? 'border-rose-400 text-white'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div className="px-6 py-6 md:px-8 md:py-8">
-        {tab === 'catalog' && <BadgeCatalogTab />}
-        {tab === 'grant' && <BadgeGrantTab />}
+    <div className="space-y-6">
+      <div className="inline-flex max-w-full flex-wrap gap-1 rounded-2xl border border-white/[0.08] bg-[#14151c] p-1.5">
+        {BADGE_SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onSectionChange(id)}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+              section === id
+                ? 'bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]'
+                : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+          >
+            <Icon className={`h-4 w-4 ${section === id ? 'text-rose-400' : ''}`} />
+            {label}
+          </button>
+        ))}
       </div>
-    </main>
+
+      <div>
+        <h2 className="text-lg font-bold text-white">{meta.title}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{meta.description}</p>
+      </div>
+
+      {section === 'catalog' && <BadgeCatalogTab />}
+      {section === 'grant' && <BadgeGrantTab />}
+    </div>
+  );
+}
+
+/** Legacy route → Settings Badges. */
+export default function AdminBadgesPage() {
+  const [searchParams] = useSearchParams();
+  const grant = searchParams.get('tab') === 'grant';
+  return (
+    <Navigate
+      to={grant ? '/admin/system-settings?tab=badges&section=grant' : '/admin/system-settings?tab=badges'}
+      replace
+    />
   );
 }

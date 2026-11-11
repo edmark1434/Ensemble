@@ -1,12 +1,14 @@
-# Active Task: Remove remaining Automod settings
+# Active Task: Reorganize admin nav (Moderation / Settings)
 
 ## Implementation Objective
 
-Remove Spam filter, Auto-flag profanity, and Active warning points before auto-suspend from admin Automod/settings. Disable spam/profanity blocking. Keep auto-suspend driven only by warning thresholds (`/admin/warnings`), not a separate Automod number.
+Remove the duplicate Reports sidebar item. Move Warnings & punishments into Moderation as a polished Policy area. Move Badges under System Settings.
 
 ## Acceptance Criteria
 
-- [x] Settings removed from defaults, UI, types, and moderation status panels.
-- [x] Forum spam/profanity automod no longer blocks posts.
-- [x] Auto-suspend uses warning thresholds only.
+- [x] Admin sidebar no longer lists Reports, Badges, or Warnings & punishments as top-level items.
+- [x] Reports remain reachable only via Moderation → Pending cases → Reports.
+- [x] Warnings library, punishments, and thresholds live inside Moderation with a professional Policy UI.
+- [x] Badges live under System Settings (Catalog / Grant).
+- [x] Old `/admin/warnings` and `/admin/badges` URLs redirect cleanly.
 - [x] Frontend typecheck passes.
