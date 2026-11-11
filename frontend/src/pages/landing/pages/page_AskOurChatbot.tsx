@@ -674,25 +674,28 @@ const PageAskOurChatbot: React.FC = () => {
           align-items: center;
           gap: 6px;
           flex: 0 0 auto;
-          padding: 8px 12px;
+          min-height: 36px;
+          padding: 8px 14px;
           border: 0;
-          border-radius: 8px;
+          border-radius: 9px;
           background: #2563eb;
           color: #ffffff;
           font: inherit;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 600;
           cursor: pointer;
+          transition: background 0.15s ease, transform 0.15s ease;
         }
         .ensemble-human-callout button:hover {
           background: #1d4ed8;
+          transform: translateY(-1px);
         }
         
         .ensemble-chat-workspace {
           display: grid;
-          grid-template-columns: 290px minmax(0, 1fr);
-          height: 690px;
-          max-height: calc(100vh - 270px);
+          grid-template-columns: 310px minmax(0, 1fr);
+          height: clamp(580px, 72vh, 760px);
+          min-height: 560px;
           overflow: hidden;
           border: 1px solid ${theme === 'dark' ? "rgba(63, 63, 70, 0.55)" : "rgba(226, 232, 240, 0.95)"};
           border-radius: 18px;
@@ -700,11 +703,11 @@ const PageAskOurChatbot: React.FC = () => {
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
           box-shadow: ${theme === 'dark' ? "0 24px 70px rgba(0,0,0,.65)" : "0 20px 60px rgba(15,23,42,.08)"};
-          transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1), height 0.3s cubic-bezier(0.16, 1, 0.3, 1), max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1), height 0.3s cubic-bezier(0.16, 1, 0.3, 1), min-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .ensemble-chat-workspace.has-conversation {
-          height: calc(100vh - 120px);
-          max-height: calc(100vh - 120px);
+          height: clamp(620px, calc(100vh - 90px), 880px);
+          min-height: 600px;
         }
         .ensemble-chat-workspace.sidebar-collapsed {
           grid-template-columns: 0px minmax(0, 1fr);
@@ -714,7 +717,7 @@ const PageAskOurChatbot: React.FC = () => {
           display: flex;
           flex-direction: column;
           min-height: 0;
-          width: 290px;
+          width: 310px;
           overflow: hidden;
           border-right: 1px solid ${theme === 'dark' ? "rgba(63, 63, 70, 0.55)" : "#e2e8f0"};
           background: ${theme === 'dark' ? "rgba(15, 15, 17, 0.75)" : "rgba(248, 250, 252, 0.88)"};
@@ -855,32 +858,34 @@ const PageAskOurChatbot: React.FC = () => {
         }
         .ensemble-quick-list {
           display: grid;
-          gap: 7px;
+          gap: 9px;
         }
         .ensemble-quick-list button {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 8px;
+          gap: 10px;
           width: 100%;
-          padding: 11px 12px;
-          border: 1px solid ${theme === 'dark' ? "rgba(255, 255, 255, 0.06)" : "rgba(226, 232, 240, 0.95)"};
-          border-radius: 9px;
-          background: ${theme === 'dark' ? "rgba(255, 255, 255, 0.03)" : "rgba(255, 255, 255, 0.85)"};
+          min-height: 44px;
+          padding: 12px 14px;
+          border: 1px solid ${theme === 'dark' ? "rgba(255, 255, 255, 0.08)" : "rgba(226, 232, 240, 0.95)"};
+          border-radius: 10px;
+          background: ${theme === 'dark' ? "rgba(255, 255, 255, 0.04)" : "rgba(255, 255, 255, 0.92)"};
           color: ${theme === 'dark' ? "#f4f4f5" : "#0f172a"};
           font: inherit;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 500;
-          line-height: 1.4;
+          line-height: 1.45;
           text-align: left;
           cursor: pointer;
           transition: all .2s ease;
         }
         .ensemble-quick-list button:hover:not(:disabled) {
           border-color: #3b82f6;
-          background: ${theme === 'dark' ? "rgba(37, 99, 235, 0.18)" : "#ffffff"};
+          background: ${theme === 'dark' ? "rgba(37, 99, 235, 0.22)" : "#ffffff"};
           color: ${theme === 'dark' ? "#ffffff" : "#1d4ed8"};
-          box-shadow: ${theme === 'dark' ? "0 2px 10px rgba(0,0,0,0.3)" : "0 2px 8px rgba(37, 99, 235, 0.12)"};
+          box-shadow: ${theme === 'dark' ? "0 4px 14px rgba(0,0,0,0.35)" : "0 4px 12px rgba(37, 99, 235, 0.15)"};
+          transform: translateY(-1px);
         }
         .ensemble-quick-list button:hover svg {
           color: #3b82f6;
@@ -924,7 +929,7 @@ const PageAskOurChatbot: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          min-height: 70px;
+          min-height: 64px;
           padding: 0 24px;
           border-bottom: 1px solid ${theme === 'dark' ? "#27272a" : "#e2e8f0"};
         }
@@ -937,7 +942,8 @@ const PageAskOurChatbot: React.FC = () => {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 6px 11px;
+          min-height: 36px;
+          padding: 7px 13px;
           border-radius: 8px;
           border: 1px solid ${theme === 'dark' ? "#3f3f46" : "#cbd5e1"};
           background: ${theme === 'dark' ? "#18181b" : "#ffffff"};
@@ -956,7 +962,7 @@ const PageAskOurChatbot: React.FC = () => {
           display: block;
         }
         .ensemble-conversation-header strong {
-          font-size: 14px;
+          font-size: 15px;
           font-weight: 700;
           color: ${theme === 'dark' ? "#ffffff" : "#0f172a"};
         }
@@ -969,14 +975,15 @@ const PageAskOurChatbot: React.FC = () => {
           display: inline-flex;
           align-items: center;
           gap: 7px;
-          padding: 8px 12px;
+          min-height: 36px;
+          padding: 8px 14px;
           border: 1px solid ${theme === 'dark' ? "#3f3f46" : "#cbd5e1"};
-          border-radius: 8px;
+          border-radius: 9px;
           background: ${theme === 'dark' ? "#18181b" : "#ffffff"};
           color: ${theme === 'dark' ? "#e4e4e7" : "#1e293b"};
           font: inherit;
-          font-size: 11px;
-          font-weight: 500;
+          font-size: 12px;
+          font-weight: 600;
           cursor: pointer;
           transition: all 0.2s ease;
         }
@@ -1055,22 +1062,22 @@ const PageAskOurChatbot: React.FC = () => {
         }
         
         .ensemble-message-bubble {
-          max-width: min(74%, 650px);
-          padding: 12px 16px;
+          max-width: min(76%, 700px);
+          padding: 13px 18px;
           border: 1px solid ${theme === 'dark' ? "rgba(63, 63, 70, 0.6)" : "#e2e8f0"};
-          border-radius: 4px 13px 13px;
+          border-radius: 4px 14px 14px;
           background: ${theme === 'dark' ? "#18181b" : "#ffffff"};
           color: ${theme === 'dark' ? "#f4f4f5" : "#0f172a"};
           box-shadow: ${theme === 'dark' ? "0 4px 20px rgba(0,0,0,0.25)" : "0 2px 10px rgba(0,0,0,0.04)"};
-          font-size: 13px;
+          font-size: 14px;
           font-weight: 450;
-          line-height: 1.65;
+          line-height: 1.6;
           white-space: pre-wrap;
           overflow-wrap: anywhere;
         }
         .ensemble-message-row.is-user .ensemble-message-bubble {
           border-color: #2563eb;
-          border-radius: 13px 4px 13px 13px;
+          border-radius: 14px 4px 14px 14px;
           background: #2563eb;
           color: #ffffff;
           box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
@@ -1117,18 +1124,21 @@ const PageAskOurChatbot: React.FC = () => {
           align-items: center;
           gap: 6px;
           flex: 0 0 auto;
-          padding: 7px 12px;
+          min-height: 36px;
+          padding: 8px 14px;
           border: 0;
-          border-radius: 8px;
+          border-radius: 9px;
           background: #2563eb;
           color: #ffffff;
           font: inherit;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 600;
           cursor: pointer;
+          transition: background 0.15s ease, transform 0.15s ease;
         }
         .ensemble-ticket-btn:hover {
           background: #1d4ed8;
+          transform: translateY(-1px);
         }
         .ensemble-inline-link {
           display: inline-flex;
@@ -1281,6 +1291,22 @@ const PageAskOurChatbot: React.FC = () => {
         @keyframes ensemble-logo-pulse {
           0%, 100% { transform: scale(.88); opacity: .65; }
           50% { transform: scale(1.08); opacity: 1; }
+        }
+        
+        @media (max-height: 860px) and (min-width: 821px) {
+          .ensemble-chat-page { padding: 18px 20px 28px; }
+          .ensemble-chat-intro { margin: 12px 0 16px; }
+          .ensemble-chat-intro h1 { font-size: clamp(26px, 3.2vw, 36px); margin: 6px 0; }
+          .ensemble-chat-intro p { font-size: 14px; }
+          .ensemble-human-callout { margin: 10px auto 0; padding: 8px 14px; gap: 10px; }
+          .ensemble-chat-workspace {
+            min-height: 520px;
+            height: clamp(520px, calc(100vh - 190px), 740px);
+          }
+          .ensemble-chat-workspace.has-conversation {
+            min-height: 560px;
+            height: calc(100vh - 80px);
+          }
         }
         
         @media (max-width: 820px) {
