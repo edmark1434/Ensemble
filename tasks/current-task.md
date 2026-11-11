@@ -1,4 +1,20 @@
-# Active Task: Dynamic Subscription Pricing on Landing Page & Settings
+# Active Task: Remove redundant email field from Submit Ticket form & pass account email in payload
+
+## Implementation Objective
+
+Remove the redundant "Email or username" question from the ticket submission form ([`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx) and [`TicketFormFields.js`](file:///c:/Capstone/Ensemble/backend/lib/TicketFormFields.js)), and pass the authenticated account's email in the payload to `POST /api/users/tickets` so users don't have to manually re-type their email.
+
+## Acceptance Criteria
+
+- [x] Removed `email_or_username` from `TICKET_FORM_FIELDS['Sign-in and password']` and `TICKET_FORM_FIELDS['Account compromised']` in [`backend/lib/TicketFormFields.js`](file:///c:/Capstone/Ensemble/backend/lib/TicketFormFields.js).
+- [x] In [`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx), filter out `email_or_username` and `email` from dynamic fields so it never renders as an editable input.
+- [x] In [`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx), display a clear "Submitting ticket as @handle (email)" badge and include `email: user.email` in the payload sent to `/api/users/tickets`.
+- [x] In [`backend/controllers/AdminTicketsControllers.js`](file:///c:/Capstone/Ensemble/backend/controllers/AdminTicketsControllers.js) and [`backend/repositories/AdminTicketsRepositories.js`](file:///c:/Capstone/Ensemble/backend/repositories/AdminTicketsRepositories.js), attach the requester's account email to the ticket submission context.
+- [x] `cd frontend && npm run build` passes with zero errors.
+
+---
+
+# Task History: Dynamic Subscription Pricing on Landing Page & Settings
 
 ## Implementation Objective
 
