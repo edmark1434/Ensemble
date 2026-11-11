@@ -20,6 +20,8 @@ const DEFAULT_SETTINGS = {
     reportToTicketAutoCreate: true,
   },
   economy: {
+    /** Philippine pesos (PHP) per 1 platform credit. Used for custom top-ups and cashouts. */
+    creditValuePhp: 1,
     creditPackages: [
       { id: 'pkg-starter', name: 'Starter Pack', credits: 500, pricePhp: 499, active: true, salesCount: 0 },
       { id: 'pkg-pro', name: 'Pro Pack', credits: 2500, pricePhp: 1999, active: true, salesCount: 0 },
@@ -90,6 +92,7 @@ const FIELD_META = {
   'moderation.maxWarningsBeforeSuspend': { name: 'Warning points before 7-day suspend', description: 'Active warning points that trigger a 7-day cooling-off suspension. 30+ points use 14 days. Values under 10 are treated as 20.' },
   'moderation.autoEscalateHighPriority': { name: 'Auto-escalate high priority', description: 'Escalate high-priority reports automatically.' },
   'moderation.reportToTicketAutoCreate': { name: 'Report to ticket', description: 'Create a support ticket when a report is filed.' },
+  'economy.creditValuePhp': { name: 'Credit value (PHP)', description: 'Philippine pesos per 1 platform credit. Used for custom top-ups and cashout conversion. Default is 1.' },
   'economy.creditPackages': { name: 'Credit packages', description: 'Purchasable credit packages offered to users.' },
   'economy.feeSettings': { name: 'Fee settings', description: 'Platform fee schedule for jobs, gigs, assets, and cashouts.' },
   'economy.marketplaceSettings.listingFeeCredits': { name: 'Listing fee (credits)', description: 'Credits charged to list an asset.' },

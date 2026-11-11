@@ -434,6 +434,9 @@ async function getEconomyOverview() {
     wallets: allWallets,
     auditLog,
     topBuyers,
+    creditValuePhp: Number(economySettings.creditValuePhp) > 0
+      ? Number(economySettings.creditValuePhp)
+      : DEFAULT_SETTINGS.economy.creditValuePhp,
     creditPackages: packages,
     feeSettings: economySettings.feeSettings || DEFAULT_SETTINGS.economy.feeSettings,
     marketplaceSettings:

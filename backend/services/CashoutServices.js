@@ -18,6 +18,7 @@ const { getSectionValue } = require('../repositories/AdminSettingsRepositories')
 const {
   calculateCashoutFeePhpCents,
   getFeeSettingById,
+  getPhpCentsPerCredit,
 } = require('../lib/PlatformFeeSettings');
 
 const CHANNELS = {
@@ -90,7 +91,7 @@ function mapXenditStatus(status) {
 }
 
 async function getCashoutConfig(amountCredits = 0) {
-    const php_cents_per_credit = positiveInteger(process.env.CASHOUT_PHP_CENTS_PER_CREDIT || 100, 'conversion_rate');
+    const php_cents_per_credit = positiveInteger(await getPhpCentsPerCredit(), 'conversion_rate');
     const economy = await getSectionValue('economy');
     const minimum_credits = Math.max(
         1,

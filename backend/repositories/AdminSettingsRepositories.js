@@ -227,6 +227,14 @@ async function updateSettingsSection(sectionKey, values) {
         .filter(Boolean);
     }
 
+    if (sectionKey === 'economy') {
+      const creditValue = Number(merged.creditValuePhp);
+      merged.creditValuePhp =
+        Number.isFinite(creditValue) && creditValue > 0
+          ? Math.round(creditValue * 10000) / 10000
+          : DEFAULT_SETTINGS.economy.creditValuePhp;
+    }
+
     const rows = flattenSection(sectionKey, merged, DEFAULT_SETTINGS[sectionKey]);
     for (const row of rows) {
       await pool.query(

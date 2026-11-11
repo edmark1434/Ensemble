@@ -17,6 +17,12 @@ async function getPublicConfigurationController(req, res) {
         pricePhp: Number(pkg.pricePhp),
       }));
 
+    const creditValueRaw = Number(economy?.creditValuePhp);
+    const creditValuePhp =
+      Number.isFinite(creditValueRaw) && creditValueRaw > 0
+        ? creditValueRaw
+        : DEFAULT_SETTINGS.economy.creditValuePhp;
+
     res.status(200).json({
       success: true,
       configuration: {
@@ -26,6 +32,7 @@ async function getPublicConfigurationController(req, res) {
         registrationEnabled: platform?.registrationEnabled !== false,
         supportEmail: platform?.supportEmail || DEFAULT_SETTINGS.platform.supportEmail,
         maxUploadMb: Number(platform?.maxUploadMb) || DEFAULT_SETTINGS.platform.maxUploadMb,
+        creditValuePhp,
         creditPackages: activePackages,
         marketplaceSettings: {
           listingFeeCredits: Number(economy?.marketplaceSettings?.listingFeeCredits ?? 0),

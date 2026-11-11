@@ -88,7 +88,7 @@ const DEFAULT_CREDIT_PACKS: CreditPack[] = [
 const formatPHP = (value: number) =>
   `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-const CREDIT_RATE = 1.25;
+const DEFAULT_CREDIT_VALUE_PHP = 1;
 
 const planOrderMap: Record<string, number> = {
   free: 1,
@@ -128,6 +128,7 @@ const CreditShop: React.FC = () => {
   const [showCustom, setShowCustom] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>(DEFAULT_CREDIT_PACKS);
+  const [creditValuePhp, setCreditValuePhp] = useState(DEFAULT_CREDIT_VALUE_PHP);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentBalance, setCurrentBalance] = useState<number>(0);
   const [escrowBalance, setEscrowBalance] = useState<number>(0);
@@ -191,6 +192,10 @@ const CreditShop: React.FC = () => {
 
         if (packsResponse?.data?.success && Array.isArray(packsResponse.data?.creditPackages) && packsResponse.data.creditPackages.length > 0) {
           setCreditPacks(packsResponse.data.creditPackages);
+        }
+        const liveCreditValue = Number(packsResponse?.data?.creditValuePhp);
+        if (Number.isFinite(liveCreditValue) && liveCreditValue > 0) {
+          setCreditValuePhp(liveCreditValue);
         }
 
         console.log("Fetch wallet response:", getWalletResponse.data);
@@ -322,7 +327,7 @@ const CreditShop: React.FC = () => {
 
   const handleCustomCheckout = () => {
     if (customCredits < 10) return;
-    const priceValue = Math.round(customCredits * CREDIT_RATE * 100) / 100;
+    const priceValue = Math.round(customCredits * creditValuePhp * 100) / 100;
     navigateToCheckout({
       id: "custom",
       name: `Custom Top-up (${customCredits.toLocaleString()} Credits)`,
@@ -663,7 +668,7 @@ const CreditShop: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Enter a Custom Credit Amount</p>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                      {formatPHP(CREDIT_RATE)} per credit • Minimum 10 credits
+                      {formatPHP(creditValuePhp)} per credit • Minimum 10 credits
                     </p>
                   </div>
                   <ChevronDown
@@ -726,7 +731,7 @@ const CreditShop: React.FC = () => {
                     <div className="flex items-center justify-between rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 px-4 py-3">
                       <span className="text-xs text-gray-500 dark:text-zinc-400">Total Due</span>
                       <span className="text-base font-bold text-gray-900 dark:text-white">
-                        {formatPHP(Math.round(customCredits * CREDIT_RATE * 100) / 100)}
+                        {formatPHP(Math.round(customCredits * creditValuePhp * 100) / 100)}
                       </span>
                     </div>
 

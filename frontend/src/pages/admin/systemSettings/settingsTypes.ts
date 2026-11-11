@@ -48,6 +48,8 @@ export type FeeSetting = {
 };
 
 export type EconomySettings = {
+  /** Philippine pesos per 1 platform credit. Default 1. */
+  creditValuePhp: number;
   creditPackages: CreditPackage[];
   feeSettings: FeeSetting[];
   marketplaceSettings: {

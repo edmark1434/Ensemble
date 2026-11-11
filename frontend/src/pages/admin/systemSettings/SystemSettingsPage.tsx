@@ -83,6 +83,7 @@ function NumberField({
   onChange,
   min,
   max,
+  step,
   hint,
 }: {
   label: string;
@@ -90,6 +91,7 @@ function NumberField({
   onChange: (v: number) => void;
   min?: number;
   max?: number;
+  step?: number | 'any';
   hint?: string;
 }) {
   return (
@@ -100,6 +102,7 @@ function NumberField({
         value={Number.isFinite(value) ? value : 0}
         min={min}
         max={max}
+        step={step}
         onChange={(e) => onChange(Number(e.target.value))}
         className={fieldClass}
       />
@@ -561,6 +564,27 @@ export default function SystemSettingsPage() {
               </Link>
               .
             </p>
+            <SectionCard
+              title="Credit value"
+              description="How much 1 platform credit is worth in Philippine pesos (PHP)."
+              dirty={dirty.economy}
+              saving={saving}
+              updatedAt={data.sections.economy.updatedAt}
+              onSave={() => void saveSection('economy', economy)}
+              onDiscard={() => discardSection('economy')}
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <NumberField
+                  label="PHP per credit"
+                  value={economy.creditValuePhp ?? 1}
+                  onChange={(v) => setEconomy({ ...economy, creditValuePhp: v })}
+                  min={0.01}
+                  max={1000}
+                  step="any"
+                  hint="Default is ₱1. Used for custom top-ups and cashout conversion."
+                />
+              </div>
+            </SectionCard>
             <SectionCard
               title="Credit packages"
               description="Top-up packages shown to users. Sales counts are stored with each package."

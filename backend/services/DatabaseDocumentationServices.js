@@ -54,6 +54,10 @@ This document is generated from the current public platform configuration in Pos
 - Maximum upload size: ${number(platform.maxUploadMb)} MB
 - Support email: ${present(platform.supportEmail)}
 
+## Credit value
+
+- 1 platform credit = ${number(economy.creditValuePhp)} PHP
+
 ## Active credit packages
 
 ${packageLines.length ? packageLines.join('\n') : 'No active credit packages are currently configured.'}
