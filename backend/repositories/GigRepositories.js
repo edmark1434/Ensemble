@@ -1532,6 +1532,7 @@ async function expireStaleAcceptedGigOrders() {
                         `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) IN ('pending', 'waiting', 'pending signature')`,
                         [row.contract_id]
                     );
+                    await TeamProjectRepositories.syncContractWorkspacesArchived(client, row.contract_id, row.client_account_id, 'Accepted order expired and cancelled');
                 }
 
                 // Planned Flow Hook (Merit deduction not active yet):
@@ -3187,6 +3188,7 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
                 "UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) IN ('pending', 'waiting', 'pending signature')",
                 [contract_id]
             );
+            await TeamProjectRepositories.syncContractWorkspacesArchived(client, contract_id, client_account_id, 'Gig order cancelled');
         }
 
 
@@ -3456,6 +3458,7 @@ async function withdrawGigOrderRepository(orderId, accountIds) {
                 `UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1 AND LOWER(status) IN ('pending', 'waiting', 'pending signature')`,
                 [contract_id]
             );
+            await TeamProjectRepositories.syncContractWorkspacesArchived(client, contract_id, freelancer_account_id, 'Gig order withdrawn and cancelled');
         }
 
         let notif = null;

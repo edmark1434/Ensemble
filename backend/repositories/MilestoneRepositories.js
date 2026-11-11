@@ -597,6 +597,7 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
                     SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
                 )
             `, [contract_id]);
+            await TeamProjectRepositories.syncContractWorkspacesArchived(client, contract_id, clientAccountId, 'Contract cancelled');
             contractClosed = true;
         }
 
@@ -808,6 +809,7 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
                 SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
             )
         `, [contractId]);
+        await TeamProjectRepositories.syncContractWorkspacesArchived(client, contractId, clientAccountId, 'Contract cancelled');
 
         await client.query('COMMIT');
         return {

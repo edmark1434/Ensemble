@@ -10,26 +10,32 @@ import useGlobalState from "@/lib/global_state";
 import { Check, Eye, EyeOff, Mail, Lock, User, UserCheck } from "lucide-react";
 import TermsModal from "@/pages/auth/TermsModal";
 import PrivacyModal from "@/pages/auth/PrivacyModal";
+import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
-  bg:        "var(--auth-bg, #09090b)",
-  bgPanel:   "var(--auth-bgPanel, #18181b)",
-  bgInput:   "var(--auth-bgInput, #27272a)",
-  border:    "var(--auth-border, rgba(255, 255, 255, 0.1))",
-  borderFoc: "var(--auth-borderFoc, #4a6fa5)",
-  accent:    "var(--auth-accent, #4a6fa5)",
-  text:      "var(--auth-text, #ffffff)",
-  muted:     "var(--auth-muted, #888)",
-  dim:       "var(--auth-dim, #555)",
-  error:     "var(--auth-error, #e05252)",
-  success:   "var(--auth-success, #52e0a0)",
-  primaryBg: "var(--auth-primaryBg, #fff)",
+  bg:          "var(--auth-bg, #09090b)",
+  bgPanel:     "var(--auth-bgPanel, #18181b)",
+  bgInput:     "var(--auth-bgInput, #1c1d21)",
+  border:      "var(--auth-border, rgba(255, 255, 255, 0.22))",
+  borderHover: "var(--auth-borderHover, rgba(255, 255, 255, 0.35))",
+  borderFoc:   "var(--auth-borderFoc, #3b82f6)",
+  accent:      "var(--auth-accent, #3b82f6)",
+  text:        "var(--auth-text, #ffffff)",
+  label:       "var(--auth-label, #e2e8f0)",
+  muted:       "var(--auth-muted, #94a3b8)",
+  dim:         "var(--auth-dim, #64748b)",
+  error:       "var(--auth-error, #ef4444)",
+  placeholder: "var(--auth-placeholder, #71717a)",
+  icon:        "var(--auth-icon, #9ca3af)",
+  success:     "var(--auth-success, #10b981)",
+  primaryBg:   "var(--auth-primaryBg, #fff)",
   primaryText: "var(--auth-primaryText, #080a12)",
   primaryHover: "var(--auth-primaryHover, #e8e8e8)",
-  overlay:   "var(--auth-overlay, rgba(18, 18, 20, 0.6))",
+  googleHover: "var(--auth-googleHover, #1a1d2e)",
+  overlay:     "var(--auth-overlay, rgba(18, 18, 20, 0.6))",
   overlayOpacity: "var(--auth-overlayOpacity, 1)",
-  logoInvert: "var(--auth-logoInvert, invert(0))",
+  logoInvert:  "var(--auth-logoInvert, invert(0))",
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
   fontBody:    "'Plus Jakarta Sans', sans-serif",
 };
@@ -146,10 +152,10 @@ function Input({
       {label && (
         <label style={{
           display: "block",
-          color: focused ? T.accent : T.muted,
-          fontSize: 12,
-          fontWeight: 500,
-          marginBottom: 8,
+          color: error ? T.error : focused ? T.borderFoc : T.label,
+          fontSize: 13,
+          fontWeight: 600,
+          marginBottom: 6,
           transition: "color .15s",
           fontFamily: T.fontBody,
         }}>
@@ -163,9 +169,10 @@ function Input({
             left: 14,
             top: "50%",
             transform: "translateY(-50%)",
-            color: focused ? T.accent : T.muted,
+            color: error ? T.error : focused ? T.borderFoc : T.icon,
             transition: "color .15s",
             zIndex: 1,
+            pointerEvents: "none",
           }}>
             {icon}
           </div>
@@ -177,18 +184,24 @@ function Input({
           onChange={onChange}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
+          className="auth-input-field"
           style={{
             width: "100%",
-            padding: icon ? "12px 14px 12px 42px" : "12px 14px",
+            height: 44,
+            boxSizing: "border-box",
+            padding: icon ? "11px 14px 11px 42px" : "11px 14px",
             paddingRight: showPasswordToggle ? "42px" : "14px",
             background: T.bgInput,
-            border: `1px solid ${error ? T.error : focused ? T.borderFoc : T.border}`,
+            border: `1.5px solid ${error ? T.error : focused ? T.borderFoc : T.border}`,
             borderRadius: 12,
             color: T.text,
             fontSize: 14,
             outline: "none",
             fontFamily: T.fontBody,
-            transition: "all .15s",
+            boxShadow: focused
+              ? (error ? "0 0 0 3px rgba(239, 68, 68, 0.15)" : "0 0 0 3px rgba(37, 99, 235, 0.18)")
+              : "var(--auth-shadow, 0 1px 2px 0 rgba(0, 0, 0, 0.04))",
+            transition: "all .15s ease",
           }}
         />
         {showPasswordToggle && onTogglePassword && (
@@ -203,7 +216,7 @@ function Input({
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: focused ? T.accent : T.muted,
+              color: focused ? T.borderFoc : T.icon,
               transition: "color .15s",
               display: "flex",
               alignItems: "center",
@@ -229,6 +242,10 @@ function Input({
 // ─── Password strength meter ──────────────────────────────────────────────────
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
 const SIGNUP_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"] as const;
+const SUFFIX_OPTIONS: GlideSelectOption[] = [
+  { value: "", label: "None" },
+  ...SIGNUP_SUFFIXES.map((suffix) => ({ value: suffix, label: suffix })),
+];
 
 function StrengthMeter({ password }: { password: string }) {
   const requirements = [
@@ -305,11 +322,12 @@ function GoogleBtn() {
   return (
     <button
       onClick={handleGoogleSignIn}
+      className="auth-input-field"
       style={{
         width: "100%",
         padding: "12px 16px",
         background: T.bgInput,
-        border: `1px solid ${T.border}`,
+        border: `1.5px solid ${T.border}`,
         borderRadius: 30,
         color: T.text,
         fontSize: 13,
@@ -320,10 +338,11 @@ function GoogleBtn() {
         gap: 10,
         fontWeight: 500,
         fontFamily: T.fontBody,
+        boxShadow: "var(--auth-shadow, 0 1px 2px 0 rgba(0, 0, 0, 0.04))",
         transition: "all .2s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#1a1d2e";
+        e.currentTarget.style.background = T.googleHover;
         e.currentTarget.style.borderColor = T.accent;
       }}
       onMouseLeave={(e) => {
@@ -456,44 +475,107 @@ export default function SignupPage({
     const styleEl = document.createElement("style");
     styleEl.innerHTML = `
       :root {
-        --auth-bg: #f4f4f5;
+        --auth-bg: #f8fafc;
         --auth-bgPanel: #ffffff;
-        --auth-bgInput: #f4f4f5;
-        --auth-border: #e4e4e7;
+        --auth-bgInput: #ffffff;
+        --auth-border: #cbd5e1;
+        --auth-borderHover: #94a3b8;
         --auth-borderFoc: #2563eb;
         --auth-accent: #2563eb;
-        --auth-text: #18181b;
-        --auth-muted: #71717a;
-        --auth-dim: #a1a1aa;
+        --auth-text: #0f172a;
+        --auth-label: #334155;
+        --auth-muted: #64748b;
+        --auth-placeholder: #94a3b8;
+        --auth-icon: #64748b;
+        --auth-dim: #94a3b8;
         --auth-error: #ef4444;
         --auth-success: #10b981;
-        --auth-primaryBg: #18181b;
+        --auth-primaryBg: #0f172a;
         --auth-primaryText: #ffffff;
-        --auth-primaryHover: #27272a;
-        --auth-googleHover: #e4e4e7;
+        --auth-primaryHover: #1e293b;
+        --auth-googleHover: #f1f5f9;
+        --auth-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         --auth-overlay: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(244,244,245,0.5) 100%);
         --auth-overlayOpacity: 1;
         --auth-logoInvert: invert(1);
       }
       .dark {
-        --auth-bg: #121214;
-        --auth-bgPanel: #1e1f22;
-        --auth-bgInput: #27282b;
-        --auth-border: rgba(255, 255, 255, 0.1);
-        --auth-borderFoc: #4a6fa5;
-        --auth-accent: #4a6fa5;
+        --auth-bg: #09090b;
+        --auth-bgPanel: #141416;
+        --auth-bgInput: #1c1d21;
+        --auth-border: rgba(255, 255, 255, 0.22);
+        --auth-borderHover: rgba(255, 255, 255, 0.38);
+        --auth-borderFoc: #3b82f6;
+        --auth-accent: #3b82f6;
         --auth-text: #ffffff;
-        --auth-muted: #888;
-        --auth-dim: #555;
-        --auth-error: #e05252;
-        --auth-success: #52e0a0;
+        --auth-label: #e2e8f0;
+        --auth-muted: #94a3b8;
+        --auth-placeholder: #71717a;
+        --auth-icon: #9ca3af;
+        --auth-dim: #64748b;
+        --auth-error: #ef4444;
+        --auth-success: #10b981;
         --auth-primaryBg: #ffffff;
         --auth-primaryText: #080a12;
         --auth-primaryHover: #e8e8e8;
-        --auth-googleHover: #1a1d2e;
+        --auth-googleHover: #22242a;
+        --auth-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
         --auth-overlay: radial-gradient(circle, rgba(18,18,20,0.2) 0%, rgba(18,18,20,0.85) 100%);
         --auth-overlayOpacity: 1;
         --auth-logoInvert: invert(0);
+      }
+      .auth-input-field::placeholder {
+        color: var(--auth-placeholder) !important;
+        opacity: 1 !important;
+      }
+      .auth-input-field:hover:not(:focus) {
+        border-color: var(--auth-borderHover) !important;
+      }
+      .auth-glide-row {
+        position: relative;
+        z-index: 30;
+      }
+      .auth-glide-row:focus-within,
+      .auth-glide-row:has([aria-expanded="true"]) {
+        position: relative !important;
+        z-index: 100 !important;
+      }
+      .auth-glide-select {
+        position: relative;
+        z-index: 30;
+      }
+      .auth-glide-select:has([aria-expanded="true"]) {
+        z-index: 100 !important;
+      }
+      .auth-glide-select button[role="combobox"] {
+        box-sizing: border-box !important;
+        height: 44px !important;
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+        border-width: 1.5px !important;
+        box-shadow: var(--auth-shadow, 0 1px 2px 0 rgba(0, 0, 0, 0.04)) !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 14px !important;
+      }
+      .auth-glide-select button[role="combobox"]:hover:not(:focus-visible) {
+        border-color: var(--auth-borderHover) !important;
+      }
+      .auth-glide-select [data-state="open"] {
+        background: var(--auth-bgPanel, #18181b) !important;
+        box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.45), 0 6px 12px -2px rgba(0, 0, 0, 0.25) !important;
+        border: 1.5px solid var(--auth-border) !important;
+        padding: 6px !important;
+        z-index: 100 !important;
+      }
+      .auth-glide-select [role="listbox"] {
+        padding: 2px !important;
+      }
+      .auth-glide-select [role="option"] {
+        box-sizing: border-box !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 14px !important;
       }
     `;
     document.head.appendChild(styleEl);
@@ -600,7 +682,7 @@ export default function SignupPage({
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; }
         body { background: ${T.bg}; font-family: ${T.fontBody}; -webkit-font-smoothing: antialiased; }
         
         input:-webkit-autofill,
@@ -632,7 +714,7 @@ export default function SignupPage({
         
         @keyframes fade-in-up {
           0% { opacity: 0; transform: translateY(20px); }
-          100% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 1; transform: none; }
         }
         
         .page-container {
@@ -782,7 +864,7 @@ export default function SignupPage({
             </div>
           </div>
 
-          <div className="fade-in-up delay-500" style={{ display: "flex", gap: 12, marginBottom: 0 }}>
+          <div className="fade-in-up delay-500 auth-glide-row" style={{ display: "flex", gap: 12, marginBottom: 0, position: "relative", zIndex: 30 }}>
             <div style={{ flex: 1 }}>
               <Input
                 label="Middle name (optional)"
@@ -792,23 +874,31 @@ export default function SignupPage({
                 error={errors.middleName}
               />
             </div>
-            <div style={{ flex: 1, marginBottom: 20 }}>
-              <label style={{ display: "block", color: T.muted, fontSize: 12, fontWeight: 500, marginBottom: 8, fontFamily: T.fontBody }}>
+            <div style={{ flex: 1, marginBottom: 20, position: "relative", zIndex: 30 }}>
+              <label style={{ display: "block", color: errors.suffix ? T.error : T.label, fontSize: 13, fontWeight: 600, marginBottom: 6, fontFamily: T.fontBody }}>
                 Suffix (optional)
               </label>
-              <select
+              <GlideSelect
+                className="auth-glide-select"
+                options={SUFFIX_OPTIONS}
                 value={form.suffix}
-                onChange={(event) => setForm((current) => ({ ...current, suffix: event.target.value }))}
-                style={{ width: "100%", padding: "12px 14px", background: T.bgInput, border: `1px solid ${errors.suffix ? T.error : T.border}`, borderRadius: 12, color: T.text, fontSize: 14, outline: "none", fontFamily: T.fontBody }}
-              >
-                <option value="">None</option>
-                {SIGNUP_SUFFIXES.map((suffix) => <option key={suffix} value={suffix}>{suffix}</option>)}
-              </select>
+                onChange={(val) => setForm((current) => ({ ...current, suffix: val }))}
+                size="lg"
+                rowHeight={32}
+                radius={12}
+                fullWidth={true}
+                surfaceColor={T.bgInput}
+                borderColor={errors.suffix ? T.error : T.border}
+                textColor={T.text}
+                accentColor={T.accent}
+                error={Boolean(errors.suffix)}
+                maxVisibleItems={7}
+              />
               {errors.suffix && <p style={{ color: T.error, fontSize: 11, marginTop: 6, fontFamily: T.fontBody }}>{errors.suffix}</p>}
             </div>
           </div>
 
-          <div className="fade-in-up delay-500">
+          <div className="fade-in-up delay-500" style={{ position: "relative", zIndex: 20 }}>
             <Input
               label="Email address"
               type="email"
@@ -820,7 +910,7 @@ export default function SignupPage({
             />
           </div>
 
-          <div className="fade-in-up delay-500">
+          <div className="fade-in-up delay-500" style={{ position: "relative", zIndex: 15 }}>
             <Input
               label="Username"
               placeholder="your_handle"
@@ -831,7 +921,7 @@ export default function SignupPage({
             />
           </div>
 
-          <div className="fade-in-up delay-600">
+          <div className="fade-in-up delay-600" style={{ position: "relative", zIndex: 10 }}>
             <Input
               label="Password"
               type={showPassword ? "text" : "password"}
@@ -846,7 +936,7 @@ export default function SignupPage({
             <StrengthMeter password={form.password} />
           </div>
 
-          <div className="fade-in-up delay-600">
+          <div className="fade-in-up delay-600" style={{ position: "relative", zIndex: 5 }}>
             <Input
               label="Confirm password"
               type={showConfirmPassword ? "text" : "password"}

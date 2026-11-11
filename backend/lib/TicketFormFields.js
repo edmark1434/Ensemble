@@ -41,7 +41,6 @@ const contract = [text('contract_or_order', 'Contract or order', { picker: 'cont
 
 const TICKET_FORM_FIELDS = Object.freeze({
   'Sign-in and password': [
-    text('email_or_username', 'Email or username'),
     select('whats_happening', "What's happening", [
       'Wrong password',
       'Reset email not arriving',
@@ -52,8 +51,7 @@ const TICKET_FORM_FIELDS = Object.freeze({
     select('sign_in_method', 'Sign-in method', ['Email', 'Google', 'Other'], { required: false }),
   ],
   'Account compromised': [
-    text('email_or_username', 'Email or username'),
-    text('contact_email', 'A contact email you currently control'),
+    optionalText('contact_email', 'Alternate contact email (if different from account email)'),
     multi('what_changed', 'What changed', ['Email', 'Password', 'Payout details', 'Posts or messages', 'Purchases']),
     text('when_noticed', 'When you noticed'),
     select('still_has_access', 'Do you still have access?', ['Yes', 'No']),

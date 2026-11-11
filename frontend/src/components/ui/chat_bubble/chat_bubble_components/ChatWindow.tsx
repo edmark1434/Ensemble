@@ -125,11 +125,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     !activeUser?.name ||
     activeUser.name === "Marketplace Chat" ||
     activeUser.name === "Chat" ||
-    activeUser.name === "Applicant";
-  const displayName =
-    (!isGenericChatName && activeUser?.name) ||
-    otherMemberName ||
-    (conversation?.is_group ? "Team Discussion" : "Chat");
+    activeUser.name === "Applicant" ||
+    activeUser.name === "Discussion" ||
+    activeUser.name === "Team Discussion" ||
+    activeUser.name === "Group Chat" ||
+    activeUser.name === "User" ||
+    activeUser.name === "Anonymous" ||
+    activeUser.name === "Direct Message" ||
+    (activeUser.name.startsWith("User ") && activeUser.name.length === 13);
+  const isGroup = Boolean(
+    conversation?.is_group ||
+    conversation?.conversation_type === "group" ||
+    conversation?.team_id
+  );
+  const displayName = isGroup
+    ? (conversation?.conversation_name || (!isGenericChatName && activeUser?.name) || "Team Discussion")
+    : (otherMemberName || (!isGenericChatName && activeUser?.name) || "User");
   const callTargetAccountId =
     activeUser?.account_id ||
     conversation?.members?.find(

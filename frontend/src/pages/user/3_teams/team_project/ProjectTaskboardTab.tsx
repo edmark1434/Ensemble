@@ -603,6 +603,57 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     };
   };
 
+  // Priority dropdown options for Create Task Modal using GlideSelect
+  const priorityModalOptions: GlideSelectOption[] = useMemo(() => [
+    {
+      value: 'low',
+      label: 'Low',
+      icon: <span className="w-2 h-2 rounded-full bg-zinc-400 inline-block shrink-0" />,
+    },
+    {
+      value: 'normal',
+      label: 'Normal',
+      icon: <span className="w-2 h-2 rounded-full bg-blue-500 inline-block shrink-0" />,
+    },
+    {
+      value: 'high',
+      label: 'High',
+      icon: <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shrink-0" />,
+    },
+    {
+      value: 'urgent',
+      label: 'Urgent',
+      icon: <span className="w-2 h-2 rounded-full bg-rose-500 inline-block shrink-0" />,
+    },
+  ], []);
+
+  // Milestone dropdown options for Create Task Modal using GlideSelect
+  const milestoneModalOptions: GlideSelectOption[] = useMemo(() => {
+    const list: GlideSelectOption[] = [
+      {
+        value: '',
+        label: 'No Milestone Linked',
+        icon: <Layers className="w-3.5 h-3.5 text-zinc-400 shrink-0" />,
+      },
+    ];
+
+    if (milestones && milestones.length > 0) {
+      milestones.forEach((m: any, idx: number) => {
+        const isMyM = String(m.assignee_account_id) === String(currentUserAccountId);
+        const mOrder = getMilestoneOrder(m, idx);
+        const val = String(m.job_milestone_id || m.contract_milestone_id || idx);
+        list.push({
+          value: val,
+          label: `M${mOrder}: ${m.milestone_title || `Milestone ${mOrder}`}`,
+          tag: isMyM ? '★ Assigned to You' : undefined,
+          icon: <Layers className={`w-3.5 h-3.5 ${isMyM ? 'text-amber-500' : 'text-indigo-500'} shrink-0`} />,
+        });
+      });
+    }
+
+    return list;
+  }, [milestones, currentUserAccountId]);
+
   // Memoized mapping of milestone to horizontal columns (Cols 1 through 8) on Gantt chart
   const milestoneColMap = useMemo(() => {
     const map = new Map<string, { startCol: number; colSpan: number; endCol: number; displayOrder: number }>();
@@ -3270,23 +3321,26 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Priority
                   </label>
-                  <select
+                  <GlideSelect
+                    options={priorityModalOptions}
                     value={newTaskPriority}
-                    onChange={(e) => setNewTaskPriority(e.target.value as any)}
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
-                  >
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                    <option value="low">Low</option>
-                  </select>
+                    onChange={(val) => setNewTaskPriority(val as any)}
+                    size="sm"
+                    fullWidth={true}
+                    radius={12}
+                    surfaceColor={isDark ? '#18181b' : '#ffffff'}
+                    highlightColor={isDark ? '#27272a' : '#f4f4f5'}
+                    textColor={isDark ? '#f4f4f5' : '#09090b'}
+                    borderColor={isDark ? '#27272a' : '#e4e4e7'}
+                    accentColor={isDark ? '#ffffff' : '#09090b'}
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Assignee
                   </label>
-                  <div className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700">
+                  <div className="w-full text-xs px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700 h-[32px]">
                     <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                     <span>You (Auto-assigned)</span>
                   </div>
@@ -3297,12 +3351,12 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Associated Milestone
                 </label>
-                <select
+                <GlideSelect
+                  options={milestoneModalOptions}
                   value={newTaskMilestone}
-                  onChange={(e) => {
-                    const selectedMId = e.target.value;
-                    setNewTaskMilestone(selectedMId);
-                    const bounds = getMilestoneTimelineBounds({ job_milestone_id: selectedMId } as any);
+                  onChange={(val) => {
+                    setNewTaskMilestone(val);
+                    const bounds = getMilestoneTimelineBounds({ job_milestone_id: val } as any);
                     if (bounds.minDate && bounds.maxDate) {
                       if (!newTaskDueDate || newTaskDueDate < bounds.minDate || newTaskDueDate > bounds.maxDate) {
                         setNewTaskDueDate(bounds.maxDate);
@@ -3313,19 +3367,16 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       }
                     }
                   }}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
-                >
-                  <option value="">No Milestone Linked</option>
-                  {milestones?.map((m: any, idx: number) => {
-                    const isMyM = String(m.assignee_account_id) === String(currentUserAccountId);
-                    const mOrder = getMilestoneOrder(m, idx);
-                    return (
-                      <option key={m.job_milestone_id || m.contract_milestone_id || idx} value={m.job_milestone_id || m.contract_milestone_id}>
-                        M{mOrder}: {m.milestone_title} {isMyM ? '★ (Your Assigned Milestone)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
+                  placeholder="No Milestone Linked"
+                  size="sm"
+                  fullWidth={true}
+                  radius={12}
+                  surfaceColor={isDark ? '#18181b' : '#ffffff'}
+                  highlightColor={isDark ? '#27272a' : '#f4f4f5'}
+                  textColor={isDark ? '#f4f4f5' : '#09090b'}
+                  borderColor={isDark ? '#27272a' : '#e4e4e7'}
+                  accentColor={isDark ? '#ffffff' : '#09090b'}
+                />
               </div>
 
               <div>

@@ -1,5 +1,6 @@
 // src/components/ui/inbox/inbox_pages/inbox_panel_page.tsx
 import React from "react";
+import { Lock } from "lucide-react";
 import { InboxPanelHeader } from "../inbox_components/inbox_panel_header";
 import { InboxPanelViewMessage } from "../inbox_components/inbox_panel_viewmessage";
 import { InboxPanelChatbox } from "../inbox_components/inbox_panel_chatbox";
@@ -88,6 +89,21 @@ onUpdateGroupName,
   const disputeClosed =
     isDisputeThread &&
     String(disputeDetails?.status || "").toLowerCase() === "closed";
+  const isMarketplace = [
+    "marketplace",
+    "marketplace_job",
+    "marketplace_gig",
+    "revision",
+    "engagement",
+  ].includes(selectedConversation.conversation_type || "");
+  const contractStatus = String(
+    selectedConversation.contract_status ||
+    selectedConversation.marketplace_status ||
+    ""
+  ).toLowerCase();
+  const isContractCompleted =
+    Boolean(selectedConversation.is_contract_completed) ||
+    (isMarketplace && ["completed", "closed", "cancelled"].includes(contractStatus));
 
   return (
     <div className="flex h-full max-h-full w-full overflow-hidden bg-gray-50 dark:bg-[#0d0e11] relative">
@@ -145,6 +161,11 @@ onUpdateGroupName,
           ) : disputeReplyBlocked ? (
             <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               This dispute is not public yet. Only the person who filed it can add information for staff.
+            </div>
+          ) : isContractCompleted ? (
+            <div className="border-t border-gray-200 dark:border-white/[0.08] bg-gray-50/80 dark:bg-white/[0.02] p-4 text-center text-sm text-gray-500 dark:text-zinc-400 flex items-center justify-center gap-2">
+              <Lock className="w-4 h-4 text-gray-400 dark:text-zinc-500 shrink-0" />
+              <span>This chat is closed (View Only) because the contract has been completed.</span>
             </div>
           ) : (
           <InboxPanelChatbox

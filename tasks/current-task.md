@@ -1,192 +1,51 @@
-# Active Task: Editor action toasts
+# Active Task: Remove redundant email field from Submit Ticket form & pass account email in payload
 
 ## Implementation Objective
 
-Use the editor's existing Sonner toasts for upload, export, caption, marketplace and upload-trash actions, providing immediate feedback and accurate completion/failure notices.
+Remove the redundant "Email or username" question from the ticket submission form ([`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx) and [`TicketFormFields.js`](file:///c:/Capstone/Ensemble/backend/lib/TicketFormFields.js)), and pass the authenticated account's email in the payload to `POST /api/users/tickets` so users don't have to manually re-type their email.
 
 ## Acceptance Criteria
 
-- [x] File/URL uploads announce start, completion and failure; adding more uploads does not restart active uploads.
-- [x] Exports announce start, completion and failure; stale or repeated polling results cannot repeat completion notices.
-- [x] Caption generation announces start, completion, no speech and failure.
-- [x] Likes/saves update optimistically with toasts and rollback on failure.
-- [x] Reports and upload trash/restore/permanent deletion announce submission and confirmed results.
-- [x] Existing individual and bulk marketplace purchase success toasts remain, without duplicates or optimistic payment claims.
-- [x] No builds, type checks, lint, or verification commands run.
+- [x] Removed `email_or_username` from `TICKET_FORM_FIELDS['Sign-in and password']` and `TICKET_FORM_FIELDS['Account compromised']` in [`backend/lib/TicketFormFields.js`](file:///c:/Capstone/Ensemble/backend/lib/TicketFormFields.js).
+- [x] In [`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx), filter out `email_or_username` and `email` from dynamic fields so it never renders as an editable input.
+- [x] In [`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx), display a clear "Submitting ticket as @handle (email)" badge and include `email: user.email` in the payload sent to `/api/users/tickets`.
+- [x] In [`backend/controllers/AdminTicketsControllers.js`](file:///c:/Capstone/Ensemble/backend/controllers/AdminTicketsControllers.js) and [`backend/repositories/AdminTicketsRepositories.js`](file:///c:/Capstone/Ensemble/backend/repositories/AdminTicketsRepositories.js), attach the requester's account email to the ticket submission context.
+- [x] `cd frontend && npm run build` passes with zero errors.
 
 ---
 
-# Previous Task: Open shared projects from navbar notifications
+# Task History: Dynamic Subscription Pricing on Landing Page & Settings
 
 ## Implementation Objective
 
-Make navbar project-invitation notifications use the same browser navigation as Full View so the project handoff opens correctly.
+Replace the hardcoded subscription pricing plans on the Landing Page (`/pricing` -> `page_Pricing.tsx`) and User Settings Subscription Details (`user_settings_subscriptiondetails.tsx`) with live data fetched from `GET /api/subscription/plans`, matching the in-app Subscription Pricing page (`CreditsShop.tsx`).
 
 ## Acceptance Criteria
 
-- [x] Navbar project-invitation clicks follow the notification's project URL using browser navigation.
-- [x] Read marking and popup dismissal remain intact; navigation matches Full View for handoff and absolute URLs.
-- [x] No builds, type checks, lint, or verification commands run.
+- [x] `page_Pricing.tsx` fetches live plans from `GET /api/subscription/plans` and sorts them (`Free` -> `Premium` -> `Business`).
+- [x] `page_Pricing.tsx` dynamically renders database plan prices (`formatPHP`), billing period (`/mo`), free-trial badges/notes (`days_of_trials`), and live plan features (`feature.description` + `feature.value`).
+- [x] `user_settings_subscriptiondetails.tsx` also fetches from `GET /api/subscription/plans` so all subscription pricing views remain synchronized.
+- [x] `cd frontend && npm run build` passes with zero errors.
 
 ---
 
-# Previous Task: Optimistic project deletion
+# Task History: IP + Canonical Account Scoped Login Lockout
 
 ## Implementation Objective
 
-Remove a project immediately when its trash action is selected, restoring the previous lists if the request fails.
+Fix the login lockout mechanism so failed login attempts and lockouts are scoped by `(Client IP + Canonical Account / Identifier)` rather than globally by the input string alone. This prevents an attacker who knows a user's username or email from locking out the legitimate account owner on another IP, and prevents an attacker on the same IP from getting extra attempts by alternating between username and email.
 
 ## Acceptance Criteria
 
-- [x] Project actions remove the affected card before awaiting the server.
-- [x] Failed requests restore the previous lists and show an error.
-- [x] Other projects do not display loading spinners.
-- [x] Existing refresh invalidation and permanent-delete confirmation remain intact.
-- [x] No builds, type checks, lint, or verification commands run.
+- [x] Failed login attempts and lockout keys in Redis are scoped by normalized client IP (`normalizeLockoutIp`) and canonical target (`acc:<account_id>` for existing accounts, `raw:<identifier>` for unknown identifiers).
+- [x] Case-insensitive username and email lookups in `UserRepositories` and `StaffRepositories` resolve consistently to the canonical account.
+- [x] Attacker exceeding max attempts from IP A is locked out on IP A for both username and email of that account.
+- [x] Legitimate user logging in from IP B is unaffected when IP A is locked out.
+- [x] Successful login clears attempt and lockout keys for that IP + account target.
 
 ---
 
-# Previous Task: Stable template preview URLs
-
-## Implementation Objective
-
-Use `/preview/<market asset UUID>` for published template previews while preserving existing links and private create-template previews.
-
-## Acceptance Criteria
-
-- [x] Main-site and editor template previews open the stable market asset URL.
-- [x] Each visit resolves the current published template and retains existing media sanitization and watermarks.
-- [x] Legacy encrypted preview links retain their snapshot binding, expiration and access checks.
-- [x] Unpublished create-template previews retain their authenticated owner/manager flow.
-- [x] No builds, type checks, lint, or verification commands run, per user preference.
-
----
-
-# Previous Task: Make market audio watermarks audible
-
-## Implementation Objective
-
-Lower the source audio while each Ensemble tag plays and increase the tag volume in generated market audio proxies.
-
-## Acceptance Criteria
-
-- [x] Source audio drops to 20% during the full tag clip, with smooth attack/release ramps.
-- [x] Tag gain doubles from 2 to 4; mixed peaks are limited without automatic makeup gain.
-- [x] Existing tag timing, original audio, and separate untagged thumbnails are preserved.
-- [x] Changes apply to newly generated proxies; existing proxies are not regenerated.
-- [x] No builds, type checks, lint, or verification commands run, per user preference.
-
----
-
-# Previous Task: Project trash and restoration
-
-## Implementation Objective
-
-Add a Trash tab and project-card actions to the main site's Projects list, following the editor upload lifecycle: 30-day recoverable trash, restore, and confirmed permanent deletion.
-
-## Acceptance Criteria
-
-- [x] Grid and compact cards offer owner-only Delete, or Restore / Delete forever in Trash.
-- [x] Active lists exclude trash; Trash shows the owner's recoverable projects and deletion dates.
-- [x] Backend validates ownership, frozen state, trash transitions, and the 30-day restore deadline.
-- [x] Expired trash is permanently marked deleted by background cleanup; reusable uploads remain intact.
-- [x] Trashed/deleted projects cannot be opened or edited, and existing editor sessions lose access.
-- [x] No builds, type checks, lint, migrations, or verification commands run, per user preference.
-
-## Implementation Notes
-
-- Reuses `projects.trashed_at` from the existing media-asset-trash migration; no new migration.
-- UI/API/runtime behavior has not been executed, per the user's verification preference.
-
----
-
-# Previous Task: Complete the pink comment theme
-
-## Implementation Objective
-
-Finish the existing pink (#f43f5e) accent theme throughout the comments panel, floating thread, and timeline comment-button tooltip.
-
-## Acceptance Criteria
-
-- [x] Panel and thread buttons, mentions, timestamp pills, and focus rings use scoped pink theme colors.
-- [x] Portalled filter/sort, mention/timestamp, and entry menus receive the comment theme; selection and hover accents are pink.
-- [x] Shared comment tooltips and the timeline comment-button tooltip, including arrows, use the existing pink tooltip style.
-- [x] Styling remains scoped to comments, retaining neutral surfaces and destructive/error colors.
-- [x] No builds, type checks, lint, or verification commands run, per user preference.
-
----
-
-# Previous Task: Reveal timeline destinations when navigating
-
-## Implementation Objective
-
-Make comment navigation and other missing timestamp/frame navigation actions scroll the timeline when their destination is offscreen, using the existing marker/caption scroll behavior.
-
-## Acceptance Criteria
-
-- [x] Comment cards, floating-thread timestamp links, ruler comment markers, and the active-comment button reveal their seek destination.
-- [x] Previous/next frame or second shortcuts and player seek/seek-by commands reveal their destination.
-- [x] Shared navigation helper scrolls to the actual player-clamped frame and leaves already-visible destinations in place.
-- [x] Visibility accounts for the canvas's left offset; deferred scrolls ignore a replaced timeline.
-- [x] Existing start/end, marker, caption, item-selection, and template navigation keep their scrolling behavior; direct pointer scrubbing remains unchanged.
-- [x] No builds, type checks, lint, or verification commands run, per user preference.
-
----
-
-# Previous Task: Sticky timeline item names
-
-## Implementation Objective
-
-Keep timeline item names at the visible left edge of each clip during horizontal scrolling, matching the existing sticky price behavior.
-
-## Acceptance Criteria
-
-- [x] Video, image, audio, scene, text, and caption labels follow the visible left edge.
-- [x] Status icons move with labels; labels remain clipped to their items.
-- [x] Positioning uses the current item/group and viewport transforms for scrolling, zooming, and dragging.
-- [x] No builds, type checks, lint, or verification commands run; the user handles verification.
-
----
-
-# Previous Task: Editor timeline tooltip update loop
-
-## Implementation Objective
-
-Fix the maximum update depth error at the timeline comment tooltip trigger by using the corrected tooltip implementation already installed through `radix-ui`.
-
-## Acceptance Criteria
-
-- [x] Shared editor tooltip uses the existing `radix-ui` package and its corrected ref/Popper dependencies.
-- [x] Verify tooltip mounting, repeated updates, hover/focus, click, and unmount behavior.
-- [ ] Run editor type checking/build and the required frontend build; record any existing blockers.
-
-## Verification
-
-- Editor type check passed (`npm run typecheck`).
-- Frontend production build passed (`npm run build`), with existing chunk-size and mixed-import warnings.
-- A focused DOM smoke check mounted 100 actual shared tooltip wrappers and verified 20 rerenders while open, stable button identity, focus, click, hover, Escape dismissal, removal/remount, and unmount without runtime errors. The reported crash was not reproduced in isolation with the older implementation; the affected editor project still needs an interactive recheck.
-- Editor lint is blocked by the existing `next lint` script: Next.js 16 treats `lint` as a nonexistent project directory.
-- Editor production build was stopped at the user's request.
-
----
-
-# Previous Task: Profile dispute visibility
-
-## Implementation Objective
-
-Remove the public "Under dispute" header badge. Surface open and closed public disputes as profile tabs beside Performance (Active History / Dispute History).
-
-## Acceptance Criteria
-
-- [x] Profile header no longer shows the yellow Under dispute badge
-- [x] Active History tab lists open public disputes beside Performance
-- [x] Dispute History tab lists closed public disputes beside Performance
-- [x] Performance panel no longer needs the footer dispute accordion
-- [x] Frontend build passes
-
----
-
-# Previous Task: One dispute per contract + staff party swap
+# Task History: One dispute per contract + staff party swap
 
 ## Implementation Objective
 
@@ -202,3 +61,28 @@ When one side disputes a contract, the other side can't file a second dispute, a
 - [x] Staff modal: Parties section labels client/freelancer and offers Swap with a confirm dialog
 - [x] Frontend build passes
 - [ ] Manual test against a non-production DB + Mongo: file dispute as client, check freelancer view, swap, check message visibility
+
+---
+
+# Task History: Suffix GlideSelect on Signup & Padding Within Fix
+
+## Objectives
+1. **Suffix GlideSelect Padding Within Fix**:
+   - Diagnosed root cause: `Signuppage.tsx` contained a global CSS reset `*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }` in its `<style>` block. Because this rendered after Tailwind utilities, it stripped all padding (`padding: 0;`) from the GlideSelect `<button>` trigger and option elements, causing "None" and the dropdown options to sit flush against the border with 0px padding.
+   - Removed `padding: 0;` from the universal selector in `Signuppage.tsx` (`*, *::before, *::after { box-sizing: border-box; margin: 0; }`).
+   - Added explicit inline styles `style={{ paddingLeft: 14, paddingRight: 14 }}` on `<button ref={triggerRef}>`, `style={{ padding: 6 }}` on `menuRef`, and `style={{ paddingLeft: 10, paddingRight: 10 }}` on each option item in `GlideSelect.tsx`.
+   - Added explicit CSS overrides in `Signuppage.tsx`: `.auth-glide-select button[role="combobox"] { padding-left: 14px !important; padding-right: 14px !important; }`, `.auth-glide-select [data-state="open"] { padding: 6px !important; }`, and `.auth-glide-select [role="option"] { padding-left: 10px !important; padding-right: 10px !important; }`.
+2. **Suffix Dropdown & Form Spacing Refinements**:
+   - Allowed custom `rowHeight` in `GlideSelect.tsx` and set `rowHeight={32}` for Suffix options (down from 40px).
+   - Inherited `font-family: 'Plus Jakarta Sans'` across dropdown menu container, listbox, and option items.
+   - Explicitly standardized `<input>` height at `44px` with `boxSizing: 'border-box'` and `padding: "11px 14px"` to match the 44px GlideSelect trigger height across the entire form.
+3. **Chat Inbox Unread Count Reappearing on Refresh**:
+   - Fixed MongoDB aggregation in `backend/repositories/InboxRepositories.js`: `getInboxByAccountId` was casting the `account_id` array to a string (`readerAccountId: String(account_id)`), turning multi-account IDs into `"id1,id2"`.
+   - Used `readerAccountIds: accountIds` with array operations (`$not: [{ $in: ["$sender_id", "$$readerAccountIds"] }]` and `$setIntersection`) to accurately determine unread count.
+   - Added explicit POST endpoint `/api/inbox/conversation/:conversationId/read` and wired it into `chat_state.ts`'s `markConversationRead` alongside WebSocket to ensure reliable database read synchronization.
+
+## Acceptance Criteria
+- [x] Suffix trigger button has 14px internal padding, matching the 14px padding of Middle name and other form fields.
+- [x] Suffix dropdown options have balanced internal padding (10px + 6px container = 16px) with no flush edges.
+- [x] Global reset `* { padding: 0; }` in `Signuppage.tsx` removed so it never wipes out element padding.
+- [x] `npm --prefix frontend run build` passes with zero errors.

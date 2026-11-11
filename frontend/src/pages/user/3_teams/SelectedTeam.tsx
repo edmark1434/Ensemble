@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  AlertCircle,
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
   ArrowRightLeft,
   Bell,
   Briefcase,
@@ -38,6 +41,7 @@ import { TeamGalleryTab } from "./team_components/TeamGalleryTab";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
+import SmartTabBar, { type SmartTabItem } from "@/components/ui/SmartTabBar";
 import { motion } from "framer-motion";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
@@ -173,14 +177,41 @@ export default function SelectedTeam() {
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [requestSearch, setRequestSearch] = useState("");
+  // Collapsible banner state matching Workspace
+  const [isBannerCollapsed, setIsBannerCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ensemble_team_banner_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleBannerCollapse = () => {
+    setIsBannerCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ensemble_team_banner_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get("tab") as Tab | null;
-  const [activeTab, setActiveTab] = useState<Tab>(() => (urlTab === "gigs" ? "services" : urlTab) || "about");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (urlTab === "chat") return "overview";
+    if (urlTab === "gigs") return "services";
+    return urlTab || "about";
+  });
 
   useEffect(() => {
     const tabParam = searchParams.get("tab") as Tab | null;
     if (tabParam) {
-      setActiveTab(tabParam === "gigs" ? "services" : tabParam);
+      if (tabParam === "chat") {
+        setActiveTab("overview");
+      } else {
+        setActiveTab(tabParam === "gigs" ? "services" : tabParam);
+      }
     } else if (team) {
       const isMember = team.current_user_status === "Active" || team.current_user_role === "Owner";
       if (isMember && activeTab === "about") {
@@ -541,7 +572,7 @@ export default function SelectedTeam() {
 
   if (loading || isInitializingTeam) {
     return (
-      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans',sans-serif] overflow-hidden">
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans',sans-serif] flex items-center justify-center p-6 font-['Plus_Jakarta_Sans',sans-serif] overflow-hidden">
         {/* Background Grid Animation */}
         <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
           <ShapeGrid
@@ -617,301 +648,429 @@ export default function SelectedTeam() {
 
   return (
     <Page title={team.display_name}>
-      <div className="relative h-48 overflow-hidden bg-dark-surface">
-        {team.avatar_path && (
-          <img
-            src={imageUrl(team.avatar_path)}
-            alt={team.display_name}
-            className="h-full w-full object-cover"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
-        <button
-          onClick={handleReturn}
-          className="absolute left-4 top-4 cursor-pointer rounded-full bg-black/50 hover:bg-black/70 active:scale-95 p-2 text-white transition"
-          title={returnFrom?.includes("discovery") ? "Back to Discovery" : "Back to Teams"}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="absolute bottom-4 right-4 flex gap-2">
-          {isTeamOwner &&
-            !team.is_business_verified &&
-            !team.business_verification_status && (
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-36 space-y-6">
+        {/* Navigation & Breadcrumbs: Return to Teams / Return to Discovery */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleReturn}
+            className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>{returnFrom?.includes("discovery") ? "Return to Discovery" : "Return to Teams"}</span>
+          </button>
+
+          {permissions.can_manage_requests && pendingRequests.length > 0 && (
             <button
-              onClick={() => {
-                if (!team.current_user_is_verified) {
-                  setShowVerificationEligibility(true);
-                  return;
-                }
-                navigate(`/teams/${id}/business-verification`, {
-                  state: {
-                    teamName: team.display_name,
-                    teamHandle: team.handle,
-                    teamAccountId: team.account_id,
-                    verificationStatus: team.business_verification_status,
-                    isOwner: true,
-                  },
-                });
-              }}
-              className="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-200 active:scale-[0.98]"
+              type="button"
+              onClick={() => selectTab("requests")}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 transition cursor-pointer"
             >
-              <ShieldCheck className="h-4 w-4" />
-              Verify as Business
-            </button>
-          )}
-          {isTeamOwner &&
-            !team.is_business_verified &&
-            team.business_verification_status && (
-              <button
-                onClick={() =>
-                  navigate(`/teams/${id}/business-verification`, {
-                    state: {
-                      teamAccountId: team.account_id,
-                      teamName: team.display_name,
-                      teamHandle: team.handle,
-                      verificationStatus: team.business_verification_status,
-                      isOwner: true,
-                    },
-                  })
-                }
-                className="flex cursor-pointer items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/25 active:scale-[0.98]"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                View Verification Status
-              </button>
-            )}
-          {activeMember && (
-            <button
-              onClick={() => void openChat()}
-              className="flex cursor-pointer items-center gap-2 rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition shadow-sm"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Message
-            </button>
-          )}
-          {permissions.can_manage_requests && (
-            <button
-              onClick={() => setActiveTab("requests")}
-              className="relative cursor-pointer rounded-full bg-black/50 hover:bg-black/70 active:scale-95 p-2 text-white transition"
-              title="View pending join requests"
-            >
-              <Bell className="h-5 w-5" />
-              {pendingRequests.length > 0 && (
-                <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-red-500 text-[10px]">
-                  {pendingRequests.length}
-                </span>
-              )}
+              <Bell className="w-3.5 h-3.5" />
+              <span>{pendingRequests.length} Pending Join {pendingRequests.length === 1 ? 'Request' : 'Requests'}</span>
             </button>
           )}
         </div>
-      </div>
 
-      <main className="mx-auto max-w-7xl p-6 md:p-8">
-        <header className="mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              {team.display_name}
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {team.is_business_verified && (
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                  <ShieldCheck className="h-4 w-4" />
-                  Verified Business
-                </div>
-              )}
-              <div
-                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 px-3 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-300"
-              >
+        {/* Team Header Banner Card (Contained rounded card matching Workspace) */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs transition-all duration-300">
+          {/* Top banner visual (Collapsible) */}
+          <div
+            className={`w-full bg-zinc-900 dark:bg-zinc-950 relative rounded-t-2xl overflow-hidden transition-all duration-300 ease-in-out ${
+              isBannerCollapsed ? 'max-h-0 opacity-0' : 'h-36 sm:h-52 opacity-100'
+            }`}
+          >
+            {team.avatar_path ? (
+              <img
+                src={imageUrl(team.avatar_path)}
+                alt={team.display_name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-zinc-800 dark:bg-zinc-900 flex items-center justify-center">
+                <Users className="w-16 h-16 text-zinc-600 dark:text-zinc-700" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
+
+            {/* Public or Private Indicator on banner top-left */}
+            <div className="absolute top-3.5 left-3.5 z-10">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md bg-black/60 text-white border border-white/15 shadow-sm">
                 {team.visibility === "Private" ? (
-                  <Lock className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-400" />
+                  <Lock className="w-3.5 h-3.5 text-zinc-300" />
                 ) : (
-                  <Globe className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-400" />
+                  <Globe className="w-3.5 h-3.5 text-zinc-300" />
                 )}
-                {team.visibility === "Private" ? "Private Team" : "Public Team"}
+                <span>{team.visibility === "Private" ? "Private" : "Public"}</span>
+              </span>
+            </div>
+
+            {/* Verify as Business and Message on banner bottom-right */}
+            <div className="absolute bottom-3.5 right-3.5 z-10 flex items-center gap-2">
+              {isTeamOwner &&
+                !team.is_business_verified &&
+                !team.business_verification_status && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!team.current_user_is_verified) {
+                      setShowVerificationEligibility(true);
+                      return;
+                    }
+                    navigate(`/teams/${id}/business-verification`, {
+                      state: {
+                        teamName: team.display_name,
+                        teamHandle: team.handle,
+                        teamAccountId: team.account_id,
+                        verificationStatus: team.business_verification_status,
+                        isOwner: true,
+                      },
+                    });
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/20 bg-black/60 backdrop-blur-md px-3.5 py-2 text-xs font-semibold text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-200 active:scale-[0.98] shadow-sm"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>Verify as Business</span>
+                </button>
+              )}
+              {isTeamOwner &&
+                !team.is_business_verified &&
+                team.business_verification_status && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(`/teams/${id}/business-verification`, {
+                      state: {
+                        teamAccountId: team.account_id,
+                        teamName: team.display_name,
+                        teamHandle: team.handle,
+                        verificationStatus: team.business_verification_status,
+                        isOwner: true,
+                      },
+                    })
+                  }
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/25 backdrop-blur-md px-3.5 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/35 active:scale-[0.98] shadow-sm"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>View Verification Status</span>
+                </button>
+              )}
+              {activeMember && (
+                <button
+                  type="button"
+                  onClick={() => void openChat()}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] px-3.5 py-2 text-xs font-semibold text-white transition shadow-sm"
+                  title="Message Team"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span>Message</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Header Metadata */}
+          <div className={`transition-all duration-300 ${isBannerCollapsed ? 'p-4 sm:px-6' : 'p-5 sm:p-6'}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                {isBannerCollapsed && (
+                  team.avatar_path ? (
+                    <img
+                      src={imageUrl(team.avatar_path)}
+                      alt={team.display_name}
+                      className="w-10 h-10 rounded-xl object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-zinc-500" />
+                    </div>
+                  )
+                )}
+                <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white truncate">
+                  {team.display_name}
+                </h1>
+              </div>
+
+              {/* Action Buttons: Verify as Business / Message (when collapsed) + Ask to Join + Collapse toggle + 3-dot menu */}
+              <div className="flex items-center gap-2 shrink-0">
+                {isBannerCollapsed && (
+                  <>
+                    {isTeamOwner && !team.is_business_verified && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!team.current_user_is_verified) {
+                            setShowVerificationEligibility(true);
+                            return;
+                          }
+                          navigate(`/teams/${id}/business-verification`, {
+                            state: {
+                              teamName: team.display_name,
+                              teamHandle: team.handle,
+                              teamAccountId: team.account_id,
+                              verificationStatus: team.business_verification_status,
+                              isOwner: true,
+                            },
+                          });
+                        }}
+                        className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
+                        title="Verify as Business"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                        <span>Verify as Business</span>
+                      </button>
+                    )}
+                    {activeMember && (
+                      <button
+                        type="button"
+                        onClick={() => void openChat()}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition cursor-pointer"
+                        title="Message Team"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span className="hidden sm:inline">Message</span>
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {!membership && (
+                  <button
+                    type="button"
+                    onClick={() => void requestToJoin()}
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {saving ? "Submitting..." : "Ask to Join"}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={toggleBannerCollapse}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
+                  title={isBannerCollapsed ? 'Expand banner' : 'Collapse banner'}
+                >
+                  {isBannerCollapsed ? (
+                    <>
+                      <ChevronDown className="w-4 h-4" />
+                      <span className="hidden sm:inline">Expand Banner</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp className="w-4 h-4" />
+                      <span className="hidden sm:inline">Collapse Banner</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowMenu((prev) => !prev)}
+                    className="p-2 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
+                    title="More options"
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                  {showMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                      <div className="absolute right-0 mt-2 w-52 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100">
+                        {permissions.can_update_team && (
+                          <button
+                            onClick={() => { setShowMenu(false); setShowEdit(true); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition cursor-pointer text-left"
+                          >
+                            <Edit3 className="w-4 h-4 text-zinc-500" />
+                            <span>Edit Team</span>
+                          </button>
+                        )}
+                        {permissions.can_manage_members && (
+                          <button
+                            onClick={openInviteModal}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition cursor-pointer text-left"
+                          >
+                            <UserPlus className="w-4 h-4 text-zinc-500" />
+                            <span>Invite Member</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setShowMenu(false);
+                            if (isGuest) {
+                              setIsGuestModalOpen(true);
+                              return;
+                            }
+                            setShowReport(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer text-left"
+                        >
+                          <Flag className="w-4 h-4" />
+                          <span>Report Team</span>
+                        </button>
+                        {activeMember && membership?.role !== "Owner" && (
+                          <button
+                            onClick={() => { setShowMenu(false); setShowLeave(true); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer text-left"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            <span>Leave Team</span>
+                          </button>
+                        )}
+                        {permissions.can_delete_team && (
+                          <button
+                            onClick={() => { setShowMenu(false); void deleteTeam(); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer text-left"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete Team</span>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            <p className="mt-2 text-gray-500 dark:text-zinc-400">{team.description}</p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
-              <span>@{team.handle}</span>
-              <span>·</span>
-              <span>{team.member_count} {team.member_count === 1 ? 'member' : 'members'}</span>
-              <span>·</span>
+
+            <p className="mt-2 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
+              {team.description || "This team seems lazy to provide a description..."}
+            </p>
+
+            {/* Tags row */}
+            <div className="flex flex-wrap items-center gap-2 mt-3 text-xs">
+              {/* Public or Private Indicator Tag */}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                {team.visibility === "Private" ? (
+                  <Lock className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+                ) : (
+                  <Globe className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+                )}
+                <span>{team.visibility === "Private" ? "Private Team" : "Public Team"}</span>
+              </span>
+
+              {/* Verified Business Tag */}
+              {team.is_business_verified && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Verified Business</span>
+                </span>
+              )}
+
+              {/* Handle */}
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                @{team.handle}
+              </span>
+
+              {/* Members */}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                <Users className="w-3 h-3 text-zinc-500" />
+                <span>{team.member_count} {team.member_count === 1 ? 'member' : 'members'}</span>
+              </span>
+
+              {/* Rating */}
               {hasRating ? (
-                <span className="inline-flex items-center gap-1 font-semibold text-zinc-900 dark:text-white">
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400 shrink-0" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                   <span>{teamRating}</span>
-                  <span className="text-xs text-zinc-400 font-normal">
-                    ({reviewCount})
-                  </span>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-normal">({reviewCount})</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 dark:text-zinc-500">
-                  <Star className="h-3.5 w-3.5 text-zinc-300 dark:text-zinc-600 shrink-0" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-500 border border-zinc-200 dark:bg-zinc-800/60 dark:text-zinc-400 dark:border-zinc-700">
+                  <Star className="w-3 h-3 text-zinc-400" />
                   <span>No Rating</span>
                 </span>
               )}
-              <span>·</span>
-              <span>Team Leader: <strong className="text-zinc-800 dark:text-zinc-200">{team.owner_name}</strong></span>
-              {wallet && (permissions.can_view_wallet || isOwnerOrAdminOrLeader) && (
-                <>
-                  <span>·</span>
-                  <button
-                    type="button"
-                    onClick={() => selectTab("wallet")}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold text-xs border border-amber-500/20 cursor-pointer transition"
-                    title="View Team Wallet & Escrow"
-                  >
-                    <Coins className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>{Number(wallet.available_balance || 0).toLocaleString()} cr</span>
-                    {Number(wallet.escrow_balance || 0) > 0 && (
-                      <span className="text-zinc-500 dark:text-zinc-400 font-normal">
-                        ({Number(wallet.escrow_balance).toLocaleString()} in escrow)
-                      </span>
-                    )}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="cursor-pointer rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition"
-              title="Team options"
-            >
-              <MoreVertical className="h-5 w-5" />
-            </button>
-            {showMenu && (
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-2 shadow-2xl">
-                {permissions.can_update_team && (
-                  <button
-                    onClick={() => { setShowMenu(false); setShowEdit(true); }}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                    Edit Team
-                  </button>
-                )}
-                {permissions.can_manage_members && (
-                  <button
-                    onClick={openInviteModal}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    Invite Member
-                  </button>
-                )}
+
+              {/* Team Leader */}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                <span className="text-zinc-500">Leader:</span>
+                <strong className="font-semibold text-zinc-900 dark:text-white">{team.owner_name}</strong>
+              </span>
+
+              {/* Team Join Code */}
+              {team.join_code && (
                 <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    if (isGuest) {
-                      setIsGuestModalOpen(true);
-                      return;
-                    }
-                    setShowReport(true);
-                  }}
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
+                  type="button"
+                  onClick={() => void copyTeamCode()}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-700 cursor-pointer transition"
+                  title="Click to copy Team Code"
                 >
-                  <Flag className="h-4 w-4" />
-                  Report Team
+                  {codeCopied ? (
+                    <Check className="w-3 h-3 text-emerald-500" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-zinc-500" />
+                  )}
+                  <span>{codeCopied ? "Copied!" : team.join_code}</span>
                 </button>
-                {activeMember && membership?.role !== "Owner" && (
-                  <button
-                    onClick={() => { setShowMenu(false); setShowLeave(true); }}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Leave Team
-                  </button>
-                )}
-                {permissions.can_delete_team && (
-                  <button
-                    onClick={() => { setShowMenu(false); void deleteTeam(); }}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Team
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </header>
-
-        {!membership && (
-          <button
-            onClick={() => void requestToJoin()}
-            disabled={saving}
-            className="mb-6 cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-5 py-2 font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
-          >
-            {saving ? "Submitting request..." : "Ask to Join"}
-          </button>
-        )}
-        {membership?.status === "Pending" && (
-          <div className="mb-6 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            Your request to join this Team is pending approval.
-          </div>
-        )}
-        {membership?.status === "Invited" && (
-          <div className="mb-6 flex gap-2">
-            <button
-              onClick={() =>
-                void continueIfAccountVerified(
-                  () => void mutate("/invitations/accept", "patch"),
-                  false,
-                  "Account Verification is required before accepting a Team invitation. Please verify your identity first."
-                )
-              }
-              className="cursor-pointer rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-5 py-2 text-sm font-medium text-white transition shadow-sm"
-            >
-              Accept invitation
-            </button>
-            <button
-              onClick={() => void mutate("/invitations/decline", "patch")}
-              className="cursor-pointer rounded-full border border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] px-5 py-2 text-sm font-medium text-red-400 transition"
-            >
-              Decline
-            </button>
-          </div>
-        )}
-        {team.join_code && (
-          <div className="mb-6 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
-                Team Code
-              </p>
-              <p className="mt-1 font-mono text-lg font-semibold tracking-[0.16em] text-gray-900 dark:text-white">
-                {team.join_code}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void copyTeamCode()}
-              className={`cursor-pointer group mt-3 inline-flex min-w-32 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-105 active:translate-y-0 active:scale-95 sm:mt-0 ${
-                codeCopied
-                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
-                  : "border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-600 dark:text-zinc-300 hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-gray-900 dark:text-white"
-              }`}
-            >
-              {codeCopied ? (
-                <Check className="h-4 w-4 animate-[pulse_0.8s_ease-in-out_1]" />
-              ) : (
-                <Copy className="h-4 w-4 transition-transform duration-200 group-hover:rotate-6" />
               )}
-              {codeCopied ? "Copied!" : "Copy Code"}
-            </button>
+
+              {/* Wallet */}
+              {wallet && (permissions.can_view_wallet || isOwnerOrAdminOrLeader) && (
+                <button
+                  type="button"
+                  onClick={() => selectTab("wallet")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold text-[11px] border border-amber-500/20 cursor-pointer transition"
+                  title="View Team Wallet & Escrow"
+                >
+                  <Coins className="w-3 h-3 text-amber-500 shrink-0" />
+                  <span>{Number(wallet.available_balance || 0).toLocaleString()} cr</span>
+                  {Number(wallet.escrow_balance || 0) > 0 && (
+                    <span className="text-zinc-500 dark:text-zinc-400 font-normal">
+                      ({Number(wallet.escrow_balance).toLocaleString()} in escrow)
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Navigation Tabs attached at bottom of the card */}
+          <TeamTabs
+            active={activeTab}
+            isMember={Boolean(activeMember)}
+            showWallet={Boolean(permissions.can_view_wallet || isOwnerOrAdminOrLeader)}
+            showRequests={Boolean(permissions.can_manage_requests)}
+            requestCount={pendingRequests.length}
+            onSelect={selectTab}
+          />
+        </div>
+
+        {/* Pending / Invited Status Alerts */}
+        {membership?.status === "Pending" && (
+          <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-xs sm:text-sm text-amber-200 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Your request to join this Team is pending approval.</span>
           </div>
         )}
 
-        <TeamTabs
-          active={activeTab}
-          isMember={Boolean(activeMember)}
-          showWallet={Boolean(permissions.can_view_wallet || isOwnerOrAdminOrLeader)}
-          showRequests={Boolean(permissions.can_manage_requests)}
-          requestCount={pendingRequests.length}
-          onSelect={selectTab}
-        />
+        {membership?.status === "Invited" && (
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+            <span className="text-emerald-200">You have been invited to join this Team!</span>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() =>
+                  void continueIfAccountVerified(
+                    () => void mutate("/invitations/accept", "patch"),
+                    false,
+                    "Account Verification is required before accepting a Team invitation. Please verify your identity first."
+                  )
+                }
+                className="cursor-pointer rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-4 py-1.5 text-xs font-bold text-white transition shadow-sm"
+              >
+                Accept invitation
+              </button>
+              <button
+                onClick={() => void mutate("/invitations/decline", "patch")}
+                className="cursor-pointer rounded-xl border border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] px-4 py-1.5 text-xs font-bold text-red-400 transition"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        )}
+
         <TeamTabContent
           active={activeTab}
           team={team}
@@ -1106,64 +1265,54 @@ function TeamTabs({
   requestCount: number;
   onSelect: (tab: Tab) => void;
 }) {
-  const memberTabs: Array<{ id: Tab; label: string; icon: any }> = [
-    { id: "overview", label: "Overview", icon: Info },
-    { id: "taskboard", label: "Taskboard", icon: LayoutDashboard },
-    { id: "services", label: "Services", icon: Briefcase },
-    { id: "chat", label: "Chat", icon: MessageCircle },
-    { id: "video-projects", label: "Video Projects", icon: Video },
-    { id: "contracts", label: "Contracts", icon: FileText },
-    { id: "members", label: "Members", icon: Users },
+  const memberTabs: Array<SmartTabItem<Tab>> = [
+    { id: "overview", label: "Overview", icon: Info, group: "Collaboration" },
+    { id: "taskboard", label: "Taskboard", icon: LayoutDashboard, group: "Collaboration" },
+    { id: "services", label: "Services", icon: Briefcase, group: "Collaboration" },
+
+    { id: "video-projects", label: "Video Projects", icon: Video, group: "Collaboration" },
+    { id: "contracts", label: "Contracts", icon: FileText, group: "Management" },
+    { id: "members", label: "Members", icon: Users, group: "Management" },
   ];
 
-  const visitorTabs: Array<{ id: Tab; label: string; icon: any }> = [
-    { id: "about", label: "About", icon: Info },
-    { id: "services", label: "Services", icon: Briefcase },
-    { id: "gallery", label: "Gallery", icon: Film },
-    { id: "reviews", label: "Rate & Reviews", icon: Star },
-    { id: "members", label: "Members", icon: Users },
+  const visitorTabs: Array<SmartTabItem<Tab>> = [
+    { id: "about", label: "About", icon: Info, group: "Team" },
+    { id: "services", label: "Services", icon: Briefcase, group: "Team" },
+    { id: "gallery", label: "Gallery", icon: Film, group: "Team" },
+    { id: "reviews", label: "Rate & Reviews", icon: Star, group: "Team" },
+    { id: "members", label: "Members", icon: Users, group: "Team" },
   ];
 
-  const tabs = isMember ? [...memberTabs] : [...visitorTabs];
+  const tabs: Array<SmartTabItem<Tab>> = isMember ? [...memberTabs] : [...visitorTabs];
 
   if (isMember) {
     if (showRequests) {
-      tabs.push({ id: "requests", label: "Pending Requests", icon: UserPlus });
+      tabs.push({
+        id: "requests",
+        label: "Pending Requests",
+        icon: UserPlus,
+        badge: requestCount > 0 ? requestCount : undefined,
+        badgeColor: "bg-red-500 text-white",
+        group: "Management",
+      });
     }
     if (showWallet) {
-      tabs.push({ id: "wallet", label: "Wallet", icon: Coins });
-      tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft });
+      tabs.push({ id: "wallet", label: "Wallet", icon: Coins, group: "Management" });
+      tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft, group: "Management" });
     }
   }
 
+  const normalizedActive = (
+    active === "tasks" ? "taskboard" : active === "gigs" ? "services" : active
+  ) as Tab;
+
   return (
-    <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10 font-['Plus_Jakarta_Sans',sans-serif]">
-      {tabs.map(({ id, label, icon: Icon }) => {
-        const isCurrentActive =
-          active === id ||
-          (id === "taskboard" && active === "tasks") ||
-          (id === "services" && active === "gigs");
-        return (
-          <button
-            key={id}
-            onClick={() => onSelect(id)}
-            className={`flex cursor-pointer items-center gap-2 rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98] ${
-              isCurrentActive
-                ? "border-b-2 border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold"
-                : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
-            }`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-            {id === "requests" && requestCount > 0 && (
-              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
-                {requestCount}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <SmartTabBar<Tab>
+      tabs={tabs}
+      activeTab={normalizedActive}
+      onSelectTab={onSelect}
+      jumpMenuTitle="Team Tabs"
+    />
   );
 }
 
@@ -1554,7 +1703,7 @@ function TeamTabContent({
   if (active === "taskboard" || active === "tasks") {
     return (
       <TeamTaskboard
-        teamId={team.team_id}
+        team={team}
         members={members}
         canManage={canManage}
         onBackToOverview={() => onSelectTab("overview")}
@@ -1575,8 +1724,8 @@ function TeamTabContent({
 
   if (active === "chat") {
     return (
-      <TeamChatTab
-        teamId={team.team_id}
+      <TeamOverviewSection
+        team={team}
         teamName={team.display_name}
         memberCount={members.length}
         members={members}
@@ -1587,7 +1736,7 @@ function TeamTabContent({
   if (active === "video-projects") {
     return (
       <TeamVideoProjectsTab
-        teamId={team.team_id}
+        team={team}
         teamName={team.display_name}
         canManage={canManage}
         isOwner={isOwner}
@@ -1599,7 +1748,7 @@ function TeamTabContent({
   if (active === "contracts") {
     return (
       <TeamContractsTab
-        teamId={team.team_id}
+        team={team}
         teamAccountId={team.account_id}
         canViewProposals={canViewMarketplaceProposals}
       />
@@ -1609,7 +1758,7 @@ function TeamTabContent({
   if (active === "gallery") {
     return (
       <TeamGalleryTab
-        teamId={team.team_id}
+        team={team}
         teamName={team.display_name}
       />
     );
@@ -1924,7 +2073,7 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans',sans-serif]">
       <UserHeader pageTitle="Team" />
       {children}
     </div>

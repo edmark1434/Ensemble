@@ -91,7 +91,16 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0, catego
     t.website,
     t.join_policy,
     CASE WHEN t.gig_id IS NOT NULL THEN 'Gig' ELSE 'Job' END AS workspace_type,
-    COALESCE(t.is_archived, FALSE) AS is_archived,
+    (t.is_archived = TRUE OR (
+      t.team_type = 'contractual' AND EXISTS (
+        SELECT 1 FROM team_contract_workspaces tcw_a WHERE tcw_a.team_id = t.team_id
+      ) AND NOT EXISTS (
+        SELECT 1 FROM team_contract_workspaces tcw_a
+        JOIN contracts c_a ON c_a.contract_id = tcw_a.contract_id
+        WHERE tcw_a.team_id = t.team_id
+          AND c_a.status NOT IN ('Completed', 'Cancelled', 'Closed')
+      )
+    )) AS is_archived,
     a.display_name,a.handle,a.tagline,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
     count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status,
@@ -461,8 +470,84 @@ async function addReport(teamId,accountId,data){
   });
 }
 async function getTeamInbox(teamId){return TeamInbox.findOne({team_id:String(teamId),deleted_at:null});}
-async function createTeamInbox(team,members){const now=new Date();const isContractual = team.team_type === 'contractual' || Boolean(team.job_id);const conversationType = isContractual ? 'engagement' : 'group';const result=await TeamInbox.insertOne({team_id:String(team.team_id),team_account_id:String(team.account_id),job_id:team.job_id?String(team.job_id):null,listing_type:isContractual?'job':null,listing_title:team.display_name,conversation_name:team.display_name,conversation_type:conversationType,conversation_image_key:team.avatar_path||null,members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),pinned_messages:[],created_at:now,updated_at:now,deleted_at:null});return TeamInbox.findOne({_id:result.insertedId});}
-async function syncTeamInboxMembers(teamId,members){const inbox=await getTeamInbox(teamId);if(!inbox)return null;const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});const teamRes = await pool.query('SELECT t.team_type, t.job_id FROM teams t WHERE t.team_id = $1', [teamId]);const isContractual = teamRes.rows[0]?.team_type === 'contractual' || Boolean(teamRes.rows[0]?.job_id);const updateFields = { members: merged, updated_at: now };if (isContractual && inbox.conversation_type !== 'engagement') { updateFields.conversation_type = 'engagement'; updateFields.listing_type = 'job'; if (teamRes.rows[0]?.job_id) updateFields.job_id = String(teamRes.rows[0].job_id); }await TeamInbox.updateOne({_id:inbox._id},{$set:updateFields});return TeamInbox.findOne({_id:inbox._id});}
+async function createTeamInbox(team,members){
+  const existing = await TeamInbox.findOne({team_id:String(team.team_id),deleted_at:null});
+  if (existing) return existing;
+
+  const now=new Date();
+  let gigId = team.gig_id || null;
+  let jobId = team.job_id || null;
+  let teamType = team.team_type || null;
+
+  if (!gigId && !jobId) {
+    try {
+      const q = await pool.query('SELECT team_type, gig_id, job_id FROM teams WHERE team_id = $1', [team.team_id]);
+      if (q.rows[0]) {
+        gigId = q.rows[0].gig_id || null;
+        jobId = q.rows[0].job_id || null;
+        teamType = q.rows[0].team_type || teamType;
+      }
+    } catch (_) {}
+  }
+
+  const isContractual = teamType === 'contractual' || Boolean(jobId) || Boolean(gigId);
+  const conversationType = isContractual ? 'engagement' : 'group';
+  const listingType = isContractual ? (gigId ? 'gig' : (jobId ? 'job' : null)) : null;
+
+  const doc = {
+    team_id:String(team.team_id),
+    team_account_id:String(team.account_id),
+    job_id:jobId ? String(jobId) : null,
+    gig_id:gigId ? String(gigId) : null,
+    listing_type:listingType,
+    listing_title:team.display_name,
+    conversation_name:team.display_name,
+    conversation_type:conversationType,
+    conversation_image_key:team.avatar_path||null,
+    members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),
+    pinned_messages:[],
+    created_at:now,
+    updated_at:now,
+    deleted_at:null
+  };
+
+  try {
+    const res = await TeamInbox.findOneAndUpdate(
+      { team_id: String(team.team_id), deleted_at: null },
+      { $setOnInsert: doc },
+      { upsert: true, returnDocument: 'after' }
+    );
+    return res.value || res;
+  } catch (err) {
+    const fallback = await TeamInbox.findOne({ team_id: String(team.team_id), deleted_at: null });
+    if (fallback) return fallback;
+    throw err;
+  }
+}
+async function syncTeamInboxMembers(teamId,members){
+  const inbox=await getTeamInbox(teamId);
+  if(!inbox)return null;
+  const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();
+  const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});
+  for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});
+  const teamRes = await pool.query('SELECT t.team_type, t.job_id, t.gig_id FROM teams t WHERE t.team_id = $1', [teamId]);
+  const teamRow = teamRes.rows[0];
+  const isContractual = teamRow?.team_type === 'contractual' || Boolean(teamRow?.job_id) || Boolean(teamRow?.gig_id);
+  const updateFields = { members: merged, updated_at: now };
+  if (isContractual) {
+    if (inbox.conversation_type !== 'engagement') {
+      updateFields.conversation_type = 'engagement';
+    }
+    const resolvedListingType = teamRow?.gig_id ? 'gig' : (teamRow?.job_id ? 'job' : inbox.listing_type || 'job');
+    if (inbox.listing_type !== resolvedListingType) {
+      updateFields.listing_type = resolvedListingType;
+    }
+    if (teamRow?.job_id && String(inbox.job_id) !== String(teamRow.job_id)) updateFields.job_id = String(teamRow.job_id);
+    if (teamRow?.gig_id && String(inbox.gig_id) !== String(teamRow.gig_id)) updateFields.gig_id = String(teamRow.gig_id);
+  }
+  await TeamInbox.updateOne({_id:inbox._id},{$set:updateFields});
+  return TeamInbox.findOne({_id:inbox._id});
+}
 async function getTeamCreationEligibility(accountId) {
   const query = `
     WITH identity AS (

@@ -7,7 +7,9 @@ import {
   MoreVertical,
   ExternalLink,
   Briefcase,
+  Sparkles,
   Zap,
+  Lock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Inbox } from "../inbox_dataset";
@@ -75,10 +77,34 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
   const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
     String(selectedConversation.conversation_type || "").toLowerCase()
   );
-  const canCall = Boolean(otherMember);
+  const isMarketplace = [
+    "marketplace",
+    "marketplace_job",
+    "marketplace_gig",
+    "revision",
+    "engagement",
+  ].includes(selectedConversation.conversation_type || "");
+
+  const contractStatus = String(
+    selectedConversation.contract_status ||
+    selectedConversation.marketplace_status ||
+    ""
+  ).toLowerCase();
+
+  const isContractCompleted =
+    Boolean(selectedConversation.is_contract_completed) ||
+    (isMarketplace && ["completed", "closed", "cancelled"].includes(contractStatus));
+
+  const canCall = Boolean(otherMember) && !isContractCompleted;
   const listingType =
-    selectedConversation.listing_type ||
-    (selectedConversation.gig_id ? "gig" : selectedConversation.job_id ? "job" : "");
+    (selectedConversation.gig_id || selectedConversation.listing_type === "gig")
+      ? "gig"
+      : (selectedConversation.job_id || selectedConversation.listing_type === "job")
+      ? "job"
+      : selectedConversation.listing_type || "";
+  const workspacePath = selectedConversation.team_id
+    ? `/teams/${selectedConversation.team_id}`
+    : "";
   const listingPath =
     selectedConversation.listing_path ||
     (listingType === "gig" && selectedConversation.gig_id
@@ -140,12 +166,20 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
           {name.startsWith("User ") && name.length === 13 ? (
             <div className="h-4 w-32 bg-gray-200 dark:bg-zinc-700 animate-pulse rounded mb-1" />
           ) : (
-            <h2
-              className="truncate font-semibold text-gray-900 dark:text-white"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              {name}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2
+                className="truncate font-semibold text-gray-900 dark:text-white"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {name}
+              </h2>
+              {isContractCompleted && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 shrink-0">
+                  <Lock className="w-2.5 h-2.5 text-zinc-500" />
+                  Closed (View Only)
+                </span>
+              )}
+            </div>
           )}
           <p
             className="truncate text-xs text-gray-500 dark:text-zinc-400"
@@ -172,22 +206,40 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
           )}
           {isEngagement && (
             <div className="mt-1 flex min-w-0 items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium uppercase text-blue-400">
-                <Briefcase className="h-3 w-3" />
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                  listingType === "gig"
+                    ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
+                    : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                }`}
+              >
+                {listingType === "gig" ? (
+                  <Sparkles className="h-3 w-3" />
+                ) : (
+                  <Briefcase className="h-3 w-3" />
+                )}
                 {listingType || "engagement"}
               </span>
               <span className="max-w-56 truncate text-xs text-gray-600 dark:text-zinc-300">
                 {selectedConversation.listing_title || name}
               </span>
-              {listingPath && (
+              {workspacePath ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(workspacePath)}
+                  className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-500 hover:text-blue-400"
+                >
+                  View Workspace <ExternalLink className="h-3 w-3" />
+                </button>
+              ) : listingPath ? (
                 <button
                   type="button"
                   onClick={() => navigate(listingPath)}
-                  className="inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300"
+                  className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-500 hover:text-blue-400"
                 >
                   View Details <ExternalLink className="h-3 w-3" />
                 </button>
-              )}
+              ) : null}
             </div>
           )}
           {isEngagement && selectedConversation.listing_preview && (

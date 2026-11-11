@@ -1,6 +1,54 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { XCircle, Check, Crown, Loader2, Zap, Flame } from "lucide-react";
+import { XCircle, Check, Loader2, Zap, Flame } from "lucide-react";
+import api from "@/lib/axios";
+
+interface ApiPlanFeature {
+  feature_id?: string;
+  feature_key?: string;
+  name?: string;
+  description: string;
+  value: string;
+}
+
+interface ApiPlan {
+  plan_id: string;
+  name: string;
+  description: string;
+  price: number;
+  billing_period: string;
+  days_of_trials: number;
+  features: ApiPlanFeature[];
+}
+
+const planOrderMap: Record<string, number> = {
+  free: 1,
+  freemium: 1,
+  basic: 1,
+  premium: 2,
+  pro: 2,
+  business: 3,
+  studio: 3,
+  enterprise: 4,
+};
+
+const formatPHP = (value: number) =>
+  `₱${Number(value).toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+
+const getSubscriptionIcon = (type: string) => {
+  switch (type.toLowerCase()) {
+    case "premium":
+      return "/icons/subscription/premium.png";
+    case "business":
+    case "studio":
+      return "/icons/subscription/studio.png";
+    default:
+      return "/icons/subscription/freemium.png";
+  }
+};
 
 interface SubscriptionDetailsProps {
   subscription: {
@@ -33,20 +81,46 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
     ? Math.max(1, Math.ceil((new Date(subscription.trial_ends_at!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  const plans = [
+  const [apiPlans, setApiPlans] = useState<ApiPlan[] | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .get("/api/subscription/plans")
+      .then((res) => {
+        const plansData: ApiPlan[] = res.data?.plans || [];
+        if (isMounted && plansData.length > 0) {
+          const sorted = [...plansData].sort((a, b) => {
+            const rankA = planOrderMap[a.name.toLowerCase()] ?? (Number(a.price) === 0 ? 0 : Number(a.price));
+            const rankB = planOrderMap[b.name.toLowerCase()] ?? (Number(b.price) === 0 ? 0 : Number(b.price));
+            return rankA - rankB;
+          });
+          setApiPlans(sorted);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch subscription plans in settings:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const fallbackPlans = [
     {
       name: "Free",
       tagline: "Free membership",
       price: "Free",
+      suffix: undefined as string | undefined,
       icon: "/icons/subscription/freemium.png",
       popular: false,
       current: isFreePlan,
       features: [
-        { label: "Maximum teams allowed", val: "1" },
+        { label: "Maximum teams allowed to create", val: "1" },
         { label: "Maximum asset posts", val: "1" },
         { label: "Maximum export quality", val: "720p" },
         { label: "Rendering/export speed", val: "Standard" },
-        { label: "Maximum collaborators", val: "3" },
+        { label: "Maximum members allowed per team (e.g. up to 3 members on Free)", val: "3" },
         { label: "Watermark on exported files", val: "Enabled" },
         { label: "Maximum collaborative projects", val: "3" },
         { label: "Available editing tools", val: "Basic" },
@@ -62,11 +136,11 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       popular: true,
       current: subscription.plan_name?.toLowerCase().includes("premium"),
       features: [
-        { label: "Maximum teams allowed", val: "5" },
+        { label: "Maximum teams allowed to create", val: "5" },
         { label: "Maximum asset posts", val: "20" },
         { label: "Maximum export quality", val: "1080p" },
         { label: "Rendering/export speed", val: "Accelerated" },
-        { label: "Maximum collaborators", val: "10" },
+        { label: "Maximum members allowed per team (e.g. up to 3 members on Free)", val: "10" },
         { label: "Watermark on exported files", val: "Disabled" },
         { label: "Maximum collaborative projects", val: "10" },
         { label: "Available editing tools", val: "Premium + AI" },
@@ -84,11 +158,11 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       popular: false,
       current: subscription.plan_name?.toLowerCase().includes("business"),
       features: [
-        { label: "Maximum teams allowed", val: "Unlimited" },
+        { label: "Maximum teams allowed to create", val: "Unlimited" },
         { label: "Maximum asset posts", val: "Unlimited" },
         { label: "Maximum export quality", val: "2K-4K" },
         { label: "Rendering/export speed", val: "Maximum" },
-        { label: "Maximum collaborators", val: "20" },
+        { label: "Maximum members allowed per team (e.g. up to 3 members on Free)", val: "20" },
         { label: "Watermark on exported files", val: "Disabled" },
         { label: "Maximum collaborative projects", val: "20" },
         { label: "Available editing tools", val: "Premium + AI" },
@@ -98,6 +172,33 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       ]
     }
   ];
+
+  const plans = apiPlans
+    ? apiPlans.map((tier) => {
+        const isFree = Number(tier.price) === 0 || tier.name.toLowerCase() === "free";
+        const isCurrent = isFree
+          ? isFreePlan
+          : Boolean(subscription.plan_name?.toLowerCase().includes(tier.name.toLowerCase()));
+        return {
+          name: tier.name,
+          tagline: tier.description,
+          price: isFree ? "Free" : formatPHP(Number(tier.price)),
+          suffix:
+            !isFree && tier.billing_period === "MONTH"
+              ? "/mo"
+              : !isFree && tier.billing_period
+              ? `/${tier.billing_period.toLowerCase()}`
+              : undefined,
+          icon: getSubscriptionIcon(tier.name),
+          popular: tier.name.toLowerCase() === "premium",
+          current: isCurrent,
+          features: (tier.features || []).map((f) => ({
+            label: f.description || f.name || "",
+            val: f.value,
+          })),
+        };
+      })
+    : fallbackPlans;
 
   const activePlanDetails = plans.find(p => p.current) || plans[0];
 

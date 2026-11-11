@@ -51,6 +51,8 @@ export interface Inbox {
   client_context_path?: string;
   freelancer_context_path?: string;
   marketplace_status?: string;
+  contract_status?: string;
+  is_contract_completed?: boolean;
   marketplace_amount_credits?: number;
   revision_price_credits?: number;
   ticket_details?: {

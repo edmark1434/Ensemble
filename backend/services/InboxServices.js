@@ -235,146 +235,248 @@ async function normalizeLinkedConversations(inboxes, viewerAccountIds = []) {
     }
 
     const disputeIds = [
-
         ...new Set(
-
             withTickets
-
                 .map((inbox) => inbox.dispute_id)
-
                 .filter(Boolean)
-
                 .map(String)
-
         ),
-
     ];
 
-    if (!disputeIds.length) return withTickets;
+    let withDisputes = withTickets;
+    if (disputeIds.length) {
+        const disputeResult = await pool.query(
+            `SELECT dispute_id, dispute_number, title, status, visibility, by_account_id, for_account_id
+             FROM disputes
+             WHERE dispute_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+            [disputeIds]
+        );
 
-    const disputeResult = await pool.query(
+        const disputesById = new Map(
+            disputeResult.rows.map((dispute) => [String(dispute.dispute_id), dispute])
+        );
 
-        `SELECT dispute_id, dispute_number, title, status, visibility, by_account_id, for_account_id
+        const { partyVisibleDisputePreview } = require('../repositories/DisputeChatRepositories');
+        const viewerSet = new Set((viewerAccountIds || []).map(String).filter(Boolean));
+        const staffViewerResult = viewerSet.size
+            ? await pool.query(
+                `SELECT account_id::text AS account_id FROM staff WHERE account_id::text = ANY($1::text[])`,
+                [[...viewerSet]]
+            )
+            : { rows: [] };
+        const staffViewerIds = new Set(staffViewerResult.rows.map((row) => String(row.account_id)));
 
-         FROM disputes
+        withDisputes = await Promise.all(
+            withTickets.map(async (inbox) => {
+                const disputeId = String(inbox.dispute_id || '');
+                const dispute = disputesById.get(disputeId);
+                if (!dispute) return inbox;
 
-         WHERE dispute_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+                const viewerMember = (inbox.members || []).find((member) =>
+                    viewerSet.has(String(member.account_id))
+                );
+                const viewerRole = String(viewerMember?.role || 'member').toLowerCase();
+                const viewerIsStaff =
+                    ['admin', 'staff', 'moderator'].includes(viewerRole)
+                    && staffViewerIds.has(String(viewerMember?.account_id || ''));
 
-        [disputeIds]
+                let next = {
+                    ...inbox,
+                    dispute_details: {
+                        ...inbox.dispute_details,
+                        dispute_number: dispute.dispute_number,
+                        title: dispute.title,
+                        status: dispute.status,
+                        visibility: Boolean(dispute.visibility),
+                        by_account_id: dispute.by_account_id,
+                        for_account_id: dispute.for_account_id,
+                    },
+                };
 
-    );
-
-    const disputesById = new Map(
-
-        disputeResult.rows.map((dispute) => [String(dispute.dispute_id), dispute])
-
-    );
-
-    const { partyVisibleDisputePreview } = require('../repositories/DisputeChatRepositories');
-
-    const viewerSet = new Set((viewerAccountIds || []).map(String).filter(Boolean));
-
-    const staffViewerResult = viewerSet.size
-
-        ? await pool.query(
-
-            `SELECT account_id::text AS account_id FROM staff WHERE account_id::text = ANY($1::text[])`,
-
-            [[...viewerSet]]
-
-        )
-
-        : { rows: [] };
-
-    const staffViewerIds = new Set(staffViewerResult.rows.map((row) => String(row.account_id)));
-
-    return Promise.all(
-
-        withTickets.map(async (inbox) => {
-
-            const disputeId = String(inbox.dispute_id || '');
-
-            const dispute = disputesById.get(disputeId);
-
-            if (!dispute) return inbox;
-
-            const viewerMember = (inbox.members || []).find((member) =>
-
-                viewerSet.has(String(member.account_id))
-
-            );
-
-            const viewerRole = String(viewerMember?.role || 'member').toLowerCase();
-
-            const viewerIsStaff =
-
-                ['admin', 'staff', 'moderator'].includes(viewerRole)
-
-                && staffViewerIds.has(String(viewerMember?.account_id || ''));
-
-            let next = {
-
-                ...inbox,
-
-                dispute_details: {
-
-                    ...inbox.dispute_details,
-
-                    dispute_number: dispute.dispute_number,
-
-                    title: dispute.title,
-
-                    status: dispute.status,
-
-                    visibility: Boolean(dispute.visibility),
-
-                    by_account_id: dispute.by_account_id,
-
-                    for_account_id: dispute.for_account_id,
-
-                },
-
-            };
-
-            // Parties must never see staff-only text in the inbox preview row.
-
-            if (!viewerIsStaff) {
-
-                try {
-
-                    const preview = await partyVisibleDisputePreview(String(inbox._id));
-
-                    if (preview) next = { ...next, ...preview };
-
-                } catch (_) {
-
-                    next = {
-
-                        ...next,
-
-                        last_message: null,
-
-                        last_message_id: null,
-
-                        last_message_sender_id: null,
-
-                        last_message_time: null,
-
-                    };
-
+                // Parties must never see staff-only text in the inbox preview row.
+                if (!viewerIsStaff) {
+                    try {
+                        const preview = await partyVisibleDisputePreview(String(inbox._id));
+                        if (preview) next = { ...next, ...preview };
+                    } catch (_) {
+                        next = {
+                            ...next,
+                            last_message: null,
+                            last_message_id: null,
+                            last_message_sender_id: null,
+                            last_message_time: null,
+                        };
+                    }
                 }
 
+                return next;
+            })
+        );
+    }
+
+    // 3. Contracts, team workspaces, and marketplace completion enrichment
+    const contractIds = [
+        ...new Set(
+            withDisputes
+                .map((inbox) => inbox.contract_id)
+                .filter(Boolean)
+                .map(String)
+        ),
+    ];
+    const proposalIds = [
+        ...new Set(
+            withDisputes
+                .map((inbox) => inbox.proposal_id)
+                .filter(Boolean)
+                .map(String)
+        ),
+    ];
+    const gigRequestIds = [
+        ...new Set(
+            withDisputes
+                .map((inbox) => inbox.gig_request_id)
+                .filter(Boolean)
+                .map(String)
+        ),
+    ];
+    const teamIds = [
+        ...new Set(
+            withDisputes
+                .map((inbox) => inbox.team_id)
+                .filter(Boolean)
+                .map(String)
+        ),
+    ];
+
+    const contractsById = new Map();
+    const contractsByProposalId = new Map();
+    const contractsByGigRequestId = new Map();
+    const gigRequestsById = new Map();
+    const teamsById = new Map();
+
+    if (contractIds.length || proposalIds.length || gigRequestIds.length) {
+        try {
+            const contractResult = await pool.query(`
+                SELECT c.contract_id, c.status as contract_status, jc.proposal_id, gc.gig_request_id
+                  FROM contracts c
+                  LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+                  LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+                 WHERE (c.contract_id = ANY($1::uuid[]) AND $1::text[] IS NOT NULL)
+                    OR (jc.proposal_id = ANY($2::uuid[]) AND $2::text[] IS NOT NULL)
+                    OR (gc.gig_request_id = ANY($3::uuid[]) AND $3::text[] IS NOT NULL)
+                 ORDER BY c.created_at DESC
+            `, [contractIds.length ? contractIds : null, proposalIds.length ? proposalIds : null, gigRequestIds.length ? gigRequestIds : null]);
+
+            for (const row of contractResult.rows) {
+                if (row.contract_id && !contractsById.has(String(row.contract_id))) {
+                    contractsById.set(String(row.contract_id), row.contract_status);
+                }
+                if (row.proposal_id && !contractsByProposalId.has(String(row.proposal_id))) {
+                    contractsByProposalId.set(String(row.proposal_id), {
+                        contract_id: String(row.contract_id),
+                        contract_status: row.contract_status,
+                    });
+                }
+                if (row.gig_request_id && !contractsByGigRequestId.has(String(row.gig_request_id))) {
+                    contractsByGigRequestId.set(String(row.gig_request_id), {
+                        contract_id: String(row.contract_id),
+                        contract_status: row.contract_status,
+                    });
+                }
             }
+        } catch (err) {
+            console.error('Error fetching contract status for inboxes:', err);
+        }
+    }
 
-            return next;
+    if (gigRequestIds.length) {
+        try {
+            const grResult = await pool.query(`
+                SELECT gig_request_id, status FROM gig_requests WHERE gig_request_id = ANY($1::uuid[])
+            `, [gigRequestIds]);
+            for (const row of grResult.rows) {
+                gigRequestsById.set(String(row.gig_request_id), row.status);
+            }
+        } catch (err) {
+            console.error('Error fetching gig request status for inboxes:', err);
+        }
+    }
 
-        })
+    if (teamIds.length) {
+        try {
+            const teamResult = await pool.query(`
+                SELECT t.team_id, t.team_type, t.job_id, t.gig_id, t.is_archived,
+                       w.contract_id, c.status as contract_status
+                  FROM teams t
+                  LEFT JOIN team_contract_workspaces w ON w.team_id = t.team_id
+                  LEFT JOIN contracts c ON c.contract_id = w.contract_id
+                 WHERE t.team_id = ANY($1::uuid[])
+            `, [teamIds]);
+            for (const row of teamResult.rows) {
+                teamsById.set(String(row.team_id), row);
+            }
+        } catch (err) {
+            console.error('Error fetching team info for inboxes:', err);
+        }
+    }
 
-    );
+    return withDisputes.map((inbox) => {
+        const teamInfo = inbox.team_id ? teamsById.get(String(inbox.team_id)) : null;
 
+        const contractInfo =
+            (inbox.contract_id && { contract_id: inbox.contract_id, contract_status: contractsById.get(String(inbox.contract_id)) }) ||
+            (teamInfo?.contract_id && { contract_id: teamInfo.contract_id, contract_status: teamInfo.contract_status }) ||
+            (inbox.proposal_id && contractsByProposalId.get(String(inbox.proposal_id))) ||
+            (inbox.gig_request_id && contractsByGigRequestId.get(String(inbox.gig_request_id)));
+
+        const gigReqStatus = inbox.gig_request_id ? gigRequestsById.get(String(inbox.gig_request_id)) : null;
+        const resolvedContractStatus = contractInfo?.contract_status || null;
+        const resolvedMarketplaceStatus = gigReqStatus || inbox.marketplace_status || resolvedContractStatus;
+        const rawStatus = String(resolvedContractStatus || resolvedMarketplaceStatus || '').toLowerCase();
+        const isTeamArchived = Boolean(teamInfo?.is_archived);
+        const isContractCompleted = isTeamArchived || ['completed', 'closed', 'cancelled'].includes(rawStatus);
+
+        let resolvedListingType = inbox.listing_type;
+        let resolvedGigId = inbox.gig_id || null;
+        let resolvedJobId = inbox.job_id || null;
+
+        if (teamInfo) {
+            if (teamInfo.gig_id) {
+                resolvedListingType = 'gig';
+                resolvedGigId = String(teamInfo.gig_id);
+            } else if (teamInfo.job_id) {
+                resolvedListingType = 'job';
+                resolvedJobId = String(teamInfo.job_id);
+            }
+        } else if (inbox.gig_id || inbox.gig_request_id) {
+            resolvedListingType = 'gig';
+        } else if (inbox.job_id || inbox.proposal_id) {
+            resolvedListingType = 'job';
+        }
+
+        // Self-heal MongoDB document asynchronously if mismatched
+        if (inbox.team_id && (inbox.listing_type !== resolvedListingType || (resolvedGigId && !inbox.gig_id))) {
+            updateInboxRepositories(String(inbox._id), {
+                $set: {
+                    listing_type: resolvedListingType,
+                    ...(resolvedGigId ? { gig_id: resolvedGigId } : {}),
+                    ...(resolvedJobId ? { job_id: resolvedJobId } : {}),
+                }
+            }).catch(() => {});
+        }
+
+        return {
+            ...inbox,
+            listing_type: resolvedListingType,
+            gig_id: resolvedGigId || inbox.gig_id,
+            job_id: resolvedJobId || inbox.job_id,
+            contract_id: contractInfo?.contract_id || inbox.contract_id,
+            contract_status: resolvedContractStatus || (isTeamArchived ? 'Archived' : inbox.contract_status) || null,
+            marketplace_status: resolvedMarketplaceStatus,
+            is_contract_completed: isContractCompleted,
+        };
+    });
 }
-
-
 
 class ChatServiceError extends Error {
 
@@ -1868,6 +1970,73 @@ async function createOrReuseDirectChatServices(payload, accountId) {
 
 
 
+async function assertMemberCanReplyOnMarketplaceContract(inbox) {
+    const isMarketplace = [
+        'marketplace',
+        'marketplace_job',
+        'marketplace_gig',
+        'revision',
+        'engagement',
+    ].includes(String(inbox?.conversation_type || '').toLowerCase());
+    if (!isMarketplace) return;
+
+    const contractId = inbox.contract_id;
+    const proposalId = inbox.proposal_id;
+    const gigRequestId = inbox.gig_request_id;
+    const teamId = inbox.team_id;
+
+    if (!contractId && !proposalId && !gigRequestId && !teamId) return;
+
+    try {
+        let isDone = false;
+        if (teamId) {
+            const teamRes = await pool.query(`
+                SELECT t.is_archived, c.status as contract_status
+                  FROM teams t
+                  LEFT JOIN team_contract_workspaces w ON w.team_id = t.team_id
+                  LEFT JOIN contracts c ON c.contract_id = w.contract_id
+                 WHERE t.team_id = $1
+                 LIMIT 1
+            `, [teamId]);
+            if (teamRes.rows.length) {
+                const row = teamRes.rows[0];
+                const status = String(row.contract_status || '').toLowerCase();
+                if (row.is_archived || ['completed', 'closed', 'cancelled'].includes(status)) {
+                    isDone = true;
+                }
+            }
+        }
+
+        if (!isDone && (contractId || proposalId || gigRequestId)) {
+            const res = await pool.query(`
+                SELECT c.status as contract_status
+                  FROM contracts c
+                  LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+                  LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+                 WHERE (c.contract_id = $1::uuid AND $1::text IS NOT NULL)
+                    OR (jc.proposal_id = $2::uuid AND $2::text IS NOT NULL)
+                    OR (gc.gig_request_id = $3::uuid AND $3::text IS NOT NULL)
+                 ORDER BY c.created_at DESC
+                 LIMIT 1
+            `, [contractId || null, proposalId || null, gigRequestId || null]);
+
+            if (res.rows.length) {
+                const status = String(res.rows[0].contract_status || '').toLowerCase();
+                if (['completed', 'closed', 'cancelled'].includes(status)) {
+                    isDone = true;
+                }
+            }
+        }
+
+        if (isDone) {
+            throw new ChatServiceError('This chat is closed (View Only) because the contract has been completed. You cannot reply.', 403);
+        }
+    } catch (err) {
+        if (err instanceof ChatServiceError) throw err;
+        console.error('Error verifying marketplace contract status:', err);
+    }
+}
+
 async function assertMemberCanReplyOnTicket(inbox) {
 
     if (String(inbox?.conversation_type || '').toLowerCase() !== 'ticket') return;
@@ -2038,6 +2207,7 @@ async function buildMessage(payload, accountId) {
     }
 
     await assertMemberCanReplyOnTicket(inbox);
+    await assertMemberCanReplyOnMarketplaceContract(inbox);
 
     const dispute = await assertMemberCanReplyOnDispute(inbox, personalSenderId);
 
@@ -4143,12 +4313,34 @@ async function getAllInboxesByAccountIdServices(accountId) {
 
     );
 
+    const flatList = conversations.flat();
+    const seenTeamInboxes = new Map();
+    const dedupedInboxes = [];
+    for (const ib of flatList) {
+        if (ib.team_id) {
+            const teamKey = String(ib.team_id);
+            if (seenTeamInboxes.has(teamKey)) {
+                const existing = seenTeamInboxes.get(teamKey);
+                const existingHasMsg = Boolean(existing.last_message || existing.last_message_id);
+                const curHasMsg = Boolean(ib.last_message || ib.last_message_id);
+                if (curHasMsg && !existingHasMsg) {
+                    const idx = dedupedInboxes.indexOf(existing);
+                    if (idx !== -1) dedupedInboxes[idx] = ib;
+                    seenTeamInboxes.set(teamKey, ib);
+                    updateInboxRepositories(String(existing._id), { $set: { deleted_at: new Date() } }).catch(() => {});
+                } else if (!curHasMsg) {
+                    updateInboxRepositories(String(ib._id), { $set: { deleted_at: new Date() } }).catch(() => {});
+                }
+                continue;
+            }
+            seenTeamInboxes.set(teamKey, ib);
+        }
+        dedupedInboxes.push(ib);
+    }
+
     const normalizedConversations = await normalizeLinkedConversations(
-
-        conversations.flat(),
-
+        dedupedInboxes,
         actorIds
-
     );
 
     const enrichedConversations = await enrichInboxesWithMemberProfiles(
@@ -4164,13 +4356,16 @@ async function getAllInboxesByAccountIdServices(accountId) {
         .map((inbox) => attachViewerAccountId(inbox, actorIds))
 
         .sort((left, right) => {
-
+            const leftStatus = String(left.contract_status || left.marketplace_status || '').toLowerCase();
+            const rightStatus = String(right.contract_status || right.marketplace_status || '').toLowerCase();
+            const leftDim = Boolean(left.is_contract_completed) || ['completed', 'closed', 'cancelled'].includes(leftStatus);
+            const rightDim = Boolean(right.is_contract_completed) || ['completed', 'closed', 'cancelled'].includes(rightStatus);
+            if (leftDim !== rightDim) {
+                return leftDim ? 1 : -1;
+            }
             const leftTime = new Date(left.last_message_time || left.updated_at || 0);
-
             const rightTime = new Date(right.last_message_time || right.updated_at || 0);
-
             return rightTime - leftTime;
-
         });
 
 }

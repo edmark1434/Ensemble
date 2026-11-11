@@ -598,30 +598,35 @@ async function getInboxByAccountId(account_id, conversation_type) {
                     from: "messages",
                     let: {
                         conversationId: { $toString: "$_id" },
-                        readerAccountId: String(account_id),
+                        readerAccountIds: accountIds,
                     },
                     pipeline: [
                         {
                             $match: {
                                 $expr: {
                                     $and: [
-                                        { $eq: ["$conversation_id", "$$conversationId"] },
-                                        { $ne: ["$sender_id", "$$readerAccountId"] },
+                                        { $eq: ["$conversation_id", "$conversationId"] },
+                                        { $not: [{ $in: ["$sender_id", "$readerAccountIds"] }] },
                                         { $ne: ["$is_deleted", true] },
                                         { $eq: [{ $ifNull: ["$deleted_at", null] }, null] },
                                         {
-                                            $not: [{
-                                                $in: [
-                                                    "$$readerAccountId",
-                                                    {
-                                                        $map: {
-                                                            input: { $ifNull: ["$read_by", []] },
-                                                            as: "reader",
-                                                            in: "$$reader.account_id",
-                                                        },
+                                            $eq: [
+                                                {
+                                                    $size: {
+                                                        $setIntersection: [
+                                                            "$readerAccountIds",
+                                                            {
+                                                                $map: {
+                                                                    input: { $ifNull: ["$read_by", []] },
+                                                                    as: "reader",
+                                                                    in: "$reader.account_id",
+                                                                },
+                                                            },
+                                                        ],
                                                     },
-                                                ],
-                                            }],
+                                                },
+                                                0,
+                                            ],
                                         },
                                     ],
                                 },

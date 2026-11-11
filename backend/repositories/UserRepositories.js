@@ -157,7 +157,7 @@ async function getEmailandPasswordHashByEmail(email) {
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
              LEFT JOIN files f ON a.avatar_file_id = f.file_id
-             WHERE u.email_address = $1`,
+             WHERE LOWER(u.email_address) = LOWER($1)`,
             [email]
         );
         return result.rows[0];
@@ -174,7 +174,7 @@ async function getEmailandPasswordHashByUsername(username) {
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
              LEFT JOIN files f ON a.avatar_file_id = f.file_id
-             WHERE a.handle = $1`,
+             WHERE LOWER(a.handle) = LOWER($1)`,
             [username]
         );
         return result.rows[0];

@@ -61,30 +61,23 @@ body {
   height: 0 !important;
 }
 
-/* Thin Scrollbar Utility */
-.inbox-scroll-thin,
-.custom-scrollbar,
-.scroll-thin {
-  scrollbar-width: thin !important;
-  scrollbar-color: rgba(156, 163, 175, 0.4) transparent !important;
-}
-
-.dark .inbox-scroll-thin,
-.dark .custom-scrollbar,
-.dark .scroll-thin {
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent !important;
-}
-
+/* Thin Scrollbar Utility & Seamless Dropdown Scrollbars */
 .inbox-scroll-thin::-webkit-scrollbar,
 .custom-scrollbar::-webkit-scrollbar,
-.scroll-thin::-webkit-scrollbar {
+.scroll-thin::-webkit-scrollbar,
+.gs-listbox-scroll::-webkit-scrollbar,
+[role="listbox"]::-webkit-scrollbar,
+[role="menu"]::-webkit-scrollbar {
   width: 5px !important;
   height: 5px !important;
 }
 
 .inbox-scroll-thin::-webkit-scrollbar-button,
 .custom-scrollbar::-webkit-scrollbar-button,
-.scroll-thin::-webkit-scrollbar-button {
+.scroll-thin::-webkit-scrollbar-button,
+.gs-listbox-scroll::-webkit-scrollbar-button,
+[role="listbox"]::-webkit-scrollbar-button,
+[role="menu"]::-webkit-scrollbar-button {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -92,33 +85,70 @@ body {
 
 .inbox-scroll-thin::-webkit-scrollbar-track,
 .custom-scrollbar::-webkit-scrollbar-track,
-.scroll-thin::-webkit-scrollbar-track {
+.scroll-thin::-webkit-scrollbar-track,
+.gs-listbox-scroll::-webkit-scrollbar-track,
+[role="listbox"]::-webkit-scrollbar-track,
+[role="menu"]::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
 .inbox-scroll-thin::-webkit-scrollbar-thumb,
 .custom-scrollbar::-webkit-scrollbar-thumb,
-.scroll-thin::-webkit-scrollbar-thumb {
+.scroll-thin::-webkit-scrollbar-thumb,
+.gs-listbox-scroll::-webkit-scrollbar-thumb,
+[role="listbox"]::-webkit-scrollbar-thumb,
+[role="menu"]::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.4) !important;
   border-radius: 9999px !important;
 }
 
 .inbox-scroll-thin::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover,
-.scroll-thin::-webkit-scrollbar-thumb:hover {
+.scroll-thin::-webkit-scrollbar-thumb:hover,
+.gs-listbox-scroll::-webkit-scrollbar-thumb:hover,
+[role="listbox"]::-webkit-scrollbar-thumb:hover,
+[role="menu"]::-webkit-scrollbar-thumb:hover {
   background: rgba(156, 163, 175, 0.6) !important;
 }
 
 .dark .inbox-scroll-thin::-webkit-scrollbar-thumb,
 .dark .custom-scrollbar::-webkit-scrollbar-thumb,
-.dark .scroll-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2) !important;
+.dark .scroll-thin::-webkit-scrollbar-thumb,
+.dark .gs-listbox-scroll::-webkit-scrollbar-thumb,
+.dark [role="listbox"]::-webkit-scrollbar-thumb,
+.dark [role="menu"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22) !important;
 }
 
 .dark .inbox-scroll-thin::-webkit-scrollbar-thumb:hover,
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
-.dark .scroll-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35) !important;
+.dark .scroll-thin::-webkit-scrollbar-thumb:hover,
+.dark .gs-listbox-scroll::-webkit-scrollbar-thumb:hover,
+.dark [role="listbox"]::-webkit-scrollbar-thumb:hover,
+.dark [role="menu"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.38) !important;
+}
+
+/* Firefox / Non-WebKit fallback */
+@supports not selector(::-webkit-scrollbar) {
+  .inbox-scroll-thin,
+  .custom-scrollbar,
+  .scroll-thin,
+  .gs-listbox-scroll,
+  [role="listbox"],
+  [role="menu"] {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent !important;
+  }
+
+  .dark .inbox-scroll-thin,
+  .dark .custom-scrollbar,
+  .dark .scroll-thin,
+  .dark .gs-listbox-scroll,
+  .dark [role="listbox"],
+  .dark [role="menu"] {
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent !important;
+  }
 }
 
 /* Hide scrollbar utility */

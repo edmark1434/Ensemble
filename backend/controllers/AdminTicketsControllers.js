@@ -390,6 +390,7 @@ async function createPublicTicket(req, res) {
       return res.status(400).json({ success: false, message: 'Description is required' });
     }
 
+    const requesterEmail = req.body?.email || req.session?.email || req.session?.email_address || null;
     const data = await createSupportTicket(
       {
         subject: subjectOrReason,
@@ -406,8 +407,12 @@ async function createPublicTicket(req, res) {
               evidence: req.body?.fields?.evidence || '',
             }
           : (req.body?.fields ?? {}),
-        context: req.body?.context,
+        context: {
+          ...(req.body?.context || {}),
+          ...(requesterEmail ? { email: requesterEmail } : {}),
+        },
         requesterAccountId,
+        email: requesterEmail,
       },
       req.session
     );

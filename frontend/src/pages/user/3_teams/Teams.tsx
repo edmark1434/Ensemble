@@ -1,5 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Briefcase, CheckCircle2, ChevronRight, Clock, Crown, Grid3x3, List, MapPin, Plus, Search, ShieldCheck, Star, UserPlus, Users, Globe, Lock } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowUpDown,
+  ArrowUpRight,
+  Briefcase,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Crown,
+  Grid3x3,
+  Info,
+  List,
+  MapPin,
+  Plus,
+  Search,
+  ShieldCheck,
+  Star,
+  UserCheck,
+  UserPlus,
+  Users,
+  Globe,
+  Lock,
+} from "lucide-react";
+import { TeamInfoTab } from "./TeamInfoTab";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -154,23 +178,54 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const initialTab: "general" | "projects" =
-    defaultTab || (tabParam === "projects" || tabParam === "workspaces" ? "projects" : "general");
-  const [activeTab, setActiveTab] = useState<"general" | "projects">(initialTab);
+  type TeamsTab = "all" | "owned" | "joined" | "pending" | "info";
+  const [activeTab, setActiveTab] = useState<TeamsTab>(() => {
+    if (tabParam === "owned" || tabParam === "joined" || tabParam === "pending" || tabParam === "info" || tabParam === "all") {
+      return tabParam as TeamsTab;
+    }
+    return "all";
+  });
 
   useEffect(() => {
-    if (defaultTab) {
-      setActiveTab(defaultTab);
-    } else if (tabParam === "projects" || tabParam === "workspaces") {
-      setActiveTab("projects");
+    if (tabParam === "owned" || tabParam === "joined" || tabParam === "pending" || tabParam === "info" || tabParam === "all") {
+      setActiveTab(tabParam as TeamsTab);
     } else if (tabParam === "general") {
-      setActiveTab("general");
+      setActiveTab("all");
     }
-  }, [defaultTab, tabParam]);
+  }, [tabParam]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sortMethod, setSortMethod] = useState<"default" | "az" | "members">("default");
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+        setIsSortMenuOpen(false);
+      }
+    };
+    if (isSortMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSortMenuOpen]);
+
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
+
+  const handleTabClick = (tabId: TeamsTab) => {
+    setActiveTab(tabId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tabId === "all") {
+        next.delete("tab");
+      } else {
+        next.set("tab", tabId);
+      }
+      return next;
+    }, { replace: true });
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -306,7 +361,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
         },
         ...current,
       ]);
-      setActiveTab("general");
+      setActiveTab("all");
       void loadTeams(false);
       void loadEligibility();
     } catch (error: unknown) {
@@ -335,7 +390,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
       setIsJoinModalOpen(false);
       setJoinCode("");
-      setActiveTab("general");
+      setActiveTab("all");
       void loadTeams(false);
       void loadEligibility();
     } catch (error: unknown) {
@@ -347,8 +402,65 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
 
   // General agency & collective teams only (contractual workspaces are in /workspaces)
   const generalTeams = teams.filter((t) => t.team_type !== "contractual");
+  const ownedTeams = generalTeams.filter((t) => t.current_user_role === "Owner");
+  const joinedTeams = generalTeams.filter((t) => t.current_user_status === "Active" && t.current_user_role !== "Owner");
+  const pendingTeams = generalTeams.filter((t) => t.current_user_status === "Pending");
 
-  let displayedTeams = [...generalTeams].sort((a, b) => {
+  const tabs: Array<{ id: TeamsTab; label: string; icon: React.ReactNode; count: number | null }> = [
+    {
+      id: "all",
+      label: "All",
+      icon: <Users className="h-4 w-4" />,
+      count: generalTeams.length,
+    },
+    {
+      id: "owned",
+      label: "Owned",
+      icon: <Crown className="h-4 w-4" />,
+      count: ownedTeams.length,
+    },
+    {
+      id: "joined",
+      label: "Joined",
+      icon: <UserCheck className="h-4 w-4" />,
+      count: joinedTeams.length,
+    },
+    {
+      id: "pending",
+      label: "Pending",
+      icon: <Clock className="h-4 w-4" />,
+      count: pendingTeams.length,
+    },
+    {
+      id: "info",
+      label: "Info",
+      icon: <Info className="h-4 w-4" />,
+      count: null,
+    },
+  ];
+
+  const baseTeams =
+    activeTab === "owned"
+      ? ownedTeams
+      : activeTab === "joined"
+      ? joinedTeams
+      : activeTab === "pending"
+      ? pendingTeams
+      : generalTeams;
+
+  const filteredTeams = debouncedSearchTerm
+    ? baseTeams.filter((team) => {
+        const search = debouncedSearchTerm.toLowerCase();
+        return (
+          team.display_name.toLowerCase().includes(search) ||
+          (team.description && team.description.toLowerCase().includes(search)) ||
+          (team.category && team.category.toLowerCase().includes(search)) ||
+          (team.tagline && team.tagline.toLowerCase().includes(search))
+        );
+      })
+    : baseTeams;
+
+  let displayedTeams = [...filteredTeams].sort((a, b) => {
     if (sortMethod === "az") {
       return (a.display_name || "").localeCompare(b.display_name || "");
     }
@@ -357,15 +469,6 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
     }
     return 0;
   });
-
-  const tabs = [
-    {
-      id: "general" as const,
-      label: "General Teams",
-      icon: <Users className="h-4 w-4" />,
-      count: generalTeams.length,
-    },
-  ];
 
   // Grid View Card - Matching Discovery style for general teams
   const renderTeamCard = (team: Team) => {
@@ -797,7 +900,7 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
           </div>
         </div>
 
-        {/* Tabs & View Toggle (Identical to /projects) */}
+        {/* Tabs & View Toggle */}
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">
           {/* Underlined Animated Tabs */}
           <div className="flex gap-1 relative">
@@ -806,7 +909,8 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab("general")}
+                  type="button"
+                  onClick={() => handleTabClick(tab.id as TeamsTab)}
                   className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 cursor-pointer ${
                     isActive
                       ? "text-blue-600 dark:text-blue-400"
@@ -815,15 +919,17 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     {tab.icon} {tab.label}
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        isActive
-                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                          : "bg-gray-200 text-gray-700 dark:bg-zinc-800 dark:text-zinc-300"
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
+                    {tab.count !== null && (
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                          isActive
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                            : "bg-gray-200 text-gray-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
                   </span>
 
                   {isActive && (
@@ -846,101 +952,136 @@ export default function Teams({ defaultTab }: TeamsProps = {}) {
           </div>
 
           {/* Sort & View Mode Controls */}
-          <div className="py-2 flex items-center gap-3">
-            {/* Sort Toggle */}
-            <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
-              <span className="text-xs font-medium text-gray-400 dark:text-zinc-500 px-2">Sort by:</span>
-              <button
-                onClick={() => setSortMethod("default")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                  sortMethod === "default"
-                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                }`}
-              >
-                Default
-              </button>
-              <button
-                onClick={() => setSortMethod("az")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                  sortMethod === "az"
-                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                }`}
-              >
-                A-Z
-              </button>
-              <button
-                onClick={() => setSortMethod("members")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                  sortMethod === "members"
-                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                }`}
-              >
-                Members
-              </button>
-            </div>
+          {activeTab !== "info" && (
+            <div className="py-2 flex items-center gap-2">
+              {/* Icon-only Sort Dropdown with Click-to-Expand */}
+              <div className="relative" ref={sortDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsSortMenuOpen((prev) => !prev)}
+                  title={`Sort by: ${sortMethod === "default" ? "Default" : sortMethod === "az" ? "A-Z" : "Members"}`}
+                  className={`flex items-center justify-center h-9 w-9 rounded-lg border transition-all duration-200 cursor-pointer ${
+                    isSortMenuOpen || sortMethod !== "default"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shadow-xs"
+                      : "border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10"
+                  }`}
+                  aria-label="Sort options"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                </button>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
-              <button
-                onClick={() => setViewMode("compact")}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer ${
-                  viewMode === "compact"
-                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                }`}
-              >
-                <List className="h-4 w-4" />
-                List View
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
-                }`}
-              >
-                <Grid3x3 className="h-4 w-4" />
-                Grid View
-              </button>
+                {isSortMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1.5 shadow-xl z-30 space-y-0.5 animate-in fade-in-50 zoom-in-95 duration-100">
+                    <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                      Sort Teams
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMethod("default");
+                        setIsSortMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                        sortMethod === "default"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>Default</span>
+                      {sortMethod === "default" && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMethod("az");
+                        setIsSortMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                        sortMethod === "az"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>Alphabetical (A-Z)</span>
+                      {sortMethod === "az" && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMethod("members");
+                        setIsSortMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                        sortMethod === "members"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>Most Members</span>
+                      {sortMethod === "members" && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("compact")}
+                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer ${
+                    viewMode === "compact"
+                      ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
+                      : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <List className="h-4 w-4" />
+                  List View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
+                      : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                  Grid View
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Content Section */}
-        {isLoading ? (
+        {activeTab === "info" ? (
+          <TeamInfoTab />
+        ) : isLoading ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <TeamCardSkeleton key={i} />
             ))}
           </div>
         ) : displayedTeams.length === 0 ? (
-          activeTab === "general" ? (
-            <EmptyState
-              title={debouncedSearchTerm ? "No matching teams found" : "No general teams found"}
-              description={
-                debouncedSearchTerm
-                  ? `No general teams match "${debouncedSearchTerm}". Try adjusting your keywords or create a new team.`
-                  : "You are not a member of any general team yet. Create your own team or join one with an invite code."
-              }
-              actionLabel="Create a Team"
-              onAction={handleCreateTeamClick}
-              className="my-4"
-            />
-          ) : (
-            <EmptyState
-              title={debouncedSearchTerm ? "No matching workspaces found" : "No project workspaces found"}
-              description={
-                debouncedSearchTerm
-                  ? `No project workspaces match "${debouncedSearchTerm}". Try searching by job title or client.`
-                  : "Contractual team workspaces are automatically created when client job offers or contracts are accepted."
-              }
-              className="my-4"
-            />
-          )
+          <EmptyState
+            title={debouncedSearchTerm ? "No matching teams found" : `No ${activeTab === "all" ? "general" : activeTab} teams found`}
+            description={
+              debouncedSearchTerm
+                ? `No teams match "${debouncedSearchTerm}". Try adjusting your keywords or create a new team.`
+                : activeTab === "owned"
+                ? "You haven't created any teams yet. Click '+ Create a Team' above to get started."
+                : activeTab === "joined"
+                ? "You haven't joined any other teams yet. You can join a team using an invite code."
+                : activeTab === "pending"
+                ? "You have no pending team membership requests."
+                : "You are not a member of any general team yet. Create your own team or join one with an invite code."
+            }
+            actionLabel={activeTab !== "pending" ? "Create a Team" : undefined}
+            onAction={activeTab !== "pending" ? handleCreateTeamClick : undefined}
+            className="my-4"
+          />
         ) : viewMode === "compact" ? (
           <div className="space-y-3">
             {displayedTeams.map(renderCompactTeamCard)}

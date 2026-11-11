@@ -312,7 +312,7 @@ async function createSupportTicket(input, session = null) {
   if (formAnswers.length) {
     formAnswers = await resolveFormAnswers(requesterAccountId, type, formAnswers);
   }
-  const submissionContext = await buildSubmissionContext(requesterAccountId, input.context);
+  const submissionContext = await buildSubmissionContext(requesterAccountId, input.context, input?.email);
   const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
@@ -5182,12 +5182,13 @@ async function resolveFormAnswers(accountId, type, rows) {
   });
 }
 
-async function buildSubmissionContext(accountId, clientContext) {
+async function buildSubmissionContext(accountId, clientContext, explicitEmail = null) {
   const profile = await pool.query(
     `
-    SELECT a.handle, u.email_address, COALESCE(p.name, 'Free') AS subscription_plan
+    SELECT a.handle, COALESCE(u.email_address, st.email_address) AS email_address, COALESCE(p.name, 'Free') AS subscription_plan
     FROM accounts a
     LEFT JOIN users u ON u.account_id = a.account_id
+    LEFT JOIN staff st ON st.account_id = a.account_id
     LEFT JOIN LATERAL (
       SELECT pl.name
       FROM subscriptions s
@@ -5208,7 +5209,7 @@ async function buildSubmissionContext(accountId, clientContext) {
   };
   assign('accountId', accountId, 80);
   assign('username', row.handle);
-  assign('email', row.email_address);
+  assign('email', explicitEmail || clientContext?.email || row.email_address || null);
   assign('plan', row.subscription_plan || 'Free', 80);
   assign('submittedAt', new Date().toISOString(), 40);
   assign('browser', clientContext?.browser);
