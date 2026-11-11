@@ -1,4 +1,19 @@
-# Active Task: IP + Canonical Account Scoped Login Lockout
+# Active Task: Dynamic Subscription Pricing on Landing Page & Settings
+
+## Implementation Objective
+
+Replace the hardcoded subscription pricing plans on the Landing Page (`/pricing` -> `page_Pricing.tsx`) and User Settings Subscription Details (`user_settings_subscriptiondetails.tsx`) with live data fetched from `GET /api/subscription/plans`, matching the in-app Subscription Pricing page (`CreditsShop.tsx`).
+
+## Acceptance Criteria
+
+- [x] `page_Pricing.tsx` fetches live plans from `GET /api/subscription/plans` and sorts them (`Free` -> `Premium` -> `Business`).
+- [x] `page_Pricing.tsx` dynamically renders database plan prices (`formatPHP`), billing period (`/mo`), free-trial badges/notes (`days_of_trials`), and live plan features (`feature.description` + `feature.value`).
+- [x] `user_settings_subscriptiondetails.tsx` also fetches from `GET /api/subscription/plans` so all subscription pricing views remain synchronized.
+- [x] `cd frontend && npm run build` passes with zero errors.
+
+---
+
+# Task History: IP + Canonical Account Scoped Login Lockout
 
 ## Implementation Objective
 
