@@ -1,4 +1,35 @@
-# Active Task: IP + Canonical Account Scoped Login Lockout
+# Active Task: Remove redundant email field from Submit Ticket form & pass account email in payload
+
+## Implementation Objective
+
+Remove the redundant "Email or username" question from the ticket submission form ([`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx) and [`TicketFormFields.js`](file:///c:/Capstone/Ensemble/backend/lib/TicketFormFields.js)), and pass the authenticated account's email in the payload to `POST /api/users/tickets` so users don't have to manually re-type their email.
+
+## Acceptance Criteria
+
+- [x] Removed `email_or_username` from `TICKET_FORM_FIELDS['Sign-in and password']` and `TICKET_FORM_FIELDS['Account compromised']` in [`backend/lib/TicketFormFields.js`](file:///c:/Capstone/Ensemble/backend/lib/TicketFormFields.js).
+- [x] In [`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx), filter out `email_or_username` and `email` from dynamic fields so it never renders as an editable input.
+- [x] In [`page_SubmitATicket.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/landing/pages/page_SubmitATicket.tsx), display a clear "Submitting ticket as @handle (email)" badge and include `email: user.email` in the payload sent to `/api/users/tickets`.
+- [x] In [`backend/controllers/AdminTicketsControllers.js`](file:///c:/Capstone/Ensemble/backend/controllers/AdminTicketsControllers.js) and [`backend/repositories/AdminTicketsRepositories.js`](file:///c:/Capstone/Ensemble/backend/repositories/AdminTicketsRepositories.js), attach the requester's account email to the ticket submission context.
+- [x] `cd frontend && npm run build` passes with zero errors.
+
+---
+
+# Task History: Dynamic Subscription Pricing on Landing Page & Settings
+
+## Implementation Objective
+
+Replace the hardcoded subscription pricing plans on the Landing Page (`/pricing` -> `page_Pricing.tsx`) and User Settings Subscription Details (`user_settings_subscriptiondetails.tsx`) with live data fetched from `GET /api/subscription/plans`, matching the in-app Subscription Pricing page (`CreditsShop.tsx`).
+
+## Acceptance Criteria
+
+- [x] `page_Pricing.tsx` fetches live plans from `GET /api/subscription/plans` and sorts them (`Free` -> `Premium` -> `Business`).
+- [x] `page_Pricing.tsx` dynamically renders database plan prices (`formatPHP`), billing period (`/mo`), free-trial badges/notes (`days_of_trials`), and live plan features (`feature.description` + `feature.value`).
+- [x] `user_settings_subscriptiondetails.tsx` also fetches from `GET /api/subscription/plans` so all subscription pricing views remain synchronized.
+- [x] `cd frontend && npm run build` passes with zero errors.
+
+---
+
+# Task History: IP + Canonical Account Scoped Login Lockout
 
 ## Implementation Objective
 

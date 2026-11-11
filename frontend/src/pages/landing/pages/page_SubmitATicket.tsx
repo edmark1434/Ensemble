@@ -138,14 +138,20 @@ const PageSubmitATicket: React.FC = () => {
         const uploaded = await uploadFileWithIntent(file, "ticket-attachments");
         attachments.push({ key: uploaded.key, name: file.name, size: file.size });
       }
+      const userEmail = user?.email || user?.email_address || "";
       const response = await api.post("/api/users/tickets", {
+        email: userEmail,
         subject: subject.trim(),
         type: ticketType,
         priority: "Medium",
         description: description.trim(),
         attachments,
-        fields: fieldValues,
+        fields: {
+          ...fieldValues,
+          ...(userEmail ? { email_or_username: userEmail } : {}),
+        },
         context: {
+          email: userEmail,
           browser: navigator.userAgent,
           device: navigator.platform || "",
           page: document.referrer || "Direct",
@@ -198,6 +204,8 @@ const PageSubmitATicket: React.FC = () => {
   };
 
   const fieldShown = (field: TicketField) => {
+    // Hide redundant email / username input fields since the user is authenticated
+    if (field.key === "email_or_username" || field.key === "email") return false;
     if (!field.when) return true;
     const current = fieldValues[field.when.key] || "";
     if (field.when.equals) return current === field.when.equals;
@@ -313,6 +321,17 @@ const PageSubmitATicket: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs dark:border-white/10 dark:bg-white/5">
+              <span className="text-gray-500 dark:text-zinc-400">Submitting ticket as:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {user?.handle ? `@${user.handle}` : user?.username || "Account"}
+                {(user?.email || user?.email_address) && (
+                  <span className="ml-1.5 font-normal text-gray-500 dark:text-zinc-400">
+                    ({user?.email || user?.email_address})
+                  </span>
+                )}
+              </span>
+            </div>
             <div>
               <label style={labelStyle}>Where is the problem?</label>
               <div className="flex flex-wrap gap-2">
