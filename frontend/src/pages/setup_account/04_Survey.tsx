@@ -25,6 +25,7 @@ import api from "@/lib/axios";
 import { deleteAvatarDraft, getAvatarDraft } from "@/lib/onboardingAvatarDraft";
 import useGlobalState from "@/lib/global_state";
 import { notifyOnboardingCompleted, notifyOnboardingStepChanged } from "@/lib/onboardingEvents";
+import { useTourStore } from "@/lib/tour_state";
 import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
 import SetupLayout from "./SetupLayout";
 
@@ -362,7 +363,12 @@ export default function Survey() {
         await api.post('/api/onboarding/avatar/finalize', { ...customAvatar, path: upload.data.key });
       }
       const completionResponse = await api.post('/api/onboarding/complete', buildSubmissionData());
-      notifyOnboardingCompleted(useGlobalState.getState().user?.account_id);
+      const accountId = useGlobalState.getState().user?.account_id;
+      notifyOnboardingCompleted(accountId);
+      sessionStorage.setItem('justCompletedOnboarding', 'true');
+      sessionStorage.setItem('showWelcomeLeftPopup', 'true');
+      useTourStore.getState().resetWalkthroughHistory(accountId);
+      useTourStore.getState().openWelcome();
       if (customAvatar?.draft_id) {
         void deleteAvatarDraft(customAvatar.draft_id).catch((error) => {
           console.warn('Unable to remove the completed avatar draft:', error);
