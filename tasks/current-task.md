@@ -1,14 +1,12 @@
-# Active Task: Remove dead admin settings + enforce Maintenance mode
+# Active Task: Honor maxWarningsBeforeSuspend as configured
 
 ## Implementation Objective
 
-1. Remove unused/dead System Settings fields and fee rows that are not enforced.
-2. Make Platform → Maintenance mode actually block the member product (login and logged-in app routes) with a branded Ensemble maintenance page, while keeping the public landing pages and admin/staff consoles usable.
+Stop treating moderation.maxWarningsBeforeSuspend values under 10 as 20. Use the admin-configured number as the real auto-suspend trigger threshold.
 
 ## Acceptance Criteria
 
-- [x] Removed dead settings: tagline, maxUploadMb, emailWeeklyDigest, notifyRequesterOnResolution, forceHttps, escrowHoldDays, and unused fee rows.
-- [x] Maintenance mode blocks member login/signup and product app routes with branded maintenance UI.
-- [x] Landing pages on the main site remain available during maintenance.
-- [x] admin/staff consoles remain usable during maintenance.
-- [x] `cd frontend && npm run build` passes.
+- [x] Configured value (including under 10) is used as the suspend gate.
+- [x] Admin UI allows values from 1–50.
+- [x] Field meta/description no longer says under-10 values become 20.
+- [x] Frontend typecheck passes.

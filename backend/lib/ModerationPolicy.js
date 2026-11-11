@@ -3,7 +3,12 @@ const { DEFAULT_SETTINGS } = require('./PlatformConfiguration');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
 const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
-const { autoSuspendDaysForPoints, AUTO_SUSPEND_POINTS, refreshLiveThresholds } = require('./WarningBands');
+const {
+  autoSuspendDaysForPoints,
+  AUTO_SUSPEND_POINTS,
+  AUTO_SUSPEND_DAYS,
+  refreshLiveThresholds,
+} = require('./WarningBands');
 
 const PROFANITY_PATTERN =
   /\b(fuck|shit|bitch|asshole|cunt|nigger|faggot|slut|whore)\b/i;
@@ -303,20 +308,24 @@ function reconcileUnassignedDisputesThrottled() {
 
 /**
  * After a warning is issued, suspend when active warning POINTS reach the
- * configured threshold (legacy stored values under 10 are treated as 20).
- * 30+ points use a 14-day cooldown. Already-suspended accounts are not stacked.
+ * admin-configured threshold (moderation.maxWarningsBeforeSuspend).
+ * Duration comes from warning thresholds when available (e.g. 30+ → 14 days),
+ * otherwise the default 7-day auto-suspend. Already-suspended accounts are not stacked.
  */
 async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   if (!accountId) return null;
   const settings = await getModerationSettings();
   const configured = Number(settings.maxWarningsBeforeSuspend);
-  const max = Number.isFinite(configured) && configured >= 10 ? configured : AUTO_SUSPEND_POINTS;
+  const max =
+    Number.isFinite(configured) && configured > 0
+      ? Math.max(1, Math.round(configured))
+      : AUTO_SUSPEND_POINTS;
   const activeCount = await sumActiveWarningPoints(accountId);
   await refreshLiveThresholds();
-  const days = autoSuspendDaysForPoints(activeCount);
-  if (!days) {
+  if (activeCount < max) {
     return { suspended: false, activeCount, max };
   }
+  const days = autoSuspendDaysForPoints(activeCount) || AUTO_SUSPEND_DAYS;
 
   const previous = await pool.query(
     `SELECT status FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,

@@ -543,8 +543,9 @@ export default function SystemSettingsPage() {
               label="Active warning points before auto-suspend"
               value={moderation.maxWarningsBeforeSuspend}
               onChange={(v) => setModeration({ ...moderation, maxWarningsBeforeSuspend: v })}
-              min={10}
+              min={1}
               max={50}
+              hint="Uses the number you set. Example: 3 means auto-suspend at 3 active warning points."
             />
           </SectionCard>
           </div>

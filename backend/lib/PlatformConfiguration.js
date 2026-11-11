@@ -83,7 +83,7 @@ const FIELD_META = {
   'moderation.forumLinkScanning': { name: 'Forum link scanning', description: 'Scan outbound links in forum discussions.' },
   'moderation.marketplaceListingReview': { name: 'Marketplace listing review', description: 'Queue new marketplace listings for staff review.' },
   'moderation.disputeAutoAssign': { name: 'Auto-assign disputes', description: 'Automatically assign open disputes to staff.' },
-  'moderation.maxWarningsBeforeSuspend': { name: 'Warning points before 7-day suspend', description: 'Active warning points that trigger a 7-day cooling-off suspension. 30+ points use 14 days. Values under 10 are treated as 20.' },
+  'moderation.maxWarningsBeforeSuspend': { name: 'Warning points before auto-suspend', description: 'Active warning points that trigger an automatic cooling-off suspension. Duration follows warning thresholds when available (for example 30+ points can use 14 days), otherwise 7 days.' },
   'moderation.autoEscalateHighPriority': { name: 'Auto-escalate high priority', description: 'Escalate high-priority reports automatically.' },
   'moderation.reportToTicketAutoCreate': { name: 'Report to ticket', description: 'Create a support ticket when a report is filed.' },
   'economy.creditValuePhp': { name: 'Credit value (PHP)', description: 'Philippine pesos per 1 platform credit. Used for custom top-ups and cashout conversion. Default is 1.' },
