@@ -7,8 +7,8 @@
 
 ## Acceptance Criteria
 
-- [ ] Removed from admin UI + defaults/config schema where appropriate: tagline, maxUploadMb, emailWeeklyDigest, notifyRequesterOnResolution, forceHttps, escrowHoldDays, and unused fee rows (credit purchase/refund, cancellation, dispute, forum, job-post, gig-create, asset-upload).
-- [ ] Maintenance mode: member login + authenticated app routes show a branded maintenance page / are blocked.
-- [ ] Landing pages on ensemble.software still work during maintenance.
-- [ ] admin.ensemble.software and staff.ensemble.software remain fully usable during maintenance.
-- [ ] `cd frontend && npm run build` passes.
+- [x] Removed dead settings: tagline, maxUploadMb, emailWeeklyDigest, notifyRequesterOnResolution, forceHttps, escrowHoldDays, and unused fee rows.
+- [x] Maintenance mode blocks member login/signup and product app routes with branded maintenance UI.
+- [x] Landing pages on the main site remain available during maintenance.
+- [x] admin/staff consoles remain usable during maintenance.
+- [x] `cd frontend && npm run build` passes.

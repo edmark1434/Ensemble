@@ -7,11 +7,9 @@ export type SettingsSection<T> = {
 
 export type PlatformSettings = {
   siteName: string;
-  tagline: string;
   maintenanceMode: boolean;
   registrationEnabled: boolean;
   supportEmail: string;
-  maxUploadMb: number;
   sessionTimeoutDays: number;
   sessionTimeoutMinutes?: number;
 };
@@ -55,7 +53,6 @@ export type EconomySettings = {
   marketplaceSettings: {
     listingFeeCredits: number;
     transactionFeePercent: number;
-    escrowHoldDays: number;
     minPayoutCredits: number;
     refundWindowDays: number;
   };
@@ -66,11 +63,9 @@ export type NotificationSettings = {
   emailNewTickets: boolean;
   emailDisputeOpened: boolean;
   emailHighPriorityReports: boolean;
-  emailWeeklyDigest: boolean;
   slackWebhookEnabled: boolean;
   slackWebhookUrl: string;
   notifyAssigneeOnTicket: boolean;
-  notifyRequesterOnResolution: boolean;
 };
 
 export type SecuritySettings = {
@@ -81,7 +76,6 @@ export type SecuritySettings = {
   auditLogRetentionDays: number;
   ipAllowlistEnabled: boolean;
   allowedAdminIps: string[];
-  forceHttps: boolean;
 };
 
 export type SettingsOverview = {

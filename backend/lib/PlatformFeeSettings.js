@@ -1,121 +1,11 @@
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { DEFAULT_SETTINGS } = require('./PlatformConfiguration');
 
-const RECOMMENDED_FEE_SETTINGS = [
-  {
-    id: 'fee-job',
-    label: 'Job transaction',
-    percent: 10,
-    flatFee: 0,
-    appliesTo: 'Completed job contracts',
-    paidBy: 'Freelancer',
-    reason: 'Commission for successfully completed jobs',
-  },
-  {
-    id: 'fee-gig',
-    label: 'Gig transaction',
-    percent: 10,
-    flatFee: 0,
-    appliesTo: 'Gig purchases',
-    paidBy: 'Freelancer',
-    reason: 'Commission when a client purchases a gig',
-  },
-  {
-    id: 'fee-marketplace',
-    label: 'Asset marketplace sale',
-    percent: 15,
-    flatFee: 0,
-    appliesTo: 'Asset sales',
-    paidBy: 'Asset creator',
-    reason: 'Marketplace commission',
-  },
-  {
-    id: 'fee-credit-purchase',
-    label: 'Credit purchase',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Credit top-ups',
-    paidBy: 'Buyer',
-    reason: 'Keep purchasing credits simple',
-  },
-  {
-    id: 'fee-credit-refund',
-    label: 'Credit refund',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Credit refunds',
-    paidBy: '—',
-    reason: 'Better for user trust',
-  },
-  {
-    id: 'fee-cashout',
-    label: 'Withdrawal / cashout',
-    percent: 3.5,
-    flatFee: 0,
-    appliesTo: 'Withdrawals',
-    paidBy: 'Seller/Freelancer',
-    reason: 'Covers withdrawal and payment processing (recommended 2–5%)',
-  },
-  {
-    id: 'fee-cancellation',
-    label: 'Job/Gig cancellation',
-    percent: 2.5,
-    flatFee: 0,
-    appliesTo: 'Cancellations',
-    paidBy: 'Depends on situation',
-    reason: 'Discourages abuse and cancellations (recommended 0–5%)',
-  },
-  {
-    id: 'fee-dispute',
-    label: 'Dispute',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Disputes',
-    paidBy: '—',
-    reason: 'Do not charge users for requesting protection',
-  },
-  {
-    id: 'fee-forum',
-    label: 'Forum',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Forum activity',
-    paidBy: '—',
-    reason: 'Community feature should remain accessible',
-  },
-  {
-    id: 'fee-job-post',
-    label: 'Posting a job',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Job posts',
-    paidBy: 'Client',
-    reason: 'Encourages clients to post opportunities',
-  },
-  {
-    id: 'fee-gig-create',
-    label: 'Creating a gig',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Gig listings',
-    paidBy: 'Freelancer',
-    reason: 'Encourages freelancers to offer services',
-  },
-  {
-    id: 'fee-asset-upload',
-    label: 'Uploading an asset',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Asset listings',
-    paidBy: 'Asset creator',
-    reason: 'Encourages marketplace inventory',
-  },
-];
+const RECOMMENDED_FEE_SETTINGS = structuredClone(DEFAULT_SETTINGS.economy.feeSettings);
 
 const RECOMMENDED_MARKETPLACE_SETTINGS = {
   listingFeeCredits: 0,
   transactionFeePercent: 15,
-  escrowHoldDays: 7,
   minPayoutCredits: 500,
   refundWindowDays: 14,
 };
@@ -184,13 +74,6 @@ async function getMarketplaceRefundWindowDays() {
   return RECOMMENDED_MARKETPLACE_SETTINGS.refundWindowDays;
 }
 
-async function getMarketplaceEscrowHoldDays() {
-  const economy = await getSectionValue('economy');
-  const configured = Number(economy?.marketplaceSettings?.escrowHoldDays);
-  if (Number.isFinite(configured) && configured >= 0) return configured;
-  return RECOMMENDED_MARKETPLACE_SETTINGS.escrowHoldDays;
-}
-
 /**
  * PHP pesos per 1 platform credit.
  * Prefer economy.creditValuePhp; fall back to CASHOUT_PHP_CENTS_PER_CREDIT env, then default 1.
@@ -221,7 +104,6 @@ module.exports = {
   getMarketplaceTransactionFeePercent,
   getMarketplaceListingFeeCredits,
   getMarketplaceRefundWindowDays,
-  getMarketplaceEscrowHoldDays,
   getCreditValuePhp,
   getPhpCentsPerCredit,
   calculatePercentFeeAmount,

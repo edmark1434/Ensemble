@@ -163,7 +163,7 @@ function buildSettingsAlerts(sections) {
   if (sections.platform?.value?.maintenanceMode) {
     alerts.push({
       id: 'maintenance',
-      message: 'Maintenance mode is ON — users may see a downtime banner.',
+      message: 'Maintenance mode is ON — member login and the product app are blocked. Landing + admin/staff remain available.',
       severity: 'warning',
     });
   }
@@ -235,7 +235,25 @@ async function updateSettingsSection(sectionKey, values) {
           : DEFAULT_SETTINGS.economy.creditValuePhp;
     }
 
+    if (sectionKey === 'economy') {
+      const { ACTIVE_FEE_SETTING_IDS } = require('../lib/PlatformConfiguration');
+      const allowed = new Set(ACTIVE_FEE_SETTING_IDS);
+      if (Array.isArray(merged.feeSettings)) {
+        merged.feeSettings = merged.feeSettings.filter((fee) => fee && allowed.has(fee.id));
+      }
+      if (merged.marketplaceSettings && typeof merged.marketplaceSettings === 'object') {
+        delete merged.marketplaceSettings.escrowHoldDays;
+      }
+    }
+
     const rows = flattenSection(sectionKey, merged, DEFAULT_SETTINGS[sectionKey]);
+    const keptKeys = rows.map((row) => row.configuration_key);
+    await pool.query(
+      `DELETE FROM configuration
+       WHERE configuration_key LIKE $1
+         AND NOT (configuration_key = ANY($2::text[]))`,
+      [configurationKeyPrefixFilter(sectionKey), keptKeys]
+    );
     for (const row of rows) {
       await pool.query(
         `INSERT INTO configuration (

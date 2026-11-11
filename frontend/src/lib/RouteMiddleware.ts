@@ -11,6 +11,8 @@ import { isGuestAllowedPath } from "./guestRouteAccess";
 import { isStaffConsolePath, isStaffPreviewFrame } from "./staffPlatformView";
 import { APPEAL_PATH, isAppealLimitedMember } from "./appealAccess";
 import DeactivatedAccountScreen from "@/components/account/DeactivatedAccountScreen";
+import { useMaintenanceGate } from "./maintenanceMode";
+import MaintenancePage from "@/pages/MaintenancePage";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -85,6 +87,7 @@ export default function RouteMiddleware() {
     const { user, isGuestMode } = useGlobalState();
     const navigate = useNavigate();
     const location = useLocation();
+    const maintenance = useMaintenanceGate(location.pathname);
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
 
@@ -376,6 +379,29 @@ export default function RouteMiddleware() {
           { replace: true },
         );
     }, [isCheckingSession, resolvedUser, isPublicRoute, isTicketFormRoute, isOnboardingRoute, location.pathname, navigate]);
+
+    if (maintenance.loading) {
+        return createElement(RouteLoadingShell);
+    }
+
+    const staffBypassMaintenance =
+        resolvedUser?.type === 'Staff' ||
+        isStaffConsolePath(location.pathname) ||
+        location.pathname.startsWith('/moderator') ||
+        location.pathname.startsWith('/admin') ||
+        location.pathname.startsWith('/staff');
+
+    // Wait for session before blocking so staff/moderators on the main host are not locked out.
+    if (maintenance.maintenanceMode && maintenance.blockProduct && isCheckingSession && !staffBypassMaintenance) {
+        return createElement(RouteLoadingShell);
+    }
+
+    if (maintenance.blockProduct && !staffBypassMaintenance) {
+        return createElement(MaintenancePage, {
+            siteName: maintenance.config?.siteName,
+            supportEmail: maintenance.config?.supportEmail,
+        });
+    }
 
     if (onboardingVerificationFailed && !isBannedMember(resolvedUser)) {
         return createElement(RouteLoadingShell);

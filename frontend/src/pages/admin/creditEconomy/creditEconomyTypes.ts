@@ -126,7 +126,6 @@ export type EconomyOverview = {
   marketplaceSettings: {
     listingFeeCredits: number;
     transactionFeePercent: number;
-    escrowHoldDays: number;
     minPayoutCredits: number;
     refundWindowDays: number;
   };

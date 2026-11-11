@@ -27,11 +27,9 @@ async function getPublicConfigurationController(req, res) {
       success: true,
       configuration: {
         siteName: platform?.siteName || DEFAULT_SETTINGS.platform.siteName,
-        tagline: platform?.tagline || DEFAULT_SETTINGS.platform.tagline,
         maintenanceMode: Boolean(platform?.maintenanceMode),
         registrationEnabled: platform?.registrationEnabled !== false,
         supportEmail: platform?.supportEmail || DEFAULT_SETTINGS.platform.supportEmail,
-        maxUploadMb: Number(platform?.maxUploadMb) || DEFAULT_SETTINGS.platform.maxUploadMb,
         creditValuePhp,
         creditPackages: activePackages,
         marketplaceSettings: {

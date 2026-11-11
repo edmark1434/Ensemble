@@ -40,7 +40,9 @@ const editorRoutes = require('./Editor');
 const feedbackRoutes = require('./Feedback');
 const configurationRoutes = require('./Configuration');
 const invitationRoutes = require('./Invitation');
+const { maintenanceMode } = require('../middleware/MaintenanceMode');
 
+router.use(maintenanceMode);
 router.get('/csrf-token', checkSession, issueCsrfToken);
 router.use('/configuration', configurationRoutes);
 router.use('/chat', chatRoutes);

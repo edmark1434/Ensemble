@@ -86,6 +86,18 @@ async function setupRefreshTokenCookie(res,result){
 }
 
 async function createSessionIdCookie(res,credentials){
+    if (credentials?.type !== 'Staff') {
+        const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+        const platform = await getSectionValue('platform').catch(() => null);
+        if (platform?.maintenanceMode) {
+            const error = new ServiceError(
+                'Ensemble is undergoing scheduled maintenance. Please try again later.',
+                503
+            );
+            error.code = 'MAINTENANCE_MODE';
+            throw error;
+        }
+    }
     const sessionId = await createSessionId(credentials);
     res.cookie('sessionId', sessionId, {
         httpOnly: true,

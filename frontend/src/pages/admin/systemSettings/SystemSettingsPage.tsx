@@ -469,7 +469,7 @@ export default function SystemSettingsPage() {
         {tab === 'platform' && (
           <SectionCard
             title="Platform identity & access"
-            description="Site branding, uploads, sessions, and registration controls."
+            description="Site branding, sessions, registration, and maintenance controls."
             dirty={dirty.platform}
             saving={saving}
             updatedAt={data.sections.platform.updatedAt}
@@ -478,9 +478,7 @@ export default function SystemSettingsPage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField label="Site name" value={platform.siteName} onChange={(v) => setPlatform({ ...platform, siteName: v })} />
-              <TextField label="Tagline" value={platform.tagline} onChange={(v) => setPlatform({ ...platform, tagline: v })} />
               <TextField label="Support email" value={platform.supportEmail} onChange={(v) => setPlatform({ ...platform, supportEmail: v })} />
-              <NumberField label="Max upload (MB)" value={platform.maxUploadMb} onChange={(v) => setPlatform({ ...platform, maxUploadMb: v })} min={1} max={500} />
               <NumberField
                 label="Session timeout (days)"
                 value={platform.sessionTimeoutDays ?? (platform.sessionTimeoutMinutes ? Math.max(1, Math.round(platform.sessionTimeoutMinutes / 1440)) : 30)}
@@ -491,7 +489,7 @@ export default function SystemSettingsPage() {
             </div>
             <Toggle
               label="Maintenance mode"
-              description="Show downtime banner and block non-staff access"
+              description="Blocks member login and the product app. Landing pages and admin/staff consoles stay available."
               checked={platform.maintenanceMode}
               onChange={(v) => setPlatform({ ...platform, maintenanceMode: v })}
             />
@@ -758,16 +756,6 @@ export default function SystemSettingsPage() {
                   }
                 />
                 <NumberField
-                  label="Escrow hold (days)"
-                  value={economy.marketplaceSettings.escrowHoldDays}
-                  onChange={(v) =>
-                    setEconomy({
-                      ...economy,
-                      marketplaceSettings: { ...economy.marketplaceSettings, escrowHoldDays: v },
-                    })
-                  }
-                />
-                <NumberField
                   label="Min payout (credits)"
                   value={economy.marketplaceSettings.minPayoutCredits}
                   onChange={(v) =>
@@ -808,9 +796,7 @@ export default function SystemSettingsPage() {
             <Toggle label="Email on new tickets" checked={notifications.emailNewTickets} onChange={(v) => setNotifications({ ...notifications, emailNewTickets: v })} />
             <Toggle label="Email when dispute opened" checked={notifications.emailDisputeOpened} onChange={(v) => setNotifications({ ...notifications, emailDisputeOpened: v })} />
             <Toggle label="Email on high-priority reports" checked={notifications.emailHighPriorityReports} onChange={(v) => setNotifications({ ...notifications, emailHighPriorityReports: v })} />
-            <Toggle label="Weekly admin digest" checked={notifications.emailWeeklyDigest} onChange={(v) => setNotifications({ ...notifications, emailWeeklyDigest: v })} />
             <Toggle label="Notify assignee on ticket" checked={notifications.notifyAssigneeOnTicket} onChange={(v) => setNotifications({ ...notifications, notifyAssigneeOnTicket: v })} />
-            <Toggle label="Notify requester on resolution" checked={notifications.notifyRequesterOnResolution} onChange={(v) => setNotifications({ ...notifications, notifyRequesterOnResolution: v })} />
             <Toggle label="Slack webhook enabled" checked={notifications.slackWebhookEnabled} onChange={(v) => setNotifications({ ...notifications, slackWebhookEnabled: v })} />
             <TextField
               label="Slack webhook URL"
@@ -844,7 +830,6 @@ export default function SystemSettingsPage() {
             onDiscard={() => discardSection('security')}
           >
             <Toggle label="Require staff 2FA" checked={security.requireStaff2fa} onChange={(v) => setSecurity({ ...security, requireStaff2fa: v })} />
-            <Toggle label="Force HTTPS" checked={security.forceHttps} onChange={(v) => setSecurity({ ...security, forceHttps: v })} />
             <Toggle
               label="IP allowlist for admin"
               description="When enabled, only listed IPs can access admin routes"

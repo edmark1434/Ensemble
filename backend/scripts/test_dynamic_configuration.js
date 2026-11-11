@@ -213,13 +213,11 @@ async function runTests() {
     // -------------------------------------------------------------
     {
       const notifSettings = await getSectionValue('notifications');
-      const ok =
-        typeof notifSettings?.notifyAssigneeOnTicket === 'boolean' &&
-        typeof notifSettings?.notifyRequesterOnResolution === 'boolean';
+      const ok = typeof notifSettings?.notifyAssigneeOnTicket === 'boolean';
       record(
-        'Dynamic notifications configuration (notifyAssigneeOnTicket & notifyRequesterOnResolution)',
+        'Dynamic notifications configuration (notifyAssigneeOnTicket)',
         ok,
-        `notifyAssigneeOnTicket=${notifSettings?.notifyAssigneeOnTicket}, notifyRequesterOnResolution=${notifSettings?.notifyRequesterOnResolution}`
+        `notifyAssigneeOnTicket=${notifSettings?.notifyAssigneeOnTicket}`
       );
     }
 
