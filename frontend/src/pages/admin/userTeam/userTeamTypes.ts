@@ -262,6 +262,7 @@ export type PlatformUserAccount = {
   lastSeenAt: string | null;
   hasAvatar: boolean;
   avatarPath: string | null;
+  staffRole?: string | null;
   tagline: string | null;
   description: string | null;
   hasPaymentProfile: boolean;

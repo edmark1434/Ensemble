@@ -61,6 +61,7 @@ function mapUserRow(row) {
     lastSeenAt: row.created_at,
     hasAvatar: Boolean(row.avatar_file_id),
     avatarPath: row.avatar_path || null,
+    staffRole: row.staff_role || null,
     tagline: row.tagline || null,
     description: row.description || null,
     hasPaymentProfile: Boolean(row.customer_id),
@@ -393,6 +394,9 @@ async function fetchAllUsers() {
       a.tagline,
       a.description,
       f.path AS avatar_path,
+      (
+        SELECT s.role FROM staff s WHERE s.account_id = a.account_id LIMIT 1
+      ) AS staff_role,
       p.name AS subscription_plan,
       v.verification_id AS account_verification_id,
       CASE WHEN COALESCE(v.is_verified, FALSE) THEN 'verified' ELSE 'unverified' END AS verification_status,
@@ -1178,6 +1182,14 @@ function sanctionReason(options = {}) {
 async function updateAccountStatus(accountId, actionOrStatus, staffId = null, options = {}) {
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
+  if (key === 'suspend' || key === 'suspended') {
+    const { assertCanSuspendTarget } = require('../lib/SuspendGuards');
+    await assertCanSuspendTarget({
+      actorStaffId: staffId,
+      actorAccountId: options.actorAccountId || null,
+      targetAccountId: accountId,
+    });
+  }
   const { resolveStandingOptions } = require('../services/PunishmentDefServices');
   const resolvedOptions = await resolveStandingOptions(key, options);
   const reason = sanctionReason(resolvedOptions);

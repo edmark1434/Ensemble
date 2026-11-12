@@ -488,6 +488,7 @@ active warning points reach 20
 ## 13. Anti-abuse and implementation
 
 - Staff cannot invent a custom point value. They warn, rescind, or pardon. Active points are summed from `violations`.
+- Nobody can suspend their own account. Moderators cannot suspend a moderator or an admin. Only Admin can suspend those staff accounts. Auto-suspend from warning points is unchanged.
 - Only warnings add points. Timeout, suspend, lock, ban, and disputes never add a second hit.
 - Expired suspend/ban/lock and expired warnings lift in a **background job**, not only on next page load.
 - Proposal and listing fees are not charged on a rejected action.

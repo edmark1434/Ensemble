@@ -102,6 +102,92 @@ async function getMarketplaceListings({ status, search, category } = {}) {
   return fetchListings({ status, search, category });
 }
 
+async function getListingLinkedAsset(marketAssetId) {
+  if (!marketAssetId) return null;
+
+  const result = await pool.query(
+    `
+    SELECT
+      ma.market_asset_id,
+      ma.name,
+      ma.status,
+      ma.description,
+      (
+        SELECT typed_media.type
+        FROM market_media_assets typed_link
+        JOIN media_assets typed_media ON typed_media.media_asset_id = typed_link.media_asset_id
+        WHERE typed_link.market_asset_id = ma.market_asset_id
+          AND typed_media.deleted_at IS NULL
+        ORDER BY typed_link.position, typed_media.media_asset_id
+        LIMIT 1
+      ) AS type,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'mediaAssetId', thumbnail_media.media_asset_id,
+          'path', thumbnail_file.path,
+          'position', thumbnail_link.position
+        ) ORDER BY thumbnail_link.position, thumbnail_media.media_asset_id)
+        FROM market_asset_thumbnails thumbnail_link
+        JOIN media_assets thumbnail_media
+          ON thumbnail_media.media_asset_id = thumbnail_link.media_asset_id
+        JOIN files thumbnail_file ON thumbnail_file.file_id = thumbnail_media.thumbnail_file_id
+        WHERE thumbnail_link.market_asset_id = ma.market_asset_id
+          AND thumbnail_media.deleted_at IS NULL
+          AND thumbnail_file.deleted_at IS NULL
+      ), '[]'::json) AS thumbnails,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'mediaAssetId', item.media_asset_id,
+          'name', item.name,
+          'type', item.type,
+          'mimeType', item_original.mime_type,
+          'sizeBytes', item_original.size_bytes,
+          'width', item.width,
+          'height', item.height,
+          'durationSeconds', item.duration_seconds,
+          'proxyPath', item_proxy.path,
+          'thumbnailPath', item_thumbnail.path,
+          'processingStatus', CASE
+            WHEN item_job.status = 'failed' THEN 'failed'
+            WHEN item_job.status IN ('pending', 'running') THEN 'processing'
+            ELSE 'ready'
+          END,
+          'position', item_link.position
+        ) ORDER BY item_link.position, item.media_asset_id)
+        FROM market_media_assets item_link
+        JOIN media_assets item ON item.media_asset_id = item_link.media_asset_id
+        JOIN files item_original ON item_original.file_id = item.original_file_id
+        LEFT JOIN files item_proxy ON item_proxy.file_id = item.proxy_file_id
+          AND item_proxy.deleted_at IS NULL
+        LEFT JOIN files item_thumbnail ON item_thumbnail.file_id = item.thumbnail_file_id
+          AND item_thumbnail.deleted_at IS NULL
+        LEFT JOIN media_asset_jobs item_job ON item_job.media_asset_id = item.media_asset_id
+        WHERE item_link.market_asset_id = ma.market_asset_id
+          AND item.deleted_at IS NULL
+          AND item_original.deleted_at IS NULL
+      ), '[]'::json) AS mediaFiles
+    FROM market_assets ma
+    WHERE ma.market_asset_id = $1
+      AND ma.deleted_at IS NULL
+    LIMIT 1
+    `,
+    [marketAssetId]
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return {
+    id: row.market_asset_id,
+    name: row.name,
+    status: row.status,
+    description: row.description,
+    type: row.type || null,
+    thumbnails: Array.isArray(row.thumbnails) ? row.thumbnails : [],
+    mediaFiles: Array.isArray(row.mediaFiles) ? row.mediaFiles : [],
+  };
+}
+
 async function getMarketplaceListingDetail(listingId) {
   const result = await pool.query(
     `
@@ -112,7 +198,9 @@ async function getMarketplaceListingDetail(listingId) {
     [listingId]
   );
   if (!result.rows[0]) return null;
-  return mapListingRow(result.rows[0]);
+  const listing = mapListingRow(result.rows[0]);
+  listing.asset = await getListingLinkedAsset(listing.marketAssetId);
+  return listing;
 }
 
 async function getSellerMarketplaceListings(accountId) {

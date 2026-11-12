@@ -1079,6 +1079,12 @@ function ModeratorsSection({
   const [modal, setModal] = useState<'add' | 'edit' | 'delete' | null>(null);
   const [selected, setSelected] = useState<ModeratorProfile | null>(null);
   const [busyId, setBusyId] = useState<string | number | null>(null);
+  const viewer = useGlobalState((state) => state.user);
+  const viewerAccountId = String(viewer?.account_id || viewer?.accountId || '');
+  const viewerStaffId = String(viewer?.staffId || viewer?.staff_id || '');
+  const isOwnStaff = (mod: ModeratorProfile) =>
+    (viewerAccountId !== '' && String(mod.accountId || '') === viewerAccountId) ||
+    (viewerStaffId !== '' && String(mod.id) === viewerStaffId);
 
   const roleOptions = useMemo(() => uniqueOptions(roster.map((m) => m.role)), [roster]);
   const statusOptions = useMemo(
@@ -1122,6 +1128,10 @@ function ModeratorsSection({
     q || roleFilter !== 'all' || statusFilter !== 'all' || dutyFilter !== 'all';
 
   const toggleStatus = async (mod: ModeratorProfile) => {
+    if (mod.active && isOwnStaff(mod)) {
+      showErrorToast('You cannot suspend your own account');
+      return;
+    }
     setBusyId(mod.id);
     try {
       const nextStatus = mod.active ? 'Suspended' : 'Active';
@@ -1278,6 +1288,7 @@ function ModeratorsSection({
                       <ModeratorRowMenu
                         busy={busyId === m.id}
                         active={m.active}
+                        allowSuspend={!isOwnStaff(m)}
                         onEdit={() => {
                           setSelected(m);
                           setModal('edit');
@@ -1321,6 +1332,7 @@ function ModeratorsSection({
         <StaffFormModal
           mode={modal}
           staff={selected}
+          suspendLocked={selected ? isOwnStaff(selected) : false}
           onClose={() => {
             setModal(null);
             setSelected(null);
@@ -1351,12 +1363,14 @@ function ModeratorsSection({
 function ModeratorRowMenu({
   busy,
   active,
+  allowSuspend = true,
   onEdit,
   onToggleStatus,
   onDelete,
 }: {
   busy?: boolean;
   active: boolean;
+  allowSuspend?: boolean;
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
@@ -1407,6 +1421,7 @@ function ModeratorRowMenu({
             <Pencil className="h-3.5 w-3.5 text-zinc-500" />
             Edit profile
           </button>
+          {(!active || allowSuspend) && (
           <button
             type="button"
             disabled={busy}
@@ -1419,6 +1434,7 @@ function ModeratorRowMenu({
             <Shield className="h-3.5 w-3.5 text-zinc-500" />
             {active ? 'Suspend account' : 'Reactivate account'}
           </button>
+          )}
           <div className="my-1 border-t border-white/[0.08]" />
           <button
             type="button"
@@ -1456,11 +1472,13 @@ function ModeratorRowMenu({
 function StaffFormModal({
   mode,
   staff,
+  suspendLocked = false,
   onClose,
   onSaved,
 }: {
   mode: 'add' | 'edit';
   staff: ModeratorProfile | null;
+  suspendLocked?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1517,6 +1535,10 @@ function StaffFormModal({
     }
     if (!email.trim()) {
       setFormError('Email is required.');
+      return;
+    }
+    if (suspendLocked && status === 'Suspended' && staff?.status !== 'Suspended') {
+      setFormError('You cannot suspend your own account.');
       return;
     }
 
@@ -1652,12 +1674,17 @@ function StaffFormModal({
                   onChange={(e) => setStatus(e.target.value)}
                   className={inputClass}
                 >
-                  {STAFF_STATUS_OPTIONS.map((s) => (
+                  {STAFF_STATUS_OPTIONS.filter((s) => s !== 'Suspended' || !suspendLocked).map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
                   ))}
                 </select>
+                {suspendLocked ? (
+                  <span className="mt-1 block text-[11px] text-zinc-600">
+                    You cannot suspend your own account.
+                  </span>
+                ) : null}
               </label>
             )}
             <div className="grid gap-4 sm:grid-cols-2">

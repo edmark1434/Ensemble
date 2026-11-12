@@ -1,20 +1,33 @@
 import { useEffect, useState } from 'react';
 import {
   Archive,
+  AudioLines,
   CheckCircle2,
   Clock,
   Coins,
+  Eye,
   History,
+  Image as ImageIcon,
   Loader2,
   Package,
   Tag,
   User,
+  Video,
   X,
   XCircle,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
-import type { MarketplaceListing, SellerListingsHistory } from './marketplaceTypes';
+import { mediaUrl } from '@/pages/user/5_assets/assetTypes';
+import type {
+  ListingAssetMediaFile,
+  MarketplaceListing,
+  SellerListingsHistory,
+} from './marketplaceTypes';
+
+function cloudUrl(path: string | null | undefined) {
+  return mediaUrl(path);
+}
 
 function formatDate(value: string | null | undefined) {
   if (!value) return '—';
@@ -272,6 +285,111 @@ export function SellerListingsModal({
   );
 }
 
+function MediaTypeIcon({ type }: { type: string }) {
+  if (type === 'video') return <Video className="h-3.5 w-3.5" />;
+  if (type === 'audio') return <AudioLines className="h-3.5 w-3.5" />;
+  return <ImageIcon className="h-3.5 w-3.5" />;
+}
+
+function ListingAssetPreviewOverlay({
+  media,
+  onClose,
+}: {
+  media: ListingAssetMediaFile;
+  onClose: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  const previewUrl =
+    media.processingStatus === 'ready' ? cloudUrl(media.proxyPath || media.thumbnailPath) : '';
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-start justify-between border-b border-white/10 px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-bold text-white">{media.name}</h2>
+            <p className="mt-1 text-xs capitalize text-zinc-400">
+              {media.type} preview
+              {media.processingStatus !== 'ready' ? ` · ${media.processingStatus}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-4 rounded-lg p-2 text-zinc-400 transition hover:bg-white/5 hover:text-white"
+            aria-label="Close preview"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex min-h-72 flex-1 items-center justify-center overflow-auto bg-black/30 p-4 md:p-6">
+          {!previewUrl || failed ? (
+            <p className="text-sm text-zinc-400">
+              {media.processingStatus === 'processing'
+                ? 'Preview is still processing.'
+                : media.processingStatus === 'failed'
+                  ? 'Preview processing failed.'
+                  : 'Watermarked preview is unavailable.'}
+            </p>
+          ) : media.type === 'image' ? (
+            <img
+              src={previewUrl}
+              alt={`Preview of ${media.name}`}
+              onError={() => setFailed(true)}
+              draggable={false}
+              onContextMenu={(event) => event.preventDefault()}
+              className="max-h-[75vh] max-w-full object-contain"
+            />
+          ) : media.type === 'video' ? (
+            <video
+              src={previewUrl}
+              controls
+              controlsList="nodownload"
+              autoPlay
+              playsInline
+              onError={() => setFailed(true)}
+              onContextMenu={(event) => event.preventDefault()}
+              className="max-h-[75vh] max-w-full bg-black"
+            />
+          ) : (
+            <div className="flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-rose-300">
+              <AudioLines className="h-16 w-16" />
+              <audio
+                src={previewUrl}
+                controls
+                controlsList="nodownload"
+                autoPlay
+                onError={() => setFailed(true)}
+                onContextMenu={(event) => event.preventDefault()}
+                className="w-full"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ListingDetailModal({
   listingId,
   seed,
@@ -292,6 +410,7 @@ export default function ListingDetailModal({
   const [saving, setSaving] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<ListingAssetMediaFile | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -385,11 +504,28 @@ export default function ListingDetailModal({
           ) : (
             <div className="space-y-6">
               {listing.thumbnailUrl && (
-                <img
-                  src={import.meta.env.VITE_CLOUDFRONT_URL +'/'+listing.thumbnailUrl}
-                  alt={listing.title}
-                  className="h-44 w-full rounded-xl object-cover ring-1 ring-white/10"
-                />
+                <button
+                  type="button"
+                  className="group relative block w-full overflow-hidden rounded-xl ring-1 ring-white/10"
+                  onClick={() => {
+                    const first = listing.asset?.mediaFiles?.[0];
+                    if (first) setPreviewMedia(first);
+                  }}
+                  disabled={!listing.asset?.mediaFiles?.length}
+                >
+                  <img
+                    src={cloudUrl(listing.thumbnailUrl)}
+                    alt={listing.title}
+                    className="h-44 w-full object-cover"
+                  />
+                  {listing.asset?.mediaFiles?.length ? (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/50 px-3 py-1.5 text-xs font-medium backdrop-blur">
+                        <Eye className="h-3.5 w-3.5" /> View asset
+                      </span>
+                    </span>
+                  ) : null}
+                </button>
               )}
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -428,6 +564,89 @@ export default function ListingDetailModal({
                 )}
               </div>
 
+              {listing.asset && (
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Linked marketplace asset</p>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {listing.asset.name}
+                        {listing.asset.type ? ` · ${listing.asset.type}` : ''}
+                        {' · '}
+                        <span className="capitalize">{listing.asset.status}</span>
+                      </p>
+                    </div>
+                    {listing.asset.mediaFiles[0] && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewMedia(listing.asset!.mediaFiles[0])}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:bg-sky-500/20"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Preview media
+                      </button>
+                    )}
+                  </div>
+
+                  {listing.asset.mediaFiles.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-white/10 px-3 py-3 text-center text-xs text-zinc-600">
+                      No media files attached to this asset.
+                    </p>
+                  ) : (
+                    <ul className="grid gap-2 sm:grid-cols-2">
+                      {listing.asset.mediaFiles.map((file) => {
+                        const thumb = cloudUrl(file.thumbnailPath || file.proxyPath);
+                        return (
+                          <li key={file.mediaAssetId}>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewMedia(file)}
+                              className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-left transition hover:border-rose-500/30 hover:bg-rose-500/[0.06]"
+                            >
+                              <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/[0.04] text-zinc-400 ring-1 ring-white/10">
+                                {thumb && file.type !== 'audio' ? (
+                                  <img
+                                    src={thumb}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <MediaTypeIcon type={file.type} />
+                                )}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-zinc-200">
+                                  {file.name}
+                                </span>
+                                <span className="mt-0.5 flex items-center gap-1.5 text-[10px] capitalize text-zinc-500">
+                                  <MediaTypeIcon type={file.type} />
+                                  {file.type}
+                                  {' · '}
+                                  {file.processingStatus}
+                                </span>
+                              </span>
+                              <Eye className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  {listing.asset.thumbnails.length > 1 && (
+                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                      {listing.asset.thumbnails.map((thumb) => (
+                        <img
+                          key={thumb.mediaAssetId}
+                          src={cloudUrl(thumb.path)}
+                          alt=""
+                          className="h-14 w-14 shrink-0 rounded-md object-cover ring-1 ring-white/10"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <p className="mb-2 text-sm font-semibold text-white">Description</p>
                 <p className="whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm leading-relaxed text-zinc-300">
@@ -445,6 +664,12 @@ export default function ListingDetailModal({
                     value={`${listing.priceCredits.toLocaleString()} credits`}
                   />
                   <DetailRow label="Internal id" value={listing.id} />
+                  {listing.marketAssetId && (
+                    <DetailRow
+                      label="Asset id"
+                      value={<span className="font-mono text-[10px]">{listing.marketAssetId}</span>}
+                    />
+                  )}
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
                   <p className="mb-2 text-sm font-semibold text-white">Review activity</p>
@@ -537,6 +762,9 @@ export default function ListingDetailModal({
           </div>
         )}
       </div>
+      {previewMedia && (
+        <ListingAssetPreviewOverlay media={previewMedia} onClose={() => setPreviewMedia(null)} />
+      )}
     </div>
   );
 }

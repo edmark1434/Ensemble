@@ -1,20 +1,12 @@
-# Active Task: Parity — admin gets all moderator desk capabilities
+# Active Task: Block self-suspend and moderator-on-moderator suspend
 
 ## Implementation Objective
 
-Scan marketplace, support, forum, and jobs/gigs moderator desks. Ensure Admin has the same operational capabilities (especially marketplace asset viewing/actions), merged into existing admin design, theme, formats, and categories — not bolted-on duplicates. Verify flows work.
+Stop an admin from suspending their own account. Stop moderators from suspending other moderators or admin accounts. Only an admin can suspend a moderator.
 
 ## Acceptance Criteria
 
-- [x] Moderator desks audited (marketplace, support, forum, jobs/gigs).
-- [x] Missing admin capabilities identified, especially marketplace asset view/actions.
-- [x] Gaps implemented inside existing admin pages/sections with matching UI patterns.
-- [x] No redundant parallel nav items that duplicate Moderation/Tickets if already covered.
+- [x] Backend rejects suspending your own account from user standing and the staff roster.
+- [x] Backend rejects a non-admin suspending a moderator or admin account.
+- [x] User, restrictions, report, and staff-roster UIs hide those suspend actions.
 - [ ] Frontend typecheck passes (run when asked).
-
-## Done in this pass
-
-- Admin APIs: `/api/admin/moderation/marketplace/*`, `/api/admin/moderation/jobs/*`, `/api/admin/restrictions/*`
-- Management → Marketplace / Jobs & Gigs (shared controls via `apiBase` + `embedded`)
-- Listing case modal → full ListingDetailModal (thumbnail/seller/actions)
-- User & Team → Restrictions tab (admin + support variants)

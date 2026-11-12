@@ -6,6 +6,37 @@ export type ListingPerson = {
   handle: string;
 };
 
+export type ListingAssetThumbnail = {
+  mediaAssetId: string;
+  path: string;
+  position: number;
+};
+
+export type ListingAssetMediaFile = {
+  mediaAssetId: string;
+  name: string;
+  type: 'image' | 'video' | 'audio' | string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+  proxyPath: string | null;
+  thumbnailPath: string | null;
+  processingStatus: 'ready' | 'processing' | 'failed' | string;
+  position: number;
+};
+
+export type ListingLinkedAsset = {
+  id: string;
+  name: string;
+  status: string;
+  description: string | null;
+  type: string | null;
+  thumbnails: ListingAssetThumbnail[];
+  mediaFiles: ListingAssetMediaFile[];
+};
+
 export type MarketplaceListing = {
   id: number;
   number: string;
@@ -14,6 +45,8 @@ export type MarketplaceListing = {
   category: string | null;
   priceCredits: number;
   thumbnailUrl: string | null;
+  marketAssetId?: string | null;
+  asset?: ListingLinkedAsset | null;
   status: 'pending' | 'approved' | 'rejected' | 'delisted';
   rejectionReason: string | null;
   submittedBy: ListingPerson;

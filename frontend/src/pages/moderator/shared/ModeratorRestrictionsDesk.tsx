@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Ban, Loader2, RefreshCw, Search, ShieldAlert, Activity, AlertTriangle, Clock, X } from 'lucide-react';
 import api from '@/lib/axios';
+import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
+import { canSuspendTarget } from '@/pages/admin/userTeam/suspendRules';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
 import { SanctionScheduleFields, type SanctionTiming } from '@/pages/admin/userTeam/components/SanctionSchedule';
 import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
@@ -25,6 +27,7 @@ type DeskAccount = {
   banEndsAt?: string | null;
   lockEndsAt?: string | null;
   timeoutEndsAt?: string | null;
+  staffRole?: string | null;
 };
 
 type ViolationRow = {
@@ -186,10 +189,15 @@ function apiMessage(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
 }
 
-function availableActions(standing: string, timeout: boolean, can: (action: string) => boolean) {
+function availableActions(
+  standing: string,
+  timeout: boolean,
+  can: (action: string) => boolean,
+  allowSuspend: boolean
+) {
   const apply: DeskAction[] = [];
   const lift: DeskAction[] = [];
-  if (can('suspend') && standing !== 'suspended') apply.push({ id: 'suspend', label: 'Suspend', tone: 'amber' });
+  if (can('suspend') && standing !== 'suspended' && allowSuspend) apply.push({ id: 'suspend', label: 'Suspend', tone: 'amber' });
   if (can('lock') && standing !== 'locked') apply.push({ id: 'lock', label: 'Lock', tone: 'amber' });
   if (can('ban') && standing !== 'banned') apply.push({ id: 'ban', label: 'Ban', tone: 'red' });
   if (can('timeout') && !timeout) apply.push({ id: 'timeout', label: 'Timeout', tone: 'amber' });
@@ -438,6 +446,7 @@ export default function ModeratorRestrictionsDesk({
   embedded?: boolean;
 }) {
   const caps = useMemo(() => getUserTeamCapabilities(variant), [variant]);
+  const viewer = useGlobalState((state) => state.user);
   const [data, setData] = useState<RestrictionsPayload | null>(() => {
     const cached = peekStaffGet(endpointBase);
     return cached ? cached.data?.data || { violations: [], restrictedAccounts: [], recentActivity: [] } : null;
@@ -577,6 +586,10 @@ export default function ModeratorRestrictionsDesk({
 
   async function runAction(action: string) {
     if (!selected) return;
+    if (action === 'suspend' && !allowSuspend) {
+      showErrorToast(suspendBlockedReason);
+      return;
+    }
     const removing = ['unsuspend', 'unban', 'unlock', 'clear_timeout'].includes(action);
     const standingKind: PunishmentKind | null =
       action === 'ban' || action === 'suspend' || action === 'timeout' ? action : null;
@@ -668,7 +681,20 @@ export default function ModeratorRestrictionsDesk({
   const timeoutCount = (data?.restrictedAccounts || []).filter((account) => account.forumTimeout).length;
   const standing = String(selected?.status || '').toLowerCase();
   const can = (action: string) => caps.statusActions.has(action);
-  const actions = availableActions(standing, Boolean(selected?.forumTimeout), can);
+  const viewerAccountId = viewer?.account_id || viewer?.accountId || null;
+  const allowSuspend = selected
+    ? canSuspendTarget({
+        actorRole: viewer?.role,
+        actorAccountId: viewerAccountId,
+        targetAccountId: selected.accountId,
+        targetStaffRole: selected.staffRole,
+      })
+    : true;
+  const suspendBlockedReason =
+    viewerAccountId && selected && String(viewerAccountId) === String(selected.accountId)
+      ? 'You cannot suspend your own account.'
+      : 'Only an admin can suspend a moderator.';
+  const actions = availableActions(standing, Boolean(selected?.forumTimeout), can, allowSuspend);
   const queueCount = queue === 'warnings' ? filteredViolations.length : queue === 'held' ? filteredRestricted.length : filteredActivity.length;
   const queueTitle = queue === 'warnings' ? 'Warnings' : queue === 'held' ? 'Held accounts' : 'Activity';
 
@@ -1126,10 +1152,13 @@ export default function ModeratorRestrictionsDesk({
                   {actions.apply.length > 0 ? (
                     <ActionGroup title="Apply" actions={actions.apply} busy={busyId === selected.accountId} onRun={(id) => void runAction(id)} />
                   ) : null}
+                  {can('suspend') && standing !== 'suspended' && !allowSuspend ? (
+                    <p className="text-xs text-zinc-500">{suspendBlockedReason}</p>
+                  ) : null}
                   {actions.lift.length > 0 ? (
                     <ActionGroup title="Lift" actions={actions.lift} busy={busyId === selected.accountId} onRun={(id) => void runAction(id)} />
                   ) : null}
-                  {actions.apply.length === 0 && actions.lift.length === 0 ? (
+                  {actions.apply.length === 0 && actions.lift.length === 0 && !(can('suspend') && !allowSuspend) ? (
                     <p className="text-xs text-zinc-500">This role cannot change standing from here.</p>
                   ) : null}
                 </div>

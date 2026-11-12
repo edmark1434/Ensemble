@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ExternalLink, FileWarning, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
 import api from '@/lib/axios';
+import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import { canSuspendTarget } from '@/pages/admin/userTeam/suspendRules';
 import ListingDetailModal, {
   SellerListingsModal,
 } from '@/pages/moderator/marketplace-moderator/ListingDetailModal';
@@ -93,6 +95,7 @@ type ReportDetailPayload = {
       name: string;
       handle: string | null;
       path: string;
+      staffRole?: string | null;
     } | null;
   };
   permissions?: DisputePermissions;
@@ -123,6 +126,14 @@ export function ReportCaseDetailModal({
   const [sanctionType, setSanctionType] = useState('warning');
   const [sanctionReason, setSanctionReason] = useState('');
   const [sanctionDays, setSanctionDays] = useState('7');
+  const viewer = useGlobalState((state) => state.user);
+  const reported = detail?.report.reportedAccount;
+  const allowSuspend = canSuspendTarget({
+    actorRole: viewer?.role,
+    actorAccountId: viewer?.account_id || viewer?.accountId,
+    targetAccountId: reported?.accountId,
+    targetStaffRole: reported?.staffRole,
+  });
 
   const accentLabel =
     accent === 'sky'
@@ -484,12 +495,12 @@ export function ReportCaseDetailModal({
                     <label className="flex flex-col gap-1 text-xs text-zinc-500">
                       Sanction
                       <select
-                        value={sanctionType}
+                        value={allowSuspend || sanctionType !== 'suspend' ? sanctionType : 'warning'}
                         onChange={(e) => setSanctionType(e.target.value)}
                         className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
                       >
                         <option value="warning">Warning</option>
-                        <option value="suspend">Suspend</option>
+                        {allowSuspend ? <option value="suspend">Suspend</option> : null}
                         <option value="ban">Ban</option>
                       </select>
                     </label>
@@ -525,6 +536,15 @@ export function ReportCaseDetailModal({
                       if (!sanctionOpen) {
                         setSanctionReason((current) => current || titleCaseLabel(report.type));
                         setSanctionOpen(true);
+                        return;
+                      }
+                      if (sanctionType === 'suspend' && !allowSuspend) {
+                        showErrorToast(
+                          reported &&
+                            String(reported.accountId) === String(viewer?.account_id || viewer?.accountId || '')
+                            ? 'You cannot suspend your own account'
+                            : 'Only an admin can suspend a moderator'
+                        );
                         return;
                       }
                       void decide('sanction', {
@@ -568,7 +588,7 @@ const LISTING_API_BASE = '/api/admin/moderation/marketplace';
 
 /**
  * Pending-cases listing review — same detail/actions as Marketplace Control
- * (thumbnail, seller, approve/reject/delist), via the admin marketplace API.
+ * (asset media preview, seller, approve/reject/delist), via the admin marketplace API.
  */
 export function ListingCaseDetailModal({
   caseItem,
