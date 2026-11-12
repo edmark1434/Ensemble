@@ -7,6 +7,7 @@ import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import SuccessModal from "@/components/ui/SuccessModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import AssetEditorModal from "./AssetEditorModal";
 import type { TemplateDraft } from "./AssetEditorModal";
@@ -141,6 +142,11 @@ export default function AssetsLibrary() {
   const [deleting, setDeleting] = useState(false);
   const [engagementPending, setEngagementPending] = useState<Set<string>>(new Set());
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
+  const [uploadSuccessOpen, setUploadSuccessOpen] = useState(false);
+  const [successModalInfo, setSuccessModalInfo] = useState({
+    title: "Asset Uploaded Successfully!",
+    message: "Your asset package has been submitted successfully to your library.",
+  });
   const availableViews: AssetView[] = isGuestView
     ? ["discover"]
     : ["discover", "mine", "purchased", "liked", "saved"];
@@ -332,28 +338,41 @@ export default function AssetsLibrary() {
     const wasEditing = Boolean(editingAsset);
     setEditorOpen(false);
     setEditingAsset(null);
-    showSuccessToast(wasEditing ? "Asset updated." : "Asset uploaded.");
-    void fetchEligibility();
-    if (!wasEditing && asset.status === "draft") {
-      setPage(1);
-      navigate('/assets/owned');
-      setMineStatus(asset.review_status === "pending" || asset.status === "draft" ? "all" : "uploaded");
-      if (view === "mine" && mineStatus === "all" && page === 1) void loadAssets();
+    if (!wasEditing) {
+      showSuccessToast("Asset uploaded successfully!");
+      setUploadSuccessOpen(true);
+      void fetchEligibility();
       return;
     }
+    showSuccessToast("Asset updated.");
+    void fetchEligibility();
     if (page !== 1) setPage(1);
     else void loadAssets();
   };
 
-  const onUploadQueued = () => {
-    setEditorOpen(false);
-    setEditingAsset(null);
+  const handleUploadSuccessDismiss = useCallback(() => {
+    setUploadSuccessOpen(false);
     setPage(1);
     setMineStatus("all");
     setFilter("all");
     setSearch("");
     setDebouncedSearch("");
     navigate("/assets/owned");
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!uploadSuccessOpen) return;
+    const timer = setTimeout(() => {
+      handleUploadSuccessDismiss();
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [uploadSuccessOpen, handleUploadSuccessDismiss]);
+
+  const onUploadQueued = () => {
+    setEditorOpen(false);
+    setEditingAsset(null);
+    showSuccessToast("Asset uploaded successfully!");
+    setUploadSuccessOpen(true);
   };
   const pendingUploads = view === "mine" ? ownUploads : [];
   const queuedAssetIds = new Set(pendingUploads.map((upload) => upload.asset?.market_asset_id));
@@ -654,6 +673,14 @@ export default function AssetsLibrary() {
         onClose={() => setIsGuestLoginOpen(false)}
         title="Log in to use Asset Library actions"
         message="Please log in or create an account to upload, like, or save marketplace assets."
+      />
+      <SuccessModal
+        isOpen={uploadSuccessOpen}
+        title={successModalInfo.title}
+        message={successModalInfo.message}
+        buttonText="Okay, got it!"
+        standalone={true}
+        onConfirm={handleUploadSuccessDismiss}
       />
       <ConfirmationModal isOpen={Boolean(deletingAsset)} title="Delete asset?" message={`Delete “${deletingAsset?.name || "this asset"}”? This removes it from the library.`} confirmText={deleting ? "Deleting..." : "Delete asset"} cancelText="Keep asset" onConfirm={() => void confirmDelete()} onCancel={() => !deleting && setDeletingAsset(null)} />
       {deleting && <span className="sr-only"><Loader2 className="animate-spin" /> Deleting asset</span>}
