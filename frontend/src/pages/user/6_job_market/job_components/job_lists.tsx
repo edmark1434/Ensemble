@@ -90,28 +90,30 @@ interface JobListProps {
 export const JobCardSkeleton: React.FC<{ viewType?: ViewType }> = ({ viewType = "list" }) => {
   if (viewType === "grid") {
     return (
-      <div className="flex flex-col rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse space-y-4">
-        <div className="h-44 w-full rounded-xl bg-gray-100 dark:bg-white/5" />
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
+      <div className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden animate-pulse">
+        <div className="h-44 sm:h-48 w-full bg-gray-100 dark:bg-white/5 border-b border-gray-100 dark:border-white/5 shrink-0" />
+        <div className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
+              <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
+            </div>
+            <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-1/2 rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+          <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+            <div className="h-4 w-20 rounded bg-gray-100 dark:bg-white/5" />
             <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
           </div>
-          <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
-          <div className="h-4 w-1/2 rounded bg-gray-100 dark:bg-white/5" />
-        </div>
-        <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
-          <div className="h-4 w-20 rounded bg-gray-100 dark:bg-white/5" />
-          <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse">
-      <div className="hidden md:block h-40 w-full md:w-60 shrink-0 rounded-xl bg-gray-100 dark:bg-white/5" />
-      <div className="flex-1 flex flex-col justify-between py-1">
+    <div className="flex flex-col md:flex-row rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden animate-pulse">
+      <div className="hidden md:block h-auto min-h-[160px] w-full md:w-56 lg:w-60 shrink-0 bg-gray-100 dark:bg-white/5 border-b md:border-b-0 md:border-r border-gray-100 dark:border-white/5 self-stretch" />
+      <div className="flex-1 p-5 flex flex-col justify-between min-w-0">
         <div className="space-y-3">
           <div className="flex gap-2">
             <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
@@ -241,14 +243,13 @@ const JobList: React.FC<JobListProps> = ({
                 transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
                 data-tour={index === 0 ? "job-card-first" : undefined}
                 onClick={() => navigate(`${baseRoute}/${job.id}`)}
-                className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
+                className={`group flex flex-col justify-between rounded-2xl border overflow-hidden transition-colors duration-200 cursor-pointer ${
                   isActive
                     ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
                     : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
                 }`}
               >
-                <div>
-                  <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3">
+                <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-gray-200 dark:bg-zinc-900 border-b border-gray-100 dark:border-white/5 shrink-0">
                     <img
                       src={job.thumbnail}
                       alt=""
@@ -341,8 +342,11 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
                   </div>
 
-                  {/* Category Pill Tags */}
-                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  {/* Card Content */}
+                  <div className="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      {/* Category Pill Tags */}
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
                       className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                         job.status?.toLowerCase() === "open" || !job.status
@@ -450,6 +454,7 @@ const JobList: React.FC<JobListProps> = ({
                     <span>{job.timeAgo}</span>
                   </div>
                 </div>
+                </div>
               </motion.div>
             );
           }
@@ -465,13 +470,13 @@ const JobList: React.FC<JobListProps> = ({
               transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
               data-tour={index === 0 ? "job-card-first" : undefined}
               onClick={() => navigate(`${baseRoute}/${job.id}`)}
-              className={`group flex flex-col md:flex-row gap-5 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
+              className={`group flex flex-col md:flex-row rounded-2xl border overflow-hidden transition-colors duration-200 cursor-pointer ${
                 isActive
                   ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
                   : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
               }`}
             >
-              <div className="hidden md:block relative h-auto min-h-[160px] w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5">
+              <div className="hidden md:block relative h-auto min-h-[180px] w-56 lg:w-60 shrink-0 overflow-hidden bg-gray-200 dark:bg-zinc-900 border-r border-gray-100 dark:border-white/5 self-stretch">
                 <img
                   src={job.thumbnail}
                   alt=""
@@ -551,7 +556,7 @@ const JobList: React.FC<JobListProps> = ({
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col justify-between min-w-0">
+              <div className="flex-1 p-5 flex flex-col justify-between min-w-0">
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex flex-wrap items-center gap-1.5">

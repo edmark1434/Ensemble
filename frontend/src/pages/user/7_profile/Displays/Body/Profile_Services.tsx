@@ -152,10 +152,10 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
           {Array.from({ length: 3 }).map((_, idx) => (
             <div
               key={idx}
-              className="flex flex-col sm:flex-row gap-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 animate-pulse"
+              className="flex flex-col sm:flex-row rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 overflow-hidden animate-pulse"
             >
-              <div className="h-36 sm:h-32 sm:w-48 shrink-0 rounded-xl bg-gray-200 dark:bg-zinc-800" />
-              <div className="flex flex-1 flex-col justify-between min-w-0">
+              <div className="h-44 sm:h-auto sm:min-h-[160px] sm:w-56 shrink-0 bg-gray-200 dark:bg-zinc-800 border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-white/5 self-stretch" />
+              <div className="flex flex-1 flex-col justify-between min-w-0 p-4 sm:p-5">
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
@@ -202,10 +202,10 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
                 navigate(`/gigs/services/${gig.id}/page`);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="group relative flex flex-col sm:flex-row cursor-pointer gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 p-4 transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
+              className="group relative flex flex-col sm:flex-row cursor-pointer rounded-2xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 overflow-hidden transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
             >
               {/* Left Thumbnail */}
-              <div className="relative h-40 sm:h-36 sm:w-52 shrink-0 overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
+              <div className="relative h-44 sm:h-auto sm:min-h-[160px] sm:w-56 shrink-0 overflow-hidden bg-gray-200 dark:bg-zinc-900 border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-white/5 self-stretch">
                 <img
                   src={gig.thumbnail}
                   alt={gig.title}
@@ -225,7 +225,7 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
               </div>
 
               {/* Right Content */}
-              <div className="flex flex-1 flex-col justify-between min-w-0">
+              <div className="flex flex-1 flex-col justify-between min-w-0 p-4 sm:p-5">
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5">
