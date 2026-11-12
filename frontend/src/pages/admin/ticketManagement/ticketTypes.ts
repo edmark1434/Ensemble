@@ -206,6 +206,8 @@ export type DisputeResolutionOption = {
   label: string;
   hint: string;
   requiresNote?: boolean;
+  /** The exact message the server posts for this choice (without staff notes). */
+  preview?: string;
 };
 
 export type UserReport = {

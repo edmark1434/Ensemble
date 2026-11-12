@@ -1,25 +1,46 @@
-# Active Task: Fix double-counted escrow on contract disputes
+# Active Task: Dispute flow audit, scheduled payouts, and live sync
 
 ## Implementation Objective
 
-Job contracts fund escrow in two hops that are both logged as `Escrow Hold`
-(client account → client escrow on offer, client escrow → freelancer escrow on
-accept). The dispute escrow math summed every hold, so DIS-787553 showed 1,500
-credits involved on a 750-credit contract, and staff settlement allowed paying
-out up to 1,500 from the freelancer's escrow wallet.
-
-Count escrow by wallet movement instead: credits entering an escrow wallet from
-a non-escrow wallet, minus credits leaving an escrow wallet to a non-escrow
-wallet. Escrow-to-escrow hops net to zero.
+Close the gaps found in the dispute flow (money, decisions, realtime sync, swap),
+and change money rulings so recipients are paid on a schedule: 7 days after the
+ruling by default, or immediately / on a staff-chosen date.
 
 ## Acceptance Criteria
 
-- [x] Opening a contract dispute stores the real remaining escrow in
-      `disputes.credit_amount_involved` (750 for a 750-credit job contract).
-- [x] Staff escrow settlement caps the payout at the same real remaining escrow.
-- [x] Both use one shared calculation in `backend/lib/DisputeEscrow.js`.
-- [x] Paid milestone revisions (`contract_milestone_revisions`) count toward the
-      contract's escrow, and fees out of escrow count as leaving it.
-- [x] A new migration recomputes `credit_amount_involved` for open contract
-      disputes (DIS-787553 → 750); `down` restores the old figure.
-- [ ] Migration applied to the database.
+### Scheduled payouts
+- [x] Settle escrow and reverse transaction create `dispute_payouts` rows instead of
+      paying instantly. Default release is 7 days after the ruling; staff may pick
+      "Pay now" or a date (up to 90 days out).
+- [x] Credits stay locked in escrow until release. Contract escrow stays frozen while
+      a payout is scheduled.
+- [x] A background job releases due payouts. Payouts pause while the case is reopened.
+- [x] Staff (Admin or assigned Support) can release now, change the date, or cancel the
+      ruling (case must be reopened first; returns any held credits).
+- [x] Each step posts a ruling card in the discussion, notifies the recipients, and
+      broadcasts the new state.
+
+### Money flaws
+- [x] Settlement must allocate all remaining escrow (no stranded credits) and ends the
+      contract (unfinished milestones cancelled), so milestones can't be paid twice.
+- [x] Settlement takes credits from the escrow wallets that actually hold them (also
+      covers disputes on Pending Signature contracts).
+- [x] Reversals cannot touch credits still in escrow (use settle) and never send credits
+      back into escrow; an escrow payout reversed goes to the other contract party.
+
+### Decisions and sync
+- [x] Generic status edits cannot close or reopen a case (Resolve / Reopen only).
+- [x] Approve does not reopen a closed case; dismiss keeps a private case private and
+      posts its decision; ban requires an open case; resolve is race-safe.
+- [x] `disputeUpdated` reaches staff with the case open; staff modal, member pages and
+      the public page refetch on it (claim/release/reassign included).
+- [x] Resolve / reopen previews come from the server text.
+
+### Swap
+- [x] Swap posts a "Parties swapped" ruling card in the discussion (already present;
+      verify), and member views refresh roles/names live after a swap.
+
+### Verification
+- [ ] Typecheck (user runs `pnpm typecheck`).
+- [x] Migration `1828300000000_dispute-payouts` applied.
+- [ ] Backend restarted so the payout job and new routes load.

@@ -11,6 +11,7 @@ import {
   Card,
   DisputeAttachments,
   DisputeDecisionCard,
+  DisputeSettlementCard,
   RoleChip,
   StatusPill,
   VisibilityPill,
@@ -19,7 +20,7 @@ import {
   isClosedStatus,
   isDisputeDecision,
 } from "@/pages/user/disputes/disputeUi";
-import type { DisputeAttachment, ViewerRole } from "@/pages/user/disputes/disputeUi";
+import type { DisputeAttachment, DisputeSettlement, ViewerRole } from "@/pages/user/disputes/disputeUi";
 import {
   InboxUploadMediaButton,
   InboxUploadMediaPreview,
@@ -141,18 +142,25 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const { mediaList, fileInputRef, openFilePicker, handleFileChange, removeMedia, clearMedia } =
     useInboxUploadMedia(4, 100);
   const [loadingNotes, setLoadingNotes] = useState(Boolean(dispute.canAddInformation));
+  const [settlement, setSettlement] = useState<DisputeSettlement | null>(null);
+  const [latestRuling, setLatestRuling] = useState<DisputeMessage | null>(null);
 
+  // Private notes while the filer can still add them; once closed, the ruling and any payout.
+  // `updatedAt` moves on every live update, so a ruling or payout made elsewhere shows here.
   useEffect(() => {
-    if (!dispute.canAddInformation) return;
+    if (!dispute.canAddInformation && open) return;
     let cancelled = false;
     api.get(`/api/users/disputes/${dispute.id}`)
       .then((res) => {
         if (cancelled) return;
-        setNotes(Array.isArray(res.data?.data?.messages) ? res.data.data.messages : []);
+        const messages: DisputeMessage[] = Array.isArray(res.data?.data?.messages) ? res.data.data.messages : [];
+        if (dispute.canAddInformation) setNotes(messages);
+        setSettlement(res.data?.data?.settlement || null);
+        setLatestRuling([...messages].reverse().find((message) => isDisputeDecision(message)) || null);
         if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
       })
       .catch(() => {
-        if (!cancelled) setNotes([]);
+        if (!cancelled && dispute.canAddInformation) setNotes([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingNotes(false);
@@ -160,7 +168,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
     return () => {
       cancelled = true;
     };
-  }, [dispute.canAddInformation, dispute.id]);
+  }, [dispute.canAddInformation, dispute.id, dispute.updatedAt, open]);
 
   useEffect(() => {
     if (!chatId || !dispute.canAddInformation) return;
@@ -331,6 +339,15 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           )}
         </div>
       </div>
+
+      {!open && (settlement || (latestRuling && !publicDiscussion)) ? (
+        <section className="space-y-3 border-t border-gray-100 p-5 dark:border-white/5">
+          {latestRuling && !publicDiscussion ? (
+            <DisputeDecisionCard body={latestRuling.body} when={formatWhen(latestRuling.createdAt)} />
+          ) : null}
+          <DisputeSettlementCard settlement={settlement} />
+        </section>
+      ) : null}
 
       {dispute.canAddInformation ? (
         <section className="border-t border-gray-100 bg-gray-50/70 p-5 dark:border-white/5 dark:bg-white/[0.02]">
@@ -537,8 +554,18 @@ export default function MyTransactionDisputesPage() {
     };
   }, []);
 
-  // Staff decisions land here without a reload: resolved, reopened, made public, closed.
+  // Staff decisions land here without a reload: resolved, reopened, made public, closed,
+  // parties swapped, payouts. The list is read back from the server, because a swap changes
+  // who filed the case (and whether this member may still see it) — not just its status.
   useEffect(() => {
+    let timer: number | undefined;
+    const refetch = () => {
+      api
+        .get("/api/users/disputes")
+        // Each change moves the case's updatedAt, so its card re-reads the ruling and payouts.
+        .then((res) => setRows(Array.isArray(res.data?.data) ? res.data.data : []))
+        .catch(() => undefined);
+    };
     const onState = (payload: {
       disputeId?: string;
       status?: string;
@@ -546,35 +573,26 @@ export default function MyTransactionDisputesPage() {
       closed?: boolean;
     }) => {
       if (!payload?.disputeId) return;
-      setRows((current) => {
-        const known = current.some((row) => String(row.id) === String(payload.disputeId));
-        if (!known) {
-          // A case that just became visible to this member isn't in the list yet.
-          api.get("/api/users/disputes")
-            .then((res) => setRows(Array.isArray(res.data?.data) ? res.data.data : []))
-            .catch(() => undefined);
-          return current;
-        }
-        return current.map((row) =>
+      setRows((current) =>
+        current.map((row) =>
           String(row.id) === String(payload.disputeId)
             ? {
                 ...row,
                 status: payload.status ?? row.status,
                 visibility: payload.visibility ?? row.visibility,
-                canAddInformation:
-                  payload.closed || payload.visibility
-                    ? false
-                    : row.canAddInformation,
-                updatedAt: new Date().toISOString(),
+                canAddInformation: payload.closed || payload.visibility ? false : row.canAddInformation,
               }
             : row
-        );
-      });
+        )
+      );
+      window.clearTimeout(timer);
+      timer = window.setTimeout(refetch, 250);
     };
 
     if (!socket.connected) socket.connect();
     socket.on("disputeUpdated", onState);
     return () => {
+      window.clearTimeout(timer);
       socket.off("disputeUpdated", onState);
     };
   }, []);

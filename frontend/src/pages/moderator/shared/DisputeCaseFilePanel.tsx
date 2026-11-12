@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
-import type { Dispute, DisputeCaseFile, DisputeCaseTransaction } from "./moderatorTypes";
+import type {
+  Dispute,
+  DisputeCaseFile,
+  DisputeCaseTransaction,
+  DisputePayout,
+  DisputePayoutState,
+} from "./moderatorTypes";
+import { DisputePayoutsList } from "./DisputePayoutUi";
 
 function when(value?: string | null) {
   if (!value) return "—";
@@ -62,6 +69,60 @@ function Tag({ children, className = "border-white/10 text-zinc-400" }: { childr
   return <span className={`rounded border px-1.5 py-px text-[10px] ${className}`}>{children}</span>;
 }
 
+function TransactionRow({
+  tx,
+  canReverse,
+  showRoute,
+  saving,
+  onReverse,
+}: {
+  tx: DisputeCaseTransaction;
+  canReverse: boolean;
+  showRoute: boolean;
+  saving: boolean;
+  onReverse?: () => void;
+}) {
+  const route = tx.reversal;
+  const to = route?.toHandle ? `@${route.toHandle}` : route?.toName;
+  return (
+    <li className="rounded-lg border border-white/10 px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-zinc-200">
+          {titleCase(tx.type)} · <span className="tabular-nums">{tx.amount.toLocaleString()}</span> credits
+        </span>
+        <span className="text-[11px] text-zinc-500">{when(tx.createdAt)}</span>
+      </div>
+      <p className="mt-1 text-xs text-zinc-400">
+        {tx.sourceName}
+        {tx.sourceHandle ? ` (@${tx.sourceHandle})` : ""} · {tx.sourceWallet} → {tx.destinationName}
+        {tx.destinationHandle ? ` (@${tx.destinationHandle})` : ""} · {tx.destinationWallet}
+      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <Tag>{titleCase(tx.status)}</Tag>
+        {tx.referenceLabel ? <Tag>{tx.referenceLabel}</Tag> : null}
+        {tx.tiedToThisDispute ? <Tag className="border-rose-500/30 text-rose-200">This dispute</Tag> : null}
+        {tx.reversesTransactionId ? <Tag className="border-amber-500/30 text-amber-200">Compensating reverse</Tag> : null}
+        {tx.reversedByTransactionId ? <Tag className="border-amber-500/30 text-amber-200">Already reversed</Tag> : null}
+        {tx.reversalScheduled ? <Tag className="border-sky-500/30 text-sky-200">Reversal scheduled</Tag> : null}
+        {canReverse ? (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onReverse}
+            title={to ? `Takes the credits back and pays ${to}` : undefined}
+            className="ml-auto rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-100 hover:bg-red-500/20 disabled:opacity-50"
+          >
+            Reverse{to ? ` → ${to}` : ""}
+          </button>
+        ) : null}
+      </div>
+      {showRoute && !canReverse && route?.reason && tx.status === "Completed" && !tx.reversesTransactionId ? (
+        <p className="mt-1.5 text-[11px] text-zinc-500">{route.reason}</p>
+      ) : null}
+    </li>
+  );
+}
+
 export default function DisputeCaseFilePanel({
   dispute,
   caseFile,
@@ -69,6 +130,8 @@ export default function DisputeCaseFilePanel({
   canAct = false,
   saving = false,
   onReverseTransaction,
+  payouts = [],
+  payoutState,
 }: {
   dispute: Dispute;
   caseFile?: DisputeCaseFile;
@@ -76,11 +139,15 @@ export default function DisputeCaseFilePanel({
   canAct?: boolean;
   saving?: boolean;
   onReverseTransaction?: (tx: DisputeCaseTransaction) => void;
+  payouts?: DisputePayout[];
+  payoutState?: DisputePayoutState;
 }) {
   const contracts = caseFile?.contracts || [];
   const transactions = caseFile?.transactions || [];
   const related = caseFile?.relatedDisputes || [];
   const financial = dispute.financialResolution;
+  const ownTransactions = transactions.filter((tx) => tx.inDisputeScope !== false);
+  const otherTransactions = transactions.filter((tx) => tx.inDisputeScope === false);
 
   return (
     <div className="space-y-6">
@@ -114,20 +181,37 @@ export default function DisputeCaseFilePanel({
             <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-300">{dispute.resolutionNotes}</p>
           </div>
         ) : null}
-        {financial ? (
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300/80">Financial resolution</p>
-            <p className="mt-0.5">
-              {financial.kind === "escrow_settle"
-                ? `Escrow settled. Client ${financial.clientCredits.toLocaleString()} · freelancer ${financial.freelancerCredits.toLocaleString()}`
-                : financial.kind === "transaction_reverse"
-                  ? "Linked transaction reversed"
-                  : titleCase(financial.kind || "Resolved")}
-            </p>
-            <p className="mt-0.5 text-xs text-emerald-200/70">{when(financial.at)}</p>
-          </div>
-        ) : null}
       </Section>
+
+      {financial || payouts.length ? (
+        <Section title="Money ruling">
+          {financial ? (
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300/80">
+                {financial.kind === "escrow_settle"
+                  ? "Escrow settled"
+                  : financial.kind === "transaction_reverse"
+                    ? "Transaction reversed"
+                    : titleCase(financial.kind || "Resolved")}
+              </p>
+              <p className="mt-0.5">
+                {financial.kind === "escrow_settle"
+                  ? `Client ${financial.clientCredits.toLocaleString()} · freelancer ${financial.freelancerCredits.toLocaleString()} credits`
+                  : financial.kind === "transaction_reverse"
+                    ? `${(financial.clientCredits + financial.freelancerCredits).toLocaleString()} credits taken back`
+                    : null}
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-200/70">Ruled {when(financial.at)}</p>
+            </div>
+          ) : (
+            <Empty>The earlier money ruling was withdrawn. The case can be decided again.</Empty>
+          )}
+          {payouts.length ? (
+            // Read-only here; the sidebar Payouts panel holds the actions.
+            <DisputePayoutsList payouts={payouts} state={payoutState} canAct={false} saving={saving} />
+          ) : null}
+        </Section>
+      ) : null}
 
       <Section title="Contracts" count={contracts.length}>
         {contracts.length === 0 ? (
@@ -192,46 +276,39 @@ export default function DisputeCaseFilePanel({
         )}
       </Section>
 
-      <Section title="Transactions" count={transactions.length}>
-        {transactions.length === 0 ? (
+      <Section title="Transactions" count={ownTransactions.length}>
+        {ownTransactions.length === 0 ? (
           <Empty>No escrow or contract credit transactions are linked.</Empty>
         ) : (
           <ul className="space-y-2">
-            {transactions.map((tx) => (
-              <li key={tx.id} className="rounded-lg border border-white/10 px-3 py-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-zinc-200">
-                    {titleCase(tx.type)} · <span className="tabular-nums">{tx.amount.toLocaleString()}</span> credits
-                  </span>
-                  <span className="text-[11px] text-zinc-500">{when(tx.createdAt)}</span>
-                </div>
-                <p className="mt-1 text-xs text-zinc-400">
-                  {tx.sourceName}
-                  {tx.sourceHandle ? ` (@${tx.sourceHandle})` : ""} · {tx.sourceWallet} → {tx.destinationName}
-                  {tx.destinationHandle ? ` (@${tx.destinationHandle})` : ""} · {tx.destinationWallet}
-                </p>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <Tag>{titleCase(tx.status)}</Tag>
-                  {tx.referenceLabel ? <Tag>{tx.referenceLabel}</Tag> : null}
-                  {tx.tiedToThisDispute ? <Tag className="border-rose-500/30 text-rose-200">This dispute</Tag> : null}
-                  {tx.reversesTransactionId ? <Tag className="border-amber-500/30 text-amber-200">Compensating reverse</Tag> : null}
-                  {tx.reversedByTransactionId ? <Tag className="border-amber-500/30 text-amber-200">Already reversed</Tag> : null}
-                  {canAct && tx.reversible && onReverseTransaction && !financial ? (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => onReverseTransaction(tx)}
-                      className="ml-auto rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-100 hover:bg-red-500/20 disabled:opacity-50"
-                    >
-                      Reverse
-                    </button>
-                  ) : null}
-                </div>
-              </li>
+            {ownTransactions.map((tx) => (
+              <TransactionRow
+                key={tx.id}
+                tx={tx}
+                canReverse={Boolean(canAct && tx.reversible && onReverseTransaction && !financial)}
+                showRoute={canAct && !financial && dispute.status !== "closed"}
+                saving={saving}
+                onReverse={() => onReverseTransaction?.(tx)}
+              />
             ))}
           </ul>
         )}
       </Section>
+
+      {otherTransactions.length ? (
+        <Section title="Their other contracts" count={otherTransactions.length}>
+          <details className="rounded-lg border border-white/[0.06]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200">
+              Transactions on other contracts between these accounts (context only)
+            </summary>
+            <ul className="space-y-2 border-t border-white/[0.06] p-2">
+              {otherTransactions.map((tx) => (
+                <TransactionRow key={tx.id} tx={tx} canReverse={false} showRoute={false} saving={saving} />
+              ))}
+            </ul>
+          </details>
+        </Section>
+      ) : null}
 
       <Section title="Other disputes between them" count={related.length}>
         {related.length === 0 ? (

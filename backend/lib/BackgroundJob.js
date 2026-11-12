@@ -593,6 +593,26 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Dispute payouts: pay out money rulings whose release date has come — runs every minute.
+    // Payouts of a reopened case wait; failed ones retry hourly (see releaseDuePayouts).
+    let isDisputePayoutJobRunning = false;
+    cron.schedule("* * * * *", async () => {
+        if (isDisputePayoutJobRunning) return;
+        isDisputePayoutJobRunning = true;
+        try {
+            const { releaseDueDisputePayoutsServices } = require('../services/DisputeFinancialServices');
+            const result = await releaseDueDisputePayoutsServices();
+            if (result.released || result.failed) {
+                console.log(`Dispute payouts: released ${result.released}, failed ${result.failed}`);
+            }
+        } catch (err) {
+            // The payouts table arrives with a migration; stay quiet until it exists.
+            if (err.code !== '42P01') console.error("Dispute payout release failed:", err.message);
+        } finally {
+            isDisputePayoutJobRunning = false;
+        }
+    });
+
     // Job 8: Accepted gig orders < 2h confirmation reminder & 24h auto-expiration — runs every 5 minutes
     let isAcceptedGigOrderReconcileRunning = false;
     cron.schedule("*/5 * * * *", async () => {

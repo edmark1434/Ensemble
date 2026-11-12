@@ -36,7 +36,7 @@ export function isDisputeDecision(message?: {
 }
 
 export type ParsedRuling = {
-  kind: "decision" | "reopen" | "parties";
+  kind: "decision" | "reopen" | "parties" | "payout";
   title: string;
   reference: string | null;
   outcomeLabel: string;
@@ -58,23 +58,33 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
     .filter(Boolean);
   const head = blocks[0] || "";
   const headMatch = head.match(
-    /^(Final decision|Case reopened|Parties swapped)(?:\s+[—-]\s+(.+))?$/i
+    /^(Final decision|Case reopened|Parties swapped|Payout released|Payout date changed|Payout delayed|Ruling withdrawn)(?:\s+[—-]\s+(.+))?$/i
   );
   const kind: ParsedRuling["kind"] = headMatch
     ? /parties swapped/i.test(headMatch[1])
       ? "parties"
       : /case reopened/i.test(headMatch[1])
         ? "reopen"
-        : "decision"
+        : /payout|ruling withdrawn/i.test(headMatch[1])
+          ? "payout"
+          : "decision"
     : /reopen/i.test(text)
       ? "reopen"
       : "decision";
 
   const result: ParsedRuling = {
     kind,
-    title: kind === "parties" ? "Parties swapped" : kind === "reopen" ? "Case reopened" : "Final decision",
+    title:
+      kind === "parties"
+        ? "Parties swapped"
+        : kind === "reopen"
+          ? "Case reopened"
+          : kind === "payout"
+            ? headMatch?.[1] || "Payout update"
+            : "Final decision",
     reference: headMatch?.[2]?.trim() || null,
-    outcomeLabel: kind === "parties" ? "Change" : kind === "reopen" ? "Reason" : "Outcome",
+    outcomeLabel:
+      kind === "parties" ? "Change" : kind === "reopen" ? "Reason" : kind === "payout" ? "Status" : "Outcome",
     outcome: null,
     paragraphs: [],
     note: null,
@@ -83,7 +93,7 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
 
   const rest = headMatch ? blocks.slice(1) : blocks;
   for (const block of rest) {
-    const outcome = block.match(/^(Outcome|Reason|Change):\s*(.+)$/i);
+    const outcome = block.match(/^(Outcome|Reason|Change|Status):\s*(.+)$/i);
     if (outcome) {
       result.outcomeLabel = outcome[1];
       result.outcome = outcome[2].trim();
@@ -94,7 +104,7 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
       result.note = note[1].trim();
       continue;
     }
-    if (/^(This case is now closed|The case is open again|The case stays open)/i.test(block)) {
+    if (/^(This case is now closed|The case is open again|The case stays open|The credits are in)/i.test(block)) {
       result.closing = result.closing ? `${result.closing}\n\n${block}` : block;
       continue;
     }
