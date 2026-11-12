@@ -161,7 +161,7 @@ export const ProjectInfoTab: React.FC<ProjectInfoTabProps> = ({
               {project?.job_description ? (
                 <JobRichText content={project.job_description} />
               ) : project?.project_description ? (
-                <p>{project.project_description}</p>
+                <JobRichText content={project.project_description} />
               ) : (
                 <p className="text-zinc-400 italic">No detailed brief provided for this project.</p>
               )}
