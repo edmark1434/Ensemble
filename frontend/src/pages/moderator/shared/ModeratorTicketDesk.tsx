@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Hand, Inbox, Loader2, Plus, RefreshCw, Search, Ticket } from "lucide-react";
+import { Hand, Inbox, Loader2, Plus, RefreshCw, Search, Ticket, UserCog } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import useGlobalState from "@/lib/global_state";
 import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import TicketFiltersPanel from "@/pages/admin/ticketManagement/TicketFiltersPanel";
 import {
@@ -70,6 +71,13 @@ const ACCENT_FOCUS: Record<Accent, string> = {
   rose: "focus:border-rose-500/40",
 };
 
+const ACCENT_VIEW: Record<Accent, string> = {
+  sky: "bg-sky-500/15 text-white shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)]",
+  violet: "bg-violet-500/15 text-white shadow-[inset_0_0_0_1px_rgba(139,92,246,0.35)]",
+  emerald: "bg-emerald-500/15 text-white shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)]",
+  rose: "bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]",
+};
+
 const ACCENT_ICON: Record<Accent, string> = {
   sky: "text-sky-300",
   violet: "text-violet-300",
@@ -84,8 +92,14 @@ function scopeQueueTickets(rows: SupportTicket[], queueKey: keyof typeof QUEUE_T
   return rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()));
 }
 
+/** Queue shows every ticket in scope; Mine shows the ones assigned to the viewer. */
+type DeskView = "queue" | "mine";
+
 /**
  * Shared moderator ticket desk with admin-style desk filters + quick chips.
+ *
+ * Mirrors the Support desk's split between the whole queue and the viewer's own
+ * tickets, so every specialist desk has the same two views.
  */
 export default function ModeratorTicketDesk({
   title = "Ticket Management",
@@ -106,7 +120,11 @@ export default function ModeratorTicketDesk({
   queueKey?: keyof typeof QUEUE_TYPES;
   statusControl?: "select" | "buttons";
 }) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useGlobalState();
+  const [view, setView] = useState<DeskView>(() =>
+    searchParams.get("view") === "mine" ? "mine" : "queue"
+  );
   const [tickets, setTickets] = useState<SupportTicket[]>(() => {
     const cached = peekStaffGet(listPath || endpointBase);
     return cached?.data?.success
@@ -167,7 +185,33 @@ export default function ModeratorTicketDesk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listPath, endpointBase]);
 
-  const filtered = useMemo(() => filterTickets(tickets, filters), [tickets, filters]);
+  const myStaffId = useMemo(() => {
+    const id = user?.staffId ?? user?.staff_id ?? null;
+    return id != null && id !== "" ? String(id) : null;
+  }, [user]);
+
+  const myTickets = useMemo(() => {
+    if (!myStaffId) return [];
+    return tickets.filter(
+      (t) =>
+        t.assignee?.staffId != null &&
+        String(t.assignee.staffId).toLowerCase() === myStaffId.toLowerCase()
+    );
+  }, [tickets, myStaffId]);
+
+  const visibleTickets = view === "mine" ? myTickets : tickets;
+  const filtered = useMemo(
+    () => filterTickets(visibleTickets, filters),
+    [visibleTickets, filters]
+  );
+
+  const switchView = (next: DeskView) => {
+    setView(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === "mine") params.set("view", "mine");
+    else params.delete("view");
+    setSearchParams(params, { replace: true });
+  };
 
   const moderators = useMemo(() => {
     const map = new Map<string, { staffId: number | string; name: string; role: string }>();
@@ -183,30 +227,30 @@ export default function ModeratorTicketDesk({
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [tickets]);
 
+  // Summary and quick chips describe the current view, so switching to Mine
+  // reports the viewer's own workload rather than the whole queue.
   const summary = useMemo(() => {
-    const open = tickets.filter((t) => t.status === "Open" || t.status === "In Progress");
+    const isActive = (t: SupportTicket) => t.status === "Open" || t.status === "In Progress";
     return {
-      open: open.length,
-      unassigned: tickets.filter((t) => !t.assignee && (t.status === "Open" || t.status === "In Progress")).length,
-      high: tickets.filter(
-        (t) =>
-          String(t.priority).toLowerCase() === "high" &&
-          (t.status === "Open" || t.status === "In Progress")
+      open: visibleTickets.filter(isActive).length,
+      unassigned: visibleTickets.filter((t) => !t.assignee && isActive(t)).length,
+      high: visibleTickets.filter(
+        (t) => String(t.priority).toLowerCase() === "high" && isActive(t)
       ).length,
-      awaiting: tickets.filter((t) => t.waitingForResponse).length,
+      awaiting: visibleTickets.filter((t) => t.waitingForResponse).length,
     };
-  }, [tickets]);
+  }, [visibleTickets]);
 
   const quickCounts = useMemo(
     () => ({
-      all: tickets.length,
+      all: visibleTickets.length,
       open_only: summary.open,
       awaiting: summary.awaiting,
-      escalated: tickets.filter((t) => t.isEscalated).length,
+      escalated: visibleTickets.filter((t) => t.isEscalated).length,
       unassigned: summary.unassigned,
       high: summary.high,
     }),
-    [tickets, summary]
+    [visibleTickets, summary]
   );
 
   if (loading) {
@@ -295,12 +339,51 @@ export default function ModeratorTicketDesk({
         </div>
       </div>
 
+      <div className="mb-4 inline-flex gap-1 rounded-xl border border-white/[0.08] bg-[#14151c] p-1">
+        {(
+          [
+            { id: "queue" as const, label: "Queue", icon: Ticket, count: tickets.length },
+            { id: "mine" as const, label: "My tickets", icon: UserCog, count: myTickets.length },
+          ] as const
+        ).map(({ id, label, icon: Icon, count }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => switchView(id)}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-medium transition ${
+              view === id ? ACCENT_VIEW[accent] : "text-zinc-500 hover:text-zinc-200"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[10px] tabular-nums ${
+                view === id ? "bg-white/10 text-white" : "bg-white/[0.06] text-zinc-500"
+              }`}
+            >
+              {count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Open tickets" value={summary.open} sub="Active queue" />
+        <SummaryCard
+          label="Open tickets"
+          value={summary.open}
+          sub={view === "mine" ? "Assigned to you" : "Active queue"}
+        />
         <SummaryCard label="Unassigned" value={summary.unassigned} sub="Need a handler" />
         <SummaryCard label="High priority" value={summary.high} sub="Open and urgent" />
         <SummaryCard label="Awaiting reply" value={summary.awaiting} sub="User message waiting" />
       </div>
+
+      {view === "mine" && !myStaffId ? (
+        <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-100">
+          Your staff profile is not linked to this session, so tickets cannot be matched to you.
+          Sign in again from the staff login to use this view.
+        </div>
+      ) : null}
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
         <div className="flex flex-col gap-4 border-b border-white/[0.06] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -332,7 +415,7 @@ export default function ModeratorTicketDesk({
           accent={accent}
           showQueue={false}
           resultCount={filtered.length}
-          totalCount={tickets.length}
+          totalCount={visibleTickets.length}
           variant="desk"
           hideSearch
           quickCounts={quickCounts}
@@ -345,8 +428,16 @@ export default function ModeratorTicketDesk({
                 <Inbox className="h-7 w-7" />
               </span>
               <div>
-                <p className="text-sm font-medium text-zinc-400">No tickets match these filters</p>
-                <p className="mt-0.5 text-xs text-zinc-600">Try clearing search or switching filters.</p>
+                <p className="text-sm font-medium text-zinc-400">
+                  {view === "mine" && myTickets.length === 0
+                    ? "No tickets are assigned to you"
+                    : "No tickets match these filters"}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-600">
+                  {view === "mine" && myTickets.length === 0
+                    ? "Assign yourself from a ticket in the queue to work it here."
+                    : "Try clearing search or switching filters."}
+                </p>
               </div>
             </div>
           ) : (

@@ -275,12 +275,19 @@ function PostingDetailModal({
 }: {
   posting: JobsGigsPosting;
   onClose: () => void;
-  onModerate: (posting: JobsGigsPosting, status: string) => Promise<void>;
+  onModerate: (posting: JobsGigsPosting, status: string, reason?: string) => Promise<void>;
   onViewHistory: (accountId: string) => void;
   saving: boolean;
 }) {
   const [detail, setDetail] = useState<JobsGigsPostingDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState("");
+
+  /** Runs one moderation action and clears the reason once it is recorded. */
+  const moderate = async (status: string) => {
+    await onModerate(posting, status, reason);
+    setReason("");
+  };
 
   useEffect(() => {
     let active = true;
@@ -590,60 +597,69 @@ function PostingDetailModal({
 
         {/* Moderation actions */}
         {!loading && detail && (
-          <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-white/[0.06] bg-[#0f1016]/95 px-6 py-3.5 backdrop-blur">
-            <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Moderate</span>
-            {isArchived ? (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void onModerate(posting, "active")}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
-              >
-                <Play className="h-3.5 w-3.5" /> Restore posting
-              </button>
-            ) : (
-              <>
-                {posting.status !== "active" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void onModerate(posting, "active")}
-                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
-                  >
-                    <Play className="h-3.5 w-3.5" /> Activate
-                  </button>
-                )}
-                {posting.status !== "paused" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void onModerate(posting, "paused")}
-                    className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50"
-                  >
-                    <Pause className="h-3.5 w-3.5" /> Pause
-                  </button>
-                )}
-                {posting.status !== "closed" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void onModerate(posting, "closed")}
-                    className="flex items-center gap-1.5 rounded-lg border border-zinc-500/30 bg-zinc-500/10 px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:bg-zinc-500/20 disabled:opacity-50"
-                  >
-                    <XCircle className="h-3.5 w-3.5" /> Close
-                  </button>
-                )}
+          <div className="sticky bottom-0 space-y-2.5 border-t border-white/[0.06] bg-[#0f1016]/95 px-6 py-3.5 backdrop-blur">
+            <input
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              maxLength={500}
+              placeholder="Reason for this action (saved to the activity log)"
+              className="w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-emerald-500/40"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Moderate</span>
+              {isArchived ? (
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => void onModerate(posting, "archived")}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+                  onClick={() => void moderate("active")}
+                  className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
                 >
-                  <Archive className="h-3.5 w-3.5" /> Archive
+                  <Play className="h-3.5 w-3.5" /> Restore posting
                 </button>
-              </>
-            )}
-            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
+              ) : (
+                <>
+                  {posting.status !== "active" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void moderate("active")}
+                      className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      <Play className="h-3.5 w-3.5" /> Activate
+                    </button>
+                  )}
+                  {posting.status !== "paused" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void moderate("paused")}
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      <Pause className="h-3.5 w-3.5" /> Pause
+                    </button>
+                  )}
+                  {posting.status !== "closed" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void moderate("closed")}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-500/30 bg-zinc-500/10 px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:bg-zinc-500/20 disabled:opacity-50"
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> Close
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void moderate("archived")}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+                  >
+                    <Archive className="h-3.5 w-3.5" /> Archive
+                  </button>
+                </>
+              )}
+              {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
+            </div>
           </div>
         )}
       </div>
@@ -963,18 +979,28 @@ export default function JobsGigsControl() {
     };
   }, [overviewSummary, postings]);
 
-  const updatePosting = async (posting: JobsGigsPosting, status: string) => {
+  /**
+   * Moderates one posting. The reason is optional but recommended: it is stored
+   * with the action and shown in Moderation → Activity log.
+   */
+  const updatePosting = async (posting: JobsGigsPosting, status: string, reason?: string) => {
     const key = `${posting.type}-${posting.id}`;
     setSavingKey(key);
     try {
-      const res = await api.patch(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`, { status });
+      const res = await api.patch(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`, {
+        status,
+        reason: reason?.trim() || undefined,
+      });
       showSuccessToast(`${posting.postNumber} marked ${status}`);
       if (res.data?.success && res.data.data && selectedPosting && String(selectedPosting.id) === String(posting.id)) {
         setSelectedPosting({ ...selectedPosting, ...res.data.data, type: posting.type });
       }
       await refreshAll();
-    } catch {
-      showErrorToast("Failed to update posting");
+    } catch (err) {
+      showErrorToast(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          "Failed to update posting"
+      );
     } finally {
       setSavingKey(null);
     }

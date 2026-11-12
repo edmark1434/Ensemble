@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
   Eye,
   FileWarning,
@@ -26,7 +25,7 @@ import {
   X,
   Hand,
 } from 'lucide-react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
@@ -48,6 +47,8 @@ import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
 import VideoManagementSection from './VideoManagementSection';
 import ForumManagementSection from './ForumManagementSection';
+import ActivityLogTab, { ActivityTable } from './ActivityLogTab';
+import ActivityDetailModal from './ActivityDetailModal';
 import {
   AdminWarningsPanel,
   type WarningsSection,
@@ -103,14 +104,13 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
 const CASE_QUEUES: CaseQueue[] = ['mine', 'disputes', 'reports', 'listings', 'identity'];
 const POLICY_SECTIONS: WarningsSection[] = ['catalog', 'punishments', 'thresholds'];
 
-type ManagementSection = 'automated' | 'moderators' | 'video' | 'forum';
+type ManagementSection = 'moderators' | 'video' | 'forum';
 
 const MANAGEMENT_SECTIONS: {
   id: ManagementSection;
   label: string;
   icon: typeof Shield;
 }[] = [
-  { id: 'automated', label: 'Auto-mod', icon: Bot },
   { id: 'moderators', label: 'Moderators', icon: UserCog },
   { id: 'video', label: 'Video', icon: Video },
   { id: 'forum', label: 'Forum', icon: MessageSquare },
@@ -135,20 +135,6 @@ function priorityClass(priority: string) {
   return 'bg-zinc-500/15 text-zinc-300 border-white/10';
 }
 
-function statusClass(status: string) {
-  const s = status.toLowerCase();
-  if (s === 'completed' || s === 'resolved' || s === 'approved' || s === 'verified' || s === 'active') {
-    return 'bg-emerald-500/15 text-emerald-300';
-  }
-  if (s === 'reversed' || s === 'dismissed' || s === 'rejected' || s === 'declined') {
-    return 'bg-violet-500/15 text-violet-300';
-  }
-  if (s === 'pending' || s === 'open' || s === 'in progress' || s === 'in_progress') {
-    return 'bg-amber-500/15 text-amber-200';
-  }
-  return 'bg-zinc-500/15 text-zinc-300';
-}
-
 export default function ModerationPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -169,7 +155,7 @@ export default function ModerationPage() {
   const initialMgmtSection =
     paramSection && validMgmtSections.includes(paramSection as ManagementSection)
       ? (paramSection as ManagementSection)
-      : 'automated';
+      : 'moderators';
   const initialPolicySection =
     paramSection && POLICY_SECTIONS.includes(paramSection as WarningsSection)
       ? (paramSection as WarningsSection)
@@ -190,6 +176,8 @@ export default function ModerationPage() {
   const [policySection, setPolicySection] = useState<WarningsSection>(initialPolicySection);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<ModerationActivity | null>(null);
+  // Bumped after a reversal so the activity log refetches its current page.
+  const [activityRefresh, setActivityRefresh] = useState(0);
 
   const load = async (silent = false) => {
     if (!silent && !peekStaffGet(MODERATION_OVERVIEW_URL)) setLoading(true);
@@ -237,9 +225,11 @@ export default function ModerationPage() {
           ? (section as ManagementSection)
           : mgmtSection;
       setMgmtSection(nextSection);
+      prefetchStaffTab('moderation', nextSection);
       setSearchParams({ tab: id, section: nextSection }, { replace: true });
       return;
     }
+    if (id === 'activity') prefetchStaffTab('moderation', 'activity');
     if (id === 'policy') {
       const nextSection =
         section && POLICY_SECTIONS.includes(section as WarningsSection)
@@ -275,6 +265,7 @@ export default function ModerationPage() {
 
   const switchMgmtSection = (section: ManagementSection) => {
     setMgmtSection(section);
+    prefetchStaffTab('moderation', section);
     setSearchParams({ tab: 'management', section }, { replace: true });
   };
 
@@ -399,7 +390,11 @@ export default function ModerationPage() {
           />
         )}
         {tab === 'activity' && (
-          <ActivityTab entries={data.recentActivity} onView={setSelectedActivity} />
+          <ActivityLogTab
+            onView={setSelectedActivity}
+            fallbackEntries={data.recentActivity}
+            refreshToken={activityRefresh}
+          />
         )}
         {tab === 'cases' && (
           <CasesTab
@@ -430,9 +425,12 @@ export default function ModerationPage() {
         <ActivityDetailModal
           activity={selectedActivity}
           onClose={() => setSelectedActivity(null)}
-          onReversed={(entries) => {
-            setData((prev) => (prev ? { ...prev, recentActivity: entries } : prev));
-            setSelectedActivity(null);
+          onReversed={(entry, entries) => {
+            if (entries) {
+              setData((prev) => (prev ? { ...prev, recentActivity: entries } : prev));
+            }
+            if (entry) setSelectedActivity(entry);
+            setActivityRefresh((value) => value + 1);
           }}
         />
       )}
@@ -653,7 +651,7 @@ function ActivityPreview({
           View all
         </button>
       </div>
-      <ActivityTableBody entries={entries} onView={onView} />
+      <ActivityTable entries={entries} onView={onView} compact />
     </section>
   );
 }
@@ -689,135 +687,6 @@ function CasesPreview({
       <CasesTableBody
         cases={preview}
         emptyLabel="No open reports, listing reviews, or identity checks."
-      />
-    </section>
-  );
-}
-
-function ActivityTab({
-  entries,
-  onView,
-}: {
-  entries: ModerationActivity[];
-  onView: (a: ModerationActivity) => void;
-}) {
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-
-  const statusOptions = useMemo(
-    () => uniqueOptions(entries.map((e) => e.status)),
-    [entries]
-  );
-  const categoryOptions = useMemo(
-    () => uniqueOptions(entries.map((e) => e.category)),
-    [entries]
-  );
-  const roleOptions = useMemo(
-    () => uniqueOptions(entries.map((e) => e.executedByRole)),
-    [entries]
-  );
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = entries.filter((a) => {
-      if (statusFilter !== 'all' && a.status.toLowerCase() !== statusFilter) return false;
-      if (categoryFilter !== 'all' && a.category.toLowerCase() !== categoryFilter) return false;
-      if (roleFilter !== 'all' && a.executedByRole.toLowerCase() !== roleFilter) return false;
-      if (!q) return true;
-      return (
-        a.target.toLowerCase().includes(q) ||
-        a.targetHandle.toLowerCase().includes(q) ||
-        a.executedBy.toLowerCase().includes(q) ||
-        a.executedByHandle.toLowerCase().includes(q) ||
-        a.action.toLowerCase().includes(q) ||
-        a.category.toLowerCase().includes(q) ||
-        a.notes.toLowerCase().includes(q)
-      );
-    });
-
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'oldest':
-          return (
-            new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
-          );
-        case 'action':
-          return a.action.localeCompare(b.action);
-        case 'target':
-          return a.target.localeCompare(b.target);
-        case 'newest':
-        default:
-          return (
-            new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
-          );
-      }
-    });
-
-    return list;
-  }, [entries, search, statusFilter, categoryFilter, roleFilter, sortBy]);
-
-  const q = search.trim();
-  const hasFilters =
-    q || statusFilter !== 'all' || categoryFilter !== 'all' || roleFilter !== 'all';
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-      <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search action / target / moderator / notes…"
-            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-          />
-        </div>
-        <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
-          {filtered.length} entr{filtered.length === 1 ? 'y' : 'ies'}
-          {hasFilters ? ` matching filters (of ${entries.length})` : ''}
-        </p>
-        <div className="hidden flex-1 lg:block" />
-        <TableFilterBar
-          filters={[
-            { id: 'status', label: 'Status', value: statusFilter, options: statusOptions },
-            {
-              id: 'category',
-              label: 'Category',
-              value: categoryFilter,
-              options: categoryOptions,
-            },
-            { id: 'role', label: 'Executed by role', value: roleFilter, options: roleOptions },
-          ]}
-          sort={{
-            value: sortBy,
-            options: [
-              { value: 'newest', label: 'Newest first' },
-              { value: 'oldest', label: 'Oldest first' },
-              { value: 'action', label: 'Action A–Z' },
-              { value: 'target', label: 'Target A–Z' },
-            ],
-          }}
-          onFilterChange={(id, value) => {
-            if (id === 'status') setStatusFilter(value);
-            if (id === 'category') setCategoryFilter(value);
-            if (id === 'role') setRoleFilter(value);
-          }}
-          onSortChange={setSortBy}
-          onClear={() => {
-            setStatusFilter('all');
-            setCategoryFilter('all');
-            setRoleFilter('all');
-            setSortBy('newest');
-          }}
-        />
-      </div>
-      <ActivityTableBody
-        entries={filtered}
-        onView={onView}
-        emptyLabel="No activity matches your search or filters."
       />
     </section>
   );
@@ -990,70 +859,6 @@ function CasesTab({
   );
 }
 
-function ActivityTableBody({
-  entries,
-  onView,
-  emptyLabel = 'No activity found.',
-}: {
-  entries: ModerationActivity[];
-  onView: (a: ModerationActivity) => void;
-  emptyLabel?: string;
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] text-left text-sm">
-        <thead>
-          <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase tracking-wide text-zinc-500">
-            <th className="px-4 py-3">Action</th>
-            <th className="px-4 py-3">Target</th>
-            <th className="px-4 py-3">Executed by</th>
-            <th className="px-4 py-3">Time & date</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3 text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((a) => (
-            <tr key={a.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-              <td className="px-4 py-3 text-white">{a.action}</td>
-              <td className="px-4 py-3">
-                <p className="text-zinc-300">{a.target}</p>
-                <p className="text-[10px] text-zinc-600">{a.targetType}</p>
-              </td>
-              <td className="px-4 py-3">
-                <p className="text-zinc-300">{a.executedBy}</p>
-                <p className="text-[10px] text-zinc-600">{a.executedByRole}</p>
-              </td>
-              <td className="px-4 py-3 text-xs text-zinc-500">{formatDateTime(a.timestamp)}</td>
-              <td className="px-4 py-3">
-                <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(a.status)}`}>
-                  {a.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-center">
-                <button
-                  type="button"
-                  onClick={() => onView(a)}
-                  className="rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-              </td>
-            </tr>
-          ))}
-          {entries.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-10 text-center text-zinc-500">
-                {emptyLabel}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function CasesTableBody({
   cases,
   emptyLabel = 'No open cases from current database scan.',
@@ -1189,11 +994,6 @@ function ManagementTab({
   onSaved?: () => void;
 }) {
   const meta: Record<ManagementSection, { title: string; description: string }> = {
-    automated: {
-      title: 'Automod status',
-      description:
-        'Live snapshot of automated rules. Edit them in System Settings → Moderation.',
-    },
     moderators: {
       title: 'Moderator management',
       description: 'Staff roster, roles, and performance across the moderation team.',
@@ -1233,9 +1033,6 @@ function ManagementTab({
         <p className="mt-1 text-sm text-zinc-500">{meta[section].description}</p>
       </div>
 
-      {section === 'automated' && (
-        <AutomatedSettingsSection />
-      )}
       {section === 'moderators' && (
         <ModeratorsSection
           roster={data.moderatorRoster}
@@ -1245,44 +1042,6 @@ function ManagementTab({
       )}
       {section === 'video' && <VideoManagementSection />}
       {section === 'forum' && <ForumManagementSection />}
-    </div>
-  );
-}
-
-function AutomatedSettingsSection() {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <div className="mb-1 flex items-center gap-2">
-          <Bot className="h-5 w-5 text-rose-400" />
-          <h3 className="font-semibold text-white">Automod</h3>
-        </div>
-        <p className="mt-2 text-sm text-zinc-500">
-          Platform Automod toggles were removed from System Settings. Auto-suspend thresholds now live under{' '}
-          <Link
-            to="/admin/moderation?tab=policy&section=thresholds"
-            className="font-medium text-rose-400 hover:underline"
-          >
-            Moderation → Policy
-          </Link>
-          .
-        </p>
-      </section>
-
-      <div className="space-y-4">
-        <SidePanel title="Security (separate)">
-          <p className="text-xs leading-relaxed text-zinc-500">
-            Password length, login lockouts, 2FA, IP allowlist, and audit retention stay under{' '}
-            <strong className="font-medium text-zinc-400">System Settings → Security</strong>.
-          </p>
-          <Link
-            to="/admin/system-settings?tab=security"
-            className="mt-3 inline-flex text-xs font-medium text-rose-400 hover:underline"
-          >
-            Open Settings → Security
-          </Link>
-        </SidePanel>
-      </div>
     </div>
   );
 }
@@ -1974,95 +1733,3 @@ function ConfirmDeleteModal({
   );
 }
 
-function ActivityDetailModal({
-  activity,
-  onClose,
-  onReversed,
-}: {
-  activity: ModerationActivity;
-  onClose: () => void;
-  onReversed?: (entries: ModerationActivity[]) => void;
-}) {
-  const [reversing, setReversing] = useState(false);
-  const canReverse = Boolean(activity.reversible) && activity.status !== 'Reversed';
-
-  const reverseAction = async () => {
-    if (!canReverse || reversing) return;
-    setReversing(true);
-    try {
-      const res = await api.post(`/api/admin/moderation/activity/${activity.id}/reverse`);
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to reverse action');
-      showSuccessToast(res.data.message || 'Action reversed');
-      const entries = Array.isArray(res.data?.data) ? res.data.data : null;
-      if (entries) onReversed?.(entries);
-      else onClose();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to reverse action');
-      showErrorToast(msg);
-    } finally {
-      setReversing(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
-        <h2 className="text-lg font-bold text-white">{activity.action}</h2>
-        <p className="mt-1 text-xs text-zinc-500">{formatDateTime(activity.timestamp)}</p>
-        <dl className="mt-4 space-y-3 text-sm">
-          <div>
-            <dt className="text-zinc-600">Target</dt>
-            <dd className="text-white">
-              {activity.target} ({activity.targetType})
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-600">Executed by</dt>
-            <dd className="text-white">
-              {activity.executedBy} — {activity.executedByRole}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-600">Category</dt>
-            <dd className="text-zinc-300">{activity.category}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-600">Status</dt>
-            <dd>
-              <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(activity.status)}`}>
-                {activity.status}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-600">
-              {activity.category === 'report' ? 'Report details' : 'Notes'}
-            </dt>
-            <dd className="whitespace-pre-wrap break-words text-zinc-400">
-              {activity.notes || 'No additional details provided.'}
-            </dd>
-          </div>
-        </dl>
-        {canReverse && (
-          <button
-            type="button"
-            disabled={reversing}
-            onClick={() => void reverseAction()}
-            className="mt-6 w-full rounded-xl border border-violet-500/30 bg-violet-500/10 py-2.5 text-sm text-violet-200 disabled:opacity-50"
-          >
-            {reversing ? 'Reversing…' : 'Reverse this action'}
-          </button>
-        )}
-        {!canReverse && activity.status === 'Reversed' && (
-          <p className="mt-6 text-center text-xs text-zinc-500">This action has already been reversed.</p>
-        )}
-        {!canReverse && activity.status !== 'Reversed' && (
-          <p className="mt-6 text-center text-xs text-zinc-500">This activity cannot be reversed.</p>
-        )}
-      </div>
-    </div>
-  );
-}

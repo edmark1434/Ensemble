@@ -2,7 +2,15 @@ const ACTIVE_FEE_SETTING_IDS = Object.freeze([
   'fee-job',
   'fee-gig',
   'fee-marketplace',
+  'fee-credit-purchase',
+  'fee-credit-refund',
   'fee-cashout',
+  'fee-cancellation',
+  'fee-dispute',
+  'fee-forum',
+  'fee-job-post',
+  'fee-gig-create',
+  'fee-asset-upload',
 ]);
 
 const DEFAULT_SETTINGS = {
@@ -26,7 +34,15 @@ const DEFAULT_SETTINGS = {
       { id: 'fee-job', label: 'Job transaction', percent: 10, flatFee: 0, appliesTo: 'Completed job contracts', paidBy: 'Freelancer', reason: 'Commission for successfully completed jobs' },
       { id: 'fee-gig', label: 'Gig transaction', percent: 10, flatFee: 0, appliesTo: 'Gig purchases', paidBy: 'Freelancer', reason: 'Commission when a client purchases a gig' },
       { id: 'fee-marketplace', label: 'Asset marketplace sale', percent: 15, flatFee: 0, appliesTo: 'Asset sales', paidBy: 'Asset creator', reason: 'Marketplace commission' },
+      { id: 'fee-credit-purchase', label: 'Credit purchase', percent: 0, flatFee: 0, appliesTo: 'Credit top-ups', paidBy: 'Buyer', reason: 'Keep purchasing credits simple' },
+      { id: 'fee-credit-refund', label: 'Credit refund', percent: 0, flatFee: 0, appliesTo: 'Credit refunds', paidBy: '—', reason: 'Better for user trust' },
       { id: 'fee-cashout', label: 'Withdrawal / cashout', percent: 3.5, flatFee: 0, appliesTo: 'Withdrawals', paidBy: 'Seller/Freelancer', reason: 'Covers withdrawal and payment processing (recommended 2–5%)' },
+      { id: 'fee-cancellation', label: 'Job/Gig cancellation', percent: 2.5, flatFee: 0, appliesTo: 'Cancellations', paidBy: 'Depends on situation', reason: 'Discourages abuse and cancellations (recommended 0–5%)' },
+      { id: 'fee-dispute', label: 'Dispute', percent: 0, flatFee: 0, appliesTo: 'Disputes', paidBy: '—', reason: 'Do not charge users for requesting protection' },
+      { id: 'fee-forum', label: 'Forum', percent: 0, flatFee: 0, appliesTo: 'Forum activity', paidBy: '—', reason: 'Community feature should remain accessible' },
+      { id: 'fee-job-post', label: 'Posting a job', percent: 0, flatFee: 50, appliesTo: 'Job posts', paidBy: 'Client', reason: 'Flat credits charged when publishing a job' },
+      { id: 'fee-gig-create', label: 'Creating a gig', percent: 0, flatFee: 50, appliesTo: 'Gig listings', paidBy: 'Freelancer', reason: 'Flat credits charged when publishing a service' },
+      { id: 'fee-asset-upload', label: 'Uploading an asset', percent: 0, flatFee: 0, appliesTo: 'Asset listings', paidBy: 'Asset creator', reason: 'Fallback flat listing fee when marketplace listing fee is unset' },
     ],
     marketplaceSettings: {
       listingFeeCredits: 0,

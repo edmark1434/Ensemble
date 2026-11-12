@@ -673,7 +673,7 @@ export default function SystemSettingsPage() {
                         }}
                       />
                       <NumberField
-                        label="Flat fee (PHP)"
+                        label="Flat fee (credits)"
                         value={f.flatFee}
                         onChange={(v) => {
                           const fees = [...economy.feeSettings];

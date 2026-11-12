@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import api from "@/lib/axios";
+import { getPlatformPostingFees } from "@/lib/platformFees";
 import {
   Check,
   Clock,
@@ -163,8 +164,13 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   isEditMode = false,
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [gigCreateFeeCredits, setGigCreateFeeCredits] = useState(50);
   const [agreedToFee, setAgreedToFee] = useState(false);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setGigCreateFeeCredits(fees.gigCreateFeeCredits));
+  }, []);
   const [copiedTos, setCopiedTos] = useState(false);
 
   const user = useGlobalState((state) => state.user);
@@ -1576,7 +1582,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             <Rocket className="h-4 w-4" />
             <span>Proceed to Checkout</span>
             <span className="px-2 py-0.5 rounded-md bg-blue-700/80 text-[10px] font-extrabold text-blue-100">
-              50 Credits
+              {gigCreateFeeCredits} Credits
             </span>
           </button>
         )}
@@ -1683,7 +1689,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
                   <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300 font-semibold">
                     <span>Marketplace Publication Fee</span>
-                    <span className="font-bold text-red-500 dark:text-red-400">-50 Credits</span>
+                    <span className="font-bold text-red-500 dark:text-red-400">-{gigCreateFeeCredits} Credits</span>
                   </div>
 
                   <div className="pt-2.5 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between font-bold text-zinc-900 dark:text-white">
@@ -1691,18 +1697,18 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                     <span className="flex items-center gap-1.5">
                       <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
                       <span>
-                        {walletBalance !== null ? `${(walletBalance - 50).toLocaleString()} Credits` : "—"}
+                        {walletBalance !== null ? `${(walletBalance - gigCreateFeeCredits).toLocaleString()} Credits` : "—"}
                       </span>
                     </span>
                   </div>
                 </div>
 
                 {/* Insufficient Balance Alert */}
-                {walletBalance !== null && walletBalance < 50 && (
+                {walletBalance !== null && walletBalance < gigCreateFeeCredits && (
                   <div className="flex items-center justify-between p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span className="font-medium">Insufficient balance (requires 50 Credits)</span>
+                      <span className="font-medium">Insufficient balance (requires {gigCreateFeeCredits} Credits)</span>
                     </div>
                     <Link
                       to="/credits/shop"
@@ -1728,7 +1734,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   />
                   <div className="space-y-1">
                     <span className="leading-relaxed select-none block">
-                      I agree to deduct <span className="font-bold text-zinc-950 dark:text-white">50 Credits</span> from my wallet to publish and broadcast this service offering to the live marketplace.
+                      I agree to deduct <span className="font-bold text-zinc-950 dark:text-white">{gigCreateFeeCredits} Credits</span> from my wallet to publish and broadcast this service offering to the live marketplace.
                     </span>
                     {!agreedToFee && (
                       <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
@@ -1751,14 +1757,14 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 </button>
 
                 <SlideCommit
-                  label="Swipe to Pay 50 Credits"
-                  doneLabel="Paid 50 Credits"
+                  label={`Swipe to Pay ${gigCreateFeeCredits} Credits`}
+                  doneLabel={`Paid ${gigCreateFeeCredits} Credits`}
                   errorLabel="Publication Failed"
                   onConfirm={async () => {
                     setIsCheckoutModalOpen(false);
                     await onSubmit();
                   }}
-                  disabled={isSubmitting || !agreedToFee || (walletBalance !== null && walletBalance < 50)}
+                  disabled={isSubmitting || !agreedToFee || (walletBalance !== null && walletBalance < gigCreateFeeCredits)}
                   width={260}
                   height={46}
                   trackColor={isDark ? "#27272a" : "#e4e4e7"}

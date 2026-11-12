@@ -1,14 +1,14 @@
-# Active Task: Reorganize admin nav (Moderation / Settings)
+# Active Task: Restore Fee management rows + wire posting fees
 
 ## Implementation Objective
 
-Remove the duplicate Reports sidebar item. Move Warnings & punishments into Moderation as a polished Policy area. Move Badges under System Settings.
+Bring back all previously removed Economy → Fee management rows, and wire the posting/listing ones into the live charge paths that were still hardcoded.
 
 ## Acceptance Criteria
 
-- [x] Admin sidebar no longer lists Reports, Badges, or Warnings & punishments as top-level items.
-- [x] Reports remain reachable only via Moderation → Pending cases → Reports.
-- [x] Warnings library, punishments, and thresholds live inside Moderation with a professional Policy UI.
-- [x] Badges live under System Settings (Catalog / Grant).
-- [x] Old `/admin/warnings` and `/admin/badges` URLs redirect cleanly.
+- [x] All original fee rows are back in defaults, admin UI, and allowed ID list.
+- [x] Job posting fee reads `fee-job-post` (fallback 50 credits).
+- [x] Gig/service posting fee reads `fee-gig-create` (fallback 50 credits).
+- [x] Asset listing fee can use `fee-asset-upload` as fallback for listing credits.
+- [x] Public config exposes posting fee amounts for checkout UI.
 - [x] Frontend typecheck passes.

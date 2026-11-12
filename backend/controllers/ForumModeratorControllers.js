@@ -2,12 +2,6 @@ const {
   getForumOverview,
   getForumTickets,
   getForumReports,
-  getModeratorForumGroups,
-  setForumGroupStatus,
-  getModeratorForumDiscussions,
-  getModeratorForumDiscussionDetail,
-  setForumDiscussionStatus,
-  removeForumDiscussionComment,
   getTicketDetail,
   updateTicket,
   addTicketMessage,
@@ -16,9 +10,18 @@ const {
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,
-  setForumGroupMemberBan,
 } = require('../services/ForumModeratorServices');
+// Group and discussion moderation is the same service the admin console calls,
+// so this desk gets the same guards and the same account-activity audit trail.
+const forumContent = require('../services/ForumContentModerationServices');
 const { FORUM_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
+
+function sendForumContentError(res, err, fallback) {
+  const message = String(err?.message || '');
+  const status = err?.statusCode || (message.includes('MongoDB') ? 503 : 500);
+  if (status >= 500 && !message.includes('MongoDB')) console.error(fallback, err);
+  res.status(status).json({ success: false, message: status < 500 || message.includes('MongoDB') ? message : fallback });
+}
 async function getOverview(req, res) {
   try {
     const data = await getForumOverview();
@@ -137,75 +140,107 @@ async function patchReport(req, res) {
 
 async function getGroups(req, res) {
   try {
-    const data = await getModeratorForumGroups();
+    const data = await forumContent.listForumGroupsForStaff({
+      search: req.query.search,
+      status: req.query.status,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error fetching forum groups:', err);
-    res.status(500).json({ success: false, message: 'Failed to load forum groups' });
+    sendForumContentError(res, err, 'Failed to load forum groups');
+  }
+}
+
+async function getGroup(req, res) {
+  try {
+    const data = await forumContent.getForumGroupForStaff(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Group not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    sendForumContentError(res, err, 'Failed to load forum group');
   }
 }
 
 async function patchGroup(req, res) {
   try {
-    const data = await setForumGroupStatus(req.params.id, req.body.status);
-    res.status(200).json({ success: true, data });
+    const data = await forumContent.setForumGroupVisibility(
+      req.params.id,
+      req.body || {},
+      req.session
+    );
+    res.status(200).json({
+      success: true,
+      data,
+      message: data?.status === 'active' ? 'Group is active again' : 'Group archived',
+    });
   } catch (err) {
-    console.error('Error updating forum group:', err);
-    res.status(500).json({ success: false, message: err.message || 'Failed to update forum group' });
+    sendForumContentError(res, err, 'Failed to update forum group');
   }
 }
 
 async function getDiscussions(req, res) {
   try {
-    const data = await getModeratorForumDiscussions({ groupId: req.query.groupId, search: req.query.search });
+    const data = await forumContent.listForumDiscussionsForStaff({
+      groupId: req.query.groupId,
+      search: req.query.search,
+      status: req.query.status,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error fetching forum discussions:', err);
-    res.status(500).json({ success: false, message: 'Failed to load discussions' });
+    sendForumContentError(res, err, 'Failed to load discussions');
   }
 }
 
 async function getDiscussion(req, res) {
   try {
-    const data = await getModeratorForumDiscussionDetail(req.params.id);
+    const data = await forumContent.getForumDiscussionForStaff(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Discussion not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error fetching discussion detail:', err);
-    res.status(500).json({ success: false, message: 'Failed to load discussion' });
+    sendForumContentError(res, err, 'Failed to load discussion');
   }
 }
 
 async function patchDiscussion(req, res) {
   try {
-    const data = await setForumDiscussionStatus(req.params.id, req.body);
-    if (!data) return res.status(404).json({ success: false, message: 'Discussion not found' });
-    res.status(200).json({ success: true, data });
+    const data = await forumContent.setForumDiscussionState(
+      req.params.id,
+      req.body || {},
+      req.session
+    );
+    res.status(200).json({ success: true, data, message: 'Discussion updated' });
   } catch (err) {
-    console.error('Error updating discussion:', err);
-    res.status(500).json({ success: false, message: err.message || 'Failed to update discussion' });
+    sendForumContentError(res, err, 'Failed to update discussion');
   }
 }
 
 async function patchGroupMember(req, res) {
   try {
-    const data = await setForumGroupMemberBan(
-      req.params.id, req.params.memberId, Boolean(req.body.isBanned), req.session
+    const data = await forumContent.banForumGroupMember(
+      req.params.id,
+      req.params.memberId,
+      req.body || {},
+      req.session
     );
-    res.status(200).json({ success: true, data });
+    res.status(200).json({
+      success: true,
+      data,
+      message: req.body?.isBanned ? 'Member banned from the group' : 'Member unbanned',
+    });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    sendForumContentError(res, err, 'Failed to update member');
   }
 }
 
 async function deleteComment(req, res) {
   try {
-    const data = await removeForumDiscussionComment(req.params.id, req.params.commentId);
-    if (!data) return res.status(404).json({ success: false, message: 'Discussion not found' });
-    res.status(200).json({ success: true, data });
+    const data = await forumContent.removeForumComment(
+      req.params.id,
+      req.params.commentId,
+      req.session
+    );
+    res.status(200).json({ success: true, data, message: 'Comment removed' });
   } catch (err) {
-    console.error('Error removing comment:', err);
-    res.status(500).json({ success: false, message: err.message || 'Failed to remove comment' });
+    sendForumContentError(res, err, 'Failed to remove comment');
   }
 }
 
@@ -353,6 +388,7 @@ module.exports = {
   getReport,
   patchReport,
   getGroups,
+  getGroup,
   patchGroup,
   patchGroupMember,
   getDiscussions,

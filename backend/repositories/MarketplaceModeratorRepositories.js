@@ -3,6 +3,7 @@ const { QUEUE_SCOPES } = require('../lib/TicketEnums');
 const { MARKETPLACE_REPORT_TYPES } = require('../lib/ReportEnums');
 const { recordAccountActivity } = require('./AccountActivityRepositories');
 const { sendMarketplaceListingNotification } = require('../lib/ModerationPolicy');
+const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
 const { sumActiveWarningPoints } = require('./WarningBandRepositories');
 const { meritFromWarningPoints } = require('../lib/WarningBands');
 const {
@@ -338,6 +339,7 @@ async function getMarketplaceOverview() {
     tickets,
     reports,
     recentListings,
+    staffWorkload,
   ] = await Promise.all([
     pool.query(`
       SELECT
@@ -361,6 +363,8 @@ async function getMarketplaceOverview() {
     getMarketplaceTickets(),
     getMarketplaceReports(),
     fetchListings({ status: 'all' }),
+    // Powers the "assign to" pickers and filters on this desk's queues.
+    fetchStaffWorkload(),
   ]);
 
   const lc = listingCounts.rows[0];
@@ -426,6 +430,7 @@ async function getMarketplaceOverview() {
     recentListings: recentListings.slice(0, 8),
     recentTickets: tickets.slice(0, 10),
     flaggedReports: reports.slice(0, 10),
+    staffWorkload,
     alerts: buildMarketplaceAlerts(lc, tc, reportBreakdown),
     dataSources: {
       tables: ['marketplace_listings', 'tickets', 'reports', 'accounts'],

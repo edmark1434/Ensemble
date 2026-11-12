@@ -5,12 +5,14 @@ const {
   setVideoProjectRemoval,
 } = require('../repositories/AdminVideoRepositories');
 
-const STATUSES = new Set(['all', 'active', 'frozen', 'archived', 'removed']);
+const STATUSES = new Set(['all', 'active', 'frozen', 'archived', 'removed', 'trashed']);
 
 async function listAdminVideoProjects({ status, search }) {
   const normalized = String(status || 'all').toLowerCase();
   if (!STATUSES.has(normalized)) {
-    const error = new Error('Status filter must be all, active, frozen, archived, or removed');
+    const error = new Error(
+      'Status filter must be all, active, frozen, archived, removed, or trashed'
+    );
     error.statusCode = 400;
     throw error;
   }
@@ -24,7 +26,7 @@ async function getAdminVideoProject(projectId) {
 async function freezeAdminVideoProject(projectId, body, session) {
   const action = String(body?.action || '').toLowerCase();
   if (action === 'remove' || action === 'restore') {
-    return setVideoProjectRemoval(projectId, action, session);
+    return setVideoProjectRemoval(projectId, action, session, { note: body?.note });
   }
   return setVideoProjectFreeze(projectId, {
     action,

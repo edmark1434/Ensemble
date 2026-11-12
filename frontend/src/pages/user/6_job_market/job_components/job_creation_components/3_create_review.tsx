@@ -48,6 +48,7 @@ import useGlobalState from "@/lib/global_state";
 import { computeJobRankingBreakdown } from "../../job_ranking";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import type { Job } from "../job_lists";
+import { getPlatformPostingFees } from "@/lib/platformFees";
 import { constructAvatarUrl } from "@/lib/accountAvatars";
 
 interface CreateReviewProps {
@@ -243,8 +244,13 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   preScopedMilestones = [],
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [postingFeeCredits, setPostingFeeCredits] = useState(50);
   const [agreedToFee, setAgreedToFee] = useState(false);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setPostingFeeCredits(fees.jobPostFeeCredits));
+  }, []);
   const [filePreviewModal, setFilePreviewModal] = useState<{
     isOpen: boolean;
     file: File | null;
@@ -378,7 +384,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       applicationDeadline: new Date(Date.now() + applicationWindowHours * 3600 * 1000).toISOString(),
       isUrgent: isUrgent || applicationWindowHours <= 24,
       hardDeadline: hasHardDeadline && hardDeadline ? hardDeadline : null,
-      postingFeeCredits: 50,
+      postingFeeCredits,
       portfolioUseAllowed,
       portfolioDuration: portfolioDuration ? Number(portfolioDuration) : null,
       isExistingProject,
@@ -417,6 +423,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
     briefFiles,
     rawSubscriptionPlan,
     clientProfileVisibility,
+    postingFeeCredits,
   ]);
 
 
@@ -1780,7 +1787,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                     <span>100% Refund Guarantee Protected</span>
                   </div>
                   <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
-                    If zero proposals are received by the end of your application window, the 50 Credits posting fee is automatically refunded to your wallet in full.
+                    If zero proposals are received by the end of your application window, the {postingFeeCredits} Credits posting fee is automatically refunded to your wallet in full.
                   </p>
                 </div>
 
@@ -1798,7 +1805,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
                   <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300 font-semibold">
                     <span>Marketplace Publication Fee</span>
-                    <span className="font-bold text-red-500 dark:text-red-400">-50 Credits</span>
+                    <span className="font-bold text-red-500 dark:text-red-400">-{postingFeeCredits} Credits</span>
                   </div>
 
                   <div className="pt-2.5 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between font-bold text-zinc-900 dark:text-white">
@@ -1806,18 +1813,18 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                     <span className="flex items-center gap-1.5">
                       <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
                       <span>
-                        {walletBalance !== null ? `${(walletBalance - 50).toLocaleString()} Credits` : "—"}
+                        {walletBalance !== null ? `${(walletBalance - postingFeeCredits).toLocaleString()} Credits` : "—"}
                       </span>
                     </span>
                   </div>
                 </div>
 
                 {/* Insufficient Balance Alert */}
-                {walletBalance !== null && walletBalance < 50 && (
+                {walletBalance !== null && walletBalance < postingFeeCredits && (
                   <div className="flex items-center justify-between p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span className="font-medium">Insufficient balance (requires 50 Credits)</span>
+                      <span className="font-medium">Insufficient balance (requires {postingFeeCredits} Credits)</span>
                     </div>
                     <Link
                       to="/credits/shop"
@@ -1843,7 +1850,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   />
                   <div className="space-y-1">
                     <span className="leading-relaxed select-none block">
-                      I agree to deduct <span className="font-bold text-zinc-950 dark:text-white">50 Credits</span> from my wallet to publish and broadcast this post to the live marketplace.
+                      I agree to deduct <span className="font-bold text-zinc-950 dark:text-white">{postingFeeCredits} Credits</span> from my wallet to publish and broadcast this post to the live marketplace.
                     </span>
                     {!agreedToFee && (
                       <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
@@ -1866,14 +1873,14 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 </button>
 
                 <SlideCommit
-                  label="Swipe to Pay 50 Credits"
-                  doneLabel="Paid 50 Credits"
+                  label={`Swipe to Pay ${postingFeeCredits} Credits`}
+                  doneLabel={`Paid ${postingFeeCredits} Credits`}
                   errorLabel="Publication Failed"
                   onConfirm={async () => {
                     await onSubmit();
                     setIsCheckoutModalOpen(false);
                   }}
-                  disabled={isSubmitting || !agreedToFee || (walletBalance !== null && walletBalance < 50)}
+                  disabled={isSubmitting || !agreedToFee || (walletBalance !== null && walletBalance < postingFeeCredits)}
                   width={260}
                   height={46}
                   trackColor={isDark ? "#27272a" : "#e4e4e7"}

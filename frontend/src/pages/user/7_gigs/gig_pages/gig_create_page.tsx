@@ -8,6 +8,7 @@ import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import { getPlatformPostingFees, peekPlatformPostingFees } from "@/lib/platformFees";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { requireVerifiedAccount } from "@/lib/accountVerification";
 
@@ -187,6 +188,11 @@ const GigCreatePage: React.FC = () => {
   });
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [gigCreateFeeCredits, setGigCreateFeeCredits] = useState(() => peekPlatformPostingFees().gigCreateFeeCredits);
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setGigCreateFeeCredits(fees.gigCreateFeeCredits));
+  }, []);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
 
   // --- STEP 1: IDENTITY ---
@@ -510,7 +516,7 @@ const GigCreatePage: React.FC = () => {
         if (stage === "uploading_media" && currentFileName) {
           text = `Uploading ${currentFileName} (${Math.round(uploadRatio * 100)}%)`;
         } else if (stage === "saving_service") {
-          text = "Deducting 50 Credits & broadcasting listing...";
+          text = `Deducting ${gigCreateFeeCredits} Credits & broadcasting listing...`;
         } else if (stage === "completed") {
           text = "Service published successfully!";
         } else {
@@ -582,7 +588,7 @@ const GigCreatePage: React.FC = () => {
         undefined,
         undefined,
         90,
-        "Deducting 50 Credits & registering service on marketplace..."
+        `Deducting ${gigCreateFeeCredits} Credits & registering service on marketplace...`
       );
 
       const finalQuestionnaires = [...questionnaires];

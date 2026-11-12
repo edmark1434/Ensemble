@@ -56,6 +56,8 @@ const {
   deleteAdminModerationCase,
   postAdminModerationCaseAssignMyself,
   postAdminModerationActivityReverse,
+  getAdminModerationActivity,
+  getAdminModerationActivityDetail,
 } = require('../controllers/AdminModerationControllers');
 const {
   getAdminAnalyticsOverview,
@@ -130,6 +132,8 @@ router.delete('/moderation/forum/discussions/:discussionId/comments/:commentId',
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
+router.get('/moderation/activity', [checkSession, requireAdmin], getAdminModerationActivity);
+router.get('/moderation/activity/:id', [checkSession, requireAdmin], getAdminModerationActivityDetail);
 router.post('/moderation/activity/:id/reverse', [checkSession, requireAdmin], postAdminModerationActivityReverse);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/analytics/platform-transactions', [checkSession, requireAdmin], getAdminPlatformTransactions);

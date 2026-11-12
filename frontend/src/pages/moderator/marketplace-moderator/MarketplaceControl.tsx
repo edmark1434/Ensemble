@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   ShoppingBag,
+  Undo2,
   XCircle,
 } from 'lucide-react';
 import api from '@/lib/axios';
@@ -236,8 +237,11 @@ export default function MarketplaceControl() {
       } as const;
       showSuccessToast(labels[status]);
       await refreshAll();
-    } catch {
-      showErrorToast('Failed to update listing');
+    } catch (err) {
+      showErrorToast(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Failed to update listing'
+      );
     } finally {
       setSavingId(null);
     }
@@ -554,6 +558,21 @@ export default function MarketplaceControl() {
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
                                 <Archive className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          )}
+                          {(l.status === 'rejected' || l.status === 'delisted') && (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void moderate(l, 'approved')}
+                              title={l.status === 'delisted' ? 'Relist' : 'Reinstate'}
+                              className="rounded-lg border border-emerald-500/25 p-1.5 text-emerald-400 transition hover:bg-emerald-500/10 disabled:opacity-50"
+                            >
+                              {saving ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Undo2 className="h-3.5 w-3.5" />
                               )}
                             </button>
                           )}
