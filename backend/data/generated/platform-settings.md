@@ -5,10 +5,13 @@ This document lists the current public Ensemble platform settings, credit packag
 ## Platform information
 
 - Platform name: Ensemble
-- Tagline: Creative collaboration platform
 - New-user registration enabled: Yes
-- Maximum upload size: 50 MB
+- Maintenance mode: No
 - Support email: support@ensemble.app
+
+## Credit value
+
+- 1 platform credit = 1 PHP
 
 ## Active credit packages
 
@@ -35,6 +38,5 @@ This document lists the current public Ensemble platform settings, credit packag
 
 - Listing fee: 0 credits
 - Transaction fee: 15%
-- Escrow holding period: 7 days
 - Minimum payout: 500 credits
 - Refund window: 14 days
