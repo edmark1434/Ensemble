@@ -2,7 +2,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { chunkSections } = require('./ChunkServices');
 const { createEmbedding } = require('./EmbeddingServices');
-const { replaceDocumentChunks } = require('../repositories/DocumentRepositories');
+const { replaceDocumentChunks, pruneDocumentChunks } = require('../repositories/DocumentRepositories');
 const { generateDatabaseDocumentation } = require('./DatabaseDocumentationServices');
 
 const DATA_ROOT = path.resolve(__dirname, '../data');
@@ -71,6 +71,7 @@ async function ingestDocumentation() {
   const sources = await loadEnabledSources();
   const results = [];
   for (const source of sources) results.push(await ingestSource(source));
+  await pruneDocumentChunks(results.map((item) => item.url));
   return results;
 }
 

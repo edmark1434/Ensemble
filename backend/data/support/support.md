@@ -1,35 +1,24 @@
-# Support, Feedback, and Notifications
+# Support Channels and Getting Help
 
-## Submit a ticket
+Routes: `/landing/AskOurChatbot`, `/support/ticket`, `/notifications`, `/settings`
 
-Route: `/landing/SubmitATicket`
+Ensemble offers self-service guides, an AI support assistant, interactive walkthroughs, and human support tickets depending on what you need.
 
-Source: `frontend/src/pages/landing/pages/page_SubmitATicket.tsx`
+## Self-service guides and AI assistant
 
-An authenticated user can submit a support ticket by selecting a ticket type and providing a subject and detailed description. Unauthenticated users are redirected to login. Submitted tickets receive a ticket number when returned by the backend. The page says support follows up within 24 hours; this is a displayed service expectation, not a guarantee the assistant can enforce.
+- **Ask Our Chatbot (`/landing/AskOurChatbot`):** Get quick answers about Ensemble features, workflows, pricing plans, credits, verification, policies, and where to find pages. The assistant cannot check private account records, modify balances, or lift restrictions directly.
+- **Frequently Asked Questions (`/landing/FAQ`):** Browse common questions on unified accounts, hiring, escrow, milestone windows, AI studio features, security, and payouts.
+- **Help tab in Settings (`/settings`):** Launch the interactive Platform Walkthrough anytime or jump straight to the FAQ and ticket pages.
 
-## Feedback
+## Submitting a support ticket
 
-Route: `/landing/SendAFeedback`
+Route: `/support/ticket` (old links to `/landing/SubmitATicket` redirect here)
 
-Source: `frontend/src/pages/landing/pages/page_SendAFeedback.tsx`
+When you need human investigation-such as missing credits, payout questions, verification issues, account compromise, bug reports tied to your account, or appealing an account penalty-submit a ticket on `/support/ticket`.
 
-The feedback page displays a rating selector and comments field. Its current component only changes local UI state and does not call a persistence API. Do not tell users their feedback was durably submitted based solely on this page.
+You must be signed in to submit a ticket so support can tie the request to your account. If you are signed out, you will be prompted to log in first. Banned or locked member accounts can still sign in and submit appeals or view tickets on `/account/appeal`.
 
-## Notifications
+## Notifications and feedback
 
-Route: `/notifications`
-
-The notifications page displays durable account notifications supplied by the backend. Realtime delivery can update the UI, while refreshing retrieves authoritative records.
-
-## Help in settings
-
-Route: `/settings`
-
-The user settings area includes help and legal sections in addition to account, wallet, subscription, and display settings.
-
-## Ask the chatbot
-
-Route: `/landing/AskOurChatbot`
-
-The documentation assistant should answer from this curated knowledge dataset and return only route URLs supplied by retrieval.
+- **Notifications (`/notifications`):** View real-time alerts for contracts, milestones, proposals, gig orders, badge grants (with a **Claim** button), verification updates, and account notices.
+- **Send Feedback (`/landing/SendAFeedback`):** Share feature requests, UI/UX suggestions, or general product feedback when signed in. Feedback is separate from support tickets and does not open a support thread.

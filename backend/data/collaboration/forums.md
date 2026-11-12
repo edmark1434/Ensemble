@@ -1,26 +1,25 @@
-# Forums
+# Community Forums
 
-Routes: `/forums`, `/forums/group/:id`, `/forums/discussion/:postId`
+Route: `/forums`
 
-Sources:
+Ensemble's community forums let creators, freelancers, and clients discuss editing techniques, share feedback, and connect around production topics.
 
-- `frontend/src/pages/user/4_forums/Forums.tsx`
-- `frontend/src/pages/user/4_forums/SelectedGroup.tsx`
-- `frontend/src/pages/user/4_forums/ExpandDiscussion.tsx`
-- `frontend/src/pages/user/4_forums/forum_modals/NewDiscussionModal.tsx`
-- `frontend/src/pages/user/4_forums/forum_modals/EditPostModal.tsx`
-- `frontend/src/pages/user/4_forums/forum_modals/CreateGroupModal.tsx`
+## Browsing groups and discussions
 
-## Forum groups and discussions
+- **Forum Home (`/forums`):** Browse forum groups and recent community discussions.
+- **Forum Groups and Discussions:** Click any group to view its threads, or open a specific discussion to read posts, comments, and replies. (Direct group and discussion links require a valid group or post ID.)
 
-The forum area lets users browse groups, open a selected group, and view an individual discussion. Authorized interfaces support creating groups and creating or editing discussions.
+Guests can browse and read public forum discussions, while creating groups, starting discussions, commenting, replying, and reacting require an active signed-in account.
 
-## Discussion participation
+## Creating posts and media uploads
 
-Discussion pages support posts, comments, replies, and reactions according to the current account's permissions. Media uploads use the platform's prepared-upload flow and effective file-size rules.
+Signed-in users in good standing can create new discussions, edit their own posts, comment, reply, and add reactions. Uploaded images or media attachments follow the platform's maximum upload size in the current platform settings.
 
-## Forum reports and moderation
+## Forum rules, timeouts, and moderation
 
-Forum content can enter report, ticket, dispute, or moderation workflows. Forum moderators have a specialist queue for groups, posts, comments, discussions, and forum reports.
+Follow community conduct rules when posting: avoid spam, off-topic flooding, offensive language, harassment, or sharing copyrighted material without permission.
 
-Dynamic group and discussion routes require a real identifier and accessible resource. The assistant must not claim content was removed, restored, or moderated without an authorized backend action.
+- If your account receives a **Forum Timeout**, you can still read forums and use the rest of Ensemble (jobs, gigs, marketplace, inbox, editor), but you cannot create groups, post, comment, react, or submit forum reports until the timeout ends.
+- Forum writing is also blocked if your Platform Merit is in the **Restricted** (85 to 92) or **Frozen** (84 or below) band, or while suspended/locked/banned.
+
+If you encounter a rule-breaking post or member, use the in-app report option or submit a ticket on `/support/ticket` under **Forum**.
