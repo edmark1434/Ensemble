@@ -282,6 +282,23 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     }
   };
 
+  const handleSaveBudget = async (budgetCredits: number | null) => {
+    try {
+      const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
+      const saved = data?.data?.budget_credits ?? null;
+      setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
+      if (saved !== null && Number(saved) > 0) {
+        toast.success(`Planned budget updated to ${Number(saved).toLocaleString()} Credits!`);
+      } else {
+        toast.success("Planned budget removed.");
+      }
+    } catch (err: any) {
+      console.error("Failed to save budget:", err);
+      toast.error(err?.response?.data?.message || "Failed to update budget");
+      throw err;
+    }
+  };
+
   const uploadFile = async (file: File, folder: "profile" | "documents" = "profile"): Promise<string> => {
     try {
       return (await uploadFileWithIntent(file, folder)).key;
@@ -1055,11 +1072,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             completionScore={completionScore}
             completionSteps={completionSteps}
             getProgressColor={getProgressColor}
-            onSaveBudget={async (budgetCredits) => {
-              const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
-              const saved = data?.data?.budget_credits ?? null;
-              setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
-            }}
+            onSaveBudget={handleSaveBudget}
             currentBudget={userDetails?.budget_credits ?? null}
             onWalkthroughComplete={() => {
               if (completionScore === 100) {
@@ -1132,11 +1145,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0}
               freelancerReviews={Number(userDetails?.freelancer_service_count || 0) + Number(userDetails?.freelancer_job_count || 0)}
               budgetCredits={userDetails?.budget_credits ?? null}
-              onSaveBudget={async (budgetCredits) => {
-                const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
-                const saved = data?.data?.budget_credits ?? null;
-                setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
-              }}
+              onSaveBudget={handleSaveBudget}
             />
             <BadgeSideSection_ProfileDisplay
               loading={loading}
