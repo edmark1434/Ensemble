@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import api from "@/lib/axios";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -36,6 +38,7 @@ export type TabType =
   | "assets"
   | "performance"
   | "disputes";
+
 type PerformanceSubTab = "ratings" | "reviews" | "history" | "records";
 
 /** Legacy profile tab query values map onto the merged Disputes tab. */
@@ -56,11 +59,14 @@ export function normalizeProfileTab(tab: string | null | undefined): TabType {
   return known.includes(tab as TabType) ? (tab as TabType) : "introduction";
 }
 
+export const parseProfileTab = normalizeProfileTab;
+
 interface DetailsListBodyProps {
   loading?: boolean;
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   portfolioItems?: any[];
+  galleryCount?: number;
   services?: any[];
   isOwner?: boolean;
   onUploadPDF?: (file: File) => Promise<void>;
@@ -78,15 +84,26 @@ interface DetailsListBodyProps {
   accountId?: string;
 }
 
-const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
-  { key: "introduction", label: "Introduction", icon: <User className="h-3.5 w-3.5" /> },
-  { key: "portfolio", label: "Portfolio", icon: <FolderOpen className="h-3.5 w-3.5" /> },
-  { key: "gallery", label: "Gallery", icon: <ImageIcon2 className="h-3.5 w-3.5" /> },
-  { key: "services", label: "Services", icon: <Briefcase className="h-3.5 w-3.5" /> },
-  { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
-  { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
-  { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
-  { key: "disputes", label: "Disputes", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
+interface TabConfig {
+  key: TabType;
+  label: string;
+  icon: React.ReactNode;
+}
+
+// Row 1: Introduction | Portfolio | Gallery | Disputes
+const ROW_1_TABS: TabConfig[] = [
+  { key: "introduction", label: "Introduction", icon: <User className="h-4 w-4" /> },
+  { key: "portfolio", label: "Portfolio", icon: <FolderOpen className="h-4 w-4" /> },
+  { key: "gallery", label: "Gallery", icon: <ImageIcon2 className="h-4 w-4" /> },
+  { key: "disputes", label: "Disputes", icon: <ShieldAlert className="h-4 w-4" /> },
+];
+
+// Row 2: Assets | Services | Job Posts | Performance
+const ROW_2_TABS: TabConfig[] = [
+  { key: "assets", label: "Assets", icon: <ImageIcon className="h-4 w-4" /> },
+  { key: "services", label: "Services", icon: <Briefcase className="h-4 w-4" /> },
+  { key: "job-posts", label: "Job Posts", icon: <FileText className="h-4 w-4" /> },
+  { key: "performance", label: "Performance", icon: <Activity className="h-4 w-4" /> },
 ];
 
 function disputeStatusLabel(status?: string) {
@@ -121,31 +138,34 @@ function ProfileDisputeList({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
         <div>
-          <h4 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h4>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">{description}</p>
+          <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-amber-500" />
+            {title}
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">{description}</p>
         </div>
         {isOwner && (
           <button
             type="button"
             onClick={onOpenCenter}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 px-3 py-1.5 text-xs font-bold text-gray-800 dark:text-zinc-200 transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/5 transition"
           >
-            <span>Open Dispute Center</span>
+            <span>Open Resolution Center</span>
             <ExternalLink className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {disputes.length === 0 ? (
-        <div className="py-10 text-center space-y-1.5">
-          <ShieldCheck className="h-7 w-7 text-emerald-500/80 mx-auto" />
-          <p className="text-sm font-bold text-gray-900 dark:text-white">{emptyTitle}</p>
-          <p className="text-xs text-gray-500 dark:text-zinc-400">{emptyDetail}</p>
+      {!disputes.length ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-8 text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-gray-300 dark:text-zinc-600 mb-2" />
+          <p className="text-sm font-semibold text-gray-700 dark:text-zinc-300">{emptyTitle}</p>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">{emptyDetail}</p>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {disputes.map((dispute) => (
             <Link
               key={dispute.id}
@@ -180,10 +200,9 @@ function ProfileDisputeList({
 
 export const DetailsListBodySkeleton: React.FC = () => (
   <div className="space-y-4 animate-pulse">
-    <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-white/5 pb-3">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className="h-8 w-24 bg-gray-200 dark:bg-dark-elevated rounded-xl" />
-      ))}
+    <div className="bg-gray-100/70 dark:bg-dark-base/60 border border-gray-200/80 dark:border-white/10 p-2 rounded-2xl w-full flex flex-col gap-2">
+      <div className="h-8 w-full bg-gray-200 dark:bg-dark-elevated rounded-xl" />
+      <div className="h-8 w-full bg-gray-200 dark:bg-dark-elevated rounded-xl" />
     </div>
     <div className="border border-gray-200 dark:border-white/10 bg-white/40 dark:bg-dark-base/40 rounded-2xl h-[720px] w-full" />
   </div>
@@ -194,6 +213,8 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   activeTab,
   onTabChange,
   portfolioItems = [],
+  galleryCount,
+  services = [],
   isOwner = false,
   onUploadPDF,
   onAddExternalLink,
@@ -206,6 +227,123 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   const navigate = useNavigate();
   const [performanceTab, setPerformanceTab] = useState<PerformanceSubTab>("ratings");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("All");
+
+  // Container ref and narrow mode state for responsive icon-only collapse (< 640px)
+  const navContainerRef = useRef<HTMLDivElement>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [hoveredTab, setHoveredTab] = useState<{
+    label: string;
+    count?: number;
+    rect: DOMRect;
+  } | null>(null);
+
+  // ResizeObserver to detect narrow navigation container (< 640px)
+  useEffect(() => {
+    const el = navContainerRef.current;
+    if (!el) return;
+
+    const checkWidth = () => {
+      setIsNarrow(el.clientWidth < 640);
+    };
+
+    checkWidth();
+    const ro = new ResizeObserver(() => checkWidth());
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, []);
+
+  // Dismiss tooltip on window scroll or resize
+  useEffect(() => {
+    if (!hoveredTab) return;
+    const handleClear = () => setHoveredTab(null);
+    window.addEventListener("scroll", handleClear, { passive: true });
+    window.addEventListener("resize", handleClear);
+    return () => {
+      window.removeEventListener("scroll", handleClear);
+      window.removeEventListener("resize", handleClear);
+    };
+  }, [hoveredTab]);
+
+  // Accurate live counters
+  const [openServicesCount, setOpenServicesCount] = useState<number | null>(null);
+  const [openJobsCount, setOpenJobsCount] = useState<number | null>(null);
+  const [assetsCount, setAssetsCount] = useState<number | null>(null);
+  const [internalGalleryCount, setInternalGalleryCount] = useState<number | null>(null);
+
+  // Fetch accurate live counts for Open Services, Open Jobs, Uploaded Assets, and Galleries
+  useEffect(() => {
+    if (!accountId) return;
+    let isMounted = true;
+
+    // Gallery count (if not passed as prop)
+    if (typeof galleryCount !== "number") {
+      api.get(`/api/accounts/${accountId}/galleries`)
+        .then((res) => {
+          if (isMounted) {
+            const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+            setInternalGalleryCount(list.length);
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Open Services count (count only Open status for this user)
+    api.get("/api/gigs")
+      .then((res) => {
+        if (isMounted) {
+          const list = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+          const openCount = list.filter((g: any) => {
+            const creatorId =
+              g.freelancerAccountId ??
+              g.freelancer_account_id ??
+              g.account_id ??
+              g.accountId ??
+              g.client_account_id ??
+              g.user_id ??
+              g.userId;
+            const isMatch = creatorId && String(creatorId).toLowerCase() === String(accountId).toLowerCase();
+            const isOpen = String(g.status || "open").toLowerCase() === "open";
+            return isMatch && isOpen;
+          }).length;
+          setOpenServicesCount(openCount);
+        }
+      })
+      .catch(() => {});
+
+    // Open Job Posts count (count only Open status for this client)
+    api.get("/api/jobs")
+      .then((res) => {
+        if (isMounted) {
+          const list = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data?.jobs) ? res.data.jobs : Array.isArray(res.data) ? res.data : [];
+          const openCount = list.filter((j: any) => {
+            const clientId = j.client_account_id ?? j.clientAccountId ?? j.account_id ?? j.accountId;
+            const isMatch = clientId && String(clientId).toLowerCase() === String(accountId).toLowerCase();
+            const isOpen = String(j.status || "open").toLowerCase() === "open";
+            return isMatch && isOpen;
+          }).length;
+          setOpenJobsCount(openCount);
+        }
+      })
+      .catch(() => {});
+
+    // Uploaded Assets count (must use creatorAccountId so platform assets are not counted)
+    const assetParams = isOwner
+      ? { view: "mine", pageSize: 100 }
+      : { creatorAccountId: accountId, pageSize: 100 };
+    api.get("/api/assets", { params: assetParams })
+      .then((res) => {
+        if (isMounted) {
+          const list = Array.isArray(res.data?.assets) ? res.data.assets : Array.isArray(res.data) ? res.data : [];
+          setAssetsCount(list.length);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accountId, galleryCount, isOwner]);
 
   if (loading) return <DetailsListBodySkeleton />;
 
@@ -222,39 +360,149 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   });
   const openDisputeCenter = () => navigate("/contracts/disputes");
 
-  return (
-    <div className="space-y-5 font-['Plus Jakarta Sans',sans-serif]">
-      {/* ==================== SMOOTH NAVIGATION BAR ==================== */}
-      <div
-        data-tour="profile-tabs"
-        className="flex flex-wrap gap-1 bg-gray-100/50 dark:bg-dark-base/40 border border-gray-200 dark:border-white/5 p-1 rounded-2xl w-fit"
+  const getTabCount = (key: TabType): number | undefined => {
+    switch (key) {
+      case "portfolio":
+        // Count only Number of Materials on a portfolio
+        return Array.isArray(portfolioItems) && portfolioItems.length > 0 ? portfolioItems.length : undefined;
+      case "gallery": {
+        // Count the number of gallery uploads present
+        const count = typeof galleryCount === "number" ? galleryCount : internalGalleryCount;
+        return typeof count === "number" && count > 0 ? count : undefined;
+      }
+      case "services": {
+        // Count the number of Open Services
+        if (typeof openServicesCount === "number") return openServicesCount > 0 ? openServicesCount : undefined;
+        const c = userDetails?.total_services ?? userDetails?.totalServices;
+        return typeof c === "number" && c > 0 ? c : undefined;
+      }
+      case "job-posts": {
+        // Count the number of Open Job posts
+        if (typeof openJobsCount === "number") return openJobsCount > 0 ? openJobsCount : undefined;
+        const c = userDetails?.total_jobs ?? userDetails?.totalJobs;
+        return typeof c === "number" && c > 0 ? c : undefined;
+      }
+      case "assets": {
+        // Count the Number of Assets uploaded (never fall back to stale mock/foreign count if fetched)
+        if (typeof assetsCount === "number") return assetsCount > 0 ? assetsCount : undefined;
+        return undefined;
+      }
+      case "disputes":
+        return Array.isArray(disputesSorted) && disputesSorted.length > 0 ? disputesSorted.length : undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  const renderTab = (tab: TabConfig) => {
+    const isActive = activeTab === tab.key;
+    const count = getTabCount(tab.key);
+    return (
+      <button
+        key={tab.key}
+        data-tab-key={tab.key}
+        onClick={() => onTabChange(tab.key)}
+        onMouseEnter={(e) => {
+          if (!isNarrow) return;
+          setHoveredTab({
+            label: tab.label,
+            count,
+            rect: e.currentTarget.getBoundingClientRect(),
+          });
+        }}
+        onMouseLeave={() => setHoveredTab(null)}
+        className={`group relative flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-2 sm:px-3 py-2 text-xs font-bold tracking-wide transition-all duration-200 select-none cursor-pointer min-w-0 ${
+          isActive
+            ? "text-white"
+            : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/60 dark:hover:bg-white/[0.06]"
+        }`}
       >
-        {tabOptions.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => onTabChange(tab.key)}
-              className={`relative flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold tracking-wide transition-colors duration-200 select-none cursor-pointer ${
-                isActive ? "text-white" : "text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200"
+        {isActive && (
+          <motion.div
+            layoutId="activeTabPill"
+            className="absolute inset-0 bg-blue-600 rounded-xl shadow-sm shadow-blue-600/20 z-0"
+            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+          />
+        )}
+
+        <span className="relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 min-w-0">
+          <span className="shrink-0">{tab.icon}</span>
+          {!isNarrow && <span className="truncate">{tab.label}</span>}
+          {typeof count === "number" && count > 0 && (
+            <span
+              className={`inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[10px] font-black shrink-0 transition-colors ${
+                isActive
+                  ? "bg-white/25 text-white"
+                  : "bg-gray-200/80 dark:bg-white/10 text-gray-600 dark:text-zinc-300 group-hover:bg-gray-300/80 dark:group-hover:bg-white/20"
               }`}
             >
-              {isActive && (
-                <motion.div
-                  layoutId="activeTabPill"
-                  className="absolute inset-0 bg-blue-600 rounded-xl shadow-md shadow-blue-600/10 border border-blue-500/20 z-0"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
+              {count}
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  };
 
-              <span className="relative z-10 flex items-center gap-2">
-                {tab.icon}
-                <span>{tab.label}</span>
-              </span>
-            </button>
-          );
-        })}
+  return (
+    <div className="space-y-5 font-['Plus Jakarta Sans',sans-serif] min-w-0">
+      {/* ==================== 2-ROW NAVIGATION BAR ==================== */}
+      <div
+        ref={navContainerRef}
+        data-tour="profile-tabs"
+        className="flex flex-col gap-1 w-full bg-gray-100/70 dark:bg-dark-base/60 backdrop-blur-sm border border-gray-200/80 dark:border-white/10 p-1.5 rounded-2xl shadow-xs"
+      >
+        {/* Row 1: Introduction | Portfolio | Gallery | Disputes */}
+        <div className="flex items-center w-full gap-0.5 sm:gap-1">
+          {renderTab(ROW_1_TABS[0])}
+          <div className="h-4 w-px bg-gray-300/80 dark:bg-white/15 mx-0.5 shrink-0" aria-hidden="true" />
+          {renderTab(ROW_1_TABS[1])}
+          <div className="h-4 w-px bg-gray-300/80 dark:bg-white/15 mx-0.5 shrink-0" aria-hidden="true" />
+          {renderTab(ROW_1_TABS[2])}
+          <div className="h-4 w-px bg-gray-300/80 dark:bg-white/15 mx-0.5 shrink-0" aria-hidden="true" />
+          {renderTab(ROW_1_TABS[3])}
+        </div>
+
+        {/* Subtle separator between Row 1 and Row 2 */}
+        <div className="h-px w-full bg-gray-200/60 dark:bg-white/[0.08] my-0.5" aria-hidden="true" />
+
+        {/* Row 2: Assets | Services | Job Posts | Performance */}
+        <div className="flex items-center w-full gap-0.5 sm:gap-1">
+          {renderTab(ROW_2_TABS[0])}
+          <div className="h-4 w-px bg-gray-300/80 dark:bg-white/15 mx-0.5 shrink-0" aria-hidden="true" />
+          {renderTab(ROW_2_TABS[1])}
+          <div className="h-4 w-px bg-gray-300/80 dark:bg-white/15 mx-0.5 shrink-0" aria-hidden="true" />
+          {renderTab(ROW_2_TABS[2])}
+          <div className="h-4 w-px bg-gray-300/80 dark:bg-white/15 mx-0.5 shrink-0" aria-hidden="true" />
+          {renderTab(ROW_2_TABS[3])}
+        </div>
       </div>
+
+      {/* Portal Tooltip: Displays only in narrow icon-only mode */}
+      {hoveredTab &&
+        isNarrow &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              top: hoveredTab.rect.top - 8,
+              left: hoveredTab.rect.left + hoveredTab.rect.width / 2,
+            }}
+            className="fixed -translate-x-1/2 -translate-y-full z-[9999] pointer-events-none animate-in fade-in zoom-in-95 duration-150 transition-transform"
+          >
+            <div className="relative px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap shadow-xl border border-gray-200/90 dark:border-white/10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md text-gray-800 dark:text-zinc-100 flex items-center gap-1.5">
+              <span>{hoveredTab.label}</span>
+              {typeof hoveredTab.count === "number" && hoveredTab.count > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
+                  {hoveredTab.count}
+                </span>
+              )}
+              {/* Downward Caret */}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-white/95 dark:border-t-zinc-900/95" />
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* ==================== CONTENT PANEL LAYER CONTROLLER ==================== */}
       <div className="bg-white/80 dark:bg-dark-base/60 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl min-h-[720px] flex flex-col relative overflow-hidden">
@@ -280,6 +528,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 />
               </div>
             )}
+
             {activeTab === "performance" && (
               <div className="flex flex-col h-full space-y-4">
                 {/* Subtabs for Performance */}
@@ -445,6 +694,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 </div>
               </div>
             )}
+
             {activeTab === "disputes" && (
               <ProfileDisputeList
                 title="Disputes"
@@ -460,6 +710,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 onOpenCenter={openDisputeCenter}
               />
             )}
+
             {activeTab === "portfolio" && (
               <div data-tour="profile-portfolio" className="flex-1 flex flex-col">
                 <Profile_Portfolio
@@ -473,15 +724,19 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 />
               </div>
             )}
+
             {activeTab === "gallery" && (
               <Profile_Gallery accountId={accountId || ""} isOwner={isOwner} />
             )}
+
             {activeTab === "services" && (
               <Profile_Services accountId={accountId} isOwner={isOwner} />
             )}
+
             {activeTab === "job-posts" && (
               <Profile_JobPosts userDetails={userDetails} accountId={accountId} isOwner={isOwner} />
             )}
+
             {activeTab === "assets" && (
               <Profile_Assets accountId={accountId} isOwner={isOwner} isLoading={loading} />
             )}

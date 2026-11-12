@@ -202,10 +202,10 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ accountId, is
                 navigate(`/gigs/services/${gig.id}/page`);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="group relative flex flex-col sm:flex-row cursor-pointer rounded-2xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 overflow-hidden transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
+              className="group relative flex flex-col xl:flex-row cursor-pointer rounded-2xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 overflow-hidden transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
             >
-              {/* Left Thumbnail */}
-              <div className="relative h-44 sm:h-auto sm:min-h-[160px] sm:w-56 shrink-0 overflow-hidden bg-gray-200 dark:bg-zinc-900 border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-white/5 self-stretch">
+              {/* Thumbnail (Top on narrow/split-screen, Left on wide) */}
+              <div className="relative h-44 xl:h-auto xl:min-h-[160px] w-full xl:w-56 shrink-0 overflow-hidden bg-gray-200 dark:bg-zinc-900 border-b xl:border-b-0 xl:border-r border-gray-100 dark:border-white/5 self-stretch">
                 <img
                   src={gig.thumbnail}
                   alt={gig.title}

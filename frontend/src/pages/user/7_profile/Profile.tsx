@@ -1051,10 +1051,10 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30 overflow-x-clip w-full">
       <UserHeader pageTitle="Profile" />
 
-      <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
+      <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5 min-w-0 w-full overflow-x-clip">
 
         {String(userDetails?.status || "").toLowerCase() === "deactivated" && (
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
@@ -1133,9 +1133,9 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         />
 
         {confirmedProfileId === id && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] min-w-0">
 
-          <div className="space-y-4 h-fit">
+          <div className="space-y-4 h-fit min-w-0">
             <RatingsBudgetSideSection_ProfileDisplay
               loading={loading}
               isOwner={isOwner}
@@ -1166,7 +1166,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <MainBody
               loading={loading}
               activeTab={activeTab}
@@ -1174,6 +1174,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
                 setActiveTab(tab);
               }}
               portfolioItems={portfolioItems}
+              galleryCount={galleryCount}
               services={services}
               isOwner={isOwner}
               onUploadPDF={handleUploadResume}

@@ -1,43 +1,24 @@
-# Active Task: Seamless Card Layout across Jobs, Gigs, Home & Profile
+# Current Task: Fix Sidebar Overlap Tendency & Convert Job/Gig Cards to 1-Col View on Narrow/Split Screens
 
 ## Implementation Objective
+1. **1-Column Vertical Card View for Jobs & Gigs (`media_1794526961786_92afd07c.png`)**:
+   - On narrow split-screen and medium viewports (< 1280px / `xl`), convert Job Post and Service/Gig cards to a 1-column layout (`flex-col`):
+     - Thumbnail sits on top (`w-full h-44 border-b`)
+     - Details, tags, price, and actions stack naturally underneath with full width, preventing squished text and ellipsis.
+   - On wide desktop screens (>= 1280px / `xl`), cards switch back to horizontal `xl:flex-row` with the thumbnail on the left (`xl:w-56`).
+2. **Fix Sidebar Overlap Tendency**:
+   - Prevent window-level horizontal overflow that causes content to slide underneath the fixed sidebar when snapped or resized.
+   - Added `overflow-x-clip` and `min-w-0` to the layout container, `<main>`, and the profile grid (`xl:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] min-w-0`).
+3. **2-Row Profile Navigation Display Threshold**:
+   - Container threshold calibrated to `640px` (`el.clientWidth < 640`).
+   - On wide viewports, displays full tab labels with icons and live counters.
+   - On narrow viewports (< 640px), collapses to clean icons + badges with hover tooltips.
 
-Apply the seamless edge-to-edge thumbnail design across all Job and Gig card views and listings in the application:
-
-1. **Job Market Cards ([`job_lists.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_lists.tsx))**:
-   - Grid View: Full-bleed top thumbnail (`h-44 sm:h-48 border-b`), body in `p-4 flex-1 flex flex-col justify-between`.
-   - List View: Full-bleed left thumbnail (`h-auto min-h-[180px] w-56 lg:w-60 border-r self-stretch`), body in `flex-1 p-5`.
-   - Skeletons: Updated to mirror the seamless structure.
-
-2. **Gig Market Cards ([`gig_lists.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/7_gigs/gig_components/gig_lists.tsx))**:
-   - Grid View: Full-bleed top thumbnail (`h-44 sm:h-48 border-b`), body in `p-4 flex-1 flex flex-col justify-between`.
-   - List View: Full-bleed left thumbnail (`h-auto min-h-[180px] w-56 lg:w-60 border-r self-stretch`), body in `flex-1 p-5`.
-   - Skeletons: Updated to mirror the seamless structure.
-
-3. **Home Page Featured Sections**:
-   - **Latest Job Posts** ([`home_featured_jobs.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/1_home/home_components/home_featured_jobs.tsx)):
-     - Full-bleed top thumbnail (`h-44 sm:h-48 border-b`), outer `overflow-hidden`, body in `p-4 flex-1 flex flex-col justify-between`.
-   - **Top Services** ([`home_featured_gigs.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/1_home/home_components/home_featured_gigs.tsx)):
-     - Full-bleed top thumbnail (`h-44 sm:h-48 border-b`), outer `overflow-hidden`, body in `p-4 flex-1 flex flex-col justify-between`.
-
-4. **Recommendation Sections**:
-   - **Other Job Posts You May Like** ([`jobs_other_posts.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/jobs_other_posts.tsx)):
-     - Seamless card and skeleton layout (`h-44 sm:h-48 border-b`), body in `p-4 flex-1 flex flex-col justify-between`.
-   - **Other Services You May Like** ([`gigs_other_services.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/7_gigs/gig_components/gigs_other_services.tsx)):
-     - Seamless card and skeleton layout (`h-44 sm:h-48 border-b`), body in `p-4 flex-1 flex flex-col justify-between`.
-
-5. **Profile Tabs**:
-   - **Services Tab** ([`Profile_Services.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/7_profile/Displays/Body/Profile_Services.tsx)):
-     - Seamless list card layout (`overflow-hidden rounded-2xl`), left thumbnail flush with card edges (`h-44 sm:h-auto sm:min-h-[160px] sm:w-56 border-b sm:border-b-0 sm:border-r self-stretch`), content in `p-4 sm:p-5 flex-1 flex flex-col justify-between min-w-0`.
-     - Skeleton updated to match.
-   - **Job Posts Tab** ([`Profile_JobPosts.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/7_profile/Displays/Body/Profile_JobPosts.tsx)):
-     - Seamless list card layout (`overflow-hidden rounded-2xl`), left thumbnail flush with card edges (`h-44 sm:h-auto sm:min-h-[160px] sm:w-56 border-b sm:border-b-0 sm:border-r self-stretch`), content in `p-4 sm:p-5 flex-1 flex flex-col justify-between min-w-0`.
-     - Skeleton updated to match.
-
-## Acceptance Criteria
-
-- [x] Home Page (Latest Job Posts & Top Services) cards have seamless full-bleed thumbnails.
-- [x] Gig / Job details recommendations (Other Services & Other Job Posts You May Like) cards and skeletons have seamless thumbnails.
-- [x] Profile (Services & Job Posts tabs) cards and skeletons have seamless left-edge thumbnails without outer border gaps.
-- [x] All overlay buttons (saves, bookmarks, algos, ratings, status, tags) remain fully functional and intact.
-- [x] No verification commands run per user preference.
+## Modified Files
+- `frontend/src/pages/user/7_profile/Displays/Body/Profile_JobPosts.tsx`
+- `frontend/src/pages/user/7_profile/Displays/Body/Profile_Services.tsx`
+- `frontend/src/pages/user/7_profile/Displays/Body/MainBody.tsx`
+- `frontend/src/pages/user/7_profile/Profile.tsx`
+- `frontend/src/components/ui/Layout.tsx`
+- `frontend/src/pages/user/7_profile/Displays/TopSection_ProfileDisplay.tsx`
+- `tasks/current-task.md`

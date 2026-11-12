@@ -226,7 +226,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
         )}
 
         {/* Right Side: Primary Info Cluster Blocks */}
-        <div className="flex-1 text-center md:text-left space-y-1.5 w-full">
+        <div className="flex-1 text-center md:text-left space-y-1.5 w-full min-w-0">
 
           {/* Row 1: Tags Wrapper */}
           <ProfileTags
