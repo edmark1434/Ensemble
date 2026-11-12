@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Briefcase, Flag, ImageIcon } from "lucide-react";
@@ -95,6 +96,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onOpenFlipCard,
   standing,
   }) => {
+  const navigate = useNavigate();
   const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
   const [isAvatarExpanded, setIsAvatarExpanded] = useState(false);
@@ -316,9 +318,22 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <span className="text-gray-800 dark:text-zinc-500 font-medium tracking-wide bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded text-[11px]">@{username}</span>
             <span className="text-zinc-600 hidden sm:inline select-none">|</span>
 
-            <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded text-[11px]">
-              <MapPin className="h-3 w-3 text-gray-500 dark:text-zinc-400 flex-shrink-0" />
-              <span>{location || country || "Location not set"}</span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded text-[11px]">
+                <MapPin className="h-3 w-3 text-gray-500 dark:text-zinc-400 flex-shrink-0" />
+                <span>{location || country || "Location not set"}</span>
+              </div>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/settings?tab=account&focus=address", { state: { tab: "account", focus: "address" } })}
+                  className="p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                  title="Edit Location in Settings"
+                  aria-label="Edit Location in Settings"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+              )}
             </div>
           </div>
 
