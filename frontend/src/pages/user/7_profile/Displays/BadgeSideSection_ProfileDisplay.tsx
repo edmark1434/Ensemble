@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldAlert, Edit2, ShieldCheck, Calendar, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { ShieldAlert, Edit2, ShieldCheck, Calendar, HelpCircle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 
 export interface BadgeMetadata {
   id: string | number;
@@ -49,11 +49,41 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
   const displayBadges = badges.slice(0, 5);
 
   const rarities = [
-    { label: "Uncommon", color: "#10b981", bg: "rgba(16,185,129,0.05)", desc: "Standard milestone achievements assigned for early platform tasks." },
-    { label: "Rare", color: "#3b82f6", bg: "rgba(59,130,246,0.05)", desc: "Commended performance markers earned through standard work cycles." },
-    { label: "Epic", color: "#a855f7", bg: "rgba(168,85,247,0.05)", desc: "High-tier distinctions awarded to platform test pioneers and elite contributors." },
-    { label: "Legendary", color: "#eab308", bg: "rgba(234,179,8,0.05)", desc: "Prestigious status emblems reserved for monumental ecosystem dedication." },
-    { label: "???", color: "#ef4444", bg: "rgba(239,68,68,0.05)", desc: "Classification protocols restricted or obscured from normal node logs." },
+    {
+      tier: "Tier 1",
+      label: "Uncommon",
+      color: "#10b981",
+      badgeClass: "border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400",
+      desc: "Earned by completing starter tasks and early milestones.",
+    },
+    {
+      tier: "Tier 2",
+      label: "Rare",
+      color: "#3b82f6",
+      badgeClass: "border-blue-500/20 bg-blue-500/5 text-blue-600 dark:text-blue-400",
+      desc: "Earned through consistent project work and solid delivery.",
+    },
+    {
+      tier: "Tier 3",
+      label: "Epic",
+      color: "#a855f7",
+      badgeClass: "border-purple-500/20 bg-purple-500/5 text-purple-600 dark:text-purple-400",
+      desc: "Awarded to top contributors, pioneers, and standout editors.",
+    },
+    {
+      tier: "Tier 4",
+      label: "Legendary",
+      color: "#f59e0b",
+      badgeClass: "border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400",
+      desc: "Reserved for extraordinary achievements and platform mastery.",
+    },
+    {
+      tier: "Tier 5",
+      label: "Secret (???)",
+      color: "#ef4444",
+      badgeClass: "border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400",
+      desc: "Hidden badges unlocked through mystery milestones.",
+    },
   ];
 
   return (
@@ -68,30 +98,51 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
         <div className="flex items-center gap-1.5 relative">
           {/* Question Mark Help Tooltip */}
           <div className="relative group/help">
-            <button className="p-1.5 rounded-lg border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-all duration-200 cursor-help">
+            <button
+              type="button"
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-all duration-200 cursor-help"
+              title="View Badge Rarities"
+            >
               <HelpCircle className="h-3 w-3" />
             </button>
 
-            <div className="absolute left-full top-0 ml-4 w-80 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out group-hover/help:opacity-100 group-hover/help:scale-100 z-[100] text-left space-y-3 origin-top-left">
-              <div className="absolute right-full top-3.5 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
+            <div className="absolute left-full top-0 ml-3.5 w-76 p-3.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_20px_50px_rgba(0,0,0,0.12)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out group-hover/help:opacity-100 group-hover/help:scale-100 z-[100] text-left space-y-2.5 origin-top-left font-['Plus_Jakarta_Sans',sans-serif]">
+              {/* Tooltip Arrow */}
+              <div className="absolute right-full top-3.5 border-[6px] border-transparent border-r-white dark:border-r-dark-base" />
               <div className="absolute right-full top-3.5 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
 
-              <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 dark:text-zinc-500 border-b border-gray-200 dark:border-white/5 pb-1.5">Badge Classification Hierarchy</p>
+              {/* Title Header */}
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  <span className="text-xs font-bold text-gray-900 dark:text-white tracking-tight">Badge Rarities</span>
+                </div>
+                <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">5 Tiers</span>
+              </div>
 
-              <div className="space-y-2 font-sans">
+              {/* Rarity Tiers List */}
+              <div className="space-y-1.5">
                 {rarities.map((r, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-3 p-2.5 rounded-xl border text-[11px]"
-                    style={{ borderColor: `${r.color}15`, backgroundColor: r.bg }}
+                    className={`flex items-start gap-2.5 p-2 rounded-xl border transition-colors ${r.badgeClass}`}
                   >
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-md animate-pulse" style={{ backgroundColor: r.color, boxShadow: `0 0 8px ${r.color}` }} />
-                    <div className="space-y-0.5 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-gray-900 dark:text-white tracking-wide">{r.label}</span>
-                        <span className="text-[8px] font-mono tracking-wider opacity-60" style={{ color: r.color }}>Tier 0{i + 1}</span>
+                    <span
+                      className="w-2 h-2 rounded-full mt-1 shrink-0 animate-pulse"
+                      style={{ backgroundColor: r.color, boxShadow: `0 0 6px ${r.color}` }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-bold text-gray-900 dark:text-white leading-tight">
+                          {r.label}
+                        </span>
+                        <span className="text-[9px] font-semibold opacity-75 uppercase tracking-wider">
+                          {r.tier}
+                        </span>
                       </div>
-                      <p className="text-gray-600 dark:text-zinc-400 font-medium leading-relaxed text-[10px]">{r.desc}</p>
+                      <p className="text-[10px] text-gray-600 dark:text-zinc-400 font-medium leading-snug mt-0.5">
+                        {r.desc}
+                      </p>
                     </div>
                   </div>
                 ))}
