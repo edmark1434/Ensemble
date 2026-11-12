@@ -6,6 +6,7 @@ import {
   Plus,
   Minus,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header.tsx";
@@ -123,6 +124,29 @@ const getSubscriptionIcon = (type: string) => {
     default:
       return "/icons/subscription/freemium.png";
   }
+};
+
+const getPackSavingsPercent = (pack: CreditPack, creditValuePhp = 1) => {
+  if (!pack.credits || !pack.price) return 0;
+  const standardValue = pack.credits * (creditValuePhp > 0 ? creditValuePhp : 1);
+  if (standardValue <= pack.price) return 0;
+  return Math.round(((standardValue - pack.price) / standardValue) * 100);
+};
+
+const getCreditPackImage = (pack: CreditPack, index: number) => {
+  const id = (pack.id || "").toLowerCase();
+  const name = (pack.name || "").toLowerCase();
+
+  if (id.includes("starter") || id === "pocket" || name.includes("starter") || index === 0) {
+    return "/shop/pack-1.png";
+  }
+  if (id.includes("pro") || id === "bundle" || name.includes("pro") || index === 1) {
+    return "/shop/pack-2.png";
+  }
+  if (id.includes("studio") || id === "box" || id === "vault" || name.includes("studio") || index === 2) {
+    return "/shop/pack-3.png";
+  }
+  return `/shop/pack-${(index % 3) + 1}.png`;
 };
 
 const CreditShop: React.FC = () => {
@@ -640,45 +664,74 @@ const CreditShop: React.FC = () => {
               transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
               className="space-y-6"
             >
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className={`grid gap-4 sm:grid-cols-2 ${creditPacks.length <= 3 ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
                 {creditPacks.map((pack, index) => {
                   const isBestValue = pack.id === "vault" || pack.id === "pkg-studio" || (creditPacks.length > 1 && index === creditPacks.length - 1);
+                  const packImg = getCreditPackImage(pack, index);
+                  const savingsPercent = getPackSavingsPercent(pack, creditValuePhp);
+
                   return (
                     <div
                       key={pack.id}
-                      className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl hover:border-blue-500/30 transition-all duration-300 group backdrop-blur-xl"
+                      className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 overflow-hidden shadow-sm dark:shadow-xl hover:border-blue-500/30 transition-all duration-300 group backdrop-blur-xl"
                     >
                       <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{pack.name}</h3>
-                          {isBestValue && (
-                            <span className="rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                              Best Value
-                            </span>
-                          )}
+                        {/* Seamless Top Banner Artwork (1:1 aspect-square preserves uncropped image) */}
+                        <div className="relative w-full aspect-square overflow-hidden bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-white/5">
+                          <img
+                            src={packImg}
+                            alt={pack.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none"
+                            loading="lazy"
+                          />
                         </div>
 
-                        {/* Credit Value (Top) */}
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
-                          <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                            {pack.credits.toLocaleString()}
-                            <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                        {/* Content Area Below Image */}
+                        <div className="p-5">
+                          {/* Pack Name & Two Separate Pills (Best Value & Save %) */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 min-h-[26px] mb-2">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                              {pack.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isBestValue && (
+                                <span className="relative inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/40 dark:border-amber-400/35 shadow-[0_0_12px_rgba(245,158,11,0.25)] overflow-hidden shrink-0 select-none">
+                                  <span>Best Value</span>
+                                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 dark:via-white/35 to-transparent animate-shine-gleam pointer-events-none" />
+                                </span>
+                              )}
+                              {savingsPercent > 0 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0 select-none">
+                                  Save {savingsPercent}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Credit Value */}
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                            <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                              {pack.credits.toLocaleString()}
+                              <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                            </p>
+                          </div>
+
+                          {/* Peso Value */}
+                          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
+                            {formatPHP(pack.price)}
                           </p>
                         </div>
-
-                        {/* Peso Value (Under) */}
-                        <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
-                          {formatPHP(pack.price)}
-                        </p>
                       </div>
 
-                      <button
-                        onClick={() => handlePackCheckout(pack)}
-                        className="mt-6 w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20"
-                      >
-                        Buy Pack
-                      </button>
+                      <div className="px-5 pb-5">
+                        <button
+                          onClick={() => handlePackCheckout(pack)}
+                          className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                        >
+                          Buy Pack
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

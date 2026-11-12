@@ -94,14 +94,14 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-md bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col font-['Plus_Jakarta_Sans',sans-serif] animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/10">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white capitalize">{type}</h2>
           <button 
             onClick={onClose}
-            className="p-1 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition"
+            className="p-1 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -122,7 +122,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="overflow-y-auto p-2 max-h-[312px] custom-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
@@ -143,7 +143,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
                       onClose();
                       navigate(`/profile/${u.account_id}`);
                     }}
-                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition text-left group"
+                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition text-left group cursor-pointer"
                   >
                     <FollowerAvatar user={u} />
                     <div className="flex-1 overflow-hidden">
