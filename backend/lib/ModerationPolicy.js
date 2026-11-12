@@ -215,14 +215,27 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   );
   if (!previous.rows.length) return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
   const previousStatus = previous.rows[0].status;
-  if (String(previousStatus).toLowerCase() === 'suspended') {
+  const current = String(previousStatus).toLowerCase();
+  if (current === 'suspended') {
     return { suspended: false, alreadySuspended: true, activeCount, max: AUTO_SUSPEND_POINTS };
   }
+  // A ban or lock is stricter than a suspension. Writing Suspended over it would turn a
+  // permanent ban into a 7-day suspension that then lifts to Active.
+  if (current === 'banned' || current === 'locked') {
+    return { suspended: false, stricterStanding: current, activeCount, max: AUTO_SUSPEND_POINTS };
+  }
 
-  await pool.query(
-    `UPDATE accounts SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day') WHERE account_id = $1`,
+  // Guarded again in SQL, in case a ban landed between the read and this write.
+  const applied = await pool.query(
+    `UPDATE accounts
+     SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day')
+     WHERE account_id = $1
+       AND LOWER(COALESCE(status, 'active')) NOT IN ('banned', 'locked', 'suspended')`,
     [accountId, days]
   );
+  if (!applied.rowCount) {
+    return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
+  }
   await recordAccountActivity({
     accountId,
     action: `Auto-suspended ${days} day(s) after ${activeCount} active warning point(s)`,

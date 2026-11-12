@@ -170,25 +170,120 @@ async function expireElapsedWarnings(accountId) {
   return rowCount > 0;
 }
 
-async function liftExpiredSuspension(accountId) {
-  const { rowCount } = await pool.query(
+const EXPIRED_STANDING_SQL = `
+  (
+    (LOWER(a.status) = 'suspended' AND a.suspension_ends_at IS NOT NULL AND a.suspension_ends_at <= NOW())
+    OR (LOWER(a.status) = 'banned' AND a.ban_ends_at IS NOT NULL AND a.ban_ends_at <= NOW())
+    OR (LOWER(a.status) = 'locked' AND a.lock_ends_at IS NOT NULL AND a.lock_ends_at <= NOW())
+  )
+`;
+
+/**
+ * Return accounts whose ban, lock or suspension has run out to Active. Used on every request
+ * for the signed-in account and by the background job for everyone else, so a profile never
+ * keeps showing "Banned" after the ban ended just because the member stayed away.
+ * Each lift is recorded and announced once (SKIP LOCKED keeps two runners from both doing it).
+ * @param {{ accountId?: string|null, limit?: number }} [options]
+ * @returns {Promise<{ accountId: string, previousStatus: string }[]>}
+ */
+async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
+  const result = await pool.query(
     `
-    UPDATE accounts
+    WITH expired AS (
+      SELECT a.account_id, a.status
+      FROM accounts a
+      WHERE a.deleted_at IS NULL
+        AND ($1::uuid IS NULL OR a.account_id = $1::uuid)
+        AND ${EXPIRED_STANDING_SQL}
+      LIMIT $2
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE accounts a
     SET status = 'Active',
         suspension_ends_at = NULL,
         ban_ends_at = NULL,
         lock_ends_at = NULL
-    WHERE account_id = $1
-      AND deleted_at IS NULL
-      AND (
-        (LOWER(status) = 'suspended' AND suspension_ends_at IS NOT NULL AND suspension_ends_at <= NOW())
-        OR (LOWER(status) = 'banned' AND ban_ends_at IS NOT NULL AND ban_ends_at <= NOW())
-        OR (LOWER(status) = 'locked' AND lock_ends_at IS NOT NULL AND lock_ends_at <= NOW())
-      )
+    FROM expired e
+    WHERE a.account_id = e.account_id
+    RETURNING a.account_id, e.status AS previous_status
     `,
-    [accountId]
+    [accountId || null, limit]
   );
-  return rowCount > 0;
+  const lifted = result.rows.map((row) => ({
+    accountId: String(row.account_id),
+    previousStatus: row.previous_status,
+  }));
+  for (const item of lifted) {
+    // Best effort: the lift itself is already committed.
+    announceStandingLift(item).catch((err) => console.warn('Standing lift notice skipped:', err.message));
+  }
+  return lifted;
+}
+
+async function announceStandingLift({ accountId, previousStatus }) {
+  const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
+  await recordAccountActivity({
+    accountId,
+    action: `${previousStatus} ended — the account is active again`,
+    eventCode: 'ACCOUNT_STATUS_CHANGED',
+    referenceTable: 'accounts',
+    referencePrefix: 'ACC',
+    referenceId: accountId,
+    metadata: { previousStatus, status: 'Active', action: 'expired', source: 'standing_expiry' },
+  });
+  const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+  const penalty = { banned: 'ban', suspended: 'suspension', locked: 'lock' }[
+    normalizeAccountStatus(previousStatus)
+  ] || 'penalty';
+  await notifyAccountStatusChanged(accountId, {
+    status: 'Active',
+    previousStatus,
+    action: 'expired',
+    reason: `Your ${penalty} has ended.`,
+  });
+}
+
+async function liftExpiredSuspension(accountId) {
+  const lifted = await liftExpiredStandings({ accountId, limit: 1 });
+  return lifted.length > 0;
+}
+
+/**
+ * Background sweep: lift expired bans, locks and suspensions, and expire lapsed warnings so
+ * warning bands drop on time instead of on the member's next request.
+ */
+async function reconcileExpiredStandings({ limit = 100 } = {}) {
+  const lifted = await liftExpiredStandings({ limit });
+  const lapsed = await pool.query(
+    `
+    WITH lapsed AS (
+      SELECT violation_id, account_id
+      FROM violations
+      WHERE deleted_at IS NULL
+        AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
+        AND expires_at IS NOT NULL
+        AND expires_at <= NOW()
+      LIMIT $1
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE violations v
+    SET status = 'expired'
+    FROM lapsed l
+    WHERE v.violation_id = l.violation_id
+    RETURNING l.account_id
+    `,
+    [limit * 5]
+  );
+  const accounts = [...new Set(lapsed.rows.map((row) => String(row.account_id)))];
+  if (accounts.length) {
+    const { refreshWarningBand } = require('../services/WarningBandServices');
+    for (const accountId of accounts) {
+      await refreshWarningBand(accountId).catch((err) =>
+        console.warn('Warning band refresh skipped:', err.message)
+      );
+    }
+  }
+  return { lifted: lifted.length, warningsExpired: lapsed.rowCount || 0 };
 }
 
 function warningExpiry({ durationDays, points } = {}) {
@@ -711,7 +806,16 @@ const SUSPENDED_WRITE_ALLOWLIST = [
   /\/api\/users\/refresh-token(?:\?|$)/,
   /\/api\/notifications\/read-all(?:\?|$)/,
   /\/api\/notifications\/[^/]+\/read(?:\?|$)/,
+  // A suspended member may appeal. The ticket controller limits these two to the appeal
+  // ticket type, exactly as it does for banned and locked members.
+  /^\/api\/users\/tickets(?:\?|$)/,
+  /^\/api\/users\/tickets\/[^/]+\/messages(?:\?|$)/,
 ];
+
+/** Banned, locked and suspended members may only open or answer an appeal ticket. */
+function appealTicketsOnly(access) {
+  return Boolean(access?.banned || access?.locked || access?.suspended);
+}
 
 function suspendedWriteAllowed(req) {
   const method = String(req.method || 'GET').toUpperCase();
@@ -768,6 +872,9 @@ function rejectForumTimeout(req, res) {
 
 module.exports = {
   APPEAL_TICKET_TYPE,
+  appealTicketsOnly,
+  reconcileExpiredStandings,
+  liftExpiredStandings,
   BANNED_ACTION_MESSAGE,
   SUSPENDED_ACTION_MESSAGE,
   FORUM_TIMEOUT_MESSAGE,

@@ -212,9 +212,14 @@ export function AccountRestrictionCard({
 function SuspensionBanner({
   standing,
   onOpenNotifications,
+  onAppeal,
+  label = "Account Suspended:",
 }: {
   standing: AccountStanding;
   onOpenNotifications: () => void;
+  /** A suspended or timed-out member may appeal, the same as a banned one. */
+  onAppeal?: () => void;
+  label?: string;
 }) {
   const { Icon, detail } = restrictionCopy(standing);
   return (
@@ -230,13 +235,22 @@ function SuspensionBanner({
           </span>
           <div className="min-w-0 flex-1 flex items-center gap-1.5">
             <span className="text-xs font-bold text-amber-900 dark:text-amber-200 shrink-0">
-              Account Suspended:
+              {label}
             </span>
             <p className="text-xs text-amber-800/90 dark:text-amber-300/90 truncate font-medium" title={detail}>
               {detail}
             </p>
           </div>
         </div>
+        {onAppeal ? (
+          <button
+            type="button"
+            onClick={onAppeal}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs font-semibold text-amber-950 transition-colors hover:bg-amber-500/20 dark:text-amber-100"
+          >
+            Appeal
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onOpenNotifications}
@@ -518,10 +532,19 @@ export function AccountRestrictionHost() {
   return (
     <>
       {suspended && warning ? (
-        <SuspensionBanner standing={warning} onOpenNotifications={() => navigate('/notifications')} />
+        <SuspensionBanner
+          standing={warning}
+          onOpenNotifications={() => navigate('/notifications')}
+          onAppeal={() => navigate('/account/appeal')}
+        />
       ) : null}
       {forumTimeout && warning && !suspended ? (
-        <SuspensionBanner standing={{ ...warning, message: warning.message || 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.' }} onOpenNotifications={() => navigate('/forums')} />
+        <SuspensionBanner
+          label="Forum timeout:"
+          standing={{ ...warning, message: warning.message || 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.' }}
+          onOpenNotifications={() => navigate('/forums')}
+          onAppeal={() => navigate('/account/appeal')}
+        />
       ) : null}
       {blocked ? (
         <AccountBlockedScreen

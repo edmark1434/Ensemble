@@ -1,7 +1,9 @@
 const {
     getCreditTransactionsByAccountId,
+    getPendingDisputePayoutsByAccountId,
     getAccountWalletSummaryByAccountId,
 } = require('../repositories/TransactionRepositories');
+const { formatPayoutDate } = require('../lib/DisputeResolutions');
 
 function getDirection(row) {
     if (row.source_owned && row.destination_owned) return 'internal';
@@ -342,6 +344,60 @@ function mapTransaction(row) {
     };
 }
 
+/**
+ * A dispute payout that has not landed yet, shaped like a ledger entry with status Pending.
+ * It never counts toward balances: the credits are still locked in escrow until release_at,
+ * and the real ledger entry replaces it once the payout is paid.
+ */
+function mapPendingPayout(row) {
+    const number = row.dispute_number || 'your dispute';
+    const type = normalizeType(row.transaction_type);
+    const paused = String(row.dispute_status || '').toLowerCase() !== 'closed';
+    const failed = row.status === 'failed';
+    const destination = formatWalletTypeLabel(row.destination_wallet_type, true);
+    const title =
+        row.kind === 'escrow_refund'
+            ? 'Dispute Refund on the Way'
+            : row.kind === 'escrow_release'
+              ? 'Dispute Payout on the Way'
+              : 'Dispute Reversal on the Way';
+    const summary = failed
+        ? `From dispute ${number}. The payout is delayed and staff are completing it.`
+        : paused
+          ? `From dispute ${number}. On hold while the case is reviewed again.`
+          : `From dispute ${number}. Arrives in ${destination} on ${formatPayoutDate(row.release_at)}.`;
+    return {
+        id: `dispute-payout-${row.dispute_payout_id}`,
+        type,
+        category: type,
+        title,
+        summary,
+        counterparty: `Escrow · dispute ${number}`,
+        walletFlow: `Escrow (dispute ${number}) → ${destination}`,
+        isCreditPurchase: false,
+        amountCredits: Math.abs(Number(row.amount_credits)),
+        status: 'Pending',
+        createdAt: row.created_at,
+        direction: 'incoming',
+        sourceWalletId: 'Escrow',
+        destinationWalletId: row.destination_wallet_id,
+        sourceWalletType: 'Escrow Wallet',
+        destinationWalletType: destination,
+        feeTransactionId: null,
+        referenceTable: 'disputes',
+        referenceId: row.dispute_id,
+        // Lets the client say when it lands without parsing the summary.
+        pending: {
+            kind: 'dispute_payout',
+            disputeId: row.dispute_id,
+            disputeNumber: row.dispute_number || null,
+            releaseAt: row.release_at,
+            paused,
+            failed,
+        },
+    };
+}
+
 async function getCreditTransactionsService(accountId) {
     if (!accountId) {
         const error = new Error('Authenticated account is required');
@@ -349,14 +405,20 @@ async function getCreditTransactionsService(accountId) {
         throw error;
     }
 
-    const [rows, walletSummary] = await Promise.all([
+    const [rows, pendingPayouts, walletSummary] = await Promise.all([
         getCreditTransactionsByAccountId(accountId),
+        getPendingDisputePayoutsByAccountId(accountId),
         getAccountWalletSummaryByAccountId(accountId),
     ]);
 
+    const pending = pendingPayouts.map(mapPendingPayout);
     return {
-        transactions: rows.map(mapTransaction),
-        walletSummary,
+        // Waiting payouts first: they are what a member is most likely looking for.
+        transactions: [...pending, ...rows.map(mapTransaction)],
+        walletSummary: {
+            ...walletSummary,
+            pendingCredits: pending.reduce((sum, item) => sum + item.amountCredits, 0),
+        },
     };
 }
 

@@ -356,12 +356,15 @@ async function submitTicketSatisfaction(ticketId, accountId, score, comment) {
 
 async function adjustTicketCredits({ ticketId, amount, note, staffId, staffRole, actorAccountId }) {
   const ticket = await pool.query(
-    `SELECT ticket_id, ticket_number, type, account_id, handled_by_staff_id
+    `SELECT ticket_id, ticket_number, type, account_id, handled_by_staff_id, status
      FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!ticket.rows.length) return null;
   const row = ticket.rows[0];
+  if (['closed', 'resolved'].includes(String(row.status || '').toLowerCase())) {
+    throw new Error('This ticket is closed. Reopen it before changing credits.');
+  }
   const assigneeId = row.handled_by_staff_id ? String(row.handled_by_staff_id).toLowerCase() : '';
   const actorId = staffId ? String(staffId).toLowerCase() : '';
   if (!assigneeId || !actorId || assigneeId !== actorId) {
@@ -372,7 +375,10 @@ async function adjustTicketCredits({ ticketId, amount, note, staffId, staffRole,
   }
   const reason = String(note || '').trim();
   if (reason.length < 8) throw new Error('Add a note of at least 8 characters for the credit change');
-  const result = await adjustAccountCredits(row.account_id, amount, reason, staffId);
+  const result = await adjustAccountCredits(row.account_id, amount, reason, staffId, {
+    referenceTable: 'tickets',
+    referenceId: row.ticket_id,
+  });
   const summary = `${Number(amount) > 0 ? 'Granted' : 'Deducted'} ${Math.abs(Number(amount))} credits. ${reason}`;
   await recordTicketEvent({
     ticketId,

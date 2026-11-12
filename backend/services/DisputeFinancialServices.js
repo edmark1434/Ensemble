@@ -93,10 +93,15 @@ async function assertCanAct(disputeId, staffSession) {
   return { staff, row, permissions };
 }
 
-/** Where a party's notification should open: the public page, their dispute list, or wallet history. */
-function memberPath(row, accountId) {
+/**
+ * Where a party's notification should open: the public page, or their dispute list. On a
+ * private case the disputee sees the outcome there only while a money ruling stands, so a
+ * withdrawn ruling sends them to their wallet history instead.
+ */
+function memberPath(row, accountId, { rulingStands = true } = {}) {
   if (row.visibility) return `/disputes/${row.dispute_id}`;
   if (String(row.by_account_id) === String(accountId)) return '/contracts/disputes';
+  if (String(row.for_account_id) === String(accountId) && rulingStands) return '/contracts/disputes';
   return '/transactions';
 }
 
@@ -265,7 +270,7 @@ async function announceCancelled(row, result, notes) {
   for (const accountId of recipients) {
     await notifyDisputeAccount(accountId, row.dispute_id, {
       message: `Staff withdrew the payout ruling on dispute ${number}. No credits were paid, and the case is being reviewed again.`,
-      path: memberPath(row, accountId),
+      path: memberPath(row, accountId, { rulingStands: false }),
     });
   }
 }

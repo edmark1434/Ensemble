@@ -78,11 +78,14 @@ async function patchAdminAccountStatus(req, res) {
       customDuration: req.body?.customDuration === true || req.body?.custom_duration === true,
       actorAccountId: req.session?.account_id || req.session?.accountId || null,
     });
+    const { describeSummary } = require('../services/BanCleanupServices');
     const message = data.forumTimeout
       ? 'Timeout applied'
       : data.forumTimeout === false && String(action).toLowerCase().includes('timeout')
         ? 'Timeout cleared'
-        : `Account set to ${data.status}`;
+        : data.banCleanup && Array.isArray(data.banCleanup.failures) && 'jobsClosed' in data.banCleanup
+          ? `Account set to ${data.status}. ${describeSummary(data.banCleanup)}.`
+          : `Account set to ${data.status}`;
     res.status(200).json({ success: true, data, message });
   } catch (err) {
     console.error('Error updating account status:', err);

@@ -196,6 +196,13 @@ async function issueViolation(accountId, { warningId, type, reason, points, expi
   const { warningExpiry } = require('../lib/AccountRestriction');
   const expiry = warningExpiry({ durationDays: issued.durationDays, points: warnPoints });
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({
+    actorStaffId: staffId,
+    actorAccountId: staffSession?.account_id || staffSession?.accountId || null,
+    targetAccountId: accountId,
+    action: 'warn',
+  });
 
   const inserted = await pool.query(
     `INSERT INTO violations (
@@ -273,6 +280,13 @@ async function issueRestriction(
   const restrictionType = String(type || 'account_restriction').trim() || 'account_restriction';
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
   if (!staffId) throw new Error('Staff session required to issue a restriction');
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({
+    actorStaffId: staffId,
+    actorAccountId: staffSession?.account_id || staffSession?.accountId || null,
+    targetAccountId: accountId,
+    action: 'timeout',
+  });
 
   const inserted = await pool.query(
     `INSERT INTO restrictions (

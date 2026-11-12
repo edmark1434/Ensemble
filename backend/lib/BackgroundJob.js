@@ -593,6 +593,26 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Standing expiry: lift ended bans, locks and suspensions (including the 24-hour lift after
+    // an accepted appeal) and expire lapsed warnings — runs every minute, so it never waits for
+    // the member's next request.
+    let isStandingExpiryRunning = false;
+    cron.schedule("* * * * *", async () => {
+        if (isStandingExpiryRunning) return;
+        isStandingExpiryRunning = true;
+        try {
+            const { reconcileExpiredStandings } = require('./AccountRestriction');
+            const result = await reconcileExpiredStandings();
+            if (result.lifted || result.warningsExpired) {
+                console.log(`Standing expiry: lifted ${result.lifted}, warnings expired ${result.warningsExpired}`);
+            }
+        } catch (err) {
+            console.error("Standing expiry failed:", err.message);
+        } finally {
+            isStandingExpiryRunning = false;
+        }
+    });
+
     // Dispute payouts: pay out money rulings whose release date has come — runs every minute.
     // Payouts of a reopened case wait; failed ones retry hourly (see releaseDuePayouts).
     let isDisputePayoutJobRunning = false;

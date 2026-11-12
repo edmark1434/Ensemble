@@ -1772,6 +1772,16 @@ export default function TicketDetailModalShell({
                             ? 'Denied permanently. This account cannot appeal again.'
                             : 'Denied. They can submit another appeal in 12 months.'}
                       </p>
+                    ) : !(
+                        perms?.isAdmin ||
+                        (perms?.isAssignee && String(perms?.role || '').toLowerCase() === 'support moderator')
+                      ) ? (
+                      // Mirrors the server: Admin, or the Support Moderator handling this appeal.
+                      <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-400">
+                        {perms?.isAssignee
+                          ? 'Only Support or Admin can decide an appeal. Move it to Support.'
+                          : 'Claim this appeal to decide it. Only Support or Admin can.'}
+                      </p>
                     ) : (
                       <div className="grid gap-1.5">
                         <button type="button" onClick={() => setAppealChoice('accept')} className={BTN.success}>

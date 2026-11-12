@@ -385,15 +385,18 @@ async function createPublicTicket(req, res) {
       priority,
       description,
     } = req.body;
-    const { APPEAL_TICKET_TYPE } = require('../lib/AccountRestriction');
+    const { APPEAL_TICKET_TYPE, appealTicketsOnly } = require('../lib/AccountRestriction');
     let ticketType = type || category || 'Other';
-    const appealOnly = Boolean(req.accountAccess?.banned || req.accountAccess?.locked);
+    // Banned, locked and suspended members may still appeal, and do nothing else here.
+    const appealOnly = appealTicketsOnly(req.accountAccess);
     if (appealOnly) {
       if (String(type || category || APPEAL_TICKET_TYPE).trim() !== APPEAL_TICKET_TYPE) {
         return res.status(403).json({
           success: false,
           code: req.accountAccess.code || 'ACCOUNT_BANNED',
-          message: 'This account can only open an appeal ticket.',
+          message: req.accountAccess?.suspended
+            ? 'While your account is suspended you can only open an appeal ticket.'
+            : 'This account can only open an appeal ticket.',
         });
       }
       ticketType = APPEAL_TICKET_TYPE;
@@ -595,6 +598,14 @@ async function postMyTicketMessage(req, res) {
     if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
     if (!sessionCanReadTicket(existing, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
+    }
+    const { APPEAL_TICKET_TYPE, appealTicketsOnly } = require('../lib/AccountRestriction');
+    if (appealTicketsOnly(req.accountAccess) && existing.ticket?.type !== APPEAL_TICKET_TYPE) {
+      return res.status(403).json({
+        success: false,
+        code: req.accountAccess.code || 'ACCOUNT_BANNED',
+        message: 'While this penalty is active you can only reply on your appeal ticket.',
+      });
     }
     const data = await addTicketMessage(
       req.params.id,

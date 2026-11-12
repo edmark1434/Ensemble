@@ -153,6 +153,13 @@ const EVENT_CATALOG = {
     targetType: 'Dispute',
     severity: 'low',
   },
+  ACCOUNT_BAN_CLEANUP: {
+    label: 'Banned account postings closed',
+    targetType: 'Account',
+    severity: 'medium',
+    impact:
+      'Closed the banned account’s open jobs, gigs and listings, withdrew its pending proposals and orders, and refunded fees and offer escrow.',
+  },
   DISPUTE_ESCROW_SETTLED: {
     label: 'Dispute escrow settled',
     targetType: 'Dispute',

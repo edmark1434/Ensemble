@@ -1541,7 +1541,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     pendingInvites,
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
     savedTranscript: await latestTicketTranscript(ticketId),
-    autoClosesAt: ticketAutoClosesAt(ticket),
+    autoClosesAt: ticketAutoClosesAt({ ...ticket, appealDecision: row.appeal_decision || null }),
     scheduledCloseAt: row.scheduled_close_at || null,
     appealDecision: row.appeal_decision || null,
     appealDecidedAt: row.appeal_decided_at || null,
@@ -1828,8 +1828,15 @@ async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorSta
 
 const TICKET_AUTO_CLOSE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Inactivity only closes a ticket that is waiting on the member: staff spoke last and the
+ * member went quiet. A ticket waiting on staff never closes on its own, and neither does an
+ * appeal that has no decision yet — it would vanish without anyone ruling on it.
+ */
 function ticketAutoClosesAt(ticket) {
   if (!ticket || isClosedStatus(ticket.status)) return null;
+  if (ticket.type === APPEAL_TICKET_TYPE && !ticket.appealDecision) return null;
+  if (String(ticket.lastMessageAuthorType || '').toLowerCase() !== 'staff') return null;
   const last = ticket.lastMessageAt || ticket.createdAt;
   if (!last) return null;
   return new Date(new Date(last).getTime() + TICKET_AUTO_CLOSE_MS).toISOString();
@@ -1914,17 +1921,22 @@ async function generateTicketTranscript(ticketId, staffSession) {
 }
 
 async function autoCloseInactiveTickets() {
+  // Waiting on the member only (staff replied last), never an undecided appeal.
   const result = await pool.query(
     `SELECT ticket_id, account_id, ticket_number
      FROM tickets
      WHERE deleted_at IS NULL
        AND status NOT IN ('Closed', 'Resolved')
+       AND LOWER(COALESCE(last_message_author_type, '')) = 'staff'
+       AND NOT (type = $1 AND appeal_decision IS NULL)
        AND COALESCE(last_message_at, created_at) < NOW() - INTERVAL '7 days'
      ORDER BY COALESCE(last_message_at, created_at) ASC
-     LIMIT 25`
+     LIMIT 25`,
+    [APPEAL_TICKET_TYPE]
   );
   let closed = 0;
   for (const row of result.rows) {
+    // Re-check inside the update: the member may have replied since the select.
     const updated = await pool.query(
       `UPDATE tickets
        SET status = 'Closed',
@@ -1933,6 +1945,8 @@ async function autoCloseInactiveTickets() {
        WHERE ticket_id = $1
          AND deleted_at IS NULL
          AND status NOT IN ('Closed', 'Resolved')
+         AND LOWER(COALESCE(last_message_author_type, '')) = 'staff'
+         AND COALESCE(last_message_at, created_at) < NOW() - INTERVAL '7 days'
        RETURNING ticket_id`,
       [row.ticket_id]
     );
@@ -1946,7 +1960,7 @@ async function autoCloseInactiveTickets() {
     await recordTicketEvent({
       ticketId: row.ticket_id,
       eventType: 'status',
-      summary: 'Auto-closed after 7 days without activity',
+      summary: 'Auto-closed after 7 days without a reply from the member',
     });
     await saveTicketCloseTranscript(row.ticket_id, { reason: 'auto' });
     await notifyTicketClosed({
@@ -1990,7 +2004,7 @@ async function scheduleTicketClose(ticketId, staffSession, closesAtInput) {
   if (!isStaffSession(staffSession)) throw ticketError('Only staff can schedule a close', 403);
   const closesAt = parseScheduledCloseAt(closesAtInput);
   const existing = await pool.query(
-    `SELECT ticket_id, status, ticket_number, account_id
+    `SELECT ticket_id, status, ticket_number, account_id, type, appeal_decision, handled_by_staff_id
      FROM tickets
      WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
@@ -1998,6 +2012,10 @@ async function scheduleTicketClose(ticketId, staffSession, closesAtInput) {
   if (!existing.rows.length) return null;
   const row = existing.rows[0];
   if (isClosedStatus(row.status)) throw ticketError('This ticket is already closed', 400);
+  if (row.type === APPEAL_TICKET_TYPE && !row.appeal_decision) {
+    throw ticketError('Decide this appeal (accept or deny) instead of scheduling it to close.', 409);
+  }
+  await assertMayChangeTicketState(row, staffSession);
   try {
     await pool.query(
       `UPDATE tickets
@@ -2600,14 +2618,19 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     if (row.handled_by_staff_id && !perms.isAdmin) {
       throw new Error('This ticket already has a handler. They must release the case first.');
     }
-    await pool.query(
+    // Two staff claiming at once: only the first finds it unassigned (Admin may take over).
+    const claimed = await pool.query(
       `UPDATE tickets
        SET handled_by_staff_id = $1,
            status = CASE WHEN status = 'Open' THEN 'In Progress' ELSE status END,
            updated_at = NOW()
-       WHERE ticket_id = $2 AND deleted_at IS NULL`,
-      [staff.staff_id, ticketId]
+       WHERE ticket_id = $2 AND deleted_at IS NULL
+         AND ($3::boolean OR handled_by_staff_id IS NULL)`,
+      [staff.staff_id, ticketId, Boolean(perms.isAdmin)]
     );
+    if (!claimed.rowCount) {
+      throw ticketError('Someone else just claimed this ticket. Refresh to see who.', 409);
+    }
     if (normalizeTicketStatus(row.status) === 'Open') {
       await recordTicketEvent({
         ticketId,
@@ -2681,7 +2704,8 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   const currentRow = await pool.query(
-    `SELECT handled_by_staff_id, status, type, account_id, ticket_number FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT handled_by_staff_id, status, priority, type, account_id, ticket_number, appeal_decision
+     FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!currentRow.rows.length) return null;
@@ -2695,6 +2719,26 @@ async function updateTicket(ticketId, patch, staffSession) {
     staff,
     sessionStaffId(staffSession)
   );
+
+  // Someone else's ticket is theirs to close, reopen or re-prioritise (Admin may override).
+  const changesState =
+    (patch.status !== undefined && normalizeTicketStatus(patch.status) !== normalizeTicketStatus(currentStatus)) ||
+    (patch.priority !== undefined &&
+      normalizeTicketPriority(patch.priority) !== normalizeTicketPriority(currentTicket.priority));
+  if (changesState && !patch.assigned_role && !ticketPerms.canAct) {
+    throw ticketError('Only the assigned handler or an Admin can change this ticket.', 403);
+  }
+  // An appeal ends with a decision (accept / deny), which records the outcome and any
+  // 12-month hold. A bare close would drop it with no ruling at all.
+  if (
+    currentTicket.type === APPEAL_TICKET_TYPE &&
+    !currentTicket.appeal_decision &&
+    patch.status !== undefined &&
+    isClosedStatus(patch.status) &&
+    !isClosedStatus(currentStatus)
+  ) {
+    throw ticketError('Decide this appeal (accept or deny) to close it.', 409);
+  }
 
   if (patch.assigned_role) {
     const catalog = await getTicketCatalog();
@@ -2941,6 +2985,20 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   return getTicketDetail(ticketId, staffSession);
+}
+
+/**
+ * Status, priority and close-scheduling belong to the ticket's handler (or Admin). An
+ * unassigned ticket may be triaged by any staff role that works the queue.
+ */
+async function assertMayChangeTicketState(ticketRow, staffSession) {
+  const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
+  const staff = await resolveDisputeStaffId(staffSession);
+  const perms = buildTicketPermissions(ticketRow, staff, sessionStaffId(staffSession));
+  if (!perms.canAct) {
+    throw ticketError('Only the assigned handler or an Admin can change this ticket.', 403);
+  }
+  return perms;
 }
 
 function assertStaffMayAnswerTicket(ticketRow, staffSession) {
@@ -5019,7 +5077,7 @@ async function notifyReportReporter(row, message) {
   }
 }
 
-async function applyReportSanction(row, patch, staffId) {
+async function applyReportSanction(row, patch, staffId, staffRole = null) {
   const accountId = row.for_account_id;
   if (!accountId) throw reportDecisionError('This report is not tied to an account');
   const reason = String(patch?.reason || '').trim();
@@ -5027,6 +5085,12 @@ async function applyReportSanction(row, patch, staffId) {
   const sanctionType = String(patch?.sanctionType || patch?.sanction_type || 'warning').toLowerCase();
   const days = patch?.days;
   const { warnAccount, updateAccountStatus } = require('./AdminUserTeamRepositories');
+  // A report decision is held to the same role rules as the Users desk: specialist
+  // moderators may warn and suspend, and only Admin or Support may ban.
+  if (['suspend', 'suspended', 'ban', 'banned'].includes(sanctionType)) {
+    const { assertStatusActionAllowed } = require('../lib/UserTeamPermissions');
+    assertStatusActionAllowed({ role: staffRole }, sanctionType.startsWith('ban') ? 'ban' : 'suspend');
+  }
 
   if (sanctionType === 'warning' || sanctionType === 'warn') {
     return warnAccount(accountId, { warningId: 'staff_follow_up', reason, days }, staffId);
@@ -5072,22 +5136,39 @@ async function decideReport(reportId, action, patch, staffSession) {
     throw reportDecisionError('Choose sanction or deny.', 400);
   }
 
-  let nextStatus = 'denied';
-  let violationId = null;
-  if (action === 'sanction') {
-    const sanction = await applyReportSanction(row, patch, staff.staff_id);
-    violationId = sanction?.violationId || null;
-    nextStatus = 'sanctioned';
+  const nextStatus = action === 'sanction' ? 'sanctioned' : 'denied';
+  // Claim the decision first, so a double click or a second staff member cannot apply the
+  // sanction twice. If the sanction then fails, the report goes back to where it was.
+  const claimed = await pool.query(
+    `UPDATE reports
+     SET status = $1, updated_at = NOW()
+     WHERE report_id = $2 AND deleted_at IS NULL AND status = $3
+     RETURNING report_id`,
+    [nextStatus, reportId, row.status]
+  );
+  if (!claimed.rowCount) {
+    throw reportDecisionError('This report was just decided. Refresh to see the outcome.', 409);
   }
 
-  await pool.query(
-    `UPDATE reports
-     SET status = $1,
-         violation_id = COALESCE($2, violation_id),
-         updated_at = NOW()
-     WHERE report_id = $3 AND deleted_at IS NULL`,
-    [nextStatus, violationId, reportId]
-  );
+  let violationId = null;
+  if (action === 'sanction') {
+    try {
+      const sanction = await applyReportSanction(row, patch, staff.staff_id, staff.role);
+      violationId = sanction?.violationId || null;
+    } catch (error) {
+      await pool.query(
+        `UPDATE reports SET status = $1, updated_at = NOW() WHERE report_id = $2`,
+        [row.status, reportId]
+      );
+      throw error;
+    }
+    if (violationId) {
+      await pool.query(
+        `UPDATE reports SET violation_id = $1 WHERE report_id = $2`,
+        [violationId, reportId]
+      );
+    }
+  }
 
   await recordAccountActivity({
     accountId: row.for_account_id || row.by_account_id,
@@ -5685,16 +5766,27 @@ const APPEAL_DECISIONS = {
 
 async function assertCanFileAppeal(accountId) {
   const hold = await pool.query(
-    `SELECT permanently_denied, blocked_until
-     FROM account_appeal_holds
-     WHERE account_id = $1`,
+    `SELECT h.permanently_denied, h.blocked_until,
+            -- A penalty issued after the denied appeal is a new case, and may be appealed.
+            EXISTS (
+              SELECT 1 FROM account_activity act
+              WHERE act.account_id = h.account_id
+                AND act.created_at > h.decided_at
+                AND (
+                  (act.event_code = 'ACCOUNT_STATUS_CHANGED'
+                    AND LOWER(COALESCE(act.metadata->>'status', '')) IN ('banned', 'locked', 'suspended'))
+                  OR act.event_code IN ('FORUM_TIMEOUT', 'VIOLATION_ISSUED', 'WARNING_ISSUED')
+                )
+            ) AS new_penalty_since
+     FROM account_appeal_holds h
+     WHERE h.account_id = $1`,
     [accountId]
   );
   const row = hold.rows[0];
   if (row?.permanently_denied) {
     throw ticketError('This account cannot submit another appeal.', 403);
   }
-  if (row?.blocked_until && new Date(row.blocked_until).getTime() > Date.now()) {
+  if (row?.blocked_until && new Date(row.blocked_until).getTime() > Date.now() && !row.new_penalty_since) {
     const when = new Date(row.blocked_until).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -5715,7 +5807,38 @@ async function assertCanFileAppeal(accountId) {
   if (open.rows.length) {
     throw ticketError('You already have an open appeal. Reply on that ticket instead.', 409);
   }
+  // An appeal answers a penalty. With nothing active, a denial would still start the
+  // 12-month hold and block the member from appealing a real penalty later.
+  const penalty = await pool.query(
+    `
+    SELECT
+      LOWER(COALESCE(a.status, 'active')) IN ('banned', 'suspended', 'locked') AS standing,
+      EXISTS (
+        SELECT 1 FROM restrictions r
+        WHERE r.account_id = a.account_id
+          AND LOWER(r.type) IN ('forum_timeout', 'timeout')
+          AND r.starts_at <= NOW()
+          AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      ) AS timeout,
+      EXISTS (
+        SELECT 1 FROM violations v
+        WHERE v.account_id = a.account_id
+          AND v.deleted_at IS NULL
+          AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open', 'pending')
+          AND (v.expires_at IS NULL OR v.expires_at > NOW())
+      ) AS warning
+    FROM accounts a
+    WHERE a.account_id = $1
+    `,
+    [accountId]
+  );
+  const found = penalty.rows[0];
+  if (!found || (!found.standing && !found.timeout && !found.warning)) {
+    throw ticketError('There is no active penalty on this account to appeal.', 400);
+  }
 }
+
+const APPEAL_DECIDER_ROLES = new Set(['admin', 'administrator', 'support moderator']);
 
 async function decideTicketAppeal(ticketId, decision, staffSession) {
   if (!isStaffSession(staffSession)) throw ticketError('Only staff can decide an appeal', 403);
@@ -5723,7 +5846,7 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
   if (!normalized) throw ticketError('Choose accept, deny, or deny permanently', 400);
 
   const current = await pool.query(
-    `SELECT ticket_id, ticket_number, type, account_id, appeal_decision
+    `SELECT ticket_id, ticket_number, type, account_id, appeal_decision, handled_by_staff_id
      FROM tickets
      WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
@@ -5734,18 +5857,56 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
   if (ticket.appeal_decision) throw ticketError('This appeal already has a decision', 409);
   if (!ticket.account_id) throw ticketError('This appeal has no account to update', 400);
 
+  // Appeals are Support's (and Admin's) to decide, and only by whoever is handling this one.
   const staff = await resolveDisputeStaffId(staffSession);
   const staffId = staff?.staff_id || null;
+  const role = String(staff?.role || staffSession?.role || '').toLowerCase();
+  if (!APPEAL_DECIDER_ROLES.has(role)) {
+    throw ticketError('Only Support or Admin can decide an appeal.', 403);
+  }
+  const isAdmin = role === 'admin' || role === 'administrator';
+  const assignee = normalizeStaffId(ticket.handled_by_staff_id);
+  if (!isAdmin && (!assignee || assignee !== normalizeStaffId(staffId))) {
+    throw ticketError('Claim this appeal before deciding it.', 403);
+  }
+  if (sessionAccountId(staffSession) && String(sessionAccountId(staffSession)) === String(ticket.account_id)) {
+    throw ticketError('You cannot decide an appeal on your own account.', 403);
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Lock and re-check, so two staff deciding at once cannot both apply a decision.
+    const locked = await client.query(
+      `SELECT appeal_decision FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [ticket.ticket_id]
+    );
+    if (!locked.rows.length) throw ticketError('Ticket not found', 404);
+    if (locked.rows[0].appeal_decision) throw ticketError('This appeal already has a decision', 409);
     if (normalized === 'accepted') {
+      // The penalty ends within 24 hours — never later than it was already going to end.
       await client.query(
         `UPDATE accounts
-         SET ban_ends_at = CASE WHEN LOWER(status) = 'banned' THEN NOW() + INTERVAL '24 hours' ELSE ban_ends_at END,
-             lock_ends_at = CASE WHEN LOWER(status) = 'locked' THEN NOW() + INTERVAL '24 hours' ELSE lock_ends_at END,
-             suspension_ends_at = CASE WHEN LOWER(status) = 'suspended' THEN NOW() + INTERVAL '24 hours' ELSE suspension_ends_at END
+         SET ban_ends_at = CASE WHEN LOWER(status) = 'banned'
+               THEN LEAST(COALESCE(ban_ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+               ELSE ban_ends_at END,
+             lock_ends_at = CASE WHEN LOWER(status) = 'locked'
+               THEN LEAST(COALESCE(lock_ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+               ELSE lock_ends_at END,
+             suspension_ends_at = CASE WHEN LOWER(status) = 'suspended'
+               THEN LEAST(COALESCE(suspension_ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+               ELSE suspension_ends_at END
          WHERE account_id = $1`,
+        [ticket.account_id]
+      );
+      // A forum timeout is a penalty too; it ends on the same clock.
+      await client.query(
+        `UPDATE restrictions
+         SET ends_at = LEAST(COALESCE(ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+         WHERE account_id = $1
+           AND LOWER(type) IN ('forum_timeout', 'timeout')
+           AND starts_at <= NOW()
+           AND (ends_at IS NULL OR ends_at > NOW())`,
         [ticket.account_id]
       );
     }

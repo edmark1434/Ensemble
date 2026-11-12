@@ -182,6 +182,25 @@ export default function AccountAccessPage() {
   const accountId = String(user?.account_id || '');
   const activeMessages: ThreadMessage[] = openTicketId ? ticketMessages : (disputeDetail?.messages || []);
 
+  // Banned and locked members live on this page; suspended and timed-out members come here
+  // from their banner to appeal and can go back to the site.
+  const statusWord = String(restriction?.status || user?.status || '').toLowerCase();
+  const penalty: 'locked' | 'banned' | 'suspended' | 'timeout' =
+    statusWord === 'locked' || restriction?.locked
+      ? 'locked'
+      : statusWord === 'banned' || restriction?.banned
+        ? 'banned'
+        : statusWord === 'suspended' || restriction?.suspended
+          ? 'suspended'
+          : 'timeout';
+  const penaltyCopy = {
+    locked: { tag: 'Locked', title: 'Your account is locked', form: 'Ask to unlock this account' },
+    banned: { tag: 'Banned', title: 'Your account is banned', form: 'Appeal this ban' },
+    suspended: { tag: 'Suspended', title: 'Your account is suspended', form: 'Appeal this suspension' },
+    timeout: { tag: 'Penalty', title: 'Appeal an account penalty', form: 'Appeal this penalty' },
+  }[penalty];
+  const canLeave = penalty === 'suspended' || penalty === 'timeout';
+
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: 'end' });
   }, [activeMessages.length, openTicketId, openDisputeId]);
@@ -195,14 +214,25 @@ export default function AccountAccessPage() {
     <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-white">
       <header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-white/10">
         <p className="text-sm font-semibold tracking-wide">Ensemble</p>
-        <button
-          type="button"
-          onClick={() => setConfirmLogout(true)}
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          {canLeave ? (
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"
+            >
+              Back to Ensemble
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setConfirmLogout(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
       </header>
       <UserLogoutModal
         isOpen={confirmLogout}
@@ -212,16 +242,14 @@ export default function AccountAccessPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
       <section className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
-          {String(restriction?.status || user?.status || '').toLowerCase() === 'locked' || restriction?.locked ? 'Locked' : 'Banned'}
+          {penaltyCopy.tag}
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
-          {String(restriction?.status || user?.status || '').toLowerCase() === 'locked' || restriction?.locked
-            ? 'Your account is locked'
-            : 'Your account is banned'}
-        </h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{penaltyCopy.title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
           {restriction?.message ||
-            'You can sign in only to file an appeal and view your tickets and disputes.'}
+            (canLeave
+              ? 'Tell staff why this penalty should be lifted. If they accept, it ends within 24 hours.'
+              : 'You can sign in only to file an appeal and view your tickets and disputes.')}
         </p>
       </section>
 
@@ -241,11 +269,7 @@ export default function AccountAccessPage() {
       </div>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
-          {String(restriction?.status || user?.status || '').toLowerCase() === 'locked' || restriction?.locked
-            ? 'Ask to unlock this account'
-            : 'Appeal this ban'}
-        </h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{penaltyCopy.form}</h2>
         <form className="mt-4 flex flex-col gap-3" onSubmit={submitAppeal}>
           <label className="text-sm text-zinc-600 dark:text-zinc-300">
             Subject

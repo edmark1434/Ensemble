@@ -1912,7 +1912,8 @@ export default function ModeratorDisputeDetailModal({
               ) : resolveMode === "ban" ? (
                 <>
                   This bans @{dispute.respondent.username} permanently, posts the reason in the
-                  discussion, and closes the case.
+                  discussion, and closes the case. Their open jobs, gigs and listings close and their
+                  pending proposals and orders are withdrawn. Live contracts stay for staff.
                 </>
               ) : resolveMode === "dismiss" ? (
                 <>
@@ -2215,6 +2216,12 @@ export default function ModeratorDisputeDetailModal({
                     {dispute.visibility ? " for both parties" : " for the disputer (the case is private)"}, and
                     both sides are notified.
                   </li>
+                  {!dispute.visibility ? (
+                    <li>
+                      @{dispute.respondent.username} gets a limited view in their disputes list: the case
+                      number, contract, outcome and payouts. Not the complaint, your notes, or the discussion.
+                    </li>
+                  ) : null}
                 </ul>
               </>
             ) : null}
