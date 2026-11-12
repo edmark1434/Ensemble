@@ -16,7 +16,7 @@ The Asset Marketplace lets creators buy, sell, and organize reusable digital pro
 Signed-in verified creators can create a listing from `/assets` by uploading the original media (or template configuration) and preview thumbnail, adding a title, description, tags, and credit price.
 
 - **Plan limits:** Free accounts can publish up to 1 asset post, Premium up to 20, and Business unlimited.
-- **Review status:** Depending on platform settings or if your Platform Merit is in the **Limited** band (93 to 97), newly submitted listings may enter an **Under Review** queue before appearing publicly. Publishing new listings is blocked if your Platform Merit is Restricted (85 to 92) or lower, or while suspended/locked/banned.
+- **Review status:** Newly submitted listings always enter an **Under Review** queue and appear publicly only after a Marketplace moderator approves them. Publishing new listings is blocked if your Platform Merit is Restricted (85 to 92) or lower, or while suspended/locked/banned.
 - **Fees:** Check the Current Ensemble Platform Settings document for current asset listing and marketplace sale fees.
 
 ## Buying assets and accessing original files

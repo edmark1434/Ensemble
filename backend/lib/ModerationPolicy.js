@@ -41,9 +41,9 @@ async function evaluateUserContent() {
 }
 
 /**
- * When marketplace listing review is on, queue or update a pending marketplace_listings row
- * and return the status that should be persisted on market_assets ('draft').
- * When off, returns requestedStatus unchanged.
+ * Queue or update a pending marketplace_listings row for moderator approval and return
+ * the status that should be persisted on market_assets ('draft').
+ * Already-published assets keep published status when their details are edited.
  */
 async function resolveMarketplacePublishStatus({
   accountId,
@@ -60,9 +60,8 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
-  const { assertWarningAllows, listingReviewForced } = require('../services/WarningBandServices');
+  const { assertWarningAllows } = require('../services/WarningBandServices');
   await assertWarningAllows(accountId, 'publish_asset');
-  const watchReview = await listingReviewForced(accountId);
 
   // If the asset is ALREADY published, updating its details preserves published status
   if (currentStatus === 'published') {
@@ -89,11 +88,7 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
-  // Global marketplace listing review was removed; only force-watched accounts are queued.
-  if (!watchReview) {
-    return { status: requestedStatus, queued: false };
-  }
-
+  // New publishes always enter the moderator review queue before going live.
   try {
     // Check if an existing listing already exists for this market_asset_id
     let existingListing = null;
