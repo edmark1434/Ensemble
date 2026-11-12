@@ -180,7 +180,11 @@ export default function AdminWarningThresholdsPanel() {
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {rows.map((row) => (
-                <tr key={row.warning_threshold_id} className="hover:bg-white/[0.02]">
+                <tr
+                  key={row.warning_threshold_id}
+                  onClick={() => openEdit(row)}
+                  className="cursor-pointer hover:bg-white/[0.02]"
+                >
                   <td className="px-4 py-3 font-medium text-white">{row.minPoints}+</td>
                   <td className="px-4 py-3 text-rose-300">
                     {row.label || effectLabel(row.effect)}
@@ -192,7 +196,7 @@ export default function AdminWarningThresholdsPanel() {
                       : 'Until points drop below this row'}
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-zinc-500">{row.note || '—'}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => openEdit(row)}

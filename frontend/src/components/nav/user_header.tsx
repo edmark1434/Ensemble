@@ -1077,6 +1077,8 @@ useEffect(() => {
     }
 
     cachedHeaderData = null;
+    sessionStorage.removeItem('showWelcomeLeftPopup');
+    sessionStorage.removeItem('justCompletedOnboarding');
     useChatState.getState().reset();
     useGlobalState.getState().clearUser();
     setShowHeader(false);

@@ -267,6 +267,15 @@ async function buildReportSubject(row) {
 
   const linkable = links.some((link) => link.label !== 'Open reporter');
 
+  let staffRole = null;
+  if (accountId) {
+    const staff = await pool.query(
+      `SELECT role FROM staff WHERE account_id::text = $1 LIMIT 1`,
+      [String(accountId)]
+    );
+    staffRole = staff.rows[0]?.role || null;
+  }
+
   return {
     headline,
     kind: snapshot?.kind || targetType || 'other',
@@ -286,6 +295,7 @@ async function buildReportSubject(row) {
           name: row.target_name || 'Account',
           handle: row.target_handle || null,
           path: profileLink(accountId),
+          staffRole,
         }
       : null,
   };

@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
   Shield,
+  Star,
   TrendingUp,
   UserPlus,
   Users,
@@ -20,6 +21,8 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { prefetchStaffRoute } from '@/lib/staffPrefetch';
+import { AdminFeedbacksPanel } from '../feedbacks/AdminFeedbacksPage';
 import type { PlatformAnalytics } from './analyticsTypes';
 import {
   AreaChart,
@@ -38,7 +41,7 @@ import AnalyticsFilters, {
 } from './components/AnalyticsFilters';
 import PlatformEconomyAnalytics from './components/PlatformEconomyAnalytics';
 
-type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health';
+type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health' | 'feedback';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
@@ -47,6 +50,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'economy', label: 'Credits', icon: Coins },
   { id: 'finance', label: 'Platform finance & transactions', icon: BadgeDollarSign },
   { id: 'health', label: 'Platform health', icon: Shield },
+  { id: 'feedback', label: 'Feedback', icon: Star },
 ];
 
 const DEFAULT_FILTERS: AnalyticsFilterState = DEFAULT_ANALYTICS_FILTERS;
@@ -137,7 +141,7 @@ export default function AnalyticsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health'];
+  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health', 'feedback'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
   const [data, setData] = useState<PlatformAnalytics | null>(() => {
@@ -172,11 +176,15 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    if (paramTab && valid.includes(paramTab)) setTab(paramTab);
+    if (paramTab && valid.includes(paramTab)) {
+      setTab(paramTab);
+      if (paramTab === 'feedback') prefetchStaffRoute('/admin/feedbacks');
+    }
   }, [paramTab]);
 
   const switchTab = (id: TabId) => {
     setTab(id);
+    if (id === 'feedback') prefetchStaffRoute('/admin/feedbacks');
     setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
   };
 
@@ -223,7 +231,7 @@ export default function AnalyticsPage() {
     return [...years].sort((a, b) => b - a);
   }, [data]);
 
-  if (loading) {
+  if (loading && tab !== 'feedback') {
     return (
       <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className="h-10 w-10 animate-spin text-rose-400" />
@@ -231,7 +239,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  if (!data) {
+  if (!data && tab !== 'feedback') {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
@@ -244,7 +252,8 @@ export default function AnalyticsPage() {
     );
   }
 
-  const { kpis, alerts } = data;
+  const kpis = data?.kpis;
+  const alerts = data?.alerts || [];
   const filterActive = isFilterActive(filters);
 
   return (
@@ -255,30 +264,33 @@ export default function AnalyticsPage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Analytics</p>
             <h1 className="text-xl font-bold text-white">Platform analytics</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {filterActive ? `${filteredMembers.length} filtered` : kpis.totalMembers} members · engagement{' '}
-              {kpis.engagementScore}/100 · @{user?.username || 'admin'}
+              {tab === 'feedback'
+                ? `Suggestions & ratings · @${user?.username || 'admin'}`
+                : `${filterActive ? `${filteredMembers.length} filtered` : kpis?.totalMembers ?? '—'} members · engagement ${kpis?.engagementScore ?? '—'}/100 · @${user?.username || 'admin'}`}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1 lg:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search members…"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-              />
+          {tab !== 'feedback' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1 lg:w-72">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search members…"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void load(true)}
+                disabled={refreshing}
+                className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void load(true)}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
+          )}
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
           {TABS.map(({ id, label, icon: Icon }) => (
@@ -298,6 +310,10 @@ export default function AnalyticsPage() {
       </header>
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
+        {tab === 'feedback' && <AdminFeedbacksPanel />}
+
+        {tab !== 'feedback' && data && (
+          <>
         <AnalyticsFilters
           filters={filters}
           onChange={setFilters}
@@ -347,6 +363,8 @@ export default function AnalyticsPage() {
         {tab === 'economy' && <EconomyTab data={data} filteredMembers={filteredMembers} />}
         {tab === 'finance' && <PlatformEconomyAnalytics data={data} filteredMembers={filteredMembers} />}
         {tab === 'health' && <HealthTab data={data} filteredMembers={filteredMembers} />}
+          </>
+        )}
       </div>
     </main>
   );

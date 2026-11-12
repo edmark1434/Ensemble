@@ -102,6 +102,7 @@ import {
   ForumModeratorLayout,
   ForumModeratorDashboard,
   ForumDiscussion,
+  ForumGroups,
   ForumTicketManagement,
   ForumReports,
   ForumUserTeam,
@@ -395,7 +396,10 @@ function App() {
           <Route path='feedbacks' element={<AdminFeedbacksPage />} />
           <Route path='badges' element={<AdminBadgesPage />} />
           <Route path='warnings' element={<AdminWarningsPage />} />
-          <Route path='badge-grant' element={<Navigate to="/admin/badges?tab=grant" replace />} />
+          <Route
+            path='badge-grant'
+            element={<Navigate to="/admin/system-settings?tab=badges&section=grant" replace />}
+          />
           <Route path='user-team' element={<UserTeamPage />} />
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />
@@ -411,6 +415,7 @@ function App() {
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ForumModeratorDashboard />} />
           <Route path='forum-discussion' element={<ForumDiscussion />} />
+          <Route path='groups' element={<ForumGroups />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
           <Route path='disputes' element={<ForumDisputes />} />
           <Route path='reports' element={<ForumReports />} />

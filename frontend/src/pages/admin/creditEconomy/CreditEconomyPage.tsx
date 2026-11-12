@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Coins,
-  Eye,
   LayoutGrid,
   Loader2,
   RefreshCw,
@@ -351,12 +350,15 @@ function WalletsPreview({
               <th className="px-4 py-3">Account type</th>
               <th className="px-4 py-3 text-right">Total credits</th>
               <th className="px-4 py-3 text-right">Total assets</th>
-              <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody>
             {wallets.map((w) => (
-              <tr key={w.walletId} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+              <tr
+                key={w.walletId}
+                onClick={() => onView(w)}
+                className="cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02]"
+              >
                 <td className="px-4 py-3">
                   <p className="font-medium text-white">{w.name}</p>
                   <p className="text-[10px] text-zinc-600">{w.walletId}</p>
@@ -366,21 +368,11 @@ function WalletsPreview({
                   {w.totalCredits.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">{w.totalAssets}</td>
-                <td className="px-4 py-3 text-center">
-                  <button
-                    type="button"
-                    onClick={() => onView(w)}
-                    className="inline-flex rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                    title="View wallet"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                </td>
               </tr>
             ))}
             {wallets.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-10 text-center text-zinc-500">
                   No wallets found.
                 </td>
               </tr>
@@ -415,12 +407,15 @@ function AuditPreview({
               <th className="px-4 py-3 text-right">Credit amount</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">When</th>
-              <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody>
             {entries.map((a) => (
-              <tr key={a.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+              <tr
+                key={a.id}
+                onClick={() => onViewWallet(a.walletId)}
+                className="cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02]"
+              >
                 <td className="px-4 py-3">
                   <p className="font-medium text-white">{a.name}</p>
                   <p className="text-[10px] text-zinc-600">@{a.username}</p>
@@ -450,15 +445,6 @@ function AuditPreview({
                 </td>
                 <td className="px-4 py-3 text-zinc-400">{a.type}</td>
                 <td className="px-4 py-3 text-xs text-zinc-500">{formatDateTime(a.timestamp)}</td>
-                <td className="px-4 py-3 text-center">
-                  <button
-                    type="button"
-                    onClick={() => onViewWallet(a.walletId)}
-                    className="inline-flex rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>

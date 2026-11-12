@@ -120,12 +120,12 @@ export type EconomyOverview = {
   wallets: EconomyWallet[];
   auditLog: AuditEntry[];
   topBuyers: TopBuyer[];
+  creditValuePhp?: number;
   creditPackages: CreditPackage[];
   feeSettings: FeeSetting[];
   marketplaceSettings: {
     listingFeeCredits: number;
     transactionFeePercent: number;
-    escrowHoldDays: number;
     minPayoutCredits: number;
     refundWindowDays: number;
   };

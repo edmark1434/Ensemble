@@ -1,120 +1,11 @@
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+const { DEFAULT_SETTINGS } = require('./PlatformConfiguration');
 
-const RECOMMENDED_FEE_SETTINGS = [
-  {
-    id: 'fee-job',
-    label: 'Job transaction',
-    percent: 10,
-    flatFee: 0,
-    appliesTo: 'Completed job contracts',
-    paidBy: 'Freelancer',
-    reason: 'Commission for successfully completed jobs',
-  },
-  {
-    id: 'fee-gig',
-    label: 'Gig transaction',
-    percent: 10,
-    flatFee: 0,
-    appliesTo: 'Gig purchases',
-    paidBy: 'Freelancer',
-    reason: 'Commission when a client purchases a gig',
-  },
-  {
-    id: 'fee-marketplace',
-    label: 'Asset marketplace sale',
-    percent: 15,
-    flatFee: 0,
-    appliesTo: 'Asset sales',
-    paidBy: 'Asset creator',
-    reason: 'Marketplace commission',
-  },
-  {
-    id: 'fee-credit-purchase',
-    label: 'Credit purchase',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Credit top-ups',
-    paidBy: 'Buyer',
-    reason: 'Keep purchasing credits simple',
-  },
-  {
-    id: 'fee-credit-refund',
-    label: 'Credit refund',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Credit refunds',
-    paidBy: '—',
-    reason: 'Better for user trust',
-  },
-  {
-    id: 'fee-cashout',
-    label: 'Withdrawal / cashout',
-    percent: 3.5,
-    flatFee: 0,
-    appliesTo: 'Withdrawals',
-    paidBy: 'Seller/Freelancer',
-    reason: 'Covers withdrawal and payment processing (recommended 2–5%)',
-  },
-  {
-    id: 'fee-cancellation',
-    label: 'Job/Gig cancellation',
-    percent: 2.5,
-    flatFee: 0,
-    appliesTo: 'Cancellations',
-    paidBy: 'Depends on situation',
-    reason: 'Discourages abuse and cancellations (recommended 0–5%)',
-  },
-  {
-    id: 'fee-dispute',
-    label: 'Dispute',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Disputes',
-    paidBy: '—',
-    reason: 'Do not charge users for requesting protection',
-  },
-  {
-    id: 'fee-forum',
-    label: 'Forum',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Forum activity',
-    paidBy: '—',
-    reason: 'Community feature should remain accessible',
-  },
-  {
-    id: 'fee-job-post',
-    label: 'Posting a job',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Job posts',
-    paidBy: 'Client',
-    reason: 'Encourages clients to post opportunities',
-  },
-  {
-    id: 'fee-gig-create',
-    label: 'Creating a gig',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Gig listings',
-    paidBy: 'Freelancer',
-    reason: 'Encourages freelancers to offer services',
-  },
-  {
-    id: 'fee-asset-upload',
-    label: 'Uploading an asset',
-    percent: 0,
-    flatFee: 0,
-    appliesTo: 'Asset listings',
-    paidBy: 'Asset creator',
-    reason: 'Encourages marketplace inventory',
-  },
-];
+const RECOMMENDED_FEE_SETTINGS = structuredClone(DEFAULT_SETTINGS.economy.feeSettings);
 
 const RECOMMENDED_MARKETPLACE_SETTINGS = {
   listingFeeCredits: 0,
   transactionFeePercent: 15,
-  escrowHoldDays: 7,
   minPayoutCredits: 500,
   refundWindowDays: 14,
 };
@@ -131,6 +22,23 @@ async function getEconomyFeeSettings() {
 async function getFeeSettingById(id) {
   const feeSettings = await getEconomyFeeSettings();
   return findFeeSetting(feeSettings, id) || findFeeSetting(RECOMMENDED_FEE_SETTINGS, id);
+}
+
+/** Flat credit fee from a feeSettings row (used for posting/listing charges). */
+async function getFlatFeeCredits(feeId, fallback = 0) {
+  const fee = await getFeeSettingById(feeId);
+  const flat = Number(fee?.flatFee);
+  if (Number.isFinite(flat) && flat >= 0) return Math.round(flat);
+  const safeFallback = Number(fallback);
+  return Number.isFinite(safeFallback) && safeFallback >= 0 ? Math.round(safeFallback) : 0;
+}
+
+async function getJobPostFeeCredits() {
+  return getFlatFeeCredits('fee-job-post', 50);
+}
+
+async function getGigCreateFeeCredits() {
+  return getFlatFeeCredits('fee-gig-create', 50);
 }
 
 async function getMarketplaceTransactionFeePercent() {
@@ -172,6 +80,9 @@ async function calculateCashoutFeePhpCents(amountCredits, phpCentsPerCredit) {
 async function getMarketplaceListingFeeCredits() {
   const economy = await getSectionValue('economy');
   const configured = Number(economy?.marketplaceSettings?.listingFeeCredits);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  const assetUploadFlat = await getFlatFeeCredits('fee-asset-upload', 0);
+  if (assetUploadFlat > 0) return assetUploadFlat;
   if (Number.isFinite(configured) && configured >= 0) return configured;
   return RECOMMENDED_MARKETPLACE_SETTINGS.listingFeeCredits;
 }
@@ -183,11 +94,26 @@ async function getMarketplaceRefundWindowDays() {
   return RECOMMENDED_MARKETPLACE_SETTINGS.refundWindowDays;
 }
 
-async function getMarketplaceEscrowHoldDays() {
-  const economy = await getSectionValue('economy');
-  const configured = Number(economy?.marketplaceSettings?.escrowHoldDays);
-  if (Number.isFinite(configured) && configured >= 0) return configured;
-  return RECOMMENDED_MARKETPLACE_SETTINGS.escrowHoldDays;
+/**
+ * PHP pesos per 1 platform credit.
+ * Prefer economy.creditValuePhp; fall back to CASHOUT_PHP_CENTS_PER_CREDIT env, then default 1.
+ */
+async function getCreditValuePhp() {
+  try {
+    const economy = await getSectionValue('economy');
+    const configured = Number(economy?.creditValuePhp);
+    if (Number.isFinite(configured) && configured > 0) return configured;
+  } catch (_err) {
+    /* use fallbacks */
+  }
+  const envCents = Number.parseInt(process.env.CASHOUT_PHP_CENTS_PER_CREDIT || '', 10);
+  if (Number.isFinite(envCents) && envCents > 0) return envCents / 100;
+  return Number(DEFAULT_SETTINGS.economy.creditValuePhp) || 1;
+}
+
+/** Whole PHP cents per 1 platform credit (for cashout / payout math). */
+async function getPhpCentsPerCredit() {
+  return Math.max(1, Math.round((await getCreditValuePhp()) * 100));
 }
 
 module.exports = {
@@ -195,10 +121,14 @@ module.exports = {
   RECOMMENDED_MARKETPLACE_SETTINGS,
   getEconomyFeeSettings,
   getFeeSettingById,
+  getFlatFeeCredits,
+  getJobPostFeeCredits,
+  getGigCreateFeeCredits,
   getMarketplaceTransactionFeePercent,
   getMarketplaceListingFeeCredits,
   getMarketplaceRefundWindowDays,
-  getMarketplaceEscrowHoldDays,
+  getCreditValuePhp,
+  getPhpCentsPerCredit,
   calculatePercentFeeAmount,
   calculateCashoutFeePhpCents,
 };

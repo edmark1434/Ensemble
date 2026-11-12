@@ -23,7 +23,6 @@ const {
 const { createNotificationServices } = require('../services/NotificationServices');
 const { buildReportSubject, snapshotTitle } = require('../lib/ReportSubject');
 const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
-const { getSectionValue } = require('./AdminSettingsRepositories');
 const {
   isMongoReady,
   getDisputeChatId,
@@ -2881,17 +2880,16 @@ async function updateTicket(ticketId, patch, staffSession) {
     }
 
     try {
-      const notifSettings = await getSectionValue('notifications');
       const { getIo } = require('../lib/WebSocket');
       const io = getIo();
 
-      // 1. Notify assignee on ticket assignment
+      // 1. Notify assignee on ticket assignment (always on)
       const nextAssignee = patch.handled_by_staff_id !== undefined ? patch.handled_by_staff_id : null;
       const isNewlyAssigned = nextAssignee && normalizeStaffId(nextAssignee) !== normalizeStaffId(currentAssignee);
       if (isNewlyAssigned) {
         await announceTicketAssignment(ticketId, nextAssignee, staffSession);
       }
-      if (isNewlyAssigned && notifSettings?.notifyAssigneeOnTicket !== false) {
+      if (isNewlyAssigned) {
         const staffRes = await pool.query(`SELECT account_id FROM staff WHERE staff_id = $1`, [nextAssignee]);
         if (staffRes.rows.length && staffRes.rows[0].account_id) {
           const staffAccountId = staffRes.rows[0].account_id;
@@ -2922,7 +2920,7 @@ async function updateTicket(ticketId, patch, staffSession) {
         });
       }
     } catch (notifErr) {
-      console.error('Error dispatching ticket configuration-based notifications:', notifErr.message);
+      console.error('Error dispatching ticket notifications:', notifErr.message);
     }
   }
 

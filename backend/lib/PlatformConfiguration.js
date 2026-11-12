@@ -1,25 +1,29 @@
+const ACTIVE_FEE_SETTING_IDS = Object.freeze([
+  'fee-job',
+  'fee-gig',
+  'fee-marketplace',
+  'fee-credit-purchase',
+  'fee-credit-refund',
+  'fee-cashout',
+  'fee-cancellation',
+  'fee-dispute',
+  'fee-forum',
+  'fee-job-post',
+  'fee-gig-create',
+  'fee-asset-upload',
+]);
+
 const DEFAULT_SETTINGS = {
   platform: {
     siteName: 'Ensemble',
-    tagline: 'Creative collaboration platform',
     maintenanceMode: false,
     registrationEnabled: true,
     supportEmail: 'support@ensemble.app',
-    maxUploadMb: 50,
     sessionTimeoutDays: 30,
   },
-  moderation: {
-    spamFilterEnabled: true,
-    autoFlagProfanity: true,
-    autoHoldNewAccounts: false,
-    forumLinkScanning: true,
-    marketplaceListingReview: true,
-    disputeAutoAssign: true,
-    maxWarningsBeforeSuspend: 20,
-    autoEscalateHighPriority: true,
-    reportToTicketAutoCreate: true,
-  },
   economy: {
+    /** Philippine pesos (PHP) per 1 platform credit. Used for custom top-ups and cashouts. */
+    creditValuePhp: 1,
     creditPackages: [
       { id: 'pkg-starter', name: 'Starter Pack', credits: 500, pricePhp: 499, active: true, salesCount: 0 },
       { id: 'pkg-pro', name: 'Pro Pack', credits: 2500, pricePhp: 1999, active: true, salesCount: 0 },
@@ -36,28 +40,16 @@ const DEFAULT_SETTINGS = {
       { id: 'fee-cancellation', label: 'Job/Gig cancellation', percent: 2.5, flatFee: 0, appliesTo: 'Cancellations', paidBy: 'Depends on situation', reason: 'Discourages abuse and cancellations (recommended 0–5%)' },
       { id: 'fee-dispute', label: 'Dispute', percent: 0, flatFee: 0, appliesTo: 'Disputes', paidBy: '—', reason: 'Do not charge users for requesting protection' },
       { id: 'fee-forum', label: 'Forum', percent: 0, flatFee: 0, appliesTo: 'Forum activity', paidBy: '—', reason: 'Community feature should remain accessible' },
-      { id: 'fee-job-post', label: 'Posting a job', percent: 0, flatFee: 0, appliesTo: 'Job posts', paidBy: 'Client', reason: 'Encourages clients to post opportunities' },
-      { id: 'fee-gig-create', label: 'Creating a gig', percent: 0, flatFee: 0, appliesTo: 'Gig listings', paidBy: 'Freelancer', reason: 'Encourages freelancers to offer services' },
-      { id: 'fee-asset-upload', label: 'Uploading an asset', percent: 0, flatFee: 0, appliesTo: 'Asset listings', paidBy: 'Asset creator', reason: 'Encourages marketplace inventory' },
+      { id: 'fee-job-post', label: 'Posting a job', percent: 0, flatFee: 50, appliesTo: 'Job posts', paidBy: 'Client', reason: 'Flat credits charged when publishing a job' },
+      { id: 'fee-gig-create', label: 'Creating a gig', percent: 0, flatFee: 50, appliesTo: 'Gig listings', paidBy: 'Freelancer', reason: 'Flat credits charged when publishing a service' },
+      { id: 'fee-asset-upload', label: 'Uploading an asset', percent: 0, flatFee: 0, appliesTo: 'Asset listings', paidBy: 'Asset creator', reason: 'Fallback flat listing fee when marketplace listing fee is unset' },
     ],
     marketplaceSettings: {
       listingFeeCredits: 0,
       transactionFeePercent: 15,
-      escrowHoldDays: 7,
       minPayoutCredits: 500,
       refundWindowDays: 14,
     },
-  },
-  notifications: {
-    emailNewSignups: true,
-    emailNewTickets: true,
-    emailDisputeOpened: true,
-    emailHighPriorityReports: true,
-    emailWeeklyDigest: false,
-    slackWebhookEnabled: false,
-    slackWebhookUrl: '',
-    notifyAssigneeOnTicket: true,
-    notifyRequesterOnResolution: true,
   },
   security: {
     requireStaff2fa: false,
@@ -67,7 +59,6 @@ const DEFAULT_SETTINGS = {
     auditLogRetentionDays: 90,
     ipAllowlistEnabled: false,
     allowedAdminIps: [],
-    forceHttps: true,
   },
 };
 
@@ -75,37 +66,20 @@ const SECTION_KEYS = Object.freeze(Object.keys(DEFAULT_SETTINGS));
 
 const FIELD_META = {
   'platform.siteName': { name: 'Site name', description: 'Public platform name shown in the product.' },
-  'platform.tagline': { name: 'Tagline', description: 'Short description shown alongside the platform name.' },
-  'platform.maintenanceMode': { name: 'Maintenance mode', description: 'When true, users may see a downtime banner.' },
+  'platform.maintenanceMode': {
+    name: 'Maintenance mode',
+    description: 'When true, members cannot use login or the product app. Landing pages and staff/admin consoles stay available.',
+  },
   'platform.registrationEnabled': { name: 'Registration enabled', description: 'Allow new user sign-ups.' },
   'platform.supportEmail': { name: 'Support email', description: 'Public support contact address.' },
-  'platform.maxUploadMb': { name: 'Max upload size (MB)', description: 'Maximum file upload size in megabytes.' },
   'platform.sessionTimeoutDays': { name: 'Session timeout (days)', description: 'Idle session lifetime in days.' },
-  'moderation.spamFilterEnabled': { name: 'Spam filter', description: 'Enable automated spam filtering.' },
-  'moderation.autoFlagProfanity': { name: 'Auto-flag profanity', description: 'Automatically flag content that contains profanity.' },
-  'moderation.autoHoldNewAccounts': { name: 'Hold new accounts', description: 'Delay full access for new accounts pending review.' },
-  'moderation.forumLinkScanning': { name: 'Forum link scanning', description: 'Scan outbound links in forum discussions.' },
-  'moderation.marketplaceListingReview': { name: 'Marketplace listing review', description: 'Queue new marketplace listings for staff review.' },
-  'moderation.disputeAutoAssign': { name: 'Auto-assign disputes', description: 'Automatically assign open disputes to staff.' },
-  'moderation.maxWarningsBeforeSuspend': { name: 'Warning points before 7-day suspend', description: 'Active warning points that trigger a 7-day cooling-off suspension. 30+ points use 14 days. Values under 10 are treated as 20.' },
-  'moderation.autoEscalateHighPriority': { name: 'Auto-escalate high priority', description: 'Escalate high-priority reports automatically.' },
-  'moderation.reportToTicketAutoCreate': { name: 'Report to ticket', description: 'Create a support ticket when a report is filed.' },
+  'economy.creditValuePhp': { name: 'Credit value (PHP)', description: 'Philippine pesos per 1 platform credit. Used for custom top-ups and cashout conversion. Default is 1.' },
   'economy.creditPackages': { name: 'Credit packages', description: 'Purchasable credit packages offered to users.' },
   'economy.feeSettings': { name: 'Fee settings', description: 'Platform fee schedule for jobs, gigs, assets, and cashouts.' },
   'economy.marketplaceSettings.listingFeeCredits': { name: 'Listing fee (credits)', description: 'Credits charged to list an asset.' },
   'economy.marketplaceSettings.transactionFeePercent': { name: 'Marketplace transaction fee (%)', description: 'Percent fee taken from asset sales.' },
-  'economy.marketplaceSettings.escrowHoldDays': { name: 'Escrow hold (days)', description: 'Days to hold marketplace escrow before release.' },
   'economy.marketplaceSettings.minPayoutCredits': { name: 'Minimum payout (credits)', description: 'Minimum credit balance required to cash out.' },
   'economy.marketplaceSettings.refundWindowDays': { name: 'Refund window (days)', description: 'Days after purchase during which a refund may be requested.' },
-  'notifications.emailNewSignups': { name: 'Email new sign-ups', description: 'Notify staff by email when a new account registers.' },
-  'notifications.emailNewTickets': { name: 'Email new tickets', description: 'Notify staff by email when a ticket is created.' },
-  'notifications.emailDisputeOpened': { name: 'Email disputes', description: 'Notify staff by email when a dispute is opened.' },
-  'notifications.emailHighPriorityReports': { name: 'Email high-priority reports', description: 'Notify staff by email for high-priority reports.' },
-  'notifications.emailWeeklyDigest': { name: 'Weekly digest', description: 'Send a weekly operational digest email.' },
-  'notifications.slackWebhookEnabled': { name: 'Slack webhook', description: 'Send operational alerts to Slack.' },
-  'notifications.slackWebhookUrl': { name: 'Slack webhook URL', description: 'Incoming Slack webhook endpoint.' },
-  'notifications.notifyAssigneeOnTicket': { name: 'Notify ticket assignee', description: 'Notify the assigned staff member when a ticket changes.' },
-  'notifications.notifyRequesterOnResolution': { name: 'Notify requester on resolution', description: 'Notify the requester when a ticket is resolved.' },
   'security.requireStaff2fa': { name: 'Require staff 2FA', description: 'Require two-factor authentication for staff accounts.' },
   'security.minPasswordLength': { name: 'Minimum password length', description: 'Minimum number of characters required for passwords.' },
   'security.lockoutAfterFailedAttempts': { name: 'Lockout after failed attempts', description: 'Failed login attempts before a lockout.' },
@@ -113,7 +87,6 @@ const FIELD_META = {
   'security.auditLogRetentionDays': { name: 'Audit log retention (days)', description: 'Days to retain administrative audit logs.' },
   'security.ipAllowlistEnabled': { name: 'Admin IP allowlist', description: 'Restrict admin access to listed IP addresses.' },
   'security.allowedAdminIps': { name: 'Allowed admin IPs', description: 'IP addresses permitted when the admin allowlist is enabled.' },
-  'security.forceHttps': { name: 'Force HTTPS', description: 'Redirect unencrypted traffic to HTTPS.' },
 };
 
 function isPlainObject(value) {
@@ -239,6 +212,18 @@ function assembleSection(sectionKey, defaults, rowsOrMap) {
     }
     assembled.sessionTimeoutMinutes = assembled.sessionTimeoutDays * 1440;
   }
+  if (sectionKey === 'economy') {
+    const allowed = new Set(ACTIVE_FEE_SETTING_IDS);
+    const existing = Array.isArray(assembled.feeSettings) ? assembled.feeSettings : [];
+    const kept = existing.filter((fee) => fee && allowed.has(fee.id));
+    for (const def of DEFAULT_SETTINGS.economy.feeSettings) {
+      if (!kept.some((fee) => fee.id === def.id)) kept.push(structuredClone(def));
+    }
+    assembled.feeSettings = kept;
+    if (assembled.marketplaceSettings && typeof assembled.marketplaceSettings === 'object') {
+      delete assembled.marketplaceSettings.escrowHoldDays;
+    }
+  }
   return assembled;
 }
 
@@ -290,6 +275,7 @@ module.exports = {
   DEFAULT_SETTINGS,
   SECTION_KEYS,
   FIELD_META,
+  ACTIVE_FEE_SETTING_IDS,
   isPlainObject,
   toLiteral,
   fromLiteral,

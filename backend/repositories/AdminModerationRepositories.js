@@ -1,43 +1,22 @@
 const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
-const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositories');
 const { fetchDisputesList, fetchReportsList } = require('./AdminTicketsRepositories');
 const {
   listRecentAccountActivity,
+  searchAccountActivity,
+  listAccountActivityEventCodes,
+  listAccountActivityActorRoles,
   getAccountActivityById,
   markAccountActivityReversed,
   recordAccountActivity,
 } = require('./AccountActivityRepositories');
 const { sendMarketplaceListingNotification } = require('../lib/ModerationPolicy');
-
-const REVERSIBLE_EVENT_CODES = new Set([
-  'ACCOUNT_STATUS_CHANGED',
-  'ACCOUNT_WARNED',
-  'VIOLATION_ISSUED',
-  'RESTRICTION_ISSUED',
-  'CREDITS_FROZEN',
-]);
-
-function categoryFromEventCode(eventCode) {
-  const code = String(eventCode || '').toUpperCase();
-  if (code.includes('REPORT')) return 'report';
-  if (code.includes('DISPUTE')) return 'dispute';
-  if (code.includes('LISTING') || code.includes('MARKET')) return 'marketplace';
-  if (code.includes('CREDIT') || code.includes('WALLET')) return 'economy';
-  if (code.includes('VIOLATION') || code.includes('WARN') || code.includes('PARDON') || code.includes('RESTRICTION')) {
-    return 'conduct';
-  }
-  if (code.includes('STATUS')) return 'account';
-  return 'moderation';
-}
-
-function targetTypeFromEventCode(eventCode) {
-  const code = String(eventCode || '').toUpperCase();
-  if (code.includes('LISTING')) return 'Marketplace listing';
-  if (code.includes('REPORT')) return 'Report';
-  if (code.includes('DISPUTE')) return 'Dispute';
-  return 'Account';
-}
+const {
+  CATEGORY_RULES,
+  REVERSIBLE_EVENT_CODES,
+  buildDetailPairs,
+  describeEvent,
+} = require('../lib/ActivityCatalog');
 
 function normalizeStatus(status) {
   if (!status) return 'Unknown';
@@ -332,37 +311,131 @@ async function countOpenIdentityReviews() {
   return Number(result.rows[0]?.count || 0);
 }
 
-async function fetchRecentModerationActivity() {
-  const rows = await listRecentAccountActivity({ limit: 40 });
-  return rows.map((row) => {
-    const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-    const reversed = meta.reversed === true || meta.reversed === 'true';
-    const reversible = !reversed && REVERSIBLE_EVENT_CODES.has(String(row.eventCode || '').toUpperCase());
-    return {
-      id: row.id,
-      action: row.action,
-      category: categoryFromEventCode(row.eventCode),
-      target: row.accountName || row.accountHandle || 'Account',
-      targetHandle: row.accountHandle || '—',
-      targetType: targetTypeFromEventCode(row.eventCode),
-      executedBy: row.actorName || 'Staff',
-      executedByRole: row.actorRole || 'Staff',
-      executedByHandle: row.actorName ? '—' : '—',
-      timestamp: row.createdAt,
-      status: reversed ? 'Reversed' : 'Completed',
-      notes:
-        (meta.reason || meta.note || meta.type || row.eventCode || '') +
-        (row.referencePrefix && row.referenceId
-          ? ` · ${row.referencePrefix}-${String(row.referenceId).slice(0, 8)}`
-          : ''),
-      eventCode: row.eventCode,
-      accountId: row.accountId,
-      referenceTable: row.referenceTable,
-      referenceId: row.referenceId,
-      reversible,
-      metadata: meta,
-    };
-  });
+/** Short, readable label for the record an activity row points at. */
+function referenceLabel(prefix, id) {
+  if (!id) return null;
+  const value = String(id);
+  const short = value.length > 12 ? `${value.slice(0, 8)}…` : value;
+  return prefix ? `${prefix}-${short}` : short;
+}
+
+/**
+ * One activity row shaped for the Moderation → Activity log.
+ *
+ * Everything a reviewer needs to judge the action without opening another page:
+ * the plain-language event, what it changed, who it hit, who did it, the record
+ * it points at, every metadata field, and the reversal trail.
+ */
+function mapModerationActivity(row) {
+  const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const reversed = meta.reversed === true || meta.reversed === 'true';
+  const event = describeEvent(row.eventCode);
+  const details = buildDetailPairs(meta);
+  const actorKind = row.actorStaffId ? 'Staff' : row.actorAccountId ? 'Member' : 'System';
+  const reason = meta.reason || meta.note || null;
+
+  return {
+    id: row.id,
+    action: row.action,
+    eventCode: event.eventCode,
+    eventLabel: event.eventLabel,
+    category: event.category,
+    categoryLabel: event.categoryLabel,
+    severity: event.severity,
+    impact: event.impact,
+
+    target: row.accountName || row.accountHandle || 'Account',
+    targetHandle: row.accountHandle || '—',
+    targetType: event.targetType,
+    accountId: row.accountId,
+    accountStatus: row.accountStatus || null,
+
+    executedBy: row.actorName || (actorKind === 'System' ? 'System' : 'Staff'),
+    executedByRole: row.actorRole || (actorKind === 'System' ? 'Automated' : actorKind),
+    executedByHandle: row.actorHandle || '—',
+    executedByKind: actorKind,
+    executedByStaffId: row.actorStaffId,
+    executedByAccountId: row.actorAccountId,
+
+    timestamp: row.createdAt,
+    status: reversed ? 'Reversed' : 'Completed',
+
+    reason,
+    details,
+    metadata: meta,
+    // Kept as one searchable line for compact previews.
+    notes:
+      (reason || meta.type || event.eventLabel || '') +
+      (row.referencePrefix && row.referenceId
+        ? ` · ${referenceLabel(row.referencePrefix, row.referenceId)}`
+        : ''),
+
+    reference: {
+      table: row.referenceTable,
+      prefix: row.referencePrefix,
+      id: row.referenceId,
+      label: referenceLabel(row.referencePrefix, row.referenceId),
+    },
+    referenceTable: row.referenceTable,
+    referenceId: row.referenceId,
+
+    reversible: !reversed && event.reversible,
+    reversal: reversed
+      ? {
+          reversed: true,
+          at: meta.reversedAt || null,
+          by: row.reversedByName || null,
+          byRole: row.reversedByRole || null,
+          byStaffId: meta.reversedByStaffId || null,
+          note: meta.reverseNote || null,
+        }
+      : { reversed: false },
+  };
+}
+
+async function fetchRecentModerationActivity({ limit = 60 } = {}) {
+  const rows = await listRecentAccountActivity({ limit });
+  return rows.map(mapModerationActivity);
+}
+
+/**
+ * A filtered, paginated page of the activity log plus everything the filter bar
+ * needs: matching totals, the category list and the event codes and staff roles
+ * that actually occur in the table.
+ */
+async function fetchModerationActivityPage(options = {}) {
+  const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 200);
+  const offset = Math.max(Number(options.offset) || 0, 0);
+
+  const [page, eventCodes, roles] = await Promise.all([
+    searchAccountActivity({ ...options, limit, offset }),
+    listAccountActivityEventCodes(),
+    listAccountActivityActorRoles(),
+  ]);
+
+  return {
+    entries: page.rows.map(mapModerationActivity),
+    total: page.total,
+    limit,
+    offset,
+    hasMore: offset + page.rows.length < page.total,
+    stats: page.stats,
+    filters: {
+      categories: CATEGORY_RULES.map((rule) => ({ value: rule.id, label: rule.label })),
+      eventCodes: eventCodes.map((row) => ({
+        value: row.eventCode,
+        label: describeEvent(row.eventCode).eventLabel,
+        count: row.count,
+      })),
+      roles: roles.map((row) => ({ value: row.role, label: row.role, count: row.count })),
+    },
+  };
+}
+
+/** One activity row by id, shaped like a log entry. */
+async function fetchModerationActivityDetail(activityId) {
+  const row = await getAccountActivityById(activityId);
+  return row ? mapModerationActivity(row) : null;
 }
 
 async function reverseModerationActivity(activityId, staffSession = null) {
@@ -505,10 +578,15 @@ async function reverseModerationActivity(activityId, staffSession = null) {
     metadata: {
       originalEventCode: code,
       originalAction: activity.action,
+      originalActedAt: activity.createdAt ? new Date(activity.createdAt).toISOString() : null,
     },
   });
 
-  return fetchRecentModerationActivity();
+  const [entry, entries] = await Promise.all([
+    fetchModerationActivityDetail(activityId),
+    fetchRecentModerationActivity(),
+  ]);
+  return { entry, entries };
 }
 
 function computeModeratorPerformance(staff, activities) {
@@ -556,7 +634,6 @@ async function getModerationOverview(staffSession = null) {
     reportStats,
     listingStats,
     violationStats,
-    moderationSettings,
     ],
     [pendingCases, recentActivity, identityReviewCount, disputes, reports],
   ] = await Promise.all([
@@ -633,7 +710,6 @@ async function getModerationOverview(staffSession = null) {
           AND (expires_at IS NULL OR expires_at > NOW())
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),
-    getSectionValue('moderation').catch(() => DEFAULT_SETTINGS.moderation),
     ]),
     Promise.all([
       fetchPendingCasesFromDb(),
@@ -731,14 +807,7 @@ async function getModerationOverview(staffSession = null) {
     })),
     forumReviewQueue: forum.groups.slice(0, 12),
     contentSnapshots: forum.flaggedDiscussions.slice(0, 8),
-    automatedSettings: (() => {
-      // Always return the persisted configuration values (same store as Settings → Moderation).
-      // Do not mutate stored flags based on Mongo connectivity — that caused false saves.
-      return {
-        ...DEFAULT_SETTINGS.moderation,
-        ...(moderationSettings || {}),
-      };
-    })(),
+    automatedSettings: {},
     forumMongoConnected: Boolean(forum.connected),
     alerts: buildModerationAlerts(
       pendingCases,
@@ -1226,4 +1295,6 @@ module.exports = {
   deletePendingCase,
   assignMyselfToPendingCase,
   reverseModerationActivity,
+  fetchModerationActivityPage,
+  fetchModerationActivityDetail,
 };

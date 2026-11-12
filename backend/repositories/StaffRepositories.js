@@ -217,7 +217,7 @@ async function getStaffById(staffId) {
 /**
  * Update staff profile, role, account status, and optionally password.
  */
-async function updateStaffAccount(staffId, payload = {}) {
+async function updateStaffAccount(staffId, payload = {}, actor = null) {
     const existing = await getStaffById(staffId);
     if (!existing) {
         throw Object.assign(new Error('Staff account not found'), { status: 404 });
@@ -274,6 +274,18 @@ async function updateStaffAccount(staffId, payload = {}) {
     }
 
     const displayName = `${trimmedFirst} ${trimmedLast}`.trim().slice(0, 50);
+    const wasSuspended = String(existing.status || '').toLowerCase() === 'suspended';
+    if (normalizedStatus === 'Suspended' && !wasSuspended) {
+        const { assertCanSuspendTarget } = require('../lib/SuspendGuards');
+        const actorStaffId = actor?.actorStaffId || actor?.staffId || null;
+        const actorAccountId = actor?.actorAccountId || actor?.accountId || null;
+        await assertCanSuspendTarget({
+            actorStaffId,
+            actorAccountId,
+            targetStaffId: staffId,
+            targetAccountId: existing.account_id,
+        });
+    }
     const client = await pool.connect();
     try {
         await client.query('BEGIN');

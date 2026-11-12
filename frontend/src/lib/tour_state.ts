@@ -985,6 +985,14 @@ export function getActiveTourSteps(role?: UserPlatformRole): WalkthroughStep[] {
 const STORAGE_KEY_COMPLETED = 'ensemble_platform_walkthrough_completed';
 const STORAGE_KEY_DISMISSED = 'ensemble_platform_walkthrough_dismissed';
 
+export const getStorageKeyCompleted = (accountId?: string | number | null) =>
+  accountId ? `ensemble_platform_walkthrough_completed_${accountId}` : STORAGE_KEY_COMPLETED;
+
+export const getStorageKeyDismissed = (accountId?: string | number | null) =>
+  accountId ? `ensemble_platform_walkthrough_dismissed_${accountId}` : STORAGE_KEY_DISMISSED;
+
+let currentTourAccountId: string | null = null;
+
 interface WalkthroughState {
   isWalkthroughActive: boolean;
   isTourActive?: boolean;
@@ -998,20 +1006,20 @@ interface WalkthroughState {
   // Actions
   initFromUser: (user: any) => void;
   openWelcome: () => void;
-  closeWelcome: () => void;
+  closeWelcome: (accountId?: string | number | null) => void;
   startWalkthrough: (role?: UserPlatformRole) => void;
   startTour: (role?: UserPlatformRole) => void;
   nextStep: () => void;
   prevStep: () => void;
   goToStep: (index: number) => void;
   skipSection: () => void;
-  skipWalkthrough: () => void;
+  skipWalkthrough: (accountId?: string | number | null) => void;
   skipTour: () => void;
-  finishWalkthrough: () => void;
+  finishWalkthrough: (accountId?: string | number | null) => void;
   finishTour: () => void;
   closeGraduation: () => void;
   setRole: (role: UserPlatformRole) => void;
-  resetWalkthroughHistory: () => void;
+  resetWalkthroughHistory: (accountId?: string | number | null) => void;
 }
 
 let lastAdvanceTimestamp = 0;
@@ -1027,8 +1035,14 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
 
   initFromUser: (user: any) => {
     const role = resolveUserRole(user);
-    const completed = localStorage.getItem(STORAGE_KEY_COMPLETED) === 'true';
-    const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED) === 'true';
+    const accountId = user?.account_id ? String(user.account_id) : (user?.accountId ? String(user.accountId) : null);
+    currentTourAccountId = accountId;
+
+    const completedKey = getStorageKeyCompleted(accountId);
+    const dismissedKey = getStorageKeyDismissed(accountId);
+
+    const completed = localStorage.getItem(completedKey) === 'true';
+    const dismissed = localStorage.getItem(dismissedKey) === 'true';
 
     set({
       userRole: role,
@@ -1051,7 +1065,11 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
       activeSteps: getActiveTourSteps(role),
     });
   },
-  closeWelcome: () => {
+  closeWelcome: (accountId?: string | number | null) => {
+    const accId = accountId ? String(accountId) : currentTourAccountId;
+    if (accId) {
+      localStorage.setItem(getStorageKeyDismissed(accId), 'true');
+    }
     localStorage.setItem(STORAGE_KEY_DISMISSED, 'true');
     set({ isWelcomeOpen: false });
   },
@@ -1132,14 +1150,22 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
     }
   },
 
-  skipWalkthrough: () => {
+  skipWalkthrough: (accountId?: string | number | null) => {
+    const accId = accountId ? String(accountId) : currentTourAccountId;
+    if (accId) {
+      localStorage.setItem(getStorageKeyDismissed(accId), 'true');
+    }
     localStorage.setItem(STORAGE_KEY_DISMISSED, 'true');
     set({ isWalkthroughActive: false, isWelcomeOpen: false });
   },
 
   skipTour: () => get().skipWalkthrough(),
 
-  finishWalkthrough: () => {
+  finishWalkthrough: (accountId?: string | number | null) => {
+    const accId = accountId ? String(accountId) : currentTourAccountId;
+    if (accId) {
+      localStorage.setItem(getStorageKeyCompleted(accId), 'true');
+    }
     localStorage.setItem(STORAGE_KEY_COMPLETED, 'true');
     set({
       isWalkthroughActive: false,
@@ -1159,7 +1185,12 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
       currentStepIndex: 0,
     }),
 
-  resetWalkthroughHistory: () => {
+  resetWalkthroughHistory: (accountId?: string | number | null) => {
+    const accId = accountId ? String(accountId) : currentTourAccountId;
+    if (accId) {
+      localStorage.removeItem(getStorageKeyCompleted(accId));
+      localStorage.removeItem(getStorageKeyDismissed(accId));
+    }
     localStorage.removeItem(STORAGE_KEY_COMPLETED);
     localStorage.removeItem(STORAGE_KEY_DISMISSED);
     set({

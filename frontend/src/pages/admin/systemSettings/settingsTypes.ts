@@ -7,25 +7,11 @@ export type SettingsSection<T> = {
 
 export type PlatformSettings = {
   siteName: string;
-  tagline: string;
   maintenanceMode: boolean;
   registrationEnabled: boolean;
   supportEmail: string;
-  maxUploadMb: number;
   sessionTimeoutDays: number;
   sessionTimeoutMinutes?: number;
-};
-
-export type ModerationSettings = {
-  spamFilterEnabled: boolean;
-  autoFlagProfanity: boolean;
-  autoHoldNewAccounts: boolean;
-  forumLinkScanning: boolean;
-  marketplaceListingReview: boolean;
-  disputeAutoAssign: boolean;
-  maxWarningsBeforeSuspend: number;
-  autoEscalateHighPriority: boolean;
-  reportToTicketAutoCreate: boolean;
 };
 
 export type CreditPackage = {
@@ -48,27 +34,16 @@ export type FeeSetting = {
 };
 
 export type EconomySettings = {
+  /** Philippine pesos per 1 platform credit. Default 1. */
+  creditValuePhp: number;
   creditPackages: CreditPackage[];
   feeSettings: FeeSetting[];
   marketplaceSettings: {
     listingFeeCredits: number;
     transactionFeePercent: number;
-    escrowHoldDays: number;
     minPayoutCredits: number;
     refundWindowDays: number;
   };
-};
-
-export type NotificationSettings = {
-  emailNewSignups: boolean;
-  emailNewTickets: boolean;
-  emailDisputeOpened: boolean;
-  emailHighPriorityReports: boolean;
-  emailWeeklyDigest: boolean;
-  slackWebhookEnabled: boolean;
-  slackWebhookUrl: string;
-  notifyAssigneeOnTicket: boolean;
-  notifyRequesterOnResolution: boolean;
 };
 
 export type SecuritySettings = {
@@ -79,16 +54,13 @@ export type SecuritySettings = {
   auditLogRetentionDays: number;
   ipAllowlistEnabled: boolean;
   allowedAdminIps: string[];
-  forceHttps: boolean;
 };
 
 export type SettingsOverview = {
   lastUpdated: string;
   sections: {
     platform: SettingsSection<PlatformSettings>;
-    moderation: SettingsSection<ModerationSettings>;
     economy: SettingsSection<EconomySettings>;
-    notifications: SettingsSection<NotificationSettings>;
     security: SettingsSection<SecuritySettings>;
   };
   staffEditors: { staffId: string | number; name: string; role: string }[];

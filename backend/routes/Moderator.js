@@ -133,6 +133,7 @@ router.patch(
   ForumModerator.patchDisputeMessage
 );
 router.get('/forum/groups', [checkSession, forumModerator], ForumModerator.getGroups);
+router.get('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.getGroup);
 router.patch('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.patchGroup);
 router.patch('/forum/groups/:id/members/:memberId', [checkSession, forumModerator], ForumModerator.patchGroupMember);
 router.get('/forum/discussions', [checkSession, forumModerator], ForumModerator.getDiscussions);

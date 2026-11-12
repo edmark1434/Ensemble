@@ -49,10 +49,13 @@ This document is generated from the current public platform configuration in Pos
 ## Platform information
 
 - Platform name: ${present(platform.siteName, 'Ensemble')}
-- Tagline: ${present(platform.tagline, '')}
 - New-user registration enabled: ${yesNo(platform.registrationEnabled)}
-- Maximum upload size: ${number(platform.maxUploadMb)} MB
+- Maintenance mode: ${yesNo(platform.maintenanceMode)}
 - Support email: ${present(platform.supportEmail)}
+
+## Credit value
+
+- 1 platform credit = ${number(economy.creditValuePhp)} PHP
 
 ## Active credit packages
 
@@ -66,7 +69,6 @@ ${feeLines.length ? feeLines.join('\n') : 'No public platform fees are currently
 
 - Listing fee: ${number(marketplace.listingFeeCredits)} credits
 - Transaction fee: ${number(marketplace.transactionFeePercent)}%
-- Escrow holding period: ${number(marketplace.escrowHoldDays)} days
 - Minimum payout: ${number(marketplace.minPayoutCredits)} credits
 - Refund window: ${number(marketplace.refundWindowDays)} days
 `;

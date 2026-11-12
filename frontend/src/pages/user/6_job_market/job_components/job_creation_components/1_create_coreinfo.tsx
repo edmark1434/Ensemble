@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import api from "@/lib/axios";
+import { getPlatformPostingFees } from "@/lib/platformFees";
 import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { 
@@ -528,9 +529,14 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   };
 
   const user = useGlobalState((state) => state.user);
+  const [postingFeeCredits, setPostingFeeCredits] = useState(50);
   const [walletBalance, setWalletBalance] = useState<number | null>(
     user?.wallet?.balance_credits != null ? Number(user.wallet.balance_credits) : null
   );
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setPostingFeeCredits(fees.jobPostFeeCredits));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -1264,11 +1270,11 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                   Job Publication Cost
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300/70 dark:border-zinc-700 shadow-2xs">
-                  <CreditIcon className="h-2.5 w-2.5 text-amber-500" /> 50 Credits
+                  <CreditIcon className="h-2.5 w-2.5 text-amber-500" /> {postingFeeCredits} Credits
                 </span>
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-                50 Credits charged upon final review in Step 4. Drafting is free.
+                {postingFeeCredits} Credits charged upon final review in Step 4. Drafting is free.
               </p>
             </div>
 
@@ -1280,7 +1286,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                   {walletBalance !== null ? `${walletBalance.toLocaleString()} Cr` : "..."}
                 </span>
               </div>
-              {walletBalance !== null && walletBalance < 50 ? (
+              {walletBalance !== null && walletBalance < postingFeeCredits ? (
                 <button
                   type="button"
                   onClick={() => window.open("/credits/shop", "_blank")}

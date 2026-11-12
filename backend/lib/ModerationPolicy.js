@@ -3,24 +3,16 @@ const { DEFAULT_SETTINGS } = require('./PlatformConfiguration');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
 const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
-const { autoSuspendDaysForPoints, AUTO_SUSPEND_POINTS, refreshLiveThresholds } = require('./WarningBands');
-
-const PROFANITY_PATTERN =
-  /\b(fuck|shit|bitch|asshole|cunt|nigger|faggot|slut|whore)\b/i;
-const URL_PATTERN = /https?:\/\/[^\s]+|www\.[^\s]+/gi;
-const REPEATED_CHAR_SPAM = /(.)\1{9,}/i;
-const REPEATED_WORD_SPAM = /\b(\w+)\b(?:\s+\1\b){4,}/i;
+const {
+  autoSuspendDaysForPoints,
+  AUTO_SUSPEND_POINTS,
+  AUTO_SUSPEND_DAYS,
+  refreshLiveThresholds,
+} = require('./WarningBands');
 
 async function getModerationSettings() {
-  try {
-    const saved = await getSectionValue('moderation');
-    return {
-      ...DEFAULT_SETTINGS.moderation,
-      ...(saved || {}),
-    };
-  } catch {
-    return { ...DEFAULT_SETTINGS.moderation };
-  }
+  // Automod toggles were removed from System Settings.
+  return {};
 }
 
 async function getSecuritySettings() {
@@ -36,43 +28,16 @@ async function getSecuritySettings() {
 }
 
 /**
- * Evaluate user-authored text against active automod toggles.
- * Returns { blocked, reasons, flags } — throw/block at the call site when blocked.
+ * Evaluate user-authored text.
+ * Automod spam/profanity toggles were removed — content is never blocked here.
  */
-async function evaluateUserContent(text = '') {
-  const settings = await getModerationSettings();
-  const content = String(text || '');
-  const reasons = [];
-  const flags = {
-    spam: false,
-    profanity: false,
-    suspiciousLinks: false,
+async function evaluateUserContent() {
+  return {
+    blocked: false,
+    reasons: [],
+    flags: { spam: false, profanity: false, suspiciousLinks: false },
+    settings: {},
   };
-
-  if (settings.spamFilterEnabled) {
-    if (REPEATED_CHAR_SPAM.test(content) || REPEATED_WORD_SPAM.test(content)) {
-      flags.spam = true;
-      reasons.push('Content looks like spam');
-    }
-  }
-
-  if (settings.autoFlagProfanity && PROFANITY_PATTERN.test(content)) {
-    flags.profanity = true;
-    reasons.push('Content contains blocked language');
-  }
-
-  if (settings.forumLinkScanning) {
-    const urls = content.match(URL_PATTERN) || [];
-    if (urls.length > 0) {
-      flags.suspiciousLinks = true;
-      // Soft flag only — do not block posting solely for having a link
-      reasons.push('Outbound link(s) flagged for review');
-    }
-  }
-
-  // Spam + profanity hard-block; link scanning flags for review (caller may soft-flag)
-  const blocked = flags.spam || flags.profanity;
-  return { blocked, reasons, flags, settings };
 }
 
 /**
@@ -124,8 +89,8 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
-  const settings = await getModerationSettings();
-  if (!settings.marketplaceListingReview && !watchReview) {
+  // Global marketplace listing review was removed; only force-watched accounts are queued.
+  if (!watchReview) {
     return { status: requestedStatus, queued: false };
   }
 
@@ -204,81 +169,16 @@ async function resolveMarketplacePublishStatus({
 /**
  * Round-robin assign an unassigned dispute to an active support/admin staff member.
  */
-async function applyDisputeAutomations(disputeRow, knownSettings = null) {
-  if (!disputeRow?.dispute_id && !disputeRow?.id) return disputeRow;
-  const disputeId = disputeRow.dispute_id || disputeRow.id;
-  if (disputeRow.handled_by_staff_id) return disputeRow;
-
-  const settings = knownSettings || await getModerationSettings();
-  if (!settings.disputeAutoAssign) return disputeRow;
-
-  const staff = await pool.query(
-    `
-    SELECT s.staff_id
-    FROM staff s
-    JOIN accounts a ON a.account_id = s.account_id
-    WHERE a.deleted_at IS NULL
-      AND LOWER(COALESCE(a.status, 'active')) = 'active'
-      AND LOWER(s.role::text) IN (
-        'admin', 'support moderator', 'support_moderator', 'moderator'
-      )
-    ORDER BY (
-      SELECT COUNT(*) FROM disputes d
-      WHERE d.handled_by_staff_id = s.staff_id
-        AND d.status <> 'closed'
-    ) ASC, s.staff_id ASC
-    LIMIT 1
-    `
-  );
-  if (!staff.rows.length) return disputeRow;
-
-  const staffId = staff.rows[0].staff_id;
-  await pool.query(
-    `
-    UPDATE disputes
-    SET handled_by_staff_id = $1,
-        status = CASE
-          WHEN LOWER(status::text) IN ('pending_review', 'open', 'pending')
-            THEN 'under_review'
-          ELSE status
-        END,
-        updated_at = NOW()
-    WHERE dispute_id = $2
-      AND handled_by_staff_id IS NULL
-    `,
-    [staffId, disputeId]
-  );
-
-  return { ...disputeRow, handled_by_staff_id: staffId };
+async function applyDisputeAutomations(disputeRow) {
+  // Dispute auto-assign was removed from Automod settings; staff must claim disputes.
+  return disputeRow;
 }
 
 /**
- * Reconcile unassigned open disputes in the system based on moderation.disputeAutoAssign.
+ * Kept as a no-op for callers/jobs after dispute auto-assign was removed.
  */
 async function reconcileUnassignedDisputes() {
-  const settings = await getModerationSettings();
-  if (!settings.disputeAutoAssign) return { assigned: 0 };
-
-  const unassigned = await pool.query(
-    `
-    SELECT dispute_id, handled_by_staff_id, status
-    FROM disputes
-    WHERE handled_by_staff_id IS NULL
-      AND deleted_at IS NULL
-      AND status <> 'closed'
-    ORDER BY opened_at ASC NULLS LAST, created_at ASC
-    `
-  );
-
-  let assignedCount = 0;
-  for (const row of unassigned.rows) {
-    const updated = await applyDisputeAutomations(row, settings);
-    if (updated?.handled_by_staff_id) {
-      assignedCount++;
-    }
-  }
-
-  return { assigned: assignedCount };
+  return { assigned: 0 };
 }
 
 /**
@@ -302,30 +202,26 @@ function reconcileUnassignedDisputesThrottled() {
 }
 
 /**
- * After a warning is issued, suspend when active warning POINTS reach the
- * configured threshold (legacy stored values under 10 are treated as 20).
- * 30+ points use a 14-day cooldown. Already-suspended accounts are not stacked.
+ * After a warning is issued, suspend when warning thresholds say so
+ * (managed under /admin/warnings). Already-suspended accounts are not stacked.
  */
 async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   if (!accountId) return null;
-  const settings = await getModerationSettings();
-  const configured = Number(settings.maxWarningsBeforeSuspend);
-  const max = Number.isFinite(configured) && configured >= 10 ? configured : AUTO_SUSPEND_POINTS;
   const activeCount = await sumActiveWarningPoints(accountId);
   await refreshLiveThresholds();
   const days = autoSuspendDaysForPoints(activeCount);
   if (!days) {
-    return { suspended: false, activeCount, max };
+    return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
   }
 
   const previous = await pool.query(
     `SELECT status FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
     [accountId]
   );
-  if (!previous.rows.length) return { suspended: false, activeCount, max };
+  if (!previous.rows.length) return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
   const previousStatus = previous.rows[0].status;
   if (String(previousStatus).toLowerCase() === 'suspended') {
-    return { suspended: false, alreadySuspended: true, activeCount, max };
+    return { suspended: false, alreadySuspended: true, activeCount, max: AUTO_SUSPEND_POINTS };
   }
 
   await pool.query(
@@ -334,7 +230,7 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   );
   await recordAccountActivity({
     accountId,
-    action: `Auto-suspended ${days} day(s) after ${activeCount} active warning point(s) (limit ${max})`,
+    action: `Auto-suspended ${days} day(s) after ${activeCount} active warning point(s)`,
     eventCode: 'ACCOUNT_STATUS_CHANGED',
     referenceTable: 'accounts',
     referencePrefix: 'ACC',
@@ -345,9 +241,9 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
       status: 'Suspended',
       action: 'auto_suspend',
       activeWarnings: activeCount,
-      maxWarningsBeforeSuspend: max,
+      maxWarningsBeforeSuspend: AUTO_SUSPEND_POINTS,
       suspensionDays: days,
-      source: 'moderation_policy',
+      source: 'warning_thresholds',
     },
   });
 
@@ -358,80 +254,17 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     console.error('Failed to notify auto-suspended account:', notifyErr);
   }
 
-  return { suspended: true, activeCount, max, days, previousStatus };
+  return { suspended: true, activeCount, max: AUTO_SUSPEND_POINTS, days, previousStatus };
 }
 
-const HIGH_PRIORITY_REPORT_TYPES = new Set([
-  'harassment',
-  'hate speech',
-  'threat',
-  'violence',
-  'sexual content',
-  'scam',
-  'fraud',
-  'impersonation',
-]);
-
 /**
- * Apply report automations from moderation settings after a report is created.
+ * Apply report automations after a report is created.
+ * Auto-escalate and auto-ticket creation were removed from Automod settings.
  */
 async function applyReportAutomations(reportRow, { staffId = null } = {}) {
   if (!reportRow?.report_id && !reportRow?.id) return reportRow;
   const reportId = reportRow.report_id || reportRow.id;
-  const settings = await getModerationSettings();
-  const type = String(reportRow.type || '').trim().toLowerCase();
-  let priority = String(reportRow.priority || 'medium').toLowerCase();
-  let ticketAutoCreated = false;
-
-  if (
-    settings.autoEscalateHighPriority &&
-    (priority === 'high' || HIGH_PRIORITY_REPORT_TYPES.has(type))
-  ) {
-    await pool.query(
-      `UPDATE reports SET priority = 'high', updated_at = NOW() WHERE report_id = $1`,
-      [reportId]
-    );
-    priority = 'high';
-  }
-
-  const requesterAccountId = reportRow.by_account_id || reportRow.reporterAccountId || null;
-  if (settings.reportToTicketAutoCreate && requesterAccountId) {
-    const reason = `Auto follow-up for report ${reportRow.report_number || String(reportId).slice(0, 8)}`;
-    const existing = await pool
-      .query(
-        `
-        SELECT ticket_id FROM tickets
-        WHERE account_id = $1
-          AND deleted_at IS NULL
-          AND reason = $2
-        LIMIT 1
-        `,
-        [requesterAccountId, reason]
-      )
-      .catch(() => ({ rows: [] }));
-
-    if (!existing.rows.length) {
-      const ticketNumber = `TKT-${Date.now().toString().slice(-10)}`;
-      try {
-        await pool.query(
-          `
-          INSERT INTO tickets (
-            ticket_number, reason, type, priority, status, account_id, message_count
-          ) VALUES ($1, $2, 'Other', $3, 'Open', $4, 0)
-          `,
-          [
-            ticketNumber,
-            reason,
-            priority === 'high' ? 'High' : 'Medium',
-            requesterAccountId,
-          ]
-        );
-        ticketAutoCreated = true;
-      } catch (err) {
-        console.warn('reportToTicketAutoCreate skipped:', err.message);
-      }
-    }
-  }
+  const priority = String(reportRow.priority || 'medium').toLowerCase();
 
   const accountId = reportRow.for_account_id || reportRow.by_account_id || null;
   if (accountId) {
@@ -447,8 +280,6 @@ async function applyReportAutomations(reportRow, { staffId = null } = {}) {
       metadata: {
         type: reportRow.type,
         priority,
-        autoEscalated: priority === 'high' && settings.autoEscalateHighPriority,
-        ticketAutoCreated,
       },
     });
   }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { AlertTriangle, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
@@ -29,6 +30,34 @@ const DESK_OPTIONS = [
   { id: 'marketplace', label: 'Marketplace' },
   { id: 'jobs', label: 'Jobs & Gigs' },
 ] as const;
+
+export type WarningsSection = 'catalog' | 'thresholds' | 'punishments';
+
+export const WARNING_POLICY_SECTIONS: {
+  id: WarningsSection;
+  label: string;
+  title: string;
+  description: string;
+}[] = [
+  {
+    id: 'catalog',
+    label: 'Warning library',
+    title: 'Warning library',
+    description: 'Catalog of warning types staff can issue. Points and duration are locked per row.',
+  },
+  {
+    id: 'punishments',
+    label: 'Ban, suspend, timeout',
+    title: 'Standing punishments',
+    description: 'Default clocks for ban, suspend, and timeout. Staff may override duration when applying.',
+  },
+  {
+    id: 'thresholds',
+    label: 'Point thresholds',
+    title: 'Auto-suspend thresholds',
+    description: 'Active warning-point bands that trigger automatic suspension.',
+  },
+];
 
 type WarningDef = {
   warning_def_id: string;
@@ -68,7 +97,14 @@ function errorMessage(err: unknown, fallback: string) {
 
 const WARNING_DEFS_URL = '/api/admin/warning-defs';
 
-export default function AdminWarningsPage() {
+/** Warnings / punishments / thresholds content for Moderation → Policy. */
+export function AdminWarningsPanel({
+  section,
+  onSectionChange,
+}: {
+  section: WarningsSection;
+  onSectionChange: (section: WarningsSection) => void;
+}) {
   const [defs, setDefs] = useState<WarningDef[]>(() => peekStaffGet(WARNING_DEFS_URL)?.data?.data || []);
   const [loading, setLoading] = useState(() => !peekStaffGet(WARNING_DEFS_URL));
   const [search, setSearch] = useState('');
@@ -76,7 +112,6 @@ export default function AdminWarningsPage() {
   const [form, setForm] = useState<DefForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [tab, setTab] = useState<'catalog' | 'thresholds' | 'punishments'>('catalog');
 
   const load = async () => {
     const res = await staffGet(WARNING_DEFS_URL);
@@ -99,6 +134,8 @@ export default function AdminWarningsPage() {
         .includes(term)
     );
   }, [defs, search]);
+
+  const meta = WARNING_POLICY_SECTIONS.find((s) => s.id === section) || WARNING_POLICY_SECTIONS[0];
 
   const openCreate = () => {
     setForm(emptyForm());
@@ -177,143 +214,132 @@ export default function AdminWarningsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <main className="min-h-screen md:pl-[260px]">
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen md:pl-[260px]">
-      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
-        <div className="px-6 py-4 md:px-8">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Admin</p>
-          <h1 className="text-xl font-bold text-white">Warnings & punishments</h1>
-          <p className="mt-1 text-xs text-zinc-500">
-            Warnings lock points and duration. Ban, suspend, and timeout rows set a default clock that staff can override.
-          </p>
-        </div>
-      </header>
-
-      <div className="space-y-5 px-6 py-6 md:px-8 md:py-8">
-        <div className="flex gap-2">
-          {([
-            { id: 'catalog', label: 'Warning library' },
-            { id: 'punishments', label: 'Ban, suspend, timeout' },
-            { id: 'thresholds', label: 'Point thresholds' },
-          ] as const).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              onPointerEnter={() => prefetchStaffTab('warnings', item.id)}
-              onFocus={() => prefetchStaffTab('warnings', item.id)}
-              className={`rounded-xl border px-4 py-2 text-sm font-medium ${
-                tab === item.id
-                  ? 'border-rose-400/40 bg-rose-500/10 text-white'
-                  : 'border-white/10 text-zinc-400 hover:text-white'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'thresholds' ? <AdminWarningThresholdsPanel /> : null}
-        {tab === 'punishments' ? <AdminPunishmentDefsPanel /> : null}
-
-        {tab === 'catalog' ? (
-        <>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search name, category, or points"
-              className={`${fieldClass} pl-9`}
-            />
-          </div>
+    <div className="space-y-6">
+      <div className="inline-flex max-w-full flex-wrap gap-1 rounded-2xl border border-white/[0.08] bg-[#14151c] p-1.5">
+        {WARNING_POLICY_SECTIONS.map((item) => (
           <button
+            key={item.id}
             type="button"
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-400"
+            onClick={() => onSectionChange(item.id)}
+            onPointerEnter={() => prefetchStaffTab('warnings', item.id)}
+            onFocus={() => prefetchStaffTab('warnings', item.id)}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+              section === item.id
+                ? 'bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]'
+                : 'text-zinc-500 hover:text-zinc-200'
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            New warning
+            {item.label}
           </button>
-        </div>
-
-        <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-white/[0.06] text-[11px] uppercase tracking-wider text-zinc-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Warning</th>
-                  <th className="px-4 py-3 font-medium">Points</th>
-                  <th className="px-4 py-3 font-medium">Duration</th>
-                  <th className="px-4 py-3 font-medium">Desks</th>
-                  <th className="px-4 py-3 font-medium" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {filtered.map((def) => (
-                  <tr key={def.warning_def_id} className="hover:bg-white/[0.02]">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-zinc-400">
-                          <AlertTriangle className="h-4 w-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-white">{def.label}</p>
-                          <p className="truncate text-[11px] text-zinc-500">
-                            {def.category}
-                            {def.is_system ? ' · seeded' : ' · custom'}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-300">{def.points} pt</td>
-                    <td className="px-4 py-3 text-zinc-400">{def.durationDays} days</td>
-                    <td className="px-4 py-3 text-zinc-500">{(def.desks || []).join(', ')}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(def)}
-                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"
-                        aria-label={`Edit ${def.label}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void remove(def)}
-                        className="rounded-lg p-1.5 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"
-                        aria-label={`Delete ${def.label}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
-                      {search ? 'No warnings match that search.' : 'No warnings in the library yet.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-        </>
-        ) : null}
+        ))}
       </div>
+
+      <div>
+        <h2 className="text-lg font-bold text-white">{meta.title}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{meta.description}</p>
+      </div>
+
+      {section === 'thresholds' ? <AdminWarningThresholdsPanel /> : null}
+      {section === 'punishments' ? <AdminPunishmentDefsPanel /> : null}
+
+      {section === 'catalog' ? (
+        loading ? (
+          <div className="flex h-40 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+            <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative max-w-md flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search name, category, or points"
+                  className={`${fieldClass} pl-9`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-400"
+              >
+                <Plus className="h-4 w-4" />
+                New warning
+              </button>
+            </div>
+
+            <section className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-white/[0.06] text-[11px] uppercase tracking-wider text-zinc-500">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Warning</th>
+                      <th className="px-4 py-3 font-medium">Points</th>
+                      <th className="px-4 py-3 font-medium">Duration</th>
+                      <th className="px-4 py-3 font-medium">Desks</th>
+                      <th className="px-4 py-3 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04]">
+                    {filtered.map((def) => (
+                      <tr
+                        key={def.warning_def_id}
+                        onClick={() => openEdit(def)}
+                        className="cursor-pointer hover:bg-white/[0.02]"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-zinc-400">
+                              <AlertTriangle className="h-4 w-4" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-white">{def.label}</p>
+                              <p className="truncate text-[11px] text-zinc-500">
+                                {def.category}
+                                {def.is_system ? ' · seeded' : ' · custom'}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300">{def.points} pt</td>
+                        <td className="px-4 py-3 text-zinc-400">{def.durationDays} days</td>
+                        <td className="px-4 py-3 text-zinc-500">{(def.desks || []).join(', ')}</td>
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(def)}
+                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"
+                            aria-label={`Edit ${def.label}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void remove(def)}
+                            className="rounded-lg p-1.5 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"
+                            aria-label={`Delete ${def.label}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
+                          {search ? 'No warnings match that search.' : 'No warnings in the library yet.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )
+      ) : null}
 
       {editor && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
@@ -462,6 +488,11 @@ export default function AdminWarningsPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
+}
+
+/** Legacy route → Moderation Policy. */
+export default function AdminWarningsPage() {
+  return <Navigate to="/admin/moderation?tab=policy&section=catalog" replace />;
 }

@@ -570,6 +570,7 @@ export default function LoginPage({
           if (onboardingPath) {
             destination = onboardingPath;
           } else {
+            sessionStorage.setItem('showWelcomeLeftPopup', 'true');
             destination = redirectUrl || '/home';
           }
         }

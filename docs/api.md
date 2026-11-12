@@ -108,6 +108,23 @@
   - `action: "reverse_transaction"` with `creditTransactionId`, optional `amount`, `resolutionNotes`. Reverses a linked completed transaction; fails with 409 if the destination wallet lacks balance; auto-closes the dispute.
   - A dispute accepts only one financial resolution. Non-handlers receive 403.
 
+## Moderation activity log
+
+- `GET /api/admin/moderation/activity` returns one page of `account_activity` with everything the log needs: `entries`, the matching `total`, `limit`/`offset`/`hasMore`, `stats` (total, reversed, accounts, actors, last24h, last7d, oldest, newest) and `filters` (categories, event codes with counts, actor roles with counts).
+  - Query: `search`, `category`, `eventCode`, `role` (a staff role, or `system` for rows with no actor), `state` (`active` | `reversed`), `accountId`, `from`, `to` (inclusive `YYYY-MM-DD`), `sort` (`newest` | `oldest` | `action` | `event` | `target`), `limit` (max 200), `offset`.
+  - Every filter is applied in SQL so the page, the total and the stats always describe the same set of rows.
+- `GET /api/admin/moderation/activity/:id` returns one entry in the same shape. The detail modal always re-reads it, because a row handed over by a table can predate a later reversal.
+- Each entry carries the plain-language `eventLabel`, `category`/`categoryLabel`, `severity`, `impact`, the target (`target`, `targetHandle`, `targetType`, `accountId`, `accountStatus`), the actor (`executedBy`, `executedByRole`, `executedByHandle`, `executedByKind`, `executedByStaffId`, `executedByAccountId`), the `reference` it points at (`table`, `prefix`, `id`, `label`), `details` (every metadata field as `{ key, label, value, type }`), the raw `metadata`, and `reversal` (`at`, `by`, `byRole`, `note`).
+- `POST /api/admin/moderation/activity/:id/reverse` returns `{ entry, entries }`: the reversed row plus the refreshed recent list.
+- `backend/lib/ActivityCatalog.js` is the single source for event labels, categories, severities and target types. Its ordered category rules generate both the JavaScript classification and the SQL predicate, so a category filter can never disagree with the category a row is labelled with. Add new event codes there.
+
+## Forum content moderation
+
+- The admin console (`/api/admin/moderation/forum/...`) and the Forum Moderator desk (`/api/moderator/forum/...`) share `backend/services/ForumContentModerationServices.js`, so both get the same validation, the same already-in-that-state guards (409) and the same audit trail. Route middleware decides who may call in.
+- Group and discussion lists accept `search` and `status` (`active` | `inactive` for groups; `active` | `removed` | `locked` | `pinned` for discussions) and return `stats` for the header alongside `groups`/`discussions`.
+- `GET /api/moderator/forum/groups/:id` returns the group detail (roster with roles, bans, join dates, owner, per-group moderation counts and its discussions) — previously only the admin console had it.
+- Group archiving, member bans, discussion lock/pin/remove/restore and comment removal all write to `account_activity` against the affected member, with the optional `reason` from the request body. Comment removal also stores the removed text so a reviewer can judge the call afterwards.
+
 ## Member reports
 
 - Member report POSTs (`/api/jobs/:jobId/report`, `/api/gigs/:id/report`, `/api/assets/:assetId/report`, `/api/accounts/:accountId/report`, `/api/inbox/message/:messageId/report`, `/api/forum/reports/...`, `/api/teams/:teamId/reports`, `/api/team-projects/:id/report`) store `subject_snapshot` on `reports`: `{ kind, title, body, href, extra }`. `description` is the reporter's reason text only.

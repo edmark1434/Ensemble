@@ -46,12 +46,14 @@ const TOPUP_PACKS = new Map([
     [750, { amount: 849, name: 'Box (750 Credits)' }],
     [1600, { amount: 1599, name: 'Vault (1,600 Credits)' }],
 ]);
-const CUSTOM_CREDIT_RATE = 1.25;
 
 async function validateTopupRequest(body = {}) {
     const credits = Number(body.credits);
     if (!Number.isSafeInteger(credits) || credits < 10 || credits > 1000000 || body.currency !== 'PHP') throw new Error('INVALID_TOPUP');
     if (!['topup', 'custom'].includes(body.itemType)) throw new Error('INVALID_TOPUP');
+
+    const { getCreditValuePhp } = require('../lib/PlatformFeeSettings');
+    const creditValuePhp = await getCreditValuePhp();
 
     let pack = null;
     if (body.itemType === 'topup') {
@@ -76,7 +78,7 @@ async function validateTopupRequest(body = {}) {
         if (!pack) throw new Error('INVALID_TOPUP');
     }
 
-    const amount = pack?.amount ?? Math.round(credits * CUSTOM_CREDIT_RATE * 100) / 100;
+    const amount = pack?.amount ?? Math.round(credits * creditValuePhp * 100) / 100;
     return { amount, credits, currency: 'PHP', itemName: pack?.name ?? `Custom Top-up (${credits.toLocaleString()} Credits)` };
 }
 async function xenditWebhookHandler(req, res) {
@@ -1781,7 +1783,11 @@ function getAnchorDate(daysOfTrial) {
 
 async function getActiveCreditPackagesService(req, res) {
     try {
-        const economy = await getSectionValue('economy');
+        const { getCreditValuePhp } = require('../lib/PlatformFeeSettings');
+        const [economy, creditValuePhp] = await Promise.all([
+            getSectionValue('economy'),
+            getCreditValuePhp(),
+        ]);
         const creditPackages = Array.isArray(economy?.creditPackages) ? economy.creditPackages : [];
         const activePackages = creditPackages
             .filter(p => p && p.active !== false)
@@ -1791,7 +1797,11 @@ async function getActiveCreditPackagesService(req, res) {
                 price: Number(p.pricePhp),
                 credits: Number(p.credits)
             }));
-        return res.status(200).json({ success: true, creditPackages: activePackages });
+        return res.status(200).json({
+            success: true,
+            creditPackages: activePackages,
+            creditValuePhp,
+        });
     } catch (error) {
         console.error('Failed to get credit packages:', error);
         return res.status(500).json({ success: false, message: 'Failed to load credit packages.' });

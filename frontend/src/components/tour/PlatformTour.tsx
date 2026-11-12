@@ -5,6 +5,7 @@ import useGlobalState from '@/lib/global_state';
 import { TourWelcomeModal } from './TourWelcomeModal';
 import { TourSpotlightCard } from './TourSpotlightCard';
 import { TourGraduationModal } from './TourGraduationModal';
+import { TourWelcomeLeftPopup } from './TourWelcomeLeftPopup';
 
 export const PlatformTour: React.FC = () => {
   const navigate = useNavigate();
@@ -30,12 +31,35 @@ export const PlatformTour: React.FC = () => {
   const closeWelcome = useTourStore((state) => state.closeWelcome);
   const closeGraduation = useTourStore((state) => state.closeGraduation);
 
-  // Initialize once user is available on /home
+  const [isLeftPopupOpen, setIsLeftPopupOpen] = React.useState(false);
+
+  // Check if user just completed onboarding or logged in
   useEffect(() => {
-    if (isAuthenticated && user && !isGuestMode && location.pathname === '/home') {
-      initFromUser(user);
+    if (isAuthenticated && user && !isGuestMode) {
+      const justCompleted = sessionStorage.getItem('justCompletedOnboarding') === 'true';
+      if (justCompleted) {
+        sessionStorage.removeItem('justCompletedOnboarding');
+        const accId = user?.account_id || user?.accountId;
+        useTourStore.getState().resetWalkthroughHistory(accId);
+        useTourStore.getState().openWelcome();
+        return;
+      }
+
+      if (location.pathname === '/home') {
+        initFromUser(user);
+      }
+
+      // Show left welcome popup if logged in and tour is not actively open
+      const showLeft = sessionStorage.getItem('showWelcomeLeftPopup') === 'true';
+      if (showLeft && !isWelcomeOpen && !isWalkthroughActive) {
+        setIsLeftPopupOpen(true);
+      } else if (isWelcomeOpen || isWalkthroughActive) {
+        setIsLeftPopupOpen(false);
+      }
+    } else {
+      setIsLeftPopupOpen(false);
     }
-  }, [isAuthenticated, user, isGuestMode, location.pathname, initFromUser]);
+  }, [isAuthenticated, user, isGuestMode, location.pathname, initFromUser, isWelcomeOpen, isWalkthroughActive]);
 
   // Synchronize route navigation when currentStepIndex changes
   useEffect(() => {
@@ -269,7 +293,7 @@ export const PlatformTour: React.FC = () => {
   }, [startWalkthrough, location.pathname, navigate]);
 
   // Don't render if user is not authenticated or in guest mode
-  if (!isAuthenticated && !isWalkthroughActive && !isWelcomeOpen) return null;
+  if (!isAuthenticated && !isWalkthroughActive && !isWelcomeOpen && !isLeftPopupOpen) return null;
 
   return (
     <>
@@ -294,6 +318,21 @@ export const PlatformTour: React.FC = () => {
       <TourGraduationModal
         isOpen={isGraduationOpen}
         onClose={closeGraduation}
+      />
+
+      {/* 4. Left-Side Welcome Popup on Login */}
+      <TourWelcomeLeftPopup
+        isOpen={isLeftPopupOpen && !isWelcomeOpen && !isWalkthroughActive}
+        userName={user?.display_name || user?.name || user?.username}
+        onClose={() => {
+          setIsLeftPopupOpen(false);
+          sessionStorage.removeItem('showWelcomeLeftPopup');
+        }}
+        onClick={() => {
+          setIsLeftPopupOpen(false);
+          sessionStorage.removeItem('showWelcomeLeftPopup');
+          useTourStore.getState().openWelcome();
+        }}
       />
     </>
   );

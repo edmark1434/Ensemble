@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Eye, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { showSuccessToast } from '@/components/utility/toast.ts';
 import BulkActionsMenu from '../userTeam/components/BulkActionsMenu';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
@@ -258,7 +258,6 @@ export default function AuditTab({ entries, onViewWallet }: AuditTabProps) {
               <th className="px-4 py-3 text-right">Credit amount</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">When</th>
-              <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -267,11 +266,12 @@ export default function AuditTab({ entries, onViewWallet }: AuditTabProps) {
               return (
                 <tr
                   key={a.id}
-                  className={`border-b border-white/[0.04] hover:bg-white/[0.02] ${
+                  onClick={() => onViewWallet(a.walletId)}
+                  className={`cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02] ${
                     isChecked ? 'bg-rose-500/[0.07]' : ''
                   }`}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isChecked}
@@ -309,22 +309,12 @@ export default function AuditTab({ entries, onViewWallet }: AuditTabProps) {
                   </td>
                   <td className="px-4 py-3 text-zinc-400">{a.type}</td>
                   <td className="px-4 py-3 text-xs text-zinc-500">{formatDateTime(a.timestamp)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onViewWallet(a.walletId)}
-                      className="inline-flex rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                      title="View wallet"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">
                   No audit entries match your search or filters.
                 </td>
               </tr>

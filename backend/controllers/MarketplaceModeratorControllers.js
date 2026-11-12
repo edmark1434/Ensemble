@@ -73,8 +73,13 @@ async function patchListing(req, res) {
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error updating listing:', err);
-    res.status(500).json({ success: false, message: 'Failed to update listing' });
+    const message = err?.message || 'Failed to update listing';
+    // "Listing not found" and "Invalid listing status" are caller errors, not faults.
+    const status = err?.statusCode || (/not found/i.test(message) ? 404 : /invalid/i.test(message) ? 400 : 500);
+    if (status >= 500) console.error('Error updating listing:', err);
+    res
+      .status(status)
+      .json({ success: false, message: status < 500 ? message : 'Failed to update listing' });
   }
 }
 

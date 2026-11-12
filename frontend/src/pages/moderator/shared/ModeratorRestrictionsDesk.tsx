@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Ban, Loader2, RefreshCw, Search, ShieldAlert, Activity, AlertTriangle, Clock, X } from 'lucide-react';
 import api from '@/lib/axios';
+import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
+import { canSuspendTarget } from '@/pages/admin/userTeam/suspendRules';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
 import { SanctionScheduleFields, type SanctionTiming } from '@/pages/admin/userTeam/components/SanctionSchedule';
 import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
@@ -25,6 +27,7 @@ type DeskAccount = {
   banEndsAt?: string | null;
   lockEndsAt?: string | null;
   timeoutEndsAt?: string | null;
+  staffRole?: string | null;
 };
 
 type ViolationRow = {
@@ -186,10 +189,15 @@ function apiMessage(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
 }
 
-function availableActions(standing: string, timeout: boolean, can: (action: string) => boolean) {
+function availableActions(
+  standing: string,
+  timeout: boolean,
+  can: (action: string) => boolean,
+  allowSuspend: boolean
+) {
   const apply: DeskAction[] = [];
   const lift: DeskAction[] = [];
-  if (can('suspend') && standing !== 'suspended') apply.push({ id: 'suspend', label: 'Suspend', tone: 'amber' });
+  if (can('suspend') && standing !== 'suspended' && allowSuspend) apply.push({ id: 'suspend', label: 'Suspend', tone: 'amber' });
   if (can('lock') && standing !== 'locked') apply.push({ id: 'lock', label: 'Lock', tone: 'amber' });
   if (can('ban') && standing !== 'banned') apply.push({ id: 'ban', label: 'Ban', tone: 'red' });
   if (can('timeout') && !timeout) apply.push({ id: 'timeout', label: 'Timeout', tone: 'amber' });
@@ -427,14 +435,18 @@ export default function ModeratorRestrictionsDesk({
   roleLabel,
   subtitle,
   variant = 'support',
+  embedded = false,
 }: {
   endpointBase: string;
   accent?: Accent;
   roleLabel: string;
   subtitle: string;
   variant?: UserTeamVariant;
+  /** When true, omit full-page chrome (admin User & Team tab / nested desks). */
+  embedded?: boolean;
 }) {
   const caps = useMemo(() => getUserTeamCapabilities(variant), [variant]);
+  const viewer = useGlobalState((state) => state.user);
   const [data, setData] = useState<RestrictionsPayload | null>(() => {
     const cached = peekStaffGet(endpointBase);
     return cached ? cached.data?.data || { violations: [], restrictedAccounts: [], recentActivity: [] } : null;
@@ -574,6 +586,10 @@ export default function ModeratorRestrictionsDesk({
 
   async function runAction(action: string) {
     if (!selected) return;
+    if (action === 'suspend' && !allowSuspend) {
+      showErrorToast(suspendBlockedReason);
+      return;
+    }
     const removing = ['unsuspend', 'unban', 'unlock', 'clear_timeout'].includes(action);
     const standingKind: PunishmentKind | null =
       action === 'ban' || action === 'suspend' || action === 'timeout' ? action : null;
@@ -665,7 +681,20 @@ export default function ModeratorRestrictionsDesk({
   const timeoutCount = (data?.restrictedAccounts || []).filter((account) => account.forumTimeout).length;
   const standing = String(selected?.status || '').toLowerCase();
   const can = (action: string) => caps.statusActions.has(action);
-  const actions = availableActions(standing, Boolean(selected?.forumTimeout), can);
+  const viewerAccountId = viewer?.account_id || viewer?.accountId || null;
+  const allowSuspend = selected
+    ? canSuspendTarget({
+        actorRole: viewer?.role,
+        actorAccountId: viewerAccountId,
+        targetAccountId: selected.accountId,
+        targetStaffRole: selected.staffRole,
+      })
+    : true;
+  const suspendBlockedReason =
+    viewerAccountId && selected && String(viewerAccountId) === String(selected.accountId)
+      ? 'You cannot suspend your own account.'
+      : 'Only an admin can suspend a moderator.';
+  const actions = availableActions(standing, Boolean(selected?.forumTimeout), can, allowSuspend);
   const queueCount = queue === 'warnings' ? filteredViolations.length : queue === 'held' ? filteredRestricted.length : filteredActivity.length;
   const queueTitle = queue === 'warnings' ? 'Warnings' : queue === 'held' ? 'Held accounts' : 'Activity';
 
@@ -724,18 +753,27 @@ export default function ModeratorRestrictionsDesk({
     },
   ];
 
+  const shellClass = embedded
+    ? 'relative z-10 min-w-0 overflow-x-hidden space-y-5'
+    : 'relative z-10 min-h-screen min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 md:pl-[260px] md:px-10 md:py-8';
+  const Shell = embedded ? 'div' : 'main';
+
   return (
-    <main
-      className="relative z-10 min-h-screen min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 md:pl-[260px] md:px-10 md:py-8"
-      style={{ animation: 'fadeIn 420ms ease' }}
+    <Shell
+      className={shellClass}
+      style={embedded ? undefined : { animation: 'fadeIn 420ms ease' }}
     >
       <div className="min-w-0 space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${accentText(accent)}`}>{roleLabel}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Restrictions</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
-          </div>
+          {!embedded ? (
+            <div>
+              <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${accentText(accent)}`}>{roleLabel}</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Restrictions</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+            </div>
+          ) : (
+            <p className="max-w-2xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+          )}
           <button
             type="button"
             onClick={() => void load()}
@@ -954,30 +992,43 @@ export default function ModeratorRestrictionsDesk({
                 />
               ) : (
                 <ol className="space-y-0">
-                  {filteredActivity.map((item, index) => (
-                    <li key={item.id} className="relative flex gap-3 pb-4">
-                      <div className="flex w-3 shrink-0 flex-col items-center">
-                        <span className={`mt-1.5 h-2 w-2 rounded-full ${ACCENT_DOT[accent]}`} />
-                        {index < filteredActivity.length - 1 ? <span className="mt-1 w-px flex-1 bg-white/10" /> : null}
-                      </div>
-                      <div className="min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-white">{item.action}</p>
-                          <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-                            {titleCaseWords(item.eventCode)}
-                          </span>
+                  {filteredActivity.map((item, index) => {
+                    const account =
+                      data?.restrictedAccounts.find((row) => row.accountId === item.accountId) ||
+                      data?.violations.find((row) => row.account.accountId === item.accountId)?.account ||
+                      null;
+                    return (
+                      <li key={item.id} className="relative flex gap-3 pb-4">
+                        <div className="flex w-3 shrink-0 flex-col items-center">
+                          <span className={`mt-1.5 h-2 w-2 rounded-full ${ACCENT_DOT[accent]}`} />
+                          {index < filteredActivity.length - 1 ? <span className="mt-1 w-px flex-1 bg-white/10" /> : null}
                         </div>
-                        <p className="mt-1 text-xs text-zinc-400">
-                          {item.accountName || item.accountHandle || shortId(item.accountId)}
-                          {item.actorName ? ` · ${item.actorName}` : ''}
-                          {item.actorRole ? ` · ${titleCaseWords(item.actorRole)}` : ''}
-                        </p>
-                        <p className="mt-2 text-[11px] text-zinc-500" title={formatDateTime(item.createdAt)}>
-                          {relativeTime(item.createdAt)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
+                        <button
+                          type="button"
+                          disabled={!account}
+                          onClick={() => account && focusAccount(account, 'standing')}
+                          className={`min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-3 text-left transition ${
+                            account ? 'cursor-pointer hover:border-white/15 hover:bg-white/[0.03]' : 'cursor-default'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-white">{item.action}</p>
+                            <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+                              {titleCaseWords(item.eventCode)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            {item.accountName || item.accountHandle || shortId(item.accountId)}
+                            {item.actorName ? ` · ${item.actorName}` : ''}
+                            {item.actorRole ? ` · ${titleCaseWords(item.actorRole)}` : ''}
+                          </p>
+                          <p className="mt-2 text-[11px] text-zinc-500" title={formatDateTime(item.createdAt)}>
+                            {relativeTime(item.createdAt)}
+                          </p>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </div>
@@ -1114,10 +1165,13 @@ export default function ModeratorRestrictionsDesk({
                   {actions.apply.length > 0 ? (
                     <ActionGroup title="Apply" actions={actions.apply} busy={busyId === selected.accountId} onRun={(id) => void runAction(id)} />
                   ) : null}
+                  {can('suspend') && standing !== 'suspended' && !allowSuspend ? (
+                    <p className="text-xs text-zinc-500">{suspendBlockedReason}</p>
+                  ) : null}
                   {actions.lift.length > 0 ? (
                     <ActionGroup title="Lift" actions={actions.lift} busy={busyId === selected.accountId} onRun={(id) => void runAction(id)} />
                   ) : null}
-                  {actions.apply.length === 0 && actions.lift.length === 0 ? (
+                  {actions.apply.length === 0 && actions.lift.length === 0 && !(can('suspend') && !allowSuspend) ? (
                     <p className="text-xs text-zinc-500">This role cannot change standing from here.</p>
                   ) : null}
                 </div>
@@ -1134,7 +1188,7 @@ export default function ModeratorRestrictionsDesk({
           </aside>
         </div>
       </div>
-    </main>
+    </Shell>
   );
 }
 

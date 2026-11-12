@@ -2,7 +2,7 @@ import { AdminSubscriptionsTab } from '../creditEconomy/components/AdminSubscrip
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  Bell,
+  Award,
   CheckCircle2,
   Coins,
   Database,
@@ -12,31 +12,35 @@ import {
   Save,
   Settings2,
   Shield,
-  ShieldAlert,
 } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { prefetchStaffRoute } from '@/lib/staffPrefetch';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import {
+  AdminBadgesPanel,
+  type BadgesSection,
+} from '../badges/AdminBadgesPage';
 import type {
   EconomySettings,
-  ModerationSettings,
-  NotificationSettings,
   PlatformSettings,
   SecuritySettings,
   SettingsOverview,
 } from './settingsTypes';
 
-type TabId = 'platform' | 'moderation' | 'economy' | 'notifications' | 'security';
+type SettingsTabId = 'platform' | 'economy' | 'security';
+type TabId = SettingsTabId | 'badges';
 
 const TABS: { id: TabId; label: string; icon: typeof Settings2 }[] = [
   { id: 'platform', label: 'Platform', icon: Globe },
-  { id: 'moderation', label: 'Moderation', icon: ShieldAlert },
   { id: 'economy', label: 'Economy', icon: Coins },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
+  { id: 'badges', label: 'Badges', icon: Award },
 ];
+
+const BADGE_SECTIONS: BadgesSection[] = ['catalog', 'grant'];
 
 const fieldClass =
   'rounded-lg border border-white/10 bg-[#0c0d12] px-3 py-2 text-sm text-white outline-none transition focus:border-rose-500/40 focus:ring-2 focus:ring-rose-500/15';
@@ -83,6 +87,7 @@ function NumberField({
   onChange,
   min,
   max,
+  step,
   hint,
 }: {
   label: string;
@@ -90,6 +95,7 @@ function NumberField({
   onChange: (v: number) => void;
   min?: number;
   max?: number;
+  step?: number | 'any';
   hint?: string;
 }) {
   return (
@@ -100,6 +106,7 @@ function NumberField({
         value={Number.isFinite(value) ? value : 0}
         min={min}
         max={max}
+        step={step}
         onChange={(e) => onChange(Number(e.target.value))}
         className={fieldClass}
       />
@@ -211,9 +218,7 @@ function settingsDrafts(d: SettingsOverview) {
   }
   return {
     platform,
-    moderation: { ...d.sections.moderation.value },
     economy: JSON.parse(JSON.stringify(d.sections.economy.value)) as EconomySettings,
-    notifications: { ...d.sections.notifications.value },
     security: {
       ...d.sections.security.value,
       allowedAdminIps: [...(d.sections.security.value.allowedAdminIps || [])],
@@ -225,8 +230,13 @@ export default function SystemSettingsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['platform', 'moderation', 'economy', 'notifications', 'security'];
+  const paramSection = searchParams.get('section');
+  const valid: TabId[] = ['platform', 'economy', 'security', 'badges'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'platform';
+  const initialBadgeSection =
+    paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection)
+      ? (paramSection as BadgesSection)
+      : 'catalog';
 
   const [data, setData] = useState<SettingsOverview | null>(() => {
     const cached = peekStaffGet(SETTINGS_URL);
@@ -235,20 +245,15 @@ export default function SystemSettingsPage() {
   const [loading, setLoading] = useState(() => !data);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
+  const [badgeSection, setBadgeSection] = useState<BadgesSection>(initialBadgeSection);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [platform, setPlatform] = useState<PlatformSettings | null>(() =>
     data ? settingsDrafts(data).platform : null
   );
-  const [moderation, setModeration] = useState<ModerationSettings | null>(() =>
-    data ? settingsDrafts(data).moderation : null
-  );
   const [economy, setEconomy] = useState<EconomySettings | null>(() =>
     data ? settingsDrafts(data).economy : null
-  );
-  const [notifications, setNotifications] = useState<NotificationSettings | null>(() =>
-    data ? settingsDrafts(data).notifications : null
   );
   const [security, setSecurity] = useState<SecuritySettings | null>(() =>
     data ? settingsDrafts(data).security : null
@@ -260,9 +265,7 @@ export default function SystemSettingsPage() {
     const drafts = settingsDrafts(d);
     const edited = keepEdits ? dirtyRef.current : null;
     if (!edited?.platform) setPlatform(drafts.platform);
-    if (!edited?.moderation) setModeration(drafts.moderation);
     if (!edited?.economy) setEconomy(drafts.economy);
-    if (!edited?.notifications) setNotifications(drafts.notifications);
     if (!edited?.security) {
       setSecurity(drafts.security);
       setIpDraft('');
@@ -291,39 +294,56 @@ export default function SystemSettingsPage() {
 
   useEffect(() => {
     if (paramTab && valid.includes(paramTab)) setTab(paramTab);
-  }, [paramTab]);
+    if (paramTab === 'badges') {
+      if (paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection)) {
+        setBadgeSection(paramSection as BadgesSection);
+      }
+      prefetchStaffRoute('/admin/badges');
+    }
+  }, [paramTab, paramSection]);
 
   const switchTab = (id: TabId) => {
     setTab(id);
+    if (id === 'badges') {
+      prefetchStaffRoute('/admin/badges');
+      setSearchParams(
+        badgeSection === 'catalog' ? { tab: id } : { tab: id, section: badgeSection },
+        { replace: true }
+      );
+      return;
+    }
     setSearchParams(id === 'platform' ? {} : { tab: id }, { replace: true });
   };
 
+  const switchBadgeSection = (section: BadgesSection) => {
+    setBadgeSection(section);
+    setSearchParams(
+      section === 'catalog' ? { tab: 'badges' } : { tab: 'badges', section },
+      { replace: true }
+    );
+  };
+
   const dirty = useMemo(() => {
-    if (!data || !platform || !moderation || !economy || !notifications || !security) {
+    if (!data || !platform || !economy || !security) {
       return {
         platform: false,
-        moderation: false,
         economy: false,
-        notifications: false,
         security: false,
-      };
+      } satisfies Record<SettingsTabId, boolean>;
     }
     return {
       platform: stableStringify(platform) !== stableStringify(data.sections.platform.value),
-      moderation: stableStringify(moderation) !== stableStringify(data.sections.moderation.value),
       economy: stableStringify(economy) !== stableStringify(data.sections.economy.value),
-      notifications:
-        stableStringify(notifications) !== stableStringify(data.sections.notifications.value),
       security: stableStringify(security) !== stableStringify(data.sections.security.value),
-    };
-  }, [data, platform, moderation, economy, notifications, security]);
+    } satisfies Record<SettingsTabId, boolean>;
+  }, [data, platform, economy, security]);
 
   const dirtyRef = useRef(dirty);
   useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
 
-  const saveSection = async (section: TabId, values: object) => {
+  const saveSection = async (section: SettingsTabId, values: object) => {
     setSaving(true);
     try {
       const res = await api.patch('/api/admin/settings', { section, values });
@@ -343,7 +363,7 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const discardSection = (section: TabId) => {
+  const discardSection = (section: SettingsTabId) => {
     if (!data) return;
     if (section === 'platform') {
       const plat = { ...data.sections.platform.value };
@@ -352,9 +372,7 @@ export default function SystemSettingsPage() {
       }
       setPlatform(plat);
     }
-    if (section === 'moderation') setModeration({ ...data.sections.moderation.value });
     if (section === 'economy') setEconomy(JSON.parse(JSON.stringify(data.sections.economy.value)));
-    if (section === 'notifications') setNotifications({ ...data.sections.notifications.value });
     if (section === 'security') {
       setSecurity({
         ...data.sections.security.value,
@@ -372,7 +390,7 @@ export default function SystemSettingsPage() {
     );
   }
 
-  if (!data || !platform || !moderation || !economy || !notifications || !security) {
+  if (!data || !platform || !economy || !security) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
@@ -412,15 +430,17 @@ export default function SystemSettingsPage() {
               <span>@{user?.username || 'admin'}</span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh from DB
-          </button>
+          {tab !== 'badges' && (
+            <button
+              type="button"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+              className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh from DB
+            </button>
+          )}
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
           {TABS.map(({ id, label, icon: Icon }) => (
@@ -434,7 +454,9 @@ export default function SystemSettingsPage() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {dirty[id] && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />}
+              {id !== 'badges' && dirty[id] && (
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              )}
             </button>
           ))}
         </div>
@@ -466,7 +488,7 @@ export default function SystemSettingsPage() {
         {tab === 'platform' && (
           <SectionCard
             title="Platform identity & access"
-            description="Site branding, uploads, sessions, and registration controls."
+            description="Site branding, sessions, registration, and maintenance controls."
             dirty={dirty.platform}
             saving={saving}
             updatedAt={data.sections.platform.updatedAt}
@@ -475,9 +497,7 @@ export default function SystemSettingsPage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField label="Site name" value={platform.siteName} onChange={(v) => setPlatform({ ...platform, siteName: v })} />
-              <TextField label="Tagline" value={platform.tagline} onChange={(v) => setPlatform({ ...platform, tagline: v })} />
               <TextField label="Support email" value={platform.supportEmail} onChange={(v) => setPlatform({ ...platform, supportEmail: v })} />
-              <NumberField label="Max upload (MB)" value={platform.maxUploadMb} onChange={(v) => setPlatform({ ...platform, maxUploadMb: v })} min={1} max={500} />
               <NumberField
                 label="Session timeout (days)"
                 value={platform.sessionTimeoutDays ?? (platform.sessionTimeoutMinutes ? Math.max(1, Math.round(platform.sessionTimeoutMinutes / 1440)) : 30)}
@@ -488,7 +508,7 @@ export default function SystemSettingsPage() {
             </div>
             <Toggle
               label="Maintenance mode"
-              description="Show downtime banner and block non-staff access"
+              description="Blocks member login and the product app. Landing pages and admin/staff consoles stay available."
               checked={platform.maintenanceMode}
               onChange={(v) => setPlatform({ ...platform, maintenanceMode: v })}
             />
@@ -499,54 +519,6 @@ export default function SystemSettingsPage() {
               onChange={(v) => setPlatform({ ...platform, registrationEnabled: v })}
             />
           </SectionCard>
-        )}
-
-        {tab === 'moderation' && (
-          <div className="space-y-4">
-            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Canonical editor for automod rules. Ops status lives in{' '}
-              <Link
-                to="/admin/moderation?tab=management&section=automated"
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Moderation → Management → Automod
-              </Link>
-              . Password and lockout rules stay under{' '}
-              <button
-                type="button"
-                onClick={() => switchTab('security')}
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Security
-              </button>
-              .
-            </p>
-          <SectionCard
-            title="Automated moderation rules"
-            description="Platform-wide auto-mod behavior and dispute routing."
-            dirty={dirty.moderation}
-            saving={saving}
-            updatedAt={data.sections.moderation.updatedAt}
-            onSave={() => void saveSection('moderation', moderation)}
-            onDiscard={() => discardSection('moderation')}
-          >
-            <Toggle label="Spam filter" checked={moderation.spamFilterEnabled} onChange={(v) => setModeration({ ...moderation, spamFilterEnabled: v })} />
-            <Toggle label="Auto-flag profanity" checked={moderation.autoFlagProfanity} onChange={(v) => setModeration({ ...moderation, autoFlagProfanity: v })} />
-            <Toggle label="Hold new accounts for review" checked={moderation.autoHoldNewAccounts} onChange={(v) => setModeration({ ...moderation, autoHoldNewAccounts: v })} />
-            <Toggle label="Forum link scanning" checked={moderation.forumLinkScanning} onChange={(v) => setModeration({ ...moderation, forumLinkScanning: v })} />
-            <Toggle label="Marketplace listing review" checked={moderation.marketplaceListingReview} onChange={(v) => setModeration({ ...moderation, marketplaceListingReview: v })} />
-            <Toggle label="Auto-assign disputes" checked={moderation.disputeAutoAssign} onChange={(v) => setModeration({ ...moderation, disputeAutoAssign: v })} />
-            <Toggle label="Auto-escalate high priority" checked={moderation.autoEscalateHighPriority} onChange={(v) => setModeration({ ...moderation, autoEscalateHighPriority: v })} />
-            <Toggle label="Auto-create ticket from report" checked={moderation.reportToTicketAutoCreate} onChange={(v) => setModeration({ ...moderation, reportToTicketAutoCreate: v })} />
-            <NumberField
-              label="Active warning points before auto-suspend"
-              value={moderation.maxWarningsBeforeSuspend}
-              onChange={(v) => setModeration({ ...moderation, maxWarningsBeforeSuspend: v })}
-              min={10}
-              max={50}
-            />
-          </SectionCard>
-          </div>
         )}
 
         {tab === 'economy' && (
@@ -561,6 +533,27 @@ export default function SystemSettingsPage() {
               </Link>
               .
             </p>
+            <SectionCard
+              title="Credit value"
+              description="How much 1 platform credit is worth in Philippine pesos (PHP)."
+              dirty={dirty.economy}
+              saving={saving}
+              updatedAt={data.sections.economy.updatedAt}
+              onSave={() => void saveSection('economy', economy)}
+              onDiscard={() => discardSection('economy')}
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <NumberField
+                  label="PHP per credit"
+                  value={economy.creditValuePhp ?? 1}
+                  onChange={(v) => setEconomy({ ...economy, creditValuePhp: v })}
+                  min={0.01}
+                  max={1000}
+                  step="any"
+                  hint="Default is ₱1. Used for custom top-ups and cashout conversion."
+                />
+              </div>
+            </SectionCard>
             <SectionCard
               title="Credit packages"
               description="Top-up packages shown to users. Sales counts are stored with each package."
@@ -680,7 +673,7 @@ export default function SystemSettingsPage() {
                         }}
                       />
                       <NumberField
-                        label="Flat fee (PHP)"
+                        label="Flat fee (credits)"
                         value={f.flatFee}
                         onChange={(v) => {
                           const fees = [...economy.feeSettings];
@@ -734,16 +727,6 @@ export default function SystemSettingsPage() {
                   }
                 />
                 <NumberField
-                  label="Escrow hold (days)"
-                  value={economy.marketplaceSettings.escrowHoldDays}
-                  onChange={(v) =>
-                    setEconomy({
-                      ...economy,
-                      marketplaceSettings: { ...economy.marketplaceSettings, escrowHoldDays: v },
-                    })
-                  }
-                />
-                <NumberField
                   label="Min payout (credits)"
                   value={economy.marketplaceSettings.minPayoutCredits}
                   onChange={(v) =>
@@ -770,49 +753,14 @@ export default function SystemSettingsPage() {
           </div>
         )}
 
-        {tab === 'notifications' && (
-          <SectionCard
-            title="Email & desk notifications"
-            description="Admin and support notification preferences."
-            dirty={dirty.notifications}
-            saving={saving}
-            updatedAt={data.sections.notifications.updatedAt}
-            onSave={() => void saveSection('notifications', notifications)}
-            onDiscard={() => discardSection('notifications')}
-          >
-            <Toggle label="Email on new signups" checked={notifications.emailNewSignups} onChange={(v) => setNotifications({ ...notifications, emailNewSignups: v })} />
-            <Toggle label="Email on new tickets" checked={notifications.emailNewTickets} onChange={(v) => setNotifications({ ...notifications, emailNewTickets: v })} />
-            <Toggle label="Email when dispute opened" checked={notifications.emailDisputeOpened} onChange={(v) => setNotifications({ ...notifications, emailDisputeOpened: v })} />
-            <Toggle label="Email on high-priority reports" checked={notifications.emailHighPriorityReports} onChange={(v) => setNotifications({ ...notifications, emailHighPriorityReports: v })} />
-            <Toggle label="Weekly admin digest" checked={notifications.emailWeeklyDigest} onChange={(v) => setNotifications({ ...notifications, emailWeeklyDigest: v })} />
-            <Toggle label="Notify assignee on ticket" checked={notifications.notifyAssigneeOnTicket} onChange={(v) => setNotifications({ ...notifications, notifyAssigneeOnTicket: v })} />
-            <Toggle label="Notify requester on resolution" checked={notifications.notifyRequesterOnResolution} onChange={(v) => setNotifications({ ...notifications, notifyRequesterOnResolution: v })} />
-            <Toggle label="Slack webhook enabled" checked={notifications.slackWebhookEnabled} onChange={(v) => setNotifications({ ...notifications, slackWebhookEnabled: v })} />
-            <TextField
-              label="Slack webhook URL"
-              value={notifications.slackWebhookUrl}
-              placeholder="https://hooks.slack.com/..."
-              onChange={(v) => setNotifications({ ...notifications, slackWebhookUrl: v })}
-            />
-          </SectionCard>
-        )}
-
         {tab === 'security' && (
           <div className="space-y-4">
             <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Auth and access controls — separate from Automod. Community auto-rules live under{' '}
-              <button
-                type="button"
-                onClick={() => switchTab('moderation')}
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Moderation
-              </button>
-              .
+              Auth and access controls for staff consoles and member login lockouts.
             </p>
           <SectionCard
             title="Security & compliance"
-            description="Staff auth, lockouts, HTTPS, and admin IP allowlist."
+            description="Staff auth, lockouts, and admin IP allowlist."
             dirty={dirty.security}
             saving={saving}
             updatedAt={data.sections.security.updatedAt}
@@ -820,7 +768,6 @@ export default function SystemSettingsPage() {
             onDiscard={() => discardSection('security')}
           >
             <Toggle label="Require staff 2FA" checked={security.requireStaff2fa} onChange={(v) => setSecurity({ ...security, requireStaff2fa: v })} />
-            <Toggle label="Force HTTPS" checked={security.forceHttps} onChange={(v) => setSecurity({ ...security, forceHttps: v })} />
             <Toggle
               label="IP allowlist for admin"
               description="When enabled, only listed IPs can access admin routes"
@@ -888,50 +835,56 @@ export default function SystemSettingsPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-            <h2 className="font-semibold text-white">Change history</h2>
-            <p className="mt-1 text-xs text-zinc-500">Recent writes to configuration</p>
-            <ul className="mt-4 space-y-2">
-              {data.changeHistory.length ? (
-                data.changeHistory.map((h) => (
-                  <li
-                    key={h.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
-                  >
-                    <span className="capitalize text-white">{h.section}</span>
-                    <span className="shrink-0 text-right text-xs text-zinc-500">
-                      {h.updatedBy}
-                      <br />
-                      {h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '—'}
-                    </span>
-                  </li>
-                ))
-              ) : (
-                <li className="text-sm text-zinc-500">No saved changes yet.</li>
-              )}
-            </ul>
-          </section>
+        {tab === 'badges' && (
+          <AdminBadgesPanel section={badgeSection} onSectionChange={switchBadgeSection} />
+        )}
 
-          <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-            <h2 className="font-semibold text-white">Staff editors</h2>
-            <p className="mt-1 text-xs text-zinc-500">Accounts that can update these settings</p>
-            <ul className="mt-4 space-y-2">
-              {data.staffEditors.map((s) => (
-                <li
-                  key={String(s.staffId)}
-                  className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
-                >
-                  <span className="text-white">{s.name}</span>
-                  <span className="text-xs text-zinc-500">{s.role}</span>
-                </li>
-              ))}
-              {!data.staffEditors.length && (
-                <li className="text-sm text-zinc-500">No staff accounts found.</li>
-              )}
-            </ul>
-          </section>
-        </div>
+        {tab !== 'badges' && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
+              <h2 className="font-semibold text-white">Change history</h2>
+              <p className="mt-1 text-xs text-zinc-500">Recent writes to configuration</p>
+              <ul className="mt-4 space-y-2">
+                {data.changeHistory.length ? (
+                  data.changeHistory.map((h) => (
+                    <li
+                      key={h.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
+                    >
+                      <span className="capitalize text-white">{h.section}</span>
+                      <span className="shrink-0 text-right text-xs text-zinc-500">
+                        {h.updatedBy}
+                        <br />
+                        {h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '—'}
+                      </span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-zinc-500">No saved changes yet.</li>
+                )}
+              </ul>
+            </section>
+
+            <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
+              <h2 className="font-semibold text-white">Staff editors</h2>
+              <p className="mt-1 text-xs text-zinc-500">Accounts that can update these settings</p>
+              <ul className="mt-4 space-y-2">
+                {data.staffEditors.map((s) => (
+                  <li
+                    key={String(s.staffId)}
+                    className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
+                  >
+                    <span className="text-white">{s.name}</span>
+                    <span className="text-xs text-zinc-500">{s.role}</span>
+                  </li>
+                ))}
+                {!data.staffEditors.length && (
+                  <li className="text-sm text-zinc-500">No staff accounts found.</li>
+                )}
+              </ul>
+            </section>
+          </div>
+        )}
       </div>
     </main>
   );

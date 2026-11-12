@@ -21,24 +21,91 @@ export type ModerationCase = {
   canDelete?: boolean;
 };
 
+/** One metadata field of an activity entry, already labelled by the backend. */
+export type ActivityDetail = {
+  key: string;
+  label: string;
+  value: string | number | boolean | null;
+  type: 'string' | 'number' | 'boolean' | 'date' | 'id' | 'text';
+};
+
+export type ActivityReversal = {
+  reversed: boolean;
+  at?: string | null;
+  by?: string | null;
+  byRole?: string | null;
+  byStaffId?: string | null;
+  note?: string | null;
+};
+
 export type ModerationActivity = {
   id: string;
   action: string;
   category: string;
+  categoryLabel?: string;
+  eventCode?: string;
+  eventLabel?: string;
+  severity?: 'critical' | 'high' | 'medium' | 'low' | 'info' | string;
+  impact?: string | null;
+
   target: string;
   targetHandle: string;
   targetType: string;
+  accountId?: string | null;
+  accountStatus?: string | null;
+
   executedBy: string;
   executedByRole: string;
   executedByHandle: string;
+  executedByKind?: 'Staff' | 'Member' | 'System' | string;
+  executedByStaffId?: string | null;
+  executedByAccountId?: string | null;
+
   timestamp: string | null;
   status: string;
+
+  reason?: string | null;
   notes: string;
-  eventCode?: string;
-  accountId?: string | null;
+  details?: ActivityDetail[];
+  metadata?: Record<string, unknown>;
+
+  reference?: {
+    table?: string | null;
+    prefix?: string | null;
+    id?: string | null;
+    label?: string | null;
+  };
   referenceTable?: string | null;
   referenceId?: string | null;
+
   reversible?: boolean;
+  reversal?: ActivityReversal;
+};
+
+export type ActivityFilterOption = { value: string; label: string; count?: number };
+
+/** `GET /api/admin/moderation/activity` */
+export type ModerationActivityPage = {
+  entries: ModerationActivity[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  stats: {
+    total: number;
+    reversed: number;
+    accounts: number;
+    actors: number;
+    last24h: number;
+    last7d: number;
+    oldest: string | null;
+    newest: string | null;
+  };
+  filters: {
+    categories: ActivityFilterOption[];
+    eventCodes: ActivityFilterOption[];
+    roles: ActivityFilterOption[];
+  };
 };
 
 export type ModeratorProfile = {
@@ -115,17 +182,7 @@ export type ModerationOverview = {
   accountStatusBreakdown: { status: string; count: number }[];
   forumReviewQueue: ForumReviewItem[];
   contentSnapshots: ContentSnapshot[];
-  automatedSettings: {
-    spamFilterEnabled: boolean;
-    autoFlagProfanity: boolean;
-    autoHoldNewAccounts: boolean;
-    forumLinkScanning: boolean;
-    marketplaceListingReview: boolean;
-    disputeAutoAssign: boolean;
-    maxWarningsBeforeSuspend: number;
-    autoEscalateHighPriority: boolean;
-    reportToTicketAutoCreate: boolean;
-  };
+  automatedSettings: Record<string, never>;
   forumMongoConnected?: boolean;
   alerts: ModerationAlert[];
 };

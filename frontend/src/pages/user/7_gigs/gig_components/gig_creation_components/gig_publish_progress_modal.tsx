@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { getPlatformPostingFees } from "@/lib/platformFees";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UploadCloud,
@@ -37,6 +38,12 @@ export const GigPublishProgressModal: React.FC<GigPublishProgressModalProps> = (
   isOpen,
   progress,
 }) => {
+  const [gigCreateFeeCredits, setGigCreateFeeCredits] = useState(50);
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setGigCreateFeeCredits(fees.gigCreateFeeCredits));
+  }, []);
+
   if (!isOpen || !progress) return null;
 
   const isComplete = progress.stage === "completed" || progress.percentage >= 100;
@@ -228,7 +235,7 @@ export const GigPublishProgressModal: React.FC<GigPublishProgressModalProps> = (
                 </div>
                 <div className="min-w-0">
                   <span className="font-semibold text-zinc-800 dark:text-zinc-200 block truncate">
-                    50 Credits Deduction & Market Broadcast
+                    {gigCreateFeeCredits} Credits Deduction & Market Broadcast
                   </span>
                   <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block truncate">
                     Bayesian discovery indexing enabled

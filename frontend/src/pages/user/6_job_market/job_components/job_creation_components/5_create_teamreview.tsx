@@ -27,6 +27,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
 import type { MilestoneFormItem } from "./4_create_teammilestones";
 import api from "@/lib/axios";
+import { getPlatformPostingFees } from "@/lib/platformFees";
 import { computeJobRankingBreakdown } from "../../job_ranking";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import type { Job } from "../job_lists";
@@ -103,7 +104,12 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
   isSubmitting = false,
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [postingFeeCredits, setPostingFeeCredits] = useState(50);
   const [agreedToFee, setAgreedToFee] = useState(false);
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setPostingFeeCredits(fees.jobPostFeeCredits));
+  }, []);
   const user = useGlobalState((state) => state.user);
   const globalSubscriptionPlan = useGlobalState((state) => state.subscriptionPlan);
   const rawSubscriptionPlan =
@@ -898,7 +904,7 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 dark:text-zinc-400">Platform Posting Fee</span>
-            <span className="font-bold text-red-500">-50 Credits</span>
+            <span className="font-bold text-red-500">-{postingFeeCredits} Credits</span>
           </div>
           <div className="pt-2 mt-1 border-t border-gray-200 dark:border-white/10 flex justify-between items-center text-sm">
             <span className="font-bold text-gray-900 dark:text-white">Balance After Publication</span>
@@ -907,17 +913,17 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
             ) : (
               <span className="font-extrabold text-gray-900 dark:text-white flex items-center gap-1">
                 <CreditIcon className="h-4 w-4 text-amber-500" />
-                {(walletBalance - 50).toLocaleString()} Credits
+                {(walletBalance - postingFeeCredits).toLocaleString()} Credits
               </span>
             )}
           </div>
         </div>
 
-        {walletBalance !== null && walletBalance < 50 ? (
+        {walletBalance !== null && walletBalance < postingFeeCredits ? (
           <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold flex justify-between items-center">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>Insufficient balance (requires 50 Credits to publish)</span>
+              <span>Insufficient balance (requires {postingFeeCredits} Credits to publish)</span>
             </div>
             <Link to="/credits" className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition font-bold text-xs">
               Buy Credits
@@ -933,7 +939,7 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
               className="mt-0.5 h-4 w-4 rounded border-gray-300 text-zinc-900 focus:ring-zinc-500 dark:border-white/20 dark:bg-zinc-900 transition cursor-pointer disabled:opacity-50"
             />
             <span className="text-xs text-gray-600 dark:text-zinc-400 select-none group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-              I agree to the <span className="font-bold text-gray-900 dark:text-white">50 Credits</span> publication fee to broadcast this team post to the marketplace.
+              I agree to the <span className="font-bold text-gray-900 dark:text-white">{postingFeeCredits} Credits</span> publication fee to broadcast this team post to the marketplace.
             </span>
           </label>
         )}
@@ -951,9 +957,9 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={isSubmitting || walletBalance === null || walletBalance < 50 || !agreedToFee}
+          disabled={isSubmitting || walletBalance === null || walletBalance < postingFeeCredits || !agreedToFee}
           className={`min-w-[240px] px-8 py-3.5 flex items-center justify-center gap-2.5 rounded-xl text-sm font-bold transition focus:outline-none ${
-            isSubmitting || walletBalance === null || walletBalance < 50 || !agreedToFee 
+            isSubmitting || walletBalance === null || walletBalance < postingFeeCredits || !agreedToFee 
               ? "bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-zinc-600 cursor-not-allowed shadow-none" 
               : "bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/35 active:scale-[0.99] cursor-pointer"
           }`}

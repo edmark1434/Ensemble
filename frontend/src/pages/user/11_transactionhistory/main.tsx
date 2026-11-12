@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  LoaderCircle,
   RefreshCw,
   Search,
   X,
@@ -278,6 +277,173 @@ function DetailItem({
   );
 }
 
+function TransactionSummarySkeleton() {
+  return (
+    <>
+      {/* 5 Metric Cards Skeleton */}
+      <section
+        aria-label="Loading wallet and income summary"
+        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-12"
+      >
+        {/* Available Balance Hero Card */}
+        <div className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 sm:col-span-2 lg:col-span-4">
+          <div className="h-3 w-28 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+          <div className="my-3 flex items-center gap-3">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
+            <div className="h-9 w-36 sm:w-44 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+          </div>
+          <div className="h-3 w-56 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+        </div>
+
+        {/* 4 Supporting Metric Cards */}
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col justify-between rounded-2xl border border-gray-200/90 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-4.5 lg:col-span-2"
+          >
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="h-2.5 w-20 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+              <div className="h-4 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
+            </div>
+            <div className="my-2.5 flex h-8 items-center">
+              <div className="h-7 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+            </div>
+            <div className="h-3 w-28 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+        ))}
+      </section>
+
+      {/* 2 Chart Skeletons */}
+      <section
+        aria-label="Loading transaction charts"
+        className="mb-6 grid gap-4 lg:grid-cols-12"
+      >
+        {/* Donut Chart Skeleton */}
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/70 p-5 lg:col-span-5">
+          <div className="space-y-1.5">
+            <div className="h-3 w-32 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-2.5 w-48 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-6">
+            <div className="h-28 w-28 shrink-0 animate-pulse rounded-full border-[10px] border-gray-200 dark:border-white/10 bg-transparent" />
+            <div className="min-w-[180px] flex-1 space-y-3.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="flex justify-between">
+                    <div className="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+                    <div className="h-3 w-14 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+                  </div>
+                  <div className="h-1.5 w-full animate-pulse rounded-full bg-gray-100 dark:bg-white/5" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline Bar Chart Skeleton */}
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/70 p-5 lg:col-span-7">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1.5">
+              <div className="h-3 w-36 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+              <div className="h-2.5 w-44 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+            </div>
+            <div className="flex gap-3">
+              <div className="h-3 w-16 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+              <div className="h-3 w-16 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+              <div className="h-3 w-16 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-7 items-end gap-2 pt-2" style={{ height: 148 }}>
+            {[45, 80, 60, 95, 70, 50, 85].map((h, i) => (
+              <div key={i} className="flex flex-col items-center justify-end gap-1.5 h-full">
+                <div
+                  className="flex w-full items-end justify-center gap-1 border-b border-gray-200 dark:border-white/10 pb-1"
+                  style={{ height: 115 }}
+                >
+                  <div
+                    className="w-2.5 sm:w-3 animate-pulse rounded-t bg-gray-200 dark:bg-white/10"
+                    style={{ height: `${h}%` }}
+                  />
+                  <div
+                    className="w-2.5 sm:w-3 animate-pulse rounded-t bg-gray-100 dark:bg-white/5"
+                    style={{ height: `${h * 0.55}%` }}
+                  />
+                </div>
+                <div className="h-2.5 w-6 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function TransactionTableSkeleton() {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-b border-gray-200 dark:border-white/10 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+            <th className="px-5 py-3.5">Date</th>
+            <th className="px-5 py-3.5">Transaction</th>
+            <th className="px-5 py-3.5">Type</th>
+            <th className="px-5 py-3.5">Direction</th>
+            <th className="px-5 py-3.5">Counterparty / Wallet</th>
+            <th className="px-5 py-3.5 text-right">Credits</th>
+            <th className="px-5 py-3.5 text-right">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="animate-pulse">
+              {/* Date */}
+              <td className="whitespace-nowrap px-5 py-4">
+                <div className="space-y-1.5">
+                  <div className="h-3 w-20 rounded bg-gray-200 dark:bg-white/10" />
+                  <div className="h-2.5 w-14 rounded bg-gray-100 dark:bg-white/5" />
+                </div>
+              </td>
+              {/* Transaction Title & Description */}
+              <td className="px-5 py-4">
+                <div className="space-y-1.5 max-w-sm">
+                  <div className="h-3.5 w-44 rounded bg-gray-200 dark:bg-white/10" />
+                  <div className="h-2.5 w-64 rounded bg-gray-100 dark:bg-white/5" />
+                </div>
+              </td>
+              {/* Type */}
+              <td className="whitespace-nowrap px-5 py-4">
+                <div className="h-3 w-24 rounded bg-gray-200 dark:bg-white/10" />
+              </td>
+              {/* Direction */}
+              <td className="whitespace-nowrap px-5 py-4">
+                <div className="h-5 w-20 rounded-md bg-gray-200 dark:bg-white/10" />
+              </td>
+              {/* Counterparty / Wallet Flow */}
+              <td className="px-5 py-4">
+                <div className="h-3 w-32 rounded bg-gray-100 dark:bg-white/5" />
+              </td>
+              {/* Credits */}
+              <td className="whitespace-nowrap px-5 py-4 text-right">
+                <div className="ml-auto h-4 w-16 rounded bg-gray-200 dark:bg-white/10" />
+              </td>
+              {/* Status */}
+              <td className="whitespace-nowrap px-5 py-4 text-right">
+                <div className="ml-auto h-5 w-20 rounded-md bg-gray-100 dark:bg-white/5" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* Pagination Footer Skeleton */}
+      <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-200 dark:border-white/10 p-4 sm:flex-row">
+        <div className="h-3.5 w-32 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+        <div className="h-7 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+      </div>
+    </div>
+  );
+}
+
 export const TransactionHistoryMain = () => {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
@@ -544,6 +710,7 @@ export const TransactionHistoryMain = () => {
         </div>
 
         {/* Top Summary Strip: Hero Available Balance (with Lottie CreditIcon) + Gross, Outgoing, Net, On Hold */}
+        {loading && <TransactionSummarySkeleton />}
         {!loading && !error && (
           <>
             <section
@@ -1076,12 +1243,7 @@ export const TransactionHistoryMain = () => {
             </div>
           )}
 
-          {loading && (
-            <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-gray-500 dark:text-zinc-400" role="status">
-              <LoaderCircle className="h-6 w-6 animate-spin text-gray-400" aria-hidden="true" />
-              <p className="text-sm">Loading transactions…</p>
-            </div>
-          )}
+          {loading && <TransactionTableSkeleton />}
 
           {!loading && error && (
             <div className="flex min-h-72 flex-col items-center justify-center gap-4 px-5 text-center" role="alert">

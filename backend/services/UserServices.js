@@ -166,6 +166,14 @@ async function registerUser(signupPayload = {}, options = {}) {
     if (platform && platform.registrationEnabled === false) {
         throw new ServiceError('User registration is currently disabled.', 403);
     }
+    if (platform?.maintenanceMode) {
+        const error = new ServiceError(
+            'Ensemble is undergoing scheduled maintenance. Please try again later.',
+            503
+        );
+        error.code = 'MAINTENANCE_MODE';
+        throw error;
+    }
 
     //normalize and validate the signup input
     const {
@@ -277,14 +285,11 @@ async function registerUser(signupPayload = {}, options = {}) {
         };
     }
     //create account and user in the database, hash the password if provided, and return the created user and account information
-    const { getModerationSettings } = require('../lib/ModerationPolicy');
-    const moderation = await getModerationSettings();
-    const accountStatus = moderation.autoHoldNewAccounts ? 'Locked' : 'active';
     const account = await createAccount({
         displayName: [firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || null,
         handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
         type: type ?? 'User',
-        status: accountStatus,
+        status: 'active',
     });
     //hash the password if provided, otherwise set to null for OAuth users
     const passwordHash = options.passwordHash || (password ? await bcrypt.hash(password, SALT_ROUNDS) : null);
@@ -496,6 +501,25 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
     await redisClient.del(attemptsKey);
     await redisClient.del(lockoutKey);
     await redisClient.del(lockoutMetaKey);
+
+    // Member product is closed during maintenance; staff/admin consoles stay available.
+    if (credentials.type !== 'Staff') {
+        try {
+            const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+            const platform = await getSectionValue('platform');
+            if (platform?.maintenanceMode) {
+                const error = new ServiceError(
+                    'Ensemble is undergoing scheduled maintenance. Please try again later.',
+                    503
+                );
+                error.code = 'MAINTENANCE_MODE';
+                throw error;
+            }
+        } catch (err) {
+            if (err?.code === 'MAINTENANCE_MODE' || err?.statusCode === 503) throw err;
+        }
+    }
+
     return credentials;
 }
 //function to generate a JSON Web Token (JWT) for authenticated users, signing the provided payload with a secret key and setting an expiration time for the token. This token can then be used for authenticating subsequent requests to protected routes in the application.

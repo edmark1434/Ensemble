@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Eye, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import BulkActionsMenu from '../userTeam/components/BulkActionsMenu';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
@@ -245,7 +245,6 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Total credits</th>
               <th className="px-4 py-3 text-right">Total assets</th>
-              <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -254,11 +253,12 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
               return (
                 <tr
                   key={w.walletId}
-                  className={`border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
+                  onClick={() => onView(w)}
+                  className={`cursor-pointer border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
                     isChecked ? 'bg-rose-500/[0.07]' : ''
                   }`}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isChecked}
@@ -292,22 +292,12 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
                     {w.totalCredits.toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{w.totalAssets}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onView(w)}
-                      className="inline-flex rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                      title="View wallet"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">
                   No wallets match your search or filters.
                 </td>
               </tr>

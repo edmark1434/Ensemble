@@ -11,6 +11,8 @@ import { isGuestAllowedPath } from "./guestRouteAccess";
 import { isStaffConsolePath, isStaffPreviewFrame } from "./staffPlatformView";
 import { APPEAL_PATH, isAppealLimitedMember } from "./appealAccess";
 import DeactivatedAccountScreen from "@/components/account/DeactivatedAccountScreen";
+import { useMaintenanceGate } from "./maintenanceMode";
+import MaintenancePage from "@/pages/MaintenancePage";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -85,6 +87,7 @@ export default function RouteMiddleware() {
     const { user, isGuestMode } = useGlobalState();
     const navigate = useNavigate();
     const location = useLocation();
+    const maintenance = useMaintenanceGate(location.pathname);
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
 
@@ -310,6 +313,14 @@ export default function RouteMiddleware() {
         && onboardingGate.accountId === resolvedAccountId
         && onboardingGate.verificationFailed;
 
+    // Member auth screens must stay reachable while a staff cookie is present so
+    // someone leaving staff.ensemble.software can switch to a user account.
+    const isMemberAuthEntryPath =
+        location.pathname === '/login' ||
+        location.pathname === '/signup' ||
+        location.pathname === '/forgot-password' ||
+        location.pathname === '/reset-password';
+
     const redirectPath = useMemo(() => {
         if (isCheckingSession || isLocalSignOutTransition) {
             return null;
@@ -323,11 +334,15 @@ export default function RouteMiddleware() {
             return null;
         }
 
+        if (resolvedUser?.type === 'Staff' && isMemberAuthEntryPath) {
+            return null;
+        }
+
         const requested = new URLSearchParams(location.search).get('redirect');
         const handoff = requested && (/^\/projects\/open\/[^/?]+(?:\?|$)/.test(requested)
             || requested.startsWith('/assets/owned?templateSnapshot=')) ? requested : null;
         return onboardingPath || (resolvedUser?.type === 'User' && handoff) || getRedirectPath(resolvedUser);
-    }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath, location.search]);
+    }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath, location.search, isMemberAuthEntryPath]);
 
     const shouldAutoRedirect = useMemo(() => {
         return basePublicRoutes.includes(location.pathname);
@@ -376,6 +391,29 @@ export default function RouteMiddleware() {
           { replace: true },
         );
     }, [isCheckingSession, resolvedUser, isPublicRoute, isTicketFormRoute, isOnboardingRoute, location.pathname, navigate]);
+
+    if (maintenance.loading) {
+        return createElement(RouteLoadingShell);
+    }
+
+    const staffBypassMaintenance =
+        resolvedUser?.type === 'Staff' ||
+        isStaffConsolePath(location.pathname) ||
+        location.pathname.startsWith('/moderator') ||
+        location.pathname.startsWith('/admin') ||
+        location.pathname.startsWith('/staff');
+
+    // Wait for session before blocking so staff/moderators on the main host are not locked out.
+    if (maintenance.maintenanceMode && maintenance.blockProduct && isCheckingSession && !staffBypassMaintenance) {
+        return createElement(RouteLoadingShell);
+    }
+
+    if (maintenance.blockProduct && !staffBypassMaintenance) {
+        return createElement(MaintenancePage, {
+            siteName: maintenance.config?.siteName,
+            supportEmail: maintenance.config?.supportEmail,
+        });
+    }
 
     if (onboardingVerificationFailed && !isBannedMember(resolvedUser)) {
         return createElement(RouteLoadingShell);

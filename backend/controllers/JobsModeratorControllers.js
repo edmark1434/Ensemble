@@ -216,12 +216,19 @@ async function getPosting(req, res) {
 
 async function patchPosting(req, res) {
   try {
-    const data = await updateJobsGigsPosting(req.params.type, req.params.id, req.body);
+    const data = await updateJobsGigsPosting(
+      req.params.type,
+      req.params.id,
+      req.body || {},
+      req.session
+    );
     if (!data) return res.status(404).json({ success: false, message: 'Posting not found' });
-    res.status(200).json({ success: true, data });
+    res.status(200).json({ success: true, data, message: 'Posting updated' });
   } catch (err) {
-    console.error('Error updating posting:', err);
-    res.status(500).json({ success: false, message: 'Failed to update posting' });
+    const message = err?.message || 'Failed to update posting';
+    const status = err?.statusCode || (/invalid|already|under 500/i.test(message) ? 400 : 500);
+    if (status >= 500) console.error('Error updating posting:', err);
+    res.status(status).json({ success: false, message: status < 500 ? message : 'Failed to update posting' });
   }
 }
 
