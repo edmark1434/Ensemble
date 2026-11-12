@@ -4,7 +4,20 @@ const {
   deletePendingCase,
   assignMyselfToPendingCase,
   reverseModerationActivity,
+  fetchModerationActivityPage,
+  fetchModerationActivityDetail,
 } = require('../repositories/AdminModerationRepositories');
+
+/** Keeps a blank or `all` query string out of the repository filters. */
+function optionalFilter(value) {
+  const text = String(value ?? '').trim();
+  return text && text.toLowerCase() !== 'all' ? text : 'all';
+}
+
+function optionalDate(value) {
+  const text = String(value ?? '').trim();
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text : null;
+}
 
 async function getAdminModerationOverview(req, res) {
   try {
@@ -46,6 +59,39 @@ async function postAdminModerationCaseAssignMyself(req, res) {
   }
 }
 
+async function getAdminModerationActivity(req, res) {
+  try {
+    const data = await fetchModerationActivityPage({
+      search: String(req.query.search || '').trim(),
+      category: optionalFilter(req.query.category),
+      eventCode: optionalFilter(req.query.eventCode),
+      role: optionalFilter(req.query.role),
+      state: optionalFilter(req.query.state),
+      accountId: String(req.query.accountId || '').trim() || null,
+      from: optionalDate(req.query.from),
+      to: optionalDate(req.query.to),
+      sort: String(req.query.sort || 'newest'),
+      limit: req.query.limit,
+      offset: req.query.offset,
+    });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching moderation activity log:', err);
+    res.status(500).json({ success: false, message: 'Failed to load the activity log' });
+  }
+}
+
+async function getAdminModerationActivityDetail(req, res) {
+  try {
+    const data = await fetchModerationActivityDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Activity not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching moderation activity entry:', err);
+    res.status(500).json({ success: false, message: 'Failed to load this activity entry' });
+  }
+}
+
 async function postAdminModerationActivityReverse(req, res) {
   try {
     const data = await reverseModerationActivity(req.params.id, req.session);
@@ -62,5 +108,7 @@ module.exports = {
   patchAdminModerationCase,
   deleteAdminModerationCase,
   postAdminModerationCaseAssignMyself,
+  getAdminModerationActivity,
+  getAdminModerationActivityDetail,
   postAdminModerationActivityReverse,
 };

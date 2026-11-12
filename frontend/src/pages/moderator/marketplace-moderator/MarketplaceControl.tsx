@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   ShoppingBag,
+  Undo2,
   XCircle,
 } from 'lucide-react';
 import api from '@/lib/axios';
@@ -23,9 +24,7 @@ import ListingDetailModal, {
 import type { MarketplaceListing, MarketplaceOverview } from './marketplaceTypes';
 
 const STATUS_TABS = ['all', 'pending', 'approved', 'rejected', 'delisted'] as const;
-
-const OVERVIEW_URL = '/api/moderator/marketplace/overview';
-const LISTINGS_URL = '/api/moderator/marketplace/listings';
+const DEFAULT_API_BASE = '/api/moderator/marketplace';
 
 function listingParams(status: string, category: string, search: string) {
   return {
@@ -134,24 +133,32 @@ function SkeletonRows() {
   );
 }
 
-export default function MarketplaceControl() {
+export default function MarketplaceControl({
+  apiBase = DEFAULT_API_BASE,
+  embedded = false,
+}: {
+  apiBase?: string;
+  embedded?: boolean;
+} = {}) {
+  const overviewUrl = `${apiBase}/overview`;
+  const listingsUrl = `${apiBase}/listings`;
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>('pending');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [listings, setListings] = useState<MarketplaceListing[]>(() => {
-    const cached = peekStaffGet(LISTINGS_URL, listingParams(statusFilter, categoryFilter, search));
+    const cached = peekStaffGet(listingsUrl, listingParams(statusFilter, categoryFilter, search));
     return cached?.data?.success ? cached.data.data : [];
   });
   const [overview, setOverview] = useState<MarketplaceOverview['summary'] | null>(() => {
-    const cached = peekStaffGet(OVERVIEW_URL);
+    const cached = peekStaffGet(overviewUrl);
     return cached?.data?.success ? cached.data.data.summary : null;
   });
   const [categories, setCategories] = useState<string[]>(() => {
-    const cached = peekStaffGet(OVERVIEW_URL);
+    const cached = peekStaffGet(overviewUrl);
     return cached?.data?.success ? overviewCategories(cached.data.data) : [];
   });
   const [loading, setLoading] = useState(
-    () => !peekStaffGet(LISTINGS_URL, listingParams(statusFilter, categoryFilter, search))?.data?.success
+    () => !peekStaffGet(listingsUrl, listingParams(statusFilter, categoryFilter, search))?.data?.success
   );
   const [refreshing, setRefreshing] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -163,7 +170,7 @@ export default function MarketplaceControl() {
 
   const loadOverview = async () => {
     try {
-      const res = await staffGet(OVERVIEW_URL);
+      const res = await staffGet(overviewUrl);
       if (res.data?.success) {
         setOverview(res.data.data.summary);
         setCategories(overviewCategories(res.data.data));
@@ -176,7 +183,7 @@ export default function MarketplaceControl() {
   const load = async () => {
     const params = listingParams(statusFilter, categoryFilter, search);
     const key = JSON.stringify(params);
-    const cached = peekStaffGet(LISTINGS_URL, params);
+    const cached = peekStaffGet(listingsUrl, params);
     if (cached?.data?.success) {
       shownListingsKey.current = key;
       setListings(cached.data.data);
@@ -184,7 +191,7 @@ export default function MarketplaceControl() {
     if (shownListingsKey.current === key) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await staffGet(LISTINGS_URL, params);
+      const res = await staffGet(listingsUrl, params);
       if (res.data?.success) {
         shownListingsKey.current = key;
         setListings(res.data.data);
@@ -225,7 +232,7 @@ export default function MarketplaceControl() {
     }
     setSavingId(listing.id);
     try {
-      await api.patch(`/api/moderator/marketplace/listings/${listing.id}`, {
+      await api.patch(`${apiBase}/listings/${listing.id}`, {
         status,
         rejectionReason,
       });
@@ -236,8 +243,11 @@ export default function MarketplaceControl() {
       } as const;
       showSuccessToast(labels[status]);
       await refreshAll();
-    } catch {
-      showErrorToast('Failed to update listing');
+    } catch (err) {
+      showErrorToast(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Failed to update listing'
+      );
     } finally {
       setSavingId(null);
     }
@@ -254,11 +264,14 @@ export default function MarketplaceControl() {
       .reduce((acc, l) => acc + l.priceCredits, 0),
   };
 
+  const shellClass = embedded
+    ? 'relative z-10 space-y-5'
+    : 'relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10';
+  const Shell = embedded ? 'div' : 'main';
+
   return (
-    <main
-      className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10"
-      style={{ animation: 'fadeIn 420ms ease' }}
-    >
+    <Shell className={shellClass} style={embedded ? undefined : { animation: 'fadeIn 420ms ease' }}>
+      {!embedded && (
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-400">
@@ -280,6 +293,20 @@ export default function MarketplaceControl() {
           Refresh
         </button>
       </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={loading || refreshing}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <SummaryChip
@@ -557,6 +584,21 @@ export default function MarketplaceControl() {
                               )}
                             </button>
                           )}
+                          {(l.status === 'rejected' || l.status === 'delisted') && (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void moderate(l, 'approved')}
+                              title={l.status === 'delisted' ? 'Relist' : 'Reinstate'}
+                              className="rounded-lg border border-emerald-500/25 p-1.5 text-emerald-400 transition hover:bg-emerald-500/10 disabled:opacity-50"
+                            >
+                              {saving ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Undo2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -572,6 +614,7 @@ export default function MarketplaceControl() {
         <ListingDetailModal
           listingId={selectedId}
           seed={selected}
+          apiBase={apiBase}
           onClose={() => setSelectedId(null)}
           onUpdated={() => void refreshAll()}
           onViewSeller={(accountId) => setSellerAccountId(accountId)}
@@ -581,6 +624,7 @@ export default function MarketplaceControl() {
       {sellerAccountId !== null && (
         <SellerListingsModal
           accountId={sellerAccountId}
+          apiBase={apiBase}
           onClose={() => setSellerAccountId(null)}
           onOpenListing={(id) => {
             setSellerAccountId(null);
@@ -588,6 +632,6 @@ export default function MarketplaceControl() {
           }}
         />
       )}
-    </main>
+    </Shell>
   );
 }

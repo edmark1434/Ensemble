@@ -9,6 +9,8 @@ import { db } from "@/lib/db";
 import { verifyProjectShareLink } from "@/lib/auth/project-share-link";
 import { redeemProjectShareLink } from "@/lib/db/project-share-links";
 import { recheckProject } from "@/lib/collab/access-recheck";
+import { CollaborativeProjectLimitError } from "@/lib/db/collaborative-projects";
+import { PlanConfigurationError } from "@/lib/plan-feature-values";
 
 // Random/garbage segments (e.g. someone fat-fingering /editor/asdf) aren't
 // valid uuid syntax, and postgres throws on that rather than just returning
@@ -55,7 +57,19 @@ export default async function EditorPage({
 
   if (share) {
     const link = await verifyProjectShareLink(share, id);
-    if (!link || !(await redeemProjectShareLink(id, decoded.userId, link))) {
+    let redeemed = false;
+    try {
+      redeemed = !!link && await redeemProjectShareLink(id, decoded.userId, link);
+    } catch (error) {
+      if (error instanceof CollaborativeProjectLimitError) {
+        return <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">The project owner has reached their collaborative project limit. Ask them to upgrade their plan before sharing another project.</div>;
+      }
+      if (error instanceof PlanConfigurationError) {
+        return <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">Sharing is temporarily unavailable. Please try again later.</div>;
+      }
+      throw error;
+    }
+    if (!redeemed) {
       return <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">This share link has expired or is no longer available. Ask the project owner for a new link.</div>;
     }
     void recheckProject(id);

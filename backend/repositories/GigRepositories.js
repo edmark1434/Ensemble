@@ -16,13 +16,15 @@ async function createGigRepository(gigData) {
 
 
 
-        // Deduct Service Posting Fee (50 Credits)
+        // Deduct Service Posting Fee (economy.feeSettings fee-gig-create flatFee, default 50)
 
         const actorAccountId = gigData.freelancer_account_id;
 
         const payerAccountId = gigData.payer_account_id || actorAccountId;
 
-        const fee = 50;
+        const { getGigCreateFeeCredits } = require('../lib/PlatformFeeSettings');
+
+        const fee = await getGigCreateFeeCredits();
 
 
 
@@ -76,7 +78,7 @@ async function createGigRepository(gigData) {
 
         if (Number(chosenWallet.balance_credits) < fee) {
 
-            const err = new Error('Insufficient funds. You need 50 Credits to post a service.');
+            const err = new Error(`Insufficient funds. You need ${fee} Credits to post a service.`);
 
             err.statusCode = 402;
 

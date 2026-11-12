@@ -41,7 +41,14 @@
 - Main site `GET /api/files/video-upload-policy` and editor `GET /api/uploads/policy` return the signed-in uploader's effective plan, resolution bounds, display label and whether to show the notice. Responses are private/no-store. Editor also returns the main site's upgrade URL.
 - New market video originals and editor file/URL video uploads enforce Free 720p, Premium 1080p, Business 2160p during server-side normalization. Bounds rotate for portrait; smaller videos are not upscaled. Business notices are hidden; image originals are unaffected.
 - Editor presign/finalize/URL-import endpoints verify the signed editor session matches the upload owner. Finalize/import also require editable project membership. The cap is queried at finalization, never supplied by the client.
-- Editor upload controls compare personal media storage against Free 5 GB, Premium 100 GB, or Business 1 TB, including queued and selected transfers. Presign/import reject uploads exceeding capacity; finalization checks actual stored size under a per-owner transaction lock. Only distinct original files belonging to non-deleted media assets count; trashed uploads still count until permanently deleted. Proxies, thumbnails, and project documents are excluded.
+- Editor upload controls read `personal_upload_storage` from the effective plan's `plan_features` rows, including queued and selected transfers in capacity checks. Values such as `5GB`, `100GB`, and `1TB` use binary units. Presign/import reject uploads exceeding capacity; finalization re-reads the limit and checks actual stored size under a per-owner transaction lock. Only distinct original files belonging to non-deleted media assets count; trashed uploads still count until permanently deleted. Proxies, thumbnails, and project documents are excluded. The storage meter formats the actual allowance rather than assuming a tier's size.
+
+## Editor collaborative project limits
+
+- The `projects` plan feature caps the number of owned projects with another active member, rather than project creation or member count. `Unlimited` removes the cap. The project owner's plan applies even when a Manager shares it. Retained shared projects in Trash still count until permanently deleted or unshared; projects joined under somebody else's ownership do not consume a slot.
+- Editor member-list responses include collaboration usage and whether this project can be shared for Owners/Managers. At the cap, an unshared project's Share modal hides adding people and copying links, keeps the access list visible, and offers an upgrade link to `/credits-subscriptions`. Existing collaborative projects remain shareable; membership management and publishing a template are separate from consuming a new collaborative-project slot.
+- Direct member additions and share-link redemption check the cap inside the membership transaction, serialized by project and owner locks. Removing the last collaborator releases a slot under the same locks. Link creation checks capacity but does not reserve a slot; previously issued links are checked again when redeemed. Limit failures on add/link creation return 409 with `COLLABORATIVE_PROJECT_LIMIT`; invalid plan configuration fails closed. No migration is needed.
+
 
 ## External providers
 
@@ -101,6 +108,23 @@
   - `action: "reverse_transaction"` with `creditTransactionId`, optional `amount`, `resolutionNotes`. Reverses a linked completed transaction; fails with 409 if the destination wallet lacks balance; auto-closes the dispute.
   - A dispute accepts only one financial resolution. Non-handlers receive 403.
 
+## Moderation activity log
+
+- `GET /api/admin/moderation/activity` returns one page of `account_activity` with everything the log needs: `entries`, the matching `total`, `limit`/`offset`/`hasMore`, `stats` (total, reversed, accounts, actors, last24h, last7d, oldest, newest) and `filters` (categories, event codes with counts, actor roles with counts).
+  - Query: `search`, `category`, `eventCode`, `role` (a staff role, or `system` for rows with no actor), `state` (`active` | `reversed`), `accountId`, `from`, `to` (inclusive `YYYY-MM-DD`), `sort` (`newest` | `oldest` | `action` | `event` | `target`), `limit` (max 200), `offset`.
+  - Every filter is applied in SQL so the page, the total and the stats always describe the same set of rows.
+- `GET /api/admin/moderation/activity/:id` returns one entry in the same shape. The detail modal always re-reads it, because a row handed over by a table can predate a later reversal.
+- Each entry carries the plain-language `eventLabel`, `category`/`categoryLabel`, `severity`, `impact`, the target (`target`, `targetHandle`, `targetType`, `accountId`, `accountStatus`), the actor (`executedBy`, `executedByRole`, `executedByHandle`, `executedByKind`, `executedByStaffId`, `executedByAccountId`), the `reference` it points at (`table`, `prefix`, `id`, `label`), `details` (every metadata field as `{ key, label, value, type }`), the raw `metadata`, and `reversal` (`at`, `by`, `byRole`, `note`).
+- `POST /api/admin/moderation/activity/:id/reverse` returns `{ entry, entries }`: the reversed row plus the refreshed recent list.
+- `backend/lib/ActivityCatalog.js` is the single source for event labels, categories, severities and target types. Its ordered category rules generate both the JavaScript classification and the SQL predicate, so a category filter can never disagree with the category a row is labelled with. Add new event codes there.
+
+## Forum content moderation
+
+- The admin console (`/api/admin/moderation/forum/...`) and the Forum Moderator desk (`/api/moderator/forum/...`) share `backend/services/ForumContentModerationServices.js`, so both get the same validation, the same already-in-that-state guards (409) and the same audit trail. Route middleware decides who may call in.
+- Group and discussion lists accept `search` and `status` (`active` | `inactive` for groups; `active` | `removed` | `locked` | `pinned` for discussions) and return `stats` for the header alongside `groups`/`discussions`.
+- `GET /api/moderator/forum/groups/:id` returns the group detail (roster with roles, bans, join dates, owner, per-group moderation counts and its discussions) — previously only the admin console had it.
+- Group archiving, member bans, discussion lock/pin/remove/restore and comment removal all write to `account_activity` against the affected member, with the optional `reason` from the request body. Comment removal also stores the removed text so a reviewer can judge the call afterwards.
+
 ## Member reports
 
 - Member report POSTs (`/api/jobs/:jobId/report`, `/api/gigs/:id/report`, `/api/assets/:assetId/report`, `/api/accounts/:accountId/report`, `/api/inbox/message/:messageId/report`, `/api/forum/reports/...`, `/api/teams/:teamId/reports`, `/api/team-projects/:id/report`) store `subject_snapshot` on `reports`: `{ kind, title, body, href, extra }`. `description` is the reporter's reason text only.
@@ -155,4 +179,5 @@
 
 - `GET /api/market-assets?view=licensed&projectId=...&type=image|video|audio` lists assets with active, non-deleted licenses assigned to the current project. A signed session and active membership in a non-deleted project are required. The collection includes collaborator/free licenses and licensed unpublished listings; it excludes unassigned and other-project licenses. Existing search, bundle pagination and media counts apply.
 - Export settings now use a separate asset-payment step when Export project/scene finds unpaid assets. Back restores settings; cancelling checkout returns to the asset step, while completing it returns to settings.
-- Export dropdowns gate FPS at 30 for Free and 60 for Premium/Business, matching authenticated render-tier limits. MP4/MKV target bitrate is capped in the UI, download state and editor export endpoint at five times the existing resolution/FPS/aspect-ratio recommendation, up to 96,000 kbps. The endpoint validates finite positive dimensions/FPS/resolution and a numeric bitrate before preparing marketplace sources; audio, GIF and ProRes retain their existing handling.
+- Editor export dropdowns and `/api/render` validate `export_resolution` and `export_frame_rate` from the effective plan's database features. `/api/uploads/policy` supplies these limits and the other tiers' export limits for dynamic upgrade badges; editor upload normalization uses the same resolution cap. Policy refreshes on export-panel opening, focus, and every 30 seconds, while submissions always query the current database limits. Missing/invalid values fail closed. The separate render server still has its own hardcoded resolution/FPS checks and must be updated before increases beyond those caps can render successfully.
+- MP4/MKV target bitrate remains capped in the UI, download state and editor export endpoint at five times the existing resolution/FPS/aspect-ratio recommendation, up to 96,000 kbps. Existing audio, GIF and ProRes bitrate handling is unchanged.

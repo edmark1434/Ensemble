@@ -16,6 +16,8 @@ const {
 const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
 const { sumActiveWarningPoints } = require('./WarningBandRepositories');
 const { meritFromWarningPoints } = require('../lib/WarningBands');
+const { recordAccountActivity } = require('./AccountActivityRepositories');
+const { resolveStaffForSession } = require('../lib/StaffSession');
 
 // Jobs & Gigs moderation covers Jobs and Gigs tickets + related disputes.
 const JOBS_TICKET_SCOPE = QUEUE_SCOPES.jobs;
@@ -438,15 +440,43 @@ async function getJobsGigsPostingDetail(type, id) {
 }
 
 // Moderate a posting: change its status, archive it (soft delete) or restore it.
-async function updateJobsGigsPosting(type, id, { status }) {
+/**
+ * Moderates one job or gig posting.
+ *
+ * The change is written to `account_activity` against the posting owner — the
+ * client for a job, the freelancer for a gig — so the action shows up in
+ * Moderation → Activity log with its reason and who made it.
+ *
+ * @param reason {string} optional note shown in the activity log
+ */
+async function updateJobsGigsPosting(type, id, { status, reason } = {}, session = null) {
   const table = type === 'job' ? 'jobs' : type === 'gig' ? 'gigs' : null;
   if (!table) throw new Error(`Invalid posting type: ${type}`);
 
   const allowed = ['active', 'paused', 'closed', 'archived'];
   const next = String(status || '').toLowerCase();
   if (!allowed.includes(next)) throw new Error(`Invalid posting status: ${status}`);
+  const note = String(reason || '').trim();
+  if (note.length > 500) throw new Error('Keep the reason under 500 characters');
 
   const idColumn = type === 'job' ? 'job_id' : 'gig_id';
+  const ownerColumn = type === 'job' ? 'client_account_id' : 'freelancer_account_id';
+
+  const current = await pool.query(
+    `SELECT ${idColumn} AS id, title, status, deleted_at, ${ownerColumn} AS owner_account_id
+     FROM ${table} WHERE ${idColumn} = $1`,
+    [id]
+  );
+  const posting = current.rows[0];
+  if (!posting) return null;
+
+  const previousStatus = normalizePostingStatus(posting.status, posting.deleted_at);
+  if (previousStatus === next) {
+    const error = new Error(`This ${type} is already ${next}`);
+    error.statusCode = 409;
+    throw error;
+  }
+
   if (next === 'archived') {
     await pool.query(`UPDATE ${table} SET deleted_at = NOW(), updated_at = NOW() WHERE ${idColumn} = $1`, [id]);
   } else {
@@ -455,6 +485,28 @@ async function updateJobsGigsPosting(type, id, { status }) {
       `UPDATE ${table} SET status = $1, deleted_at = NULL, updated_at = NOW() WHERE ${idColumn} = $2`,
       [dbStatus, id]
     );
+  }
+
+  if (posting.owner_account_id) {
+    const staff = await resolveStaffForSession(session);
+    const verb = { active: 'Reopened', paused: 'Paused', closed: 'Closed', archived: 'Archived' }[next];
+    await recordAccountActivity({
+      accountId: posting.owner_account_id,
+      action: `${verb} ${type} posting “${posting.title || id}”`,
+      eventCode: next === 'archived' ? 'JOBS_POSTING_ARCHIVED' : 'JOBS_POSTING_STATUS_CHANGED',
+      referenceTable: table,
+      referencePrefix: type === 'job' ? 'JOB' : 'GIG',
+      referenceId: id,
+      actorStaffId: staff?.staff_id || null,
+      actorAccountId: staff?.account_id || session?.account_id || session?.accountId || null,
+      metadata: {
+        postingType: type,
+        postingTitle: posting.title || null,
+        previousStatus,
+        status: next,
+        reason: note || null,
+      },
+    });
   }
 
   return getJobsGigsPostingDetail(type, id);

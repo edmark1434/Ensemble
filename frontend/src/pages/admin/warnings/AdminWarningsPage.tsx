@@ -284,7 +284,11 @@ export function AdminWarningsPanel({
                   </thead>
                   <tbody className="divide-y divide-white/[0.04]">
                     {filtered.map((def) => (
-                      <tr key={def.warning_def_id} className="hover:bg-white/[0.02]">
+                      <tr
+                        key={def.warning_def_id}
+                        onClick={() => openEdit(def)}
+                        className="cursor-pointer hover:bg-white/[0.02]"
+                      >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-zinc-400">
@@ -302,7 +306,7 @@ export function AdminWarningsPanel({
                         <td className="px-4 py-3 text-zinc-300">{def.points} pt</td>
                         <td className="px-4 py-3 text-zinc-400">{def.durationDays} days</td>
                         <td className="px-4 py-3 text-zinc-500">{(def.desks || []).join(', ')}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => openEdit(def)}

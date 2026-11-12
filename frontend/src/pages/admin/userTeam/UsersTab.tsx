@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import useGlobalState from '@/lib/global_state';
+import { showErrorToast } from '@/components/utility/toast';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import TableFilterBar, { uniqueOptions } from './components/TableFilterBar';
@@ -23,6 +25,7 @@ import {
   setAccountStatus,
 } from './accountActions';
 import { buildRowActionItems, exportAccountJson } from './statusActions';
+import { canSuspendTarget } from './suspendRules';
 import { formatDateTime } from './formatDateTime';
 import type { PlatformUserAccount, UserManagementData } from './userTeamTypes';
 import {
@@ -130,6 +133,9 @@ export default function UsersTab({
   capabilities: capabilitiesProp,
 }: UsersTabProps) {
   const capabilities = capabilitiesProp ?? getUserTeamCapabilities('admin');
+  const viewer = useGlobalState((state) => state.user);
+  const viewerAccountId = viewer?.account_id || viewer?.accountId || null;
+  const viewerRole = viewer?.role || null;
   const bulkItems = useMemo(
     () => ALL_BULK_ITEMS.filter((item) => capabilities.bulkActions.has(item.id)),
     [capabilities]
@@ -308,7 +314,6 @@ export default function UsersTab({
         exportAccountJson(`user-${user.username || user.accountId}.json`, user);
         break;
       case 'ban':
-      case 'suspend':
       case 'restore':
       case 'lock':
       case 'unban':
@@ -316,6 +321,19 @@ export default function UsersTab({
       case 'unlock':
       case 'timeout':
       case 'clear_timeout':
+        open(user, actionId);
+        break;
+      case 'suspend':
+        if (
+          !canSuspendTarget({
+            actorRole: viewerRole,
+            actorAccountId: viewerAccountId,
+            targetAccountId: user.accountId,
+            targetStaffRole: user.staffRole,
+          })
+        ) {
+          return;
+        }
         open(user, actionId);
         break;
       default:
@@ -451,11 +469,12 @@ export default function UsersTab({
                 return (
                   <tr
                     key={String(user.id)}
-                    className={`border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
+                    onClick={() => open(user, 'overview')}
+                    className={`cursor-pointer border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
                       isChecked ? 'bg-rose-500/[0.07]' : ''
                     }`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -475,14 +494,23 @@ export default function UsersTab({
                     <td className="px-4 py-3">{user.status}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.lastSeenAt)}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.joinedAt)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <RowActionsMenu
                         status={user.status}
                         items={buildRowActionItems(user.status, {
                           hasViolations: (user.history?.totalViolations ?? 0) > 0,
                           forumTimeout: user.forumTimeout,
                           capabilities,
-                        })}
+                        }).filter(
+                          (item) =>
+                            item.id !== 'suspend' ||
+                            canSuspendTarget({
+                              actorRole: viewerRole,
+                              actorAccountId: viewerAccountId,
+                              targetAccountId: user.accountId,
+                              targetStaffRole: user.staffRole,
+                            })
+                        )}
                         onAction={(id) => handleAction(user, id)}
                       />
                     </td>
@@ -586,10 +614,35 @@ export default function UsersTab({
           onClose={() => setBulkPending(null)}
           requireReason={bulkPending.kind === 'status'}
           onConfirm={async (reason) => {
+            let ids = [...selectedIds];
+            if (bulkPending.action === 'suspend') {
+              const blocked = new Set(
+                (data?.users || [])
+                  .filter(
+                    (account) =>
+                      !canSuspendTarget({
+                        actorRole: viewerRole,
+                        actorAccountId: viewerAccountId,
+                        targetAccountId: account.accountId,
+                        targetStaffRole: account.staffRole,
+                      })
+                  )
+                  .map((account) => String(account.accountId))
+              );
+              const allowed = ids.filter((id) => !blocked.has(String(id)));
+              if (allowed.length === 0) {
+                showErrorToast('You cannot suspend your own account or a moderator account');
+                return;
+              }
+              if (allowed.length < ids.length) {
+                showErrorToast('Skipped accounts you cannot suspend');
+              }
+              ids = allowed;
+            }
             setBulkBusy(true);
             try {
               await runBulkAccountAction(
-                [...selectedIds],
+                ids,
                 bulkPending.kind,
                 bulkPending.action,
                 reason

@@ -24,6 +24,23 @@ async function getFeeSettingById(id) {
   return findFeeSetting(feeSettings, id) || findFeeSetting(RECOMMENDED_FEE_SETTINGS, id);
 }
 
+/** Flat credit fee from a feeSettings row (used for posting/listing charges). */
+async function getFlatFeeCredits(feeId, fallback = 0) {
+  const fee = await getFeeSettingById(feeId);
+  const flat = Number(fee?.flatFee);
+  if (Number.isFinite(flat) && flat >= 0) return Math.round(flat);
+  const safeFallback = Number(fallback);
+  return Number.isFinite(safeFallback) && safeFallback >= 0 ? Math.round(safeFallback) : 0;
+}
+
+async function getJobPostFeeCredits() {
+  return getFlatFeeCredits('fee-job-post', 50);
+}
+
+async function getGigCreateFeeCredits() {
+  return getFlatFeeCredits('fee-gig-create', 50);
+}
+
 async function getMarketplaceTransactionFeePercent() {
   const economy = await getSectionValue('economy');
   const configured = Number(economy?.marketplaceSettings?.transactionFeePercent);
@@ -63,6 +80,9 @@ async function calculateCashoutFeePhpCents(amountCredits, phpCentsPerCredit) {
 async function getMarketplaceListingFeeCredits() {
   const economy = await getSectionValue('economy');
   const configured = Number(economy?.marketplaceSettings?.listingFeeCredits);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  const assetUploadFlat = await getFlatFeeCredits('fee-asset-upload', 0);
+  if (assetUploadFlat > 0) return assetUploadFlat;
   if (Number.isFinite(configured) && configured >= 0) return configured;
   return RECOMMENDED_MARKETPLACE_SETTINGS.listingFeeCredits;
 }
@@ -101,6 +121,9 @@ module.exports = {
   RECOMMENDED_MARKETPLACE_SETTINGS,
   getEconomyFeeSettings,
   getFeeSettingById,
+  getFlatFeeCredits,
+  getJobPostFeeCredits,
+  getGigCreateFeeCredits,
   getMarketplaceTransactionFeePercent,
   getMarketplaceListingFeeCredits,
   getMarketplaceRefundWindowDays,

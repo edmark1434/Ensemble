@@ -4,6 +4,7 @@ import { activeProjectIds } from "@/lib/db/project-availability";
 import { db } from "@/lib/db";
 import { canManageSharing } from "@/features/editor/types/editor-role";
 import { resolveFileUrl } from "@/lib/file-url";
+import { assertCollaborativeProjectCapacity, lockCollaborativeProjectOwner, readCollaborativeProjectAllowance, type CollaborativeProjectAllowance } from "./collaborative-projects";
 
 export type ProjectRole = "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
 export type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
@@ -25,6 +26,7 @@ export interface ProjectAccess {
   members: ProjectMember[];
   canManage: boolean;
   canGrantManager: boolean;
+  collaboration: CollaborativeProjectAllowance | null;
 }
 
 type PersonRow = {
@@ -94,6 +96,7 @@ export async function getProjectAccess(
     ),
     canManage: canManageSharing(viewerRole),
     canGrantManager: viewerRole === "Owner",
+    collaboration: canManageSharing(viewerRole) ? await readCollaborativeProjectAllowance(projectId) : null,
   };
 }
 
@@ -111,6 +114,7 @@ export async function addProjectMember({
   role: AssignableProjectRole;
 }): Promise<AddProjectMemberResult> {
   return db.transaction().execute(async (trx) => {
+    await assertCollaborativeProjectCapacity(projectId, trx);
     const existing = await trx
       .selectFrom("project_members")
       .where("project_id", "=", projectId)
@@ -226,13 +230,18 @@ export async function removeProjectMember({
   projectId: string;
   userId: string;
 }): Promise<boolean> {
-  const result = await db
-    .updateTable("project_members")
-    .set({ deleted_at: new Date() })
-    .where("project_id", "=", projectId)
-    .where("user_id", "=", userId)
-    .where("role", "!=", "Owner")
-    .where("deleted_at", "is", null)
-    .executeTakeFirst();
-  return Number(result.numUpdatedRows) > 0;
+  return db.transaction().execute(async (trx) => {
+    // Releasing a collaboration slot must serialize with new shares, but
+    // removing members never requires spare capacity or a valid plan limit.
+    await lockCollaborativeProjectOwner(projectId, trx);
+    const result = await trx
+      .updateTable("project_members")
+      .set({ deleted_at: new Date() })
+      .where("project_id", "=", projectId)
+      .where("user_id", "=", userId)
+      .where("role", "!=", "Owner")
+      .where("deleted_at", "is", null)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
+  });
 }

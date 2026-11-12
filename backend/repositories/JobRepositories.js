@@ -7,11 +7,12 @@ async function createJobRepositories(jobData) {
     try {
                 await client.query('BEGIN');
         
-        // 0. Deduct Job Posting Fee (50 Credits)
-        // Prefer actor wallet if it has >= 50 credits, otherwise fall back to the authenticated user's personal wallet
+        // 0. Deduct Job Posting Fee (economy.feeSettings fee-job-post flatFee, default 50)
+        // Prefer actor wallet if it has enough credits, otherwise fall back to the authenticated user's personal wallet
         const actorAccountId = jobData.client_account_id;
         const payerAccountId = jobData.payer_account_id || actorAccountId;
-        const fee = 50;
+        const { getJobPostFeeCredits } = require('../lib/PlatformFeeSettings');
+        const fee = await getJobPostFeeCredits();
 
         const walletCandidates = Array.from(new Set([actorAccountId, payerAccountId].filter(Boolean)));
         const walletRes = await client.query(`
@@ -38,7 +39,7 @@ async function createJobRepositories(jobData) {
                 : personalWallet || actorWallet || walletRes.rows[0];
 
         if (Number(chosenWallet.balance_credits) < fee) {
-            const err = new Error('Insufficient funds. You need 50 Credits to post a job.');
+            const err = new Error(`Insufficient funds. You need ${fee} Credits to post a job.`);
             err.statusCode = 402;
             throw err;
         }
@@ -87,7 +88,7 @@ async function createJobRepositories(jobData) {
             (jobData.application_window_hours && parseInt(jobData.application_window_hours, 10) <= 24)
         );
         const hardDeadline = jobData.hard_deadline || jobData.hardDeadline || null;
-        const postingFeeCredits = fee; // 50
+        const postingFeeCredits = fee;
 
         let deadline = hardDeadline || applicationDeadline;
 
@@ -486,7 +487,7 @@ async function deleteJobRepositories(jobId, accountIds) {
             WHERE p.job_id = $1 AND p.deleted_at IS NULL AND p.status IN ('Pending', 'Shortlisted', 'Interviewing')
         `, [jobId]);
 
-        // If 0 proposals, refund 50-credit posting fee to client
+        // If 0 proposals, refund the stored posting fee to client
         if (applicantsToRefund.rows.length === 0 && platformWalletId) {
             const clientWalletRes = await client.query(`
                 SELECT w.wallet_id 
@@ -1565,7 +1566,7 @@ async function autoExpireJobsRepositories() {
                 await client.query(`
                     INSERT INTO notifications (message, is_read, reference_table, reference_prefix, reference_path, reference_id, account_id)
                     VALUES ($1, false, 'jobs', 'JOB_EXPIRED', '/job-market', $2, $3)
-                `, [`Your job "${job.title}" has expired with no applicants. Your 50-credit posting fee has been fully refunded to your wallet.`, jobId, job.client_account_id]);
+                `, [`Your job "${job.title}" has expired with no applicants. Your ${(job.posting_fee_credits || 50)}-credit posting fee has been fully refunded to your wallet.`, jobId, job.client_account_id]);
 
             } else {
                 for (const prop of proposalsRes.rows) {

@@ -260,7 +260,11 @@ export default function BadgeCatalogTab() {
               {filtered.map((badge) => {
                 const icon = iconFor(badge.registry_id);
                 return (
-                  <tr key={badge.badge_id} className="hover:bg-white/[0.02]">
+                  <tr
+                    key={badge.badge_id}
+                    onClick={() => openEdit(badge)}
+                    className="cursor-pointer hover:bg-white/[0.02]"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {icon ? (
@@ -287,7 +291,7 @@ export default function BadgeCatalogTab() {
                     <td className="px-4 py-3 text-zinc-400">
                       {badge.claimed_count} claimed · {badge.pending_count} pending
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => openEdit(badge)}

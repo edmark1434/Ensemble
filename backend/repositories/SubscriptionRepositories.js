@@ -1,5 +1,13 @@
 const { pool } = require('../lib/Database');
 
+async function getRenderBudgetConfigurationRepositories() {
+    const result = await pool.query(
+        `SELECT configuration_key, current_value_literal
+         FROM configuration WHERE configuration_key = ANY($1::text[])`,
+        [['rendering.stillsAudioBudget', 'rendering.freeOverflowBudget']]
+    );
+    return result.rows;
+}
 
 async function getAllPlanRepositories() {
     try {
@@ -346,6 +354,7 @@ async function getSubscriptionBySubscriptionIdRepositories(subscriptionId) {
 }
 
 module.exports = {
+    getRenderBudgetConfigurationRepositories,
     getAllPlanRepositories,
     getSubcriptionByUserIdRepositories,
     getSubscriptionPlanDetailsByUserIdRepositories,

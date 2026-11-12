@@ -17,6 +17,7 @@ export const StaffPlatformPreviewPage = lazyWithPreload(() => import('@/pages/st
 export const ForumModeratorLayout = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/Layout'));
 export const ForumModeratorDashboard = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/Dashboard'));
 export const ForumDiscussion = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/ForumDiscussion'));
+export const ForumGroups = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/Groups'));
 export const ForumTicketManagement = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/TicketManagement'));
 export const ForumReports = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/Reports'));
 export const ForumUserTeam = lazyWithPreload(() => import('@/pages/moderator/forum-moderator/UserTeam'));
@@ -51,7 +52,7 @@ export type StaffConsole = 'admin' | 'staff' | 'forum' | 'marketplace' | 'suppor
 const CONSOLE_PAGES: Record<StaffConsole, Preloadable[]> = {
   admin: [AdminDashboard, AdminFeedbacksPage, AdminBadgesPage, AdminWarningsPage, UserTeamPage, CreditEconomyPage, ModerationPage, AnalyticsPage, TicketManagementPage, SystemSettingsPage, StaffPlatformPreviewPage],
   staff: [StaffDashboard, StaffPlatformPreviewPage],
-  forum: [ForumModeratorDashboard, ForumDiscussion, ForumTicketManagement, ForumReports, ForumUserTeam, ForumDisputes, ForumRestrictions, StaffPlatformPreviewPage],
+  forum: [ForumModeratorDashboard, ForumDiscussion, ForumGroups, ForumTicketManagement, ForumReports, ForumUserTeam, ForumDisputes, ForumRestrictions, StaffPlatformPreviewPage],
   marketplace: [MarketplaceModeratorDashboard, MarketplaceControl, MarketplaceTicketManagement, MarketplaceReports, MarketplaceUserTeam, MarketplaceDisputes, MarketplaceRestrictions, StaffPlatformPreviewPage],
   support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, SupportRestrictions, StaffPlatformPreviewPage],
   jobs: [JobsModeratorDashboard, JobsGigsControl, JobsTicketManagement, JobsDisputes, JobsReports, JobsUserTeam, JobsRestrictions, StaffPlatformPreviewPage],

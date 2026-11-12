@@ -10,6 +10,7 @@ const {
   toCategoryChart,
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
+const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
 const { QUEUE_SCOPES } = require('../lib/TicketEnums');
 const { FORUM_REPORT_TYPES } = require('../lib/ReportEnums');
 
@@ -22,27 +23,7 @@ function mongoConnected() {
   return Boolean(getMongoClient());
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const FORUM_TICKET_SCOPE = QUEUE_SCOPES.forums;
-
-// Resolve account UUIDs found in Mongo documents to display handles.
-async function lookupHandles(ids) {
-  const uuids = [...new Set(ids.filter((id) => typeof id === 'string' && UUID_RE.test(id)))];
-  if (!uuids.length) return {};
-  const result = await pool.query(
-    `SELECT a.account_id, a.handle, COALESCE(a.display_name, u.first_name || ' ' || u.last_name) AS name
-     FROM accounts a
-     LEFT JOIN users u ON u.account_id = a.account_id
-     WHERE a.account_id = ANY($1)`,
-    [uuids]
-  );
-  const map = {};
-  for (const row of result.rows) {
-    map[row.account_id] = { handle: row.handle, name: row.name };
-  }
-  return map;
-}
 
 // Forum moderation covers Forums tickets and reports about forum content.
 
@@ -56,81 +37,345 @@ async function getForumReports({ status } = {}) {
 
 // ─── Forum content moderation (MongoDB) ─────────────────────────────────
 
-async function getModeratorForumGroups() {
-  const db = forumDb();
-  if (!db) return { available: false, groups: [] };
+/** Staff search text is user input: never let it reach Mongo as a pattern. */
+function escapeMongoRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-  const [groups, discussionCounts] = await Promise.all([
-    db
-      .collection('forum_groups')
-      .find({})
-      .sort({ created_at: -1 })
-      .limit(100)
-      .toArray(),
-    db
-      .collection('forum_discussions')
-      .aggregate([{ $group: { _id: '$forum_group_id', count: { $sum: 1 } } }])
-      .toArray(),
-  ]);
-  const countMap = {};
-  for (const c of discussionCounts) countMap[String(c._id)] = c.count;
+/** Group member roles, strongest first — the Admin of a group is its owner. */
+const GROUP_ROLE_ORDER = { Admin: 0, Moderator: 1, Member: 2 };
 
+/** A discussion counts as removed when it is soft-deleted or marked removed. */
+const REMOVED_DISCUSSION_EXPR = {
+  $or: [{ $ne: [{ $ifNull: ['$deleted_at', null] }, null] }, { $eq: ['$status', 'removed'] }],
+};
+
+const REMOVED_COMMENTS_EXPR = {
+  $size: {
+    $filter: {
+      input: { $ifNull: ['$comments', []] },
+      as: 'comment',
+      cond: { $ne: [{ $ifNull: ['$$comment.deleted_at', null] }, null] },
+    },
+  },
+};
+
+/** Resolves forum user ids to the account identity shown on staff desks. */
+async function resolveForumIdentities(userIds) {
+  const { getPublicForumUserIdentities } = require('./UserRepositories');
+  const ids = [...new Set((userIds || []).filter((id) => id !== null && id !== undefined).map(String))];
+  if (!ids.length) return new Map();
+  const identities = await getPublicForumUserIdentities(ids);
+  return new Map(identities.map((row) => [String(row.user_id), row]));
+}
+
+function identityPerson(userId, identities) {
+  const identity = identities.get(String(userId ?? ''));
   return {
-    available: true,
-    groups: groups.map((g) => ({
-      id: String(g._id),
-      name: g.group_name || 'Untitled group',
-      description: g.description || null,
-      imageUrl: g.image_url || null,
-      status: g.status || 'active',
-      memberCount: Array.isArray(g.members) ? g.members.length : 0,
-      members: (Array.isArray(g.members) ? g.members : []).map((member) => ({
-        userId: member.userId,
-        role: member.role || 'Member',
-        isBanned: Boolean(member.is_banned),
-      })),
-      discussionCount: countMap[String(g._id)] || 0,
-      tags: Array.isArray(g.tags) ? g.tags : [],
-      createdAt: g.created_at || null,
-      deletedAt: g.deleted_at || null,
-    })),
+    userId: userId ?? null,
+    accountId: identity?.account_id || null,
+    name: identity?.display_name || null,
+    handle: identity?.handle || null,
+    isVerified: Boolean(identity?.is_verified),
   };
 }
 
+function toDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function latestDate(...values) {
+  const dates = values.map(toDate).filter(Boolean);
+  if (!dates.length) return null;
+  return new Date(Math.max(...dates.map((date) => date.getTime())));
+}
+
+/** Per-group discussion, comment and engagement counts in one pass. */
+async function discussionStatsByGroup(db) {
+  const rows = await db
+    .collection('forum_discussions')
+    .aggregate([
+      {
+        $group: {
+          _id: { $toString: '$forum_group_id' },
+          total: { $sum: 1 },
+          removed: { $sum: { $cond: [REMOVED_DISCUSSION_EXPR, 1, 0] } },
+          locked: { $sum: { $cond: [{ $eq: ['$is_locked', true] }, 1, 0] } },
+          pinned: { $sum: { $cond: [{ $eq: ['$is_sticky', true] }, 1, 0] } },
+          comments: { $sum: { $size: { $ifNull: ['$comments', []] } } },
+          removedComments: { $sum: REMOVED_COMMENTS_EXPR },
+          likes: { $sum: { $size: { $ifNull: ['$likes', []] } } },
+          lastActivityAt: { $max: { $ifNull: ['$updated_at', '$created_at'] } },
+        },
+      },
+    ])
+    .toArray();
+
+  const map = new Map();
+  for (const row of rows) {
+    map.set(String(row._id), {
+      total: row.total || 0,
+      removed: row.removed || 0,
+      active: Math.max(0, (row.total || 0) - (row.removed || 0)),
+      locked: row.locked || 0,
+      pinned: row.pinned || 0,
+      comments: Math.max(0, (row.comments || 0) - (row.removedComments || 0)),
+      removedComments: row.removedComments || 0,
+      likes: row.likes || 0,
+      lastActivityAt: row.lastActivityAt || null,
+    });
+  }
+  return map;
+}
+
+const EMPTY_GROUP_STATS = {
+  total: 0,
+  removed: 0,
+  active: 0,
+  locked: 0,
+  pinned: 0,
+  comments: 0,
+  removedComments: 0,
+  likes: 0,
+  lastActivityAt: null,
+};
+
+function mapGroupMembers(members, identities) {
+  return (Array.isArray(members) ? members : [])
+    .map((member) => ({
+      ...identityPerson(member.userId, identities),
+      name: identities.get(String(member.userId ?? ''))?.display_name || 'Unknown member',
+      role: member.role || 'Member',
+      isBanned: Boolean(member.is_banned),
+      bannedAt: member.banned_at || null,
+      joinedAt: member.joined_at || member.created_at || null,
+    }))
+    .sort((a, b) => {
+      const byRole = (GROUP_ROLE_ORDER[a.role] ?? 9) - (GROUP_ROLE_ORDER[b.role] ?? 9);
+      if (byRole !== 0) return byRole;
+      return String(a.name).localeCompare(String(b.name));
+    });
+}
+
+function summariseMembers(members) {
+  const list = Array.isArray(members) ? members : [];
+  return {
+    memberCount: list.length,
+    bannedMemberCount: list.filter((member) => member.is_banned || member.isBanned).length,
+    adminCount: list.filter((member) => (member.role || 'Member') === 'Admin').length,
+    moderatorCount: list.filter((member) => (member.role || 'Member') === 'Moderator').length,
+  };
+}
+
+/**
+ * Platform-wide forum counts for the management header. Returned with both the
+ * group list and the discussion list so the header never needs its own request.
+ */
+async function getForumModerationStats(connected = null) {
+  const db = connected || forumDb();
+  if (!db) return null;
+
+  const [groupRows, discussionRows] = await Promise.all([
+    db
+      .collection('forum_groups')
+      .aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+            members: { $sum: { $size: { $ifNull: ['$members', []] } } },
+            banned: {
+              $sum: {
+                $size: {
+                  $filter: {
+                    input: { $ifNull: ['$members', []] },
+                    as: 'member',
+                    cond: { $eq: ['$$member.is_banned', true] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ])
+      .toArray(),
+    db
+      .collection('forum_discussions')
+      .aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            removed: { $sum: { $cond: [REMOVED_DISCUSSION_EXPR, 1, 0] } },
+            locked: { $sum: { $cond: [{ $eq: ['$is_locked', true] }, 1, 0] } },
+            pinned: { $sum: { $cond: [{ $eq: ['$is_sticky', true] }, 1, 0] } },
+            comments: { $sum: { $size: { $ifNull: ['$comments', []] } } },
+            removedComments: { $sum: REMOVED_COMMENTS_EXPR },
+            lastActivityAt: { $max: { $ifNull: ['$updated_at', '$created_at'] } },
+          },
+        },
+      ])
+      .toArray(),
+  ]);
+
+  const g = groupRows[0] || { total: 0, active: 0, members: 0, banned: 0 };
+  const d = discussionRows[0] || {
+    total: 0,
+    removed: 0,
+    locked: 0,
+    pinned: 0,
+    comments: 0,
+    removedComments: 0,
+    lastActivityAt: null,
+  };
+
+  return {
+    groups: {
+      total: g.total || 0,
+      active: g.active || 0,
+      archived: Math.max(0, (g.total || 0) - (g.active || 0)),
+    },
+    members: { total: g.members || 0, banned: g.banned || 0 },
+    discussions: {
+      total: d.total || 0,
+      removed: d.removed || 0,
+      active: Math.max(0, (d.total || 0) - (d.removed || 0)),
+      locked: d.locked || 0,
+      pinned: d.pinned || 0,
+    },
+    comments: {
+      total: d.comments || 0,
+      removed: d.removedComments || 0,
+      visible: Math.max(0, (d.comments || 0) - (d.removedComments || 0)),
+    },
+    lastActivityAt: d.lastActivityAt || null,
+  };
+}
+
+/**
+ * Forum groups for a staff desk, each with its moderation counts, its owner and
+ * when the group last saw activity.
+ *
+ * @param options.search {string} matches name, description and tags
+ * @param options.status {string} `active`, `inactive` or `all`
+ */
+async function getModeratorForumGroups({ search = '', status = 'all' } = {}) {
+  const db = forumDb();
+  if (!db) return { available: false, groups: [], stats: null };
+
+  const filter = {};
+  const normalizedStatus = String(status || 'all').toLowerCase();
+  if (normalizedStatus === 'active') filter.status = 'active';
+  else if (normalizedStatus === 'inactive') filter.status = { $ne: 'active' };
+
+  const q = String(search || '').trim();
+  if (q) {
+    const regex = { $regex: escapeMongoRegex(q), $options: 'i' };
+    filter.$or = [{ group_name: regex }, { description: regex }, { tags: regex }, { 'tags.tag_name': regex }];
+  }
+
+  const [groups, stats, platformStats] = await Promise.all([
+    db.collection('forum_groups').find(filter).sort({ created_at: -1 }).limit(200).toArray(),
+    discussionStatsByGroup(db),
+    getForumModerationStats(db),
+  ]);
+
+  const owners = groups.map((group) =>
+    (Array.isArray(group.members) ? group.members : []).find((member) => member.role === 'Admin')
+  );
+  const identities = await resolveForumIdentities(owners.map((owner) => owner?.userId));
+
+  return {
+    available: true,
+    stats: platformStats,
+    groups: groups.map((group, index) => {
+      const key = String(group._id);
+      const groupStats = stats.get(key) || EMPTY_GROUP_STATS;
+      const owner = owners[index];
+      return {
+        id: key,
+        name: group.group_name || 'Untitled group',
+        description: group.description || null,
+        imageUrl: group.image_url || null,
+        status: group.status || 'active',
+        tags: Array.isArray(group.tags) ? group.tags : [],
+        ...summariseMembers(group.members),
+        members: (Array.isArray(group.members) ? group.members : []).map((member) => ({
+          userId: member.userId,
+          role: member.role || 'Member',
+          isBanned: Boolean(member.is_banned),
+        })),
+        owner: owner ? identityPerson(owner.userId, identities) : null,
+        discussionCount: groupStats.total,
+        activeDiscussionCount: groupStats.active,
+        removedDiscussionCount: groupStats.removed,
+        lockedDiscussionCount: groupStats.locked,
+        pinnedDiscussionCount: groupStats.pinned,
+        commentCount: groupStats.comments,
+        removedCommentCount: groupStats.removedComments,
+        likeCount: groupStats.likes,
+        lastActivityAt: latestDate(groupStats.lastActivityAt, group.created_at),
+        createdAt: group.created_at || null,
+        deletedAt: group.deleted_at || null,
+      };
+    }),
+  };
+}
+
+/** One group with its full member roster and the discussions inside it. */
 async function getModeratorForumGroupDetail(groupId) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
   if (!ObjectId.isValid(String(groupId || ''))) return null;
   const group = await db.collection('forum_groups').findOne({ _id: new ObjectId(groupId) });
   if (!group) return null;
-  const { getPublicForumUserIdentities } = require('./UserRepositories');
+
+  const key = String(group._id);
+  const groupFilter = { forum_group_id: { $in: [key, group._id] } };
   const members = Array.isArray(group.members) ? group.members : [];
-  const identities = await getPublicForumUserIdentities(members.map((member) => member.userId));
-  const byId = new Map(identities.map((row) => [String(row.user_id), row]));
-  const discussionCount = await db.collection('forum_discussions').countDocuments({
-    forum_group_id: { $in: [String(groupId), group._id] },
-  });
+
+  const [discussionDocs, stats] = await Promise.all([
+    db
+      .collection('forum_discussions')
+      .find(groupFilter)
+      .sort({ created_at: -1 })
+      .limit(50)
+      .toArray(),
+    discussionStatsByGroup(db),
+  ]);
+
+  const identities = await resolveForumIdentities([
+    ...members.map((member) => member.userId),
+    ...discussionDocs.map((doc) => doc.user_id),
+  ]);
+  const groupStats = stats.get(key) || EMPTY_GROUP_STATS;
+  const roster = mapGroupMembers(members, identities);
+
   return {
-    id: String(group._id),
+    id: key,
     name: group.group_name || 'Untitled group',
     description: group.description || null,
     imageUrl: group.image_url || null,
     status: group.status || 'active',
     tags: Array.isArray(group.tags) ? group.tags : [],
-    discussionCount,
+    ...summariseMembers(members),
+    owner: roster.find((member) => member.role === 'Admin') || null,
+    discussionCount: groupStats.total,
+    activeDiscussionCount: groupStats.active,
+    removedDiscussionCount: groupStats.removed,
+    lockedDiscussionCount: groupStats.locked,
+    pinnedDiscussionCount: groupStats.pinned,
+    commentCount: groupStats.comments,
+    removedCommentCount: groupStats.removedComments,
+    likeCount: groupStats.likes,
+    lastActivityAt: latestDate(groupStats.lastActivityAt, group.created_at),
     createdAt: group.created_at || null,
     deletedAt: group.deleted_at || null,
-    members: members.map((member) => {
-      const identity = byId.get(String(member.userId));
-      return {
-        userId: member.userId,
-        accountId: identity?.account_id || null,
-        name: identity?.display_name || 'Unknown member',
-        handle: identity?.handle || null,
-        role: member.role || 'Member',
-        isBanned: Boolean(member.is_banned),
-      };
-    }),
+    members: roster,
+    discussions: discussionDocs.map((doc) => mapDiscussionSummary(doc, identities, group)),
   };
 }
 
@@ -142,24 +387,92 @@ async function setForumGroupStatus(groupId, status) {
 
   await db.collection('forum_groups').updateOne(
     { _id: new ObjectId(groupId) },
-    { $set: { status, deleted_at: status === 'inactive' ? new Date() : null } }
+    {
+      $set: {
+        status,
+        deleted_at: status === 'inactive' ? new Date() : null,
+        updated_at: new Date(),
+      },
+    }
   );
   return getModeratorForumGroups();
 }
 
-async function getModeratorForumDiscussions({ groupId, search } = {}) {
+function commentStats(comments) {
+  const list = Array.isArray(comments) ? comments.filter(Boolean) : [];
+  const removed = list.filter((comment) => comment.deleted_at).length;
+  return {
+    totalCommentCount: list.length,
+    commentCount: list.length - removed,
+    removedCommentCount: removed,
+    lastCommentAt: latestDate(...list.map((comment) => comment.updated_at || comment.created_at)),
+  };
+}
+
+/** List row for a discussion. `group` is optional and fills in group context. */
+function mapDiscussionSummary(doc, identities, group = null) {
+  const counts = commentStats(doc.comments);
+  const removed = Boolean(doc.deleted_at) || doc.status === 'removed';
+  return {
+    id: String(doc._id),
+    title: doc.title || 'Untitled discussion',
+    description: doc.description || null,
+    groupId: doc.forum_group_id ? String(doc.forum_group_id) : null,
+    groupName: group ? group.group_name || 'Untitled group' : null,
+    groupStatus: group ? group.status || 'active' : null,
+    author: identityPerson(doc.user_id, identities),
+    tags: Array.isArray(doc.tags) ? doc.tags : [],
+    attachmentCount: Array.isArray(doc.attachments) ? doc.attachments.length : 0,
+    ...counts,
+    likeCount: Array.isArray(doc.likes) ? doc.likes.length : 0,
+    saveCount: Array.isArray(doc.saves) ? doc.saves.length : 0,
+    status: removed ? 'removed' : 'active',
+    isLocked: Boolean(doc.is_locked),
+    isSticky: Boolean(doc.is_sticky),
+    createdAt: doc.created_at || null,
+    updatedAt: doc.updated_at || null,
+    removedAt: doc.deleted_at || null,
+    lastActivityAt: latestDate(counts.lastCommentAt, doc.updated_at, doc.created_at),
+  };
+}
+
+/**
+ * Discussions for a staff desk with their group, author, engagement and state.
+ *
+ * @param options.search {string} matches title and body — callers escape it
+ * @param options.status {string} `active`, `removed`, `locked`, `pinned` or `all`
+ */
+async function getModeratorForumDiscussions({ groupId, search, status = 'all' } = {}) {
   const db = forumDb();
-  if (!db) return { available: false, discussions: [] };
+  if (!db) return { available: false, discussions: [], stats: null };
 
   const filter = {};
-  if (groupId) filter.forum_group_id = groupId;
-  if (search) filter.title = { $regex: String(search), $options: 'i' };
+  if (groupId) {
+    filter.forum_group_id = ObjectId.isValid(String(groupId))
+      ? { $in: [String(groupId), new ObjectId(String(groupId))] }
+      : String(groupId);
+  }
+  if (search) {
+    const regex = { $regex: String(search), $options: 'i' };
+    filter.$or = [{ title: regex }, { description: regex }];
+  }
+
+  const normalizedStatus = String(status || 'all').toLowerCase();
+  if (normalizedStatus === 'removed') {
+    filter.$and = [{ $or: [{ deleted_at: { $ne: null } }, { status: 'removed' }] }];
+  } else if (normalizedStatus === 'active') {
+    filter.$and = [{ deleted_at: null }, { status: { $ne: 'removed' } }];
+  } else if (normalizedStatus === 'locked') {
+    filter.is_locked = true;
+  } else if (normalizedStatus === 'pinned') {
+    filter.is_sticky = true;
+  }
 
   const discussions = await db
     .collection('forum_discussions')
     .find(filter)
     .sort({ created_at: -1 })
-    .limit(100)
+    .limit(200)
     .toArray();
 
   const groupIds = [...new Set(discussions.map((d) => String(d.forum_group_id)).filter(Boolean))];
@@ -169,71 +482,64 @@ async function getModeratorForumDiscussions({ groupId, search } = {}) {
         .find({ _id: { $in: groupIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } })
         .toArray()
     : [];
-  const groupNames = {};
-  for (const g of groupDocs) groupNames[String(g._id)] = g.group_name;
+  const groupsById = new Map(groupDocs.map((group) => [String(group._id), group]));
 
-  const handles = await lookupHandles(discussions.map((d) => d.user_id));
+  const [identities, platformStats] = await Promise.all([
+    resolveForumIdentities(discussions.map((d) => d.user_id)),
+    getForumModerationStats(db),
+  ]);
 
   return {
     available: true,
-    discussions: discussions.map((d) => ({
-      id: String(d._id),
-      title: d.title || 'Untitled discussion',
-      description: d.description || null,
-      groupId: d.forum_group_id ? String(d.forum_group_id) : null,
-      groupName: groupNames[String(d.forum_group_id)] || null,
-      author: {
-        userId: d.user_id ?? null,
-        handle: handles[d.user_id]?.handle || null,
-        name: handles[d.user_id]?.name || null,
-      },
-      commentCount: Array.isArray(d.comments) ? d.comments.filter((c) => c && c.comment).length : 0,
-      likeCount: Array.isArray(d.likes) ? d.likes.length : 0,
-      status: d.deleted_at ? 'removed' : 'active',
-      isLocked: Boolean(d.is_locked),
-      isSticky: Boolean(d.is_sticky),
-      createdAt: d.created_at || null,
-      updatedAt: d.updated_at || null,
-    })),
+    stats: platformStats,
+    discussions: discussions.map((doc) =>
+      mapDiscussionSummary(doc, identities, groupsById.get(String(doc.forum_group_id)) || null)
+    ),
   };
 }
 
+/** One discussion with its full comment thread, including removed comments. */
 async function getModeratorForumDiscussionDetail(discussionId) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
+  if (!ObjectId.isValid(String(discussionId || ''))) return null;
 
-  const d = await db.collection('forum_discussions').findOne({ _id: new ObjectId(discussionId) });
-  if (!d) return null;
+  const doc = await db.collection('forum_discussions').findOne({ _id: new ObjectId(discussionId) });
+  if (!doc) return null;
 
-  const comments = Array.isArray(d.comments) ? d.comments.filter((c) => c && c.comment_id) : [];
-  const handles = await lookupHandles([d.user_id, ...comments.map((c) => c.user_id)]);
+  const comments = Array.isArray(doc.comments) ? doc.comments.filter((c) => c && c.comment_id) : [];
+  const group =
+    doc.forum_group_id && ObjectId.isValid(String(doc.forum_group_id))
+      ? await db.collection('forum_groups').findOne({ _id: new ObjectId(String(doc.forum_group_id)) })
+      : null;
+
+  const identities = await resolveForumIdentities([doc.user_id, ...comments.map((c) => c.user_id)]);
+  const replyCounts = new Map();
+  for (const comment of comments) {
+    const parent = comment.comment_reference_id;
+    if (!parent) continue;
+    replyCounts.set(String(parent), (replyCounts.get(String(parent)) || 0) + 1);
+  }
 
   return {
-    id: String(d._id),
-    title: d.title || 'Untitled discussion',
-    description: d.description || null,
-    groupId: d.forum_group_id ? String(d.forum_group_id) : null,
-    author: {
-      userId: d.user_id ?? null,
-      handle: handles[d.user_id]?.handle || null,
-      name: handles[d.user_id]?.name || null,
-    },
-    status: d.deleted_at ? 'removed' : 'active',
-    isLocked: Boolean(d.is_locked),
-    isSticky: Boolean(d.is_sticky),
-    createdAt: d.created_at || null,
-    comments: comments.map((c) => ({
-      commentId: c.comment_id,
-      comment: c.comment,
-      author: {
-        userId: c.user_id ?? null,
-        handle: handles[c.user_id]?.handle || null,
-        name: handles[c.user_id]?.name || null,
-      },
-      likeCount: Array.isArray(c.likes) ? c.likes.length : 0,
-      isDeleted: Boolean(c.deleted_at),
-      createdAt: c.created_at || null,
-    })),
+    ...mapDiscussionSummary(doc, identities, group),
+    comments: comments
+      .map((comment) => ({
+        commentId: comment.comment_id,
+        comment: comment.comment,
+        replyToCommentId: comment.comment_reference_id || null,
+        replyCount: replyCounts.get(String(comment.comment_id)) || 0,
+        author: identityPerson(comment.user_id, identities),
+        likeCount: Array.isArray(comment.likes)
+          ? comment.likes.filter((like) => like && like.user_id).length
+          : 0,
+        attachmentCount: Array.isArray(comment.attachments) ? comment.attachments.length : 0,
+        isDeleted: Boolean(comment.deleted_at),
+        deletedAt: comment.deleted_at || null,
+        createdAt: comment.created_at || null,
+        updatedAt: comment.updated_at || null,
+      }))
+      .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)),
   };
 }
 
@@ -250,10 +556,15 @@ async function setForumDiscussionStatus(discussionId, changes = {}) {
   if (changes.isSticky != null) updates.is_sticky = Boolean(changes.isSticky);
   if (Object.keys(updates).length === 1) throw new Error('No moderation fields provided');
 
-  await db.collection('forum_discussions').updateOne(
+  const result = await db.collection('forum_discussions').updateOne(
     { _id: new ObjectId(discussionId) },
     { $set: updates }
   );
+  if (!result.matchedCount) {
+    const error = new Error('Discussion not found');
+    error.statusCode = 404;
+    throw error;
+  }
   return getModeratorForumDiscussionDetail(discussionId);
 }
 
@@ -262,16 +573,23 @@ async function removeForumDiscussionComment(discussionId, commentId) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
 
-  await db.collection('forum_discussions').updateOne(
+  const result = await db.collection('forum_discussions').updateOne(
     { _id: new ObjectId(discussionId), 'comments.comment_id': commentId },
     {
       $set: {
         'comments.$.deleted_at': new Date(),
         'comments.$.comment': '[removed by moderator]',
+        'comments.$.attachments': [],
         'comments.$.updated_at': new Date(),
+        updated_at: new Date(),
       },
     }
   );
+  if (!result.matchedCount) {
+    const error = new Error('Comment not found');
+    error.statusCode = 404;
+    throw error;
+  }
   return getModeratorForumDiscussionDetail(discussionId);
 }
 
@@ -529,16 +847,26 @@ function buildAlerts(tc, rc, reportBreakdown, contentStats) {
 
 async function getForumOverview() {
   const forumTypes = [...FORUM_REPORT_TYPES];
-  const [ticketCounts, categoryRows, reportCounts, tickets, reports, contentStats, reportBreakdown] =
-    await Promise.all([
-      scopedTicketCounts(FORUM_TICKET_SCOPE),
-      scopedTicketCategoryBreakdown(FORUM_TICKET_SCOPE),
-      scopedReportCounts({ targetTypesIn: forumTypes }),
-      getForumTickets(),
-      getForumReports(),
-      getForumContentStats(),
-      getForumReportBreakdown(forumTypes),
-    ]);
+  const [
+    ticketCounts,
+    categoryRows,
+    reportCounts,
+    tickets,
+    reports,
+    contentStats,
+    reportBreakdown,
+    staffWorkload,
+  ] = await Promise.all([
+    scopedTicketCounts(FORUM_TICKET_SCOPE),
+    scopedTicketCategoryBreakdown(FORUM_TICKET_SCOPE),
+    scopedReportCounts({ targetTypesIn: forumTypes }),
+    getForumTickets(),
+    getForumReports(),
+    getForumContentStats(),
+    getForumReportBreakdown(forumTypes),
+    // Powers the "assign to" pickers and filters on this desk's queues.
+    fetchStaffWorkload(),
+  ]);
 
   const tc = ticketCounts;
   const rc = reportCounts;
@@ -580,6 +908,7 @@ async function getForumOverview() {
     },
     recentTickets: tickets.slice(0, 10),
     flaggedReports: reports.slice(0, 10),
+    staffWorkload,
     alerts: buildAlerts(tc, rc, reportBreakdown, contentStats),
     notice: mongoConnected()
       ? null
@@ -602,4 +931,5 @@ module.exports = {
   getModeratorForumDiscussionDetail,
   setForumDiscussionStatus,
   removeForumDiscussionComment,
+  getForumModerationStats,
 };

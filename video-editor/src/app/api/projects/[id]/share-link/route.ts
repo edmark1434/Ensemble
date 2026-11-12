@@ -4,6 +4,8 @@ import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-se
 import { signProjectShareLink } from "@/lib/auth/project-share-link";
 import { getShareLinkIssuer } from "@/lib/db/project-share-links";
 import { ASSIGNABLE_PROJECT_ROLES, type AssignableProjectRole } from "@/lib/db/project-members";
+import { readCollaborativeProjectAllowance } from "@/lib/db/collaborative-projects";
+import { PlanConfigurationError } from "@/lib/plan-feature-values";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = (await cookies()).get(EDITOR_SESSION_COOKIE)?.value;
@@ -17,6 +19,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const role = body.role as AssignableProjectRole;
   const membership = await getShareLinkIssuer(id, user.userId, role);
   if (!membership) return NextResponse.json({ error: "You cannot share this access level" }, { status: 403 });
+  try {
+    const collaboration = await readCollaborativeProjectAllowance(id);
+    if (!collaboration.canShare) return NextResponse.json({
+      error: "The project owner has reached their collaborative project limit. Upgrade their plan to share another project.",
+      code: "COLLABORATIVE_PROJECT_LIMIT", collaboration,
+    }, { status: 409 });
+  } catch (error) {
+    if (error instanceof PlanConfigurationError) return NextResponse.json({ error: error.message }, { status: 503 });
+    throw error;
+  }
   const token = await signProjectShareLink(id, user.userId, role, membership);
   const url = new URL(`/projects/open/${id}`, process.env.MAIN_APP_URL || "http://localhost:5173");
   url.searchParams.set("share", token);

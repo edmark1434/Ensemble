@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, UserCircle, Users, FileText } from 'lucide-react';
+import { Activity, RefreshCw, ShieldBan, UserCircle, Users, FileText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { prefetchStaffTab } from '@/lib/staffPrefetch';
@@ -7,14 +7,16 @@ import TeamsTab from './TeamsTab';
 import UsersTab from './UsersTab';
 import UserTeamOverviewTab from './UserTeamOverviewTab';
 import SurveyResponsesTab from './SurveyResponsesTab';
+import RestrictionsTab from './RestrictionsTab';
 import { getUserTeamCapabilities, type UserTeamVariant } from './userTeamCapabilities';
 
-type TabId = 'overview' | 'teams' | 'users' | 'survey-responses';
+type TabId = 'overview' | 'teams' | 'users' | 'restrictions' | 'survey-responses';
 
 const ALL_TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'teams', label: 'Team accounts', icon: Users },
   { id: 'users', label: 'Platform users', icon: UserCircle },
+  { id: 'restrictions', label: 'Restrictions', icon: ShieldBan },
   { id: 'survey-responses', label: 'Survey Responses', icon: FileText },
 ];
 
@@ -61,8 +63,14 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
   const tabs = useMemo(
-    () => ALL_TABS.filter((t) => (t.id === 'teams' ? caps.showTeamsTab : true)),
-    [caps.showTeamsTab]
+    () =>
+      ALL_TABS.filter((t) => {
+        if (t.id === 'teams') return caps.showTeamsTab;
+        // Specialist mod desks already have a dedicated Restrictions route.
+        if (t.id === 'restrictions') return variant === 'admin';
+        return true;
+      }),
+    [caps.showTeamsTab, variant]
   );
   const valid = useMemo(() => tabs.map((t) => t.id), [tabs]);
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
@@ -176,6 +184,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
             capabilities={caps}
           />
         )}
+        {tab === 'restrictions' && <RestrictionsTab />}
         {tab === 'survey-responses' && (
           <SurveyResponsesTab refreshToken={refreshToken} />
         )}

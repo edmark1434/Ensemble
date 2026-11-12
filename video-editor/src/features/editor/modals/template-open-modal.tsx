@@ -56,7 +56,7 @@ export function TemplateOpenModal({ template, onClose, onPurchase }: {
         window.dispatchEvent(new Event("market-license-updated"));
       }
       await applyTemplate(template.marketAssetId, projectId, mode);
-      toast.success(mode === "replace" ? "Project replaced with the template." : "Template added to the end of the project.");
+      toast.success(mode === "replace" ? "Template applied to replace the project." : "Template added to the end of the project.");
       onClose();
     } catch (error) { setError(error instanceof Error ? error.message : "Unable to apply the template."); }
     finally { setPending(false); }

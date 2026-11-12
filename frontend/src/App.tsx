@@ -102,6 +102,7 @@ import {
   ForumModeratorLayout,
   ForumModeratorDashboard,
   ForumDiscussion,
+  ForumGroups,
   ForumTicketManagement,
   ForumReports,
   ForumUserTeam,
@@ -414,6 +415,7 @@ function App() {
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ForumModeratorDashboard />} />
           <Route path='forum-discussion' element={<ForumDiscussion />} />
+          <Route path='groups' element={<ForumGroups />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
           <Route path='disputes' element={<ForumDisputes />} />
           <Route path='reports' element={<ForumReports />} />

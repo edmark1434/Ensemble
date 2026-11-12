@@ -13,7 +13,8 @@ const ROUTE_DATA: Record<string, DataRequest[]> = {
     '/api/admin/moderation-overview',
     '/api/admin/warning-defs',
   ],
-  '/admin/analytics': ['/api/admin/analytics-overview'],
+  // Moderation tabs that load their own data (see TAB_DATA below for the rest).
+  '/admin/analytics': ['/api/admin/analytics-overview', '/api/admin/feedbacks'],
   '/admin/ticket-management': ['/api/admin/tickets-overview', '/api/admin/ticket-articles'],
   '/admin/feedbacks': ['/api/admin/feedbacks'],
   '/admin/badges': ['/api/admin/badges', '/api/admin/badge-requirement-types', '/api/admin/badge-categories'],
@@ -38,7 +39,15 @@ function addModeratorDesk(desk: string, extra: Record<string, DataRequest[]>, re
   for (const [suffix, requests] of Object.entries(extra)) ROUTE_DATA[`${route}/${suffix}`] = requests;
 }
 
-addModeratorDesk('forum', {});
+const FORUM_CONTENT_DESK: DataRequest[] = [
+  ['/api/moderator/forum/groups', { search: '', status: 'all' }],
+  ['/api/moderator/forum/discussions', { search: '', status: 'all' }],
+];
+
+addModeratorDesk('forum', {
+  'forum-discussion': FORUM_CONTENT_DESK,
+  groups: FORUM_CONTENT_DESK,
+});
 addModeratorDesk(
   'marketplace',
   {
@@ -58,12 +67,45 @@ const TAB_DATA: Record<string, Record<string, DataRequest[]>> = {
     overview: [USER_TEAM_OVERVIEW],
     teams: ['/api/admin/teams-management'],
     users: ['/api/admin/users-management'],
+    restrictions: ['/api/admin/restrictions'],
     'survey-responses': ['/api/admin/survey-responses'],
   },
   warnings: {
     catalog: ['/api/admin/warning-defs'],
     punishments: ['/api/admin/punishment-defs'],
     thresholds: ['/api/admin/warning-thresholds'],
+  },
+  moderation: {
+    activity: [
+      [
+        '/api/admin/moderation/activity',
+        {
+          search: '',
+          category: 'all',
+          eventCode: 'all',
+          role: 'all',
+          state: 'all',
+          sort: 'newest',
+          from: '',
+          to: '',
+          limit: 50,
+          offset: 0,
+        },
+      ],
+    ],
+    video: [['/api/admin/moderation/videos', { status: 'all', search: '' }]],
+    forum: [
+      ['/api/admin/moderation/forum/groups', { search: '', status: 'all' }],
+      ['/api/admin/moderation/forum/discussions', { search: '', status: 'all' }],
+    ],
+    marketplace: [
+      '/api/admin/moderation/marketplace/overview',
+      ['/api/admin/moderation/marketplace/listings', { status: 'pending' }],
+    ],
+    jobs: [
+      '/api/admin/moderation/jobs/overview',
+      '/api/admin/moderation/jobs/postings',
+    ],
   },
 };
 

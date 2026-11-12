@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { ROLE_RANK } from "@/features/editor/types/block-members";
 import type { AssignableProjectRole } from "./project-members";
+import { assertCollaborativeProjectCapacity } from "./collaborative-projects";
 
 export async function getShareLinkIssuer(projectId: string, userId: string, role: AssignableProjectRole) {
   const member = await db.selectFrom("project_members as pm")
@@ -43,6 +44,7 @@ export async function redeemProjectShareLink(projectId: string, userId: string, 
       }
       return true;
     }
+    await assertCollaborativeProjectCapacity(projectId, trx);
     if (member) {
       await trx.updateTable("project_members").set({ role: link.role, deleted_at: null, joined_at: new Date() })
         .where("project_id", "=", projectId).where("user_id", "=", userId).execute();

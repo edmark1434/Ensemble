@@ -45,6 +45,7 @@ function mapDeskAccount(row) {
     banEndsAt: row.ban_ends_at || null,
     lockEndsAt: row.lock_ends_at || null,
     timeoutEndsAt: row.timeout_ends_at || null,
+    staffRole: row.staff_role || null,
   };
 }
 
@@ -75,6 +76,9 @@ const ACCOUNT_DESK_SELECT = `
   a.suspension_ends_at,
   a.ban_ends_at,
   a.lock_ends_at,
+  (
+    SELECT s.role FROM staff s WHERE s.account_id = a.account_id LIMIT 1
+  ) AS staff_role,
   u.email_address,
   NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), '') AS legal_name,
   EXISTS (
@@ -320,7 +324,11 @@ async function updateAccountRestriction(accountId, status, staffSession = null, 
 
   const { updateAccountStatus } = require('./AdminUserTeamRepositories');
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
-  await updateAccountStatus(accountId, action, staffId, options);
+  await updateAccountStatus(accountId, action, staffId, {
+    ...options,
+    actorAccountId:
+      options.actorAccountId || staffSession?.account_id || staffSession?.accountId || null,
+  });
   return getViolationsAndRestrictions();
 }
 

@@ -313,6 +313,14 @@ export default function RouteMiddleware() {
         && onboardingGate.accountId === resolvedAccountId
         && onboardingGate.verificationFailed;
 
+    // Member auth screens must stay reachable while a staff cookie is present so
+    // someone leaving staff.ensemble.software can switch to a user account.
+    const isMemberAuthEntryPath =
+        location.pathname === '/login' ||
+        location.pathname === '/signup' ||
+        location.pathname === '/forgot-password' ||
+        location.pathname === '/reset-password';
+
     const redirectPath = useMemo(() => {
         if (isCheckingSession || isLocalSignOutTransition) {
             return null;
@@ -326,11 +334,15 @@ export default function RouteMiddleware() {
             return null;
         }
 
+        if (resolvedUser?.type === 'Staff' && isMemberAuthEntryPath) {
+            return null;
+        }
+
         const requested = new URLSearchParams(location.search).get('redirect');
         const handoff = requested && (/^\/projects\/open\/[^/?]+(?:\?|$)/.test(requested)
             || requested.startsWith('/assets/owned?templateSnapshot=')) ? requested : null;
         return onboardingPath || (resolvedUser?.type === 'User' && handoff) || getRedirectPath(resolvedUser);
-    }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath, location.search]);
+    }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath, location.search, isMemberAuthEntryPath]);
 
     const shouldAutoRedirect = useMemo(() => {
         return basePublicRoutes.includes(location.pathname);

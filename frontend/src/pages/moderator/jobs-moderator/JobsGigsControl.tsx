@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Clock,
   Coins,
-  Eye,
   FileSignature,
   FileText,
   Gem,
@@ -34,9 +33,7 @@ import type { JobsGigsPosting, JobsGigsPostingDetail, JobsOverview, UserJobsHist
 
 const TYPE_TABS = ["all", "job", "gig"] as const;
 const STATUS_TABS = ["all", "active", "paused", "closed", "archived"] as const;
-
-const OVERVIEW_URL = "/api/moderator/jobs/overview";
-const POSTINGS_URL = "/api/moderator/jobs/postings";
+const DEFAULT_API_BASE = "/api/moderator/jobs";
 
 function postingParams(type: string, status: string, search: string) {
   return {
@@ -272,22 +269,31 @@ function PostingDetailModal({
   onModerate,
   onViewHistory,
   saving,
+  apiBase = DEFAULT_API_BASE,
 }: {
   posting: JobsGigsPosting;
   onClose: () => void;
-  onModerate: (posting: JobsGigsPosting, status: string) => Promise<void>;
+  onModerate: (posting: JobsGigsPosting, status: string, reason?: string) => Promise<void>;
   onViewHistory: (accountId: string) => void;
   saving: boolean;
+  apiBase?: string;
 }) {
   const [detail, setDetail] = useState<JobsGigsPostingDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState("");
+
+  /** Runs one moderation action and clears the reason once it is recorded. */
+  const moderate = async (status: string) => {
+    await onModerate(posting, status, reason);
+    setReason("");
+  };
 
   useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`);
+        const res = await api.get(`${apiBase}/postings/${posting.type}/${posting.id}`);
         if (active && res.data?.success) setDetail(res.data.data);
       } catch {
         if (active) showErrorToast("Failed to load posting detail");
@@ -298,7 +304,7 @@ function PostingDetailModal({
     return () => {
       active = false;
     };
-  }, [posting.type, posting.id, posting.status]);
+  }, [posting.type, posting.id, posting.status, apiBase]);
 
   const isArchived = posting.status === "archived";
   const headerGradient =
@@ -590,60 +596,69 @@ function PostingDetailModal({
 
         {/* Moderation actions */}
         {!loading && detail && (
-          <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-white/[0.06] bg-[#0f1016]/95 px-6 py-3.5 backdrop-blur">
-            <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Moderate</span>
-            {isArchived ? (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void onModerate(posting, "active")}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
-              >
-                <Play className="h-3.5 w-3.5" /> Restore posting
-              </button>
-            ) : (
-              <>
-                {posting.status !== "active" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void onModerate(posting, "active")}
-                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
-                  >
-                    <Play className="h-3.5 w-3.5" /> Activate
-                  </button>
-                )}
-                {posting.status !== "paused" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void onModerate(posting, "paused")}
-                    className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50"
-                  >
-                    <Pause className="h-3.5 w-3.5" /> Pause
-                  </button>
-                )}
-                {posting.status !== "closed" && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void onModerate(posting, "closed")}
-                    className="flex items-center gap-1.5 rounded-lg border border-zinc-500/30 bg-zinc-500/10 px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:bg-zinc-500/20 disabled:opacity-50"
-                  >
-                    <XCircle className="h-3.5 w-3.5" /> Close
-                  </button>
-                )}
+          <div className="sticky bottom-0 space-y-2.5 border-t border-white/[0.06] bg-[#0f1016]/95 px-6 py-3.5 backdrop-blur">
+            <input
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              maxLength={500}
+              placeholder="Reason for this action (saved to the activity log)"
+              className="w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-emerald-500/40"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Moderate</span>
+              {isArchived ? (
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => void onModerate(posting, "archived")}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+                  onClick={() => void moderate("active")}
+                  className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
                 >
-                  <Archive className="h-3.5 w-3.5" /> Archive
+                  <Play className="h-3.5 w-3.5" /> Restore posting
                 </button>
-              </>
-            )}
-            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
+              ) : (
+                <>
+                  {posting.status !== "active" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void moderate("active")}
+                      className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      <Play className="h-3.5 w-3.5" /> Activate
+                    </button>
+                  )}
+                  {posting.status !== "paused" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void moderate("paused")}
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      <Pause className="h-3.5 w-3.5" /> Pause
+                    </button>
+                  )}
+                  {posting.status !== "closed" && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void moderate("closed")}
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-500/30 bg-zinc-500/10 px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:bg-zinc-500/20 disabled:opacity-50"
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> Close
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void moderate("archived")}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+                  >
+                    <Archive className="h-3.5 w-3.5" /> Archive
+                  </button>
+                </>
+              )}
+              {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
+            </div>
           </div>
         )}
       </div>
@@ -677,10 +692,12 @@ function UserHistoryModal({
   accountId,
   onClose,
   onOpenPosting,
+  apiBase = DEFAULT_API_BASE,
 }: {
   accountId: string;
   onClose: () => void;
   onOpenPosting?: (type: "job" | "gig", id: string) => void;
+  apiBase?: string;
 }) {
   const [history, setHistory] = useState<UserJobsHistory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -689,7 +706,7 @@ function UserHistoryModal({
     let active = true;
     (async () => {
       try {
-        const res = await api.get(`/api/moderator/jobs/users/${accountId}/history`);
+        const res = await api.get(`${apiBase}/users/${accountId}/history`);
         if (active && res.data?.success) setHistory(res.data.data);
       } catch {
         if (active) showErrorToast("Failed to load user history");
@@ -700,7 +717,7 @@ function UserHistoryModal({
     return () => {
       active = false;
     };
-  }, [accountId]);
+  }, [accountId, apiBase]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -873,20 +890,28 @@ function UserHistoryModal({
   );
 }
 
-export default function JobsGigsControl() {
+export default function JobsGigsControl({
+  apiBase = DEFAULT_API_BASE,
+  embedded = false,
+}: {
+  apiBase?: string;
+  embedded?: boolean;
+} = {}) {
+  const overviewUrl = `${apiBase}/overview`;
+  const postingsUrl = `${apiBase}/postings`;
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_TABS)[number]>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>("all");
   const [search, setSearch] = useState("");
   const [postings, setPostings] = useState<JobsGigsPosting[]>(() => {
-    const cached = peekStaffGet(POSTINGS_URL, postingParams(typeFilter, statusFilter, search));
+    const cached = peekStaffGet(postingsUrl, postingParams(typeFilter, statusFilter, search));
     return cached?.data?.success ? cached.data.data : [];
   });
   const [overviewSummary, setOverviewSummary] = useState<JobsOverview["summary"] | null>(() => {
-    const cached = peekStaffGet(OVERVIEW_URL);
+    const cached = peekStaffGet(overviewUrl);
     return cached?.data?.success ? cached.data.data.summary : null;
   });
   const [loading, setLoading] = useState(
-    () => !peekStaffGet(POSTINGS_URL, postingParams(typeFilter, statusFilter, search))?.data?.success
+    () => !peekStaffGet(postingsUrl, postingParams(typeFilter, statusFilter, search))?.data?.success
   );
   const [refreshing, setRefreshing] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -898,7 +923,7 @@ export default function JobsGigsControl() {
 
   const loadOverview = async () => {
     try {
-      const res = await staffGet(OVERVIEW_URL);
+      const res = await staffGet(overviewUrl);
       if (res.data?.success) setOverviewSummary(res.data.data.summary);
     } catch {
       /* chips fall back to in-view counts */
@@ -908,7 +933,7 @@ export default function JobsGigsControl() {
   const load = async () => {
     const params = postingParams(typeFilter, statusFilter, search);
     const key = JSON.stringify(params);
-    const cached = peekStaffGet(POSTINGS_URL, params);
+    const cached = peekStaffGet(postingsUrl, params);
     if (cached?.data?.success) {
       shownPostingsKey.current = key;
       setPostings(cached.data.data);
@@ -916,7 +941,7 @@ export default function JobsGigsControl() {
     if (shownPostingsKey.current === key) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await staffGet(POSTINGS_URL, params);
+      const res = await staffGet(postingsUrl, params);
       if (res.data?.success) {
         shownPostingsKey.current = key;
         setPostings(res.data.data);
@@ -963,18 +988,28 @@ export default function JobsGigsControl() {
     };
   }, [overviewSummary, postings]);
 
-  const updatePosting = async (posting: JobsGigsPosting, status: string) => {
+  /**
+   * Moderates one posting. The reason is optional but recommended: it is stored
+   * with the action and shown in Moderation → Activity log.
+   */
+  const updatePosting = async (posting: JobsGigsPosting, status: string, reason?: string) => {
     const key = `${posting.type}-${posting.id}`;
     setSavingKey(key);
     try {
-      const res = await api.patch(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`, { status });
+      const res = await api.patch(`${apiBase}/postings/${posting.type}/${posting.id}`, {
+        status,
+        reason: reason?.trim() || undefined,
+      });
       showSuccessToast(`${posting.postNumber} marked ${status}`);
       if (res.data?.success && res.data.data && selectedPosting && String(selectedPosting.id) === String(posting.id)) {
         setSelectedPosting({ ...selectedPosting, ...res.data.data, type: posting.type });
       }
       await refreshAll();
-    } catch {
-      showErrorToast("Failed to update posting");
+    } catch (err) {
+      showErrorToast(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          "Failed to update posting"
+      );
     } finally {
       setSavingKey(null);
     }
@@ -987,7 +1022,7 @@ export default function JobsGigsControl() {
       return;
     }
     try {
-      const res = await api.get(`/api/moderator/jobs/postings/${type}/${id}`);
+      const res = await api.get(`${apiBase}/postings/${type}/${id}`);
       if (res.data?.success && res.data.data) {
         const detail = res.data.data;
         setSelectedPosting({
@@ -1020,8 +1055,14 @@ export default function JobsGigsControl() {
     }
   };
 
+  const shellClass = embedded
+    ? "relative z-10 space-y-5"
+    : "relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10";
+  const Shell = embedded ? "div" : "main";
+
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <Shell className={shellClass} style={embedded ? undefined : { animation: "fadeIn 420ms ease" }}>
+      {!embedded && (
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Jobs &amp; Gigs Moderator</p>
@@ -1040,6 +1081,20 @@ export default function JobsGigsControl() {
           Refresh
         </button>
       </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={loading || refreshing}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
+      )}
 
       {/* Summary strip */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -1181,17 +1236,16 @@ export default function JobsGigsControl() {
                   const key = `${p.type}-${p.id}`;
                   const saving = savingKey === key;
                   return (
-                    <tr key={key} className="group transition hover:bg-white/[0.03]">
+                    <tr
+                      key={key}
+                      onClick={() => setSelectedPosting(p)}
+                      className="group cursor-pointer transition hover:bg-white/[0.03]"
+                    >
                       <td className="py-3 pl-2 font-mono text-[11px] text-zinc-400">{p.postNumber}</td>
                       <td className="max-w-[240px] py-3 pr-3">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPosting(p)}
-                          className="block max-w-full truncate text-left font-medium text-zinc-200 underline-offset-2 transition hover:text-emerald-300 hover:underline"
-                          title={p.title}
-                        >
+                        <p className="max-w-full truncate font-medium text-zinc-200 underline-offset-2 group-hover:text-emerald-300 group-hover:underline" title={p.title}>
                           {p.title}
-                        </button>
+                        </p>
                         {p.tags.length > 0 && (
                           <p className="mt-1 flex max-w-full flex-wrap gap-1">
                             {p.tags.slice(0, 3).map((t) => (
@@ -1203,7 +1257,7 @@ export default function JobsGigsControl() {
                           </p>
                         )}
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
                         <AuthorCell name={p.author.name} handle={p.author.handle} onClick={() => setHistoryAccountId(p.author.accountId)} />
                       </td>
                       <td className="py-3 pr-3">
@@ -1232,16 +1286,8 @@ export default function JobsGigsControl() {
                           {relativeTime(p.createdAt)}
                         </span>
                       </td>
-                      <td className="py-3 pr-2">
+                      <td className="py-3 pr-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPosting(p)}
-                            title="View details"
-                            className="rounded-lg border border-white/10 p-1.5 text-zinc-400 transition hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
                           <button
                             type="button"
                             onClick={() => setHistoryAccountId(p.author.accountId)}
@@ -1285,6 +1331,7 @@ export default function JobsGigsControl() {
       {selectedPosting && (
         <PostingDetailModal
           posting={selectedPosting}
+          apiBase={apiBase}
           onClose={() => setSelectedPosting(null)}
           onModerate={updatePosting}
           onViewHistory={(accountId) => setHistoryAccountId(accountId)}
@@ -1295,10 +1342,11 @@ export default function JobsGigsControl() {
       {historyAccountId !== null && (
         <UserHistoryModal
           accountId={historyAccountId}
+          apiBase={apiBase}
           onClose={() => setHistoryAccountId(null)}
           onOpenPosting={(type, id) => void openPostingFromHistory(type, id)}
         />
       )}
-    </main>
+    </Shell>
   );
 }

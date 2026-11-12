@@ -52,7 +52,10 @@ async function patchAdminStaff(req, res) {
     if (!staffId) {
       return res.status(400).json({ success: false, message: 'Staff ID is required' });
     }
-    const data = await updateStaffAccount(staffId, req.body || {});
+    const data = await updateStaffAccount(staffId, req.body || {}, {
+      actorStaffId: staffIdFromSession(req.session),
+      actorAccountId: req.session?.account_id || req.session?.accountId || null,
+    });
     res.status(200).json({
       success: true,
       message: `Updated ${data.name}`,

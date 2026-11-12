@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { User, Users, Check, ChevronDown, ExternalLink, ShieldCheck, Sparkles, ArrowRight } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import { getPlatformPostingFees } from "@/lib/platformFees";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { constructAvatarUrl } from "@/lib/accountAvatars";
 import { resolveBannerPreset, bannerPresetUrl } from "@/lib/profileBanners";
@@ -64,6 +65,11 @@ export const GigIdentity: React.FC<GigIdentityProps> = ({
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [gigCreateFeeCredits, setGigCreateFeeCredits] = useState(50);
+
+  useEffect(() => {
+    void getPlatformPostingFees().then((fees) => setGigCreateFeeCredits(fees.gigCreateFeeCredits));
+  }, []);
 
   // User details & safe avatar / banner hydration
   const [userProfileAvatar, setUserProfileAvatar] = useState<string | undefined>(
@@ -318,11 +324,11 @@ export const GigIdentity: React.FC<GigIdentityProps> = ({
                 Service Publishing Fee
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300/70 dark:border-zinc-700 shadow-2xs">
-                <CreditIcon className="h-3 w-3 text-amber-500" /> 50 Credits
+                <CreditIcon className="h-3 w-3 text-amber-500" /> {gigCreateFeeCredits} Credits
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-              50 Credits will be deducted upon final review and publishing in Step 6. Drafting is free.
+              {gigCreateFeeCredits} Credits will be deducted upon final review and publishing in Step 6. Drafting is free.
             </p>
           </div>
 
@@ -334,7 +340,7 @@ export const GigIdentity: React.FC<GigIdentityProps> = ({
                 {walletBalance !== null ? `${walletBalance} Cr` : "..."}
               </span>
             </div>
-            {walletBalance !== null && walletBalance < 50 ? (
+            {walletBalance !== null && walletBalance < gigCreateFeeCredits ? (
               <button
                 type="button"
                 onClick={() => window.open("/credits", "_blank")}

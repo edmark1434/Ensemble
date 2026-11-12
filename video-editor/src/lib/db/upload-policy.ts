@@ -1,21 +1,56 @@
 import { sql } from "kysely";
 import { db } from "@/lib/db";
+import { parseStorageLimitBytes, PlanConfigurationError } from "@/lib/plan-feature-values";
 
 // Match the main site's active-subscription selection. No client plan input.
-export async function readUploadPlan(userId: string, executor = db) {
-  const result = await sql<{ name: string }>`
-    SELECT p.name FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id
-    WHERE s.user_id = ${userId} AND UPPER(s.status) = 'ACTIVE'
-      AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
-    ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC LIMIT 1
+async function readEffectivePlan(userId: string, executor = db) {
+  const result = await sql<{ plan_id: string; name: string }>`
+    SELECT p.plan_id, p.name FROM plans p
+    WHERE p.plan_id = COALESCE(
+      (SELECT s.plan_id FROM subscriptions s
+       WHERE s.user_id = ${userId} AND UPPER(s.status) IN ('ACTIVE', 'TRIALING')
+         AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+       ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC LIMIT 1),
+      (SELECT free.plan_id FROM plans free WHERE LOWER(free.name) = 'free' ORDER BY free.plan_id LIMIT 1)
+    )
   `.execute(executor);
-  return result.rows[0]?.name || "Free";
+  if (!result.rows[0]) throw new PlanConfigurationError();
+  return result.rows[0];
+}
+
+export async function readUploadPlan(userId: string, executor = db) {
+  return (await readEffectivePlan(userId, executor)).name;
+}
+
+export async function readPlanFeatures(userId: string, keys: string[], executor = db) {
+  const plan = await readEffectivePlan(userId, executor);
+  const result = await sql<{ feature_key: string; value: string }>`
+    SELECT f.feature_key, pf.value FROM plan_features pf
+    JOIN features f ON f.feature_id = pf.feature_id
+    WHERE pf.plan_id = ${plan.plan_id} AND f.feature_key = ANY(${keys}::text[])
+  `.execute(executor);
+  const features = new Map<string, string>();
+  for (const row of result.rows) {
+    if (features.has(row.feature_key)) throw new PlanConfigurationError();
+    features.set(row.feature_key, row.value);
+  }
+  return { plan, features };
+}
+
+export async function readExportPlanFeatures() {
+  return (await sql<{ plan_id: string; name: string; feature_key: string; value: string }>`
+    SELECT p.plan_id, p.name, f.feature_key, pf.value FROM plans p
+    JOIN plan_features pf ON pf.plan_id = p.plan_id
+    JOIN features f ON f.feature_id = pf.feature_id
+    WHERE LOWER(p.name) IN ('free', 'premium', 'business')
+      AND f.feature_key IN ('export_resolution', 'export_frame_rate')
+    ORDER BY CASE LOWER(p.name) WHEN 'free' THEN 0 WHEN 'premium' THEN 1 ELSE 2 END, p.plan_id
+  `.execute(db)).rows;
 }
 
 export async function readMediaStorageUsage(userId: string, executor = db) {
-  const planName = (await readUploadPlan(userId, executor)).trim().toLowerCase();
-  const plan = planName === "business" ? "Business" : planName === "premium" ? "Premium" : "Free";
-  const limitBytes = plan === "Business" ? 1024 ** 4 : plan === "Premium" ? 100 * 1024 ** 3 : 5 * 1024 ** 3;
+  const { plan, features } = await readPlanFeatures(userId, ['personal_upload_storage'], executor);
+  const limitBytes = parseStorageLimitBytes(features.get('personal_upload_storage'));
   const result = await sql<{ used_bytes: string | number }>`
     SELECT COALESCE(SUM(files.size_bytes), 0)::bigint AS used_bytes
     FROM (
@@ -28,7 +63,7 @@ export async function readMediaStorageUsage(userId: string, executor = db) {
     WHERE files.deleted_at IS NULL
   `.execute(executor);
   return {
-    plan,
+    plan: plan.name,
     usedBytes: Number(result.rows[0]?.used_bytes ?? 0),
     limitBytes,
     upgradeUrl: `${(process.env.MAIN_APP_URL || "http://localhost:5173").replace(/\/$/, "")}/credits-subscriptions`,

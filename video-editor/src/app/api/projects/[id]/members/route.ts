@@ -15,6 +15,8 @@ import {
 import { recheckProject } from "@/lib/collab/access-recheck";
 import { canManageSharing } from "@/features/editor/types/editor-role";
 import { notifyProjectInvite } from "@/lib/invitations/notify-project-invite";
+import { CollaborativeProjectLimitError } from "@/lib/db/collaborative-projects";
+import { PlanConfigurationError } from "@/lib/plan-feature-values";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -63,8 +65,13 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const auth = await authorize(ctx, { requireManager: false });
   if ("error" in auth) return auth.error;
 
-  const access = await getProjectAccess(auth.projectId, auth.userId);
-  return NextResponse.json(access);
+  try {
+    const access = await getProjectAccess(auth.projectId, auth.userId);
+    return NextResponse.json(access, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    if (error instanceof PlanConfigurationError) return fail(error.message, 503);
+    throw error;
+  }
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
@@ -78,11 +85,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   if (await touchesManager(auth, body.userId, body.role)) return fail(MANAGER_ONLY, 403);
 
-  const result = await addProjectMember({
-    projectId: auth.projectId,
-    userId: body.userId,
-    role: body.role,
-  });
+  let result;
+  try {
+    result = await addProjectMember({
+      projectId: auth.projectId,
+      userId: body.userId,
+      role: body.role,
+    });
+  } catch (error) {
+    if (error instanceof CollaborativeProjectLimitError) return NextResponse.json({
+      error: error.message, code: "COLLABORATIVE_PROJECT_LIMIT", collaboration: error.allowance,
+    }, { status: 409 });
+    if (error instanceof PlanConfigurationError) return fail(error.message, 503);
+    throw error;
+  }
 
   if (result === "already_member") return fail("That user already has access", 409);
   void recheckProject(auth.projectId);

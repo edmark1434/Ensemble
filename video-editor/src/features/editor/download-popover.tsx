@@ -40,7 +40,7 @@ import { PlanIcon } from "./components/plan-icon";
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
   const { data: policy, isError: planError, refetch: refetchPlan } = useEditorPlan();
-  const maxFps = policy?.plan === "Free" ? 30 : 60;
+  const maxFps = policy?.maxFps ?? 0;
   const {
     actions,
     type,
@@ -63,6 +63,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   const isEmpty = trackItemIds.length === 0;
 
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (open) void refetchPlan();
+  }, [open, refetchPlan]);
   const [assetStepScope, setAssetStepScope] = useState<string | null>(null);
   const assets = useMarketLicenses(state => state.assets);
   const licenseProjectId = useMarketLicenses(state => state.projectId);
@@ -237,6 +240,23 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   const showResolution = type !== "audio";
   const showFrameRate = type === "video" || type === "image-sequence";
   const showBitrate = (type === "video" || type === "audio") && !(format === "gif" || format === "mov");
+  const getRequiredPlan = (value: number, feature: "maxHeight" | "maxFps") => {
+    const required = policy?.planOptions.find(option => value <= option[feature])?.plan;
+    return required === "Premium" || required === "Business" ? required : undefined;
+  };
+  // Keep standard choices and include configured caps so a changed limit is
+  // selectable even when it is not one of the usual resolution/FPS presets.
+  const resolutionOptions = Array.from(new Map([
+    ...getResolutionOptions(format),
+    ...(policy?.planOptions ?? []).map(option => {
+      const value = format === "gif" ? Math.min(option.maxHeight, 640) : option.maxHeight;
+      return { value, label: `${value}p` };
+    }).filter(option => !getResolutionOptions(format).some(preset => preset.value === option.value)),
+  ].map(option => [option.value, option] as const)).values()).sort((a, b) => a.value - b.value);
+  const frameRateOptions = Array.from(new Map([
+    ...FRAME_RATE_OPTIONS,
+    ...(policy?.planOptions ?? []).map(option => ({ value: option.maxFps, label: `${option.maxFps} fps` })),
+  ].map(option => [option.value, option] as const)).values()).sort((a, b) => a.value - b.value);
 
   return (
     <>
@@ -317,9 +337,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
               <SelectField
                 label="Resolution"
                 value={resolution}
-                options={getResolutionOptions(format)}
+                options={resolutionOptions}
                 onChange={actions.setResolution}
-                getRequiredPlan={(value) => value > 1080 ? "Business" : value > 720 ? "Premium" : undefined}
+                getRequiredPlan={(value) => getRequiredPlan(value, "maxHeight")}
                 isLocked={(value) => !policy || value > policy.maxHeight}
                 onLockedClick={() => { if (policy) window.open(policy.upgradeUrl, "_blank", "noopener,noreferrer"); }}
               />
@@ -329,9 +349,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
               <SelectField
                 label="Frame rate"
                 value={fps}
-                options={FRAME_RATE_OPTIONS}
+                options={frameRateOptions}
                 onChange={actions.setFps}
-                getRequiredPlan={(value) => value > 30 ? "Premium" : undefined}
+                getRequiredPlan={(value) => getRequiredPlan(value, "maxFps")}
                 isLocked={(value) => !policy || value > maxFps}
                 onLockedClick={() => { if (policy) window.open(policy.upgradeUrl, "_blank", "noopener,noreferrer"); }}
               />
