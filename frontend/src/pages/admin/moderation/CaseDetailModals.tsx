@@ -3,6 +3,9 @@ import { motion } from 'framer-motion';
 import { ExternalLink, FileWarning, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import ListingDetailModal, {
+  SellerListingsModal,
+} from '@/pages/moderator/marketplace-moderator/ListingDetailModal';
 import type { ModerationCase } from './moderationTypes';
 import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
 import ReportedItemPreviewOverlay from './ReportedItemPreviewOverlay';
@@ -561,6 +564,12 @@ export function ReportCaseDetailModal({
   );
 }
 
+const LISTING_API_BASE = '/api/admin/moderation/marketplace';
+
+/**
+ * Pending-cases listing review — same detail/actions as Marketplace Control
+ * (thumbnail, seller, approve/reject/delist), via the admin marketplace API.
+ */
 export function ListingCaseDetailModal({
   caseItem,
   onClose,
@@ -570,96 +579,29 @@ export function ListingCaseDetailModal({
   onClose: () => void;
   onUpdated: () => void;
 }) {
-  const [saving, setSaving] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
-
-  const review = async (status: 'approved' | 'rejected' | 'delisted') => {
-    setSaving(true);
-    try {
-      const res = await api.patch(`/api/admin/moderation/cases/${caseItem.id}`, {
-        source: 'listing',
-        status,
-        rejectionReason: status === 'rejected' ? rejectionReason.trim() || undefined : undefined,
-      });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to review listing');
-      showSuccessToast(
-        status === 'approved'
-          ? 'Listing approved'
-          : status === 'rejected'
-            ? 'Listing rejected'
-            : 'Listing delisted'
-      );
-      onUpdated();
-      onClose();
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to review listing');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const [listingId, setListingId] = useState(Number(caseItem.id));
+  const [sellerAccountId, setSellerAccountId] = useState<number | null>(null);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-lg rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-400">
-              Listing review
-            </p>
-            <h2 className="mt-1 text-lg font-bold text-white">{caseItem.target}</h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              {caseItem.referenceNumber || caseItem.targetHandle} · {formatDateTime(caseItem.openedAt)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/[0.06] hover:text-white"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <p className="mt-4 text-sm text-zinc-400">{caseItem.reason}</p>
-
-        <label className="mt-4 block text-xs text-zinc-500">
-          Rejection reason (if rejecting)
-          <textarea
-            value={rejectionReason}
-            onChange={(e) => setRejectionReason(e.target.value)}
-            rows={2}
-            className="mt-1.5 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none"
-          />
-        </label>
-
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void review('rejected')}
-            className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/15 disabled:opacity-50"
-          >
-            Reject
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void review('delisted')}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white hover:bg-white/[0.04] disabled:opacity-50"
-          >
-            Delist
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void review('approved')}
-            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            Approve
-          </button>
-        </div>
-      </div>
-    </div>
+    <>
+      <ListingDetailModal
+        listingId={listingId}
+        apiBase={LISTING_API_BASE}
+        onClose={onClose}
+        onUpdated={() => onUpdated()}
+        onViewSeller={(accountId) => setSellerAccountId(accountId)}
+      />
+      {sellerAccountId !== null && (
+        <SellerListingsModal
+          accountId={sellerAccountId}
+          apiBase={LISTING_API_BASE}
+          onClose={() => setSellerAccountId(null)}
+          onOpenListing={(id) => {
+            setSellerAccountId(null);
+            setListingId(id);
+          }}
+        />
+      )}
+    </>
   );
 }

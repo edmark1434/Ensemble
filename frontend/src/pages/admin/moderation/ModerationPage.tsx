@@ -7,6 +7,7 @@ import {
   Gavel,
   LayoutGrid,
   Loader2,
+  Briefcase,
   MessageSquare,
   MoreHorizontal,
   Pencil,
@@ -17,6 +18,7 @@ import {
   Settings2,
   Shield,
   ShieldAlert,
+  ShoppingBag,
   Trash2,
   UserCog,
   UserPlus,
@@ -47,6 +49,8 @@ import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
 import VideoManagementSection from './VideoManagementSection';
 import ForumManagementSection from './ForumManagementSection';
+import MarketplaceManagementSection from './MarketplaceManagementSection';
+import JobsManagementSection from './JobsManagementSection';
 import ActivityLogTab, { ActivityTable } from './ActivityLogTab';
 import ActivityDetailModal from './ActivityDetailModal';
 import {
@@ -104,7 +108,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
 const CASE_QUEUES: CaseQueue[] = ['mine', 'disputes', 'reports', 'listings', 'identity'];
 const POLICY_SECTIONS: WarningsSection[] = ['catalog', 'punishments', 'thresholds'];
 
-type ManagementSection = 'moderators' | 'video' | 'forum';
+type ManagementSection = 'moderators' | 'video' | 'forum' | 'marketplace' | 'jobs';
 
 const MANAGEMENT_SECTIONS: {
   id: ManagementSection;
@@ -114,6 +118,8 @@ const MANAGEMENT_SECTIONS: {
   { id: 'moderators', label: 'Moderators', icon: UserCog },
   { id: 'video', label: 'Video', icon: Video },
   { id: 'forum', label: 'Forum', icon: MessageSquare },
+  { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+  { id: 'jobs', label: 'Jobs & Gigs', icon: Briefcase },
 ];
 
 function formatDateTime(value: string | null) {
@@ -1006,6 +1012,14 @@ function ManagementTab({
       title: 'Forum content management',
       description: 'Groups, discussions, members, and the actions that hide or lock them.',
     },
+    marketplace: {
+      title: 'Marketplace catalog',
+      description: 'Review submissions, approve assets, reject violations, and delist live listings.',
+    },
+    jobs: {
+      title: 'Jobs & Gigs control',
+      description: 'Review, pause, close, and archive job and gig postings across the platform.',
+    },
   };
 
   return (
@@ -1042,6 +1056,8 @@ function ManagementTab({
       )}
       {section === 'video' && <VideoManagementSection />}
       {section === 'forum' && <ForumManagementSection />}
+      {section === 'marketplace' && <MarketplaceManagementSection />}
+      {section === 'jobs' && <JobsManagementSection />}
     </div>
   );
 }

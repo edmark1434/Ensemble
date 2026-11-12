@@ -126,10 +126,12 @@ export function SellerListingsModal({
   accountId,
   onClose,
   onOpenListing,
+  apiBase = '/api/moderator/marketplace',
 }: {
   accountId: number | string;
   onClose: () => void;
   onOpenListing?: (listingId: number) => void;
+  apiBase?: string;
 }) {
   const [history, setHistory] = useState<SellerListingsHistory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +140,7 @@ export function SellerListingsModal({
     let active = true;
     (async () => {
       try {
-        const res = await api.get(`/api/moderator/marketplace/users/${accountId}/listings`);
+        const res = await api.get(`${apiBase}/users/${accountId}/listings`);
         if (active && res.data?.success) setHistory(res.data.data);
       } catch {
         if (active) showErrorToast('Failed to load seller listings');
@@ -149,7 +151,7 @@ export function SellerListingsModal({
     return () => {
       active = false;
     };
-  }, [accountId]);
+  }, [accountId, apiBase]);
 
   return (
     <div
@@ -276,12 +278,14 @@ export default function ListingDetailModal({
   onClose,
   onUpdated,
   onViewSeller,
+  apiBase = '/api/moderator/marketplace',
 }: {
   listingId: number;
   seed?: MarketplaceListing | null;
   onClose: () => void;
   onUpdated: (listing?: MarketplaceListing) => void;
-  onViewSeller: (accountId: number) => void;
+  onViewSeller?: (accountId: number) => void;
+  apiBase?: string;
 }) {
   const [detail, setDetail] = useState<MarketplaceListing | null>(seed || null);
   const [loading, setLoading] = useState(!seed);
@@ -294,7 +298,7 @@ export default function ListingDetailModal({
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/api/moderator/marketplace/listings/${listingId}`);
+        const res = await api.get(`${apiBase}/listings/${listingId}`);
         if (active && res.data?.success) setDetail(res.data.data);
       } catch {
         if (active) showErrorToast('Failed to load listing detail');
@@ -305,12 +309,12 @@ export default function ListingDetailModal({
     return () => {
       active = false;
     };
-  }, [listingId]);
+  }, [listingId, apiBase]);
 
   const review = async (status: 'approved' | 'rejected' | 'delisted', reason?: string) => {
     setSaving(true);
     try {
-      const res = await api.patch(`/api/moderator/marketplace/listings/${listingId}`, {
+      const res = await api.patch(`${apiBase}/listings/${listingId}`, {
         status,
         rejectionReason: reason,
       });
@@ -412,14 +416,16 @@ export default function ListingDetailModal({
                     <p className="text-xs text-zinc-500">Seller / submitter</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onViewSeller(listing.submittedBy.accountId)}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-300"
-                >
-                  <History className="h-3.5 w-3.5" />
-                  Seller listings
-                </button>
+                {onViewSeller && (
+                  <button
+                    type="button"
+                    onClick={() => onViewSeller(listing.submittedBy.accountId)}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-300"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    Seller listings
+                  </button>
+                )}
               </div>
 
               <div>

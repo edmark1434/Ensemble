@@ -34,9 +34,7 @@ import type { JobsGigsPosting, JobsGigsPostingDetail, JobsOverview, UserJobsHist
 
 const TYPE_TABS = ["all", "job", "gig"] as const;
 const STATUS_TABS = ["all", "active", "paused", "closed", "archived"] as const;
-
-const OVERVIEW_URL = "/api/moderator/jobs/overview";
-const POSTINGS_URL = "/api/moderator/jobs/postings";
+const DEFAULT_API_BASE = "/api/moderator/jobs";
 
 function postingParams(type: string, status: string, search: string) {
   return {
@@ -272,12 +270,14 @@ function PostingDetailModal({
   onModerate,
   onViewHistory,
   saving,
+  apiBase = DEFAULT_API_BASE,
 }: {
   posting: JobsGigsPosting;
   onClose: () => void;
   onModerate: (posting: JobsGigsPosting, status: string, reason?: string) => Promise<void>;
   onViewHistory: (accountId: string) => void;
   saving: boolean;
+  apiBase?: string;
 }) {
   const [detail, setDetail] = useState<JobsGigsPostingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -294,7 +294,7 @@ function PostingDetailModal({
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`);
+        const res = await api.get(`${apiBase}/postings/${posting.type}/${posting.id}`);
         if (active && res.data?.success) setDetail(res.data.data);
       } catch {
         if (active) showErrorToast("Failed to load posting detail");
@@ -305,7 +305,7 @@ function PostingDetailModal({
     return () => {
       active = false;
     };
-  }, [posting.type, posting.id, posting.status]);
+  }, [posting.type, posting.id, posting.status, apiBase]);
 
   const isArchived = posting.status === "archived";
   const headerGradient =
@@ -693,10 +693,12 @@ function UserHistoryModal({
   accountId,
   onClose,
   onOpenPosting,
+  apiBase = DEFAULT_API_BASE,
 }: {
   accountId: string;
   onClose: () => void;
   onOpenPosting?: (type: "job" | "gig", id: string) => void;
+  apiBase?: string;
 }) {
   const [history, setHistory] = useState<UserJobsHistory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -705,7 +707,7 @@ function UserHistoryModal({
     let active = true;
     (async () => {
       try {
-        const res = await api.get(`/api/moderator/jobs/users/${accountId}/history`);
+        const res = await api.get(`${apiBase}/users/${accountId}/history`);
         if (active && res.data?.success) setHistory(res.data.data);
       } catch {
         if (active) showErrorToast("Failed to load user history");
@@ -716,7 +718,7 @@ function UserHistoryModal({
     return () => {
       active = false;
     };
-  }, [accountId]);
+  }, [accountId, apiBase]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -889,20 +891,28 @@ function UserHistoryModal({
   );
 }
 
-export default function JobsGigsControl() {
+export default function JobsGigsControl({
+  apiBase = DEFAULT_API_BASE,
+  embedded = false,
+}: {
+  apiBase?: string;
+  embedded?: boolean;
+} = {}) {
+  const overviewUrl = `${apiBase}/overview`;
+  const postingsUrl = `${apiBase}/postings`;
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_TABS)[number]>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>("all");
   const [search, setSearch] = useState("");
   const [postings, setPostings] = useState<JobsGigsPosting[]>(() => {
-    const cached = peekStaffGet(POSTINGS_URL, postingParams(typeFilter, statusFilter, search));
+    const cached = peekStaffGet(postingsUrl, postingParams(typeFilter, statusFilter, search));
     return cached?.data?.success ? cached.data.data : [];
   });
   const [overviewSummary, setOverviewSummary] = useState<JobsOverview["summary"] | null>(() => {
-    const cached = peekStaffGet(OVERVIEW_URL);
+    const cached = peekStaffGet(overviewUrl);
     return cached?.data?.success ? cached.data.data.summary : null;
   });
   const [loading, setLoading] = useState(
-    () => !peekStaffGet(POSTINGS_URL, postingParams(typeFilter, statusFilter, search))?.data?.success
+    () => !peekStaffGet(postingsUrl, postingParams(typeFilter, statusFilter, search))?.data?.success
   );
   const [refreshing, setRefreshing] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -914,7 +924,7 @@ export default function JobsGigsControl() {
 
   const loadOverview = async () => {
     try {
-      const res = await staffGet(OVERVIEW_URL);
+      const res = await staffGet(overviewUrl);
       if (res.data?.success) setOverviewSummary(res.data.data.summary);
     } catch {
       /* chips fall back to in-view counts */
@@ -924,7 +934,7 @@ export default function JobsGigsControl() {
   const load = async () => {
     const params = postingParams(typeFilter, statusFilter, search);
     const key = JSON.stringify(params);
-    const cached = peekStaffGet(POSTINGS_URL, params);
+    const cached = peekStaffGet(postingsUrl, params);
     if (cached?.data?.success) {
       shownPostingsKey.current = key;
       setPostings(cached.data.data);
@@ -932,7 +942,7 @@ export default function JobsGigsControl() {
     if (shownPostingsKey.current === key) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await staffGet(POSTINGS_URL, params);
+      const res = await staffGet(postingsUrl, params);
       if (res.data?.success) {
         shownPostingsKey.current = key;
         setPostings(res.data.data);
@@ -987,7 +997,7 @@ export default function JobsGigsControl() {
     const key = `${posting.type}-${posting.id}`;
     setSavingKey(key);
     try {
-      const res = await api.patch(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`, {
+      const res = await api.patch(`${apiBase}/postings/${posting.type}/${posting.id}`, {
         status,
         reason: reason?.trim() || undefined,
       });
@@ -1013,7 +1023,7 @@ export default function JobsGigsControl() {
       return;
     }
     try {
-      const res = await api.get(`/api/moderator/jobs/postings/${type}/${id}`);
+      const res = await api.get(`${apiBase}/postings/${type}/${id}`);
       if (res.data?.success && res.data.data) {
         const detail = res.data.data;
         setSelectedPosting({
@@ -1046,8 +1056,14 @@ export default function JobsGigsControl() {
     }
   };
 
+  const shellClass = embedded
+    ? "relative z-10 space-y-5"
+    : "relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10";
+  const Shell = embedded ? "div" : "main";
+
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <Shell className={shellClass} style={embedded ? undefined : { animation: "fadeIn 420ms ease" }}>
+      {!embedded && (
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Jobs &amp; Gigs Moderator</p>
@@ -1066,6 +1082,20 @@ export default function JobsGigsControl() {
           Refresh
         </button>
       </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={loading || refreshing}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
+      )}
 
       {/* Summary strip */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -1311,6 +1341,7 @@ export default function JobsGigsControl() {
       {selectedPosting && (
         <PostingDetailModal
           posting={selectedPosting}
+          apiBase={apiBase}
           onClose={() => setSelectedPosting(null)}
           onModerate={updatePosting}
           onViewHistory={(accountId) => setHistoryAccountId(accountId)}
@@ -1321,10 +1352,11 @@ export default function JobsGigsControl() {
       {historyAccountId !== null && (
         <UserHistoryModal
           accountId={historyAccountId}
+          apiBase={apiBase}
           onClose={() => setHistoryAccountId(null)}
           onOpenPosting={(type, id) => void openPostingFromHistory(type, id)}
         />
       )}
-    </main>
+    </Shell>
   );
 }

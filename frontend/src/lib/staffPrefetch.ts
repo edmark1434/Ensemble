@@ -67,6 +67,7 @@ const TAB_DATA: Record<string, Record<string, DataRequest[]>> = {
     overview: [USER_TEAM_OVERVIEW],
     teams: ['/api/admin/teams-management'],
     users: ['/api/admin/users-management'],
+    restrictions: ['/api/admin/restrictions'],
     'survey-responses': ['/api/admin/survey-responses'],
   },
   warnings: {
@@ -96,6 +97,14 @@ const TAB_DATA: Record<string, Record<string, DataRequest[]>> = {
     forum: [
       ['/api/admin/moderation/forum/groups', { search: '', status: 'all' }],
       ['/api/admin/moderation/forum/discussions', { search: '', status: 'all' }],
+    ],
+    marketplace: [
+      '/api/admin/moderation/marketplace/overview',
+      ['/api/admin/moderation/marketplace/listings', { status: 'pending' }],
+    ],
+    jobs: [
+      '/api/admin/moderation/jobs/overview',
+      '/api/admin/moderation/jobs/postings',
     ],
   },
 };

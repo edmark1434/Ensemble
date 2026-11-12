@@ -427,12 +427,15 @@ export default function ModeratorRestrictionsDesk({
   roleLabel,
   subtitle,
   variant = 'support',
+  embedded = false,
 }: {
   endpointBase: string;
   accent?: Accent;
   roleLabel: string;
   subtitle: string;
   variant?: UserTeamVariant;
+  /** When true, omit full-page chrome (admin User & Team tab / nested desks). */
+  embedded?: boolean;
 }) {
   const caps = useMemo(() => getUserTeamCapabilities(variant), [variant]);
   const [data, setData] = useState<RestrictionsPayload | null>(() => {
@@ -724,18 +727,27 @@ export default function ModeratorRestrictionsDesk({
     },
   ];
 
+  const shellClass = embedded
+    ? 'relative z-10 min-w-0 overflow-x-hidden space-y-5'
+    : 'relative z-10 min-h-screen min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 md:pl-[260px] md:px-10 md:py-8';
+  const Shell = embedded ? 'div' : 'main';
+
   return (
-    <main
-      className="relative z-10 min-h-screen min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 md:pl-[260px] md:px-10 md:py-8"
-      style={{ animation: 'fadeIn 420ms ease' }}
+    <Shell
+      className={shellClass}
+      style={embedded ? undefined : { animation: 'fadeIn 420ms ease' }}
     >
       <div className="min-w-0 space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${accentText(accent)}`}>{roleLabel}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Restrictions</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
-          </div>
+          {!embedded ? (
+            <div>
+              <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${accentText(accent)}`}>{roleLabel}</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Restrictions</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+            </div>
+          ) : (
+            <p className="max-w-2xl text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+          )}
           <button
             type="button"
             onClick={() => void load()}
@@ -1134,7 +1146,7 @@ export default function ModeratorRestrictionsDesk({
           </aside>
         </div>
       </div>
-    </main>
+    </Shell>
   );
 }
 

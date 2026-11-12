@@ -1,14 +1,20 @@
-# Active Task: Restore Fee management rows + wire posting fees
+# Active Task: Parity — admin gets all moderator desk capabilities
 
 ## Implementation Objective
 
-Bring back all previously removed Economy → Fee management rows, and wire the posting/listing ones into the live charge paths that were still hardcoded.
+Scan marketplace, support, forum, and jobs/gigs moderator desks. Ensure Admin has the same operational capabilities (especially marketplace asset viewing/actions), merged into existing admin design, theme, formats, and categories — not bolted-on duplicates. Verify flows work.
 
 ## Acceptance Criteria
 
-- [x] All original fee rows are back in defaults, admin UI, and allowed ID list.
-- [x] Job posting fee reads `fee-job-post` (fallback 50 credits).
-- [x] Gig/service posting fee reads `fee-gig-create` (fallback 50 credits).
-- [x] Asset listing fee can use `fee-asset-upload` as fallback for listing credits.
-- [x] Public config exposes posting fee amounts for checkout UI.
-- [x] Frontend typecheck passes.
+- [x] Moderator desks audited (marketplace, support, forum, jobs/gigs).
+- [x] Missing admin capabilities identified, especially marketplace asset view/actions.
+- [x] Gaps implemented inside existing admin pages/sections with matching UI patterns.
+- [x] No redundant parallel nav items that duplicate Moderation/Tickets if already covered.
+- [ ] Frontend typecheck passes (run when asked).
+
+## Done in this pass
+
+- Admin APIs: `/api/admin/moderation/marketplace/*`, `/api/admin/moderation/jobs/*`, `/api/admin/restrictions/*`
+- Management → Marketplace / Jobs & Gigs (shared controls via `apiBase` + `embedded`)
+- Listing case modal → full ListingDetailModal (thumbnail/seller/actions)
+- User & Team → Restrictions tab (admin + support variants)
