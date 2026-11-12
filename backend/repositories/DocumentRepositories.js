@@ -90,9 +90,24 @@ async function searchDocumentChunks(embedding, limit = 5, minSimilarity = 0.2) {
     .slice(0, safeLimit);
 }
 
+async function pruneDocumentChunks(activeUrls) {
+  const urls = Array.isArray(activeUrls) ? activeUrls.filter(Boolean) : [];
+  if (!urls.length) return 0;
+  const result = await pool.query(
+    'DELETE FROM document_chunks WHERE NOT (url = ANY($1::text[]))',
+    [urls],
+  );
+  return result.rowCount || 0;
+}
+
 async function getDocumentChunkCount() {
   const result = await pool.query('SELECT COUNT(*)::int AS count FROM document_chunks');
   return result.rows[0]?.count || 0;
 }
 
-module.exports = { replaceDocumentChunks, searchDocumentChunks, getDocumentChunkCount };
+module.exports = {
+  replaceDocumentChunks,
+  pruneDocumentChunks,
+  searchDocumentChunks,
+  getDocumentChunkCount,
+};

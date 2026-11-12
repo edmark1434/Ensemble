@@ -1,33 +1,32 @@
 # Asset Marketplace
 
-Routes: `/assets`, `/assets/:assetId`
+Routes: `/assets`, `/assets/owned`, `/assets/purchased`, `/assets/saved`, `/assets/liked`
 
-Sources:
+The Asset Marketplace lets creators buy, sell, and organize reusable digital production assets-including Template Videos, multi-asset Bundles, Images, Videos, and Audios-that can also be imported into the browser video editor.
 
-- `frontend/src/pages/user/5_assets/AssetsLibrary.tsx`
-- `frontend/src/pages/user/5_assets/AssetDetails.tsx`
-- `frontend/src/pages/user/5_assets/AssetEditorModal.tsx`
+## Browsing and library views
 
-## Browse and manage assets
+- **Discover Assets (`/assets`):** Browse published marketplace assets by category (All, Images, Videos, Audio, Templates), preview media, inspect creator details, and read comments or buyer reviews.
+- **My Owned Assets (`/assets/owned`):** Manage your published, under-review, rejected, or draft asset listings.
+- **Purchased Assets (`/assets/purchased`):** Access all assets you have bought or claimed for zero credits.
+- **Saved (`/assets/saved`) and Liked (`/assets/liked`):** Revisit bookmarked or liked marketplace listings.
 
-The Assets Library provides marketplace discovery and user-specific asset views. Asset Details displays listing information, creator information, tags, engagement, comments and replies, and purchase state.
+## Creating and publishing an asset listing
 
-## Create an asset
+Signed-in verified creators can create a listing from `/assets` by uploading the original media (or template configuration) and preview thumbnail, adding a title, description, tags, and credit price.
 
-The asset editor accepts an original file and a listing thumbnail. It supports image, video, and audio previews where appropriate. Listing information includes the asset identity, description, pricing, and optional tags.
+- **Plan limits:** Free accounts can publish up to 1 asset post, Premium up to 20, and Business unlimited.
+- **Review status:** Depending on platform settings or if your Platform Merit is in the **Limited** band (93 to 97), newly submitted listings may enter an **Under Review** queue before appearing publicly. Publishing new listings is blocked if your Platform Merit is Restricted (85 to 92) or lower, or while suspended/locked/banned.
+- **Fees:** Check the Current Ensemble Platform Settings document for current asset listing and marketplace sale fees.
 
-## Buy an asset
+## Buying assets and accessing original files
 
-An authenticated non-owner can purchase a published paid asset or claim a zero-credit asset. The purchase confirmation shows the asset, total credits, current wallet balance, and projected balance. Insufficient balance prevents purchase.
+- Any signed-in non-owner with sufficient Account Wallet credits can purchase a paid asset or claim a zero-credit asset. The checkout confirmation displays the asset price, your current wallet balance, and your balance after purchase.
+- After purchase, the asset appears immediately under `/assets/purchased` and can be opened from the protected **Original File** section or imported into your browser video editor.
+- Buyers can leave star ratings and reviews on purchased assets, and community members can post comments (subject to account standing).
 
-After a successful purchase, the asset appears as owned and is available through the Purchased library view.
+## Ownership and deletion rules
 
-## Original file access
+Purchasing an asset grants the buyer a license to download and use the protected original file; ownership of the creator's listing is not transferred. Once an asset has active purchases, the creator cannot delete the listing so existing buyers do not lose access.
 
-Creators and active purchasers can open the protected Original File section. The interface requests short-lived access only when the original-file modal is opened. Public listing responses do not expose the permanent storage path.
-
-## Ownership and deletion
-
-The creator remains the listing and media owner after purchase. A buyer receives access to the asset; ownership of the creator's listing is not transferred. Assets with active purchases cannot be deleted while no refund/removal workflow is available.
-
-Dynamic route `/assets/:assetId` requires a real asset ID.
+For missing downloads, damaged/wrong files, or marketplace refund requests, submit a ticket on `/support/ticket` under **Marketplace**.

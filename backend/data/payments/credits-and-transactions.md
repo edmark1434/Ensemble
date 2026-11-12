@@ -1,66 +1,36 @@
-# Credits, Subscriptions, Checkout, and Transactions
+# Credits, Subscriptions, Wallet, Cashouts, and Transactions
 
-Routes: `/credits`, `/credits-subscriptions`, `/credits/checkout`, `/transactions`
+Routes: `/credits`, `/credits-subscriptions`, `/credits/checkout`, `/transactions`, `/settings`
 
-Sources:
+Platform credits are used across Ensemble for funding job and gig contract milestones, posting jobs or submitting proposals when applicable, buying marketplace assets, and transferring funds. For live credit values, active credit packages, platform fees, minimum payout thresholds, and subscription plan prices, always check the **Current Ensemble Platform Settings** and **Current Ensemble Plans** documents.
 
-- `frontend/src/pages/user/13_creditsshop/CreditsShop.tsx`
-- `frontend/src/pages/payment/checkout.tsx`
-- `frontend/src/pages/user/11_transactionhistory/main.tsx`
-- `frontend/src/components/nav/Settings/user_settings_wallet.tsx`
+## Buying credits and subscriptions
 
-## Credits
+- **Credit Shop (`/credits` and `/credits-subscriptions`):** Browse available credit top-up packages and subscription plans (Free, Premium, Business).
+- **Checkout (`/credits/checkout`):** Complete payments for selected credit packages or subscription upgrades. When upgrading mid-cycle, prorated pricing may apply depending on your remaining billing period.
+- **Managing Subscriptions:** View your active plan, trial status, renewal date, or cancel renewal from the Subscription tab in `/settings` or on `/credits-subscriptions`.
 
-The credit shop allows an authenticated user to select an available credit package or supported top-up amount. Payment processing is handled by the backend and configured payment provider; the frontend must not be treated as the authority for price or credited quantity.
+## Account wallet, escrow, and credit transfers
 
-## Checkout
+In the Wallet tab of `/settings`, you can view:
 
-Checkout directs the user through the applicable payment flow. A payment may remain pending while the provider processes it. Successful top-up settlement updates the wallet and transaction history after durable backend processing.
+- **Account Wallet:** Your available credits for purchases, hiring, transfers, and eligible cashouts.
+- **Escrow Wallet:** Credits currently held in escrow for active contracts or open disputes.
+- **User Transfers:** Transfer credits directly from your Account Wallet to another Ensemble member by searching their name or handle.
 
-## Transactions
+## Withdrawing earnings (Cashout)
 
-`/transactions` displays the user's credit transaction history. Marketplace purchases, eligible transfers, fees, cashouts, refunds, and top-up fund transfers appear according to completed backend records.
+Verified users can withdraw eligible credits from the Wallet tab in `/settings`:
 
-## Credit transaction types
+- **Supported payout methods:** **GCash** and **Maya**.
+- **Requirements:** You must have completed personal Identity Verification (KYC), meet the minimum payout credit requirement, and have an Account Standing that allows cashouts (cashouts are paused while suspended, locked, banned, or in the Frozen Platform Merit band-though your balance is never seized).
+- **Cashout statuses:** Requests move through `PENDING` / `PROCESSING` to `SUCCEEDED`, or `FAILED` / `REJECTED` / `REVERSED` (in which case credits are restored via a Cashout Refund).
+- Check the Current Ensemble Platform Settings document for current withdrawal fees and minimum payout amounts.
 
-The backend ledger uses these business categories:
+## Transaction history and refunds
 
-- Fund Transfer: credits moved between wallets, including completed top-up credits
-- Escrow Hold: credits reserved for protected work or a dispute
-- Escrow Release: held credits released to the eligible destination
-- Escrow Refund: held credits returned through the escrow workflow
-- Asset Purchase: buyer payment for a marketplace asset
-- Asset Refund: reversal associated with an eligible asset refund workflow
-- Fee: a platform fee linked to its related transaction where applicable
-- Cashout: credits submitted for an external payout
-- Cashout Refund: credits returned after an unsuccessful or reversed cashout
+Route: `/transactions`
 
-The presence of a UI label is not proof that a transaction completed. Durable `credit_transactions` records and wallet state are authoritative.
+Your Transaction History logs every wallet movement across categories including **Credit Top-Up**, **Fund Transfer**, **Credits On Hold (Escrow Hold)**, **Credits Released (Escrow Release)**, **Credits Refunded (Escrow Refund)**, **Asset Purchase**, **Asset Refund**, **Cashout Payout**, **Cashout Refund**, and **Platform Fee**. You can filter by tab (All, Credits, Assets, Transfers, Fee, Summary), search, and inspect details.
 
-## Wallets
-
-Accounts and teams use their applicable platform wallets. Wallet status can affect whether a transfer, purchase, or payout is allowed. Balance validation and locking occur on the backend for financial mutations.
-
-## Marketplace purchases and fees
-
-For an asset purchase, the buyer is charged the listing price. The creator receives proceeds after the configured marketplace fee, and the fee is recorded separately when applicable. The exact fee must come from the current backend configuration and transaction response.
-
-## Escrow
-
-Contracts and disputes can use escrow holds, releases, or refunds. Only authorized workflow transitions may move held credits. Documentation chat cannot release escrow.
-
-## Cashouts
-
-An eligible verified user can submit a cashout through the supported payout workflow. The backend validates the wallet and configured minimum, records the debit, tracks provider status, and restores credits through a cashout-refund record when the supported failure/refund path applies.
-
-## Top-up settlement
-
-A successful top-up must atomically mark the payment and top-up paid, credit the account wallet, create one Fund Transfer ledger record, and persist a notification. Duplicate provider events must not credit the wallet more than once.
-
-## Subscriptions
-
-`/credits-subscriptions` opens the credit shop's subscription view. The database-generated **Current Ensemble Plans** knowledge source is authoritative for current plan names, prices, billing periods, and trial periods. Do not guess plan details that are absent from that current source.
-
-## Payment support
-
-For a payment that is paid but missing from wallet or transaction history, direct the user to `/landing/SubmitATicket`. Do not claim to retry, refund, or modify a payment from documentation chat.
+If a payment completed externally but does not appear in your wallet or `/transactions`, or if a cashout is stuck, file a ticket on `/support/ticket` under **Billing -> Credits and balance** or **Payouts and withdrawals** with the payment time and receipt ID.

@@ -1,33 +1,26 @@
-# Ensemble Website Knowledge Data
+# Ensemble Customer Support Knowledge Data
 
-This directory contains customer-facing knowledge derived from the React route source files in `frontend/src`.
+This directory contains customer-facing knowledge for the Ensemble Support Assistant (RAG). All content is written strictly for customer support and omits internal database, API, credential, environment, source-code, and staff-only operational details.
 
 ## URL convention
 
-Routes are stored as application-relative URLs, such as `/landing/FAQ`. At runtime, prepend the configured frontend origin (`FRONTEND_URL`). Dynamic segments such as `:assetId` require a real resource identifier and must not be returned to customers as a literal clickable URL.
+Each entry in `sources.json` maps to a unique customer-accessible route (with `#fragment` disambiguation where multiple topics reference the same page). Dynamic route placeholders such as `:id` or `:assetId` require an actual resource identifier and are not returned as standalone clickable links.
 
 ## Categories
 
-- `public/`: public product information, FAQ, hiring, and working flows
-- `platform/`: Ensemble overview and advertised feature set
-- `account/`: authentication, profile, settings, and verification routes
-- `collaboration/`: projects, teams, forums, inbox, and dashboard
-- `marketplace/`: assets and creative-service discovery
-- `work/`: jobs, proposals, gigs, and contracts
-- `payments/`: credits, checkout, transactions, and subscriptions
-- `support/`: tickets, feedback, notifications, and help
-- `communication/`: inbox, direct/group chat, calls, and meetings
-- `governance/`: reports, violations, disputes, and moderation lifecycle
-- `operations/`: role-protected admin and specialist moderator portals
-- `legal/`: public and authenticated legal pages
+- `public/`: public landing pages, FAQ, hiring, working, pricing, use cases, feedback
+- `platform/`: Ensemble overview, features, history, user roles, home, discovery, profiles
+- `account/`: registration, login, onboarding, profile setup, settings, deactivation
+- `verification/`: personal identity verification (KYC) and team business verification
+- `policy/`: Platform Merit, warnings and account limits, account standing and appeals, badges
+- `governance/`: reporting content/users and contract/transaction disputes
+- `collaboration/`: projects, browser editor, teams, workspaces, delivery dashboard, forums
+- `communication/`: inbox, direct/group chat, calls, and Google Meet
+- `marketplace/`: job postings, services (gigs), and asset marketplace
+- `work/`: proposals and hiring, gig orders, contracts, milestones, and escrow lifecycle
+- `payments/`: credits, subscriptions, wallet, cashouts, and transaction history
+- `support/`: self-service channels, notifications, ticket categories, and purchase help
+- `legal/`: summaries of Terms of Service, Privacy Policy, and custom participant terms
+- `generated/`: live public platform settings and subscription plans synced automatically at ingestion
 
-`sources.json` is the machine-readable route catalog. Markdown files are the cleaned knowledge source for ingestion.
-
-## Accuracy rules
-
-- Content describes behavior represented by current frontend source.
-- Staff and moderator routes are role-protected operational references, not customer instructions.
-- Backend-only guarantees are not inferred from labels or marketing copy.
-- UI placeholders and non-persisted forms are identified as such.
-- URLs come from `frontend/src/App.tsx`.
-- Rebuild or review this data when route behavior changes.
+`sources.json` is the machine-readable catalog of enabled knowledge files.

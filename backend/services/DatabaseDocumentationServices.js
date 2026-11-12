@@ -44,7 +44,7 @@ function renderPlatformSettings(rows) {
 
   return `# Current Ensemble Platform Settings
 
-This document is generated from the current public platform configuration in PostgreSQL.
+This document lists the current public Ensemble platform settings, credit packages, and fees. It is refreshed automatically when the support knowledge base is updated, so these values take priority over any older figures.
 
 ## Platform information
 
@@ -88,7 +88,7 @@ ${present(plan.description, 'No description is currently available.')}
 
   return `# Current Ensemble Plans
 
-This document is generated from active records in the PostgreSQL plans table.
+This document lists the subscription plans currently offered on Ensemble. It is refreshed automatically when the support knowledge base is updated, so these values take priority over any older figures. Plans are managed from the subscription plans page (`/credits-subscriptions`).
 
 ## Available subscription plans
 
