@@ -34,13 +34,19 @@ export default function UserSettings() {
   const globalUser = useGlobalState((state) => state.user);
 
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<TabType>(location.state?.tab || "display");
+  const searchParams = new URLSearchParams(location.search);
+  const initialTab = (searchParams.get("tab") as TabType) || location.state?.tab || "display";
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   useEffect(() => {
-    if (location.state?.tab && location.state.tab !== activeTab) {
-      setActiveTab(location.state.tab);
+    const params = new URLSearchParams(location.search);
+    const tabFromUrlOrState = (params.get("tab") as TabType) || location.state?.tab;
+    if (tabFromUrlOrState && tabFromUrlOrState !== activeTab) {
+      setActiveTab(tabFromUrlOrState);
     }
-  }, [location.state?.tab]);
+  }, [location.search, location.state?.tab]);
+
+  const focusAddress = searchParams.get("focus") === "address" || location.state?.focus === "address";
   const isWalkthroughActive = useTourStore((state) => state.isWalkthroughActive);
   const currentStepIndex = useTourStore((state) => state.currentStepIndex);
   const currentTourStep = isWalkthroughActive ? WALKTHROUGH_STEPS[currentStepIndex] : null;
@@ -146,6 +152,8 @@ export default function UserSettings() {
         setUsername(fetchedUsername);
         setAddress(fetchedAddress);
         setEmail(fetchedEmail);
+        setPassword("");
+        setConfirmPassword("");
 
         setInitialValues({
           username: fetchedUsername,
@@ -357,8 +365,12 @@ export default function UserSettings() {
             </div>
           </div>
           {isDirty && (
-            <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 animate-pulse">
-              ● Unsaved Changes Detected
+            <span className="inline-flex items-center gap-2 text-xs font-semibold px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 shadow-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span>Unsaved Changes Detected</span>
             </span>
           )}
         </div>
@@ -415,6 +427,8 @@ export default function UserSettings() {
               >
                 {activeTab === "account" && (
                   <UserSettingsAccountDetails
+                    isLoading={loading}
+                    highlightAddress={focusAddress}
                     fullName={fullName}
                     birthdate={birthdate}
                     username={username}
