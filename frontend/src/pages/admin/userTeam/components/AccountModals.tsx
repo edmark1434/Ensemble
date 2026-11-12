@@ -258,7 +258,7 @@ export function ConfirmStatusModal({
     >
       <p className="text-sm text-zinc-300">
         {action === 'ban'
-          ? 'They can sign in only to file an appeal and view their tickets and disputes.'
+          ? 'They can sign in only to file an appeal and view their tickets and disputes. Their open jobs, gigs and marketplace listings close, their pending proposals, orders and unsigned offers are withdrawn, and fees and offer escrow are refunded. Live contracts stay for staff to resolve.'
           : action === 'suspend'
             ? 'They stay signed in and can read the whole platform. Every other action stays off.'
             : action === 'timeout'

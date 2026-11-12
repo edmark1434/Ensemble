@@ -490,11 +490,17 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
             `, [client_account_id]);
 
             if (escrowWalletRes.rows[0] && personalWalletRes.rows[0]) {
-                await client.query(`
+                const debited = await client.query(`
                     UPDATE wallets
                     SET balance_credits = balance_credits - $1
                     WHERE wallet_id = $2 AND balance_credits >= $1
+                    RETURNING wallet_id
                 `, [transferAmount, escrowWalletRes.rows[0].wallet_id]);
+                // Without this the refund was credited even when the escrow debit did not
+                // happen, creating credits out of nothing.
+                if (!debited.rows.length) {
+                    throw new Error('Client escrow balance is lower than this offer. Nothing was refunded.');
+                }
 
                 await client.query(`
                     UPDATE wallets

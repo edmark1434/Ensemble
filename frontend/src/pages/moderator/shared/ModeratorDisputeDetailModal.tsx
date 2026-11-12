@@ -1912,7 +1912,8 @@ export default function ModeratorDisputeDetailModal({
               ) : resolveMode === "ban" ? (
                 <>
                   This bans @{dispute.respondent.username} permanently, posts the reason in the
-                  discussion, and closes the case.
+                  discussion, and closes the case. Their open jobs, gigs and listings close and their
+                  pending proposals and orders are withdrawn. Live contracts stay for staff.
                 </>
               ) : resolveMode === "dismiss" ? (
                 <>

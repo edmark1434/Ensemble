@@ -1385,8 +1385,21 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     console.warn('Failed to broadcast account status change:', notifyErr.message);
   }
 
+  // A banned account's open jobs, gigs and listings close, so no one keeps applying to,
+  // ordering from or buying from it. Every ban path (Users desk, dispute ban, report ban)
+  // comes through here. The ban is already saved; clean-up problems are reported, not fatal.
+  let banCleanup = null;
+  if (status === 'Banned') {
+    try {
+      const { closeBannedAccountListings } = require('../services/BanCleanupServices');
+      banCleanup = await closeBannedAccountListings(accountId, { staffId });
+    } catch (cleanupErr) {
+      console.error('Ban clean-up failed:', cleanupErr.message);
+      banCleanup = { failures: [{ step: 'all', id: null, message: cleanupErr.message }] };
+    }
+  }
 
-  return { accountId, status, previousStatus: account.status, suspensionEndsAt };
+  return { accountId, status, previousStatus: account.status, suspensionEndsAt, banCleanup };
 }
 
 async function updateAccountVerification(accountId, action, staffId, _options = {}) {

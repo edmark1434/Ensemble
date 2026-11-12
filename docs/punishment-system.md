@@ -404,10 +404,14 @@ When standing changes, **do not strand the other party or their credits.** Warni
 
 | Situation | What happens |
 |---|---|
-| Open job, owner suspended/banned | Staff or job expire-now path closes it. Application-window refund rules already in the jobs engine still run. |
+| Open job, owner banned | Closed automatically by the ban. Open applicants' proposal fees are refunded and their proposals closed; with no applicants the posting fee is refunded (the jobs engine's own rule). |
+| Open job, owner suspended | Stays open; staff may close it. |
+| Unsigned job offer, either side banned | Withdrawn automatically through the normal reject path; the client's escrow returns to their Account Wallet. |
+| Gig, seller banned | Closed automatically; unconfirmed orders are cancelled and the clients notified (no credits are held before confirmation). |
+| Pending proposals / gig orders by a banned member | Withdrawn automatically so no one can hire them. Proposal fees follow the normal withdraw rule. |
 | Live contract, party suspended | They cannot write. Other party can file a ticket/dispute. Staff may extend deadlines or cancel with escrow rules. |
-| Live contract, party banned | Staff resolve via dispute/escrow. Ban does not silently keep money. |
-| Published asset, creator banned | Staff unpublish. Buyers keep purchased originals. New purchases disabled. |
+| Live contract, party banned | Staff resolve via dispute/escrow. Ban does not silently keep money. The ban clean-up counts these for staff and leaves them untouched. |
+| Published or pending asset, creator banned | Delisted automatically (note: removed because the account was banned). Buyers keep purchased originals. New purchases stop. |
 | Personal or team editor project, Suspend/Ban/Lock | Editor stops. Staff handle any live paid work on the related contract. |
 
 ---
@@ -500,6 +504,7 @@ Implementation rules (enforced in code):
 - Every standing action — warn, timeout, suspend, lock, ban, restore, pardon, rescind, credit adjustment — refuses to act on the actor's own account, and only an Admin may act on another staff account (`assertCanSanctionTarget` in `backend/lib/SuspendGuards.js`).
 - Status changes must match the current standing: unsuspend only lifts a suspension, unlock a lock, unban a ban. A banned account can only be changed by Admin or Support, so a specialist moderator cannot lift a ban through unsuspend/unlock or a suspension.
 - The 20-point auto-suspend never writes Suspended over a ban or lock.
+- Every ban (Users desk, dispute conviction, report sanction) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. Lifting the ban does not reopen anything — the member reposts, or reopens a closed gig. Locks and suspensions do not run it.
 - Report decisions follow the same role rules: specialist moderators may warn or suspend from a report, only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice.
 - Expired bans, locks, suspensions and warnings lift in a one-minute background job (`reconcileExpiredStandings`), which records the lift and notifies the member, as well as on the member's own next request.
 - Suspended members may open and answer an **appeal ticket** (and nothing else on tickets), the same as banned and locked members. Their banner links to `/account/appeal`; so does the forum-timeout banner.
