@@ -1,4 +1,4 @@
-const forum = require('../services/AdminForumServices');
+const forum = require('../services/ForumContentModerationServices');
 
 function sendError(res, err, fallback) {
   const status = err?.statusCode || (String(err?.message || '').includes('MongoDB') ? 503 : 500);
@@ -9,7 +9,10 @@ function sendError(res, err, fallback) {
 
 async function getAdminForumGroups(req, res) {
   try {
-    const data = await forum.listAdminForumGroups();
+    const data = await forum.listForumGroupsForStaff({
+      search: req.query.search,
+      status: req.query.status,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     sendError(res, err, 'Failed to load forum groups');
@@ -18,7 +21,7 @@ async function getAdminForumGroups(req, res) {
 
 async function getAdminForumGroup(req, res) {
   try {
-    const data = await forum.getAdminForumGroup(req.params.groupId);
+    const data = await forum.getForumGroupForStaff(req.params.groupId);
     if (!data) return res.status(404).json({ success: false, message: 'Group not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -28,7 +31,7 @@ async function getAdminForumGroup(req, res) {
 
 async function patchAdminForumGroup(req, res) {
   try {
-    const data = await forum.updateAdminForumGroup(req.params.groupId, req.body || {});
+    const data = await forum.setForumGroupVisibility(req.params.groupId, req.body || {}, req.session);
     res.status(200).json({
       success: true,
       data,
@@ -41,7 +44,12 @@ async function patchAdminForumGroup(req, res) {
 
 async function patchAdminForumMember(req, res) {
   try {
-    const data = await forum.updateAdminForumMember(req.params.groupId, req.params.memberId, req.body || {});
+    const data = await forum.banForumGroupMember(
+      req.params.groupId,
+      req.params.memberId,
+      req.body || {},
+      req.session
+    );
     res.status(200).json({
       success: true,
       data,
@@ -54,9 +62,10 @@ async function patchAdminForumMember(req, res) {
 
 async function getAdminForumDiscussions(req, res) {
   try {
-    const data = await forum.listAdminForumDiscussions({
+    const data = await forum.listForumDiscussionsForStaff({
       groupId: req.query.groupId,
       search: req.query.search,
+      status: req.query.status,
     });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -66,7 +75,7 @@ async function getAdminForumDiscussions(req, res) {
 
 async function getAdminForumDiscussion(req, res) {
   try {
-    const data = await forum.getAdminForumDiscussion(req.params.discussionId);
+    const data = await forum.getForumDiscussionForStaff(req.params.discussionId);
     if (!data) return res.status(404).json({ success: false, message: 'Discussion not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -76,7 +85,11 @@ async function getAdminForumDiscussion(req, res) {
 
 async function patchAdminForumDiscussion(req, res) {
   try {
-    const data = await forum.updateAdminForumDiscussion(req.params.discussionId, req.body || {});
+    const data = await forum.setForumDiscussionState(
+      req.params.discussionId,
+      req.body || {},
+      req.session
+    );
     res.status(200).json({ success: true, data, message: 'Discussion updated' });
   } catch (err) {
     sendError(res, err, 'Failed to update discussion');
@@ -85,7 +98,11 @@ async function patchAdminForumDiscussion(req, res) {
 
 async function deleteAdminForumComment(req, res) {
   try {
-    const data = await forum.removeAdminForumComment(req.params.discussionId, req.params.commentId);
+    const data = await forum.removeForumComment(
+      req.params.discussionId,
+      req.params.commentId,
+      req.session
+    );
     res.status(200).json({ success: true, data, message: 'Comment removed' });
   } catch (err) {
     sendError(res, err, 'Failed to remove comment');
