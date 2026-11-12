@@ -124,12 +124,34 @@ interface CreditTransaction {
   referenceTable: string | null;
   referenceId: string | null;
   isCreditPurchase: boolean;
+  /** Set on credits that are on their way but not paid yet (e.g. a dispute payout). */
+  pending?: {
+    kind: "dispute_payout";
+    disputeId: string;
+    disputeNumber: string | null;
+    releaseAt: string | null;
+    paused: boolean;
+    failed: boolean;
+  } | null;
 }
 
 interface WalletSummary {
   availableCredits: number;
   escrowCredits: number;
   frozenCredits: number;
+  /** Dispute payouts scheduled to land in this account; not part of any balance yet. */
+  pendingCredits?: number;
+}
+
+function pendingLine(transaction: CreditTransaction) {
+  const pending = transaction.pending;
+  if (!pending) return null;
+  if (pending.failed) return "Delayed";
+  if (pending.paused) return "On hold";
+  if (!pending.releaseAt) return null;
+  const date = new Date(pending.releaseAt);
+  if (!Number.isFinite(date.getTime())) return null;
+  return `Arrives ${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
 interface CreditTransactionsResponse {
@@ -588,7 +610,10 @@ export const TransactionHistoryMain = () => {
   const typeTotals = useMemo(
     () =>
       types.map((type) => {
-        const matching = transactions.filter((transaction) => transactionCategory(transaction) === type);
+        // Payouts still on their way have not moved any credits yet.
+        const matching = transactions.filter(
+          (transaction) => !transaction.pending && transactionCategory(transaction) === type
+        );
         return {
           type,
           count: matching.length,
@@ -832,7 +857,9 @@ export const TransactionHistoryMain = () => {
                 </div>
                 <div className="flex h-7 items-start">
                   <p className="text-[11px] leading-snug text-gray-500 dark:text-zinc-500 line-clamp-2">
-                    Reserved in Escrow
+                    {walletSummary?.pendingCredits
+                      ? `Reserved in Escrow · ${credits(walletSummary.pendingCredits)} on the way to you`
+                      : "Reserved in Escrow"}
                   </p>
                 </div>
               </div>
@@ -1422,6 +1449,11 @@ export const TransactionHistoryMain = () => {
                             >
                               {formatStatus(transaction.status)}
                             </span>
+                            {pendingLine(transaction) ? (
+                              <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-300">
+                                {pendingLine(transaction)}
+                              </p>
+                            ) : null}
                           </td>
                         </tr>
                       );
@@ -1653,8 +1685,22 @@ export const TransactionHistoryMain = () => {
                   mono
                   copyable
                 />
+                {selectedTransaction.pending ? (
+                  <DetailItem
+                    label="Arrives"
+                    value={
+                      selectedTransaction.pending.failed
+                        ? "Delayed — staff are completing it"
+                        : selectedTransaction.pending.paused
+                          ? "On hold while the dispute is reviewed again"
+                          : selectedTransaction.pending.releaseAt
+                            ? new Date(selectedTransaction.pending.releaseAt).toLocaleString()
+                            : "—"
+                    }
+                  />
+                ) : null}
                 <DetailItem
-                  label="Transaction ID"
+                  label={selectedTransaction.pending ? "Payout ID" : "Transaction ID"}
                   value={selectedTransaction.id}
                   mono
                   copyable

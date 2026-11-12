@@ -69,4 +69,52 @@ async function assertCanSuspendTarget({
   throw forbid('Only an admin can suspend this staff account');
 }
 
-module.exports = { assertCanSuspendTarget };
+const ACTION_WORDS = {
+  ban: 'ban',
+  lock: 'lock',
+  suspend: 'suspend',
+  timeout: 'time out',
+  warn: 'warn',
+  pardon: 'pardon',
+  rescind: 'rescind a warning on',
+  restore: 'change the standing of',
+  credits: 'change the credits of',
+};
+
+/**
+ * Every standing action, not just suspension, follows the same two rules:
+ *  - nobody acts on their own account (no self-pardon, self-rescind, self-credit, self-ban), and
+ *  - only an Admin acts on another staff member's account.
+ * @param {{ actorStaffId?: string|null, actorAccountId?: string|null, targetAccountId: string, action?: string }} input
+ */
+async function assertCanSanctionTarget({
+  actorStaffId = null,
+  actorAccountId = null,
+  targetAccountId = null,
+  action = 'restore',
+} = {}) {
+  const word = ACTION_WORDS[action] || ACTION_WORDS.restore;
+  const actor = actorStaffId
+    ? await loadStaffById(actorStaffId)
+    : await loadStaffByAccount(actorAccountId);
+  const target = await loadStaffByAccount(targetAccountId);
+
+  const actorAccount = actor?.account_id || actorAccountId || null;
+  if (actorAccount && targetAccountId && String(actorAccount) === String(targetAccountId)) {
+    throw forbid(`You cannot ${word} your own account`);
+  }
+  if (!target) return;
+  if (actor?.staff_id && String(actor.staff_id) === String(target.staff_id)) {
+    throw forbid(`You cannot ${word} your own account`);
+  }
+  if (String(actor?.role || '') === STAFF_ROLE.ADMIN) return;
+  throw forbid(`Only an admin can ${word} a staff account`);
+}
+
+/** Role of the staff member acting, for rules that depend on it. */
+async function staffRoleOf(staffId) {
+  const staff = await loadStaffById(staffId);
+  return staff?.role || null;
+}
+
+module.exports = { assertCanSuspendTarget, assertCanSanctionTarget, staffRoleOf };

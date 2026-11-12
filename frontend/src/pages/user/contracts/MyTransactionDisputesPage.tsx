@@ -55,6 +55,10 @@ type DisputeRow = {
   canAddInformation?: boolean;
   updatedAt?: string;
   chatId?: string | null;
+  /** A private case shown to the disputee only because a money ruling touched them. */
+  limited?: boolean;
+  contractTitle?: string | null;
+  outcomeLabel?: string | null;
 };
 
 const MAX_LENGTH = 2000;
@@ -299,7 +303,13 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-zinc-400">
           <span className="font-semibold">{dispute.number || "Dispute"}</span>
           <span className="text-gray-300 dark:text-zinc-600">·</span>
-          <span>{dispute.filedByMe ? "Filed by you" : "You are named in this dispute"}</span>
+          <span>
+            {dispute.filedByMe
+              ? "Filed by you"
+              : dispute.limited
+                ? "Decided by staff — you are the other party"
+                : "You are named in this dispute"}
+          </span>
           <span className="ml-auto flex items-center gap-1.5">
             <VisibilityPill isPublic={publicDiscussion} />
             <StatusPill status={dispute.status} />
@@ -313,6 +323,15 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           {dispute.reason && dispute.reason !== dispute.title ? (
             <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-zinc-400">
               {dispute.reason}
+            </p>
+          ) : null}
+          {dispute.limited ? (
+            <p className="mt-1 text-sm text-gray-600 dark:text-zinc-400">
+              The other party filed a private dispute
+              {dispute.contractTitle ? ` about your contract “${dispute.contractTitle}”` : " about your contract"}.
+              Staff ruled on it{dispute.outcomeLabel ? ` (${dispute.outcomeLabel.toLowerCase()})` : ""}, and it
+              affects your credits, so you can see the outcome here. The complaint and its discussion stay
+              private. Contact Support if you want to appeal.
             </p>
           ) : null}
         </div>
@@ -335,7 +354,9 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
               {dispute.filedByMe ? "Staff are reviewing your dispute" : "Waiting for staff"}
             </span>
           ) : (
-            <span className="text-xs text-gray-500 dark:text-zinc-500">Closed before it was made public</span>
+            <span className="text-xs text-gray-500 dark:text-zinc-500">
+              {dispute.limited ? "Decided privately" : "Closed before it was made public"}
+            </span>
           )}
         </div>
       </div>

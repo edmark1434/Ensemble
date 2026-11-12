@@ -495,6 +495,17 @@ active warning points reach 20
 - `CheckSession` already enforces ban/lock/suspend/timeout. Keep that as the standing gate. Warning-point bands are additional guards in [warning-system.md](warning-system.md).
 - Record activity must include `ACCOUNT_WARNED`, `VIOLATION_ISSUED`, `WARNING_ISSUED`, `ACCOUNT_PARDONED`.
 
+Implementation rules (enforced in code):
+
+- Every standing action — warn, timeout, suspend, lock, ban, restore, pardon, rescind, credit adjustment — refuses to act on the actor's own account, and only an Admin may act on another staff account (`assertCanSanctionTarget` in `backend/lib/SuspendGuards.js`).
+- Status changes must match the current standing: unsuspend only lifts a suspension, unlock a lock, unban a ban. A banned account can only be changed by Admin or Support, so a specialist moderator cannot lift a ban through unsuspend/unlock or a suspension.
+- The 20-point auto-suspend never writes Suspended over a ban or lock.
+- Report decisions follow the same role rules: specialist moderators may warn or suspend from a report, only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice.
+- Expired bans, locks, suspensions and warnings lift in a one-minute background job (`reconcileExpiredStandings`), which records the lift and notifies the member, as well as on the member's own next request.
+- Suspended members may open and answer an **appeal ticket** (and nothing else on tickets), the same as banned and locked members. Their banner links to `/account/appeal`; so does the forum-timeout banner.
+- Appeals: filing needs an active penalty (standing, forum timeout, or active warning). Only Admin or the assigned Support Moderator decides, under a row lock, never on their own account. Accepting ends a ban/lock/suspension and any forum timeout within 24 hours, never later than it would have ended anyway. Warnings are not lifted by an accepted appeal; rescind them. A 12-month denial hold does not block appealing a penalty issued after that denial.
+- Undecided appeal tickets cannot be closed by a status change, a scheduled close, or the inactivity auto-close; they end only with a decision. Inactivity auto-close only applies when staff replied last.
+
 Build order (punishment slice):
 
 1. Record event codes, Restriction views show live standing + warning points + auto-locks.

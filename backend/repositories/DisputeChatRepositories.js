@@ -855,6 +855,28 @@ async function broadcastInboxDisputeMessage(io, event, message) {
   return true;
 }
 
+/**
+ * A private case is the filer's until staff make it public — except that once a money ruling
+ * moves the disputee's credits or ends their contract, they may see that it happened. This
+ * view gives them the case number, the contract, the outcome and the payouts only: never the
+ * complaint, its title, or the discussion.
+ */
+function isLimitedDisputeeView(row, accountId) {
+  return Boolean(
+    accountId &&
+      !row.visibility &&
+      String(row.for_account_id) === String(accountId) &&
+      String(row.by_account_id) !== String(accountId) &&
+      row.financial_resolution_at
+  );
+}
+
+function financialOutcomeLabel(kind) {
+  if (kind === 'escrow_settle') return 'Escrow settled';
+  if (kind === 'transaction_reverse') return 'Transaction reversed';
+  return null;
+}
+
 function mapDisputeSummary(row, accountId) {
   const filedByMe = Boolean(accountId && String(row.by_account_id) === String(accountId));
   const namesMe = Boolean(
@@ -862,34 +884,59 @@ function mapDisputeSummary(row, accountId) {
   );
   const closed = String(row.status || '').toLowerCase() === 'closed';
   const visibility = Boolean(row.visibility);
+  const limited = isLimitedDisputeeView(row, accountId);
   return {
     viewerRole: filedByMe ? 'disputer' : namesMe ? 'disputee' : null,
     id: row.dispute_id,
     number: row.dispute_number,
-    title: row.title || row.description,
+    // The title carries the filer's complaint headline, so the limited view replaces it.
+    title: limited ? `Dispute ${row.dispute_number || ''}`.trim() : row.title || row.description,
     type: row.type,
     status: row.status,
-    reason: row.description || null,
+    reason: limited ? null : row.description || null,
     visibility,
     filedByMe,
     canAddInformation: filedByMe && !visibility && !closed,
+    limited,
+    contractTitle: limited ? row.contract_title || null : undefined,
+    outcomeLabel: financialOutcomeLabel(row.financial_resolution_kind),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+const CONTRACT_TITLE_SQL = `
+  (
+    SELECT COALESCE(j.title, g.title)
+    FROM contracts c
+    LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+    LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+    LEFT JOIN jobs j ON j.job_id = p.job_id
+    LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+    LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+    LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+    LEFT JOIN gigs g ON g.gig_id = gt.gig_id
+    WHERE c.contract_id = d.contract_id
+    LIMIT 1
+  )
+`;
+
 async function listAccountDisputes(accountId) {
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, title, type, status, description, visibility,
-           by_account_id, for_account_id, created_at, updated_at
-    FROM disputes
-    WHERE deleted_at IS NULL
+    SELECT d.dispute_id, d.dispute_number, d.title, d.type, d.status, d.description, d.visibility,
+           d.by_account_id, d.for_account_id, d.created_at, d.updated_at,
+           d.financial_resolution_at, d.financial_resolution_kind,
+           ${CONTRACT_TITLE_SQL} AS contract_title
+    FROM disputes d
+    WHERE d.deleted_at IS NULL
       AND (
-        by_account_id = $1
-        OR (for_account_id = $1 AND visibility IS TRUE)
+        d.by_account_id = $1
+        OR (d.for_account_id = $1 AND d.visibility IS TRUE)
+        -- A private case shows up for the disputee once a money ruling touches them.
+        OR (d.for_account_id = $1 AND d.financial_resolution_at IS NOT NULL)
       )
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+    ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC
     `,
     [accountId]
   );
@@ -1024,13 +1071,16 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
 async function getAccountDispute(disputeId, accountId) {
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, title, type, status, description, visibility, by_account_id, for_account_id, created_at, updated_at
-    FROM disputes
-    WHERE dispute_id = $1
-      AND deleted_at IS NULL
+    SELECT d.dispute_id, d.dispute_number, d.title, d.type, d.status, d.description, d.visibility,
+           d.by_account_id, d.for_account_id, d.created_at, d.updated_at,
+           d.financial_resolution_at, d.financial_resolution_kind,
+           ${CONTRACT_TITLE_SQL} AS contract_title
+    FROM disputes d
+    WHERE d.dispute_id = $1
+      AND d.deleted_at IS NULL
       AND (
-        by_account_id = $2
-        OR for_account_id = $2
+        d.by_account_id = $2
+        OR d.for_account_id = $2
       )
     `,
     [disputeId, accountId]
@@ -1040,6 +1090,16 @@ async function getAccountDispute(disputeId, accountId) {
   const filer = String(row.by_account_id) === String(accountId);
   const isRespondent = String(row.for_account_id) === String(accountId);
   const isParty = filer || isRespondent;
+  if (isLimitedDisputeeView(row, accountId)) {
+    // Outcome and payouts only. No complaint, no discussion, no chat id to join.
+    return {
+      ...mapDisputeSummary(row, accountId),
+      decidedAt: row.financial_resolution_at,
+      settlement: await getDisputeSettlementForParty(disputeId, accountId),
+      chatId: null,
+      messages: [],
+    };
+  }
   if (!row.visibility && !filer) return null;
   const chatId = await getDisputeChatId(disputeId);
   const messages = (await listDisputeMessages(chatId)).filter((message) =>

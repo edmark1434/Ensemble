@@ -2215,6 +2215,12 @@ export default function ModeratorDisputeDetailModal({
                     {dispute.visibility ? " for both parties" : " for the disputer (the case is private)"}, and
                     both sides are notified.
                   </li>
+                  {!dispute.visibility ? (
+                    <li>
+                      @{dispute.respondent.username} gets a limited view in their disputes list: the case
+                      number, contract, outcome and payouts. Not the complaint, your notes, or the discussion.
+                    </li>
+                  ) : null}
                 </ul>
               </>
             ) : null}
