@@ -313,9 +313,11 @@ export default function RouteMiddleware() {
         && onboardingGate.accountId === resolvedAccountId
         && onboardingGate.verificationFailed;
 
-    // Member auth screens must stay reachable while a staff cookie is present so
-    // someone leaving staff.ensemble.software can switch to a user account.
+    // The landing page and member auth screens must stay reachable while a staff
+    // cookie is present so someone leaving staff.ensemble.software can switch to
+    // a user account. Signing in as a member replaces the shared session.
     const isMemberAuthEntryPath =
+        location.pathname === '/' ||
         location.pathname === '/login' ||
         location.pathname === '/signup' ||
         location.pathname === '/forgot-password' ||
@@ -440,7 +442,8 @@ export default function RouteMiddleware() {
         return createElement(DeactivatedAccountScreen);
     }
 
-    if (shouldAutoRedirect && !isLocalSignOutTransition && (redirectPath || resolvedUser)) {
+    const staffOnMemberEntry = resolvedUser?.type === 'Staff' && isMemberAuthEntryPath;
+    if (shouldAutoRedirect && !isLocalSignOutTransition && (redirectPath || (resolvedUser && !staffOnMemberEntry))) {
         return createElement(RouteLoadingShell);
     }
 
