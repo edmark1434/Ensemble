@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, 
 import {
   AlertTriangle,
   CheckCircle2,
-  Eye,
   FileWarning,
   Gavel,
   LayoutGrid,
@@ -693,6 +692,7 @@ function CasesPreview({
       <CasesTableBody
         cases={preview}
         emptyLabel="No open reports, listing reviews, or identity checks."
+        onView={() => onViewAll()}
       />
     </section>
   );
@@ -882,7 +882,7 @@ function CasesTableBody({
   onDelete?: (c: ModerationCase) => void;
   onAssignMyself?: (c: ModerationCase) => void;
 }) {
-  const showActions = Boolean(onView || onDelete || onAssignMyself);
+  const showActions = Boolean(onDelete || onAssignMyself);
   const colSpan = showActions ? 7 : 6;
   const isMine = (c: ModerationCase) =>
     currentStaffId != null &&
@@ -905,7 +905,13 @@ function CasesTableBody({
         </thead>
         <tbody>
           {cases.map((c) => (
-            <tr key={c.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+            <tr
+              key={c.id}
+              onClick={onView ? () => onView(c) : undefined}
+              className={`border-b border-white/[0.04] hover:bg-white/[0.02] ${
+                onView ? 'cursor-pointer' : ''
+              }`}
+            >
               <td className="px-4 py-3 text-zinc-300">{c.type}</td>
               <td className="px-4 py-3">
                 <p className="font-medium text-white">{c.target}</p>
@@ -933,18 +939,8 @@ function CasesTableBody({
               </td>
               <td className="px-4 py-3 text-xs text-zinc-500">{formatDateTime(c.openedAt)}</td>
               {showActions && (
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-1">
-                    {onView && (
-                      <button
-                        type="button"
-                        title="View details"
-                        onClick={() => onView(c)}
-                        className="rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                    )}
                     {onAssignMyself && c.canAssignMyself && !isMine(c) && (
                       <button
                         type="button"
@@ -1255,7 +1251,14 @@ function ModeratorsSection({
               </thead>
               <tbody>
                 {filtered.map((m) => (
-                  <tr key={String(m.id)} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                  <tr
+                    key={String(m.id)}
+                    onClick={() => {
+                      setSelected(m);
+                      setModal('edit');
+                    }}
+                    className="cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02]"
+                  >
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{m.name}</p>
                       <p className="text-[10px] text-zinc-600">
@@ -1284,7 +1287,7 @@ function ModeratorsSection({
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-white">
                       {m.performanceScore}%
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <ModeratorRowMenu
                         busy={busyId === m.id}
                         active={m.active}

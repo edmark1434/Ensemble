@@ -469,11 +469,12 @@ export default function UsersTab({
                 return (
                   <tr
                     key={String(user.id)}
-                    className={`border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
+                    onClick={() => open(user, 'overview')}
+                    className={`cursor-pointer border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
                       isChecked ? 'bg-rose-500/[0.07]' : ''
                     }`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -493,7 +494,7 @@ export default function UsersTab({
                     <td className="px-4 py-3">{user.status}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.lastSeenAt)}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.joinedAt)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <RowActionsMenu
                         status={user.status}
                         items={buildRowActionItems(user.status, {

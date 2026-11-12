@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Clock,
   Coins,
-  Eye,
   FileSignature,
   FileText,
   Gem,
@@ -1237,17 +1236,16 @@ export default function JobsGigsControl({
                   const key = `${p.type}-${p.id}`;
                   const saving = savingKey === key;
                   return (
-                    <tr key={key} className="group transition hover:bg-white/[0.03]">
+                    <tr
+                      key={key}
+                      onClick={() => setSelectedPosting(p)}
+                      className="group cursor-pointer transition hover:bg-white/[0.03]"
+                    >
                       <td className="py-3 pl-2 font-mono text-[11px] text-zinc-400">{p.postNumber}</td>
                       <td className="max-w-[240px] py-3 pr-3">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPosting(p)}
-                          className="block max-w-full truncate text-left font-medium text-zinc-200 underline-offset-2 transition hover:text-emerald-300 hover:underline"
-                          title={p.title}
-                        >
+                        <p className="max-w-full truncate font-medium text-zinc-200 underline-offset-2 group-hover:text-emerald-300 group-hover:underline" title={p.title}>
                           {p.title}
-                        </button>
+                        </p>
                         {p.tags.length > 0 && (
                           <p className="mt-1 flex max-w-full flex-wrap gap-1">
                             {p.tags.slice(0, 3).map((t) => (
@@ -1259,7 +1257,7 @@ export default function JobsGigsControl({
                           </p>
                         )}
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
                         <AuthorCell name={p.author.name} handle={p.author.handle} onClick={() => setHistoryAccountId(p.author.accountId)} />
                       </td>
                       <td className="py-3 pr-3">
@@ -1288,16 +1286,8 @@ export default function JobsGigsControl({
                           {relativeTime(p.createdAt)}
                         </span>
                       </td>
-                      <td className="py-3 pr-2">
+                      <td className="py-3 pr-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPosting(p)}
-                            title="View details"
-                            className="rounded-lg border border-white/10 p-1.5 text-zinc-400 transition hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
                           <button
                             type="button"
                             onClick={() => setHistoryAccountId(p.author.accountId)}

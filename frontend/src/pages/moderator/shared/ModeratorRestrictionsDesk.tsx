@@ -992,30 +992,43 @@ export default function ModeratorRestrictionsDesk({
                 />
               ) : (
                 <ol className="space-y-0">
-                  {filteredActivity.map((item, index) => (
-                    <li key={item.id} className="relative flex gap-3 pb-4">
-                      <div className="flex w-3 shrink-0 flex-col items-center">
-                        <span className={`mt-1.5 h-2 w-2 rounded-full ${ACCENT_DOT[accent]}`} />
-                        {index < filteredActivity.length - 1 ? <span className="mt-1 w-px flex-1 bg-white/10" /> : null}
-                      </div>
-                      <div className="min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-white">{item.action}</p>
-                          <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-                            {titleCaseWords(item.eventCode)}
-                          </span>
+                  {filteredActivity.map((item, index) => {
+                    const account =
+                      data?.restrictedAccounts.find((row) => row.accountId === item.accountId) ||
+                      data?.violations.find((row) => row.account.accountId === item.accountId)?.account ||
+                      null;
+                    return (
+                      <li key={item.id} className="relative flex gap-3 pb-4">
+                        <div className="flex w-3 shrink-0 flex-col items-center">
+                          <span className={`mt-1.5 h-2 w-2 rounded-full ${ACCENT_DOT[accent]}`} />
+                          {index < filteredActivity.length - 1 ? <span className="mt-1 w-px flex-1 bg-white/10" /> : null}
                         </div>
-                        <p className="mt-1 text-xs text-zinc-400">
-                          {item.accountName || item.accountHandle || shortId(item.accountId)}
-                          {item.actorName ? ` · ${item.actorName}` : ''}
-                          {item.actorRole ? ` · ${titleCaseWords(item.actorRole)}` : ''}
-                        </p>
-                        <p className="mt-2 text-[11px] text-zinc-500" title={formatDateTime(item.createdAt)}>
-                          {relativeTime(item.createdAt)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
+                        <button
+                          type="button"
+                          disabled={!account}
+                          onClick={() => account && focusAccount(account, 'standing')}
+                          className={`min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-3 text-left transition ${
+                            account ? 'cursor-pointer hover:border-white/15 hover:bg-white/[0.03]' : 'cursor-default'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-white">{item.action}</p>
+                            <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+                              {titleCaseWords(item.eventCode)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            {item.accountName || item.accountHandle || shortId(item.accountId)}
+                            {item.actorName ? ` · ${item.actorName}` : ''}
+                            {item.actorRole ? ` · ${titleCaseWords(item.actorRole)}` : ''}
+                          </p>
+                          <p className="mt-2 text-[11px] text-zinc-500" title={formatDateTime(item.createdAt)}>
+                            {relativeTime(item.createdAt)}
+                          </p>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </div>

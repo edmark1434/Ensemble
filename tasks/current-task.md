@@ -1,12 +1,17 @@
-# Active Task: Block self-suspend and moderator-on-moderator suspend
+# Active Task: Staff host must not trap member login
 
 ## Implementation Objective
 
-Stop an admin from suspending their own account. Stop moderators from suspending other moderators or admin accounts. Only an admin can suspend a moderator.
+On `staff.ensemble.software`, choosing the member/user login path must reach
+the platform login on the main site. An existing staff session must not bounce
+the browser back into the staff desk.
 
 ## Acceptance Criteria
 
-- [x] Backend rejects suspending your own account from user standing and the staff roster.
-- [x] Backend rejects a non-admin suspending a moderator or admin account.
-- [x] User, restrictions, report, and staff-roster UIs hide those suspend actions.
-- [ ] Frontend typecheck passes (run when asked).
+- [x] “Member login” from the staff portal opens the main-site member login.
+- [x] Visiting `/login` (and signup/forgot/reset) on the main site with a staff
+      session does not auto-redirect to the staff desk.
+- [x] Already-signed-in staff on the portal login see Continue vs Member login
+      instead of a silent redirect.
+- [x] Staff can still reach their desk from Continue / successful staff login.
+- [x] Admin session handling on the member site remains unchanged.

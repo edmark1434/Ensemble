@@ -338,7 +338,13 @@ export default function UserTeamOverviewTab({
             </thead>
             <tbody>
               {data.recentSignups.map((s) => (
-                <tr key={s.id} className="border-b border-white/[0.04] text-zinc-300">
+                <tr
+                  key={s.id}
+                  onClick={onGoUsers}
+                  className={`border-b border-white/[0.04] text-zinc-300 ${
+                    onGoUsers ? 'cursor-pointer hover:bg-white/[0.02]' : ''
+                  }`}
+                >
                   <td className="py-2.5 pr-4 font-medium text-white">{s.name}</td>
                   <td className="py-2.5 pr-4">@{s.username}</td>
                   <td className="py-2.5 pr-4">{s.status}</td>

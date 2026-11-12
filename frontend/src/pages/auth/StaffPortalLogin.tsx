@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Eye, EyeOff, Gem, Lock, Mail, Shield } from 'lucide-react';
@@ -97,20 +97,10 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
   const [error, setError] = useState('');
   const [restriction, setRestriction] = useState<AccountStanding | null>(null);
 
-  useEffect(() => {
-    if (user?.type !== 'Staff' || !user?.role) {
-      return;
-    }
-
-    if (portal === 'admin' && user.role === 'Admin') {
-      navigate(config.redirectPath(user.role), { replace: true });
-      return;
-    }
-
-    if (portal === 'staff' && user.role !== 'Admin') {
-      navigate(config.redirectPath(user.role), { replace: true });
-    }
-  }, [user, portal, navigate, config]);
+  const signedInForPortal =
+    user?.type === 'Staff' &&
+    Boolean(user?.role) &&
+    (portal === 'admin' ? user.role === 'Admin' : user.role !== 'Admin');
 
   const validate = () => {
     if (!loginIdentifier.trim()) {
@@ -190,6 +180,10 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
   const PortalIcon = portal === 'admin' ? Shield : Gem;
   const alternateHref = consoleEntryUrl(portal === 'admin' ? 'staff' : 'admin');
   const memberHome = mainSiteOrigin();
+  // Always land on the member login. A staff session on the shared cookie must
+  // not bounce “Back to Ensemble” straight back into the staff desk.
+  const memberLoginHref =
+    memberHome === window.location.origin ? '/login' : `${memberHome}/login`;
 
   return (
     <div
@@ -239,6 +233,33 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
             </div>
           ) : null}
 
+          {signedInForPortal ? (
+            <div className="mt-8 space-y-4">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
+                Signed in as{' '}
+                <span className="font-medium text-white">
+                  {user?.username || user?.email || 'staff'}
+                </span>
+                {user?.role ? (
+                  <span className="text-zinc-500"> · {user.role}</span>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(config.redirectPath(user?.role), { replace: true })}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition"
+                style={{ background: config.accent }}
+              >
+                Continue to {config.title}
+              </button>
+              <PortalLink
+                href={memberLoginHref}
+                className="flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-zinc-200 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+              >
+                Member login instead
+              </PortalLink>
+            </div>
+          ) : (
           <div className="mt-8 space-y-5">
             <label className="block">
               <span className="mb-2 block text-xs font-medium uppercase tracking-wider text-zinc-400">
@@ -301,6 +322,7 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </div>
+          )}
 
           <p className="mt-6 text-center text-sm text-zinc-500">
             {config.alternateLabel}{' '}
@@ -315,8 +337,8 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
         </div>
 
         <p className="mt-6 text-center text-xs text-zinc-600">
-          <PortalLink href={memberHome === window.location.origin ? '/' : `${memberHome}/`} className="transition hover:text-zinc-400">
-            ← Back to Ensemble
+          <PortalLink href={memberLoginHref} className="transition hover:text-zinc-400">
+            ← Member login
           </PortalLink>
         </p>
       </div>

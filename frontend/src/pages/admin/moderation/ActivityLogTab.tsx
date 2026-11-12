@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Eye,
   Loader2,
   RefreshCw,
   Search,
@@ -551,7 +550,6 @@ export function ActivityTable({
             <th className="px-4 py-3">Executed by</th>
             {compact ? null : <th className="px-4 py-3">Reference</th>}
             <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3 text-center">View</th>
           </tr>
         </thead>
         <tbody>
@@ -616,24 +614,11 @@ export function ActivityTable({
                   <p className="mt-0.5 text-[10px] text-zinc-600">by {entry.reversal.by}</p>
                 ) : null}
               </td>
-              <td className="px-4 py-3 text-center">
-                <button
-                  type="button"
-                  aria-label={`View details of ${entry.action}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onView(entry);
-                  }}
-                  className="rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-              </td>
             </tr>
           ))}
           {entries.length === 0 ? (
             <tr>
-              <td colSpan={compact ? 6 : 8} className="px-4 py-12 text-center text-zinc-500">
+              <td colSpan={compact ? 5 : 7} className="px-4 py-12 text-center text-zinc-500">
                 {emptyLabel}
               </td>
             </tr>
