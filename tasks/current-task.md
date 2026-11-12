@@ -1,19 +1,24 @@
-# Active Task: Joed AI Profile Introduction Underline Removal & Badge Rarities Redesign
+# Active Task: Profile Sidebar Merit, Ratings & Budget UI Refinements
 
 ## Implementation Objective
 
-1. Underline removal for Joed AI Profile Introductions:
-   - Updated `PROFILE_INTRO_SYSTEM_PROMPT` in `backend/services/ClaudeSupportServices.js` to strictly forbid generating underline tags (`<u>` or `</u>`) or markdown underlines, advising reliance exclusively on bold and italics for emphasis.
-   - Added automated sanitization in `generateProfileIntroductionDraft` to strip all `<u>` and `</u>` tags from the generated introduction string before returning it to the user.
-2. Tool & Platform Mentions:
-   - Forbid boilerplate third-party software bullets (Premiere Pro, After Effects, DaVinci Resolve) unless explicitly provided by the creator.
-   - Focus on Ensemble collaboration, pacing, sound design, and retention craft.
-3. Badge Rarities Popover Redesign:
-   - Rename to "Badge Rarities" with `Plus Jakarta Sans` font and concise, easy-to-read tier descriptions.
+1. **Platform Merit Section**:
+   - Reordered layout: Circular gauge on the left, Platform Merit label and status on the right.
+   - Removed "Starts at 100" text.
+   - Made the status text gray (`text-gray-700 dark:text-zinc-200`) and the `ShieldCheck` icon a bold, highly visible emerald green (`text-emerald-600 dark:text-emerald-400`).
+2. **Ratings Section**:
+   - Moved the Freelance sub-stat pill cleanly below the hero rating (`5.0 (1 review)`), giving the review count ample space without wrapping.
+3. **Planned Budget Section**:
+   - Removed the outer icon container on the left.
+   - Integrated the animated `CreditIcon` (dotlottie) alongside the budget credits amount and in the edit header.
+   - Styled the Planned Budget edit button to match the Account Badges edit button for visual consistency: an icon-only square button with matching subtle borders, neutral background, and hover rotation micro-interaction.
 
 ## Acceptance Criteria
 
-- [x] Underline rule removed from `PROFILE_INTRO_SYSTEM_PROMPT` and replaced with an explicit prohibition against underlines.
-- [x] Post-processing filter strips all `<u>` and `</u>` tags from generated introductions in [`ClaudeSupportServices.js`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/backend/services/ClaudeSupportServices.js).
-- [x] Boilerplate software bullets suppressed unless written by user.
-- [x] Badge Rarities tooltip updated with clean Plus Jakarta Sans styling and 1-line tier explanations.
+- [x] Circle gauge on left, Platform Merit on right in [`RatingsBudgetSideSection_ProfileDisplay.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/7_profile/Displays/RatingsBudgetSideSection_ProfileDisplay.tsx).
+- [x] "Starts at 100" removed.
+- [x] Merit band text in gray with visible dark/emerald green `ShieldCheck` icon.
+- [x] Freelance pill positioned below the hero rating.
+- [x] Left icon container removed from Budget section; animated `CreditIcon` integrated.
+- [x] Edit button on Planned Budget styled consistently with Account Badges edit button (`p-1.5 rounded-lg border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-all duration-200 cursor-pointer group/btn`).
+- [x] Plus Jakarta Sans typography preserved across all items.

@@ -307,19 +307,9 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
                       ({freelancerServiceCount + freelancerJobCount})
                     </td>
                     <td className="py-3 px-3 text-right">
-                      {freelancerServiceCount + freelancerJobCount === 0 ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500">
-                          No Reviews
-                        </span>
-                      ) : freelancerRating >= 4.8 ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          Exceptional
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                          Great
-                        </span>
-                      )}
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${freelancerTier.badgeClass}`}>
+                        {freelancerTier.label}
+                      </span>
                     </td>
                   </tr>
 
@@ -403,19 +393,9 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
                       ({clientServiceCount + clientJobCount})
                     </td>
                     <td className="py-3 px-3 text-right">
-                      {clientServiceCount + clientJobCount === 0 ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500">
-                          No Reviews
-                        </span>
-                      ) : clientRating >= 4.8 ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          Exceptional
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                          Great
-                        </span>
-                      )}
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${clientTier.badgeClass}`}>
+                        {clientTier.label}
+                      </span>
                     </td>
                   </tr>
 
@@ -563,8 +543,8 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
                       (0)
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-zinc-500">
-                        No Reviews
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${assetTier.badgeClass}`}>
+                        {assetTier.label}
                       </span>
                     </td>
                   </tr>
