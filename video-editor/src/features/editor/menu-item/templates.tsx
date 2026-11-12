@@ -62,7 +62,7 @@ function TemplateCard({ template, onOpen }: { template: MarketAssetBundle; onOpe
       <MarketPriceBadge credits={template.price_credits} className="absolute left-2 top-2" />
       <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/50 p-2.5 text-xs font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">{template.name}</span>
     </button>
-    <div className="absolute right-1 top-1"><MarketAssetActions bundle={template} menuOnly /></div>
+    <div className="absolute right-1 top-1"><MarketAssetActions bundle={template} menuOnly kind="template" /></div>
   </div>;
 }
 

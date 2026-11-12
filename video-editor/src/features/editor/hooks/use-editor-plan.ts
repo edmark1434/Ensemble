@@ -12,8 +12,13 @@ export function useEditorPlan() {
       return response.json() as Promise<{
         plan: "Free" | "Premium" | "Business";
         maxHeight: number;
+        maxFps: number;
+        planOptions: { plan: "Free" | "Premium" | "Business"; maxHeight: number; maxFps: number }[];
         upgradeUrl: string;
       }>;
     },
+    staleTime: 5_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 }

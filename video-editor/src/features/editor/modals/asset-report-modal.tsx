@@ -26,6 +26,7 @@ interface AssetReportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assetName: string;
+  kind?: "asset" | "template";
   busy?: boolean;
   onSubmit: (report: { type: string; description: string }) => Promise<unknown>;
 }
@@ -38,7 +39,7 @@ const REPORT_REASONS = [
   "Other",
 ];
 
-export function AssetReportModal({ open, onOpenChange, assetName, busy = false, onSubmit }: AssetReportModalProps) {
+export function AssetReportModal({ open, onOpenChange, assetName, busy = false, onSubmit, kind = "asset" }: AssetReportModalProps) {
   const fieldId = useId();
   const [reason, setReason] = useState(REPORT_REASONS[0]);
   const [description, setDescription] = useState("");
@@ -51,12 +52,12 @@ export function AssetReportModal({ open, onOpenChange, assetName, busy = false, 
     if (pending || description.trim().length < 20) return;
     setSubmitting(true);
     setError("");
-    const toastId = toast.info("Submitting asset report…");
+    const toastId = toast.info(`Submitting ${kind} report…`);
     try {
       await onSubmit({ type: reason, description });
       onOpenChange(false);
       setDescription("");
-      toast.success("Report submitted to marketplace moderators.", { id: toastId });
+      toast.success(`${kind === "template" ? "Template" : "Asset"} report submitted to marketplace moderators.`, { id: toastId });
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to submit report.");
       toast.error(error instanceof Error ? error.message : "Unable to submit report.", { id: toastId });
@@ -70,7 +71,7 @@ export function AssetReportModal({ open, onOpenChange, assetName, busy = false, 
       <DialogContent className="z-[300] max-h-[calc(100dvh-2rem)] overflow-y-auto border bg-card px-2 py-8 gap-6 sm:max-w-lg"
         onClick={(event) => event.stopPropagation()}>
         <DialogHeader className="px-6 -mt-0.75">
-          <DialogTitle className="text-md font-semibold">Report asset</DialogTitle>
+          <DialogTitle className="text-md font-semibold">Report {kind}</DialogTitle>
           <DialogDescription className="break-words leading-relaxed">
             Describe the issue with <strong className="font-semibold text-foreground">{assetName}</strong> for the marketplace moderators.
           </DialogDescription>

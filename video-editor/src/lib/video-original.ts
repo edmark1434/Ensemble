@@ -22,8 +22,8 @@ export async function readVideoMetadata(filePath: string) {
 
 // Policy applies to the original at upload completion. Proxy creation must never
 // choose a different resolution. The upload service supplies the verified plan cap.
-export async function normalizeVideoOriginal(inputPath: string, workDir: string, maxShortSide = 1080) {
-  if (![720, 1080, 2160].includes(maxShortSide)) throw new Error("Invalid video resolution limit");
+export async function normalizeVideoOriginal(inputPath: string, workDir: string, maxShortSide: number) {
+  if (!Number.isSafeInteger(maxShortSide) || maxShortSide < 2) throw new Error("Invalid video resolution limit");
   const metadata = await readVideoMetadata(inputPath);
   const [sarWidth, sarHeight] = (metadata.sampleAspectRatio || '1:1').split(':').map(Number);
   const sar = sarWidth > 0 && sarHeight > 0 ? sarWidth / sarHeight : 1;

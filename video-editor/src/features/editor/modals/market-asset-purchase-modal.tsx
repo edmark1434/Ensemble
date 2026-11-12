@@ -66,8 +66,8 @@ function PurchaseModal({ assetId, projectId }: { assetId: string; projectId: str
       window.dispatchEvent(new Event("market-license-updated"));
       if (isTemplate && templateMode) {
         await applyTemplate(assetId, projectId, templateMode);
-        toast.success(templateMode === "replace" ? "Project replaced with the template." : "Template added to the end of the project.");
-      } else toast.success(isTemplate ? "This project is licensed to use the template." : "Watermarks removed. This project is licensed to use the asset.");
+        toast.success(templateMode === "replace" ? "Template applied to replace the project." : "Template added to the end of the project.");
+      } else toast.success(isTemplate ? "Template licensed for this project." : "Watermarks removed. This project is licensed to use the asset.");
       close();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to purchase this asset.");

@@ -50,6 +50,8 @@
 
 ## Editor export and comment feedback
 
+- The editor upload storage bar uses `red-500` at 80% usage and above, and the normal primary color below 80%. Its width and warning threshold both use actual used bytes divided by the database plan allowance.
+
 - The export modal displays a minimum of 1% after one second of an active export. This is a presentation-only floor; server progress is unchanged. Queue position, failures, completion and cancellation retain their existing states.
 - Completed exports auto-request a download once after three seconds and keep the Download button available for manual retries. A browser download request is not treated as confirmed saved. Closing the completed-output modal calls the existing render cleanup endpoint and resets export state; output stays available until that dismissal, subject to existing expiration. Closing an active render only hides its progress modal.
 - The active project/scene comments WebSocket invalidates the authenticated comment list. Each successful snapshot is compared by entry ID to detect mentions and replies to the viewer's top-level comments; the server's author-only `canDelete` flag excludes self-notifications. Older overlapping responses are ignored.

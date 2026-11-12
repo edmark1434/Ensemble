@@ -1168,11 +1168,13 @@ export const Uploads = () => {
       : `${(storage.usedBytes / 1024 ** 3).toFixed(2)} GB`
     : null;
   const storageLimitLabel = storage
-    ? storage.plan.trim().toLowerCase() === "business"
-      ? "1 TB"
-      : `${(storage.limitBytes / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 0 })} GB`
+    ? storage.limitBytes >= 1024 ** 4
+      ? `${(storage.limitBytes / 1024 ** 4).toLocaleString(undefined, { maximumFractionDigits: 2 })} TB`
+      : storage.limitBytes >= 1024 ** 3
+        ? `${(storage.limitBytes / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 2 })} GB`
+        : `${(storage.limitBytes / 1024 ** 2).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB`
     : null;
-  const storagePercent = storage ? Math.min(100, (storage.usedBytes / storage.limitBytes) * 100) : 0;
+  const storagePercent = storage ? storage.limitBytes > 0 ? Math.min(100, (storage.usedBytes / storage.limitBytes) * 100) : 100 : 0;
 
   return (
     <div
@@ -1284,7 +1286,7 @@ export const Uploads = () => {
         <div className="flex shrink-0 items-center gap-4 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Media storage used" aria-valuemin={0} aria-valuemax={storage.limitBytes} aria-valuenow={Math.min(storage.usedBytes, storage.limitBytes)}>
-              <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${storagePercent}%` }} />
+              <div className={`h-full rounded-full transition-[width] ${storagePercent >= 80 ? "bg-red-500" : "bg-primary"}`} style={{ width: `${storagePercent}%` }} />
             </div>
             <p className="mt-1 text-xs leading-none text-muted-foreground">{storageUsedLabel} of {storageLimitLabel} used</p>
           </div>

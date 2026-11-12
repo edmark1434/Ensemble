@@ -41,7 +41,19 @@ interface Membership {
   billing_period: string;
   days_of_trials: number;
   features: Feature[];
+  renderSummary?: {
+    exportQueueing: string;
+    renderSpeed: string;
+  };
 }
+
+// Summaries are rendered separately; internal worker settings are never listed.
+const hiddenFeatureKeys = new Set(["tools", "render_queue", "export_speed", "render_workers"]);
+
+const featureOrder = [
+  "export_resolution", "export_frame_rate", "personal_upload_storage", "watermark",
+  "collaborators", "projects", "team_creation", "asset_posts", "profile_visibility", "badge",
+];
 
 interface CheckoutItem {
   id: string;
@@ -509,6 +521,19 @@ const CreditShop: React.FC = () => {
     );
   }
 
+  // Use the same keys for every tier, including an explicit unavailable value,
+  // so missing features cannot shift the comparison rows.
+  const comparisonFeatures = Array.from(new Map(
+    memberships.flatMap((tier) => tier.features || [])
+      .filter((feature) => !hiddenFeatureKeys.has(feature.feature_key))
+      .map((feature) => [feature.feature_key, feature] as const),
+  ).values()).sort((a, b) => {
+    const aIndex = featureOrder.indexOf(a.feature_key);
+    const bIndex = featureOrder.indexOf(b.feature_key);
+    return (aIndex < 0 ? featureOrder.length : aIndex) - (bIndex < 0 ? featureOrder.length : bIndex)
+      || a.feature_key.localeCompare(b.feature_key);
+  });
+
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-zinc-200 font-inter selection:bg-blue-500/30 transition-colors duration-300">
       {/* Background ShapeGrid */}
@@ -753,12 +778,34 @@ const CreditShop: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-              className="grid gap-6 md:grid-cols-3 items-stretch"
+              className="grid gap-x-6 gap-y-3 md:grid-cols-3 items-stretch"
             >
               {memberships.map((tier) => {
                 const isFree = tier.price === 0;
                 const isPremium = tier.name.toLowerCase() === "premium";
                 const isBusiness = tier.name.toLowerCase() === "business" || tier.name.toLowerCase() === "studio";
+                const displayFeatures = [
+                  ...comparisonFeatures.map((feature) => ({
+                    key: feature.feature_key,
+                    description: feature.description,
+                    value: tier.features?.find((item) => item.feature_key === feature.feature_key)?.value ?? "Not included",
+                  })),
+                  {
+                    key: "tools",
+                    description: "Available editing tools",
+                    value: isFree ? "Basic" : "Basic + Captions",
+                  },
+                  {
+                    key: "render_queue",
+                    description: "Export queueing",
+                    value: tier.renderSummary?.exportQueueing ?? (isFree ? "Shared free queue" : "Paid queue"),
+                  },
+                  {
+                    key: "export_speed",
+                    description: "Render speed",
+                    value: tier.renderSummary?.renderSpeed ?? (isFree ? "Standard" : "Unavailable"),
+                  },
+                ];
                 const currentPlan = isCurrentPlan(tier.plan_id);
 
                 const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } =
@@ -772,7 +819,8 @@ const CreditShop: React.FC = () => {
                 return (
                   <div
                     key={tier.plan_id}
-                    className={`flex flex-col justify-between rounded-2xl border p-6 relative transition-all duration-300 backdrop-blur-xl ${
+                    style={{ gridRow: `span ${displayFeatures.length + 3}` }}
+                    className={`flex flex-col justify-between md:grid md:[grid-template-rows:subgrid] rounded-2xl border p-6 relative transition-all duration-300 backdrop-blur-xl ${
                       isCurrent && !isFree
                         ? "border-emerald-500/60 bg-white dark:bg-dark-surface/80 shadow-[0_0_20px_rgba(16,185,129,0.08)]"
                         : isPremium
@@ -807,7 +855,8 @@ const CreditShop: React.FC = () => {
                       </div>
                     )}
 
-                    <div>
+                    <div className="md:contents">
+                      <div>
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2.5">
                           <img
@@ -881,12 +930,13 @@ const CreditShop: React.FC = () => {
                         </p>
                       )}
 
-                      <div className="h-px bg-gray-200 dark:bg-white/10 my-6" />
+                      </div>
 
-                      <ul className="space-y-3 mb-8">
-                        {tier.features && tier.features.length > 0 ? (
-                          tier.features.map((feature) => (
-                            <li key={feature.feature_id} className="flex items-start gap-2 text-xs">
+                      <div className="h-px bg-gray-200 dark:bg-white/10 my-6 md:my-3" />
+
+                      <ul role="list" className="space-y-3 mb-8 md:contents md:space-y-0">
+                        {displayFeatures.map((feature) => (
+                            <li key={feature.key} className="flex items-start gap-2 text-xs">
                               <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                               <span className="text-gray-700 dark:text-zinc-300">
                                 {feature.description}{" "}
@@ -895,17 +945,14 @@ const CreditShop: React.FC = () => {
                                 </span>
                               </span>
                             </li>
-                          ))
-                        ) : (
-                          <li className="text-xs text-gray-400 dark:text-zinc-500">No features available</li>
-                        )}
+                          ))}
                       </ul>
                     </div>
 
                     <button
                       onClick={() => handleMembershipCheckout(tier)}
                       disabled={isDisabled}
-                      className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
+                      className={`md:mt-3 w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
                         isDisabled
                           ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
                           : isUpgrade && hasXenditPlan && !isOnFreePlan

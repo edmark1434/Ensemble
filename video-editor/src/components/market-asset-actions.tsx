@@ -19,16 +19,20 @@ export const useMarketEngagement = create<{
   setPending: (id, value) => set((state) => ({ pending: { ...state.pending, [id]: value } })),
 }));
 
-async function marketAction(id: string, payload: Record<string, unknown>) {
+async function marketAction(id: string, payload: Record<string, unknown>, kind: "asset" | "template") {
   const response = await fetch(`/api/market-assets/${id}/action`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || result.message || "Unable to update this asset.");
+  if (!response.ok) {
+    const message = result.error || result.message || `Unable to update this ${kind}.`;
+    throw new Error(kind === "template" ? message.replace(/\basset\b/gi, "template") : message);
+  }
   return result;
 }
 
-export function MarketAssetActions({ bundle, menuOnly = false }: { bundle: MarketAssetBundle; menuOnly?: boolean }) {
+export function MarketAssetActions({ bundle, menuOnly = false, kind = "asset" }: { bundle: MarketAssetBundle; menuOnly?: boolean; kind?: "asset" | "template" }) {
+  const label = kind === "template" ? "Template" : "Asset";
   const engagement = useMarketEngagement((state) => state.items[bundle.marketAssetId]);
   const update = useMarketEngagement((state) => state.update);
   const current = engagement ?? { is_liked: !!bundle.is_liked, is_saved: !!bundle.is_saved, like_count: bundle.like_count ?? 0 };
@@ -46,15 +50,15 @@ export function MarketAssetActions({ bundle, menuOnly = false }: { bundle: Marke
       ? { ...current, is_liked: enabled, like_count: Math.max(0, current.like_count + (enabled ? 1 : -1)) }
       : { ...current, is_saved: enabled });
     const toastId = toast.success(action === "like"
-      ? enabled ? "Asset liked" : "Asset unliked"
-      : enabled ? "Asset saved" : "Asset removed from saved");
+      ? enabled ? `${label} liked` : `${label} unliked`
+      : enabled ? `${label} saved` : `${label} removed from saved`);
     try {
-      const result = await marketAction(id, { action, enabled });
+      const result = await marketAction(id, { action, enabled }, kind);
       update(id, { ...current, ...result });
       window.dispatchEvent(new CustomEvent("market-engagement-updated"));
     } catch (error) {
       update(id, current);
-      toast.error(error instanceof Error ? error.message : "Unable to update this asset.", { id: toastId });
+      toast.error(error instanceof Error ? error.message : `Unable to update this ${kind}.`, { id: toastId });
     }
     finally { store.setPending(id, false); }
   };
@@ -73,7 +77,7 @@ export function MarketAssetActions({ bundle, menuOnly = false }: { bundle: Marke
         {!bundle.is_owner && <DropdownMenuItem onSelect={() => setReportOpen(true)}><Flag />Report</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>}
-    <AssetReportModal open={reportOpen} onOpenChange={setReportOpen} assetName={bundle.name} busy={engagementPending}
-      onSubmit={(report) => marketAction(bundle.marketAssetId, { action: "report", ...report })} />
+    <AssetReportModal open={reportOpen} onOpenChange={setReportOpen} assetName={bundle.name} busy={engagementPending} kind={kind}
+      onSubmit={(report) => marketAction(bundle.marketAssetId, { action: "report", ...report }, kind)} />
   </div>;
 }

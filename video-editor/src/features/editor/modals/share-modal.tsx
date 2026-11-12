@@ -22,6 +22,7 @@ import useBlockMembersStore from "@/features/editor/store/use-block-members-stor
 import { useAccessRefresh } from "@/features/editor/hooks/use-access-refresh";
 import { Avatar } from "@/components/user-avatar";
 import { Separator } from "@/components/ui/separator";
+import type { CollaborativeProjectAllowance } from "@/lib/db/collaborative-projects";
 
 type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
 const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
@@ -45,6 +46,7 @@ interface ProjectAccess {
   members: ProjectMember[];
   canManage: boolean;
   canGrantManager: boolean;
+  collaboration: CollaborativeProjectAllowance | null;
 }
 
 const ROLE_DESCRIPTIONS: Record<AssignableProjectRole, string> = {
@@ -186,6 +188,8 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [canManage, setCanManage] = useState(false);
   const [canGrantManager, setCanGrantManager] = useState(false);
+  const [collaboration, setCollaboration] = useState<CollaborativeProjectAllowance | null>(null);
+  const canShare = status === "ready" && canManage && collaboration?.canShare === true;
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProjectPerson[]>([]);
@@ -207,7 +211,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
   useEffect(() => { setCopiedRole(null); setShareError(null); setTemplateUrl(null); }, [open, projectId, newUserRole]);
 
   const copyShareLink = async () => {
-    if (copying) return;
+    if (copying || !canShare) return;
     setCopying(true);
     setShareError(null);
     try {
@@ -215,6 +219,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: newUserRole }),
       });
       const data = await res.json();
+      if (data.code === "COLLABORATIVE_PROJECT_LIMIT") setCollaboration(data.collaboration);
       if (!res.ok) throw new Error(data.error || "Could not create a share link");
       await navigator.clipboard.writeText(data.url);
       setCopiedRole(newUserRole);
@@ -251,6 +256,8 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
     if (!silent) {
       setStatus("loading");
       setLoadError(null);
+      setCanManage(false);
+      setCollaboration(null);
     }
     try {
       const res = await fetch(`/api/projects/${projectId}/members`, { cache: "no-store" });
@@ -261,6 +268,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
       setMembers(data.members);
       setCanManage(data.canManage);
       setCanGrantManager(data.canGrantManager);
+      setCollaboration(data.collaboration);
       setLoadError(null);
       setStatus("ready");
     } catch {
@@ -276,6 +284,16 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
   }, [open, projectId]);
 
   useAccessRefresh(open, () => void load(true));
+
+  useEffect(() => {
+    if (!canShare) {
+      searchSeq.current++;
+      setSuggestOpen(false);
+      setSuggestions([]);
+      setSearching(false);
+      setCopiedRole(null);
+    }
+  }, [canShare]);
 
   // lost the right to grant Manager while "Add as: Manager" was selected
   useEffect(() => {
@@ -339,6 +357,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
   }, [suggestOpen]);
 
   const handleAdd = async (person: ProjectPerson) => {
+    if (!canShare) return;
     searchSeq.current++;
     searchUsers.cancel();
     setSearching(false);
@@ -355,6 +374,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      if (body.code === "COLLABORATIVE_PROJECT_LIMIT") setCollaboration(body.collaboration);
       setAddError(body.error ?? "Failed to add");
       return;
     }
@@ -415,7 +435,19 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
         </DialogHeader>
 
         <div className="px-6 flex flex-col gap-4">
-          {canManage && (
+          {canManage && collaboration && !collaboration.canShare && (
+            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4" role="status">
+              <p className="text-sm font-medium">Collaborative project limit reached</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {canGrantManager ? "You've" : "The project owner has"} reached the limit of {collaboration.limit} collaborative projects ({collaboration.used} shared).
+                {" "}{canGrantManager ? "Upgrade your plan to share this project with people." : "Ask the owner to upgrade their plan to share this project with people."}
+              </p>
+              <Button asChild className="w-full">
+                <a href={collaboration.upgradeUrl} target="_blank" rel="noopener noreferrer">Upgrade plan</a>
+              </Button>
+            </div>
+          )}
+          {canShare && (
             <div className="flex flex-col gap-3">
               <div className="relative" ref={searchWrapperRef}>
                 <Search
@@ -424,7 +456,7 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
                   placeholder="Add people by their email"
                   className="pl-10"
                   value={query}
-                  disabled={!canManage}
+                  disabled={!canShare}
                   onChange={(e) => {
                     const v = e.target.value;
                     setQuery(v);
