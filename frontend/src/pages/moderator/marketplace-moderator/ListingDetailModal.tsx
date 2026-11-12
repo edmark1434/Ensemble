@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Archive,
   AudioLines,
-  CheckCircle2,
   Clock,
   Coins,
   Eye,
@@ -14,11 +12,16 @@ import {
   User,
   Video,
   X,
-  XCircle,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { mediaUrl } from '@/pages/user/5_assets/assetTypes';
+import {
+  LISTING_ACTIONS,
+  ListingReasonDialog,
+  actionsForStatus,
+  type ListingAction,
+} from './listingActions';
 import type {
   ListingAssetMediaFile,
   MarketplaceListing,
@@ -408,8 +411,7 @@ export default function ListingDetailModal({
   const [detail, setDetail] = useState<MarketplaceListing | null>(seed || null);
   const [loading, setLoading] = useState(!seed);
   const [saving, setSaving] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ListingAction | null>(null);
   const [previewMedia, setPreviewMedia] = useState<ListingAssetMediaFile | null>(null);
 
   useEffect(() => {
@@ -430,19 +432,22 @@ export default function ListingDetailModal({
     };
   }, [listingId, apiBase]);
 
-  const review = async (status: 'approved' | 'rejected' | 'delisted', reason?: string) => {
+  const review = async (action: ListingAction, reason?: string) => {
+    const meta = LISTING_ACTIONS[action];
+    if (meta.requiresReason && !reason) {
+      setPendingAction(action);
+      return;
+    }
     setSaving(true);
     try {
       const res = await api.patch(`${apiBase}/listings/${listingId}`, {
-        status,
-        rejectionReason: reason,
+        status: meta.status,
+        rejectionReason: action === 'reject' ? reason : undefined,
+        moderationNote: action === 'reject' ? undefined : reason,
+        reason,
       });
-      const labels = {
-        approved: 'Listing approved',
-        rejected: 'Listing rejected',
-        delisted: 'Listing delisted',
-      } as const;
-      showSuccessToast(labels[status]);
+      showSuccessToast(meta.successMessage);
+      setPendingAction(null);
       if (res.data?.success && res.data.data) {
         setDetail(res.data.data);
         onUpdated(res.data.data);
@@ -450,8 +455,11 @@ export default function ListingDetailModal({
         onUpdated();
       }
       onClose();
-    } catch {
-      showErrorToast('Failed to update listing');
+    } catch (err) {
+      showErrorToast(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Failed to update listing'
+      );
     } finally {
       setSaving(false);
     }
@@ -688,80 +696,50 @@ export default function ListingDetailModal({
                   Rejection reason: {listing.rejectionReason}
                 </div>
               )}
+              {listing.moderationNote && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
+                  Moderation note: {listing.moderationNote}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {listing && (
           <div className="sticky bottom-0 border-t border-white/[0.06] bg-[#0f1016]/95 px-6 py-3.5 backdrop-blur">
-            {showRejectForm ? (
-              <div className="space-y-3">
-                <textarea
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  rows={3}
-                  placeholder="Reason for rejection…"
-                  className="w-full resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none focus:border-rose-500/40"
-                />
-                <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
+                Moderate
+              </span>
+              {actionsForStatus(listing.status).map((action) => {
+                const meta = LISTING_ACTIONS[action];
+                const Icon = meta.icon;
+                return (
                   <button
-                    type="button"
-                    onClick={() => setShowRejectForm(false)}
-                    className="rounded-lg px-4 py-2 text-sm text-zinc-400 hover:bg-white/5"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving || !rejectionReason.trim()}
-                    onClick={() => void review('rejected', rejectionReason.trim())}
-                    className="rounded-lg bg-red-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-                  >
-                    Confirm reject
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-                  Moderate
-                </span>
-                {listing.status !== 'approved' && (
-                  <button
+                    key={action}
                     type="button"
                     disabled={saving}
-                    onClick={() => void review('approved')}
-                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                    onClick={() => void review(action)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-medium transition disabled:opacity-50 ${meta.wideTone}`}
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                    <Icon className="h-3.5 w-3.5" /> {meta.label}
                   </button>
-                )}
-                {listing.status !== 'rejected' && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => setShowRejectForm(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
-                  >
-                    <XCircle className="h-3.5 w-3.5" /> Reject
-                  </button>
-                )}
-                {listing.status === 'approved' && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void review('delisted')}
-                    className="flex items-center gap-1.5 rounded-lg border border-zinc-500/30 bg-zinc-500/10 px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:bg-zinc-500/20 disabled:opacity-50"
-                  >
-                    <Archive className="h-3.5 w-3.5" /> Delist
-                  </button>
-                )}
-                {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
-              </div>
-            )}
+                );
+              })}
+              {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
+            </div>
           </div>
         )}
       </div>
+      {listing && pendingAction && (
+        <ListingReasonDialog
+          action={pendingAction}
+          listingTitle={`${listing.number} · ${listing.title}`}
+          saving={saving}
+          onCancel={() => setPendingAction(null)}
+          onConfirm={(reason) => void review(pendingAction, reason)}
+        />
+      )}
       {previewMedia && (
         <ListingAssetPreviewOverlay media={previewMedia} onClose={() => setPreviewMedia(null)} />
       )}

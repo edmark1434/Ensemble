@@ -75,6 +75,7 @@ const ACCENT_BTN: Record<Accent, string> = {
   violet: 'border-violet-500/40 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25',
   emerald: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25',
   rose: 'border-rose-500/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25',
+  amber: 'border-amber-500/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25',
 };
 
 const CHIP_CLASS: Record<ChipTone, string> = {
@@ -92,6 +93,7 @@ const ACCENT_DOT: Record<Accent, string> = {
   violet: 'bg-violet-400',
   emerald: 'bg-emerald-400',
   rose: 'bg-rose-400',
+  amber: 'bg-amber-400',
 };
 
 function formatDateTime(value: string | null | undefined) {

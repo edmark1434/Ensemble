@@ -309,16 +309,20 @@ async function sendMarketplaceListingNotification({
   title,
   status,
   rejectionReason = null,
+  moderationNote = null,
 }) {
   if (!accountId) return;
   const assetTitle = String(title || 'Untitled Asset').trim();
+  const note = String(moderationNote || '').trim();
   let message = '';
   if (status === 'approved') {
     message = `Your asset "${assetTitle}" has been approved by moderators and is now published to the Marketplace!`;
   } else if (status === 'rejected') {
     message = `Your asset "${assetTitle}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''} You can edit the asset to address this feedback and resubmit.`;
   } else if (status === 'delisted') {
-    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.`;
+    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.${note ? ` Reason: ${note}` : ''}`;
+  } else if (status === 'pending') {
+    message = `Your asset "${assetTitle}" was removed from the Marketplace and is being re-reviewed by moderators.${note ? ` Reason: ${note}` : ''}`;
   } else {
     return;
   }
@@ -344,6 +348,7 @@ async function sendMarketplaceListingNotification({
           marketAssetId,
           status,
           rejectionReason,
+          moderationNote: note || null,
         });
       }
     } catch (wsErr) {

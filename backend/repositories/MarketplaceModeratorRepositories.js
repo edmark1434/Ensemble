@@ -28,6 +28,7 @@ function mapListingRow(row) {
     marketAssetId: row.market_asset_id || null,
     status: row.status,
     rejectionReason: row.rejection_reason,
+    moderationNote: row.moderation_note || null,
     submittedBy: {
       accountId: row.submitted_by_account_id,
       name: row.submitter_name || 'Unknown',
@@ -55,7 +56,23 @@ const LISTING_SELECT = `
   LEFT JOIN accounts ra ON ra.account_id = rs.account_id
 `;
 
-async function fetchListings({ status, search, category } = {}) {
+/** Queue order the desk can ask for. Pending always floats to the top of the default view. */
+const LISTING_SORTS = {
+  newest: 'CASE l.status WHEN \'pending\' THEN 0 ELSE 1 END, l.created_at DESC',
+  oldest: 'CASE l.status WHEN \'pending\' THEN 0 ELSE 1 END, l.created_at ASC',
+  price_desc: 'l.price_credits DESC, l.created_at DESC',
+  price_asc: 'l.price_credits ASC, l.created_at DESC',
+  title: 'LOWER(l.title) ASC',
+  reviewed: 'l.reviewed_at DESC NULLS LAST, l.created_at DESC',
+};
+
+function listingLimit(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 100;
+  return Math.min(parsed, 500);
+}
+
+async function fetchListings({ status, search, category, sort, limit } = {}) {
   const params = [];
   const clauses = [];
 
@@ -83,23 +100,24 @@ async function fetchListings({ status, search, category } = {}) {
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const orderBy = LISTING_SORTS[String(sort || 'newest')] || LISTING_SORTS.newest;
+
+  params.push(listingLimit(limit));
 
   const result = await pool.query(
     `
     ${LISTING_SELECT}
     ${where}
-    ORDER BY
-      CASE l.status WHEN 'pending' THEN 0 ELSE 1 END,
-      l.created_at DESC
-    LIMIT 100
+    ORDER BY ${orderBy}
+    LIMIT $${params.length}
     `,
     params
   );
   return result.rows.map(mapListingRow);
 }
 
-async function getMarketplaceListings({ status, search, category } = {}) {
-  return fetchListings({ status, search, category });
+async function getMarketplaceListings({ status, search, category, sort, limit } = {}) {
+  return fetchListings({ status, search, category, sort, limit });
 }
 
 async function getListingLinkedAsset(marketAssetId) {
@@ -277,10 +295,37 @@ async function getSellerMarketplaceListings(accountId) {
   };
 }
 
-async function reviewMarketplaceListing(listingId, { status, rejectionReason }, staffSession) {
-  const allowed = ['approved', 'rejected', 'delisted'];
+/**
+ * Review one listing.
+ *
+ * `pending` re-opens an already reviewed listing (the copyright / re-approval path): the
+ * market asset goes back to draft so it leaves the live catalog while it is re-checked.
+ * A rejection stores its reason in `rejection_reason`; delist and re-approval store theirs
+ * in `moderation_note`, so the two trails never overwrite each other.
+ */
+async function reviewMarketplaceListing(
+  listingId,
+  { status, rejectionReason, moderationNote, reason },
+  staffSession
+) {
+  const allowed = ['approved', 'rejected', 'delisted', 'pending'];
   if (!allowed.includes(status)) {
     throw new Error(`Invalid listing status: ${status}`);
+  }
+
+  const rejectReason = status === 'rejected' ? (rejectionReason || reason || null) : null;
+  const note =
+    status === 'delisted' || status === 'pending'
+      ? (moderationNote || reason || rejectionReason || null)
+      : null;
+  if ((status === 'delisted' || status === 'pending') && !String(note || '').trim()) {
+    const err = new Error(
+      status === 'pending'
+        ? 'A reason is required when sending a listing back for re-approval'
+        : 'A reason is required when delisting a listing'
+    );
+    err.statusCode = 400;
+    throw err;
   }
 
   const rawStaffId = staffSession?.staff_id || staffSession?.staffId || null;
@@ -296,9 +341,14 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
 
   await pool.query(
     `UPDATE marketplace_listings
-     SET status = $1, rejection_reason = $2, reviewed_by_staff_id = $3, reviewed_at = NOW(), updated_at = NOW()
-     WHERE listing_id = $4`,
-    [status, status === 'rejected' ? rejectionReason || null : null, staffId, listingId]
+     SET status = $1,
+         rejection_reason = $2,
+         moderation_note = $3,
+         reviewed_by_staff_id = $4,
+         reviewed_at = NOW(),
+         updated_at = NOW()
+     WHERE listing_id = $5`,
+    [status, rejectReason, note, staffId, listingId]
   );
 
   const row = before.rows[0];
@@ -315,7 +365,8 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
       } catch (badgeErr) {
         console.error('Badge evaluation after listing approve failed:', badgeErr.message);
       }
-    } else if (status === 'rejected' || status === 'delisted') {
+    } else {
+      // rejected, delisted and re-review all pull the asset out of the live catalog.
       await pool.query(
         `UPDATE market_assets
          SET status = 'draft', updated_at = NOW()
@@ -331,18 +382,27 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
     listingId,
     title: row.title || 'Untitled Asset',
     status,
-    rejectionReason: status === 'rejected' ? rejectionReason || null : null,
+    rejectionReason: rejectReason,
+    moderationNote: note,
   });
 
   await recordAccountActivity({
     accountId: row.submitted_by_account_id,
-    action: `Listing ${row.listing_number || row.title || listingId} ${status}`,
+    action:
+      status === 'pending'
+        ? `Listing ${row.listing_number || row.title || listingId} sent back for re-approval`
+        : `Listing ${row.listing_number || row.title || listingId} ${status}`,
     eventCode: 'LISTING_REVIEWED',
     referenceTable: 'marketplace_listings',
     referencePrefix: 'LST',
     referenceId: listingId,
     actorStaffId: staffId,
-    metadata: { status, title: row.title, rejectionReason: rejectionReason || null },
+    metadata: {
+      status,
+      title: row.title,
+      rejectionReason: rejectReason,
+      moderationNote: note,
+    },
   });
 
   return getMarketplaceListingDetail(listingId);
@@ -414,6 +474,62 @@ async function getMarketplaceReportBreakdown(targetTypesIn) {
   };
 }
 
+/** Review-queue health for the dashboard: backlog age, throughput and copyright pressure. */
+async function getListingQueueHealth(targetTypesIn) {
+  const [queue, copyright] = await Promise.all([
+    pool.query(`
+      SELECT
+        MIN(created_at) FILTER (WHERE status = 'pending') AS oldest_pending_at,
+        COUNT(*) FILTER (
+          WHERE status = 'pending' AND created_at < NOW() - INTERVAL '48 hours'
+        )::int AS pending_over_48h,
+        COUNT(*) FILTER (
+          WHERE status = 'pending' AND created_at < NOW() - INTERVAL '7 days'
+        )::int AS pending_over_7d,
+        COUNT(*) FILTER (WHERE reviewed_at >= NOW() - INTERVAL '24 hours')::int AS reviewed_24h,
+        COUNT(*) FILTER (WHERE reviewed_at >= NOW() - INTERVAL '7 days')::int AS reviewed_7d,
+        COUNT(*) FILTER (
+          WHERE status = 'approved' AND reviewed_at >= NOW() - INTERVAL '7 days'
+        )::int AS approved_7d,
+        COUNT(*) FILTER (
+          WHERE status IN ('rejected', 'delisted') AND reviewed_at >= NOW() - INTERVAL '7 days'
+        )::int AS removed_7d,
+        AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))) FILTER (
+          WHERE reviewed_at IS NOT NULL AND reviewed_at >= NOW() - INTERVAL '30 days'
+        ) AS avg_review_seconds
+      FROM marketplace_listings
+    `),
+    pool.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM reports
+      WHERE deleted_at IS NULL
+        AND LOWER(COALESCE(target_type, type)) = ANY($1)
+        AND LOWER(status) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
+        AND (LOWER(COALESCE(type, '')) LIKE '%copyright%' OR LOWER(COALESCE(description, '')) LIKE '%copyright%')
+      `,
+      [targetTypesIn]
+    ),
+  ]);
+
+  const q = queue.rows[0] || {};
+  const avgSeconds = q.avg_review_seconds === null ? null : Number(q.avg_review_seconds);
+  return {
+    oldestPendingAt: q.oldest_pending_at || null,
+    pendingOver48h: Number(q.pending_over_48h || 0),
+    pendingOver7d: Number(q.pending_over_7d || 0),
+    reviewedLast24h: Number(q.reviewed_24h || 0),
+    reviewedLast7d: Number(q.reviewed_7d || 0),
+    approvedLast7d: Number(q.approved_7d || 0),
+    removedLast7d: Number(q.removed_7d || 0),
+    avgReviewHours:
+      avgSeconds === null || Number.isNaN(avgSeconds)
+        ? null
+        : Math.round((avgSeconds / 3600) * 10) / 10,
+    copyrightReports: Number(copyright.rows[0]?.count || 0),
+  };
+}
+
 async function getMarketplaceOverview() {
   const marketplaceTypes = [...MARKETPLACE_REPORT_TYPES];
   const [
@@ -428,6 +544,7 @@ async function getMarketplaceOverview() {
     reports,
     recentListings,
     staffWorkload,
+    queueHealth,
   ] = await Promise.all([
     pool.query(`
       SELECT
@@ -453,6 +570,7 @@ async function getMarketplaceOverview() {
     fetchListings({ status: 'all' }),
     // Powers the "assign to" pickers and filters on this desk's queues.
     fetchStaffWorkload(),
+    getListingQueueHealth(marketplaceTypes),
   ]);
 
   const lc = listingCounts.rows[0];
@@ -503,7 +621,9 @@ async function getMarketplaceOverview() {
       highPriorityReports: rb.highPriority,
       resolvedReports: rb.resolved,
       restrictedAccounts: Number(restrictedCount.rows[0].count),
+      ...queueHealth,
     },
+    queueHealth,
     charts: {
       listingStatusMix,
       listingCategories,
@@ -519,7 +639,7 @@ async function getMarketplaceOverview() {
     recentTickets: tickets.slice(0, 10),
     flaggedReports: reports.slice(0, 10),
     staffWorkload,
-    alerts: buildMarketplaceAlerts(lc, tc, reportBreakdown),
+    alerts: buildMarketplaceAlerts(lc, tc, reportBreakdown, queueHealth),
     dataSources: {
       tables: ['marketplace_listings', 'tickets', 'reports', 'accounts'],
       persisted: true,
@@ -527,7 +647,7 @@ async function getMarketplaceOverview() {
   };
 }
 
-function buildMarketplaceAlerts(lc, tc, reportBreakdown) {
+function buildMarketplaceAlerts(lc, tc, reportBreakdown, queueHealth = {}) {
   const alerts = [];
   const openTickets = Number(tc.open_count) + Number(tc.in_progress || 0) + Number(tc.escalated_dev || 0);
   const rb = reportBreakdown?.counts || {};
@@ -538,6 +658,22 @@ function buildMarketplaceAlerts(lc, tc, reportBreakdown) {
       message: `${lc.pending} listing(s) awaiting review.`,
       severity: 'warning',
       action: { tab: 'marketplace-control' },
+    });
+  }
+  if (Number(queueHealth.pendingOver48h) > 0) {
+    alerts.push({
+      id: 'aging-listings',
+      message: `${queueHealth.pendingOver48h} listing(s) have been pending for over 48 hours.`,
+      severity: 'error',
+      action: { tab: 'marketplace-control' },
+    });
+  }
+  if (Number(queueHealth.copyrightReports) > 0) {
+    alerts.push({
+      id: 'copyright-reports',
+      message: `${queueHealth.copyrightReports} open marketplace report(s) mention copyright.`,
+      severity: 'error',
+      action: { tab: 'reports' },
     });
   }
   if (Number(tc.unassigned) > 0) {

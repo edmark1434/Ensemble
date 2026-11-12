@@ -15,9 +15,20 @@ import {
   Wallet,
 } from 'lucide-react';
 
-type MenuItem = { id: string; label: string; danger?: boolean; section?: string };
+type MenuItem = {
+  id: string;
+  label: string;
+  danger?: boolean;
+  section?: string;
+  /** Overrides the account-oriented default icon, for non-account rows. */
+  icon?: React.ComponentType<{ className?: string }>;
+  disabled?: boolean;
+};
 
 export type { MenuItem };
+
+/** Group headings above each section; defaults suit the account rows this menu started on. */
+export type MenuSectionLabels = { primary?: string; tools?: string; manage?: string };
 
 const DEFAULT_ITEMS: MenuItem[] = [
   { id: 'view', label: 'View profile' },
@@ -35,6 +46,8 @@ type RowActionsMenuProps = {
   onAction: (actionId: string) => void;
   items?: MenuItem[];
   status?: string | null;
+  sectionLabels?: MenuSectionLabels;
+  statusLabel?: string;
 };
 
 type MenuCoords = { top: number; left: number; openUp: boolean };
@@ -82,7 +95,14 @@ export default function RowActionsMenu({
   onAction,
   items = DEFAULT_ITEMS,
   status,
+  sectionLabels,
+  statusLabel = 'Account status',
 }: RowActionsMenuProps) {
+  const labels = {
+    primary: sectionLabels?.primary ?? 'Account',
+    tools: sectionLabels?.tools ?? 'Tools',
+    manage: sectionLabels?.manage ?? 'Enforcement',
+  };
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<MenuCoords | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -143,16 +163,17 @@ export default function RowActionsMenu({
   const manage = items.filter((i) => i.section === 'manage');
 
   const renderItem = (item: MenuItem) => {
-    const Icon = iconForAction(item.id);
+    const Icon = item.icon || iconForAction(item.id);
     return (
       <button
         key={item.id}
         type="button"
+        disabled={item.disabled}
         onClick={() => {
           onAction(item.id);
           setOpen(false);
         }}
-        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-white/[0.06] ${
+        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40 ${
           item.danger ? 'text-red-300' : 'text-zinc-200'
         }`}
       >
@@ -176,7 +197,7 @@ export default function RowActionsMenu({
           {status && (
             <div className="border-b border-white/[0.06] px-3 pb-2 pt-1.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-                Account status
+                {statusLabel}
               </p>
               <span
                 className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(status)}`}
@@ -186,16 +207,20 @@ export default function RowActionsMenu({
             </div>
           )}
 
-          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-            Account
-          </p>
-          {primary.map(renderItem)}
+          {primary.length > 0 && (
+            <>
+              <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                {labels.primary}
+              </p>
+              {primary.map(renderItem)}
+            </>
+          )}
 
           {tools.length > 0 && (
             <>
               <div className="my-1 border-t border-white/[0.08]" />
               <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-                Tools
+                {labels.tools}
               </p>
               {tools.map(renderItem)}
             </>
@@ -205,7 +230,7 @@ export default function RowActionsMenu({
             <>
               <div className="my-1 border-t border-white/[0.08]" />
               <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-                Enforcement
+                {labels.manage}
               </p>
               {manage.map(renderItem)}
             </>

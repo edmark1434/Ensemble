@@ -12,7 +12,7 @@ import {
   escalateTypesForRole,
 } from './ticketTypes';
 
-type Accent = 'rose' | 'sky' | 'violet' | 'emerald';
+type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 
 type PersonHit = {
   accountId: string;
@@ -28,6 +28,7 @@ const ACCENT_BTN: Record<Accent, string> = {
   sky: 'bg-sky-500 hover:bg-sky-400',
   violet: 'bg-violet-500 hover:bg-violet-400',
   emerald: 'bg-emerald-500 hover:bg-emerald-400',
+  amber: 'bg-amber-500 hover:bg-amber-400',
 };
 
 const ACCENT_FOCUS: Record<Accent, string> = {
@@ -35,6 +36,7 @@ const ACCENT_FOCUS: Record<Accent, string> = {
   sky: 'focus:border-sky-500/40',
   violet: 'focus:border-violet-500/40',
   emerald: 'focus:border-emerald-500/40',
+  amber: 'focus:border-amber-500/40',
 };
 
 function apiErrorMessage(err: unknown, fallback: string) {

@@ -828,7 +828,7 @@ function buildAlerts(tc, rc, reportBreakdown, contentStats) {
       id: 'removed-discussions',
       message: `${contentStats.removedDiscussions} discussion(s) are currently removed.`,
       severity: 'info',
-      action: { tab: 'forum-discussion' },
+      action: { tab: 'forum-control' },
     });
   }
   if (openTickets > 0) {

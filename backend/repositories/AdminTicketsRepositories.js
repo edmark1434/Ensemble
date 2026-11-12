@@ -5158,13 +5158,122 @@ const PICKER_LISTS = {
   job: 'jobs',
 };
 
+const TICKET_TEAM_VISIBLE_SQL = `
+  t.deleted_at IS NULL
+  AND a.deleted_at IS NULL
+  AND (
+    t.visibility = 'Public'
+    OR EXISTS (
+      SELECT 1
+      FROM team_members tm
+      JOIN users member_user ON member_user.user_id = tm.user_id
+      WHERE tm.team_id = t.team_id
+        AND member_user.account_id = $1
+    )
+  )
+`;
+
+function ticketTeamLabel(row) {
+  const name = String(row.label || '').trim() || 'Team';
+  const handle = String(row.handle || '').trim();
+  return handle ? `${name} (@${handle})` : name;
+}
+
+async function searchTicketTeams(accountId, rawQuery) {
+  const query = String(rawQuery || '').replace(/^@/, '').trim();
+  if (query.length > 80) throw ticketError('Search is too long', 400);
+  const escaped = escapeTicketSearch(query);
+  const hasQuery = query.length > 0;
+  const result = await pool.query(
+    `
+    SELECT t.team_id AS id, a.display_name AS label, a.handle,
+      EXISTS (
+        SELECT 1
+        FROM team_members tm
+        JOIN users member_user ON member_user.user_id = tm.user_id
+        WHERE tm.team_id = t.team_id
+          AND member_user.account_id = $1
+      ) AS related
+    FROM teams t
+    JOIN accounts a ON a.account_id = t.account_id
+    WHERE ${TICKET_TEAM_VISIBLE_SQL}
+      AND (
+        $2::boolean = FALSE
+        OR a.display_name ILIKE $3 ESCAPE '\\'
+        OR a.handle ILIKE $3 ESCAPE '\\'
+      )
+      AND ($2::boolean = TRUE OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        JOIN users member_user ON member_user.user_id = tm.user_id
+        WHERE tm.team_id = t.team_id
+          AND member_user.account_id = $1
+      ))
+    ORDER BY
+      CASE
+        WHEN LOWER(a.handle) = LOWER($4) OR LOWER(a.display_name) = LOWER($4) THEN 0
+        WHEN LOWER(a.display_name) ILIKE $5 ESCAPE '\\' OR LOWER(a.handle) ILIKE $5 ESCAPE '\\' THEN 1
+        ELSE 2
+      END,
+      related DESC,
+      a.display_name ASC
+    LIMIT 8
+    `,
+    [accountId, hasQuery, `%${escaped}%`, query, `${escaped}%`]
+  );
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    label: String(row.label || 'Team'),
+    handle: row.handle ? String(row.handle) : null,
+  }));
+}
+
+async function findVisibleTicketTeam(accountId, needle) {
+  const byId = TICKET_ACCOUNT_UUID.test(needle);
+  const result = await pool.query(
+    `
+    SELECT t.team_id AS id, a.display_name AS label, a.handle
+    FROM teams t
+    JOIN accounts a ON a.account_id = t.account_id
+    WHERE ${TICKET_TEAM_VISIBLE_SQL}
+      AND (
+        ($2::boolean AND t.team_id = $3::uuid)
+        OR (
+          NOT $2::boolean
+          AND (LOWER(a.display_name) = LOWER($4) OR LOWER(a.handle) = LOWER($4))
+        )
+      )
+    LIMIT 2
+    `,
+    [accountId, byId, byId ? needle : null, needle]
+  );
+  if (result.rows.length !== 1) return null;
+  return {
+    id: String(result.rows[0].id),
+    label: String(result.rows[0].label || 'Team'),
+    handle: result.rows[0].handle ? String(result.rows[0].handle) : null,
+  };
+}
+
+async function resolveTicketTeamAnswer(accountId, row) {
+  const needle = String(row.value || '').replace(/^@/, '').trim();
+  if (!needle) return row;
+  const team = await findVisibleTicketTeam(accountId, needle);
+  if (!team) throw ticketError('Choose a team from the suggestions', 400);
+  return { ...row, value: ticketTeamLabel(team).slice(0, 2000), id: team.id };
+}
+
 async function resolveFormAnswers(accountId, type, rows) {
   const { fieldsForType } = require('../lib/TicketFormFields');
   const definitions = new Map(fieldsForType(type).map((field) => [field.key, field]));
-  const needsPicker = rows.some((row) => definitions.get(row.key)?.picker);
+  const needsPicker = rows.some((row) => {
+    const picker = definitions.get(row.key)?.picker;
+    return picker && picker !== 'team';
+  });
   const pickers = needsPicker && accountId ? await getTicketPickers(accountId) : null;
-  return rows.map((row) => {
+  return Promise.all(rows.map(async (row) => {
     const field = definitions.get(row.key);
+    if (field?.picker === 'team') return resolveTicketTeamAnswer(accountId, row);
     const listName = field?.picker ? PICKER_LISTS[field.picker] : null;
     if (!listName || !pickers) return row;
     const options = pickers[listName] || [];
@@ -5177,7 +5286,7 @@ async function resolveFormAnswers(accountId, type, rows) {
       throw ticketError(`Choose a ${field.label.toLowerCase()} from your account`, 400);
     }
     return row;
-  });
+  }));
 }
 
 async function buildSubmissionContext(accountId, clientContext, explicitEmail = null) {
@@ -5511,6 +5620,7 @@ module.exports = {
   createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,
+  searchTicketTeams,
   nextTicketNumber,
   nextDisputeNumber,
   updateTicket,

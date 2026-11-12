@@ -14,12 +14,27 @@ const {
   getReportDetail,
   updateReport,
 } = require('../repositories/AdminTicketsRepositories');
-const {
-  getViolationsAndRestrictions,
-  issueViolation,
-  updateAccountRestriction,
-} = require('../repositories/ModeratorRepositories');
 const { MARKETPLACE_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
+const { MARKETPLACE_TYPES, normalizeTicketType } = require('../lib/TicketEnums');
+
+/** The marketplace desk may only read or act on tickets filed under a marketplace type. */
+function isMarketplaceTicket(ticket) {
+  const type = normalizeTicketType(ticket?.type || ticket?.category, null);
+  return Boolean(type && MARKETPLACE_TYPES.includes(type));
+}
+
+async function loadScopedTicket(req, res) {
+  const detail = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
+  if (!detail) {
+    res.status(404).json({ success: false, message: 'Ticket not found' });
+    return null;
+  }
+  if (!isMarketplaceTicket(detail.ticket)) {
+    res.status(403).json({ success: false, message: 'Ticket is outside the marketplace queue' });
+    return null;
+  }
+  return detail;
+}
 
 async function getOverview(req, res) {
   try {
@@ -37,6 +52,8 @@ async function getListings(req, res) {
       status: req.query.status,
       search: req.query.search,
       category: req.query.category,
+      sort: req.query.sort,
+      limit: req.query.limit,
     });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -95,8 +112,8 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
-    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    const data = await loadScopedTicket(req, res);
+    if (!data) return;
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching ticket detail:', err);
@@ -106,6 +123,7 @@ async function getTicket(req, res) {
 
 async function patchTicket(req, res) {
   try {
+    if (!(await loadScopedTicket(req, res))) return;
     const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
@@ -129,6 +147,7 @@ async function patchTicket(req, res) {
 
 async function postTicketMessage(req, res) {
   try {
+    if (!(await loadScopedTicket(req, res))) return;
     const { body, isInternal, attachments } = req.body;
     if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
@@ -141,40 +160,6 @@ async function postTicketMessage(req, res) {
     const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
     const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
     res.status(status).json({ success: false, message: msg });
-  }
-}
-
-async function getRestrictions(req, res) {
-  try {
-    const data = await getViolationsAndRestrictions();
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error fetching restrictions:', err);
-    res.status(500).json({ success: false, message: 'Failed to load restrictions' });
-  }
-}
-
-async function postViolation(req, res) {
-  try {
-    const { accountId, warningId, type, title, reason, points } = req.body;
-    if (!accountId || !(warningId || type || title)) {
-      return res.status(400).json({ success: false, message: 'accountId and a predefined warning are required' });
-    }
-    const data = await issueViolation(accountId, { warningId, type: type || title, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error issuing violation:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to issue violation' });
-  }
-}
-
-async function patchRestriction(req, res) {
-  try {
-    const data = await updateAccountRestriction(req.params.id, req.body.action || req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt, reason: req.body?.reason, punishmentId: req.body?.punishmentId || req.body?.punishment_id, customDuration: req.body?.customDuration === true || req.body?.custom_duration === true });
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error updating account restriction:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to update restriction' });
   }
 }
 
@@ -333,9 +318,6 @@ module.exports = {
   getTicket,
   patchTicket,
   postTicketMessage,
-  getRestrictions,
-  postViolation,
-  patchRestriction,
   getReports,
   getReport,
   patchReport,

@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import type { Alert, SupportTicket } from "./moderatorTypes";
 import { formatEscalatedLabel } from "@/pages/admin/ticketManagement/ticketFilterUtils";
 
-export type Accent = "sky" | "violet" | "emerald" | "rose";
+export type Accent = "sky" | "violet" | "emerald" | "rose" | "amber";
 
 // Static class maps so Tailwind can see the full class names at build time.
 const ACCENT_TEXT: Record<Accent, string> = {
@@ -10,6 +10,7 @@ const ACCENT_TEXT: Record<Accent, string> = {
   violet: "text-violet-400",
   emerald: "text-emerald-400",
   rose: "text-rose-400",
+  amber: "text-amber-400",
 };
 
 const ACCENT_SPINNER: Record<Accent, string> = {
@@ -17,6 +18,7 @@ const ACCENT_SPINNER: Record<Accent, string> = {
   violet: "text-violet-400",
   emerald: "text-emerald-400",
   rose: "text-rose-400",
+  amber: "text-amber-400",
 };
 
 export function accentText(accent: Accent) {

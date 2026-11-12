@@ -4,6 +4,7 @@ const {
   getSupportReports,
   getSupportDisputes,
   isAdminTicketPayload,
+  isSupportScopedTicket,
 } = require('../repositories/SupportModeratorRepositories');
 const {
   getTicketDetail,
@@ -17,11 +18,24 @@ const {
   getReportDetail,
 } = require('../repositories/AdminTicketsRepositories');
 const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
-const {
-  getViolationsAndRestrictions,
-  issueViolation,
-  updateAccountRestriction,
-} = require('../repositories/ModeratorRepositories');
+
+/**
+ * Every ticket route on this desk goes through here: a Support Moderator may only read or
+ * change a ticket inside the support queue, and never an Admin-owned one. The frontend scopes
+ * the list as well, but this is the boundary that counts.
+ */
+const OUT_OF_SCOPE_MESSAGE =
+  'That ticket belongs to another queue. Only its own moderator desk or an Admin can open it.';
+
+function ticketScopeDenial(ticket) {
+  if (isAdminTicketPayload(ticket)) {
+    return { status: 403, message: 'Admin tickets are not available to Support Moderators' };
+  }
+  if (!isSupportScopedTicket(ticket)) {
+    return { status: 403, message: OUT_OF_SCOPE_MESSAGE };
+  }
+  return null;
+}
 
 async function getOverview(req, res) {
   try {
@@ -70,7 +84,7 @@ async function getTicket(req, res) {
   try {
     const data = await getTicketDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (isAdminTicketPayload(data.ticket || data)) {
+    if (ticketScopeDenial(data.ticket || data)) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
     }
     res.status(200).json({ success: true, data });
@@ -84,9 +98,8 @@ async function patchTicket(req, res) {
   try {
     const existing = await getTicketDetail(req.params.id, req.session);
     if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (isAdminTicketPayload(existing.ticket || existing)) {
-      return res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
-    }
+    const denied = ticketScopeDenial(existing.ticket || existing);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
     const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
@@ -108,9 +121,8 @@ async function postTicketMessage(req, res) {
     }
     const existing = await getTicketDetail(req.params.id, req.session);
     if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (isAdminTicketPayload(existing.ticket || existing)) {
-      return res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
-    }
+    const denied = ticketScopeDenial(existing.ticket || existing);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
     const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments, req.body?.replyToMessageId);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
@@ -124,7 +136,9 @@ async function postTicketMessage(req, res) {
 
 async function getReports(req, res) {
   try {
-    const data = await getSupportReports({ status: req.query.status });
+    // `scope=all` opens the whole platform queue; the desk defaults to support-owned targets.
+    const scope = String(req.query.scope || 'support').toLowerCase() === 'all' ? 'all' : 'support';
+    const data = await getSupportReports({ status: req.query.status, scope });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching reports:', err);
@@ -275,41 +289,14 @@ async function patchDisputeMessage(req, res) {
   }
 }
 
-async function getRestrictions(req, res) {
-  try {
-    const data = await getViolationsAndRestrictions();
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error fetching restrictions:', err);
-    res.status(500).json({ success: false, message: 'Failed to load restrictions' });
-  }
-}
+// Support enforcement happens inside a report case and in User & Team → Users, so this console
+// has no standalone restrictions desk. The forum and jobs consoles keep theirs.
 
-async function postViolation(req, res) {
-  try {
-    const { accountId, warningId, type, title, reason, points } = req.body;
-    if (!accountId || !(warningId || type || title)) {
-      return res.status(400).json({ success: false, message: 'accountId and a predefined warning are required' });
-    }
-    const data = await issueViolation(accountId, { warningId, type: type || title, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error issuing violation:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to issue violation' });
-  }
-}
-
-async function patchRestriction(req, res) {
-  try {
-    const data = await updateAccountRestriction(req.params.id, req.body.action || req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt, reason: req.body?.reason, punishmentId: req.body?.punishmentId || req.body?.punishment_id, customDuration: req.body?.customDuration === true || req.body?.custom_duration === true });
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error updating account restriction:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to update restriction' });
-  }
-}
-
-const { postTicketCreditAdjustment, patchAdminTicketMessage, deleteAdminTicketMessage } = require('./AdminTicketsControllers');
+const {
+  postTicketCreditAdjustment: postAdminTicketCreditAdjustment,
+  patchAdminTicketMessage,
+  deleteAdminTicketMessage,
+} = require('./AdminTicketsControllers');
 
 async function guardSupportTicket(req, res) {
   const existing = await getTicketDetail(req.params.id, req.session);
@@ -317,8 +304,9 @@ async function guardSupportTicket(req, res) {
     res.status(404).json({ success: false, message: 'Ticket not found' });
     return false;
   }
-  if (isAdminTicketPayload(existing.ticket || existing)) {
-    res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
+  const denied = ticketScopeDenial(existing.ticket || existing);
+  if (denied) {
+    res.status(denied.status).json({ success: false, message: denied.message });
     return false;
   }
   return true;
@@ -344,6 +332,16 @@ async function deleteTicketMessage(req, res) {
   }
 }
 
+async function postTicketCreditAdjustment(req, res) {
+  try {
+    if (!(await guardSupportTicket(req, res))) return;
+    return postAdminTicketCreditAdjustment(req, res);
+  } catch (err) {
+    console.error('Error recording ticket credit adjustment:', err);
+    res.status(500).json({ success: false, message: 'Failed to record credit adjustment' });
+  }
+}
+
 module.exports = {
   getOverview,
   getTickets,
@@ -362,7 +360,4 @@ module.exports = {
   patchDispute,
   postDisputeMessage,
   patchDisputeMessage,
-  getRestrictions,
-  postViolation,
-  patchRestriction,
 };

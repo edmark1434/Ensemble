@@ -1,25 +1,49 @@
-# Active Task: Staff host must not trap member login
-# Active Task: Refresh support RAG knowledge (policy + current pages)
+# Active Task: Forum Moderator console redo
 
 ## Implementation Objective
 
-On `staff.ensemble.software`, choosing the member/user login path must reach
-the platform login on the main site. An existing staff session must not bounce
-the browser back into the staff desk.
-Update the support assistant knowledge base in `backend/data/` so it reflects the current platform policies (Platform Merit, warnings, account standing/appeals, badges, reports/disputes) and the current customer-facing pages. Content must be customer-support oriented only.
+Rebuild the Forum Moderator desk into a cleaner, professional console: one
+Forum Control tab for discussions and groups, a detailed dashboard, forum-only
+tickets with escalate/recategorize, working reports, and no Restrictions tab.
 
 ## Acceptance Criteria
 
-- [x] “Member login” from the staff portal opens the main-site member login.
-- [x] Visiting `/login` (and signup/forgot/reset) on the main site with a staff
-      session does not auto-redirect to the staff desk.
-- [x] Already-signed-in staff on the portal login see Continue vs Member login
-      instead of a silent redirect.
-- [x] Staff can still reach their desk from Continue / successful staff login.
-- [x] Admin session handling on the member site remains unchanged.
-- [x] Knowledge files describe current customer-facing routes and behavior (e.g. `/support/ticket`, `/account/appeal`, gig orders, disputes, discovery, workspaces).
-- [x] New policy documents cover Platform Merit, warnings and automatic limits, account standing and appeals, and badges in user-facing terms.
-- [x] No database, table/column, API endpoint, environment variable, credential, source-file path, or internal staff tooling details appear in ingested knowledge.
-- [x] Staff-only operations documents are no longer ingested; stale chunks from removed sources are pruned at ingestion.
-- [x] Each source in `sources.json` has a unique URL so documents no longer overwrite each other's chunks.
-- [x] Generated documents no longer mention the underlying database.
+- [x] Dashboard is detailed, clean, and professional (marketplace-desk quality).
+- [x] Forum Discussion and Forum Groups are a single Forum Control tab with
+      Discussions | Groups views, wired to `/api/moderator/forum`.
+- [x] Ticket Management shows only forum-scoped tickets; staff can escalate and
+      move a ticket to another category/queue when filed wrong.
+- [x] Reports desk is detailed, forum-scoped, and clean.
+- [x] Restrictions tab is removed from the forum console (warn/suspend stay on
+      User & Team).
+- [x] Old `/groups`, `/forum-discussion`, and `/restrictions` paths still land
+      somewhere useful (redirects).
+- [x] Any extra forum-moderator tools needed for day-to-day work are present.
+
+---
+
+# Active Task (parallel): Jobs & Gigs Moderator console pass
+
+## Implementation Objective
+
+Bring `/moderator/jobs` to the marketplace-desk standard: a sectioned dashboard with
+queue health, a cleaner and more detailed Jobs & Gigs Control, a jobs-only ticket desk
+with move/escalate, report cases that resolve every jobs target, and no Restrictions tab.
+
+## Acceptance Criteria
+
+- [x] Dashboard: queue health (ageing tickets/reports/disputes, first-reply and
+      resolution averages, 7-day throughput), board, contracts/escrow, tickets/reports
+      sections; most-reported postings, team workload; flat surfaces, no gradients.
+- [x] Control: sort (reported first by default), status filter with counts, type tabs,
+      reported-only toggle, per-posting open-report count, load more, row kebab menu.
+- [x] Pause / Close / Archive require a reason (backend-enforced) via a reason dialog.
+- [x] Posting detail shows reports on the posting and its moderation history; it is a
+      self-contained modal used by both Control and the dashboard.
+- [x] Ticket desk is hard-scoped to `JOBS_TYPES` on every endpoint (incl. message
+      edit/delete); Move ticket recategorises or hands off; copy explains it.
+- [x] Report subjects resolve `job`, `gig`, `jobs`, `gigs`, `contract`, `proposal`,
+      `application`, `feedback` with staff links.
+- [x] Restrictions removed: nav, route (redirects to User & Team), lazy page, prefetch,
+      page file, backend routes and controller handlers.
+- [ ] Frontend typecheck passes (run when asked).

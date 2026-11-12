@@ -1,6 +1,6 @@
 const { pool } = require('../lib/Database');
 const { QUEUE_SCOPES } = require('../lib/TicketEnums');
-const { JOBS_REPORT_TYPES } = require('../lib/ReportEnums');
+const { JOBS_REPORT_TYPES, closedReportStatusListSql } = require('../lib/ReportEnums');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
@@ -81,12 +81,15 @@ function mapPostingRow(row) {
     description: row.description,
     status: normalizePostingStatus(row.status, row.deleted_at),
     paymentType: row.payment_type,
+    category: row.category || null,
     experienceLevel: row.experience_level,
     rateCreditsMin: row.rate_min === null ? null : Number(row.rate_min),
     rateCreditsMax: row.rate_max === null ? null : Number(row.rate_max),
     // Jobs: open proposals; gigs: gig requests across tiers.
     applicantCount: Number(row.applicant_count || 0),
     contractCount: Number(row.contract_count || 0),
+    // Unresolved reports filed against this exact posting — the triage signal.
+    openReportCount: Number(row.open_report_count || 0),
     tags: row.tags || [],
     author: {
       accountId: row.author_account_id,
@@ -100,8 +103,32 @@ function mapPostingRow(row) {
   };
 }
 
+/**
+ * Queue order the Jobs & Gigs Control desk can ask for.
+ *
+ * `flagged` floats postings with unresolved reports to the top, which is the order a
+ * moderator working the queue wants; every other key is a plain column sort.
+ */
+const POSTING_SORTS = {
+  flagged: 'p.open_report_count DESC, p.created_at DESC',
+  newest: 'p.created_at DESC',
+  oldest: 'p.created_at ASC',
+  updated: 'p.updated_at DESC NULLS LAST, p.created_at DESC',
+  applicants: 'p.applicant_count DESC, p.created_at DESC',
+  contracts: 'p.contract_count DESC, p.created_at DESC',
+  rate_desc: 'p.rate_max DESC NULLS LAST, p.created_at DESC',
+  rate_asc: 'p.rate_min ASC NULLS LAST, p.created_at DESC',
+  title: 'LOWER(p.title) ASC',
+};
+
+function postingLimit(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 100;
+  return Math.min(parsed, 500);
+}
+
 // Combined job + gig postings list for the moderation queue.
-async function getJobsGigsPostings({ type, status, search } = {}) {
+async function getJobsGigsPostings({ type, status, search, sort, limit } = {}) {
   const params = [];
   const filters = [];
 
@@ -131,6 +158,17 @@ async function getJobsGigsPostings({ type, status, search } = {}) {
   }
 
   const whereSql = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const orderBy = POSTING_SORTS[String(sort || 'newest')] || POSTING_SORTS.newest;
+  params.push(postingLimit(limit));
+  const limitParam = `$${params.length}`;
+
+  // One unresolved-report count per posting, so the desk can sort by what is flagged.
+  const openReportCountSql = (idColumn) => `
+        (SELECT COUNT(*)::int
+           FROM reports r
+          WHERE r.deleted_at IS NULL
+            AND r.target_id = ${idColumn}::text
+            AND LOWER(r.status) NOT IN (${closedReportStatusListSql()}))`;
 
   const result = await pool.query(
     `
@@ -141,7 +179,9 @@ async function getJobsGigsPostings({ type, status, search } = {}) {
         'J-' || UPPER(LEFT(j.job_id::text, 8)) AS post_number,
         'job' AS post_type,
         j.title, j.description, j.payment_type, j.status,
+        j.category,
         j.experience_level,
+        ${openReportCountSql('j.job_id')} AS open_report_count,
         j.rate_credits_min AS rate_min,
         j.rate_credits_max AS rate_max,
         (SELECT COUNT(*)::int FROM proposals pr WHERE pr.job_id = j.job_id AND pr.deleted_at IS NULL) AS applicant_count,
@@ -161,7 +201,9 @@ async function getJobsGigsPostings({ type, status, search } = {}) {
         'G-' || UPPER(LEFT(g.gig_id::text, 8)) AS post_number,
         'gig' AS post_type,
         g.title, g.description, g.payment_type, g.status,
+        g.category,
         NULL AS experience_level,
+        ${openReportCountSql('g.gig_id')} AS open_report_count,
         (SELECT MIN(gt.rate_credits) FROM gig_tiers gt WHERE gt.gig_id = g.gig_id AND gt.deleted_at IS NULL) AS rate_min,
         (SELECT MAX(gt.rate_credits) FROM gig_tiers gt WHERE gt.gig_id = g.gig_id AND gt.deleted_at IS NULL) AS rate_max,
         (SELECT COUNT(*)::int
@@ -183,12 +225,82 @@ async function getJobsGigsPostings({ type, status, search } = {}) {
     LEFT JOIN accounts a ON a.account_id = p.author_account_id
     LEFT JOIN users u ON u.account_id = a.account_id
     ${whereSql}
-    ORDER BY p.created_at DESC
-    LIMIT 100
+    ORDER BY ${orderBy}
+    LIMIT ${limitParam}
     `,
     params
   );
   return result.rows.map(mapPostingRow);
+}
+
+/** Reports filed against one posting, so the review modal shows why it was flagged. */
+async function getPostingReports(postingId) {
+  const result = await pool.query(
+    `
+    SELECT r.report_id, r.report_number, r.type, r.status, r.priority, r.description,
+           r.created_at, r.updated_at,
+           COALESCE(a.display_name, u.first_name || ' ' || u.last_name) AS reporter_name,
+           a.handle AS reporter_handle
+    FROM reports r
+    LEFT JOIN accounts a ON a.account_id = r.by_account_id
+    LEFT JOIN users u ON u.account_id = a.account_id
+    WHERE r.deleted_at IS NULL AND r.target_id = $1::text
+    ORDER BY r.created_at DESC
+    LIMIT 20
+    `,
+    [String(postingId)]
+  );
+  return result.rows.map((row) => ({
+    id: row.report_id,
+    number: row.report_number,
+    type: row.type,
+    status: row.status,
+    priority: row.priority,
+    description: row.description,
+    reporter: { name: row.reporter_name || 'Unknown', handle: row.reporter_handle || '—' },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+/** Past moderation actions on one posting, with the reason each one was taken for. */
+async function getPostingModerationHistory(postingId) {
+  const result = await pool.query(
+    `
+    SELECT aa.account_activity_id, aa.action, aa.event_code, aa.created_at, aa.metadata,
+           COALESCE(sa.display_name, s.first_name || ' ' || s.last_name) AS actor_name,
+           s.role AS actor_role
+    FROM account_activity aa
+    LEFT JOIN staff s ON s.staff_id = aa.actor_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = s.account_id
+    WHERE aa.reference_id = $1::text
+      AND aa.event_code IN ('JOBS_POSTING_STATUS_CHANGED', 'JOBS_POSTING_ARCHIVED')
+    ORDER BY aa.created_at DESC
+    LIMIT 20
+    `,
+    [String(postingId)]
+  );
+  return result.rows.map((row) => {
+    const metadata = typeof row.metadata === 'string' ? safeJson(row.metadata) : row.metadata || {};
+    return {
+      id: row.account_activity_id,
+      action: row.action,
+      eventCode: row.event_code,
+      previousStatus: metadata?.previousStatus || null,
+      status: metadata?.status || null,
+      reason: metadata?.reason || null,
+      actor: row.actor_name ? { name: row.actor_name, role: row.actor_role || 'Staff' } : null,
+      createdAt: row.created_at,
+    };
+  });
+}
+
+function safeJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
 }
 
 // Full record for one posting, with everything a moderator may need to review it.
@@ -208,7 +320,14 @@ async function getJobsGigsPostingDetail(type, id) {
     if (!jobResult.rows.length) return null;
     const j = jobResult.rows[0];
 
-    const [tagsResult, proposalsResult, contractsResult, attachmentsResult] = await Promise.all([
+    const [
+      tagsResult,
+      proposalsResult,
+      contractsResult,
+      attachmentsResult,
+      postingReports,
+      moderationHistory,
+    ] = await Promise.all([
       pool.query(
         `SELECT t.name FROM job_tags jt JOIN tags t ON t.tag_id = jt.tag_id WHERE jt.job_id = $1 ORDER BY t.name`,
         [id]
@@ -247,6 +366,8 @@ async function getJobsGigsPostingDetail(type, id) {
          WHERE ja.job_id = $1 ORDER BY ja.index`,
         [id]
       ),
+      getPostingReports(id),
+      getPostingModerationHistory(id),
     ]);
 
     return {
@@ -257,6 +378,7 @@ async function getJobsGigsPostingDetail(type, id) {
       description: j.description,
       status: normalizePostingStatus(j.status, j.deleted_at),
       paymentType: j.payment_type,
+      category: j.category || null,
       experienceLevel: j.experience_level,
       noOfHires: Number(j.no_of_hires),
       roughDeadline: j.rough_deadline,
@@ -302,6 +424,8 @@ async function getJobsGigsPostingDetail(type, id) {
         startsAt: r.starts_at,
         createdAt: r.created_at,
       })),
+      reports: postingReports,
+      moderationHistory,
     };
   }
 
@@ -320,8 +444,16 @@ async function getJobsGigsPostingDetail(type, id) {
     if (!gigResult.rows.length) return null;
     const g = gigResult.rows[0];
 
-    const [tagsResult, tiersResult, addonsResult, requestsResult, contractsResult, attachmentsResult] =
-      await Promise.all([
+    const [
+      tagsResult,
+      tiersResult,
+      addonsResult,
+      requestsResult,
+      contractsResult,
+      attachmentsResult,
+      postingReports,
+      moderationHistory,
+    ] = await Promise.all([
         pool.query(
           `SELECT t.name FROM gig_tags gt JOIN tags t ON t.tag_id = gt.tag_id WHERE gt.gig_id = $1 ORDER BY t.name`,
           [id]
@@ -371,6 +503,8 @@ async function getJobsGigsPostingDetail(type, id) {
            WHERE ga.gig_id = $1 ORDER BY ga.index`,
           [id]
         ),
+        getPostingReports(id),
+        getPostingModerationHistory(id),
       ]);
 
     return {
@@ -381,6 +515,7 @@ async function getJobsGigsPostingDetail(type, id) {
       description: g.description,
       status: normalizePostingStatus(g.status, g.deleted_at),
       paymentType: g.payment_type,
+      category: g.category || null,
       noOfConcurrentMax: Number(g.no_of_concurrent_max),
       createdAt: g.created_at,
       updatedAt: g.updated_at,
@@ -433,6 +568,8 @@ async function getJobsGigsPostingDetail(type, id) {
         startsAt: r.starts_at,
         createdAt: r.created_at,
       })),
+      reports: postingReports,
+      moderationHistory,
     };
   }
 
@@ -458,6 +595,13 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
   if (!allowed.includes(next)) throw new Error(`Invalid posting status: ${status}`);
   const note = String(reason || '').trim();
   if (note.length > 500) throw new Error('Keep the reason under 500 characters');
+  // Taking a posting off the board is written to the owner's activity log and shown to
+  // staff reviewing the case later, so it always carries a reason.
+  if (!note && ['paused', 'closed', 'archived'].includes(next)) {
+    const error = new Error(`A reason is required when you ${next === 'archived' ? 'archive' : next === 'closed' ? 'close' : 'pause'} a posting`);
+    error.statusCode = 400;
+    throw error;
+  }
 
   const idColumn = type === 'job' ? 'job_id' : 'gig_id';
   const ownerColumn = type === 'job' ? 'client_account_id' : 'freelancer_account_id';
@@ -641,8 +785,9 @@ async function getUserJobsHistory(accountId) {
   };
 }
 
-function buildAlerts(tc, dc, reportBreakdown, postingCounts, pipelineCounts) {
+function buildAlerts(tc, dc, reportBreakdown, postingCounts, pipelineCounts, queueHealth) {
   const alerts = [];
+  const health = queueHealth || {};
   const openTickets = Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev || 0);
   const pausedJobs = Number(postingCounts?.paused_jobs || 0);
   const pausedGigs = Number(postingCounts?.paused_gigs || 0);
@@ -704,6 +849,46 @@ function buildAlerts(tc, dc, reportBreakdown, postingCounts, pipelineCounts) {
       message: `${rb.unassigned} job/gig report(s) are unassigned.`,
       severity: 'warning',
       action: { tab: 'reports' },
+    });
+  }
+  if (Number(health.ticketsOver48h) > 0) {
+    alerts.push({
+      id: 'ageing-tickets',
+      message: `${health.ticketsOver48h} job/gig ticket(s) have been open over 48h.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'open_only' } },
+    });
+  }
+  if (Number(health.ticketsNeverAnswered) > 0) {
+    alerts.push({
+      id: 'never-answered',
+      message: `${health.ticketsNeverAnswered} open job/gig ticket(s) have never had a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'open_only' } },
+    });
+  }
+  if (Number(health.reportsOver48h) > 0) {
+    alerts.push({
+      id: 'ageing-reports',
+      message: `${health.reportsOver48h} job/gig report(s) have waited over 48h for triage.`,
+      severity: 'error',
+      action: { tab: 'reports' },
+    });
+  }
+  if (Number(health.disputesOver7d) > 0) {
+    alerts.push({
+      id: 'ageing-disputes',
+      message: `${health.disputesOver7d} job/gig dispute(s) have been open over 7 days.`,
+      severity: 'error',
+      action: { tab: 'disputes' },
+    });
+  }
+  if (Number(health.staleActivePostings) > 0) {
+    alerts.push({
+      id: 'stale-postings',
+      message: `${health.staleActivePostings} active posting(s) have not been touched in 60 days.`,
+      severity: 'info',
+      action: { tab: 'control' },
     });
   }
   if (pausedJobs + pausedGigs > 0) {
@@ -802,6 +987,190 @@ async function getJobsReportBreakdown(targetTypesIn) {
   };
 }
 
+/**
+ * Queue health for the Jobs & Gigs dashboard.
+ *
+ * Everything here answers "is this desk keeping up?": how old the oldest untouched case is,
+ * how much is ageing past the service targets, how much the desk closed recently, and how
+ * much board activity is waiting on moderation. Counted straight off the durable tables so
+ * the numbers match the queues they link to.
+ */
+async function getJobsQueueHealth(reportTargetTypes) {
+  const closedReports = closedReportStatusListSql();
+  const [tickets, reports, disputes, board, actions] = await Promise.all([
+    pool.query(
+      `
+      SELECT
+        MIN(created_at) FILTER (WHERE status NOT IN ('Resolved', 'Closed')) AS oldest_open_at,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed') AND created_at < NOW() - INTERVAL '48 hours'
+        )::int AS open_over_48h,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed') AND created_at < NOW() - INTERVAL '7 days'
+        )::int AS open_over_7d,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed') AND first_staff_reply_at IS NULL
+        )::int AS never_answered,
+        COUNT(*) FILTER (WHERE resolved_at >= NOW() - INTERVAL '7 days')::int AS resolved_7d,
+        AVG(EXTRACT(EPOCH FROM (resolved_at - created_at))) FILTER (
+          WHERE resolved_at IS NOT NULL AND resolved_at >= NOW() - INTERVAL '30 days'
+        ) AS avg_resolution_seconds,
+        AVG(EXTRACT(EPOCH FROM (first_staff_reply_at - created_at))) FILTER (
+          WHERE first_staff_reply_at IS NOT NULL AND created_at >= NOW() - INTERVAL '30 days'
+        ) AS avg_first_reply_seconds
+      FROM tickets
+      WHERE deleted_at IS NULL AND type = ANY($1)
+      `,
+      [[...QUEUE_SCOPES.jobs.typesIn]]
+    ),
+    pool.query(
+      `
+      SELECT
+        MIN(created_at) FILTER (WHERE LOWER(status) NOT IN (${closedReports})) AS oldest_open_at,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) NOT IN (${closedReports}) AND created_at < NOW() - INTERVAL '48 hours'
+        )::int AS open_over_48h,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) IN ('resolved', 'closed', 'sanctioned')
+            AND updated_at >= NOW() - INTERVAL '7 days'
+        )::int AS closed_7d
+      FROM reports
+      WHERE deleted_at IS NULL AND LOWER(COALESCE(target_type, type)) = ANY($1)
+      `,
+      [reportTargetTypes]
+    ),
+    pool.query(
+      `
+      SELECT
+        MIN(opened_at) FILTER (WHERE LOWER(status::text) IN ('open', 'under_review')) AS oldest_open_at,
+        COUNT(*) FILTER (
+          WHERE LOWER(status::text) IN ('open', 'under_review')
+            AND opened_at < NOW() - INTERVAL '7 days'
+        )::int AS open_over_7d,
+        COUNT(*) FILTER (
+          WHERE LOWER(status::text) IN ('open', 'under_review') AND handled_by_staff_id IS NULL
+        )::int AS unassigned,
+        COUNT(*) FILTER (WHERE resolved_at >= NOW() - INTERVAL '7 days')::int AS resolved_7d
+      FROM disputes
+      WHERE LOWER(type::text) = ANY($1::text[])
+      `,
+      [JOBS_DISPUTE_ENTITIES]
+    ),
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '24 hours')
+          + (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '24 hours')
+          AS postings_24h,
+        (SELECT COUNT(*)::int
+           FROM jobs
+          WHERE deleted_at IS NULL
+            AND ${activeStatusSql('status')}
+            AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '60 days')
+          + (SELECT COUNT(*)::int
+               FROM gigs
+              WHERE deleted_at IS NULL
+                AND ${activeStatusSql('status')}
+                AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '60 days')
+          AS stale_active_postings,
+        (SELECT COUNT(*)::int
+           FROM proposals
+          WHERE deleted_at IS NULL
+            AND LOWER(status) IN ('pending', 'submitted', 'open')
+            AND created_at < NOW() - INTERVAL '14 days')
+          AS stale_pending_proposals,
+        (SELECT COUNT(*)::int
+           FROM gig_requests
+          WHERE deleted_at IS NULL
+            AND LOWER(status) IN ('pending', 'submitted', 'open')
+            AND created_at < NOW() - INTERVAL '14 days')
+          AS stale_pending_requests
+    `),
+    pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS actions_7d,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS actions_24h,
+        MAX(created_at) AS last_action_at
+      FROM account_activity
+      WHERE event_code IN ('JOBS_POSTING_STATUS_CHANGED', 'JOBS_POSTING_ARCHIVED')
+    `),
+  ]);
+
+  const t = tickets.rows[0] || {};
+  const r = reports.rows[0] || {};
+  const d = disputes.rows[0] || {};
+  const b = board.rows[0] || {};
+  const a = actions.rows[0] || {};
+  const toHours = (seconds) => {
+    const value = seconds === null || seconds === undefined ? null : Number(seconds);
+    if (value === null || Number.isNaN(value)) return null;
+    return Math.round((value / 3600) * 10) / 10;
+  };
+
+  return {
+    oldestOpenTicketAt: t.oldest_open_at || null,
+    ticketsOver48h: Number(t.open_over_48h || 0),
+    ticketsOver7d: Number(t.open_over_7d || 0),
+    ticketsNeverAnswered: Number(t.never_answered || 0),
+    ticketsResolvedLast7d: Number(t.resolved_7d || 0),
+    avgTicketResolutionHours: toHours(t.avg_resolution_seconds),
+    avgFirstReplyHours: toHours(t.avg_first_reply_seconds),
+    oldestOpenReportAt: r.oldest_open_at || null,
+    reportsOver48h: Number(r.open_over_48h || 0),
+    reportsClosedLast7d: Number(r.closed_7d || 0),
+    oldestOpenDisputeAt: d.oldest_open_at || null,
+    disputesOver7d: Number(d.open_over_7d || 0),
+    unassignedDisputes: Number(d.unassigned || 0),
+    disputesResolvedLast7d: Number(d.resolved_7d || 0),
+    postingsLast24h: Number(b.postings_24h || 0),
+    staleActivePostings: Number(b.stale_active_postings || 0),
+    stalePendingProposals: Number(b.stale_pending_proposals || 0),
+    stalePendingRequests: Number(b.stale_pending_requests || 0),
+    postingActionsLast7d: Number(a.actions_7d || 0),
+    postingActionsLast24h: Number(a.actions_24h || 0),
+    lastPostingActionAt: a.last_action_at || null,
+  };
+}
+
+/** Unresolved reports whose target is a job or gig posting, newest first. */
+async function getFlaggedPostings(limit = 6) {
+  const result = await pool.query(
+    `
+    SELECT
+      r.report_id, r.report_number, r.type, r.status, r.priority, r.created_at,
+      r.target_type, r.target_id,
+      COALESCE(j.title, g.title) AS posting_title,
+      CASE WHEN j.job_id IS NOT NULL THEN 'job' WHEN g.gig_id IS NOT NULL THEN 'gig' ELSE NULL END AS posting_type,
+      (SELECT COUNT(*)::int
+         FROM reports r2
+        WHERE r2.deleted_at IS NULL
+          AND r2.target_id = r.target_id
+          AND LOWER(r2.status) NOT IN (${closedReportStatusListSql()})) AS report_count
+    FROM reports r
+    LEFT JOIN jobs j ON j.job_id::text = r.target_id
+    LEFT JOIN gigs g ON g.gig_id::text = r.target_id
+    WHERE r.deleted_at IS NULL
+      AND LOWER(COALESCE(r.target_type, r.type)) IN ('job', 'gig', 'jobs', 'gigs')
+      AND LOWER(r.status) NOT IN (${closedReportStatusListSql()})
+      AND (j.job_id IS NOT NULL OR g.gig_id IS NOT NULL)
+    ORDER BY report_count DESC, r.created_at ASC
+    LIMIT $1
+    `,
+    [Math.min(Math.max(Number.parseInt(limit, 10) || 6, 1), 25)]
+  );
+  return result.rows.map((row) => ({
+    reportId: row.report_id,
+    reportNumber: row.report_number,
+    reportType: row.type,
+    status: row.status,
+    priority: row.priority,
+    createdAt: row.created_at,
+    postingType: row.posting_type,
+    postingId: row.target_id,
+    postingTitle: row.posting_title || 'Untitled posting',
+    openReports: Number(row.report_count || 0),
+  }));
+}
+
 async function getJobsOverview() {
   const jobsReportTypes = [...JOBS_REPORT_TYPES];
   const [
@@ -818,9 +1187,12 @@ async function getJobsOverview() {
     contractMixResult,
     trendResult,
     jobCategoryMix,
+    postingCategoryMix,
     experienceMix,
     recentPostings,
     staffWorkload,
+    queueHealth,
+    flaggedPostings,
   ] = await Promise.all([
     scopedTicketCounts(JOBS_TICKET_SCOPE),
     scopedTicketCategoryBreakdown(JOBS_TICKET_SCOPE),
@@ -876,12 +1248,24 @@ async function getJobsOverview() {
       GROUP BY 1 ORDER BY count DESC LIMIT 8
     `),
     pool.query(`
+      SELECT category, SUM(count)::int AS count FROM (
+        SELECT COALESCE(NULLIF(TRIM(category), ''), 'Uncategorized') AS category, COUNT(*)::int AS count
+        FROM jobs WHERE deleted_at IS NULL GROUP BY 1
+        UNION ALL
+        SELECT COALESCE(NULLIF(TRIM(category), ''), 'Uncategorized') AS category, COUNT(*)::int AS count
+        FROM gigs WHERE deleted_at IS NULL GROUP BY 1
+      ) mix
+      GROUP BY category ORDER BY count DESC LIMIT 8
+    `),
+    pool.query(`
       SELECT COALESCE(NULLIF(TRIM(experience_level), ''), 'Unspecified') AS level, COUNT(*)::int AS count
       FROM jobs WHERE deleted_at IS NULL
       GROUP BY 1 ORDER BY count DESC
     `),
-    getJobsGigsPostings({}),
+    getJobsGigsPostings({ sort: 'newest' }),
     fetchStaffWorkload(),
+    getJobsQueueHealth(jobsReportTypes),
+    getFlaggedPostings(6),
   ]);
 
   const tc = ticketCounts;
@@ -1013,6 +1397,12 @@ async function getJobsOverview() {
         value: Number(r.count),
         color: CHART_COLORS[i % CHART_COLORS.length],
       })),
+      // Jobs and gigs together: what the board actually looks like by category.
+      postingCategories: postingCategoryMix.rows.map((r, i) => ({
+        label: r.category,
+        value: Number(r.count),
+        color: CHART_COLORS[i % CHART_COLORS.length],
+      })),
       experienceLevels: experienceMix.rows.map((r, i) => ({
         label: String(r.level)
           .replace(/_/g, ' ')
@@ -1026,12 +1416,14 @@ async function getJobsOverview() {
         gigs: Number(r.gigs),
       })),
     },
+    queueHealth,
     recentTickets: tickets.slice(0, 10),
     recentPostings: recentPostings.slice(0, 8),
     flaggedReports: reports.slice(0, 10),
+    flaggedPostings,
     disputes: disputes.slice(0, 10),
     staffWorkload,
-    alerts: buildAlerts(tc, dc, reportBreakdown, pc, pl),
+    alerts: buildAlerts(tc, dc, reportBreakdown, pc, pl, queueHealth),
     dataSources: {
       tables: [
         'tickets',
@@ -1057,6 +1449,8 @@ module.exports = {
   getJobsDisputes,
   getJobsGigsPostings,
   getJobsGigsPostingDetail,
+  getJobsQueueHealth,
+  getFlaggedPostings,
   updateJobsGigsPosting,
   getUserJobsHistory,
   JOBS_DISPUTE_ENTITIES,

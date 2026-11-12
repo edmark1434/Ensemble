@@ -188,6 +188,21 @@ function StatePill({ children, value }: { children: ReactNode; value: string }) 
   );
 }
 
+const DESK_ACCENT = {
+  rose: {
+    tabOn: 'bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]',
+    tabIcon: 'text-rose-400',
+    focus: 'focus:ring-rose-500/15',
+  },
+  violet: {
+    tabOn: 'bg-violet-500/15 text-white shadow-[inset_0_0_0_1px_rgba(139,92,246,0.35)]',
+    tabIcon: 'text-violet-400',
+    focus: 'focus:ring-violet-500/15',
+  },
+} as const;
+
+type DeskAccent = keyof typeof DESK_ACCENT;
+
 /**
  * Forum content moderation, shared by the admin console (Moderation →
  * Management → Forum) and the Forum Moderator desk.
@@ -200,11 +215,18 @@ function StatePill({ children, value }: { children: ReactNode; value: string }) 
 export default function ForumModerationDesk({
   apiBase,
   initialView = 'groups',
+  accent = 'rose',
+  onViewChange,
 }: {
   /** Root of this console's forum routes, without a trailing slash. */
   apiBase: string;
   initialView?: View;
+  /** Admin Management uses rose; Forum Moderator console uses violet. */
+  accent?: DeskAccent;
+  /** Optional sync when the desk toggles Discussions ↔ Groups. */
+  onViewChange?: (view: View) => void;
 }) {
+  const theme = DESK_ACCENT[accent] || DESK_ACCENT.rose;
   const { groups: FORUM_GROUPS_URL, discussions: FORUM_DISCUSSIONS_URL } = useMemo(
     () => forumDeskApi(apiBase),
     [apiBase]
@@ -278,7 +300,18 @@ export default function ForumModerationDesk({
     setView(next);
     setStatus('all');
     setSortBy('recent');
+    onViewChange?.(next);
   };
+
+  useEffect(() => {
+    if (initialView !== view) {
+      setView(initialView);
+      setStatus('all');
+      setSortBy('recent');
+    }
+    // Only react when the parent changes the URL-driven initial view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialView]);
 
   const visibleGroups = useMemo(() => {
     const list = [...groups];
@@ -553,8 +586,8 @@ export default function ForumModerationDesk({
       <div className="inline-flex gap-1 rounded-2xl border border-white/[0.08] bg-[#14151c] p-1.5">
         {(
           [
-            { id: 'groups' as const, label: 'Groups', icon: Users },
             { id: 'discussions' as const, label: 'Discussions', icon: MessagesSquare },
+            { id: 'groups' as const, label: 'Groups', icon: Users },
           ] as const
         ).map(({ id, label, icon: Icon }) => (
           <button
@@ -562,12 +595,10 @@ export default function ForumModerationDesk({
             type="button"
             onClick={() => switchView(id)}
             className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
-              view === id
-                ? 'bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]'
-                : 'text-zinc-500 hover:text-zinc-200'
+              view === id ? theme.tabOn : 'text-zinc-500 hover:text-zinc-200'
             }`}
           >
-            <Icon className={`h-4 w-4 ${view === id ? 'text-rose-400' : ''}`} />
+            <Icon className={`h-4 w-4 ${view === id ? theme.tabIcon : ''}`} />
             {label}
           </button>
         ))}
@@ -583,7 +614,7 @@ export default function ForumModerationDesk({
               placeholder={
                 view === 'groups' ? 'Search name, description, tag…' : 'Search title or body…'
               }
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-9 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
+              className={`w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-9 text-sm text-white outline-none focus:ring-2 ${theme.focus}`}
             />
             {search ? (
               <button

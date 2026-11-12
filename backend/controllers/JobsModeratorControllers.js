@@ -19,12 +19,50 @@ const {
   getReportDetail,
   updateReport,
 } = require('../repositories/AdminTicketsRepositories');
-const {
-  getViolationsAndRestrictions,
-  issueViolation,
-  updateAccountRestriction,
-} = require('../repositories/ModeratorRepositories');
 const { JOBS_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
+const { JOBS_TYPES, normalizeTicketType } = require('../lib/TicketEnums');
+
+/** The Jobs & Gigs desk may only read or act on tickets filed under a Jobs & Gigs type. */
+function isJobsTicket(ticket) {
+  const type = normalizeTicketType(ticket?.type || ticket?.category, null);
+  return Boolean(type && JOBS_TYPES.includes(type));
+}
+
+async function loadScopedTicket(req, res) {
+  const detail = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'jobs' });
+  if (!detail) {
+    res.status(404).json({ success: false, message: 'Ticket not found' });
+    return null;
+  }
+  if (!isJobsTicket(detail.ticket)) {
+    res.status(403).json({ success: false, message: 'Ticket is outside the Jobs & Gigs queue' });
+    return null;
+  }
+  return detail;
+}
+
+/**
+ * Route guard for the shared message edit/delete handlers, so a Jobs & Gigs moderator
+ * cannot reach a message on a ticket outside this queue by guessing its id.
+ */
+async function requireJobsTicket(req, res, next) {
+  try {
+    if (await loadScopedTicket(req, res)) next();
+  } catch (err) {
+    console.error('Error checking jobs ticket scope:', err);
+    res.status(500).json({ success: false, message: 'Failed to load ticket' });
+  }
+}
+
+/** Caller mistakes from `updateTicket` (bad move target, missing type, no permission). */
+function ticketUpdateClientStatus(message) {
+  const msg = String(message || '');
+  if (/only a moderator or admin|assign yourself|permission/i.test(msg)) return 403;
+  if (/not valid for|type is required|only be changed when escalating|unknown escalate role|invalid/i.test(msg)) {
+    return 400;
+  }
+  return null;
+}
 
 async function getOverview(req, res) {
   try {
@@ -48,8 +86,8 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'jobs' });
-    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    const data = await loadScopedTicket(req, res);
+    if (!data) return;
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching ticket detail:', err);
@@ -57,31 +95,28 @@ async function getTicket(req, res) {
   }
 }
 
+/**
+ * Update a Jobs & Gigs ticket. Sending `assigned_role` + `type` moves it: to another
+ * moderator queue (escalation) or to the right Jobs & Gigs type when it was miscategorised.
+ */
 async function patchTicket(req, res) {
   try {
+    if (!(await loadScopedTicket(req, res))) return;
     const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error updating ticket:', err);
-    const msg =
-      err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-        ? err.message
-        : 'Failed to update ticket';
+    const status = err?.statusCode || ticketUpdateClientStatus(err?.message) || 500;
+    if (status >= 500) console.error('Error updating ticket:', err);
     res
-      .status(
-        err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-          ? 400
-          : 500
-      )
-      .json({ success: false, message: msg });
+      .status(status)
+      .json({ success: false, message: status < 500 ? err.message : 'Failed to update ticket' });
   }
 }
 
 async function postTicketMessage(req, res) {
   try {
+    if (!(await loadScopedTicket(req, res))) return;
     const { body, isInternal, attachments } = req.body;
     if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
@@ -195,6 +230,8 @@ async function getPostings(req, res) {
       type: req.query.type,
       status: req.query.status,
       search: req.query.search,
+      sort: req.query.sort,
+      limit: req.query.limit,
     });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -240,40 +277,6 @@ async function getUserHistory(req, res) {
   } catch (err) {
     console.error('Error fetching user jobs history:', err);
     res.status(500).json({ success: false, message: 'Failed to load user history' });
-  }
-}
-
-async function getRestrictions(req, res) {
-  try {
-    const data = await getViolationsAndRestrictions();
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error fetching restrictions:', err);
-    res.status(500).json({ success: false, message: 'Failed to load restrictions' });
-  }
-}
-
-async function postViolation(req, res) {
-  try {
-    const { accountId, warningId, type, title, reason, points } = req.body;
-    if (!accountId || !(warningId || type || title)) {
-      return res.status(400).json({ success: false, message: 'accountId and a predefined warning are required' });
-    }
-    const data = await issueViolation(accountId, { warningId, type: type || title, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error issuing violation:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to issue violation' });
-  }
-}
-
-async function patchRestriction(req, res) {
-  try {
-    const data = await updateAccountRestriction(req.params.id, req.body.action || req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt, reason: req.body?.reason, punishmentId: req.body?.punishmentId || req.body?.punishment_id, customDuration: req.body?.customDuration === true || req.body?.custom_duration === true });
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error updating account restriction:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to update restriction' });
   }
 }
 
@@ -323,6 +326,7 @@ async function patchReport(req, res) {
 }
 
 module.exports = {
+  requireJobsTicket,
   getOverview,
   getTickets,
   getTicket,
@@ -337,9 +341,6 @@ module.exports = {
   getPosting,
   patchPosting,
   getUserHistory,
-  getRestrictions,
-  postViolation,
-  patchRestriction,
   getReports,
   getReport,
   patchReport,

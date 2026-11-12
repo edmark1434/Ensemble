@@ -30,14 +30,12 @@ export const MarketplaceTicketManagement = lazyWithPreload(() => import('@/pages
 export const MarketplaceReports = lazyWithPreload(() => import('@/pages/moderator/marketplace-moderator/Reports'));
 export const MarketplaceUserTeam = lazyWithPreload(() => import('@/pages/moderator/marketplace-moderator/UserTeam'));
 export const MarketplaceDisputes = lazyWithPreload(() => import('@/pages/moderator/marketplace-moderator/Disputes'));
-export const MarketplaceRestrictions = lazyWithPreload(() => import('@/pages/moderator/marketplace-moderator/Restrictions'));
 export const SupportModeratorLayout = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Layout'));
 export const SupportModeratorDashboard = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Dashboard'));
 export const SupportTicketManagement = lazyWithPreload(() => import('@/pages/moderator/support-moderator/TicketManagement'));
 export const SupportDisputes = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Disputes'));
 export const SupportUserTeam = lazyWithPreload(() => import('@/pages/moderator/support-moderator/UserTeam'));
 export const SupportReports = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Reports'));
-export const SupportRestrictions = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Restrictions'));
 export const JobsModeratorLayout = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Layout'));
 export const JobsModeratorDashboard = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Dashboard'));
 export const JobsGigsControl = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/JobsGigsControl'));
@@ -45,7 +43,6 @@ export const JobsTicketManagement = lazyWithPreload(() => import('@/pages/modera
 export const JobsDisputes = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Disputes'));
 export const JobsReports = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Reports'));
 export const JobsUserTeam = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/UserTeam'));
-export const JobsRestrictions = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Restrictions'));
 
 export type StaffConsole = 'admin' | 'staff' | 'forum' | 'marketplace' | 'support' | 'jobs';
 
@@ -53,9 +50,9 @@ const CONSOLE_PAGES: Record<StaffConsole, Preloadable[]> = {
   admin: [AdminDashboard, AdminFeedbacksPage, AdminBadgesPage, AdminWarningsPage, UserTeamPage, CreditEconomyPage, ModerationPage, AnalyticsPage, TicketManagementPage, SystemSettingsPage, StaffPlatformPreviewPage],
   staff: [StaffDashboard, StaffPlatformPreviewPage],
   forum: [ForumModeratorDashboard, ForumDiscussion, ForumGroups, ForumTicketManagement, ForumReports, ForumUserTeam, ForumDisputes, ForumRestrictions, StaffPlatformPreviewPage],
-  marketplace: [MarketplaceModeratorDashboard, MarketplaceControl, MarketplaceTicketManagement, MarketplaceReports, MarketplaceUserTeam, MarketplaceDisputes, MarketplaceRestrictions, StaffPlatformPreviewPage],
-  support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, SupportRestrictions, StaffPlatformPreviewPage],
-  jobs: [JobsModeratorDashboard, JobsGigsControl, JobsTicketManagement, JobsDisputes, JobsReports, JobsUserTeam, JobsRestrictions, StaffPlatformPreviewPage],
+  marketplace: [MarketplaceModeratorDashboard, MarketplaceControl, MarketplaceTicketManagement, MarketplaceReports, MarketplaceUserTeam, MarketplaceDisputes, StaffPlatformPreviewPage],
+  support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, StaffPlatformPreviewPage],
+  jobs: [JobsModeratorDashboard, JobsGigsControl, JobsTicketManagement, JobsDisputes, JobsReports, JobsUserTeam, StaffPlatformPreviewPage],
 };
 
 /** Fetches every page chunk of a console so sidebar navigation never waits on a download. */

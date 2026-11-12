@@ -247,6 +247,7 @@ const ACCENT_BTN: Record<Accent, string> = {
   violet: "bg-violet-500/90 hover:bg-violet-500",
   emerald: "bg-emerald-500/90 hover:bg-emerald-500",
   rose: "bg-rose-500/90 hover:bg-rose-500",
+  amber: "bg-amber-500/90 hover:bg-amber-500",
 };
 
 /**

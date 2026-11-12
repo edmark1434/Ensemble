@@ -13,6 +13,7 @@ const {
   cancelScheduledTicketClose,
   createSupportTicket,
   getTicketPickers,
+  searchTicketTeams,
   getTicketCatalog,
   updateTicket,
   addTicketMessage,
@@ -331,6 +332,24 @@ async function getTicketContext(req, res) {
   } catch (err) {
     console.error('Error loading ticket context:', err);
     res.status(500).json({ success: false, message: 'Failed to load your projects and orders' });
+  }
+}
+
+async function getTicketTeamSearch(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const data = await searchTicketTeams(accountId, req.query?.q);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    if (status >= 500) console.error('Error searching ticket teams:', err);
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Failed to search teams',
+    });
   }
 }
 
@@ -832,6 +851,7 @@ module.exports = {
   patchAdminReport,
   getPublicTicketCatalog,
   getTicketContext,
+  getTicketTeamSearch,
   createPublicTicket,
   listMyTickets,
   listMyDisputes,

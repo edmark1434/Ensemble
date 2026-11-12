@@ -15,6 +15,12 @@ const {
 // so this desk gets the same guards and the same account-activity audit trail.
 const forumContent = require('../services/ForumContentModerationServices');
 const { FORUM_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
+const { FORUM_TYPES, normalizeTicketType } = require('../lib/TicketEnums');
+
+function isForumTicket(ticket) {
+  const type = normalizeTicketType(ticket?.type || ticket?.category, null);
+  return Boolean(type && FORUM_TYPES.includes(type));
+}
 
 function sendForumContentError(res, err, fallback) {
   const message = String(err?.message || '');
@@ -46,6 +52,9 @@ async function getTicket(req, res) {
   try {
     const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'forum' });
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (!isForumTicket(data.ticket)) {
+      return res.status(403).json({ success: false, message: 'Ticket is outside the forum queue' });
+    }
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching ticket detail:', err);
@@ -55,6 +64,11 @@ async function getTicket(req, res) {
 
 async function patchTicket(req, res) {
   try {
+    const existing = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'forum' });
+    if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (!isForumTicket(existing.ticket)) {
+      return res.status(403).json({ success: false, message: 'Ticket is outside the forum queue' });
+    }
     const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
@@ -78,6 +92,11 @@ async function patchTicket(req, res) {
 
 async function postTicketMessage(req, res) {
   try {
+    const existing = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'forum' });
+    if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (!isForumTicket(existing.ticket)) {
+      return res.status(403).json({ success: false, message: 'Ticket is outside the forum queue' });
+    }
     const { body, isInternal, attachments } = req.body;
     if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });

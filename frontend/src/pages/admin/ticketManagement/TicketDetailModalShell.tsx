@@ -394,6 +394,12 @@ const ACCENT: Record<string, { text: string; spin: string; btn: string; soft: st
     btn: 'bg-emerald-500/90 hover:bg-emerald-500',
     soft: 'bg-emerald-500/10 text-emerald-50 border-emerald-500/25',
   },
+  amber: {
+    text: 'text-amber-400',
+    spin: 'text-amber-400',
+    btn: 'bg-amber-500/90 hover:bg-amber-500',
+    soft: 'bg-amber-500/10 text-amber-50 border-amber-500/25',
+  },
 };
 
 function priorityPillClass(priority: string | null | undefined) {
@@ -889,7 +895,18 @@ export default function TicketDetailModalShell({
         onClose();
         return;
       }
-      await load();
+      try {
+        const res = await api.get(`${endpointBase}/${ticketId}`);
+        if (res.data?.success) applyLoadedTicket(res.data.data as TicketDetail, true);
+      } catch (reloadErr: unknown) {
+        // A specialist desk loses access once the ticket moves to another queue.
+        const status = (reloadErr as { response?: { status?: number } })?.response?.status;
+        if (status === 403 || status === 404) {
+          onClose();
+          return;
+        }
+        showErrorToast('Failed to load ticket');
+      }
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to escalate ticket'));
     } finally {

@@ -11,9 +11,6 @@ const {
   getTicket,
   patchTicket,
   postTicketMessage,
-  getRestrictions,
-  postViolation,
-  patchRestriction,
   getReports: getMarketplaceReports,
   getReport: getMarketplaceReport,
   patchReport: patchMarketplaceReport,
@@ -84,10 +81,8 @@ router.post('/tickets/:id/messages', [checkSession, marketplaceModerator], postT
 router.patch('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
 router.delete('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
 
-router.get('/restrictions', [checkSession, marketplaceModerator], getRestrictions);
-router.get('/restrictions/lookup', [checkSession, marketplaceModerator], lookupRestrictionAccounts);
-router.post('/restrictions/violations', [checkSession, marketplaceModerator], postViolation);
-router.patch('/restrictions/accounts/:id', [checkSession, marketplaceModerator], patchRestriction);
+// Marketplace moderation enforcement happens inside a report case, so this console has no
+// standalone restrictions desk. The other consoles keep their `/<desk>/restrictions` routes.
 
 // ─── Support Moderator ───────────────────────────────────────────────────
 router.get('/support/overview', [checkSession, supportModerator], SupportModerator.getOverview);
@@ -107,10 +102,9 @@ router.post('/support/disputes/:id/financial-resolution', [checkSession, support
 router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);
 router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
 router.patch('/support/disputes/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchDisputeMessage);
-router.get('/support/restrictions', [checkSession, supportModerator], SupportModerator.getRestrictions);
-router.get('/support/restrictions/lookup', [checkSession, supportModerator], lookupRestrictionAccounts);
-router.post('/support/restrictions/violations', [checkSession, supportModerator], SupportModerator.postViolation);
-router.patch('/support/restrictions/accounts/:id', [checkSession, supportModerator], SupportModerator.patchRestriction);
+
+// Support enforcement happens inside a report case and in User & Team → Users, so this console
+// has no standalone restrictions desk. The forum and jobs consoles keep theirs.
 
 // ─── Forum Moderator ─────────────────────────────────────────────────────
 router.get('/forum/overview', [checkSession, forumModerator], ForumModerator.getOverview);
@@ -151,8 +145,16 @@ router.get('/jobs/tickets', [checkSession, jobsModerator], JobsModerator.getTick
 router.get('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.getTicket);
 router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.patchTicket);
 router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
-router.patch('/jobs/tickets/:id/messages/:messageId', [checkSession, jobsModerator], patchAdminTicketMessage);
-router.delete('/jobs/tickets/:id/messages/:messageId', [checkSession, jobsModerator], deleteAdminTicketMessage);
+router.patch(
+  '/jobs/tickets/:id/messages/:messageId',
+  [checkSession, jobsModerator, JobsModerator.requireJobsTicket],
+  patchAdminTicketMessage
+);
+router.delete(
+  '/jobs/tickets/:id/messages/:messageId',
+  [checkSession, jobsModerator, JobsModerator.requireJobsTicket],
+  deleteAdminTicketMessage
+);
 router.get('/jobs/reports', [checkSession, jobsModerator], JobsModerator.getReports);
 router.get('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.getReport);
 router.patch('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.patchReport);
@@ -169,9 +171,8 @@ router.get('/jobs/postings', [checkSession, jobsModerator], JobsModerator.getPos
 router.get('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.getPosting);
 router.patch('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.patchPosting);
 router.get('/jobs/users/:accountId/history', [checkSession, jobsModerator], JobsModerator.getUserHistory);
-router.get('/jobs/restrictions', [checkSession, jobsModerator], JobsModerator.getRestrictions);
-router.get('/jobs/restrictions/lookup', [checkSession, jobsModerator], lookupRestrictionAccounts);
-router.post('/jobs/restrictions/violations', [checkSession, jobsModerator], JobsModerator.postViolation);
-router.patch('/jobs/restrictions/accounts/:id', [checkSession, jobsModerator], JobsModerator.patchRestriction);
+
+// Jobs & Gigs enforcement is taken inside a report case (or from User & Team → Users), so
+// this console has no standalone restrictions desk. Forum still keeps its own.
 
 module.exports = router;

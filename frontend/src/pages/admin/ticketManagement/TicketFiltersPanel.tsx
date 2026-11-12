@@ -27,7 +27,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-type Accent = 'rose' | 'sky' | 'violet' | 'emerald';
+type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 
 function renderTypeOptions(types: readonly string[]) {
   const allowed = new Set(types);
@@ -58,6 +58,7 @@ const ACCENT_FOCUS: Record<Accent, string> = {
   sky: 'focus:border-sky-500/40',
   violet: 'focus:border-violet-500/40',
   emerald: 'focus:border-emerald-500/40',
+  amber: 'focus:border-amber-500/40',
 };
 
 const ACCENT_CHIP: Record<Accent, string> = {
@@ -65,6 +66,7 @@ const ACCENT_CHIP: Record<Accent, string> = {
   sky: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
   violet: 'border-violet-500/40 bg-violet-500/10 text-violet-300',
   emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+  amber: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
 };
 
 const ACCENT_BTN: Record<Accent, string> = {
@@ -72,6 +74,7 @@ const ACCENT_BTN: Record<Accent, string> = {
   sky: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
   violet: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
   emerald: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+  amber: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
 };
 
 const ACCENT_CHIP_ACTIVE: Record<Accent, string> = {
@@ -79,6 +82,7 @@ const ACCENT_CHIP_ACTIVE: Record<Accent, string> = {
   sky: 'bg-sky-500/15 text-sky-100',
   violet: 'bg-violet-500/15 text-violet-100',
   emerald: 'bg-emerald-500/15 text-emerald-100',
+  amber: 'bg-amber-500/15 text-amber-100',
 };
 
 export type ModeratorOption = {

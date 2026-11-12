@@ -49,6 +49,9 @@ export type MarketplaceListing = {
   asset?: ListingLinkedAsset | null;
   status: 'pending' | 'approved' | 'rejected' | 'delisted';
   rejectionReason: string | null;
+  moderationNote?: string | null;
+  /** Reason recorded for a delist or a send-back-for-re-approval. */
+  moderationNote: string | null;
   submittedBy: ListingPerson;
   reviewedBy: { staffId: number; name: string } | null;
   reviewedAt: string | null;
@@ -82,30 +85,46 @@ export type MarketplaceAlert = {
   };
 };
 
+/** Review backlog, throughput, and copyright pressure for the listing queue. */
+export type MarketplaceQueueHealth = {
+  oldestPendingAt: string | null;
+  pendingOver48h: number;
+  pendingOver7d: number;
+  reviewedLast24h: number;
+  reviewedLast7d: number;
+  approvedLast7d: number;
+  removedLast7d: number;
+  avgReviewHours: number | null;
+  copyrightReports: number;
+};
+
+export type MarketplaceSummary = MarketplaceQueueHealth & {
+  totalListings: number;
+  pendingListings: number;
+  approvedListings: number;
+  rejectedListings: number;
+  delistedListings: number;
+  approvedCreditValue: number;
+  openTickets: number;
+  totalTickets: number;
+  unassignedTickets: number;
+  highPriorityTickets: number;
+  awaitingReplyTickets: number;
+  escalatedTickets: number;
+  inProgressTickets: number;
+  resolvedTickets: number;
+  openReports: number;
+  totalReports: number;
+  unassignedReports: number;
+  highPriorityReports: number;
+  resolvedReports: number;
+  restrictedAccounts: number;
+};
+
 export type MarketplaceOverview = {
   lastUpdated: string;
-  summary: {
-    totalListings: number;
-    pendingListings: number;
-    approvedListings: number;
-    rejectedListings: number;
-    delistedListings: number;
-    approvedCreditValue: number;
-    openTickets: number;
-    totalTickets: number;
-    unassignedTickets: number;
-    highPriorityTickets: number;
-    awaitingReplyTickets: number;
-    escalatedTickets: number;
-    inProgressTickets: number;
-    resolvedTickets: number;
-    openReports: number;
-    totalReports: number;
-    unassignedReports: number;
-    highPriorityReports: number;
-    resolvedReports: number;
-    restrictedAccounts: number;
-  };
+  queueHealth?: MarketplaceQueueHealth;
+  summary: MarketplaceSummary;
   charts: {
     listingStatusMix: ChartSegment[];
     listingCategories: ChartSegment[];

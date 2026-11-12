@@ -65,7 +65,7 @@ const TICKET_FORM_FIELDS = Object.freeze({
     optionalText('error_message', 'Error message shown'),
   ],
   Teams: [
-    text('team_name', 'Team name'),
+    text('team_name', 'Team', { picker: 'team' }),
     select('issue', 'Issue', ['Invite', 'Role', 'Removal', 'Suspended membership']),
     optionalText('affected_username', "Affected member's username"),
   ],

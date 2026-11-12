@@ -115,14 +115,12 @@ import {
   MarketplaceReports,
   MarketplaceUserTeam,
   MarketplaceDisputes,
-  MarketplaceRestrictions,
   SupportModeratorLayout,
   SupportModeratorDashboard,
   SupportTicketManagement,
   SupportDisputes,
   SupportUserTeam,
   SupportReports,
-  SupportRestrictions,
   JobsModeratorLayout,
   JobsModeratorDashboard,
   JobsGigsControl,
@@ -130,7 +128,6 @@ import {
   JobsDisputes,
   JobsReports,
   JobsUserTeam,
-  JobsRestrictions,
 } from '@/pages/staff/staffPages';
 
 const lazyPage = (loader: () => Promise<{ default: ComponentType<any> }>) => lazy(loader);
@@ -414,7 +411,8 @@ function App() {
         {/* Moderator Routes */}
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ForumModeratorDashboard />} />
-          <Route path='forum-discussion' element={<ForumDiscussion />} />
+          <Route path='forum-control' element={<ForumDiscussion />} />
+          <Route path='forum-discussion' element={<Navigate to="/moderator/forum/forum-control" replace />} />
           <Route path='groups' element={<ForumGroups />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
           <Route path='disputes' element={<ForumDisputes />} />
@@ -430,7 +428,6 @@ function App() {
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
           <Route path='disputes' element={<MarketplaceDisputes />} />
           <Route path='reports' element={<MarketplaceReports />} />
-          <Route path='restrictions' element={<MarketplaceRestrictions />} />
           <Route path='user-team' element={<MarketplaceUserTeam />} />
           <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
@@ -440,7 +437,8 @@ function App() {
           <Route path='ticket-management' element={<SupportTicketManagement />} />
           <Route path='disputes' element={<SupportDisputes />} />
           <Route path='reports' element={<SupportReports />} />
-          <Route path='restrictions' element={<SupportRestrictions />} />
+          {/* Restrictions removed: enforce from a report case or User & Team → Users. */}
+          <Route path='restrictions' element={<Navigate to="/moderator/support/user-team" replace />} />
           <Route path='user-team' element={<SupportUserTeam />} />
           <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
@@ -451,7 +449,8 @@ function App() {
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
           <Route path='reports' element={<JobsReports />} />
-          <Route path='restrictions' element={<JobsRestrictions />} />
+          {/* Restrictions removed: enforce from a report case or User & Team → Users. */}
+          <Route path='restrictions' element={<Navigate to="/moderator/jobs/user-team" replace />} />
           <Route path='user-team' element={<JobsUserTeam />} />
           <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>

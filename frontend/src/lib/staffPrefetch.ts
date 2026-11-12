@@ -27,14 +27,21 @@ const ROUTE_DATA: Record<string, DataRequest[]> = {
   ],
 };
 
-function addModeratorDesk(desk: string, extra: Record<string, DataRequest[]>, restrictionsEndpoint?: string) {
+/** Pass `false` as `restrictionsEndpoint` for a console with no Restrictions page. */
+function addModeratorDesk(
+  desk: string,
+  extra: Record<string, DataRequest[]>,
+  restrictionsEndpoint?: string | false,
+) {
   const api = `/api/moderator/${desk}`;
   const route = `/moderator/${desk}`;
   ROUTE_DATA[route] = [`${api}/overview`];
   ROUTE_DATA[`${route}/ticket-management`] = [`${api}/tickets`];
   ROUTE_DATA[`${route}/disputes`] = [`${api}/disputes`, `${api}/overview`];
   ROUTE_DATA[`${route}/reports`] = [`${api}/reports`, `${api}/overview`];
-  ROUTE_DATA[`${route}/restrictions`] = [restrictionsEndpoint || `${api}/restrictions`];
+  if (restrictionsEndpoint !== false) {
+    ROUTE_DATA[`${route}/restrictions`] = [restrictionsEndpoint || `${api}/restrictions`];
+  }
   ROUTE_DATA[`${route}/user-team`] = [USER_TEAM_OVERVIEW];
   for (const [suffix, requests] of Object.entries(extra)) ROUTE_DATA[`${route}/${suffix}`] = requests;
 }
@@ -45,6 +52,8 @@ const FORUM_CONTENT_DESK: DataRequest[] = [
 ];
 
 addModeratorDesk('forum', {
+  'forum-control': FORUM_CONTENT_DESK,
+  // Legacy paths still prefetch the same desk while redirects settle.
   'forum-discussion': FORUM_CONTENT_DESK,
   groups: FORUM_CONTENT_DESK,
 });
@@ -53,13 +62,23 @@ addModeratorDesk(
   {
     'marketplace-control': [
       '/api/moderator/marketplace/overview',
-      ['/api/moderator/marketplace/listings', { status: 'pending' }],
+      ['/api/moderator/marketplace/listings', { status: 'pending', sort: 'newest', limit: 100 }],
     ],
   },
-  '/api/moderator/restrictions',
+  // Marketplace enforcement runs through report cases; this console has no Restrictions tab.
+  false,
 );
-addModeratorDesk('support', { 'ticket-management': ['/api/moderator/support/overview'] });
-addModeratorDesk('jobs', { control: ['/api/moderator/jobs/overview', '/api/moderator/jobs/postings'] });
+addModeratorDesk('support', { 'ticket-management': ['/api/moderator/support/overview'] }, false);
+addModeratorDesk(
+  'jobs',
+  {
+    control: [
+      '/api/moderator/jobs/overview',
+      ['/api/moderator/jobs/postings', { sort: 'flagged', limit: 100 }],
+    ],
+  },
+  false,
+);
 
 /** Tabs that load their own data instead of sharing the page overview. */
 const TAB_DATA: Record<string, Record<string, DataRequest[]>> = {

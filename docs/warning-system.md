@@ -91,7 +91,7 @@ New users start with **0 active points** and full access. Being new is not a cri
 
 ## 4. How a warning is issued
 
-1. Staff open a desk (Admin User & Team, Support, Forum, Marketplace, or Jobs restrictions).
+1. Staff open a desk (Admin User & Team, a moderator console's User & Team or Restrictions desk, or a report case).
 2. They pick a **named warning**. The picker loads `/api/admin/warning-catalog` or `/api/moderator/warning-catalog`.
 3. Points and duration are locked to that row.
 4. They write **case notes** (required). That is what happened on this case, not a custom score.
