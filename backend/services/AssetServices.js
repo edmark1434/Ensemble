@@ -483,13 +483,12 @@ async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
     const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
-    const { assertWarningAllows, listingReviewForced } = require('./WarningBandServices');
+    const { assertWarningAllows } = require('./WarningBandServices');
     if (String(data.status).toLowerCase() === 'published') {
       await assertWarningAllows(accountId, 'publish_asset');
     }
-    const watchReview = String(data.status).toLowerCase() === 'published'
-      && await listingReviewForced(accountId);
-    const reviewRequired = watchReview && String(data.status).toLowerCase() === 'published';
+    // New publishes always await moderator approval before going live.
+    const reviewRequired = String(data.status).toLowerCase() === 'published';
 
     // When review is required, asset is created as draft while awaiting moderator approval
     const requestedStatus = data.status;
@@ -497,7 +496,7 @@ async function createAssetServices(accountId, payload) {
 
     // Save the listing and its processing jobs atomically; storage work runs afterwards.
     const assetId = await createAssetRepository(accountId, data);
-    const asset = await getAssetServices(assetId, accountId);
+    let asset = await getAssetServices(assetId, accountId);
 
     let reviewInfo = { queued: false };
     if (reviewRequired) {
@@ -512,6 +511,8 @@ async function createAssetServices(accountId, payload) {
         requestedStatus,
         currentStatus: 'draft',
       });
+      // Refetch so review_status reflects the pending listing row.
+      asset = await getAssetServices(assetId, accountId);
     }
 
     if (reviewInfo.queued) {

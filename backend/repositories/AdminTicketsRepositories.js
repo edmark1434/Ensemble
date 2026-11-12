@@ -33,6 +33,7 @@ const {
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,
   notifyDisputeParties,
+  notifyDisputeHandler,
   resolveDisputeReplyTarget,
   emitDisputeState,
 } = require('./DisputeChatRepositories');
@@ -49,7 +50,13 @@ const {
   buildDisputeReopenMessage,
   buildDisputeSanctionMessage,
   buildDisputePartySwapMessage,
+  buildDisputeDismissMessage,
+  DISPUTE_RESOLUTIONS,
+  DISPUTE_REOPEN_REASONS,
+  DISPUTE_PAYOUT_DEFAULT_DAYS,
+  DISPUTE_PAYOUT_MAX_DAYS,
 } = require('../lib/DisputeResolutions');
+const { listDisputePayouts, planReversalRoute } = require('./DisputeFinancialRepositories');
 const {
   ROLE_TO_TICKET_TYPES,
   TICKET_TYPES,
@@ -3465,13 +3472,21 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (row.handled_by_staff_id && !perms.isAdmin) {
       throw new Error('This dispute already has a handler. They must release the case first.');
     }
-    await pool.query(
+    // Two Support Moderators claiming at once: only the first update finds the case unassigned.
+    const claimed = await pool.query(
       `UPDATE disputes
        SET handled_by_staff_id = $1,
            updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
+       WHERE dispute_id = $2
+         AND ($3::boolean OR handled_by_staff_id IS NULL)`,
+      [staff.staff_id, disputeId, Boolean(perms.isAdmin)]
     );
+    if (!claimed.rowCount) {
+      const error = new Error('Someone else just claimed this dispute. Refresh to see who.');
+      error.statusCode = 409;
+      throw error;
+    }
+    await emitDisputeState(disputeId, { reason: 'handler_changed' });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3496,6 +3511,7 @@ async function updateDispute(disputeId, patch, staffSession) {
         [disputeId, staff.staff_id]
       );
     }
+    await emitDisputeState(disputeId, { reason: 'handler_changed' });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3536,6 +3552,20 @@ async function updateDispute(disputeId, patch, staffSession) {
          WHERE dispute_id = $2`,
         [nextAssignee, disputeId]
       );
+      if (nextNorm) {
+        try {
+          await notifyDisputeHandler(
+            { dispute_id: disputeId, handled_by_staff_id: nextAssignee },
+            {
+              message: `You were assigned dispute ${row.dispute_number || ''}.`.replace(/\s+\./, '.'),
+              path: `/disputes/${disputeId}`,
+            }
+          );
+        } catch (err) {
+          console.warn('Dispute assignment notice skipped:', err.message);
+        }
+      }
+      await emitDisputeState(disputeId, { reason: 'handler_changed' });
     }
 
     const otherKeys = Object.keys(patch).filter(
@@ -3552,9 +3582,14 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (action === 'approve') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before approving.');
+    if (String(refreshed.status || '').toLowerCase() === 'closed') {
+      throw disputeDecisionError('This dispute is closed. Reopen it before making it public.');
+    }
+    // Making a case public moves it out of the review queue; it never pulls a case that is
+    // already further along (awaiting response, under review) back to "open".
     await pool.query(
       `UPDATE disputes
-       SET status = 'open',
+       SET status = CASE WHEN status = 'pending_review' THEN 'open'::dispute_status ELSE status END,
            visibility = TRUE,
            updated_at = NOW()
        WHERE dispute_id = $1`,
@@ -3646,7 +3681,8 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
     if (notes.length > 2000) throw new Error('Resolution notes are too long.');
 
-    await pool.query(
+    // Guarded on status so a settle or second resolve landing at the same moment wins once.
+    const closedNow = await pool.query(
       `
       UPDATE disputes
       SET status = 'closed',
@@ -3655,9 +3691,13 @@ async function updateDispute(disputeId, patch, staffSession) {
           resolved_at = NOW(),
           updated_at = NOW()
       WHERE dispute_id = $3
+        AND status <> 'closed'
       `,
       [resolution.key, notes, disputeId]
     );
+    if (!closedNow.rowCount) {
+      throw disputeDecisionError('This dispute was just closed by someone else. Refresh to see the decision.');
+    }
 
     await recordAccountActivity({
       accountId: refreshed.by_account_id || refreshed.for_account_id,
@@ -3707,16 +3747,23 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (action === 'dismiss') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
-    await pool.query(
+    const notes = String(patch.resolution_notes || '').trim();
+    if (notes.length > 2000) throw disputeDecisionError('Resolution notes are too long.');
+    // Dismissing keeps the case's visibility. A private complaint that goes nowhere must not
+    // land on both profiles and the public page just because it was closed.
+    const dismissed = await pool.query(
       `UPDATE disputes
        SET status = 'closed',
-           visibility = TRUE,
-           resolution_notes = COALESCE($1, resolution_notes),
+           resolution_notes = COALESCE(NULLIF($1, ''), resolution_notes),
            resolved_at = NOW(),
            updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [patch.resolution_notes || null, disputeId]
+       WHERE dispute_id = $2
+         AND status <> 'closed'`,
+      [notes, disputeId]
     );
+    if (!dismissed.rowCount) {
+      throw disputeDecisionError('This dispute is already closed. Reopen it first.');
+    }
     await recordAccountActivity({
       accountId: refreshed.by_account_id || refreshed.for_account_id,
       action: `Dispute ${refreshed.dispute_number || disputeId} dismissed`,
@@ -3725,9 +3772,28 @@ async function updateDispute(disputeId, patch, staffSession) {
       referencePrefix: 'DIS',
       referenceId: disputeId,
       actorStaffId: staff.staff_id,
-      metadata: { status: 'closed' },
+      metadata: { status: 'closed', visibility: Boolean(refreshed.visibility) },
     });
-    await emitDisputeState(disputeId);
+    try {
+      await postDisputeDecisionMessage(
+        refreshed,
+        staffSession,
+        buildDisputeDismissMessage({ notes, disputeNumber: refreshed.dispute_number || null }),
+        { audience: refreshed.visibility ? 'public' : 'disputer', notify: false, asSystem: true }
+      );
+    } catch (err) {
+      console.warn('Dispute dismissal message skipped:', err.message);
+    }
+    try {
+      await notifyDisputeParties(refreshed, {
+        message: `Dispute ${refreshed.dispute_number || ''} was dismissed and closed.`.replace(/\s+was/, ' was'),
+        path: refreshed.visibility ? `/disputes/${disputeId}` : '/contracts/disputes',
+        onlyFiler: !refreshed.visibility,
+      });
+    } catch (err) {
+      console.warn('Dispute dismissal notice skipped:', err.message);
+    }
+    await emitDisputeState(disputeId, { reason: 'dismissed' });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3749,6 +3815,18 @@ async function updateDispute(disputeId, patch, staffSession) {
   }
 
   const normalized = normalizeDisputeStatusPatch(patch);
+  // Closing and reopening are decisions with a recorded reason and a message for both
+  // parties; a bare status edit would skip both. Route them through Resolve / Reopen.
+  const currentStatus = String(refreshed.status || '').toLowerCase();
+  if (normalized.status !== undefined && normalized.status !== currentStatus) {
+    if (normalized.status === 'closed') {
+      throw disputeDecisionError('Use Resolve to close a dispute so the outcome is recorded and posted.');
+    }
+    if (currentStatus === 'closed') {
+      throw disputeDecisionError('Use Reopen to bring a closed dispute back, so the reason is recorded.');
+    }
+  }
+  if (normalized.status === currentStatus) delete normalized.status;
   const allowed = [
     'status',
     'priority',
@@ -3950,6 +4028,10 @@ async function loadDisputeCaseFile(row) {
       rev.credit_transaction_id AS reversed_by_transaction_id,
       src_w.type AS source_wallet_type,
       dst_w.type AS destination_wallet_type,
+      src_w.wallet_id AS source_wallet_id,
+      dst_w.wallet_id AS destination_wallet_id,
+      src_aw.account_id AS source_account_id,
+      dst_aw.account_id AS destination_account_id,
       COALESCE(src_a.display_name, src_u.first_name || ' ' || src_u.last_name, 'Platform') AS source_name,
       src_a.handle AS source_handle,
       COALESCE(dst_a.display_name, dst_u.first_name || ' ' || dst_u.last_name, 'Platform') AS destination_name,
@@ -3969,16 +4051,22 @@ async function loadDisputeCaseFile(row) {
     WHERE ct.related_dispute_id = $1
       OR ($2::uuid IS NOT NULL AND ct.credit_transaction_id = $2::uuid)
       OR (ct.reference_table = 'contracts' AND ct.reference_id = ANY($3::uuid[]))
-      OR (ct.reference_table = 'contract_milestones' AND ct.reference_id = ANY($4::uuid[]))
+      OR (
+        ct.reference_table IN ('contract_milestones', 'contract_milestone_revisions')
+        AND ct.reference_id = ANY($4::uuid[])
+      )
       OR ct.reverses_credit_transaction_id IN (
            SELECT credit_transaction_id FROM credit_transactions
            WHERE related_dispute_id = $1
               OR ($2::uuid IS NOT NULL AND credit_transaction_id = $2::uuid)
               OR (reference_table = 'contracts' AND reference_id = ANY($3::uuid[]))
-              OR (reference_table = 'contract_milestones' AND reference_id = ANY($4::uuid[]))
+              OR (
+                reference_table IN ('contract_milestones', 'contract_milestone_revisions')
+                AND reference_id = ANY($4::uuid[])
+              )
          )
     ORDER BY ct.created_at ASC
-    LIMIT 80
+    LIMIT 120
     `,
     [
       row.dispute_id,
@@ -4045,6 +4133,63 @@ async function loadDisputeCaseFile(row) {
 
   const contractTitleById = new Map(contractResult.rows.map((contract) => [contract.contract_id, contract.title]));
   const milestoneNameById = new Map(milestoneResult.rows.map((milestone) => [milestone.contract_milestone_id, milestone.name]));
+  const linkedContractRow = linkedContractId
+    ? contractResult.rows.find((contract) => String(contract.contract_id) === String(linkedContractId))
+    : null;
+  const parties = linkedContractRow
+    ? {
+        client_account_id: linkedContractRow.client_account_id,
+        freelancer_account_id: linkedContractRow.freelancer_account_id,
+      }
+    : null;
+  const nameByAccount = new Map();
+  if (linkedContractRow) {
+    nameByAccount.set(String(linkedContractRow.client_account_id), {
+      name: linkedContractRow.client_name,
+      handle: linkedContractRow.client_handle || null,
+    });
+    nameByAccount.set(String(linkedContractRow.freelancer_account_id), {
+      name: linkedContractRow.freelancer_name,
+      handle: linkedContractRow.freelancer_handle || null,
+    });
+  }
+  // A reversal that is already scheduled counts as taken, even before its ledger row exists.
+  let scheduledReversalIds = new Set();
+  try {
+    const scheduled = await pool.query(
+      `SELECT reverses_credit_transaction_id FROM dispute_payouts
+       WHERE dispute_id = $1 AND kind = 'reversal' AND status IN ('scheduled', 'failed')
+         AND reverses_credit_transaction_id IS NOT NULL`,
+      [row.dispute_id]
+    );
+    scheduledReversalIds = new Set(scheduled.rows.map((r) => String(r.reverses_credit_transaction_id)));
+  } catch (err) {
+    if (err.code !== '42P01') throw err;
+  }
+  const milestoneContractById = new Map(
+    milestoneResult.rows.map((milestone) => [String(milestone.contract_milestone_id), String(milestone.contract_id)])
+  );
+  // The case file also lists the parties' other contracts for context; only this dispute's
+  // own contract (and anything linked to the dispute) can be reversed from here.
+  const inDisputeScope = (tx) => {
+    if (String(tx.related_dispute_id || '') === String(row.dispute_id)) return true;
+    if (String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || '')) return true;
+    if (!linkedContractId) return false;
+    if (tx.reference_table === 'contracts') return String(tx.reference_id) === String(linkedContractId);
+    if (['contract_milestones', 'contract_milestone_revisions'].includes(tx.reference_table)) {
+      return milestoneContractById.get(String(tx.reference_id)) === String(linkedContractId);
+    }
+    return false;
+  };
+  const referenceLabelFor = (tx) => {
+    if (tx.reference_table === 'contracts') return contractTitleById.get(tx.reference_id) || 'Contract';
+    if (tx.reference_table === 'contract_milestones') return milestoneNameById.get(tx.reference_id) || 'Milestone';
+    if (tx.reference_table === 'contract_milestone_revisions') {
+      return `Paid revision · ${milestoneNameById.get(tx.reference_id) || 'Milestone'}`;
+    }
+    if (tx.reference_table === 'disputes') return 'Dispute payout';
+    return tx.reference_table || null;
+  };
 
   return {
     contracts: contractResult.rows.map((contract) => ({
@@ -4066,10 +4211,35 @@ async function loadDisputeCaseFile(row) {
     })),
     transactions: transactionResult.rows.map((tx) => {
       const status = String(tx.status || '');
-      const alreadyReversed = Boolean(tx.reversed_by_transaction_id) || status === 'Reversed';
+      const alreadyReversed =
+        Boolean(tx.reversed_by_transaction_id) ||
+        status === 'Reversed' ||
+        scheduledReversalIds.has(String(tx.credit_transaction_id));
       const tiedToThisDispute =
         String(tx.related_dispute_id || '') === String(row.dispute_id) ||
         String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || '');
+      // Same routing the server applies when staff confirm, so the dialog can say exactly
+      // whose credits are taken and who receives them — or why this one can't be reversed.
+      const route = planReversalRoute({
+        source: {
+          wallet_id: tx.source_wallet_id,
+          type: tx.source_wallet_type,
+          account_id: tx.source_account_id,
+        },
+        destination: {
+          wallet_id: tx.destination_wallet_id,
+          type: tx.destination_wallet_type,
+          account_id: tx.destination_account_id,
+        },
+        parties,
+        hasContract: Boolean(linkedContractId),
+      });
+      const recipient = route.allowed
+        ? nameByAccount.get(String(route.recipientAccountId)) ||
+          (String(route.recipientAccountId) === String(tx.source_account_id)
+            ? { name: tx.source_name, handle: tx.source_handle || null }
+            : null)
+        : null;
       return {
         id: tx.credit_transaction_id,
         type: tx.type,
@@ -4077,11 +4247,7 @@ async function loadDisputeCaseFile(row) {
         status: tx.status,
         createdAt: tx.created_at,
         referenceTable: tx.reference_table || null,
-        referenceLabel: tx.reference_table === 'contracts'
-          ? contractTitleById.get(tx.reference_id) || 'Contract'
-          : tx.reference_table === 'contract_milestones'
-            ? milestoneNameById.get(tx.reference_id) || 'Milestone'
-            : tx.reference_table || null,
+        referenceLabel: referenceLabelFor(tx),
         sourceName: tx.source_name,
         sourceHandle: tx.source_handle || null,
         sourceWallet: walletLabel(tx.source_wallet_type),
@@ -4091,11 +4257,28 @@ async function loadDisputeCaseFile(row) {
         tiedToThisDispute,
         reversesTransactionId: tx.reverses_credit_transaction_id || null,
         reversedByTransactionId: tx.reversed_by_transaction_id || null,
+        reversalScheduled: scheduledReversalIds.has(String(tx.credit_transaction_id)),
+        reversal: {
+          allowed: Boolean(route.allowed) && inDisputeScope(tx),
+          reason: !inDisputeScope(tx)
+            ? 'This transaction belongs to another contract between these accounts.'
+            : route.allowed
+              ? null
+              : route.reason,
+          fromName: tx.destination_name,
+          fromHandle: tx.destination_handle || null,
+          toName: recipient?.name || (route.allowed ? 'Original sender' : null),
+          toHandle: recipient?.handle || null,
+          toRole: route.allowed ? route.recipientRole || null : null,
+        },
+        inDisputeScope: inDisputeScope(tx),
         reversible:
           status === 'Completed' &&
           !alreadyReversed &&
           !tx.reverses_credit_transaction_id &&
-          !row.financial_resolution_at,
+          !row.financial_resolution_at &&
+          inDisputeScope(tx) &&
+          Boolean(route.allowed),
       };
     }),
     relatedDisputes: relatedResult.rows.map((dispute) => ({
@@ -4154,6 +4337,27 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     chatAvailable = false;
   }
 
+  let payouts = [];
+  try {
+    payouts = (await listDisputePayouts(pool, disputeId)).map(mapDisputePayout);
+  } catch (err) {
+    console.error('Error loading dispute payouts:', err.message);
+  }
+  const waiting = payouts.filter((p) => ['scheduled', 'failed'].includes(p.status));
+  const closed = String(row.status || '').toLowerCase() === 'closed';
+
+  // The exact text the server posts, so the console preview never drifts from it.
+  const names = {
+    disputer: row.initiator_handle ? `@${row.initiator_handle}` : row.initiator_name || 'The disputer',
+    disputee: row.respondent_handle ? `@${row.respondent_handle}` : row.respondent_name || 'The disputee',
+    disputeNumber: row.dispute_number || null,
+  };
+  const withPreview = (options, entries, build) =>
+    options.map((option) => {
+      const entry = entries.find((item) => item.key === option.key);
+      return entry ? { ...option, preview: build(entry, names) } : option;
+    });
+
   return {
     dispute: mapDisputeRow(row),
     caseFile,
@@ -4163,9 +4367,55 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     permissions,
     assignableQueue: 'disputes',
     assignableStaff,
+    payouts,
+    payoutState: {
+      waiting: waiting.length,
+      // Auto-release only runs on closed cases; a reopened case holds its payouts.
+      paused: waiting.length > 0 && !closed,
+      failed: waiting.filter((p) => p.status === 'failed').length,
+      nextReleaseAt:
+        waiting
+          .map((p) => (p.releaseAt ? new Date(p.releaseAt) : null))
+          .filter((date) => date && !Number.isNaN(date.getTime()))
+          .sort((a, b) => a.getTime() - b.getTime())[0] || null,
+      canCancel: waiting.length > 0 && !closed && !payouts.some((p) => p.status === 'paid'),
+    },
+    payoutPolicy: {
+      defaultDays: DISPUTE_PAYOUT_DEFAULT_DAYS,
+      maxDays: DISPUTE_PAYOUT_MAX_DAYS,
+    },
     // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
-    resolutionOptions: listDisputeResolutionOptions(),
-    reopenOptions: listDisputeReopenOptions(),
+    resolutionOptions: withPreview(
+      listDisputeResolutionOptions(),
+      DISPUTE_RESOLUTIONS,
+      buildDisputeResolutionMessage
+    ),
+    reopenOptions: withPreview(listDisputeReopenOptions(), DISPUTE_REOPEN_REASONS, buildDisputeReopenMessage),
+  };
+}
+
+function mapDisputePayout(row) {
+  const holder = row.holder_handle ? `@${row.holder_handle}` : row.holder_name || null;
+  return {
+    id: String(row.dispute_payout_id),
+    kind: row.kind,
+    status: row.status,
+    amount: Number(row.amount_credits || 0),
+    recipientAccountId: row.recipient_account_id || null,
+    recipientRole: row.recipient_role || null,
+    recipientName: row.recipient_name || 'Member',
+    recipientHandle: row.recipient_handle || null,
+    heldIn: `${walletLabel(row.source_wallet_type)}${holder ? ` · ${holder}` : ''}`,
+    paysInto: walletLabel(row.destination_wallet_type),
+    releaseAt: row.release_at || null,
+    paidAt: row.paid_at || null,
+    cancelledAt: row.cancelled_at || null,
+    cancelReason: row.cancel_reason || null,
+    failureReason: row.failure_reason || null,
+    attempts: Number(row.attempts || 0),
+    creditTransactionId: row.credit_transaction_id || null,
+    reversesTransactionId: row.reverses_credit_transaction_id || null,
+    createdAt: row.created_at || null,
   };
 }
 
@@ -4451,6 +4701,9 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
   if (String(row.sanction_type || '').toLowerCase() === 'ban') {
     throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
   }
+  if (String(row.status || '').toLowerCase() === 'closed') {
+    throw disputeDecisionError('This dispute is closed. Reopen it before deciding it again.');
+  }
 
   const handle = row.respondent_handle ? `@${row.respondent_handle}` : 'the respondent';
   const name = row.respondent_name || 'The respondent';
@@ -4550,6 +4803,13 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms, patch =
   if (banned) {
     message += '\n\nThe permanent ban from the earlier decision stays in place until a staff member lifts it.';
   }
+  const waitingPayouts = (await listDisputePayouts(pool, disputeId)).filter((p) =>
+    ['scheduled', 'failed'].includes(p.status)
+  );
+  if (waitingPayouts.length) {
+    message +=
+      '\n\nThe payout from the earlier ruling is paused while the case is reviewed. No credits move until staff confirm or withdraw it.';
+  }
 
   try {
     await postDisputeDecisionMessage(row, staffSession, message, {
@@ -4587,7 +4847,7 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms, patch =
     console.warn('Dispute reopen notice skipped:', err.message);
   }
 
-  await emitDisputeState(disputeId);
+  await emitDisputeState(disputeId, { reason: 'reopened' });
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -4612,9 +4872,10 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
   if (notes.length > 2000) throw disputeDecisionError('The note is too long.');
 
   const chatId = await getDisputeChatId(disputeId);
-  if (chatId && !isMongoReady()) {
+  // Even a case with no discussion yet needs Mongo: the swap is always announced there.
+  if (!isMongoReady()) {
     const error = new Error(
-      'MongoDB is not connected — the discussion cannot be relabelled, so the parties were not swapped.'
+      'MongoDB is not connected — the discussion cannot be relabelled or notified, so the parties were not swapped.'
     );
     error.statusCode = 503;
     throw error;
@@ -4726,7 +4987,7 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
     console.warn('Dispute party swap notice skipped:', err.message);
   }
 
-  await emitDisputeState(disputeId);
+  await emitDisputeState(disputeId, { reason: 'parties_swapped' });
   return getDisputeDetail(disputeId, staffSession);
 }
 

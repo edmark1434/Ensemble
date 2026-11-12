@@ -153,6 +153,36 @@ const EVENT_CATALOG = {
     targetType: 'Dispute',
     severity: 'low',
   },
+  DISPUTE_ESCROW_SETTLED: {
+    label: 'Dispute escrow settled',
+    targetType: 'Dispute',
+    severity: 'high',
+    impact: 'Split a contract’s frozen escrow between the client and the freelancer.',
+  },
+  DISPUTE_TRANSACTION_REVERSED: {
+    label: 'Dispute transaction reversed',
+    targetType: 'Dispute',
+    severity: 'high',
+    impact: 'Took credits back from one account and scheduled them for another.',
+  },
+  DISPUTE_PAYOUT_RELEASED: {
+    label: 'Dispute payout released',
+    targetType: 'Dispute',
+    severity: 'medium',
+    impact: 'Paid a dispute ruling’s credits into the recipient’s Account Wallet.',
+  },
+  DISPUTE_PAYOUT_RESCHEDULED: {
+    label: 'Dispute payout rescheduled',
+    targetType: 'Dispute',
+    severity: 'low',
+    impact: 'Changed when a dispute ruling’s credits are paid out.',
+  },
+  DISPUTE_PAYOUT_CANCELLED: {
+    label: 'Dispute ruling withdrawn',
+    targetType: 'Dispute',
+    severity: 'high',
+    impact: 'Cancelled an unpaid money ruling and returned any credits it had taken back.',
+  },
   VIDEO_PROJECT_FROZEN: {
     label: 'Video project frozen',
     targetType: 'Video project',

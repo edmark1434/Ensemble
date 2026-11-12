@@ -339,20 +339,27 @@ function emitDisputeChat(
 }
 
 /**
- * Tell both parties — and anyone reading the public page — that a dispute's state moved.
- * Covers approve / hide / resolve / reopen / dismiss / ban and plain status patches, so a
- * party's view updates without a reload.
+ * Tell both parties, the staff working the case, and anyone reading the public page that a
+ * dispute's state moved. Covers approve / hide / resolve / reopen / dismiss / ban / swap,
+ * claims and handoffs, money rulings and payouts, so every open view refetches instead of
+ * showing a stale decision. The payload only says *that* something changed (plus status and
+ * visibility); clients read the details back over HTTP, which also enforces who sees what.
  *
  * Deliberately selects only long-standing columns: it must not break if a newer
  * migration has not been applied yet.
+ * @param {string} disputeId
+ * @param {{ reason?: string|null }} [options] short machine word for what changed, e.g. `parties_swapped`
  */
-async function emitDisputeState(disputeId) {
+async function emitDisputeState(disputeId, { reason = null } = {}) {
   if (!disputeId) return null;
   let row = null;
   try {
     const result = await pool.query(
-      `SELECT dispute_id, dispute_number, status, visibility, by_account_id, for_account_id
-       FROM disputes WHERE dispute_id = $1 AND deleted_at IS NULL`,
+      `SELECT d.dispute_id, d.dispute_number, d.status, d.visibility, d.by_account_id,
+              d.for_account_id, d.updated_at, st.account_id AS handler_account_id
+       FROM disputes d
+       LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
+       WHERE d.dispute_id = $1 AND d.deleted_at IS NULL`,
       [disputeId]
     );
     row = result.rows[0] || null;
@@ -369,15 +376,138 @@ async function emitDisputeState(disputeId) {
     status,
     visibility: Boolean(row.visibility),
     closed: status === 'closed',
+    reason: reason || null,
+    updatedAt: row.updated_at || new Date(),
   };
+
+  // Staff who have opened the case are members of its chat; the handler may not have yet.
+  let staffIds = [];
+  try {
+    const chatId = await getDisputeChatId(disputeId);
+    if (chatId && isMongoReady()) staffIds = await listDisputeChatStaffAccountIds(chatId);
+  } catch (error) {
+    console.warn('Dispute state broadcast could not list staff:', error.message);
+  }
 
   emitDisputeChat('disputeUpdated', {
     disputeId: payload.disputeId,
     payload,
-    accountIds: [row.by_account_id, row.for_account_id].filter(Boolean),
+    accountIds: [row.by_account_id, row.for_account_id, row.handler_account_id, ...staffIds].filter(
+      Boolean
+    ),
     includePublicRoom: true,
   });
   return payload;
+}
+
+/**
+ * Post a platform ruling card (author "Dispute Resolution", no account attached) in a
+ * dispute's discussion. Money and party changes use this so the thread always records them.
+ * @param {object} row dispute row with dispute_id, by_account_id, for_account_id, dispute_number
+ * @param {string} body
+ * @param {{ audience?: string }} [options]
+ */
+async function postDisputeSystemMessage(row, body, { audience = 'parties' } = {}) {
+  if (!row?.dispute_id || !body) return null;
+  if (!isMongoReady()) {
+    throw new Error('MongoDB is not connected — cannot post the decision in the discussion.');
+  }
+  const { DISPUTE_DECISION_AUTHOR } = require('../lib/DisputeResolutions');
+  const chatId = await ensureDisputeChat(row.dispute_id, row);
+  const normalizedAudience = String(audience || 'parties').toLowerCase();
+  const partyIds =
+    normalizedAudience === 'disputer'
+      ? [row.by_account_id]
+      : normalizedAudience === 'disputee'
+        ? [row.for_account_id]
+        : [row.by_account_id, row.for_account_id];
+  return createDisputeMessage({
+    chatId,
+    body,
+    senderId: null,
+    authorName: DISPUTE_DECISION_AUTHOR.name,
+    authorType: DISPUTE_DECISION_AUTHOR.type,
+    authorRole: DISPUTE_DECISION_AUTHOR.role,
+    audience: normalizedAudience,
+    audiences: normalizedAudience === 'public' ? ['public', 'parties'] : [normalizedAudience],
+    isInternal: false,
+    notifyAccountIds: partyIds.filter(Boolean),
+    disputeId: row.dispute_id,
+  });
+}
+
+/** One notification to one account about a dispute, with a live push. */
+async function notifyDisputeAccount(accountId, disputeId, { message, path } = {}) {
+  if (!accountId || !disputeId || !message) return;
+  try {
+    const NotificationRepositories = require('./NotificationRepositories');
+    const notification = await NotificationRepositories.createNotification({
+      account_id: accountId,
+      message,
+      reference_table: 'disputes',
+      reference_prefix: 'DIS',
+      reference_path: path || `/disputes/${disputeId}`,
+      reference_id: disputeId,
+    });
+    let io = null;
+    try {
+      io = require('../lib/WebSocket').getIo();
+    } catch {
+      io = null;
+    }
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+  } catch (err) {
+    console.warn('Dispute notification skipped:', err.message);
+  }
+}
+
+/**
+ * The money side of a ruling, shaped for one of the two parties. Each payout says how much
+ * goes to whom and when; `isYou` marks the viewer's own. Null when there is no ruling, or
+ * when the payouts table is not there yet (migration not applied).
+ */
+async function getDisputeSettlementForParty(disputeId, accountId) {
+  try {
+    const result = await pool.query(
+      `
+      SELECT dp.dispute_payout_id, dp.kind, dp.amount_credits, dp.status, dp.release_at,
+             dp.paid_at, dp.recipient_account_id, dp.recipient_role,
+             d.status AS dispute_status, d.financial_resolution_kind, d.financial_resolution_at,
+             COALESCE(ra.display_name, ra.handle) AS recipient_name, ra.handle AS recipient_handle
+      FROM dispute_payouts dp
+      JOIN disputes d ON d.dispute_id = dp.dispute_id
+      LEFT JOIN accounts ra ON ra.account_id = dp.recipient_account_id
+      WHERE dp.dispute_id = $1
+        AND dp.status <> 'cancelled'
+      ORDER BY dp.created_at ASC, dp.dispute_payout_id ASC
+      `,
+      [disputeId]
+    );
+    if (!result.rows.length) return null;
+    const first = result.rows[0];
+    const waiting = result.rows.some((row) => ['scheduled', 'failed'].includes(row.status));
+    return {
+      kind: first.financial_resolution_kind || null,
+      decidedAt: first.financial_resolution_at || null,
+      // Payouts wait while a reopened case is reviewed again.
+      paused: waiting && String(first.dispute_status || '').toLowerCase() !== 'closed',
+      payouts: result.rows.map((row) => ({
+        id: String(row.dispute_payout_id),
+        kind: row.kind,
+        amount: Number(row.amount_credits || 0),
+        status: row.status,
+        releaseAt: row.release_at || null,
+        paidAt: row.paid_at || null,
+        recipientRole: row.recipient_role || null,
+        recipientName: row.recipient_name || 'Member',
+        recipientHandle: row.recipient_handle || null,
+        isYou: Boolean(accountId && String(row.recipient_account_id) === String(accountId)),
+      })),
+    };
+  } catch (error) {
+    if (error.code !== '42P01') console.warn('Dispute settlement summary skipped:', error.message);
+    return null;
+  }
 }
 
 async function listDisputeChatMemberAccountIds(chatId, { roles = null } = {}) {
@@ -884,6 +1014,8 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     canComment: Boolean(viewerAccountId) && !closed,
     // Replies from people outside the dispute are held for staff review before they appear.
     commentsNeedApproval: Boolean(viewerAccountId) && !isParty,
+    // Only the two parties see how the money was split and when it lands.
+    settlement: isParty ? await getDisputeSettlementForParty(disputeId, viewerAccountId) : null,
     chatId,
     messages,
   };
@@ -919,7 +1051,12 @@ async function getAccountDispute(disputeId, accountId) {
       visibility: Boolean(row.visibility),
     })
   );
-  return { ...mapDisputeSummary(row, accountId), chatId, messages };
+  return {
+    ...mapDisputeSummary(row, accountId),
+    settlement: await getDisputeSettlementForParty(disputeId, accountId),
+    chatId,
+    messages,
+  };
 }
 
 async function postPublicDisputeComment(
@@ -1142,6 +1279,9 @@ module.exports = {
   postPublicDisputeComment,
   notifyDisputeParties,
   notifyDisputeHandler,
+  notifyDisputeAccount,
+  postDisputeSystemMessage,
+  getDisputeSettlementForParty,
   emitDisputeState,
   createDisputeMessage,
   updateDisputeMessageAudience,

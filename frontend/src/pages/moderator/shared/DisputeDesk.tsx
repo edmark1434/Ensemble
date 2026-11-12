@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Hand, Loader2, Scale, Search, SlidersHorizontal, X } from 'lucide-react';
+import socket from '@/lib/socket';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import type { Dispute } from '@/pages/admin/ticketManagement/ticketTypes';
 
@@ -210,6 +211,29 @@ export default function DisputeDesk({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [handlerSearch, setHandlerSearch] = useState('');
+
+  // A case this staff member handles or has opened changed somewhere else (another console,
+  // a party, the payout job): refresh the queue so its status, handler and amount stay true.
+  // The open modal refreshes itself; this keeps the list behind it in step.
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
+  const openIdRef = useRef(selectedId);
+  openIdRef.current = selectedId;
+  useEffect(() => {
+    let timer: number | undefined;
+    const onState = (payload: { disputeId?: string } | null) => {
+      if (!payload?.disputeId) return;
+      if (openIdRef.current != null && String(openIdRef.current) === String(payload.disputeId)) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => onUpdatedRef.current(), 600);
+    };
+    if (!socket.connected) socket.connect();
+    socket.on('disputeUpdated', onState);
+    return () => {
+      window.clearTimeout(timer);
+      socket.off('disputeUpdated', onState);
+    };
+  }, []);
 
   const handlerOptions = useMemo(() => {
     const byId = new Map<string, DisputeHandlerOption>();

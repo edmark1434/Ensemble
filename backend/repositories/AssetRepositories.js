@@ -778,12 +778,16 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
 
     const needsProcessing = data.type !== 'template'
       && originals.some((original) => !derivatives.has(String(original.file_id)));
+    // Publish intent stays draft + pending until a moderator approves the listing.
+    const wantsPublish = data.status === 'published';
+    const assetStatus = needsProcessing || wantsPublish ? 'draft' : data.status;
+    const listingStatus = wantsPublish ? 'pending' : 'draft';
     const market = await client.query(
       `INSERT INTO market_assets
          (name, description, price_credits, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING market_asset_id`,
-      [data.name, data.description, data.priceCredits, needsProcessing ? 'draft' : data.status]
+      [data.name, data.description, data.priceCredits, assetStatus]
     );
     const marketAssetId = market.rows[0].market_asset_id;
     await client.query(
@@ -791,7 +795,7 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
         (listing_number, market_asset_id, submitted_by_account_id, title, description, category, price_credits, status)
        VALUES ('LST-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16), $1, $2, $3, $4, $5, $6, $7)`,
       [marketAssetId, accountId, data.name, data.description, data.type, data.priceCredits,
-        data.status === 'published' ? 'approved' : 'draft']);
+        listingStatus]);
 
 
     if (data.type === 'template') {

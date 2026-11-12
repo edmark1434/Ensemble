@@ -25,6 +25,17 @@ import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
 import {
+  DEFAULT_PAYOUT_POLICY,
+  DisputePayoutsList,
+  PayoutTimingPicker,
+  formatPayoutWhen,
+  initialPayoutTiming,
+  payoutTimingBody,
+  payoutTimingError,
+  payoutTimingSummary,
+  type PayoutTiming,
+} from "./DisputePayoutUi";
+import {
   InboxUploadMediaButton,
   InboxUploadMediaPreview,
   uploadChatAttachment,
@@ -290,6 +301,18 @@ function resolutionPreview(
   return note ? `${body} — Staff notes: ${note}` : body;
 }
 
+/**
+ * The server's own message for a choice, with the staff note placed where the server puts it
+ * (just before the closing paragraph).
+ */
+function previewWithNotes(preview: string, notes: string) {
+  const note = notes.trim();
+  if (!note) return preview;
+  const parts = preview.split("\n\n");
+  const closing = parts.length > 3 ? parts.pop() : null;
+  return [...parts, `Reviewing staff noted: ${note}`, ...(closing ? [closing] : [])].join("\n\n");
+}
+
 /** Preview of the reopen notice. Mirrors DISPUTE_REOPEN_REASONS `finding` builders. */
 function reopenPreview(key: string, notes: string) {
   const bodies: Record<string, string> = {
@@ -453,6 +476,16 @@ export default function ModeratorDisputeDetailModal({
   const [reverseTxn, setReverseTxn] = useState<DisputeCaseTransaction | null>(null);
   const [reverseAmount, setReverseAmount] = useState("");
   const [reverseNotes, setReverseNotes] = useState("");
+  const [settleTiming, setSettleTiming] = useState<PayoutTiming>(() => initialPayoutTiming());
+  const [reverseTiming, setReverseTiming] = useState<PayoutTiming>(() => initialPayoutTiming());
+  const [payoutDialog, setPayoutDialog] = useState<null | "release" | "reschedule" | "cancel">(null);
+  const [rescheduleTiming, setRescheduleTiming] = useState<PayoutTiming>(() => ({
+    ...initialPayoutTiming(),
+    mode: "date",
+  }));
+  const [payoutNotes, setPayoutNotes] = useState("");
+  const formRef = useRef({ status: "", priority: "", resolutionNotes: "" });
+  formRef.current = { status, priority, resolutionNotes };
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -526,6 +559,46 @@ export default function ModeratorDisputeDetailModal({
     };
   }, [detail?.chatId]);
 
+  // Another staff member (or the payout job) changed this case: read it back so every open
+  // console shows the same decision, handler and payouts. Unsaved edits in the Case form stay.
+  const detailRef = useRef<DisputeDetail | null>(null);
+  detailRef.current = detail;
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
+  useEffect(() => {
+    let timer: number | undefined;
+    const refreshLive = async () => {
+      try {
+        const res = await api.get(`${endpointBase}/${disputeId}`);
+        if (!res.data?.success) return;
+        const previous = detailRef.current?.dispute;
+        const form = formRef.current;
+        const dirty = Boolean(
+          previous &&
+            (form.status !== toApiToken(previous.status) ||
+              form.priority !== toApiToken(previous.priority) ||
+              (form.resolutionNotes || "") !== (previous.resolutionNotes || ""))
+        );
+        applyDetail(res.data.data as DisputeDetail, { syncForm: !dirty });
+        onUpdatedRef.current?.();
+      } catch {
+        // Keep showing what we have; the next event or a manual action reloads it.
+      }
+    };
+    const onState = (payload: { disputeId?: string } | null) => {
+      if (!payload || String(payload.disputeId) !== String(disputeId)) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void refreshLive(), 250);
+    };
+    if (!socket.connected) socket.connect();
+    socket.on("disputeUpdated", onState);
+    return () => {
+      window.clearTimeout(timer);
+      socket.off("disputeUpdated", onState);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disputeId, endpointBase]);
+
   useEffect(() => {
     if (tab !== "discussion") return;
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -590,11 +663,34 @@ export default function ModeratorDisputeDetailModal({
     }
   };
 
+  const payoutPolicy = detail?.payoutPolicy || DEFAULT_PAYOUT_POLICY;
+
   const openReverse = (tx: DisputeCaseTransaction) => {
     setReverseTxn(tx);
     setReverseAmount(String(tx.amount || 0));
     setReverseNotes(resolutionNotes || "");
+    setReverseTiming(initialPayoutTiming(payoutPolicy));
     setReverseOpen(true);
+  };
+
+  /** POST a money action; on success the response already carries the refreshed case. */
+  const postFinancial = async (body: Record<string, unknown>, successMsg: string, fallback: string) => {
+    setSaving(true);
+    try {
+      const res = await api.post(`${endpointBase}/${disputeId}/financial-resolution`, body);
+      if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
+      else await load();
+      showSuccessToast(successMsg);
+      onUpdated();
+      return true;
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
+      showErrorToast(msg);
+      return false;
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmSettleEscrow = async () => {
@@ -604,64 +700,111 @@ export default function ModeratorDisputeDetailModal({
       showErrorToast("Settlement amounts must be non-negative integers.");
       return;
     }
+    if (clientCredits + freelancerCredits !== Number(detail?.dispute?.creditAmount || 0)) {
+      showErrorToast("Split every remaining escrow credit between the client and the freelancer.");
+      return;
+    }
     if (settleNotes.trim().length < 8) {
       showErrorToast("Resolution notes must be at least 8 characters.");
       return;
     }
-    setSaving(true);
-    try {
-      await api.post(`${endpointBase}/${disputeId}/financial-resolution`, {
+    const timingError = payoutTimingError(settleTiming, payoutPolicy);
+    if (timingError) {
+      showErrorToast(timingError);
+      return;
+    }
+    const ok = await postFinancial(
+      {
         action: "settle_escrow",
         clientCredits,
         freelancerCredits,
         resolutionNotes: settleNotes.trim(),
-      });
-      showSuccessToast("Escrow settled and dispute closed");
-      setResolvePromptOpen(false);
-      setResolveMode("choose");
-      await load();
-      onUpdated();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        "Failed to settle escrow";
-      showErrorToast(msg);
-    } finally {
-      setSaving(false);
-    }
+        ...payoutTimingBody(settleTiming, payoutPolicy),
+      },
+      settleTiming.mode === "now" ? "Escrow settled and paid out" : "Escrow settled — payout scheduled",
+      "Failed to settle escrow"
+    );
+    if (!ok) return;
+    setResolvePromptOpen(false);
+    setResolveMode("choose");
   };
 
   const confirmReverseTransaction = async () => {
     if (!reverseTxn) return;
     const amount = Number(reverseAmount);
-    if (!Number.isInteger(amount) || amount < 1) {
-      showErrorToast("Reverse amount must be an integer of at least 1.");
+    if (!Number.isInteger(amount) || amount < 1 || amount > reverseTxn.amount) {
+      showErrorToast(`Reverse amount must be a whole number from 1 to ${reverseTxn.amount.toLocaleString()}.`);
       return;
     }
     if (reverseNotes.trim().length < 8) {
       showErrorToast("Resolution notes must be at least 8 characters.");
       return;
     }
-    setSaving(true);
-    try {
-      await api.post(`${endpointBase}/${disputeId}/financial-resolution`, {
+    const timingError = payoutTimingError(reverseTiming, payoutPolicy);
+    if (timingError) {
+      showErrorToast(timingError);
+      return;
+    }
+    const ok = await postFinancial(
+      {
         action: "reverse_transaction",
         creditTransactionId: reverseTxn.id,
         amount,
         resolutionNotes: reverseNotes.trim(),
-      });
-      showSuccessToast("Transaction reversed and dispute closed");
-      setReverseOpen(false);
-      setReverseTxn(null);
-      await load();
-      onUpdated();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        "Failed to reverse transaction";
-      showErrorToast(msg);
-    } finally {
-      setSaving(false);
+        ...payoutTimingBody(reverseTiming, payoutPolicy),
+      },
+      reverseTiming.mode === "now" ? "Transaction reversed and paid out" : "Transaction reversed — payout scheduled",
+      "Failed to reverse transaction"
+    );
+    if (!ok) return;
+    setReverseOpen(false);
+    setReverseTxn(null);
+  };
+
+  const openPayoutDialog = (kind: "release" | "reschedule" | "cancel") => {
+    setPayoutNotes("");
+    if (kind === "reschedule") {
+      // Start the picker a full default wait from now; staff move it from there.
+      setRescheduleTiming({ ...initialPayoutTiming(payoutPolicy), mode: "date" });
+    }
+    setPayoutDialog(kind);
+  };
+
+  const confirmPayoutDialog = async () => {
+    if (payoutDialog === "release") {
+      const ok = await postFinancial({ action: "release_payouts" }, "Payout released", "Failed to release payout");
+      if (ok) setPayoutDialog(null);
+      return;
+    }
+    if (payoutDialog === "reschedule") {
+      const timingError = payoutTimingError(rescheduleTiming, payoutPolicy);
+      if (timingError) {
+        showErrorToast(timingError);
+        return;
+      }
+      const ok = await postFinancial(
+        {
+          action: "reschedule_payouts",
+          ...payoutTimingBody(rescheduleTiming, payoutPolicy),
+          resolutionNotes: payoutNotes.trim() || null,
+        },
+        "Payout date changed",
+        "Failed to change the payout date"
+      );
+      if (ok) setPayoutDialog(null);
+      return;
+    }
+    if (payoutDialog === "cancel") {
+      if (payoutNotes.trim().length < 8) {
+        showErrorToast("Write a reason of at least 8 characters.");
+        return;
+      }
+      const ok = await postFinancial(
+        { action: "cancel_payouts", resolutionNotes: payoutNotes.trim() },
+        "Ruling withdrawn — no credits were paid",
+        "Failed to withdraw the ruling"
+      );
+      if (ok) setPayoutDialog(null);
     }
   };
 
@@ -885,6 +1028,7 @@ export default function ModeratorDisputeDetailModal({
     setSettleClientCredits(String(remaining));
     setSettleFreelancerCredits("0");
     setSettleNotes(resolutionNotes || "");
+    setSettleTiming(initialPayoutTiming(payoutPolicy));
     setBanReason("");
     setResolvePromptOpen(true);
   };
@@ -947,6 +1091,39 @@ export default function ModeratorDisputeDetailModal({
     }
     return null;
   };
+  const clientLabel = linkedContract?.clientHandle && linkedContract.clientHandle !== "—"
+    ? `@${linkedContract.clientHandle}`
+    : linkedContract?.clientName || "the client";
+  const freelancerLabel = linkedContract?.freelancerHandle && linkedContract.freelancerHandle !== "—"
+    ? `@${linkedContract.freelancerHandle}`
+    : linkedContract?.freelancerName || "the freelancer";
+
+  // Settlement must hand out every remaining escrow credit, so nothing is stranded.
+  const escrowRemaining = Number(dispute?.creditAmount || 0);
+  const settleClientNum = Number(settleClientCredits);
+  const settleFreelancerNum = Number(settleFreelancerCredits);
+  const settleNumbersValid =
+    Number.isInteger(settleClientNum) &&
+    Number.isInteger(settleFreelancerNum) &&
+    settleClientNum >= 0 &&
+    settleFreelancerNum >= 0;
+  const settleAssigned = settleNumbersValid ? settleClientNum + settleFreelancerNum : 0;
+  const settleUnassigned = escrowRemaining - settleAssigned;
+  const settleReady =
+    settleNumbersValid &&
+    settleUnassigned === 0 &&
+    settleNotes.trim().length >= 8 &&
+    !payoutTimingError(settleTiming, payoutPolicy);
+  const setSplit = (clientShare: number) => {
+    const safe = Math.max(0, Math.min(escrowRemaining, Math.round(clientShare)));
+    setSettleClientCredits(String(safe));
+    setSettleFreelancerCredits(String(escrowRemaining - safe));
+  };
+
+  const payouts = detail?.payouts || [];
+  const payoutState = detail?.payoutState;
+  const hasPayouts = payouts.length > 0;
+
   const resolutionOptions =
     detail?.resolutionOptions && detail.resolutionOptions.length
       ? detail.resolutionOptions
@@ -1382,6 +1559,8 @@ export default function ModeratorDisputeDetailModal({
                     canAct={canDecide}
                     saving={saving}
                     onReverseTransaction={openReverse}
+                    payouts={payouts}
+                    payoutState={payoutState}
                   />
                 </div>
               )}
@@ -1488,13 +1667,14 @@ export default function ModeratorDisputeDetailModal({
                 <div className="space-y-1.5">
                   <p className="text-[11px] text-zinc-500">Status</p>
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dispute status">
-                    {STATUS_OPTIONS.map((s) => {
+                    {/* Closing and reopening are decisions (Resolve / Reopen), not status edits. */}
+                    {STATUS_OPTIONS.filter((s) => s !== CLOSED_STATUS || closed).map((s) => {
                       const active = toApiToken(status) === s;
                       return (
                         <button
                           key={s}
                           type="button"
-                          disabled={viewOnly}
+                          disabled={viewOnly || closed}
                           aria-pressed={active}
                           onClick={() => setStatus(s)}
                           className={`rounded-md border px-2 py-1 text-[11px] font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
@@ -1504,6 +1684,9 @@ export default function ModeratorDisputeDetailModal({
                       );
                     })}
                   </div>
+                  <p className="text-[11px] text-zinc-600">
+                    {closed ? "Reopen the case to change its status." : "Use Resolve to close the case."}
+                  </p>
                 </div>
                 <label className="block space-y-1 text-[11px] text-zinc-500">
                   <span>Priority</span>
@@ -1520,9 +1703,17 @@ export default function ModeratorDisputeDetailModal({
                     ))}
                   </select>
                 </label>
-                {closed && dispute.resolutionOutcomeLabel && (
+                {closed && (dispute.resolutionOutcomeLabel || dispute.financialResolution || banned) && (
                   <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-100">
-                    Closed as <span className="font-semibold">{dispute.resolutionOutcomeLabel}</span>
+                    Closed as{" "}
+                    <span className="font-semibold">
+                      {dispute.resolutionOutcomeLabel ||
+                        (dispute.financialResolution?.kind === "escrow_settle"
+                          ? "Escrow settled"
+                          : dispute.financialResolution?.kind === "transaction_reverse"
+                            ? "Transaction reversed"
+                            : "Permanent ban")}
+                    </span>
                     {dispute.resolvedAt ? ` on ${formatDateTime(dispute.resolvedAt)}` : ""}.
                   </p>
                 )}
@@ -1562,6 +1753,29 @@ export default function ModeratorDisputeDetailModal({
                   </div>
                 )}
               </SidebarSection>
+
+              {hasPayouts && (
+                <SidebarSection
+                  title="Payouts"
+                  action={
+                    payoutState?.waiting ? (
+                      <span className="text-[10px] text-zinc-500">
+                        {payoutState.paused ? "Paused" : `Next ${formatPayoutWhen(payoutState.nextReleaseAt)}`}
+                      </span>
+                    ) : null
+                  }
+                >
+                  <DisputePayoutsList
+                    payouts={payouts}
+                    state={payoutState}
+                    canAct={canDecide}
+                    saving={saving}
+                    onReleaseNow={() => openPayoutDialog("release")}
+                    onReschedule={() => openPayoutDialog("reschedule")}
+                    onCancel={() => openPayoutDialog("cancel")}
+                  />
+                </SidebarSection>
+              )}
 
               <SidebarSection title="Parties">
                 {(
@@ -1691,9 +1905,9 @@ export default function ModeratorDisputeDetailModal({
             description={
               resolveMode === "settle" ? (
                 <>
-                  Split up to {Number(dispute.creditAmount || 0).toLocaleString()} remaining escrow
-                  credits. The refund goes to the client and the release goes to the freelancer. This
-                  closes the dispute.
+                  Split all {escrowRemaining.toLocaleString()} frozen escrow credits between{" "}
+                  {clientLabel} (client refund) and {freelancerLabel} (freelancer release). This closes
+                  the dispute and posts the ruling in the discussion.
                 </>
               ) : resolveMode === "ban" ? (
                 <>
@@ -1719,7 +1933,9 @@ export default function ModeratorDisputeDetailModal({
             }
             confirmLabel={
               resolveMode === "settle"
-                ? "Settle and close"
+                ? settleTiming.mode === "now"
+                  ? "Settle and pay now"
+                  : "Settle and schedule payout"
                 : resolveMode === "ban"
                   ? "Ban permanently"
                   : resolveMode === "dismiss"
@@ -1744,7 +1960,7 @@ export default function ModeratorDisputeDetailModal({
             cancelLabel={resolveMode === "choose" ? "Cancel" : "Back"}
             confirmDisabled={
               resolveMode === "settle"
-                ? settleNotes.trim().length < 8
+                ? !settleReady
                 : resolveMode === "ban"
                   ? !banReason.trim()
                   : resolveMode === "outcome"
@@ -1785,7 +2001,8 @@ export default function ModeratorDisputeDetailModal({
                     <p className="text-sm font-medium text-amber-100">Settle escrow</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
                       {dispute.creditAmount.toLocaleString()} credits are still frozen. Split them
-                      between client refund and freelancer release, then close.
+                      between client refund and freelancer release. Paid out in{" "}
+                      {payoutPolicy.defaultDays} days by default, or now, or on a date you pick.
                     </p>
                   </button>
                 ) : null}
@@ -1861,14 +2078,25 @@ export default function ModeratorDisputeDetailModal({
                 </label>
 
                 {selectedResolution ? (
-                  <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                    <span className="font-semibold text-zinc-300">Posted in the discussion:</span>{" "}
-                    {resolutionPreview(selectedResolution.key, dispute, resolveNotes)}
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                    <p className="font-semibold text-zinc-300">Posted in the discussion</p>
+                    <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                      {selectedResolution.preview
+                        ? previewWithNotes(selectedResolution.preview, resolveNotes)
+                        : resolutionPreview(selectedResolution.key, dispute, resolveNotes)}
+                    </p>
                     {!dispute.visibility ? (
                       <span className="mt-1 block text-amber-200/80">
                         This case is private, so the message goes to the disputer and staff only.
                       </span>
                     ) : null}
+                  </div>
+                ) : null}
+                {escrowRemaining > 0 ? (
+                  <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
+                    {escrowRemaining.toLocaleString()} credits are still frozen. Closing without settling
+                    unfreezes them and the contract carries on as before. Use Settle escrow if the money
+                    should be split.
                   </p>
                 ) : null}
               </>
@@ -1876,40 +2104,118 @@ export default function ModeratorDisputeDetailModal({
 
             {resolveMode === "settle" ? (
               <>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick split">
+                  {[
+                    { label: "All to client", share: escrowRemaining },
+                    { label: "50 / 50", share: Math.floor(escrowRemaining / 2) },
+                    { label: "All to freelancer", share: 0 },
+                  ].map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setSplit(option.share)}
+                      className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 transition hover:border-white/25 hover:bg-white/[0.04] disabled:opacity-50"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block space-y-1 text-[11px] text-zinc-500">
-                    <span>Client refund</span>
+                    <span>Client refund · {clientLabel}</span>
                     <input
                       type="number"
                       min={0}
+                      max={escrowRemaining}
                       step={1}
                       value={settleClientCredits}
-                      onChange={(event) => setSettleClientCredits(event.target.value)}
+                      onChange={(event) => {
+                        setSettleClientCredits(event.target.value);
+                        const next = Number(event.target.value);
+                        if (Number.isInteger(next) && next >= 0 && next <= escrowRemaining) {
+                          setSettleFreelancerCredits(String(escrowRemaining - next));
+                        }
+                      }}
                       className={FIELD}
                     />
                   </label>
                   <label className="block space-y-1 text-[11px] text-zinc-500">
-                    <span>Freelancer release</span>
+                    <span>Freelancer release · {freelancerLabel}</span>
                     <input
                       type="number"
                       min={0}
+                      max={escrowRemaining}
                       step={1}
                       value={settleFreelancerCredits}
-                      onChange={(event) => setSettleFreelancerCredits(event.target.value)}
+                      onChange={(event) => {
+                        setSettleFreelancerCredits(event.target.value);
+                        const next = Number(event.target.value);
+                        if (Number.isInteger(next) && next >= 0 && next <= escrowRemaining) {
+                          setSettleClientCredits(String(escrowRemaining - next));
+                        }
+                      }}
                       className={FIELD}
                     />
                   </label>
                 </div>
+                <p
+                  className={`text-[11px] ${
+                    !settleNumbersValid || settleUnassigned !== 0 ? "text-red-300" : "text-zinc-500"
+                  }`}
+                  role="status"
+                >
+                  {!settleNumbersValid
+                    ? "Use whole, non-negative numbers."
+                    : settleUnassigned > 0
+                      ? `${settleUnassigned.toLocaleString()} credits still unassigned. Every frozen credit has to go to one side.`
+                      : settleUnassigned < 0
+                        ? `${Math.abs(settleUnassigned).toLocaleString()} credits over the ${escrowRemaining.toLocaleString()} in escrow.`
+                        : `All ${escrowRemaining.toLocaleString()} escrow credits assigned.`}
+                </p>
+
+                <PayoutTimingPicker
+                  value={settleTiming}
+                  onChange={setSettleTiming}
+                  policy={payoutPolicy}
+                  disabled={saving}
+                />
+
                 <label className="block space-y-1 text-[11px] text-zinc-500">
-                  <span>Resolution notes (at least 8 characters)</span>
+                  <span>Resolution notes (at least 8 characters, both parties read this)</span>
                   <textarea
                     value={settleNotes}
                     onChange={(event) => setSettleNotes(event.target.value)}
                     rows={3}
+                    maxLength={2000}
                     placeholder="Why this split is correct"
                     className={`${FIELD} resize-none`}
                   />
                 </label>
+
+                <ul className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                  {settleNumbersValid && settleClientNum > 0 ? (
+                    <li>
+                      {clientLabel} gets {settleClientNum.toLocaleString()} credits back.
+                    </li>
+                  ) : null}
+                  {settleNumbersValid && settleFreelancerNum > 0 ? (
+                    <li>
+                      {freelancerLabel} receives {settleFreelancerNum.toLocaleString()} credits.
+                    </li>
+                  ) : null}
+                  <li>{payoutTimingSummary(settleTiming, payoutPolicy)}</li>
+                  <li>
+                    {settleTiming.mode === "now"
+                      ? "The contract ends now and its unfinished milestones are cancelled."
+                      : "The contract stays frozen until then, and ends when the payout goes through."}
+                  </li>
+                  <li>
+                    The ruling is posted in the discussion
+                    {dispute.visibility ? " for both parties" : " for the disputer (the case is private)"}, and
+                    both sides are notified.
+                  </li>
+                </ul>
               </>
             ) : null}
 
@@ -1972,15 +2278,25 @@ export default function ModeratorDisputeDetailModal({
             </label>
 
             {selectedReopen && (
-              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                <span className="font-semibold text-zinc-300">Posted in the discussion:</span>{" "}
-                {reopenPreview(selectedReopen.key, reopenNotes)}
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                <p className="font-semibold text-zinc-300">Posted in the discussion</p>
+                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                  {selectedReopen.preview
+                    ? previewWithNotes(selectedReopen.preview, reopenNotes)
+                    : reopenPreview(selectedReopen.key, reopenNotes)}
+                </p>
                 {banned ? (
                   <span className="mt-1 block text-amber-200/80">
                     The permanent ban stays in place until you lift it from the account.
                   </span>
                 ) : null}
-              </p>
+                {payoutState?.waiting ? (
+                  <span className="mt-1 block text-amber-200/80">
+                    The scheduled payout pauses while the case is open again. You can pay it, move its
+                    date, or withdraw the ruling from the Payouts panel.
+                  </span>
+                ) : null}
+              </div>
             )}
           </ConfirmDialog>
         )}
@@ -2011,9 +2327,10 @@ export default function ModeratorDisputeDetailModal({
               </li>
               <li>
                 {dispute.visibility
-                  ? "A notice is posted in the public discussion and both parties are notified."
-                  : `This case is private, so only the new disputer (@${dispute.respondent.username}) can see it. @${dispute.initiator.username} loses access until you make it public.`}
+                  ? "A “Parties swapped” notice is posted in the public discussion and both parties are notified."
+                  : `This case is private, so only the new disputer (@${dispute.respondent.username}) can see it, including the original complaint. The “Parties swapped” notice is posted for them, and @${dispute.initiator.username} is notified but loses access until you make it public.`}
               </li>
+              <li>Both parties&apos; open pages update to the new roles straight away.</li>
               <li>A permanent ban, if you use one later, targets the new disputee.</li>
             </ul>
             <label className="block space-y-1 text-[11px] text-zinc-500">
@@ -2030,43 +2347,186 @@ export default function ModeratorDisputeDetailModal({
           </ConfirmDialog>
         )}
 
-        {reverseOpen && reverseTxn && (
+        {reverseOpen && reverseTxn && (() => {
+          const route = reverseTxn.reversal;
+          const fromLabel = route?.fromHandle ? `@${route.fromHandle}` : route?.fromName || reverseTxn.destinationName;
+          const toLabel = route?.toHandle ? `@${route.toHandle}` : route?.toName || "the original sender";
+          const amountNum = Number(reverseAmount);
+          const amountValid = Number.isInteger(amountNum) && amountNum >= 1 && amountNum <= reverseTxn.amount;
+          return (
+            <ConfirmDialog
+              title="Reverse transaction"
+              description={
+                <>
+                  {titleCaseLabel(reverseTxn.type)} of {reverseTxn.amount.toLocaleString()} credits
+                  {reverseTxn.referenceLabel ? ` · ${reverseTxn.referenceLabel}` : ""}. The credits are
+                  taken from {fromLabel} now and paid to {toLabel}
+                  {route?.toRole ? ` (${route.toRole})` : ""}. If {fromLabel} no longer has enough
+                  spendable credits, nothing moves. This closes the dispute.
+                </>
+              }
+              confirmLabel={reverseTiming.mode === "now" ? "Reverse and pay now" : "Reverse and schedule"}
+              busyLabel="Reversing…"
+              busy={saving}
+              confirmDisabled={
+                reverseNotes.trim().length < 8 ||
+                !amountValid ||
+                Boolean(payoutTimingError(reverseTiming, payoutPolicy))
+              }
+              confirmClassName={BTN.danger}
+              onCancel={() => {
+                setReverseOpen(false);
+                setReverseTxn(null);
+              }}
+              onConfirm={() => void confirmReverseTransaction()}
+            >
+              <label className="block space-y-1 text-[11px] text-zinc-500">
+                <span>Amount (up to {reverseTxn.amount.toLocaleString()})</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={reverseTxn.amount}
+                  step={1}
+                  value={reverseAmount}
+                  onChange={(event) => setReverseAmount(event.target.value)}
+                  aria-invalid={!amountValid}
+                  className={FIELD}
+                />
+              </label>
+              <PayoutTimingPicker
+                value={reverseTiming}
+                onChange={setReverseTiming}
+                policy={payoutPolicy}
+                disabled={saving}
+                label={`When ${toLabel} receives the credits`}
+              />
+              <label className="block space-y-1 text-[11px] text-zinc-500">
+                <span>Resolution notes (at least 8 characters, both parties read this)</span>
+                <textarea
+                  value={reverseNotes}
+                  onChange={(event) => setReverseNotes(event.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Why this reverse is correct"
+                  className={`${FIELD} resize-none`}
+                />
+              </label>
+              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                {reverseTiming.mode === "now"
+                  ? `${toLabel} receives the credits as soon as you confirm.`
+                  : `${fromLabel}'s credits are locked in their escrow wallet right away. ${payoutTimingSummary(
+                      reverseTiming,
+                      payoutPolicy
+                    )}`}
+              </p>
+            </ConfirmDialog>
+          );
+        })()}
+
+        {payoutDialog && (
           <ConfirmDialog
-            title="Reverse transaction"
-            description={`Reverse ${reverseTxn.type} of ${reverseTxn.amount.toLocaleString()} credits. If the recipient no longer has enough spendable credits, this fails and nothing moves. This closes the dispute.`}
-            confirmLabel="Reverse and close"
-            busyLabel="Reversing…"
+            title={
+              payoutDialog === "release"
+                ? "Pay out now"
+                : payoutDialog === "reschedule"
+                  ? "Change the payout date"
+                  : "Withdraw this ruling"
+            }
+            description={
+              payoutDialog === "release" ? (
+                <>
+                  Every waiting payout on this dispute goes to its recipient&apos;s Account Wallet now.
+                  This can&apos;t be undone.
+                </>
+              ) : payoutDialog === "reschedule" ? (
+                <>
+                  Move every waiting payout to a new date. The credits stay locked in escrow until then,
+                  and both sides are told the new date.
+                </>
+              ) : (
+                <>
+                  Nothing has been paid yet, so the ruling can be withdrawn. Credits a reversal took back
+                  are returned to whoever they were taken from, and you can decide the case again.
+                </>
+              )
+            }
+            confirmLabel={
+              payoutDialog === "release"
+                ? "Pay now"
+                : payoutDialog === "reschedule"
+                  ? "Save new date"
+                  : "Withdraw ruling"
+            }
+            busyLabel="Working…"
             busy={saving}
-            confirmDisabled={reverseNotes.trim().length < 8}
-            confirmClassName={BTN.danger}
+            confirmDisabled={
+              payoutDialog === "reschedule"
+                ? Boolean(payoutTimingError(rescheduleTiming, payoutPolicy))
+                : payoutDialog === "cancel"
+                  ? payoutNotes.trim().length < 8
+                  : false
+            }
+            confirmClassName={
+              payoutDialog === "release" ? BTN.warn : payoutDialog === "cancel" ? BTN.danger : BTN.neutral
+            }
             onCancel={() => {
-              setReverseOpen(false);
-              setReverseTxn(null);
+              if (saving) return;
+              setPayoutDialog(null);
             }}
-            onConfirm={() => void confirmReverseTransaction()}
+            onConfirm={() => void confirmPayoutDialog()}
           >
-            <label className="block space-y-1 text-[11px] text-zinc-500">
-              <span>Amount</span>
-              <input
-                type="number"
-                min={1}
-                max={reverseTxn.amount}
-                step={1}
-                value={reverseAmount}
-                onChange={(event) => setReverseAmount(event.target.value)}
-                className={FIELD}
-              />
-            </label>
-            <label className="block space-y-1 text-[11px] text-zinc-500">
-              <span>Resolution notes (at least 8 characters)</span>
-              <textarea
-                value={reverseNotes}
-                onChange={(event) => setReverseNotes(event.target.value)}
-                rows={3}
-                placeholder="Why this reverse is correct"
-                className={`${FIELD} resize-none`}
-              />
-            </label>
+            <ul className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-400">
+              {payouts
+                .filter((payout) => payout.status === "scheduled" || payout.status === "failed")
+                .map((payout) => (
+                  <li key={payout.id} className="flex justify-between gap-2">
+                    <span className="truncate">
+                      {payout.recipientHandle ? `@${payout.recipientHandle}` : payout.recipientName}
+                      {payout.recipientRole ? ` · ${payout.recipientRole}` : ""}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-zinc-200">
+                      {payout.amount.toLocaleString()} · {formatPayoutWhen(payout.releaseAt)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+            {payoutDialog === "reschedule" ? (
+              <>
+                <PayoutTimingPicker
+                  value={rescheduleTiming}
+                  onChange={setRescheduleTiming}
+                  policy={payoutPolicy}
+                  disabled={saving}
+                  allowNow={false}
+                  allowDefault={false}
+                  label="New payout date"
+                />
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Note for both parties (optional)</span>
+                  <textarea
+                    value={payoutNotes}
+                    onChange={(event) => setPayoutNotes(event.target.value)}
+                    rows={2}
+                    maxLength={2000}
+                    placeholder="Why the date moved"
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+              </>
+            ) : null}
+            {payoutDialog === "cancel" ? (
+              <label className="block space-y-1 text-[11px] text-zinc-500">
+                <span>Reason (at least 8 characters, both parties read this)</span>
+                <textarea
+                  value={payoutNotes}
+                  onChange={(event) => setPayoutNotes(event.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Why the ruling is being withdrawn"
+                  className={`${FIELD} resize-none`}
+                />
+              </label>
+            ) : null}
           </ConfirmDialog>
         )}
         <ChatImagePreview url={previewUrl} onClose={() => setPreviewUrl(null)} />

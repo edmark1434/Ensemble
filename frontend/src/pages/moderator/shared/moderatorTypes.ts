@@ -58,6 +58,58 @@ export type DisputeCaseTransaction = {
   reversesTransactionId?: string | null;
   reversedByTransactionId?: string | null;
   reversible?: boolean;
+  /** Belongs to this dispute's contract (the case file also lists the parties' other contracts). */
+  inDisputeScope?: boolean;
+  /** A reversal of this transaction is scheduled and waiting to pay out. */
+  reversalScheduled?: boolean;
+  /** Where a reversal would take the credits from and who would receive them. */
+  reversal?: {
+    allowed: boolean;
+    reason: string | null;
+    fromName: string;
+    fromHandle: string | null;
+    toName: string | null;
+    toHandle: string | null;
+    toRole: "client" | "freelancer" | null;
+  };
+};
+
+/** One recipient's share of a money ruling, paid on `releaseAt`. */
+export type DisputePayout = {
+  id: string;
+  kind: "escrow_refund" | "escrow_release" | "reversal";
+  status: "scheduled" | "paid" | "cancelled" | "failed";
+  amount: number;
+  recipientAccountId: string | null;
+  recipientRole: "client" | "freelancer" | null;
+  recipientName: string;
+  recipientHandle: string | null;
+  /** Wallet the credits stay locked in until release, e.g. "Escrow wallets · @maria". */
+  heldIn: string;
+  paysInto: string;
+  releaseAt: string | null;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  failureReason: string | null;
+  attempts: number;
+  creditTransactionId: string | null;
+  reversesTransactionId: string | null;
+  createdAt: string | null;
+};
+
+export type DisputePayoutState = {
+  waiting: number;
+  /** Waiting payouts do not auto-release while the case is reopened. */
+  paused: boolean;
+  failed: number;
+  nextReleaseAt: string | null;
+  canCancel: boolean;
+};
+
+export type DisputePayoutPolicy = {
+  defaultDays: number;
+  maxDays: number;
 };
 
 export type DisputeCaseRelated = {
@@ -95,6 +147,9 @@ export type DisputeDetail = {
   assignableStaff: { staffId: number | string; name: string; role: string }[];
   resolutionOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
   reopenOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
+  payouts?: DisputePayout[];
+  payoutState?: DisputePayoutState;
+  payoutPolicy?: DisputePayoutPolicy;
 };
 
 export type Alert = {

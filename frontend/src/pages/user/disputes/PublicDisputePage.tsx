@@ -23,6 +23,7 @@ import {
   Card,
   DisputeAttachments,
   DisputeDecisionCard,
+  DisputeSettlementCard,
   RoleChip,
   StatusPill,
   VisibilityPill,
@@ -32,7 +33,7 @@ import {
   isDisputeDecision,
   titleCase,
 } from "./disputeUi";
-import type { DisputeAttachment, ViewerRole } from "./disputeUi";
+import type { DisputeAttachment, DisputeSettlement, ViewerRole } from "./disputeUi";
 import {
   InboxUploadMediaButton,
   InboxUploadMediaPreview,
@@ -73,6 +74,8 @@ type Discussion = {
   viewerRole?: ViewerRole;
   canComment?: boolean;
   commentsNeedApproval?: boolean;
+  /** Parties only: who receives what from the ruling, and when. */
+  settlement?: DisputeSettlement | null;
   chatId?: string | null;
   messages: DiscussionMessage[];
 };
@@ -311,7 +314,23 @@ export default function PublicDisputePage() {
       setError("Staff made this dispute private. The public discussion is no longer available.");
     };
 
-    // Status moved under us — resolved, reopened, closed, made private.
+    // The case moved under us — resolved, reopened, parties swapped, a ruling or payout.
+    // Patch the status at once, then read the case back: a swap changes who is the disputer
+    // (and so which replies this reader may see), and a ruling adds the settlement card.
+    let refetchTimer: number | undefined;
+    const refetch = () => {
+      api
+        .get(`/api/accounts/disputes/${id}`)
+        .then((res) => {
+          if (res.data?.data) setDiscussion(res.data.data);
+        })
+        .catch((err) => {
+          if (err?.response?.status === 404) {
+            setDiscussion(null);
+            setError("Staff made this dispute private. The public discussion is no longer available.");
+          }
+        });
+    };
     const onState = (payload: {
       disputeId?: string;
       status?: string;
@@ -334,6 +353,8 @@ export default function PublicDisputePage() {
           canComment: closed ? false : current.canComment,
         };
       });
+      window.clearTimeout(refetchTimer);
+      refetchTimer = window.setTimeout(refetch, 250);
     };
 
     const join = () => socket.emit("joinDisputeDiscussion", { disputeId: String(id) });
@@ -346,6 +367,7 @@ export default function PublicDisputePage() {
     socket.on("disputeVisibilityChanged", onVisibility);
     socket.on("disputeUpdated", onState);
     return () => {
+      window.clearTimeout(refetchTimer);
       socket.off("connect", join);
       socket.off("disputeMessage", onLive);
       socket.off("disputeMessageUpdated", onLive);
@@ -606,6 +628,9 @@ export default function PublicDisputePage() {
                       </p>
                     </div>
                   ) : null}
+
+                  {/* Only the two parties receive this; the community never sees the split. */}
+                  <DisputeSettlementCard settlement={discussion.settlement} />
                 </>
               ) : (
                 <p className="truncate text-xs text-gray-500 dark:text-zinc-400">

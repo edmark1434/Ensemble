@@ -1,6 +1,10 @@
 const { pool } = require('../lib/Database');
 const { normalizeDisputePriority } = require('../lib/DisputeEnums');
-const { freezeContractEscrowForDispute, assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
+const {
+    freezeContractEscrowForDispute,
+    assertNoOpenContractDispute,
+    getPendingPayoutContractDispute,
+} = require('../lib/DisputeEscrow');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
 
@@ -863,6 +867,16 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             LIMIT 1
         `, [contractId]);
         if (existing.rows.length) throw openDisputeError();
+        // A closed case whose payout is still scheduled keeps the contract's credits earmarked;
+        // a second case would see them as unsettled escrow and could split them again.
+        const pendingPayout = await getPendingPayoutContractDispute(client, contractId);
+        if (pendingPayout) {
+            const error = new Error(
+                `Dispute ${pendingPayout.dispute_number || ''} on this contract has a payout scheduled. A new dispute can be filed once it is paid, or contact Support to appeal it.`
+            );
+            error.statusCode = 409;
+            throw error;
+        }
 
         const disputeRes = await client.query(`
             INSERT INTO disputes (
