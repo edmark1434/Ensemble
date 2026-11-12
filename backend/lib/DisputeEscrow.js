@@ -24,6 +24,54 @@ function frozenEscrowError(dispute) {
   return error;
 }
 
+// Ledger rows that belong to a contract: the contract itself, its milestones, paid milestone
+// revisions (stored against the milestone id), and anything already linked to the dispute.
+// $1 = dispute id, $2 = contract id.
+const CONTRACT_LEDGER_SCOPE_SQL = `
+  (
+    ct.related_dispute_id = $1
+    OR (ct.reference_table = 'contracts' AND ct.reference_id = $2)
+    OR (
+      ct.reference_table IN ('contract_milestones', 'contract_milestone_revisions')
+      AND ct.reference_id IN (
+        SELECT contract_milestone_id
+        FROM contract_milestones
+        WHERE contract_id = $2
+      )
+    )
+  )
+`;
+
+// Credits still sitting in escrow for a contract, counted by wallet movement rather than by
+// transaction label. Job contracts log two `Escrow Hold` rows for the same credits (client
+// account → client escrow on offer, then client escrow → freelancer escrow on accept), so
+// summing holds double-counts. Only money crossing into or out of escrow wallets counts;
+// escrow-to-escrow hops net to zero, and fees taken from escrow count as leaving it.
+const REMAINING_CONTRACT_ESCROW_SQL = `
+  SELECT GREATEST(0, COALESCE(SUM(
+    CASE
+      WHEN dw.type = 'escrow wallets' AND COALESCE(sw.type, '') <> 'escrow wallets'
+        THEN ct.amount_credits
+      WHEN sw.type = 'escrow wallets' AND COALESCE(dw.type, '') <> 'escrow wallets'
+        THEN -ct.amount_credits
+      ELSE 0
+    END
+  ), 0))::int AS remaining
+  FROM credit_transactions ct
+  LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+  LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+  WHERE ct.status = 'Completed'
+    AND ${CONTRACT_LEDGER_SCOPE_SQL}
+`;
+
+async function remainingContractEscrowCredits(db, { disputeId, contractId }) {
+  const result = await (db || pool).query(REMAINING_CONTRACT_ESCROW_SQL, [
+    disputeId || null,
+    contractId || null,
+  ]);
+  return Number(result.rows[0]?.remaining || 0);
+}
+
 async function getOpenContractDispute(db, contractId) {
   if (!contractId) return null;
   const result = await (db || pool).query(OPEN_DISPUTE_SQL, [contractId]);
@@ -43,66 +91,34 @@ async function freezeContractEscrowForDispute(client, { disputeId, contractId })
 
   await client.query(
     `
-    UPDATE credit_transactions
+    UPDATE credit_transactions ct
     SET related_dispute_id = $1
-    WHERE related_dispute_id IS NULL
-      AND (
-        (reference_table = 'contracts' AND reference_id = $2)
-        OR (
-          reference_table = 'contract_milestones'
-          AND reference_id IN (
-            SELECT contract_milestone_id
-            FROM contract_milestones
-            WHERE contract_id = $2
-          )
-        )
-      )
+    WHERE ct.related_dispute_id IS NULL
+      AND ${CONTRACT_LEDGER_SCOPE_SQL}
     `,
     [disputeId, contractId]
   );
 
+  // The latest contract-level hold is the one that put the credits in the freelancer's escrow.
   const hold = await client.query(
     `
     SELECT credit_transaction_id
     FROM credit_transactions
     WHERE type = 'Escrow Hold'
       AND status = 'Completed'
-      AND (
-        related_dispute_id = $1
-        OR (reference_table = 'contracts' AND reference_id = $2)
-      )
+      AND reference_table = 'contracts'
+      AND reference_id = $1
     ORDER BY created_at DESC
     LIMIT 1
     `,
-    [disputeId, contractId]
-  );
-
-  const remaining = await client.query(
-    `
-    SELECT GREATEST(0,
-      COALESCE(SUM(CASE WHEN type = 'Escrow Hold' THEN amount_credits ELSE 0 END), 0)
-      - COALESCE(SUM(CASE WHEN type IN ('Escrow Release', 'Escrow Refund') THEN amount_credits ELSE 0 END), 0)
-    )::int AS remaining
-    FROM credit_transactions
-    WHERE status = 'Completed'
-      AND (
-        related_dispute_id = $1
-        OR (reference_table = 'contracts' AND reference_id = $2)
-        OR (
-          reference_table = 'contract_milestones'
-          AND reference_id IN (
-            SELECT contract_milestone_id
-            FROM contract_milestones
-            WHERE contract_id = $2
-          )
-        )
-      )
-    `,
-    [disputeId, contractId]
+    [contractId]
   );
 
   const relatedCreditTransactionId = hold.rows[0]?.credit_transaction_id || null;
-  const creditAmountInvolved = Number(remaining.rows[0]?.remaining || 0);
+  const creditAmountInvolved = await remainingContractEscrowCredits(client, {
+    disputeId,
+    contractId,
+  });
 
   await client.query(
     `
@@ -126,4 +142,5 @@ module.exports = {
   getOpenContractDispute,
   assertNoOpenContractDispute,
   freezeContractEscrowForDispute,
+  remainingContractEscrowCredits,
 };

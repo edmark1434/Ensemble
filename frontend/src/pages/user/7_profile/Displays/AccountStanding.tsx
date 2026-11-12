@@ -82,7 +82,7 @@ export function standingBadges(standing?: PublicStanding | null) {
   if (standing.forumTimeout) {
     badges.push({ label: 'Timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
   }
-  // Open disputes are listed on Active History / Dispute History tabs — not as a header badge.
+  // Open disputes are listed on the Disputes tab — not as a header badge.
   return badges;
 }
 

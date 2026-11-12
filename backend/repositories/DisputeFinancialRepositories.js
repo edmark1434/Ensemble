@@ -3,6 +3,7 @@ const {
   CREDIT_TRANSACTION_TYPE,
   CREDIT_TRANSACTION_STATUS,
 } = require('../lib/CreditTransactionEnums');
+const { remainingContractEscrowCredits } = require('../lib/DisputeEscrow');
 
 function domainError(message, statusCode = 400, code = null) {
   const error = new Error(message);
@@ -53,32 +54,9 @@ async function lockDispute(client, disputeId) {
   return result.rows[0] || null;
 }
 
+// Same calculation the dispute freeze stores in `credit_amount_involved`.
 async function remainingEscrowCredits(client, disputeId, contractId) {
-  const result = await client.query(
-    `
-    SELECT GREATEST(0,
-      COALESCE(SUM(CASE WHEN type = 'Escrow Hold' THEN amount_credits ELSE 0 END), 0)
-      - COALESCE(SUM(CASE WHEN type IN ('Escrow Release', 'Escrow Refund') THEN amount_credits ELSE 0 END), 0)
-    )::int AS remaining
-    FROM credit_transactions
-    WHERE status = 'Completed'
-      AND (
-        related_dispute_id = $1
-        OR ($2::uuid IS NOT NULL AND reference_table = 'contracts' AND reference_id = $2)
-        OR (
-          $2::uuid IS NOT NULL
-          AND reference_table = 'contract_milestones'
-          AND reference_id IN (
-            SELECT contract_milestone_id
-            FROM contract_milestones
-            WHERE contract_id = $2
-          )
-        )
-      )
-    `,
-    [disputeId, contractId || null]
-  );
-  return Number(result.rows[0]?.remaining || 0);
+  return remainingContractEscrowCredits(client, { disputeId, contractId });
 }
 
 async function loadContractParties(client, contractId) {

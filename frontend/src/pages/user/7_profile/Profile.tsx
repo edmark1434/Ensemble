@@ -25,7 +25,7 @@ import { ProfileSetupWidget } from "./Displays/ProfileSetupWidget.tsx";
 import { MainBody } from "./Displays/Body/MainBody.tsx";
 import confetti from "canvas-confetti";
 import { Award } from "lucide-react";
-import type { TabType } from "./Displays/Body/MainBody.tsx";
+import { normalizeProfileTab, type TabType } from "./Displays/Body/MainBody.tsx";
 import type { PortfolioItem } from "./Displays/Body/Profile_Portfolio.tsx";
 
 // Badges Registry & Type Infrastructure
@@ -165,7 +165,10 @@ function standingWithMerit(standing?: PublicStanding | null): PublicStanding {
 export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const locationHook = useLocation(); const [activeTab, setActiveTab] = useState<TabType>((new URLSearchParams(locationHook.search).get("tab") as TabType) || "introduction");
+  const locationHook = useLocation();
+  const [activeTab, setActiveTab] = useState<TabType>(
+    normalizeProfileTab(new URLSearchParams(locationHook.search).get("tab"))
+  );
 
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();

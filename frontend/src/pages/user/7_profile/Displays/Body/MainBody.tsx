@@ -12,7 +12,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   ExternalLink,
-  History,
 } from "lucide-react";
 
 // Sub-component Imports
@@ -36,9 +35,26 @@ export type TabType =
   | "job-posts"
   | "assets"
   | "performance"
-  | "active-history"
-  | "dispute-history";
+  | "disputes";
 type PerformanceSubTab = "ratings" | "reviews" | "history" | "records";
+
+/** Legacy profile tab query values map onto the merged Disputes tab. */
+export function normalizeProfileTab(tab: string | null | undefined): TabType {
+  if (tab === "active-history" || tab === "dispute-history" || tab === "disputes") {
+    return "disputes";
+  }
+  const known: TabType[] = [
+    "introduction",
+    "portfolio",
+    "gallery",
+    "services",
+    "job-posts",
+    "assets",
+    "performance",
+    "disputes",
+  ];
+  return known.includes(tab as TabType) ? (tab as TabType) : "introduction";
+}
 
 interface DetailsListBodyProps {
   loading?: boolean;
@@ -70,8 +86,7 @@ const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
   { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
   { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
   { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
-  { key: "active-history", label: "Active History", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
-  { key: "dispute-history", label: "Dispute History", icon: <History className="h-3.5 w-3.5" /> },
+  { key: "disputes", label: "Disputes", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
 ];
 
 function disputeStatusLabel(status?: string) {
@@ -197,8 +212,14 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   const publicDisputes: PublicProfileDispute[] = Array.isArray(userDetails?.disputes)
     ? userDetails.disputes
     : [];
-  const activeDisputes = publicDisputes.filter((dispute) => !isClosedStatus(dispute.status));
-  const closedDisputes = publicDisputes.filter((dispute) => isClosedStatus(dispute.status));
+  const disputesSorted = [...publicDisputes].sort((a, b) => {
+    const aClosed = isClosedStatus(a.status) ? 1 : 0;
+    const bClosed = isClosedStatus(b.status) ? 1 : 0;
+    if (aClosed !== bClosed) return aClosed - bClosed;
+    const aTime = new Date(a.updatedAt || 0).getTime();
+    const bTime = new Date(b.updatedAt || 0).getTime();
+    return bTime - aTime;
+  });
   const openDisputeCenter = () => navigate("/contracts/disputes");
 
   return (
@@ -424,33 +445,18 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 </div>
               </div>
             )}
-            {activeTab === "active-history" && (
+            {activeTab === "disputes" && (
               <ProfileDisputeList
-                title="Active disputes"
-                disputes={activeDisputes}
+                title="Disputes"
+                disputes={disputesSorted}
                 isOwner={isOwner}
                 description={
                   isOwner
-                    ? "Open public dispute cases linked to your profile."
-                    : "Open public dispute cases linked to this profile."
+                    ? "Public dispute cases linked to your profile (open and closed)."
+                    : "Public dispute cases linked to this profile (open and closed)."
                 }
-                emptyTitle="No active disputes"
-                emptyDetail="There are no open public dispute cases on this profile."
-                onOpenCenter={openDisputeCenter}
-              />
-            )}
-            {activeTab === "dispute-history" && (
-              <ProfileDisputeList
-                title="Dispute history"
-                disputes={closedDisputes}
-                isOwner={isOwner}
-                description={
-                  isOwner
-                    ? "Closed public dispute cases linked to your profile."
-                    : "Closed public dispute cases linked to this profile."
-                }
-                emptyTitle="No dispute history"
-                emptyDetail="There are no closed public dispute cases on this profile."
+                emptyTitle="No public disputes"
+                emptyDetail="There are no public dispute cases on this profile."
                 onOpenCenter={openDisputeCenter}
               />
             )}
