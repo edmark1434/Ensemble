@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowDown, ArrowUp, AudioLines, Clapperboard, Eye, Image, Loader2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, AudioLines, Clapperboard, Eye, Image, Loader2, Lock, Upload, X } from "lucide-react";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { mediaUrl, type AssetRecord, type AssetType } from "./assetTypes";
@@ -7,6 +7,7 @@ import { prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivati
 import { enqueueAssetUpload } from "./assetUploadStore";
 import useGlobalState from "@/lib/global_state";
 import VideoUploadNotice from "./VideoUploadNotice";
+import AssetMedia from "./AssetMedia";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import { templateSnapshotPreviewUrl } from "./templatePreview";
 
@@ -297,6 +298,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     if (!cleanName || cleanName.length > 50) return setError("Enter an asset title up to 50 characters.");
     if (!cleanDescription || cleanDescription.length > 5000) return setError("Enter an asset description up to 5,000 characters.");
     if (!Number.isInteger(price) || price < 0 || price > 100000000) return setError("Enter a valid whole-number price.");
+    if (submittedTags.length < 3) return setError("Please add at least 3 tags to help users find your asset.");
     if (submittedTags.length > 10) return setError("You can add up to 10 tags.");
     const snapshotId = ydocSnapshotId.trim();
     if (snapshotId && !/^[1-9]\d{0,17}$/.test(snapshotId)) return setError("Enter a valid project snapshot ID.");
@@ -402,83 +404,403 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     else onClose();
   };
 
-  const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#0b0e17] dark:text-white";
+  const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600";
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="asset-editor-title">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
-        <div className="flex shrink-0 items-start justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131e]">
-          <div><h2 id="asset-editor-title" className="text-lg font-bold">{isTemplate ? (asset ? "Edit template" : "Add template") : asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{isTemplate ? "Add listing details and showcase images for your project template." : asset ? "Update listing details and showcase images." : "Create a protected asset package."}</p></div>
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/5" aria-label="Close"><X className="h-5 w-5" /></button>
+      <div className="flex max-h-[90vh] w-full max-w-4xl lg:max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-[#121214]">
+        <div className="flex shrink-0 items-start justify-between border-b border-gray-200 bg-white px-6 py-5 dark:border-zinc-800 dark:bg-[#121214]">
+          <div><h2 id="asset-editor-title" className="text-lg font-bold text-gray-900 dark:text-zinc-100">{isTemplate ? (asset ? "Edit template" : "Add template") : asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{isTemplate ? "Add listing details and showcase images for your project template." : asset ? "Update listing details and showcase images." : "Create a protected asset package."}</p></div>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
-        <form onSubmit={submit} className="scroll-thin min-h-0 overflow-y-auto p-5" aria-busy={checkingEligibility}>
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-busy={checkingEligibility}>
+          <div className="scroll-thin flex-1 overflow-y-auto p-6">
           {checkingEligibility && <p role="status" className="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" />Checking upload access…</p>}
-          <fieldset disabled={checkingEligibility || saving} className="min-w-0 space-y-5">
-          {(!asset || showShowcaseControls || showcaseOrder.length > 0) && <div className="space-y-5">
-            {!asset && !isTemplate && <div><p className="mb-2 text-sm font-semibold">Asset type</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(["image", "video", "audio"] as AssetType[]).map((type) => { const Icon = type === "image" ? Image : type === "video" ? Clapperboard : AudioLines; return <button key={type} type="button" onClick={() => changeListingType(type)} aria-pressed={listingType === type} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${listingType === type ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:border-blue-400 dark:border-white/10"}`}><Icon className="h-4 w-4" />{type}</button>; })}</div></div>}
-            {asset && showShowcaseControls && hasAvailableExistingShowcaseImages && <div className="rounded-xl border border-gray-200 p-4 dark:border-white/10">
-              <p className="mb-3 text-sm font-bold">Available showcase images</p>
-              <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">
-                {availableMediaShowcaseItems.map((mediaFile) => {
-                  const Icon = mediaFile.type === "image" ? Image : Clapperboard;
-                  return <div key={mediaFile.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-white/10 dark:bg-white/[0.025]">
-                    {mediaFile.thumbnail_path ? <img src={mediaUrl(mediaFile.thumbnail_path)} alt="" className="h-10 w-10 rounded object-cover" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-500"><Icon className="h-4 w-4" /></span>}
-                    <span className="min-w-0 flex-1 truncate text-xs">{mediaFile.name}</span>
-                    <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`media:${mediaFile.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
-                  </div>;
-                })}
-                {availableThumbnailShowcaseItems.map((item) => <div key={item.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-white/10 dark:bg-white/[0.025]">
-                  <img src={mediaUrl(item.path)} alt="" className="h-10 w-10 rounded object-cover" />
-                  <span className="min-w-0 flex-1 truncate text-xs">Showcase image</span>
-                  <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`retained:${item.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
-                </div>)}
+          <fieldset disabled={checkingEligibility || saving} className="min-w-0 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              {/* LEFT COLUMN: Asset Type, Files, Preview & Showcase */}
+              <div className="space-y-5 min-w-0">
+                {/* When Editing an Existing Asset: Show Media Preview Card */}
+                {asset && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                        Asset preview
+                      </p>
+                      <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                        {asset.type}
+                      </span>
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-gray-100 flex items-center justify-center dark:bg-zinc-900">
+                        <AssetMedia asset={asset} compact />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-200/60 pt-2.5 text-xs text-gray-500 dark:border-zinc-800/80 dark:text-zinc-400">
+                        <span className="truncate max-w-[200px] font-medium text-gray-700 dark:text-zinc-300">
+                          {asset.media_assets?.[0]?.name || asset.name}
+                        </span>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          {asset.width && asset.height && (
+                            <span>{asset.width}×{asset.height}</span>
+                          )}
+                          {asset.duration_seconds && (
+                            <span>{Math.round(asset.duration_seconds)}s</span>
+                          )}
+                          {asset.size_bytes ? (
+                            <span>{(asset.size_bytes / 1024 / 1024).toFixed(1)} MB</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-xs text-gray-600 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400">
+                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
+                      <p className="leading-relaxed">
+                        <span className="font-semibold text-gray-800 dark:text-zinc-200">Asset file is locked:</span> The uploaded media file cannot be replaced once published to protect existing buyers and licenses. You can still modify its title, price, description, tags, and showcase images.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {(!asset || showShowcaseControls || showcaseOrder.length > 0) && (
+                  <>
+                    {!asset && !isTemplate && (
+                      <div>
+                        <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                          Asset type <span className="text-red-500">*</span>
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(["image", "video", "audio"] as AssetType[]).map((type) => {
+                            const Icon = type === "image" ? Image : type === "video" ? Clapperboard : AudioLines;
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={() => changeListingType(type)}
+                                aria-pressed={listingType === type}
+                                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${
+                                  listingType === type
+                                    ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-400"
+                                    : "border-gray-300 hover:border-blue-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300 dark:hover:border-zinc-700"
+                                }`}
+                              >
+                                <Icon className="h-4 w-4" />
+                                {type}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {!asset && listingType === "video" && <VideoUploadNotice />}
+
+                    {!asset && isTemplate && (
+                      <div className="flex min-w-0 flex-col">
+                        <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                          Snapshot <span className="text-red-500">*</span>
+                        </p>
+                        <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{template?.name || "Project template"}</p>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Project snapshot attached. Later project edits won't change this listing.</p>
+                          <button type="button" disabled={openingPreview || !template?.previewToken} onClick={() => void previewSnapshot()} className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold transition hover:bg-gray-100 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+                            {openingPreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}{openingPreview ? "Opening…" : "Preview"}
+                          </button>
+                          {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block text-xs text-blue-600 underline dark:text-blue-400">Open snapshot preview</a>}
+                          {!template?.previewToken && <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Share the template again from the editor to enable its preview.</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    {!asset && !isTemplate && (
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                          Asset files <span className="text-red-500">*</span>
+                        </label>
+                        <input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
+                        <button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-4 text-left transition hover:border-blue-500 dark:border-zinc-800 dark:bg-zinc-950/60 dark:hover:border-zinc-700">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                            {primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
+                          </span>
+                          <span>
+                            <span className="block text-sm font-semibold text-gray-900 dark:text-zinc-100">
+                              {files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : "Choose asset files"}
+                            </span>
+                            <span className="mt-1 block text-xs text-gray-500 dark:text-zinc-400">Up to 20 files, 1GB each.</span>
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
+                    {!asset && files.length > 0 && (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                        <p className="mb-3 text-xs font-semibold text-gray-900 dark:text-zinc-200">Asset files ({files.length})</p>
+                        <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">
+                          {files.map((file, index) => {
+                            const kind = sourceKind(file);
+                            const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : FileAudio;
+                            const fileKey = fileIdentity(file);
+                            const showcaseKey = `asset:${fileKey}`;
+                            const isShowcased = showcaseOrder.includes(showcaseKey);
+                            return (
+                              <div key={fileKey} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                {kind === "image" ? (
+                                  <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" />
+                                ) : (
+                                  <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500">
+                                    <Icon className="h-5 w-5" />
+                                  </span>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-semibold text-gray-900 dark:text-zinc-100">{file.name}</p>
+                                  <p className="text-[10px] uppercase text-gray-500 dark:text-zinc-400">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p>
+                                </div>
+                                {showShowcaseControls && (kind === "image" || kind === "video") && (
+                                  <button
+                                    type="button"
+                                    aria-pressed={isShowcased}
+                                    disabled={!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType)}
+                                    onClick={() => toggleShowcaseEntry(showcaseKey)}
+                                    className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${
+                                      isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"
+                                    }`}
+                                  >
+                                    {isShowcased ? "Added to showcase" : "Add to showcase"}
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => removeAssetFile(index, fileKey)} className="rounded p-1.5 text-gray-400 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/15">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {showShowcaseControls && (
+                      <div className="flex min-w-0 flex-col">
+                        <label className="mb-2 block text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                          Showcase images {isTemplate ? <span className="text-red-500">*</span> : <span className="font-normal text-gray-400 dark:text-zinc-500">(optional)</span>}
+                        </label>
+                        <input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
+                        <button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-24 flex-1 w-full items-center gap-3.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-3.5 text-left transition hover:border-blue-500 dark:border-zinc-800 dark:bg-zinc-950/60 dark:hover:border-zinc-700">
+                          {thumbnailPreviewUrls[0] ? (
+                            <img src={thumbnailPreviewUrls[0]} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                          ) : (
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                              <Upload className="h-5 w-5" />
+                            </span>
+                          )}
+                          <span>
+                            <span className="block text-sm font-semibold text-gray-900 dark:text-zinc-100">Choose showcase images</span>
+                            <span className="mt-0.5 block text-xs text-gray-500 dark:text-zinc-400">
+                              {showcaseOrder.length} of {maxShowcaseImages(listingType)} selected · {maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB total
+                            </span>
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
+                    {asset && showShowcaseControls && hasAvailableExistingShowcaseImages && (
+                      <div className="rounded-xl border border-gray-200 p-3.5 dark:border-zinc-800 dark:bg-zinc-950/60">
+                        <p className="mb-2.5 text-xs font-bold text-gray-900 dark:text-zinc-200">Available showcase images</p>
+                        <div className="scroll-thin max-h-40 space-y-2 overflow-y-auto pr-1">
+                          {availableMediaShowcaseItems.map((mediaFile) => {
+                            const Icon = mediaFile.type === "image" ? Image : Clapperboard;
+                            return (
+                              <div key={mediaFile.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                {mediaFile.thumbnail_path ? <img src={mediaUrl(mediaFile.thumbnail_path)} alt="" className="h-9 w-9 rounded object-cover" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-500"><Icon className="h-4 w-4" /></span>}
+                                <span className="min-w-0 flex-1 truncate text-xs text-gray-900 dark:text-zinc-200">{mediaFile.name}</span>
+                                <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`media:${mediaFile.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
+                              </div>
+                            );
+                          })}
+                          {availableThumbnailShowcaseItems.map((item) => (
+                            <div key={item.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                              <img src={mediaUrl(item.path)} alt="" className="h-9 w-9 rounded object-cover" />
+                              <span className="min-w-0 flex-1 truncate text-xs text-gray-900 dark:text-zinc-200">Showcase image</span>
+                              <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`retained:${item.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {showShowcaseControls && showcaseOrder.length > 0 && (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                        <div className="mb-2.5 flex justify-between">
+                          <p className="text-xs font-semibold text-gray-900 dark:text-zinc-200">Showcase image order</p>
+                          <p className="text-[10px] text-gray-500 dark:text-zinc-400">First is cover · arrows to reorder</p>
+                        </div>
+                        <div className="grid gap-2.5 grid-cols-2">
+                          {showcaseOrder.map((key, index) => {
+                            const separator = key.indexOf(":");
+                            const kind = key.slice(0, separator);
+                            const value = key.slice(separator + 1);
+                            const retained = kind === "retained" || kind === "media" ? asset?.thumbnails.find((item) => item.media_asset_id === value) : undefined;
+                            const mediaFile = kind === "media" ? asset?.media_assets.find((item) => item.media_asset_id === value) : undefined;
+                            const assetIndex = kind === "asset" ? files.findIndex((file) => fileIdentity(file) === value) : -1;
+                            const uploadIndex = kind === "upload" ? thumbnailFiles.findIndex((file) => fileIdentity(file) === value) : -1;
+                            const localFile = assetIndex >= 0 ? files[assetIndex] : uploadIndex >= 0 ? thumbnailFiles[uploadIndex] : undefined;
+                            const preview = kind === "upload" && uploadIndex >= 0 ? thumbnailPreviewUrls[uploadIndex]
+                              : kind === "asset" && assetIndex >= 0 ? originalPreviewUrls[assetIndex]
+                                : retained ? mediaUrl(retained.path) : mediaUrl(mediaFile?.thumbnail_path);
+                            const imageLike = kind === "upload" || (kind === "asset" && sourceKind(localFile!) === "image")
+                              || Boolean(preview && (mediaFile?.type === "image" || mediaFile?.type === "video" || retained));
+                            const Icon = kind === "asset" && sourceKind(localFile!) === "video" || mediaFile?.type === "video" ? Clapperboard : Image;
+                            const label = localFile?.name || mediaFile?.name || "Showcase image";
+                            return (
+                              <div key={key} className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
+                                <div className="relative aspect-video bg-gray-100 dark:bg-zinc-950">
+                                  {preview && imageLike ? <img src={preview} alt={label} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-blue-500"><Icon className="h-6 w-6" /></span>}
+                                  {index === 0 && <span className="absolute left-1.5 top-1.5 rounded bg-blue-600 px-1.5 py-0.5 text-[8px] font-bold uppercase text-white">Cover</span>}
+                                </div>
+                                <div className="flex items-center gap-1.5 p-1.5">
+                                  <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-gray-900 dark:text-zinc-200">{label}</span>
+                                  <button type="button" aria-label={`Move ${label} up`} onClick={() => moveShowcaseEntry(index, -1)} disabled={index === 0} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-zinc-800"><ArrowUp className="h-3 w-3" /></button>
+                                  <button type="button" aria-label={`Move ${label} down`} onClick={() => moveShowcaseEntry(index, 1)} disabled={index === showcaseOrder.length - 1} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-zinc-800"><ArrowDown className="h-3 w-3" /></button>
+                                  <button type="button" aria-label={`Remove ${label} from showcase`} onClick={() => removeShowcaseEntry(key)} className="rounded p-1 text-gray-400 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/15"><X className="h-3 w-3" /></button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            </div>}
-            {!asset && listingType === "video" && <VideoUploadNotice />}
-            {(!asset || showShowcaseControls) && <div className={`grid gap-4 ${showShowcaseControls && !asset ? "sm:grid-cols-2" : "grid-cols-1"}`}>
-              {!asset && isTemplate && (
-                <div className="flex min-w-0 flex-col"><p className="mb-2 text-sm font-semibold">Snapshot</p><div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
-                  <p className="text-sm font-semibold">{template?.name || "Project template"}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Project snapshot attached. Later project edits won't change this listing.</p>
-                  <button type="button" disabled={openingPreview || !template?.previewToken} onClick={() => void previewSnapshot()} className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold transition hover:bg-gray-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
-                    {openingPreview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}{openingPreview ? "Opening…" : "Preview"}
-                  </button>
-                  {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block text-xs text-blue-600 underline dark:text-blue-400">Open snapshot preview</a>}
-                  {!template?.previewToken && <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Share the template again from the editor to enable its preview.</p>}
-                </div></div>
-              )}
-              {!asset && !isTemplate && <div><label className="mb-2 block text-sm font-semibold">Asset files <span className="text-red-500">*</span></label><input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500">{primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}</span><span><span className="block text-sm font-semibold">{files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : "Choose asset files"}</span><span className="mt-1 block text-xs text-gray-500">Up to 20 files, 1GB each.</span></span></button></div>}
-              {showShowcaseControls && <div className="flex min-w-0 flex-col"><label className="mb-2 block text-sm font-semibold">Showcase images <span className="font-normal text-gray-400">({isTemplate ? "required" : "optional"})</span></label><input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-28 flex-1 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]">{thumbnailPreviewUrls[0] ? <img src={thumbnailPreviewUrls[0]} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500"><Upload className="h-5 w-5" /></span>}<span><span className="block text-sm font-semibold">Choose showcase images</span><span className="mt-1 block text-xs text-gray-500">{showcaseOrder.length} of {maxShowcaseImages(listingType)} selected · {maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB total</span></span></button></div>}
-            </div>}
-            {!asset && files.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><p className="mb-3 text-xs font-semibold">Asset files ({files.length})</p><div className="scroll-thin max-h-56 space-y-2 overflow-y-auto pr-1">{files.map((file, index) => { const kind = sourceKind(file); const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : FileAudio; const fileKey = fileIdentity(file); const showcaseKey = `asset:${fileKey}`; const isShowcased = showcaseOrder.includes(showcaseKey); return <div key={fileKey} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">{kind === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" /> : <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><Icon className="h-5 w-5" /></span>}<div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="text-[10px] uppercase text-gray-500">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p></div>{showShowcaseControls && (kind === "image" || kind === "video") && <button type="button" aria-pressed={isShowcased} disabled={!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}<button type="button" onClick={() => removeAssetFile(index, fileKey)} className="rounded p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>; })}</div></div>}
-            {showShowcaseControls && showcaseOrder.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><div className="mb-3 flex justify-between"><p className="text-xs font-semibold">Showcase image order</p><p className="text-[10px] text-gray-500">First is the cover · use arrows to reorder</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{showcaseOrder.map((key, index) => {
-              const separator = key.indexOf(":");
-              const kind = key.slice(0, separator);
-              const value = key.slice(separator + 1);
-              const retained = kind === "retained" || kind === "media" ? asset?.thumbnails.find((item) => item.media_asset_id === value) : undefined;
-              const mediaFile = kind === "media" ? asset?.media_assets.find((item) => item.media_asset_id === value) : undefined;
-              const assetIndex = kind === "asset" ? files.findIndex((file) => fileIdentity(file) === value) : -1;
-              const uploadIndex = kind === "upload" ? thumbnailFiles.findIndex((file) => fileIdentity(file) === value) : -1;
-              const localFile = assetIndex >= 0 ? files[assetIndex] : uploadIndex >= 0 ? thumbnailFiles[uploadIndex] : undefined;
-              const preview = kind === "upload" && uploadIndex >= 0 ? thumbnailPreviewUrls[uploadIndex]
-                : kind === "asset" && assetIndex >= 0 ? originalPreviewUrls[assetIndex]
-                  : retained ? mediaUrl(retained.path) : mediaUrl(mediaFile?.thumbnail_path);
-              const imageLike = kind === "upload" || (kind === "asset" && sourceKind(localFile!) === "image")
-                || Boolean(preview && (mediaFile?.type === "image" || mediaFile?.type === "video" || retained));
-              const Icon = kind === "asset" && sourceKind(localFile!) === "video" || mediaFile?.type === "video" ? Clapperboard : Image;
-              const label = localFile?.name || mediaFile?.name || "Showcase image";
-              return <div key={key} className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-white/10 dark:bg-white/[0.025]">
-                <div className="relative aspect-video bg-gray-100 dark:bg-white/5">{preview && imageLike ? <img src={preview} alt={label} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-blue-500"><Icon className="h-8 w-8" /></span>}{index === 0 && <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[9px] font-bold uppercase text-white">Cover</span>}</div>
-                <div className="flex items-center gap-2 p-2"><span className="min-w-0 flex-1 truncate text-[10px] font-semibold">{label}</span><button type="button" aria-label={`Move ${label} up`} onClick={() => moveShowcaseEntry(index, -1)} disabled={index === 0} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/10"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" aria-label={`Move ${label} down`} onClick={() => moveShowcaseEntry(index, 1)} disabled={index === showcaseOrder.length - 1} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/10"><ArrowDown className="h-3.5 w-3.5" /></button><button type="button" aria-label={`Remove ${label} from showcase`} onClick={() => removeShowcaseEntry(key)} className="rounded p-1 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>
-              </div>;
-            })}</div></div>}
-          </div>}
-          <label className="block"><span className="mb-2 block text-sm font-semibold">Title</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} className={inputClass} placeholder="Name your asset" /></label>
-          <label className="block"><span className="mb-2 block text-sm font-semibold">Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={5000} rows={5} className={inputClass} placeholder="Describe what this asset contains" /></label>
-          <div><label htmlFor="asset-tags" className="mb-2 block text-sm font-semibold">Tags <span className="font-normal text-gray-400">(optional)</span></label><div className="min-h-12 rounded-xl border border-gray-300 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0b0e17]"><div className="flex flex-wrap items-center gap-2">{tags.map((tag) => <span key={tag.toLowerCase()} className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs font-semibold text-blue-600">#{tag}<button type="button" onClick={() => setTags((current) => current.filter((item) => item !== tag))}><X className="h-3 w-3" /></button></span>)}<input id="asset-tags" value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={handleTagKeyDown} onBlur={() => addTag(tagInput)} maxLength={50} className="min-w-36 flex-1 bg-transparent px-1 py-1.5 text-sm outline-none" placeholder="Type a tag and press Enter" /></div></div></div>
-          <label className="block"><span className="mb-2 block text-sm font-semibold">Price in credits</span><input type="number" min="0" max="100000000" value={priceCredits} onChange={(event) => setPriceCredits(event.target.value)} className={inputClass} /></label>
-          {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">{error}</p>}
-          <div className="flex justify-end gap-3 border-t border-gray-200 pt-5 dark:border-white/10"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-semibold dark:border-white/10">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-60">{saving && <Loader2 className="h-4 w-4 animate-spin" />}{saving ? (asset ? "Saving..." : "Uploading...") : asset ? "Save changes" : "Upload asset"}</button></div>
+
+              {/* RIGHT COLUMN: Title, Price, Description, Tags */}
+              <div className="space-y-4 min-w-0">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                      Title <span className="text-red-500">*</span>
+                    </label>
+                    <span className={`text-xs ${name.length >= 50 ? 'text-red-500 font-semibold' : 'text-gray-400 dark:text-zinc-500'}`}>
+                      {name.length}/50
+                    </span>
+                  </div>
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    maxLength={50}
+                    className={inputClass}
+                    placeholder="Name your asset"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                      Price in credits <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-xs text-gray-400 dark:text-zinc-500">
+                      0 for free download
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={priceCredits}
+                    onFocus={(event) => event.target.select()}
+                    onChange={(event) => {
+                      const val = event.target.value.replace(/[^0-9]/g, "");
+                      setPriceCredits(val);
+                    }}
+                    onBlur={() => {
+                      if (!priceCredits.trim()) {
+                        setPriceCredits("0");
+                      }
+                    }}
+                    className={inputClass}
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <span className={`text-xs ${description.length >= 5000 ? 'text-red-500 font-semibold' : 'text-gray-400 dark:text-zinc-500'}`}>
+                      {description.length}/5000
+                    </span>
+                  </div>
+                  <textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    maxLength={5000}
+                    rows={4}
+                    className={inputClass}
+                    placeholder="Describe what this asset contains"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="asset-tags" className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                      Tags <span className="text-red-500">*</span> <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">(at least 3 tags)</span>
+                    </label>
+                    <span className={`text-xs font-semibold ${tags.length >= 3 ? 'text-emerald-500 dark:text-emerald-400' : 'text-amber-500 dark:text-amber-400'}`}>
+                      {tags.length}/3 required{tags.length > 3 ? ` (${tags.length}/10)` : ''}
+                    </span>
+                  </div>
+                  <div className="min-h-12 rounded-xl border border-gray-300 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {tags.map((tag) => (
+                        <span key={tag.toLowerCase()} className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                          #{tag}
+                          <button type="button" onClick={() => setTags((current) => current.filter((item) => item !== tag))}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        id="asset-tags"
+                        value={tagInput}
+                        onChange={(event) => setTagInput(event.target.value)}
+                        onKeyDown={handleTagKeyDown}
+                        onBlur={() => addTag(tagInput)}
+                        maxLength={50}
+                        className="min-w-36 flex-1 bg-transparent px-1 py-1 text-sm outline-none text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+                        placeholder={tags.length < 3 ? `Add tag and press Enter (${3 - tags.length} more needed)` : "Add another tag and press Enter"}
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                    Press Enter or comma to add a tag. At least 3 tags are required to upload.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                {error}
+              </p>
+            )}
           </fieldset>
+          </div>
+
+          {/* Sticky footer pinned at the bottom */}
+          <div className="shrink-0 flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-[#121214]">
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              <span className="text-red-500 font-bold">*</span> Required fields
+            </p>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving || checkingEligibility} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-60">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? (asset ? "Saving..." : "Uploading...") : asset ? "Save changes" : "Upload asset"}
+              </button>
+            </div>
+          </div>
         </form>
       </div>
     </div>
