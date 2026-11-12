@@ -285,12 +285,13 @@ export const PlatformTour: React.FC = () => {
 
   // Start walkthrough handler from welcome modal
   const handleStartWalkthrough = useCallback((role: UserPlatformRole) => {
+    closeWelcome();
     startWalkthrough(role);
     const firstStep = useTourStore.getState().activeSteps[0];
     if (firstStep && location.pathname !== firstStep.route) {
       navigate(firstStep.route);
     }
-  }, [startWalkthrough, location.pathname, navigate]);
+  }, [closeWelcome, startWalkthrough, location.pathname, navigate]);
 
   // Don't render if user is not authenticated or in guest mode
   if (!isAuthenticated && !isWalkthroughActive && !isWelcomeOpen && !isLeftPopupOpen) return null;

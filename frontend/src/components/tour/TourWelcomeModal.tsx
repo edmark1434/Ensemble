@@ -167,21 +167,22 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
 
   return (
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5"
-        style={{ fontFamily: T.fontDisplay }}
-      >
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-          onClick={() => {
-            playClick();
-            onClose();
-          }}
-        />
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5"
+          style={{ fontFamily: T.fontDisplay }}
+        >
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => {
+              playClick();
+              onClose();
+            }}
+          />
 
         {/* Architectural Blueprint Modal Window */}
         <motion.div
@@ -639,6 +640,7 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
               type="button"
               onClick={() => {
                 playClick();
+                onClose();
                 onStart(activeRole);
               }}
               onMouseEnter={playHover}
@@ -673,6 +675,7 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };
