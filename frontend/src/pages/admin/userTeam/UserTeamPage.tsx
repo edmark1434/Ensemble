@@ -118,7 +118,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
             <p className="mt-1 text-xs text-zinc-500">
               Signed in as @{user?.username || meta.fallbackUser}
               {variant === 'forum' || variant === 'marketplace' || variant === 'jobs'
-                ? ' · Warn, suspend, and lock only — no bans, credits, or team management'
+                ? ' · Warn, suspend, and lock users & teams — no bans, credits, or verification'
                 : ''}
             </p>
           </div>
@@ -175,7 +175,11 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
           />
         )}
         {tab === 'teams' && caps.showTeamsTab && (
-          <TeamsTab refreshToken={refreshToken} onStatsLoaded={setTeamsPending} />
+          <TeamsTab
+            refreshToken={refreshToken}
+            onStatsLoaded={setTeamsPending}
+            capabilities={caps}
+          />
         )}
         {tab === 'users' && (
           <UsersTab

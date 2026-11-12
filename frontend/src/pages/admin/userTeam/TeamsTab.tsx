@@ -4,7 +4,10 @@ import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import TableFilterBar, { uniqueOptions } from './components/TableFilterBar';
-import BulkActionsMenu, { type BulkActionId } from './components/BulkActionsMenu';
+import BulkActionsMenu, {
+  type BulkActionId,
+  type BulkActionItem,
+} from './components/BulkActionsMenu';
 import {
   BulkConfirmModal,
   ConfirmStatusModal,
@@ -22,8 +25,22 @@ import {
 import { buildRowActionItems, exportAccountJson } from './statusActions';
 import { formatDateTime } from './formatDateTime';
 import type { PlatformTeam, TeamManagementData } from './userTeamTypes';
+import {
+  getUserTeamCapabilities,
+  type UserTeamCapabilities,
+} from './userTeamCapabilities';
 
 const TEAMS_URL = '/api/admin/teams-management';
+
+const ALL_BULK_ITEMS: BulkActionItem[] = [
+  { id: 'restore', label: 'Restore to Active', section: 'Status' },
+  { id: 'suspend', label: 'Suspend teams', danger: true, section: 'Status' },
+  { id: 'lock', label: 'Lock teams', section: 'Status' },
+  { id: 'ban', label: 'Ban teams', danger: true, section: 'Status' },
+  { id: 'approve', label: 'Approve verification', section: 'Verification' },
+  { id: 'reject', label: 'Reject verification', danger: true, section: 'Verification' },
+  { id: 'clear', label: 'Clear selection', section: 'Other' },
+];
 
 type ModalKind =
   | 'overview'
@@ -100,13 +117,20 @@ type TeamsTabProps = {
   refreshToken?: number;
   /** Pre-select verification filter (value is lowercased option key, e.g. "pending review"). */
   defaultVerificationFilter?: string;
+  capabilities?: UserTeamCapabilities;
 };
 
 export default function TeamsTab({
   onStatsLoaded,
   refreshToken = 0,
   defaultVerificationFilter = 'all',
+  capabilities: capabilitiesProp,
 }: TeamsTabProps) {
+  const capabilities = capabilitiesProp ?? getUserTeamCapabilities('admin');
+  const bulkItems = useMemo(
+    () => ALL_BULK_ITEMS.filter((item) => capabilities.bulkActions.has(item.id)),
+    [capabilities]
+  );
   const [data, setData] = useState<TeamManagementData | null>(() => {
     const cached = peekStaffGet(TEAMS_URL);
     return cached?.data?.success ? cached.data.data : null;
@@ -257,21 +281,27 @@ export default function TeamsTab({
   };
 
   const handleAction = (team: PlatformTeam, actionId: string) => {
+    const isPrimary = capabilities.primaryActions.has(actionId);
+    const isStatus =
+      capabilities.statusActions.has(actionId) ||
+      (actionId === 'warn' && capabilities.canWarn);
+    if (!isPrimary && !isStatus) return;
+
     switch (actionId) {
       case 'view':
         open(team, 'overview');
         break;
       case 'credit':
-        open(team, 'credit');
+        if (capabilities.canCredits) open(team, 'credit');
         break;
       case 'verification':
-        open(team, 'verification');
+        if (capabilities.canVerification) open(team, 'verification');
         break;
       case 'history':
         open(team, 'history');
         break;
       case 'warn':
-        open(team, 'warn');
+        if (capabilities.canWarn) open(team, 'warn');
         break;
       case 'export':
         exportAccountJson(`team-${team.handle || team.accountId}.json`, team);
@@ -382,6 +412,7 @@ export default function TeamsTab({
           <BulkActionsMenu
             selectedCount={selectedIds.size}
             busy={bulkBusy}
+            items={bulkItems}
             onAction={(id) => handleBulkAction(id as BulkActionId)}
           />
         </div>
@@ -446,6 +477,7 @@ export default function TeamsTab({
                         items={buildRowActionItems(team.status, {
                           hasViolations: (team.history?.totalViolations ?? 0) > 0,
                           forumTimeout: team.forumTimeout,
+                          capabilities,
                         })}
                         onAction={(id) => handleAction(team, id)}
                       />
@@ -469,12 +501,16 @@ export default function TeamsTab({
         <TeamOverviewModal
           team={selected}
           onClose={closeModal}
-          onOpenCredit={() => open(selected, 'credit')}
-          onOpenVerification={() => open(selected, 'verification')}
+          onOpenCredit={
+            capabilities.canCredits ? () => open(selected, 'credit') : undefined
+          }
+          onOpenVerification={
+            capabilities.canVerification ? () => open(selected, 'verification') : undefined
+          }
           onOpenHistory={() => open(selected, 'history')}
         />
       )}
-      {selected && modal === 'credit' && (
+      {selected && modal === 'credit' && capabilities.canCredits && (
         <CreditActivityModal
           title={selected.name}
           accountId={selected.accountId}
@@ -486,7 +522,7 @@ export default function TeamsTab({
           onChanged={() => void refreshAfterChange()}
         />
       )}
-      {selected && modal === 'verification' && (
+      {selected && modal === 'verification' && capabilities.canVerification && (
         <VerificationModal
           entityName={selected.name}
           accountId={selected.accountId}
@@ -505,7 +541,7 @@ export default function TeamsTab({
           onChanged={() => void refreshAfterChange()}
         />
       )}
-      {selected && modal === 'warn' && (
+      {selected && modal === 'warn' && capabilities.canWarn && (
         <WarnAccountModal
           entityName={selected.name}
           accountId={selected.accountId}

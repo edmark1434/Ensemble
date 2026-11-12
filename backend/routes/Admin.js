@@ -21,7 +21,7 @@ const {
   getAdminAccountActivity,
 } = require('../controllers/AdminUserTeamControllers');
 
-/** Admin + Support: full User & Team. Forum/Marketplace: read + limited enforcement. */
+/** Admin + Support: full User & Team. Forum/Marketplace/Jobs: read + limited enforcement. */
 const requireUserTeamAccess = requireStaffRole([
   'Admin',
   'Support Moderator',
@@ -29,7 +29,7 @@ const requireUserTeamAccess = requireStaffRole([
   'Marketplace Moderator',
   'Jobs N Gigs Moderator',
 ]);
-/** Credits, verification, pardons, team management, ban — Admin/Support only. */
+/** Credits, verification, pardons, ban — Admin/Support only. Team list is readable by all User & Team roles. */
 const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);
 const {
   getAdminEconomyOverview,
@@ -100,7 +100,7 @@ router.get('/staff/roles', [checkSession, requireAdmin], getAdminStaffRoles);
 router.post('/staff', [checkSession, requireAdmin], createAdminStaff);
 router.patch('/staff/:staffId', [checkSession, requireAdmin], patchAdminStaff);
 router.delete('/staff/:staffId', [checkSession, requireAdmin], deleteAdminStaff);
-router.get('/teams-management', [checkSession, requireUserTeamFullWrite], getAdminTeamsManagement);
+router.get('/teams-management', [checkSession, requireUserTeamAccess], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminUsersManagement);
 router.get('/accounts/:accountId/verification-details', [checkSession, requireUserTeamFullWrite], getAdminUserVerificationDetails);
 router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
