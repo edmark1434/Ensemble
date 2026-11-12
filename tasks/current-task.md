@@ -1,14 +1,13 @@
-# Active Task: Platform teams on all moderator User & Team desks
+# Active Task: Hide Survey Responses on moderator User & Team
 
 ## Implementation Objective
 
-Show the Team accounts (platform teams) tab on every moderator User & Team
-desk — Forum, Marketplace, Jobs, and Support — not only Admin/Support.
+Remove the Survey Responses tab from every moderator User & Team desk
+(Support, Forum, Marketplace, Jobs). Keep it on Admin only.
 
 ## Acceptance Criteria
 
-- [x] Forum / Marketplace / Jobs User & Team shows the Team accounts tab.
-- [x] `/api/admin/teams-management` is readable by all User & Team staff roles.
-- [x] Specialist mods keep limited enforcement on teams (warn / suspend / lock;
-      no ban, credits, or verification).
+- [x] Survey Responses tab is not shown for support / forum / marketplace / jobs
+      User & Team variants.
+- [x] Admin User & Team still includes Survey Responses.
 - [ ] Frontend typecheck passes (run when asked).
