@@ -29,6 +29,7 @@ import {
   Search,
   Settings,
   Share2,
+  ShieldCheck,
   Table as TableIcon,
   Tag,
   User,
