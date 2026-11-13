@@ -255,9 +255,15 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     },
   });
 
+  // The one suspension notice for this crossing. notifyAccountWarned does not send another.
   try {
-    const { notifyAccountSuspended } = require('../services/AccountStandingServices');
-    await notifyAccountSuspended(accountId);
+    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+    await notifyAccountStatusChanged(accountId, {
+      status: 'Suspended',
+      previousStatus,
+      action: 'auto_suspend',
+      reason: 'Auto-suspended after exceeding active warning threshold',
+    });
   } catch (notifyErr) {
     console.error('Failed to notify auto-suspended account:', notifyErr);
   }
@@ -304,7 +310,7 @@ async function applyReportAutomations(reportRow, { staffId = null } = {}) {
     } catch {}
   }
 
-  return { ...reportRow, priority, ticketAutoCreated };
+  return { ...reportRow, priority };
 }
 
 /**

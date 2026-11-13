@@ -154,8 +154,14 @@ async function listActiveViolations(accountId) {
   }));
 }
 
+/** Same per-row weight as sumActiveWarningPoints: 1–10, a missing value counts as 1. */
+const WARNING_POINTS_SQL = 'LEAST(GREATEST(COALESCE(points, 1), 1), 10)';
+
+/**
+ * Mark lapsed warnings expired. Returns the points that just stopped counting (0 when none).
+ */
 async function expireElapsedWarnings(accountId) {
-  const { rowCount } = await pool.query(
+  const { rows } = await pool.query(
     `
     UPDATE violations
     SET status = 'expired'
@@ -164,11 +170,39 @@ async function expireElapsedWarnings(accountId) {
       AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
       AND expires_at IS NOT NULL
       AND expires_at <= NOW()
+    RETURNING ${WARNING_POINTS_SQL} AS points
     `,
     [accountId]
   );
-  return rowCount > 0;
+  return rows.reduce((sum, row) => sum + Number(row.points || 0), 0);
 }
+
+/**
+ * After warnings lapse, recompute the band and tell the member when it moved
+ * ("Your Platform Merit recovered to …"). The points before the lapse are the points now
+ * plus the ones that just expired.
+ */
+async function refreshBandAfterLapse(accountId, lapsedPoints) {
+  if (!lapsedPoints) return;
+  const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
+  const { refreshWarningBand } = require('../services/WarningBandServices');
+  const remaining = await sumActiveWarningPoints(accountId);
+  await refreshWarningBand(accountId, remaining + lapsedPoints);
+}
+
+/**
+ * The status an account returns to when a ban, lock or suspension ends. A member who had
+ * deactivated the account keeps `deactivated_at` under the penalty, so they go back to
+ * Deactivated (and reactivate themselves) instead of silently becoming Active.
+ * @param {string} [alias] table alias of `accounts` in the surrounding statement
+ */
+function restingStatusSql(alias = '') {
+  const col = (name) => (alias ? `${alias}.${name}` : name);
+  return `CASE WHEN ${col('deactivated_at')} IS NOT NULL AND LOWER(COALESCE(${col('type')}, '')) = 'user'
+    THEN 'Deactivated' ELSE 'Active' END`;
+}
+
+const RESTING_STATUS_SQL = restingStatusSql('a');
 
 const EXPIRED_STANDING_SQL = `
   (
@@ -199,19 +233,20 @@ async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
       FOR UPDATE SKIP LOCKED
     )
     UPDATE accounts a
-    SET status = 'Active',
+    SET status = ${RESTING_STATUS_SQL},
         suspension_ends_at = NULL,
         ban_ends_at = NULL,
         lock_ends_at = NULL
     FROM expired e
     WHERE a.account_id = e.account_id
-    RETURNING a.account_id, e.status AS previous_status
+    RETURNING a.account_id, e.status AS previous_status, a.status AS next_status
     `,
     [accountId || null, limit]
   );
   const lifted = result.rows.map((row) => ({
     accountId: String(row.account_id),
     previousStatus: row.previous_status,
+    nextStatus: row.next_status || 'Active',
   }));
   for (const item of lifted) {
     // Best effort: the lift itself is already committed.
@@ -220,17 +255,23 @@ async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
   return lifted;
 }
 
-async function announceStandingLift({ accountId, previousStatus }) {
+async function announceStandingLift({ accountId, previousStatus, nextStatus = 'Active' }) {
   const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
+  const deactivated = normalizeAccountStatus(nextStatus) === 'deactivated';
   await recordAccountActivity({
     accountId,
-    action: `${previousStatus} ended — the account is active again`,
+    action: deactivated
+      ? `${previousStatus} ended — the account is back to deactivated`
+      : `${previousStatus} ended — the account is active again`,
     eventCode: 'ACCOUNT_STATUS_CHANGED',
     referenceTable: 'accounts',
     referencePrefix: 'ACC',
     referenceId: accountId,
-    metadata: { previousStatus, status: 'Active', action: 'expired', source: 'standing_expiry' },
+    metadata: { previousStatus, status: nextStatus, action: 'expired', source: 'standing_expiry' },
   });
+  // A member who had turned the account off is not told it is "active" again; they reactivate
+  // it themselves.
+  if (deactivated) return;
   const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
   const penalty = { banned: 'ban', suspended: 'suspension', locked: 'lock' }[
     normalizeAccountStatus(previousStatus)
@@ -270,20 +311,29 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
     SET status = 'expired'
     FROM lapsed l
     WHERE v.violation_id = l.violation_id
-    RETURNING l.account_id
+    RETURNING l.account_id, LEAST(GREATEST(COALESCE(v.points, 1), 1), 10) AS points
     `,
     [limit * 5]
   );
-  const accounts = [...new Set(lapsed.rows.map((row) => String(row.account_id)))];
-  if (accounts.length) {
-    const { refreshWarningBand } = require('../services/WarningBandServices');
-    for (const accountId of accounts) {
-      await refreshWarningBand(accountId).catch((err) =>
-        console.warn('Warning band refresh skipped:', err.message)
-      );
-    }
+  const lapsedByAccount = new Map();
+  for (const row of lapsed.rows) {
+    const key = String(row.account_id);
+    lapsedByAccount.set(key, (lapsedByAccount.get(key) || 0) + Number(row.points || 0));
   }
-  return { lifted: lifted.length, warningsExpired: lapsed.rowCount || 0 };
+  for (const [accountId, points] of lapsedByAccount) {
+    await refreshBandAfterLapse(accountId, points).catch((err) =>
+      console.warn('Warning band refresh skipped:', err.message)
+    );
+  }
+  // Credit holds with an end date (including ones an accepted appeal shortened to 24 hours).
+  let creditHoldsReleased = 0;
+  try {
+    const { releaseDueCreditHolds } = require('../services/CreditHoldServices');
+    creditHoldsReleased = await releaseDueCreditHolds({ limit: 50 });
+  } catch (err) {
+    console.warn('Credit hold release skipped:', err.message);
+  }
+  return { lifted: lifted.length, warningsExpired: lapsed.rowCount || 0, creditHoldsReleased };
 }
 
 function warningExpiry({ durationDays, points } = {}) {
@@ -311,6 +361,61 @@ async function activeForumTimeout(accountId) {
   return result.rows[0]?.ends_at || (result.rows.length ? null : undefined);
 }
 
+/** Each active warning's weight and expiry, to work out when the current band lifts. */
+async function activeWarningClock(accountId) {
+  const result = await pool.query(
+    `
+    SELECT ${WARNING_POINTS_SQL} AS points, expires_at
+    FROM violations
+    WHERE account_id = $1
+      AND deleted_at IS NULL
+      AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
+      AND (expires_at IS NULL OR expires_at > NOW())
+    `,
+    [accountId]
+  );
+  return result.rows.map((row) => ({
+    points: Number(row.points || 0),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+  }));
+}
+
+/**
+ * When points drop below the floor of the current band, assuming no new warnings. Null when
+ * there is no band, or a warning with no expiry keeps the account in it.
+ */
+function warningBandLiftsAt(rows, band) {
+  if (!band || !band.id || band.id === 'none') return null;
+  const floor = Number(band.min) || 0;
+  let points = rows.reduce((sum, row) => sum + row.points, 0);
+  if (points < floor) return null;
+  const permanent = rows.filter((row) => !row.expiresAt).reduce((sum, row) => sum + row.points, 0);
+  if (permanent >= floor) return null;
+  const timed = rows.filter((row) => row.expiresAt).sort((a, b) => a.expiresAt - b.expiresAt);
+  for (const row of timed) {
+    points -= row.points;
+    if (points < floor) return row.expiresAt;
+  }
+  return null;
+}
+
+async function loadCreditHold(accountId) {
+  try {
+    const { getAccountCreditHold } = require('../repositories/CreditHoldRepositories');
+    return await getAccountCreditHold(accountId);
+  } catch (err) {
+    console.warn('Could not load credit hold:', err.message);
+    return null;
+  }
+}
+
+function frozenAccessMessage(endsAt) {
+  const when = formatWhen(endsAt);
+  return `Frozen access: your Platform Merit is low, so proposals, new messages, cash out, new jobs, gigs, listings and forum posts are paused${
+    when ? ` until ${when}, when the warnings behind it expire` : ' until the warnings behind it expire'
+  }. Live contracts and existing threads stay open.`;
+}
+
 function emptyAccess() {
   return {
     status: 'Active',
@@ -328,7 +433,17 @@ function emptyAccess() {
     warningBand: 'none',
     merit: meritFromWarningPoints(0),
     suspensionEndsAt: null,
+    banEndsAt: null,
+    lockEndsAt: null,
     forumTimeoutEndsAt: null,
+    warningBandLabel: null,
+    warningBandEndsAt: null,
+    creditsFrozen: false,
+    frozenCredits: 0,
+    creditsFrozenAt: null,
+    creditsFrozenUntil: null,
+    creditsFrozenReason: null,
+    returnsToDeactivated: false,
     code: null,
     message: null,
     violations: [],
@@ -346,14 +461,11 @@ async function getAccountAccess(accountId) {
   if (!accountId) return emptyAccess();
 
   try {
-    const [, warningsLapsed] = await Promise.all([
+    const [, lapsedPoints] = await Promise.all([
       liftExpiredSuspension(accountId),
       expireElapsedWarnings(accountId),
     ]);
-    if (warningsLapsed) {
-      const { refreshWarningBand } = require('../services/WarningBandServices');
-      await refreshWarningBand(accountId);
-    }
+    await refreshBandAfterLapse(accountId, lapsedPoints);
   } catch (err) {
     console.warn('Could not lift an expired suspension or warning:', err.message);
   }
@@ -400,6 +512,16 @@ async function getAccountAccess(accountId) {
   }
   const warningBand = bandForPoints(member ? warningPoints : 0);
   const warningFrozen = member && warningBand.id === 'frozen' && normalized === 'active';
+  const [creditHold, warningRows] = await Promise.all([
+    loadCreditHold(accountId),
+    member && warningBand.id !== 'none'
+      ? activeWarningClock(accountId).catch((err) => {
+          console.warn('Could not load warning expiries:', err.message);
+          return [];
+        })
+      : [],
+  ]);
+  const warningBandEndsAt = warningBandLiftsAt(warningRows, warningBand);
   const deactivated = normalized === 'deactivated' && member;
   const reactivationAvailableAt = row.reactivation_available_at || null;
   const reactivationReady = !deactivated
@@ -439,14 +561,25 @@ async function getAccountAccess(accountId) {
     warningBand: warningBand.id,
     merit: meritFromWarningPoints(warningPoints),
     suspensionEndsAt: row.suspension_ends_at || null,
+    banEndsAt: banned ? row.ban_ends_at || null : null,
+    lockEndsAt: locked ? row.lock_ends_at || null : null,
     forumTimeoutEndsAt,
+    warningBandLabel: warningBand.id === 'none' ? null : warningBand.label,
+    warningBandEndsAt,
+    creditsFrozen: Boolean(creditHold),
+    frozenCredits: creditHold?.frozenCredits || 0,
+    creditsFrozenAt: creditHold?.frozenAt || null,
+    creditsFrozenUntil: creditHold?.frozenUntil || null,
+    creditsFrozenReason: creditHold?.reason || null,
+    // A member who deactivated before a penalty goes back to Deactivated when it ends.
+    returnsToDeactivated: member && !deactivated && Boolean(row.deactivated_at),
     code,
     message: blocked || banned || locked || suspended
       ? blockMessage(normalized, { member, suspensionEndsAt: row.suspension_ends_at })
       : forumTimeout
         ? forumTimeoutMessage(forumTimeoutEndsAt)
         : warningFrozen
-          ? ACTION_MESSAGES.forum_write
+          ? frozenAccessMessage(warningBandEndsAt)
           : null,
     violations,
   };
@@ -532,11 +665,7 @@ async function loadBanNotice(accountId) {
 
 async function getPublicAccountStanding(accountId) {
   try {
-    const warningsLapsed = await expireElapsedWarnings(accountId);
-    if (warningsLapsed) {
-      const { refreshWarningBand } = require('../services/WarningBandServices');
-      await refreshWarningBand(accountId);
-    }
+    await refreshBandAfterLapse(accountId, await expireElapsedWarnings(accountId));
   } catch (err) {
     console.warn('Could not expire elapsed warnings for standing:', err.message);
   }
@@ -626,9 +755,13 @@ async function getOwnAccountRecord(accountId) {
           event_code IN (
             'ACCOUNT_STATUS_CHANGED',
             'FORUM_TIMEOUT',
+            -- Users desk and report warnings log ACCOUNT_WARNED; restriction desks VIOLATION_ISSUED.
+            'ACCOUNT_WARNED',
             'VIOLATION_ISSUED',
             'WARNING_ISSUED',
-            'WARNING_RESCINDED'
+            'WARNING_RESCINDED',
+            'ACCOUNT_PARDONED',
+            'APPEAL_DECISION'
           )
           OR event_code LIKE '%TIMEOUT%'
           OR event_code LIKE '%RESTRICTION%'
@@ -857,6 +990,9 @@ function rejectForumTimeout(req, res) {
     });
     return true;
   }
+  // Reporting is not posting: a Restricted or Frozen member can still report forum content.
+  // Only a staff timeout (above) blocks forum reports.
+  if (/^\/api\/forum\/reports(?:\/|$)/.test(requestPath(req))) return false;
   const warningBand = req.accountAccess?.warningBand;
   if (warningBand && !actionAllowed('forum_write', warningBand)) {
     res.status(403).json({
@@ -890,4 +1026,5 @@ module.exports = {
   timeoutEndFromDays,
   sanctionEndsAt,
   warningExpiry,
+  restingStatusSql,
 };

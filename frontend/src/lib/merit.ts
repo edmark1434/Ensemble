@@ -26,9 +26,10 @@ export function meritFromWarningPoints(points: number | null | undefined): numbe
 }
 
 export function meritFromWarnings(warnings: MeritWarning[] | null | undefined): number {
+  // Each warning weighs 1–10 (missing counts as 1), the same as the backend sum.
   const points = (warnings || []).reduce((sum, warning) => {
     if (!isActiveWarning(warning)) return sum;
-    return sum + Math.max(0, Number(warning.points) || 0);
+    return sum + Math.min(10, Math.max(1, Math.round(Number(warning.points) || 1)));
   }, 0);
   return meritFromWarningPoints(points);
 }

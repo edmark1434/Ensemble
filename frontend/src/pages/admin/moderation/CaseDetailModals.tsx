@@ -5,6 +5,8 @@ import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { canSuspendTarget } from '@/pages/admin/userTeam/suspendRules';
+import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
+import type { WarningDesk } from '@/lib/warningCatalog';
 import ListingDetailModal, {
   SellerListingsModal,
 } from '@/pages/moderator/marketplace-moderator/ListingDetailModal';
@@ -39,6 +41,27 @@ function statusButtonClass(label: string, active: boolean) {
 
 const REPORT_STATUS_OPTIONS = ['open', 'in_progress', 'closed'] as const;
 const DECIDED_REPORT_STATUSES = ['resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'];
+/** Sanctioned and Denied are decisions; the backend refuses to change them by hand. */
+const FINAL_REPORT_STATUSES = ['sanctioned', 'denied'];
+/** Only these roles may ban (backend: UserTeamPermissions). */
+const BAN_ROLES = ['Admin', 'Support Moderator'];
+/** Default when no named warning is picked; matches the backend default. */
+const DEFAULT_REPORT_WARNING = 'staff_follow_up';
+
+function warningDeskForRole(role?: string | null): WarningDesk {
+  switch (role) {
+    case 'Support Moderator':
+      return 'support';
+    case 'Forum Moderator':
+      return 'forum';
+    case 'Marketplace Moderator':
+      return 'marketplace';
+    case 'Jobs N Gigs Moderator':
+      return 'jobs';
+    default:
+      return 'admin';
+  }
+}
 
 function toApiToken(value: string) {
   return String(value || '')
@@ -99,6 +122,8 @@ type ReportDetailPayload = {
     } | null;
   };
   permissions?: DisputePermissions;
+  /** False when the report only names the reporter (e.g. a technical problem). */
+  sanctionable?: boolean;
   assignableStaff: { staffId: string | number; name: string; role: string }[];
 };
 
@@ -126,14 +151,23 @@ export function ReportCaseDetailModal({
   const [sanctionType, setSanctionType] = useState('warning');
   const [sanctionReason, setSanctionReason] = useState('');
   const [sanctionDays, setSanctionDays] = useState('7');
+  const [sanctionWarningId, setSanctionWarningId] = useState(DEFAULT_REPORT_WARNING);
   const viewer = useGlobalState((state) => state.user);
-  const reported = detail?.report.reportedAccount;
+  // The reported account lives on the subject, not on the report row.
+  const reported = detail?.subject?.reportedAccount;
   const allowSuspend = canSuspendTarget({
     actorRole: viewer?.role,
     actorAccountId: viewer?.account_id || viewer?.accountId,
     targetAccountId: reported?.accountId,
     targetStaffRole: reported?.staffRole,
   });
+  const allowBan = allowSuspend && BAN_ROLES.includes(String(viewer?.role || ''));
+  const warningDesk = warningDeskForRole(viewer?.role);
+  const sanctionable = detail?.sanctionable !== false;
+  const selectedSanction =
+    (sanctionType === 'suspend' && !allowSuspend) || (sanctionType === 'ban' && !allowBan)
+      ? 'warning'
+      : sanctionType;
 
   const accentLabel =
     accent === 'sky'
@@ -376,7 +410,7 @@ export function ReportCaseDetailModal({
                       <button
                         key={s}
                         type="button"
-                        disabled={!alreadyAssignedToMe}
+                        disabled={!alreadyAssignedToMe || FINAL_REPORT_STATUSES.includes(toApiToken(report.status))}
                         onClick={() => setStatus(s)}
                         aria-pressed={active}
                         className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${statusButtonClass(s, active)}`}
@@ -482,7 +516,9 @@ export function ReportCaseDetailModal({
                 <div>
                   <p className="text-sm font-medium text-white">Decision</p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Sanction notifies the reporter. Deny does not.
+                    {sanctionable
+                      ? 'Sanction notifies the reporter. Deny does not.'
+                      : 'This report is about the platform, not another account, so it cannot be sanctioned. Close or deny it when it is handled.'}
                   </p>
                 </div>
                 {!alreadyAssignedToMe && (
@@ -490,21 +526,36 @@ export function ReportCaseDetailModal({
                     Claim this report before you sanction or deny it.
                   </p>
                 )}
-                {sanctionOpen && (
+                {sanctionOpen && sanctionable && (
                   <div className="space-y-2">
                     <label className="flex flex-col gap-1 text-xs text-zinc-500">
                       Sanction
                       <select
-                        value={allowSuspend || sanctionType !== 'suspend' ? sanctionType : 'warning'}
+                        value={selectedSanction}
                         onChange={(e) => setSanctionType(e.target.value)}
                         className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
                       >
                         <option value="warning">Warning</option>
                         {allowSuspend ? <option value="suspend">Suspend</option> : null}
-                        <option value="ban">Ban</option>
+                        {allowBan ? <option value="ban">Ban</option> : null}
                       </select>
                     </label>
-                    {sanctionType === 'suspend' && (
+                    {selectedSanction === 'warning' && (
+                      <>
+                        <WarningPresetFields
+                          desk={warningDesk}
+                          warningId={sanctionWarningId}
+                          reason={sanctionReason}
+                          onWarningId={setSanctionWarningId}
+                          onReason={setSanctionReason}
+                          fieldClass="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                        />
+                        <p className="text-[11px] text-zinc-500">
+                          The warned member sees the warning name and these case notes.
+                        </p>
+                      </>
+                    )}
+                    {selectedSanction === 'suspend' && (
                       <label className="flex flex-col gap-1 text-xs text-zinc-500">
                         Days
                         <input
@@ -517,47 +568,51 @@ export function ReportCaseDetailModal({
                         />
                       </label>
                     )}
-                    <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                      Reason shown to the sanctioned account
-                      <textarea
-                        value={sanctionReason}
-                        onChange={(e) => setSanctionReason(e.target.value)}
-                        rows={3}
-                        className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-                      />
-                    </label>
+                    {selectedSanction !== 'warning' && (
+                      <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                        Reason shown to the sanctioned account
+                        <textarea
+                          value={sanctionReason}
+                          onChange={(e) => setSanctionReason(e.target.value)}
+                          rows={3}
+                          className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                    )}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={saving || !alreadyAssignedToMe}
-                    onClick={() => {
-                      if (!sanctionOpen) {
-                        setSanctionReason((current) => current || titleCaseLabel(report.type));
-                        setSanctionOpen(true);
-                        return;
-                      }
-                      if (sanctionType === 'suspend' && !allowSuspend) {
-                        showErrorToast(
-                          reported &&
-                            String(reported.accountId) === String(viewer?.account_id || viewer?.accountId || '')
-                            ? 'You cannot suspend your own account'
-                            : 'Only an admin can suspend a moderator'
-                        );
-                        return;
-                      }
-                      void decide('sanction', {
-                        sanctionType,
-                        reason: sanctionReason.trim(),
-                        days: sanctionType === 'suspend' ? Number(sanctionDays) : undefined,
-                      });
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
-                  >
-                    <ShieldAlert className="h-4 w-4" />
-                    {sanctionOpen ? 'Confirm sanction' : 'Sanction'}
-                  </button>
+                  {sanctionable && (
+                    <button
+                      type="button"
+                      disabled={saving || !alreadyAssignedToMe}
+                      onClick={() => {
+                        if (!sanctionOpen) {
+                          setSanctionReason((current) => current || titleCaseLabel(report.type));
+                          setSanctionOpen(true);
+                          return;
+                        }
+                        if (!sanctionReason.trim()) {
+                          showErrorToast('Write the reason the member will see.');
+                          return;
+                        }
+                        if (selectedSanction === 'warning' && !sanctionWarningId) {
+                          showErrorToast('Pick the warning that fits this report.');
+                          return;
+                        }
+                        void decide('sanction', {
+                          sanctionType: selectedSanction,
+                          reason: sanctionReason.trim(),
+                          warningId: selectedSanction === 'warning' ? sanctionWarningId : undefined,
+                          days: selectedSanction === 'suspend' ? Number(sanctionDays) : undefined,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                    >
+                      <ShieldAlert className="h-4 w-4" />
+                      {sanctionOpen ? 'Confirm sanction' : 'Sanction'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={saving || !alreadyAssignedToMe}

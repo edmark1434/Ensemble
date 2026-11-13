@@ -32,6 +32,22 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
             throw new Error("Cannot extend offer: this job posting is closed.");
         }
 
+        // An offer locks the client's credits in escrow until it is answered. A deactivated
+        // freelancer cannot answer, so the offer would only strand those credits.
+        const freelancerState = await client.query(
+            `SELECT 1 FROM accounts
+             WHERE account_id = $1
+               AND LOWER(COALESCE(type, '')) = 'user'
+               AND (LOWER(COALESCE(status, '')) = 'deactivated' OR deactivated_at IS NOT NULL)`,
+            [freelancer_account_id]
+        );
+        if (freelancerState.rows.length) {
+            const error = new Error("Cannot extend offer: this freelancer has deactivated their account.");
+            error.statusCode = 409;
+            error.code = 'ACCOUNT_DEACTIVATED';
+            throw error;
+        }
+
         const currentHiredCheck = await client.query(`
             SELECT COUNT(*) as hired_count FROM proposals WHERE job_id = $1 AND status = 'Hired' AND deleted_at IS NULL
         `, [job_id]);

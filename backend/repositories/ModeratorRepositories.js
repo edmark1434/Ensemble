@@ -14,9 +14,10 @@ function violationExpiryFromPoints(points, fromDate = new Date()) {
   return d;
 }
 
+/** Same rule as sumActiveWarningPoints, so staff desks show the merit the engine enforces. */
 function isViolationActive(row, now = Date.now()) {
   const status = String(row.status || 'active').toLowerCase();
-  if (['cleared', 'pardoned', 'resolved', 'expired', 'rescinded', 'reversed'].includes(status)) return false;
+  if (!['active', 'open', 'pending'].includes(status)) return false;
   if (row.deleted_at) return false;
   if (row.expires_at && new Date(row.expires_at).getTime() <= now) return false;
   return true;
@@ -183,8 +184,22 @@ async function searchRestrictionAccounts(query) {
 
 async function issueViolation(accountId, { warningId, type, reason, points, expiresAt, duration, days, endsAt }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
+  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
+  const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({
+    actorStaffId: staffId,
+    actorAccountId: staffSession?.account_id || staffSession?.accountId || null,
+    targetAccountId: accountId,
+    action: 'warn',
+  });
+  const { assertWarnableAccount } = require('../services/WarningBandServices');
+  await assertWarnableAccount(accountId);
   const { resolveIssuedWarning } = require('../services/WarningDefServices');
-  const issued = await resolveIssuedWarning({ warningId, type, points });
+  const issued = await resolveIssuedWarning({
+    warningId,
+    type,
+    actorRole: (staffId ? await staffRoleOf(staffId) : null) || staffSession?.role || null,
+  });
   const violationType = issued.type;
   const warnPoints = issued.points;
   const warnReason = String(reason || '').trim();
@@ -195,14 +210,6 @@ async function issueViolation(accountId, { warningId, type, reason, points, expi
   }
   const { warningExpiry } = require('../lib/AccountRestriction');
   const expiry = warningExpiry({ durationDays: issued.durationDays, points: warnPoints });
-  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
-  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
-  await assertCanSanctionTarget({
-    actorStaffId: staffId,
-    actorAccountId: staffSession?.account_id || staffSession?.accountId || null,
-    targetAccountId: accountId,
-    action: 'warn',
-  });
 
   const inserted = await pool.query(
     `INSERT INTO violations (

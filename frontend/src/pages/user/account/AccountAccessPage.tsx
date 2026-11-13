@@ -8,6 +8,8 @@ import { auth } from '@/pages/firebase';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { AccountRecordSection } from '@/pages/user/7_profile/Displays/AccountStanding';
 import UserLogoutModal from '@/components/nav/user_logout_modal';
+import { StandingConditionList } from '@/components/account/StandingDetails';
+import { standingConditions } from '@/lib/standing';
 
 type TicketRow = {
   id: string;
@@ -185,21 +187,28 @@ export default function AccountAccessPage() {
   // Banned and locked members live on this page; suspended and timed-out members come here
   // from their banner to appeal and can go back to the site.
   const statusWord = String(restriction?.status || user?.status || '').toLowerCase();
-  const penalty: 'locked' | 'banned' | 'suspended' | 'timeout' =
+  const conditions = standingConditions(restriction);
+  const penalty: 'locked' | 'banned' | 'suspended' | 'credits' | 'frozen' | 'timeout' =
     statusWord === 'locked' || restriction?.locked
       ? 'locked'
       : statusWord === 'banned' || restriction?.banned
         ? 'banned'
         : statusWord === 'suspended' || restriction?.suspended
           ? 'suspended'
-          : 'timeout';
+          : restriction?.creditsFrozen
+            ? 'credits'
+            : restriction?.warningFrozen
+              ? 'frozen'
+              : 'timeout';
   const penaltyCopy = {
     locked: { tag: 'Locked', title: 'Your account is locked', form: 'Ask to unlock this account' },
     banned: { tag: 'Banned', title: 'Your account is banned', form: 'Appeal this ban' },
     suspended: { tag: 'Suspended', title: 'Your account is suspended', form: 'Appeal this suspension' },
+    credits: { tag: 'Credits on hold', title: 'Some of your credits are on hold', form: 'Ask for your credits back' },
+    frozen: { tag: 'Frozen access', title: 'Your account has Frozen access', form: 'Appeal a warning' },
     timeout: { tag: 'Penalty', title: 'Appeal an account penalty', form: 'Appeal this penalty' },
   }[penalty];
-  const canLeave = penalty === 'suspended' || penalty === 'timeout';
+  const canLeave = penalty !== 'locked' && penalty !== 'banned';
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: 'end' });
@@ -252,6 +261,13 @@ export default function AccountAccessPage() {
               : 'You can sign in only to file an appeal and view your tickets and disputes.')}
         </p>
       </section>
+
+      {conditions.length ? (
+        <section aria-label="What is on your account">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">What is on your account</h2>
+          <StandingConditionList conditions={conditions} />
+        </section>
+      ) : null}
 
       <div>
         <button

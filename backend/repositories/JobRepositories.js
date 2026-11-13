@@ -354,6 +354,15 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
         if (filters.jobId || filters.job_id) {
             values.push(filters.jobId || filters.job_id);
             query += ` AND j.job_id = $${values.length}`;
+        } else {
+            // Browse hides jobs from a client who deactivated (their own posts stay visible to
+            // them). A job opened by id still loads for people already working with them.
+            query += ` AND (
+                j.client_account_id = ANY($2::uuid[])
+                OR a.account_id IS NULL
+                OR LOWER(COALESCE(a.type, '')) <> 'user'
+                OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL)
+            )`;
         }
         
         query += ` ORDER BY j.created_at DESC`;
@@ -634,12 +643,16 @@ async function createProposalRepositories(proposalData) {
         `, [fee, userWalletId, platformWalletId, proposalData.job_id]);
 
         const jobResult = await client.query(
-            `SELECT client_account_id,
-                    application_deadline,
-                    client_account_id = ANY($2::uuid[]) AS is_affiliated_listing
-             FROM jobs
-             WHERE job_id = $1 AND deleted_at IS NULL AND status = 'Open'
-             FOR UPDATE`,
+            `SELECT j.client_account_id,
+                    j.application_deadline,
+                    j.client_account_id = ANY($2::uuid[]) AS is_affiliated_listing,
+                    (LOWER(COALESCE(owner.type, '')) = 'user'
+                      AND (LOWER(COALESCE(owner.status, '')) = 'deactivated' OR owner.deactivated_at IS NOT NULL)
+                    ) AS owner_deactivated
+             FROM jobs j
+             LEFT JOIN accounts owner ON owner.account_id = j.client_account_id
+             WHERE j.job_id = $1 AND j.deleted_at IS NULL AND j.status = 'Open'
+             FOR UPDATE OF j`,
             [proposalData.job_id, proposalData.prohibited_client_account_ids || []]
         );
         if (jobResult.rows[0]?.application_deadline && new Date(jobResult.rows[0].application_deadline).getTime() <= Date.now()) {
@@ -650,6 +663,13 @@ async function createProposalRepositories(proposalData) {
         if (!jobResult.rows[0]) {
             const error = new Error('Job not found or is not accepting proposals');
             error.statusCode = 404;
+            throw error;
+        }
+        // The fee above rolls back with this: nobody pays to apply to a hidden client.
+        if (jobResult.rows[0].owner_deactivated) {
+            const error = new Error('This client has deactivated their account, so the job is not taking proposals right now.');
+            error.statusCode = 409;
+            error.code = 'ACCOUNT_DEACTIVATED';
             throw error;
         }
         if (jobResult.rows[0].is_affiliated_listing) {

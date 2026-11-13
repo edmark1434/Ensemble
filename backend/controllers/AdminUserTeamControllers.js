@@ -176,15 +176,23 @@ async function postAdminAccountCreditFreeze(req, res) {
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
-    const data = await freezeAccountCredits(accountId, freeze, staffIdFromSession(req.session));
+    const data = await freezeAccountCredits(accountId, freeze, staffIdFromSession(req.session), {
+      reason: req.body?.reason,
+      days: req.body?.days,
+      endsAt: req.body?.endsAt,
+    });
     res.status(200).json({
       success: true,
       data,
-      message: data.frozen ? 'Credits frozen' : 'Credits unfrozen',
+      message: data.frozen ? 'Credits frozen. The member has been told why and until when.' : 'Credits unfrozen',
     });
   } catch (err) {
-    console.error('Error freezing credits:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to freeze credits' });
+    const status = Number(err.statusCode) || 400;
+    if (status >= 500) console.error('Error freezing credits:', err);
+    res.status(status >= 500 ? 500 : status).json({
+      success: false,
+      message: status >= 500 ? 'Failed to update the credit hold' : err.message || 'Failed to freeze credits',
+    });
   }
 }
 
@@ -211,7 +219,8 @@ async function postAdminAccountWarn(req, res) {
     res.status(200).json({ success: true, data, message: 'Warning issued' });
   } catch (err) {
     console.error('Error issuing warning:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to issue warning' });
+    const code = err.statusCode && err.statusCode < 500 ? err.statusCode : 400;
+    res.status(code).json({ success: false, message: err.message || 'Failed to issue warning' });
   }
 }
 
@@ -241,7 +250,7 @@ async function postAdminAccountPardon(req, res) {
     res.status(200).json({
       success: true,
       data,
-      message: `Pardon issued — ${data.violationsCleared} violation(s) cleared, account set to Active`,
+      message: `Pardon issued — ${data.violationsCleared} violation(s) cleared, account set to ${data.status || 'Active'}`,
     });
   } catch (err) {
     console.error('Error issuing pardon:', err);

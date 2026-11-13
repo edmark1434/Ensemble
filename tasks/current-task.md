@@ -1,24 +1,67 @@
-# Current Task: Fix Sidebar Overlap Tendency & Convert Job/Gig Cards to 1-Col View on Narrow/Split Screens
+# Active Task: Audit and fix the report, merit and punishment systems
 
 ## Implementation Objective
-1. **1-Column Vertical Card View for Jobs & Gigs (`media_1794526961786_92afd07c.png`)**:
-   - On narrow split-screen and medium viewports (< 1280px / `xl`), convert Job Post and Service/Gig cards to a 1-column layout (`flex-col`):
-     - Thumbnail sits on top (`w-full h-44 border-b`)
-     - Details, tags, price, and actions stack naturally underneath with full width, preventing squished text and ellipsis.
-   - On wide desktop screens (>= 1280px / `xl`), cards switch back to horizontal `xl:flex-row` with the thumbnail on the left (`xl:w-56`).
-2. **Fix Sidebar Overlap Tendency**:
-   - Prevent window-level horizontal overflow that causes content to slide underneath the fixed sidebar when snapped or resized.
-   - Added `overflow-x-clip` and `min-w-0` to the layout container, `<main>`, and the profile grid (`xl:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] min-w-0`).
-3. **2-Row Profile Navigation Display Threshold**:
-   - Container threshold calibrated to `640px` (`el.clientWidth < 640`).
-   - On wide viewports, displays full tab labels with icons and live counters.
-   - On narrow viewports (< 640px), collapses to clean icons + badges with hover tooltips.
 
-## Modified Files
-- `frontend/src/pages/user/7_profile/Displays/Body/Profile_JobPosts.tsx`
-- `frontend/src/pages/user/7_profile/Displays/Body/Profile_Services.tsx`
-- `frontend/src/pages/user/7_profile/Displays/Body/MainBody.tsx`
-- `frontend/src/pages/user/7_profile/Profile.tsx`
-- `frontend/src/components/ui/Layout.tsx`
-- `frontend/src/pages/user/7_profile/Displays/TopSection_ProfileDisplay.tsx`
-- `tasks/current-task.md`
+Find and fix the gaps in member reports, staff report decisions, warnings/merit and standing
+punishments so they work end to end for members, specialist moderators, Support and Admin.
+
+## Acceptance Criteria
+
+Reports
+- [x] Filing a report no longer fails with a 500 after saving (undefined `ticketAutoCreated`).
+- [x] Gig reports resolve the reporter from the JWT (the route has no `checkSession`).
+- [x] Technical-problem reports (and any report whose target is the reporter) cannot be sanctioned.
+- [x] Team member reports only accept accounts with a membership on that team.
+- [x] A member cannot hold two open reports on the same item (409); technical reports exempt.
+- [x] Generic report PATCH validates status/priority; Sanctioned/Denied are final and only set
+      by a decision; claiming is guarded in SQL.
+- [x] Report sanctions can use a named warning (desk-checked); default stays Staff follow-up.
+- [x] Restricted/Frozen bands no longer block forum reports (only a forum timeout does).
+- [x] Forum report details capped at 2,000 characters like every other report.
+- [x] Staff report modal reads the reported account from `subject`, hides Ban from roles that
+      cannot ban, hides Sanction on technical reports, and offers the warning picker.
+
+Warnings / punishment
+- [x] Named warnings are desk-checked when issued, not only in the picker.
+- [x] Warnings are refused on team and staff accounts (they have no Platform Merit).
+- [x] A warning issued after a denied appeal (`ACCOUNT_WARNED`) re-opens appealing.
+- [x] Owner Record activity includes `ACCOUNT_WARNED` and `ACCOUNT_PARDONED`.
+- [x] Auto-suspend sends one notice, not two.
+- [x] Lifting a penalty (expiry, unban/unsuspend/unlock/restore, pardon) on a deactivated member
+      returns it to Deactivated instead of Active.
+
+Merit
+- [x] Rescinding a warning notifies the member with their new merit.
+- [x] Expired warnings announce a merit band change.
+- [x] Owner Record uses the backend merit; staff merit sums match the backend rule.
+
+- [ ] Typecheck (user runs `pnpm typecheck`).
+- [ ] Backend restarted.
+
+---
+
+# Parallel Task (separate session): Standing indicator, credit holds, deactivation cooldown
+
+## Implementation Objective
+
+Members always see when they are Suspended, in Frozen access, have credits on hold, or are
+timed out: what is paused, when it ends, and how to get back to normal (wait, or appeal).
+Credit holds become explained, dated, appealable and race-safe. Members can deactivate
+(hidden from every member, staff bypass), reactivate after 72 hours, and deactivate again
+only after a 7-day cooldown.
+
+## Acceptance Criteria
+
+- [x] `getAccountAccess` returns credit-hold details, ban/lock end times and `warningBandEndsAt`.
+- [x] Site-wide status bar + "How to fix" sheet; same list on the appeal page and the wallet.
+- [x] Freeze needs a reason, may set an end date, locks the wallet row, notifies the member.
+- [x] Expired holds are released by the one-minute job; accepted appeals end holds within 24h.
+- [x] A credit hold is an appealable penalty; reversing `CREDITS_FROZEN` uses the safe release.
+- [x] Reversing a status change cannot overwrite a newer status, and restores the old clock.
+- [x] Deactivation: 7-day re-deactivation cooldown; blocked by live contracts, unsigned offers or
+      open disputes; activity logged; hidden while penalised; sign out from the deactivated screen.
+- [x] No follow, DM, proposal, offer or gig order to a deactivated member; their jobs/gigs leave browse.
+- [x] `/api/accounts/dev/*` refuses to run in production.
+- [ ] Migration `1828400000000_credit-holds-and-deactivation-cooldown` applied before restart.
+- [ ] Typecheck (user runs `pnpm typecheck`).
+- [ ] Backend restarted.

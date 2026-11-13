@@ -5050,6 +5050,26 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
 }
 
 const REPORT_DECISIONS = new Set(['deny', 'sanction']);
+/** Statuses a handler may set by hand. Sanctioned and Denied come only from a decision. */
+const REPORT_EDITABLE_STATUSES = new Set([
+  'open', 'in_progress', 'under_review', 'escalated', 'closed', 'resolved', 'dismissed',
+]);
+/** A decided report is final, so it cannot be reopened and sanctioned a second time. */
+const REPORT_FINAL_STATUSES = new Set(['sanctioned', 'denied']);
+const REPORT_PRIORITIES = new Set(['low', 'medium', 'high']);
+/** Reports about the platform itself; their account columns point at the reporter. */
+const UNSANCTIONABLE_REPORT_TARGETS = new Set(['technical_problem']);
+
+function reportStatusToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+/** Whether a report names someone other than the reporter who could be sanctioned. */
+function reportCanBeSanctioned(row) {
+  if (!row?.for_account_id) return false;
+  if (UNSANCTIONABLE_REPORT_TARGETS.has(reportStatusToken(row.target_type))) return false;
+  return String(row.for_account_id) !== String(row.by_account_id || '');
+}
 
 function reportDecisionError(message, statusCode = 400) {
   const error = new Error(message);
@@ -5093,7 +5113,10 @@ async function applyReportSanction(row, patch, staffId, staffRole = null) {
   }
 
   if (sanctionType === 'warning' || sanctionType === 'warn') {
-    return warnAccount(accountId, { warningId: 'staff_follow_up', reason, days }, staffId);
+    // Staff pick the named warning that fits (checked against their desk in warnAccount);
+    // Staff follow-up stays the default when none is chosen.
+    const warningId = String(patch?.warningId || patch?.warning_id || '').trim() || 'staff_follow_up';
+    return warnAccount(accountId, { warningId, reason }, staffId);
   }
   if (sanctionType === 'suspend' || sanctionType === 'suspended') {
     if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');
@@ -5134,6 +5157,14 @@ async function decideReport(reportId, action, patch, staffSession) {
   }
   if (action !== 'deny' && action !== 'sanction') {
     throw reportDecisionError('Choose sanction or deny.', 400);
+  }
+  // A technical-problem report stores the reporter as its account, so "sanctioning" it would
+  // punish the member who reported a bug.
+  if (action === 'sanction' && !reportCanBeSanctioned(row)) {
+    throw reportDecisionError(
+      'This report does not name another account to sanction. Close or deny it instead.',
+      409
+    );
   }
 
   const nextStatus = action === 'sanction' ? 'sanctioned' : 'denied';
@@ -5221,12 +5252,18 @@ async function updateReport(reportId, patch, staffSession = null) {
       throw new Error('This report already has a handler. Ask Admin to reassign it.');
     }
 
-    await pool.query(
+    // Guarded in SQL: if two staff claim at once, the second gets a 409 instead of silently
+    // taking the case from the first. Admin may still take over a claimed report.
+    const claimed = await pool.query(
       `UPDATE reports
        SET assigned_staff_id = $1, updated_at = NOW()
-       WHERE report_id = $2 AND deleted_at IS NULL`,
-      [staff.staff_id, reportId]
+       WHERE report_id = $2 AND deleted_at IS NULL
+         AND (assigned_staff_id IS NULL OR assigned_staff_id = $1 OR $3::boolean)`,
+      [staff.staff_id, reportId, Boolean(perms.isAdmin)]
     );
+    if (!claimed.rowCount) {
+      throw reportDecisionError('Another staff member just claimed this report. Refresh to see who.', 409);
+    }
     const row = fresh.rows[0];
     await recordAccountActivity({
       accountId: row.for_account_id || row.by_account_id,
@@ -5282,6 +5319,31 @@ async function updateReport(reportId, patch, staffSession = null) {
     [reportId]
   );
   if (!fresh.rows.length) return null;
+
+  // Hand edits are validated: a status the handler re-sends unchanged is ignored, a decided
+  // report stays decided, and Sanctioned/Denied can only come from a decision.
+  patch = { ...(patch || {}) };
+  if (patch.status !== undefined) {
+    const currentStatus = reportStatusToken(fresh.rows[0].status || 'open');
+    const nextStatus = reportStatusToken(patch.status);
+    if (nextStatus === currentStatus) {
+      delete patch.status;
+    } else if (REPORT_FINAL_STATUSES.has(currentStatus)) {
+      throw reportDecisionError(`This report was already ${currentStatus}. That decision is final.`, 409);
+    } else if (REPORT_FINAL_STATUSES.has(nextStatus)) {
+      throw reportDecisionError('Use Sanction or Deny to decide a report.', 400);
+    } else if (!REPORT_EDITABLE_STATUSES.has(nextStatus)) {
+      throw reportDecisionError('Choose a valid report status.', 400);
+    } else {
+      patch.status = nextStatus;
+    }
+  }
+  if (patch.priority !== undefined) {
+    const priority = String(patch.priority || '').trim().toLowerCase();
+    if (!REPORT_PRIORITIES.has(priority)) throw reportDecisionError('Choose low, medium or high priority.', 400);
+    patch.priority = priority;
+  }
+
   const currentAssignee = fresh.rows[0].assigned_staff_id;
   const staffForAssign = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const reportPerms = buildReportPermissions(fresh.rows[0], staffForAssign, staffSession);
@@ -5430,6 +5492,8 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     }),
     subject,
     permissions: buildReportPermissions(row, staff, staffSession),
+    // False for technical-problem reports and anything that only names the reporter.
+    sanctionable: reportCanBeSanctioned(row),
     assignableQueue: normalizeQueueKey(queueKey),
     assignableStaff,
   };
@@ -5775,7 +5839,8 @@ async function assertCanFileAppeal(accountId) {
                 AND (
                   (act.event_code = 'ACCOUNT_STATUS_CHANGED'
                     AND LOWER(COALESCE(act.metadata->>'status', '')) IN ('banned', 'locked', 'suspended'))
-                  OR act.event_code IN ('FORUM_TIMEOUT', 'VIOLATION_ISSUED', 'WARNING_ISSUED')
+                  -- Users desk and report warnings log ACCOUNT_WARNED, restriction desks VIOLATION_ISSUED.
+                  OR act.event_code IN ('FORUM_TIMEOUT', 'ACCOUNT_WARNED', 'VIOLATION_ISSUED', 'WARNING_ISSUED', 'CREDITS_FROZEN')
                 )
             ) AS new_penalty_since
      FROM account_appeal_holds h
@@ -5826,14 +5891,22 @@ async function assertCanFileAppeal(accountId) {
           AND v.deleted_at IS NULL
           AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open', 'pending')
           AND (v.expires_at IS NULL OR v.expires_at > NOW())
-      ) AS warning
+      ) AS warning,
+      -- Credits held by staff are a penalty the member can ask to have lifted.
+      EXISTS (
+        SELECT 1 FROM account_wallets aw
+        JOIN wallets w ON w.wallet_id = aw.wallet_id
+        WHERE aw.account_id = a.account_id
+          AND w.type = 'account wallets'
+          AND w.frozen_balance_credits > 0
+      ) AS credit_hold
     FROM accounts a
     WHERE a.account_id = $1
     `,
     [accountId]
   );
   const found = penalty.rows[0];
-  if (!found || (!found.standing && !found.timeout && !found.warning)) {
+  if (!found || (!found.standing && !found.timeout && !found.warning && !found.credit_hold)) {
     throw ticketError('There is no active penalty on this account to appeal.', 400);
   }
 }
@@ -5909,6 +5982,9 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
            AND (ends_at IS NULL OR ends_at > NOW())`,
         [ticket.account_id]
       );
+      // Held credits come back on the same clock; the one-minute job returns them.
+      const { endCreditHoldWithin24Hours } = require('./CreditHoldRepositories');
+      await endCreditHoldWithin24Hours(client, ticket.account_id);
     }
     const hold = normalized === 'denied_permanent'
       ? { decision: 'denied_permanent', permanent: true }
@@ -5967,7 +6043,7 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
       ? 'appeal_denied'
       : 'appeal_denied_permanent';
   const action = normalized === 'accepted'
-    ? 'Appeal accepted. Penalty ends in 24 hours.'
+    ? 'Appeal accepted. Penalty (and any credit hold) ends in 24 hours.'
     : normalized === 'denied'
       ? 'Appeal denied. Next appeal is available in 12 months.'
       : 'Appeal denied permanently.';

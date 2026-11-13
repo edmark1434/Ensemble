@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Ban, Bell, Lock, ShieldAlert } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AlertTriangle, Ban, Lock, ShieldAlert, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useGlobalState from '@/lib/global_state';
 import socket from '@/lib/socket';
@@ -8,6 +8,20 @@ import api from '@/lib/axios';
 import { showSuccessToast } from '@/components/utility/toast';
 import { SwipeToast } from '@/components/ui/SwipeToast';
 import { isConsoleLoginPath } from '@/lib/consoleHosts';
+import {
+  APPEAL_PATH,
+  type StandingCondition,
+  type StandingRestriction,
+  bannerConditions,
+  formatCountdown,
+  nextStandingChange,
+} from '@/lib/standing';
+import {
+  StandingDetailsModal,
+  conditionIcon,
+  toneClasses,
+  useNow,
+} from '@/components/account/StandingDetails';
 
 export type AccountViolation = {
   type?: string | null;
@@ -16,7 +30,7 @@ export type AccountViolation = {
   createdAt?: string | null;
 };
 
-export type AccountStanding = {
+export type AccountStanding = StandingRestriction & {
   status?: string | null;
   blocked?: boolean;
   banned?: boolean;
@@ -209,56 +223,110 @@ export function AccountRestrictionCard({
   );
 }
 
-function SuspensionBanner({
-  standing,
-  onOpenNotifications,
+const BANNER_DISMISS_KEY = 'ensemble:standing-banner-dismissed';
+
+function conditionsKey(conditions: StandingCondition[]) {
+  return conditions.map((c) => `${c.id}:${c.endsAt || 'open'}`).join('|');
+}
+
+function readDismissed() {
+  try {
+    return window.sessionStorage.getItem(BANNER_DISMISS_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeDismissed(value: string) {
+  try {
+    window.sessionStorage.setItem(BANNER_DISMISS_KEY, value);
+  } catch {
+    // Private mode: the banner simply comes back on the next page.
+  }
+}
+
+/**
+ * Site-wide status bar: suspension, Frozen access, credits on hold, forum timeout. Shows the
+ * most serious one with a live countdown; Details explains all of them and how to recover.
+ * A suspension cannot be dismissed; the others can be hidden until something changes.
+ */
+function StandingStatusBar({
+  conditions,
+  onDetails,
   onAppeal,
-  label = "Account Suspended:",
 }: {
-  standing: AccountStanding;
-  onOpenNotifications: () => void;
-  /** A suspended or timed-out member may appeal, the same as a banned one. */
-  onAppeal?: () => void;
-  label?: string;
+  conditions: StandingCondition[];
+  onDetails: () => void;
+  onAppeal: () => void;
 }) {
-  const { Icon, detail } = restrictionCopy(standing);
+  const now = useNow();
+  const key = conditionsKey(conditions);
+  const [dismissed, setDismissed] = useState(() => readDismissed());
+  const primary = conditions[0];
+  if (!primary) return null;
+  const dismissible = !conditions.some((c) => c.id === 'suspended');
+  if (dismissible && dismissed === key) return null;
+
+  const Icon = conditionIcon(primary.id);
+  const tone = toneClasses(primary.tone);
+  const remaining = primary.endsAt ? new Date(primary.endsAt).getTime() - now : null;
+  const when = remaining == null
+    ? primary.id === 'credit_hold'
+      ? 'until staff review'
+      : primary.id === 'frozen_access'
+        ? 'until warnings expire'
+        : 'no end date yet'
+    : remaining > 0
+      ? `ends in ${formatCountdown(remaining)}`
+      : 'ending now';
+  const others = conditions.length - 1;
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] sm:top-[4.75rem] z-[45] flex justify-center px-3 sm:px-4 animate-enter">
+    <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] z-[45] flex justify-center px-3 animate-enter sm:top-[4.75rem] sm:px-4">
       <div
-        role="alert"
-        className="pointer-events-auto flex w-full max-w-xl items-center justify-between gap-2.5 rounded-xl border border-amber-400/60 bg-amber-50/95 dark:bg-[#201908]/95 px-3 py-1.5 shadow-md backdrop-blur-md transition-all text-amber-950 dark:text-amber-200"
+        role="status"
+        aria-live="polite"
+        className={`pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-2.5 rounded-xl border bg-white/95 px-3 py-1.5 shadow-md backdrop-blur-md dark:bg-[#15161b]/95 ${tone.border}`}
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+        <button type="button" onClick={onDetails} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
             <Icon className="h-3.5 w-3.5" />
           </span>
-          <div className="min-w-0 flex-1 flex items-center gap-1.5">
-            <span className="text-xs font-bold text-amber-900 dark:text-amber-200 shrink-0">
-              {label}
-            </span>
-            <p className="text-xs text-amber-800/90 dark:text-amber-300/90 truncate font-medium" title={detail}>
-              {detail}
-            </p>
-          </div>
-        </div>
-        {onAppeal ? (
-          <button
-            type="button"
-            onClick={onAppeal}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs font-semibold text-amber-950 transition-colors hover:bg-amber-500/20 dark:text-amber-100"
-          >
-            Appeal
-          </button>
-        ) : null}
+          <span className="shrink-0 text-xs font-bold text-zinc-900 dark:text-white">{primary.label}</span>
+          <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
+            {primary.id === 'credit_hold' ? `${primary.title} · ` : ''}
+            {when}
+            {others > 0 ? ` · +${others} more` : ''}
+          </span>
+        </button>
         <button
           type="button"
-          onClick={onOpenNotifications}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 dark:text-amber-100 px-2.5 py-1 text-xs font-semibold transition-colors"
+          onClick={onDetails}
+          className="inline-flex shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
         >
-          <Bell className="h-3 w-3" />
-          <span>Notifications</span>
+          How to fix
         </button>
+        <button
+          type="button"
+          onClick={onAppeal}
+          className="hidden shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5 sm:inline-flex"
+        >
+          Appeal
+        </button>
+        {dismissible ? (
+          <button
+            type="button"
+            aria-label="Hide until something changes"
+            onClick={() => {
+              writeDismissed(key);
+              setDismissed(key);
+            }}
+            className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -358,11 +426,21 @@ export function showAccountWarningToast(payload: {
   );
 }
 
+function refreshCurrentUser() {
+  api.get('api/users/me').then((res) => {
+    if (res.data?.user) {
+      useGlobalState.getState().setUser(res.data.user);
+    }
+  }).catch(() => {});
+}
+
 export function AccountRestrictionHost() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useGlobalState((state) => state.user);
   const clearUser = useGlobalState((state) => state.clearUser);
   const [blocked, setBlocked] = useState<AccountStanding | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     const onRestricted = (event: Event) => {
@@ -469,11 +547,11 @@ export function AccountRestrictionHost() {
       } else if (status === 'active') {
         setBlocked(null);
         showSuccessToast('Your account standing has been restored to Active.');
-        api.get('api/users/me').then((res) => {
-          if (res.data?.user) {
-            useGlobalState.getState().setUser(res.data.user);
-          }
-        }).catch(() => {});
+        refreshCurrentUser();
+      } else if (status === 'deactivated') {
+        // The penalty ended on an account the member had deactivated: back to that screen.
+        setBlocked(null);
+        refreshCurrentUser();
       } else if (status === 'suspended') {
         setBlocked(null);
         const standing: AccountStanding = payload?.restriction || {
@@ -508,44 +586,71 @@ export function AccountRestrictionHost() {
       });
     };
 
+    // A credit hold placed or released by staff: refresh the standing so the banner and the
+    // wallet show it straight away.
+    const handleCreditsHold = (payload: any) => {
+      const currentUser = useGlobalState.getState().user;
+      if (currentUser && payload?.restriction) {
+        useGlobalState.getState().setUser({ ...currentUser, restriction: payload.restriction });
+      } else {
+        refreshCurrentUser();
+      }
+      if (payload?.held === false && payload?.message) showSuccessToast(payload.message);
+      window.dispatchEvent(new CustomEvent('ensemble:wallet-changed'));
+    };
+
     socket.on('account:restricted', handleRestricted);
     socket.on('account:status_changed', handleStatusChanged);
     socket.on('account:warning', handleWarning);
+    socket.on('account:credits_hold', handleCreditsHold);
 
     return () => {
       socket.off('account:restricted', handleRestricted);
       socket.off('account:status_changed', handleStatusChanged);
       socket.off('account:warning', handleWarning);
+      socket.off('account:credits_hold', handleCreditsHold);
     };
   }, [user?.account_id, navigate]);
 
-  const warning = user?.restriction as AccountStanding | undefined;
-  const forumTimeout = Boolean(warning?.forumTimeout || warning?.code === 'FORUM_TIMEOUT');
-  const suspended = Boolean(
-    warning &&
-      !warning.blocked &&
-      (warning.suspended ||
-        warning.code === 'ACCOUNT_SUSPENDED' ||
-        String(warning.status || '').toLowerCase() === 'suspended')
+  const standing = user?.restriction as AccountStanding | undefined;
+  const conditions = useMemo(
+    () => (user?.type === 'User' && standing && !standing.blocked ? bannerConditions(standing) : []),
+    [user?.type, standing]
   );
+
+  // When the earliest clock runs out (suspension, hold, timeout, band), fetch the new
+  // standing once so the banner clears without a reload. The background job lifts it on
+  // the server within a minute; retry a few times in case this tab is early.
+  const nextChange = nextStandingChange(conditions);
+  useEffect(() => {
+    if (!nextChange) return;
+    const delay = Math.max(0, nextChange - Date.now()) + 5000;
+    if (delay > 2147483000) return; // setTimeout overflows past ~24.8 days.
+    let tries = 0;
+    let timer = 0;
+    const schedule = (wait: number) => {
+      timer = window.setTimeout(() => {
+        tries += 1;
+        refreshCurrentUser();
+        if (tries < 4) schedule(60000);
+      }, wait);
+    };
+    schedule(delay);
+    return () => window.clearTimeout(timer);
+  }, [nextChange]);
+
+  const showBar = conditions.length > 0 && location.pathname !== APPEAL_PATH;
 
   return (
     <>
-      {suspended && warning ? (
-        <SuspensionBanner
-          standing={warning}
-          onOpenNotifications={() => navigate('/notifications')}
-          onAppeal={() => navigate('/account/appeal')}
+      {showBar ? (
+        <StandingStatusBar
+          conditions={conditions}
+          onDetails={() => setDetailsOpen(true)}
+          onAppeal={() => navigate(APPEAL_PATH)}
         />
       ) : null}
-      {forumTimeout && warning && !suspended ? (
-        <SuspensionBanner
-          label="Forum timeout:"
-          standing={{ ...warning, message: warning.message || 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.' }}
-          onOpenNotifications={() => navigate('/forums')}
-          onAppeal={() => navigate('/account/appeal')}
-        />
-      ) : null}
+      <StandingDetailsModal open={detailsOpen} conditions={conditions} onClose={() => setDetailsOpen(false)} />
       {blocked ? (
         <AccountBlockedScreen
           standing={blocked}

@@ -249,7 +249,9 @@ Each subsection is: where it lives, how a punishment starts, what standing does,
 
 - Failed verification does not add warning points. Fraudulent ID is an `identity` warning (and usually a lock or ban).
 - Email verification is not a punishment.
-- Deactivate is voluntary, not a punishment, not a warning-point hit. 72h reactivation rule stays.
+- Deactivate is voluntary, not a punishment, not a warning-point hit. 72h reactivation rule stays. After reactivating, the member waits 7 days before deactivating again (`accounts.deactivation_available_at`).
+- Deactivation needs an Active standing and nothing other people are waiting on: no contract that is Active, Waiting or Pending Signature, and no open dispute on either side. A penalty cannot be hidden behind a deactivation.
+- Deactivated members are hidden from every member and guest (profile, search, followers, galleries) and nobody can follow, message, propose to, offer to, or order from them; their jobs and gigs leave browse. Staff and admins bypass all of it. A penalty issued on a deactivated account keeps `deactivated_at`, keeps the profile hidden, and returns the account to Deactivated (not Active) when it ends; staff cannot "restore" a deactivation away, only the member reactivates.
 - Appeal page shows the Record and is the only home for banned/locked members.
 
 **Staff:** Support / Admin user-team.
@@ -324,6 +326,7 @@ Listing fees: charge only when the listing is actually accepted into pending/pub
 - Buying credits and managing a subscription: blocked by Suspended / Ban / Lock.
 - Cashout: Suspended/Ban/Lock blocked. Band extra holds are warning-point bands, not standing.
 - Wallets are never seized by a punishment automatically. Ban may freeze payouts; support handles leftover balances.
+- **Credit hold** (Admin/Support "Freeze credits"): moves the available Account Wallet balance into `frozen_balance_credits`. Staff must write the reason the member sees and may set a release date (1–365 days); no date means until staff review. Freeze and release lock the wallet row, update relatively and write one `Escrow Hold` / `Escrow Release` ledger row referencing `wallets`. The member is notified (`account:credits_hold`). Holds with a date are released by the one-minute standing job. A hold is an appealable penalty; an accepted appeal shortens it to end within 24 hours. Credits received after the hold stay spendable.
 - Transactions history is always readable except Ban/Lock (appeal-only).
 
 ### 8.9 Forums
@@ -378,7 +381,7 @@ Listing fees: charge only when the listing is actually accepted into pending/pub
 **Routes:** `/support/ticket`, `/landing/*`, in-product reports, Ask Joed
 
 - Support tickets: Suspended cannot create (write block). Banned/locked: **appeal ticket type only**.
-- Product reports: Frozen OK except forum reports during timeout. Suspended/Ban/Lock NO.
+- Product reports: Limited/Restricted/Frozen OK, including forum reports (the band's forum-write lock does not cover `/api/forum/reports`). Forum reports NO during a timeout. Suspended/Ban/Lock NO.
 - Filing a report is not a violation and adds no warning points.
 - Joed / Ask Our Chatbot: read help always. Actions Joed claims must still hit the same backend locks. Do not put this spec into `backend/data/` until it ships (`backend/data` is current-behavior only).
 - Legal/landing pages: no punishment effect.
@@ -440,6 +443,8 @@ Frozen access is a warning-point band, not a standing. It is on this map so staf
 **Public** (`/profile/:id`, job/gig/asset author chips): chips for Banned / Suspended / Locked / Timeout / Under dispute. Star ratings and badge pins are the other systems. Badges hidden if Banned or Locked.
 
 **Owner:** Record modal — standing, warnings, timeouts, recent activity. Warning points and auto band live in the same modal.
+
+**Owner status bar:** while signed in, a bar under the header shows Suspended, Frozen access, Credits on hold, or Forum timeout with a live countdown. "How to fix" opens a sheet listing, for each one, what is paused, when it ends (`suspensionEndsAt`, `warningBandEndsAt`, `creditsFrozenUntil`, `forumTimeoutEndsAt` from `getAccountAccess`) and how to get back to normal (wait, or appeal). The appeal page and the wallet show the same list. Copy lives in `frontend/src/lib/standing.ts`. Frozen access and credit holds can be hidden until they change; a suspension cannot.
 
 **Never public:** warning text, points, staff names, case IDs, pardoned rows as active.
 
@@ -506,6 +511,10 @@ Implementation rules (enforced in code):
 - The 20-point auto-suspend never writes Suspended over a ban or lock.
 - Every ban (Users desk, dispute conviction, report sanction) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. Lifting the ban does not reopen anything — the member reposts, or reopens a closed gig. Locks and suspensions do not run it.
 - Report decisions follow the same role rules: specialist moderators may warn or suspend from a report, only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice.
+- A report warning uses the named warning staff pick (desk-checked like any warning); **Staff follow-up warning** is only the default. A report that names no other account (technical problems, whose account columns point at the reporter) cannot be sanctioned — close or deny it.
+- Sanctioned and Denied are final: a hand edit cannot set them, change them, or reopen the report for a second sanction. Other statuses (open, in progress, closed, …) can still be changed by the handler. Claiming a report is guarded in SQL; a second claimer gets 409 (Admin may still take over).
+- A member holds at most one open report per item (409 `REPORT_ALREADY_OPEN`); technical-problem reports are exempt. Team member reports must name an account with a membership on that team.
+- When a ban, lock or suspension ends (expiry, unban/unsuspend/unlock/restore, pardon, accepted appeal) on a member who had deactivated the account, it returns to **Deactivated**, not Active; the member reactivates it themselves.
 - Expired bans, locks, suspensions and warnings lift in a one-minute background job (`reconcileExpiredStandings`), which records the lift and notifies the member, as well as on the member's own next request.
 - Suspended members may open and answer an **appeal ticket** (and nothing else on tickets), the same as banned and locked members. Their banner links to `/account/appeal`; so does the forum-timeout banner.
 - Appeals: filing needs an active penalty (standing, forum timeout, or active warning). Only Admin or the assigned Support Moderator decides, under a row lock, never on their own account. Accepting ends a ban/lock/suspension and any forum timeout within 24 hours, never later than it would have ended anyway. Warnings are not lifted by an accepted appeal; rescind them. A 12-month denial hold does not block appealing a penalty issued after that denial.

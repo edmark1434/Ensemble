@@ -111,6 +111,18 @@ const EVENT_CATALOG = {
     severity: 'info',
     impact: 'Returned frozen credits to the spendable balance.',
   },
+  ACCOUNT_DEACTIVATED: {
+    label: 'Account deactivated by member',
+    targetType: 'Account',
+    severity: 'info',
+    impact: 'The member hid their profile from other members. Staff can still view it.',
+  },
+  ACCOUNT_REACTIVATED: {
+    label: 'Account reactivated by member',
+    targetType: 'Account',
+    severity: 'info',
+    impact: 'The member turned the account back on; a cooldown applies before they can deactivate again.',
+  },
   APPEAL_DECISION: {
     label: 'Appeal decided',
     targetType: 'Appeal',

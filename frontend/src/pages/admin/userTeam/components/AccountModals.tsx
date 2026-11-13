@@ -592,11 +592,20 @@ export function CreditActivityModal({
 }) {
   const [saving, setSaving] = useState(false);
   const isFrozen = frozenBalance > 0;
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
+  const [holdDays, setHoldDays] = useState<string>('');
+  const holdReasonOk = holdReason.trim().length >= 5;
+  const holdDaysNumber = holdDays === '' ? null : Number(holdDays);
+  const holdDaysOk = holdDaysNumber === null || (Number.isInteger(holdDaysNumber) && holdDaysNumber >= 1 && holdDaysNumber <= 365);
 
   const run = async (fn: () => Promise<unknown>) => {
     setSaving(true);
     try {
       await fn();
+      setHoldOpen(false);
+      setHoldReason('');
+      setHoldDays('');
       onChanged?.();
     } catch (err) {
       handleAccountActionError(err);
@@ -611,14 +620,30 @@ export function CreditActivityModal({
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-2">
-          {!isFrozen && (
+          {holdOpen ? (
+            <button
+              type="button"
+              disabled={saving || !holdReasonOk || !holdDaysOk}
+              onClick={() =>
+                void run(() =>
+                  freezeAccountCredits(accountId, true, undefined, {
+                    reason: holdReason.trim(),
+                    days: holdDaysNumber,
+                  })
+                )
+              }
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
+            >
+              {isFrozen ? 'Hold new credits too' : 'Confirm hold'}
+            </button>
+          ) : (
             <button
               type="button"
               disabled={saving}
-              onClick={() => void run(() => freezeAccountCredits(accountId, true))}
+              onClick={() => setHoldOpen(true)}
               className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
             >
-              Freeze credits
+              {isFrozen ? 'Hold more credits' : 'Freeze credits'}
             </button>
           )}
           {isFrozen && (
@@ -634,6 +659,45 @@ export function CreditActivityModal({
         </div>
       }
     >
+      {holdOpen && (
+        <div className="mb-5 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.05] p-4">
+          <p className="text-xs text-zinc-400">
+            Holds the available balance. The member is notified with this reason and the end date, and can appeal.
+            An accepted appeal releases the credits within 24 hours.
+          </p>
+          <label className="block text-xs font-medium text-zinc-300">
+            Reason the member will see
+            <textarea
+              value={holdReason}
+              onChange={(e) => setHoldReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
+              placeholder="e.g. Chargeback under review on a recent purchase"
+            />
+            {!holdReasonOk && holdReason.length > 0 && (
+              <span className="mt-1 block text-[11px] text-amber-300">At least 5 characters.</span>
+            )}
+          </label>
+          <label className="block text-xs font-medium text-zinc-300">
+            Release after (days)
+            <input
+              type="number"
+              min={1}
+              max={365}
+              step={1}
+              value={holdDays}
+              onChange={(e) => setHoldDays(e.target.value)}
+              placeholder="Leave empty to hold until you review it"
+              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
+            />
+            {!holdDaysOk && <span className="mt-1 block text-[11px] text-amber-300">Whole days from 1 to 365.</span>}
+          </label>
+          <button type="button" onClick={() => setHoldOpen(false)} className="text-xs text-zinc-400 hover:text-white">
+            Cancel
+          </button>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap gap-8 text-sm">
         <div>
           <p className="text-zinc-500">Total credits</p>

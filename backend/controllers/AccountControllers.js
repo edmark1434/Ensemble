@@ -274,6 +274,8 @@ async function followUserController(req, res) {
     const { accountId: followedId } = req.params;
     if (!followerId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     try {
+        // A deactivated member cannot be found, so they cannot be followed either.
+        if (await hiddenProfileResponse(req, res, followedId)) return;
         await followUserService(followerId, followedId);
         
         try {
@@ -392,6 +394,7 @@ async function deactivationResponse(req, res, action) {
         if (status >= 500) console.error('Account deactivation error:', err);
         return res.status(status).json({
             success: false,
+            code: status >= 500 ? undefined : err.code || undefined,
             message: status >= 500 ? 'Unable to update deactivation.' : err.message,
             deactivation: err.details || null,
         });

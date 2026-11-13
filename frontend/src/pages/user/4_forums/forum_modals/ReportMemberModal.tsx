@@ -27,6 +27,7 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ reason?: string; description?: string }>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -44,14 +45,17 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
     if (!validate()) return;
 
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await onSubmit(reason, description);
       setReason("");
       setDescription("");
       setErrors({});
       onClose();
-    } catch {
-      // The parent displays the API error and the modal stays open for retry.
+    } catch (error) {
+      // Show why the report was refused; the modal stays open for a retry.
+      const data = (error as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+      setSubmitError(data?.error || data?.message || "Failed to submit the report. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -136,6 +140,13 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
             {description.length} characters (minimum 20)
           </p>
         </div>
+
+        {submitError && (
+          <p className="mb-4 flex items-center gap-1 text-xs text-red-400" role="alert">
+            <AlertCircle className="h-3 w-3" />
+            {submitError}
+          </p>
+        )}
 
         <div className="flex gap-3">
           <button

@@ -42,13 +42,13 @@ async function getAllGalleries(includeDeactivated = false) {
                 a.display_name,
                 a.handle,
                 a.status,
-                (LOWER(COALESCE(a.status, '')) = 'deactivated') AS deactivated,
+                (LOWER(COALESCE(a.status, '')) = 'deactivated' OR a.deactivated_at IS NOT NULL) AS deactivated,
                 af.path AS avatar_url
             FROM user_galleries g
             JOIN files f ON g.file_id = f.file_id
             JOIN accounts a ON g.account_id = a.account_id
             LEFT JOIN files af ON a.avatar_file_id = af.file_id
-            WHERE $1::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated'
+            WHERE $1::boolean = TRUE OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL)
             ORDER BY g.created_at DESC
         `;
         const result = await pool.query(query, [Boolean(includeDeactivated)]);

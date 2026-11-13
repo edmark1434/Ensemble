@@ -1916,6 +1916,16 @@ async function createOrReuseDirectChatServices(payload, accountId) {
 
     if (!inbox) {
         await require('./WarningBandServices').assertWarningAllows(senderId, 'new_dm');
+        // A deactivated member cannot read or answer, and is hidden from every member.
+        try {
+            await require('./AccountDeactivationServices').assertAccountReachable(
+                recipientId,
+                'This member has deactivated their account, so you cannot message them right now.'
+            );
+        } catch (error) {
+            if (error.code === 'ACCOUNT_DEACTIVATED') throw new ChatServiceError(error.message, 409);
+            throw error;
+        }
         const now = new Date();
 
         const result = await createInboxRepositories({

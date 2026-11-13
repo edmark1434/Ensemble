@@ -75,6 +75,15 @@
 - Not stored. Profile `standing.merit` and `GET /api/users/me/standing` `merit` are `clamp(100 − active warning points, 0, 100)`.
 - Staff restriction payloads still include `warningPoints`. User-facing payloads should use `merit`.
 
+## Account standing, credit holds, deactivation
+
+- `GET /api/users/me` `restriction` (from `getAccountAccess`) adds `banEndsAt`, `lockEndsAt`, `warningBandLabel`, `warningBandEndsAt` (when active points drop below the current band, assuming no new warnings; null if a warning has no expiry), `creditsFrozen`, `frozenCredits`, `creditsFrozenAt`, `creditsFrozenUntil`, `creditsFrozenReason`, and `returnsToDeactivated`. Frozen access now carries its own `message`.
+- `POST /api/admin/accounts/:accountId/credits/freeze` body `{ freeze, reason, days? | endsAt? }`. `reason` (≥ 5 chars, shown to the member) is required to freeze; `days` 1–365 or `endsAt` within 365 days sets the release date, neither means until staff review. Refuses your own account and (unless Admin) staff accounts. 409 when nothing is available to hold or release.
+- Socket `account:credits_hold` `{ held, message, restriction }` follows a hold or release; the client refreshes its standing and wallet.
+- `GET /api/accounts/deactivation` returns `deactivationAvailableAt`, `deactivationReady`, `canDeactivate`, `standingBlocksDeactivation`, `blockers { liveContracts, openDisputes }`, `cooldownHours`, `redeactivateCooldownDays`. `POST /api/accounts/deactivate` returns 409 with `code` `DEACTIVATION_COOLDOWN`, `DEACTIVATION_BLOCKED` or `DEACTIVATION_STANDING`. Both deactivate and reactivate write `ACCOUNT_DEACTIVATED` / `ACCOUNT_REACTIVATED` activity.
+- Proposals, gig orders, job offers, new DMs and follows aimed at a deactivated member return 409 (`ACCOUNT_DEACTIVATED`) or the profile 404, before any credits move.
+- `POST /api/accounts/dev/add-credits` and `/dev/add-rating` return 404 when `NODE_ENV=production`.
+
 ## Warning library
 
 - `GET /api/admin/warning-catalog?desk=` lists live named warnings for a desk (admin/support see all). Same payload on `GET /api/moderator/warning-catalog` for restriction-desk staff. Each row includes locked `points` and `durationDays`.
@@ -135,7 +144,9 @@
 
 ## Member reports
 
-- Member report POSTs (`/api/jobs/:jobId/report`, `/api/gigs/:id/report`, `/api/assets/:assetId/report`, `/api/accounts/:accountId/report`, `/api/inbox/message/:messageId/report`, `/api/forum/reports/...`, `/api/teams/:teamId/reports`, `/api/team-projects/:id/report`) store `subject_snapshot` on `reports`: `{ kind, title, body, href, extra }`. `description` is the reporter's reason text only.
+- Member report POSTs (`/api/jobs/:jobId/report`, `/api/gigs/:id/report`, `/api/assets/:assetId/report`, `/api/accounts/:accountId/report`, `/api/inbox/message/:messageId/report`, `/api/forum/reports/...`, `/api/teams/:teamId/reports`, `/api/team-projects/:id/report`) store `subject_snapshot` on `reports`: `{ kind, title, body, href, extra }`. `description` is the reporter's reason text only (20–2,000 characters).
+- A second open report by the same member on the same item returns 409 `REPORT_ALREADY_OPEN` (`createReport`, serialized by an advisory lock). Technical-problem reports (`POST /api/users/reports`) are exempt. Team/team-project member reports (`target_account_id`) must name an account with a membership on that team, else 404.
+- Staff report PATCH: `action: "sanction"` takes `sanctionType` (`warning` | `suspend` | `ban`), `reason`, `days` (suspend) and optional `warningId` (named warning, desk-checked; default `staff_follow_up`). Reports whose detail has `sanctionable: false` (technical problems) return 409 on sanction. Hand edits accept `status` in `open`, `in_progress`, `under_review`, `escalated`, `closed`, `resolved`, `dismissed` and `priority` in `low`, `medium`, `high`; `sanctioned` / `denied` are decision-only and final (409 when changing a decided report). `action: "self_assign"` is guarded in SQL (409 if someone else just claimed it).
 - Staff `GET /api/admin/reports/:id` and the matching moderator report detail routes return `subject` with `headline`, `preview`, `available`, `linkable`, `links`, and (for chat) `message`. `links` are member-site paths; staff consoles wrap them in platform-view. Inbox messages are not linkable, so the snapshot body is shown instead. Deleted jobs, gigs, assets, discussions, groups, and teams keep the snapshot and drop the dead Open link.
 
 ## Marketplace license endpoints

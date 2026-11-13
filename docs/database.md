@@ -64,6 +64,12 @@
 - Both paths use existing S3 credentials and only delete keys under `uploads/<owner_user_id>/`. Objects shared by another non-deleted media asset remain. If S3 deletion fails, the database deletion rolls back: manual deletion can be retried, and expired uploads are retried by the existing retention job. See `docs/upload-storage-cleanup.md` for S3 versioning behavior.
 - `projects.trashed_at` provides the same 30-day recoverable lifecycle. Active lists exclude trash; the owner's Trash list excludes expired and permanently deleted entries. Restore clears `trashed_at`; Delete forever and the ten-minute retention job set `deleted_at`, retaining project history and membership records. Project deletion does not delete reusable uploaded media. Frozen projects cannot be trashed, restored, permanently deleted, or expired by the job. Moderation restore does not revive owner-deleted projects.
 
+## Credit holds and deactivation
+
+- `wallets.frozen_at`, `frozen_until`, `frozen_reason`, `frozen_by_staff_id` (FK `staff`, `ON DELETE SET NULL`) describe a staff credit hold on `frozen_balance_credits`. `frozen_until` NULL means until staff review. A partial index on `frozen_until` serves the release job. A second hold adds to the held amount and its reason/date replace the old ones. Releasing clears all four columns.
+- `accounts.deactivation_available_at` is set on reactivation (now + 7 days); deactivating is refused until it passes. `deactivated_at` stays set while a staff penalty covers the status, so the account returns to Deactivated afterwards and stays hidden from members.
+- Migration `1828400000000_credit-holds-and-deactivation-cooldown` adds these columns and stamps `frozen_at` on existing holds.
+
 ## Badge catalog
 
 - Unlock rules live on `badges`: `trigger_event_code`, `condition_type` (`boolean` or `count`), and `condition_value`.

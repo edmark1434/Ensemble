@@ -145,6 +145,20 @@ function buildHumanReadableMeta(row, type, isCreditPurchase, direction) {
         };
     }
 
+    // Staff credit hold: the credits stay in the Account Wallet, just not spendable.
+    if (refTable === 'wallets' && (type === 'Escrow Hold' || type === 'Escrow Release')) {
+        const held = type === 'Escrow Hold';
+        return {
+            category: held ? 'Credits on Hold' : 'Hold Released',
+            title: held ? 'Credits Placed on Hold by Staff' : 'Credit Hold Released',
+            summary: held
+                ? 'Staff put a hold on these credits. They stay yours and come back when the hold ends or an appeal is accepted.'
+                : 'The hold ended and these credits are spendable in your Account Wallet again.',
+            counterparty: 'Your Account Wallet',
+            walletFlow,
+        };
+    }
+
     if (type === 'Escrow Hold') {
         if (direction === 'internal') {
             return {

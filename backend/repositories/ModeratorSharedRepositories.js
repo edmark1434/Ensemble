@@ -7,6 +7,10 @@ const {
 } = require('../lib/TicketEnums');
 const { normalizeDisputeType, normalizeDisputePriority } = require('../lib/DisputeEnums');
 const { snapshotTitle } = require('../lib/ReportSubject');
+const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
+
+/** Technical problems are reports about the platform, not about an item, so they never dedupe. */
+const UNDEDUPED_REPORT_TARGETS = new Set(['technical_problem']);
 
 function normalizeStatus(status) {
   // Keep dispute/report helpers on snake-ish labels; tickets use Title Case via ticketEnums.
@@ -372,7 +376,45 @@ async function createReport({
   subjectSnapshot = null,
 }) {
   const reportType = String(type || 'Other').trim() || 'Other';
-  const result = await pool.query(
+  const dedupe = !UNDEDUPED_REPORT_TARGETS.has(String(targetType || '').toLowerCase())
+    && reporterAccountId && targetId;
+  const client = await pool.connect();
+  let row;
+  try {
+    await client.query('BEGIN');
+    if (dedupe) {
+      // One open report per member per item. The item includes its context (reference_id),
+      // so the same person can still be reported in two different groups or teams. The lock
+      // makes a double submit wait for the first insert instead of both passing the check.
+      const contextId = String(referenceId || targetId);
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `report:${reporterAccountId}:${String(targetType).toLowerCase()}:${targetId}:${contextId}`,
+      ]);
+      const existing = await client.query(
+        `
+        SELECT report_number
+        FROM reports
+        WHERE by_account_id = $1
+          AND LOWER(target_type) = LOWER($2)
+          AND target_id = $3
+          AND reference_id = $4
+          AND deleted_at IS NULL
+          AND LOWER(COALESCE(status, 'open')) <> ALL($5::text[])
+        LIMIT 1
+        `,
+        [reporterAccountId, targetType, String(targetId), contextId, [...CLOSED_REPORT_STATUSES]]
+      );
+      if (existing.rows.length) {
+        const number = existing.rows[0].report_number;
+        const error = new Error(
+          `You already reported this${number ? ` (${number})` : ''}. Staff are reviewing it.`
+        );
+        error.statusCode = 409;
+        error.code = 'REPORT_ALREADY_OPEN';
+        throw error;
+      }
+    }
+    const result = await client.query(
     `
     INSERT INTO reports (
       report_number,
@@ -407,11 +449,25 @@ async function createReport({
       referenceId || targetId,
       subjectSnapshot ? JSON.stringify(subjectSnapshot) : null,
     ]
-  );
-  const row = result.rows[0];
-  const { applyReportAutomations } = require('../lib/ModerationPolicy');
-  const enriched = await applyReportAutomations(row);
-  return mapReportRow({ ...row, priority: enriched.priority || row.priority });
+    );
+    row = result.rows[0];
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+  // The report is saved. Activity logging and alerts are best effort, so a failure there must
+  // not tell the member their report failed (they would file it again).
+  let enriched = row;
+  try {
+    const { applyReportAutomations } = require('../lib/ModerationPolicy');
+    enriched = await applyReportAutomations(row);
+  } catch (err) {
+    console.error('Report automations skipped:', err.message);
+  }
+  return mapReportRow({ ...row, priority: enriched?.priority || row.priority });
 }
 
 // Scoped disputes list. Filter by dispute type and status.

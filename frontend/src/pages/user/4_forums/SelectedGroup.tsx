@@ -1798,7 +1798,7 @@ const SelectedGroup = () => {
       await api.post(`api/forum/reports/groups/${group._id}`, { reason, description });
       showSuccessToast("Group reported successfully. Our team will review it.");
     } catch (error) {
-      showErrorToast("Failed to submit the report. Please try again.");
+      // ReportGroupModal shows the server's reason inline.
       throw error;
     }
   };
@@ -1839,7 +1839,7 @@ const SelectedGroup = () => {
       showSuccessToast(`Report submitted for ${selectedMember.name}`);
       setSelectedMember(null);
     } catch (error) {
-      showErrorToast("Failed to submit the report. Please try again.");
+      // ReportGroupModal shows the server's reason inline.
       throw error;
     }
   };

@@ -80,6 +80,25 @@ async function assertWarningAllows(accountId, action, extras = {}) {
   return { points, band };
 }
 
+/**
+ * Warnings only count on member accounts (Platform Merit). A warning on a team or staff
+ * account would be saved and then silently ignored, so it is refused with a clear reason.
+ */
+async function assertWarnableAccount(accountId) {
+  const account = accountId ? await getWarningBandAccount(accountId) : null;
+  if (!account || account.deleted_at) {
+    throw warningBandError('Account not found', 'ACCOUNT_NOT_FOUND', 404);
+  }
+  if (String(account.type || '').toLowerCase() !== 'user') {
+    throw warningBandError(
+      'Warnings only apply to member accounts. Teams and staff have no Platform Merit, so warn the member who acted, or lock or ban the account instead.',
+      'WARNING_MEMBER_ONLY',
+      400
+    );
+  }
+  return account;
+}
+
 async function listingReviewForced(accountId) {
   const { band } = await getWarningBand(accountId);
   return band.id === 'limited';
@@ -89,6 +108,7 @@ module.exports = {
   getWarningBand,
   refreshWarningBand,
   assertWarningAllows,
+  assertWarnableAccount,
   listingReviewForced,
   countProposalsToday,
 };

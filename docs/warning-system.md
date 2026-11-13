@@ -95,7 +95,7 @@ New users start with **0 active points** and full access. Being new is not a cri
 2. They pick a **named warning**. The picker loads `/api/admin/warning-catalog` or `/api/moderator/warning-catalog`.
 3. Points and duration are locked to that row.
 4. They write **case notes** (required). That is what happened on this case, not a custom score.
-5. Backend resolves the row from `warning_defs` (fallback: hardcoded seed). Client-sent points and duration are ignored.
+5. Backend resolves the row from `warning_defs` (fallback: hardcoded seed). Client-sent points and duration are ignored. The row must be on the issuer's desk (`desks`), checked on the server, not just in the picker: Admin and Support may issue every row; a specialist moderator gets 403 for rows outside their desk. Warnings are refused (400 `WARNING_MEMBER_ONLY`) on team and staff accounts, which have no Platform Merit.
 6. A `violations` row is inserted: `status = active`, `points` copied, `expires_at` set from the catalog duration.
 7. Activity log `ACCOUNT_WARNED`. User is notified (`account:warning`).
 8. Active points pick the §8 threshold. Auto-suspend rows fire once per crossing.
@@ -295,7 +295,7 @@ A Restricted user who is also suspended still cannot write. A Frozen-access user
 | Appeal accepted | Support | standing lift in 24h; leftover warnings still count | Ban/lock/suspend end in 24h, then band from leftover points |
 | Appeal denied | Support | unchanged | optional 12-month appeal block |
 
-Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`). They do not wait for staff.
+Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`) and by the one-minute `reconcileExpiredStandings` sweep. They do not wait for staff. When an expiry moves the band, the member is notified ("Your Platform Merit recovered to …"). A rescind always notifies the member with their new merit.
 
 ---
 

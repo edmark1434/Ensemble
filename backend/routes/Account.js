@@ -103,11 +103,23 @@ const { getMyBadgeGrants, postClaimBadge } = require('../controllers/BadgeContro
 router.get('/badges/mine', [checkSession, requireAuth], getMyBadgeGrants);
 router.post('/badges/:accountBadgeId/claim', [checkSession, requireAuth], postClaimBadge);
 
-router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
+// Development helpers. They mint credits and fake ratings, so they never run in production:
+// any signed-in member could otherwise top up their own wallet (Alt+I opens the widget).
+function devOnly(_req, res, next) {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    return next();
+}
+
+router.post('/dev/add-credits', [devOnly, checkSession, requireAuth], async (req, res) => {
     try {
         const { pool } = require('../lib/Database');
         const accountId = req.user.account_id;
-        const { amount } = req.body;
+        const amount = Number(req.body?.amount);
+        if (!Number.isInteger(amount) || amount <= 0 || amount > 1000000) {
+            return res.status(400).json({ success: false, message: 'Amount must be a whole number from 1 to 1,000,000' });
+        }
         
         await pool.query(`
             UPDATE wallets 
@@ -123,7 +135,7 @@ router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) =>
     }
 });
 
-router.post('/dev/add-rating', [checkSession, requireAuth], async (req, res) => {
+router.post('/dev/add-rating', [devOnly, checkSession, requireAuth], async (req, res) => {
     try {
         const { pool } = require('../lib/Database');
         const accountId = req.user.account_id;
