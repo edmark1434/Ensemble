@@ -19,6 +19,7 @@ import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { WalletIcon } from "@/components/ui/wallet-icon";
 import toast from "react-hot-toast";
+import CancelSubscriptionModal from "@/components/ui/CancelSubscriptionModal";
 
 // ---- Data models ----
 interface CreditPack {
@@ -177,19 +178,23 @@ const CreditShop: React.FC = () => {
   const [hasXenditPlan, setHasXenditPlan] = useState(false);
   const [isOnFreePlan, setIsOnFreePlan] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const handleCancelSubscription = async () => {
-    if (window.confirm("Are you sure you want to cancel your recurring subscription? Your access will remain active until the end of the current billing cycle.")) {
-      try {
-        setIsCancelling(true);
-        const { data } = await api.post("/api/payment/cancel-subscription");
-        setUserSubscription((prev) => prev ? { ...prev, cancel_at_period_end: true } : prev);
-        toast.success(data.message || "Subscription cancellation scheduled successfully.");
-      } catch (err: any) {
-        toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
-      } finally {
-        setIsCancelling(false);
-      }
+  const handleCancelSubscription = () => {
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancelSubscription = async () => {
+    try {
+      setIsCancelling(true);
+      const { data } = await api.post("/api/payment/cancel-subscription");
+      setUserSubscription((prev) => prev ? { ...prev, cancel_at_period_end: true } : prev);
+      toast.success(data.message || "Subscription cancellation scheduled successfully.");
+      setShowCancelModal(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -1119,6 +1124,15 @@ const CreditShop: React.FC = () => {
         <p className="mt-10 text-center text-xs text-gray-500 dark:text-zinc-500">
           Payments are processed securely via Xendit. Prices shown in Philippine Pesos (PHP).
         </p>
+
+        <CancelSubscriptionModal
+          isOpen={showCancelModal}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={handleConfirmCancelSubscription}
+          isCancelling={isCancelling}
+          planName={getCurrentPlan()?.name || "current"}
+          endDate={userSubscription?.trial_ends_at || userSubscription?.current_period_end}
+        />
       </div>
     </div>
   );
