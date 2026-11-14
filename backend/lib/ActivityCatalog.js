@@ -111,6 +111,18 @@ const EVENT_CATALOG = {
     severity: 'info',
     impact: 'Returned frozen credits to the spendable balance.',
   },
+  ACCOUNT_DEACTIVATED: {
+    label: 'Account deactivated by member',
+    targetType: 'Account',
+    severity: 'info',
+    impact: 'The member hid their profile from other members. Staff can still view it.',
+  },
+  ACCOUNT_REACTIVATED: {
+    label: 'Account reactivated by member',
+    targetType: 'Account',
+    severity: 'info',
+    impact: 'The member turned the account back on; a cooldown applies before they can deactivate again.',
+  },
   APPEAL_DECISION: {
     label: 'Appeal decided',
     targetType: 'Appeal',
@@ -141,6 +153,18 @@ const EVENT_CATALOG = {
     severity: 'medium',
     impact: 'Approved or rejected a listing, which controls its visibility in the marketplace.',
   },
+  LISTING_FILE_VIEWED: {
+    label: 'Listing original opened',
+    targetType: 'Marketplace listing',
+    severity: 'low',
+    impact: "A staff member opened the seller's original upload while reviewing the listing.",
+  },
+  LISTING_FILE_DOWNLOADED: {
+    label: 'Listing original downloaded',
+    targetType: 'Marketplace listing',
+    severity: 'medium',
+    impact: "A staff member downloaded the seller's original upload while reviewing the listing.",
+  },
   DISPUTE_APPROVED: { label: 'Dispute approved', targetType: 'Dispute', severity: 'medium' },
   DISPUTE_DISMISSED: { label: 'Dispute dismissed', targetType: 'Dispute', severity: 'medium' },
   DISPUTE_RESOLVED: { label: 'Dispute resolved', targetType: 'Dispute', severity: 'medium' },
@@ -152,6 +176,43 @@ const EVENT_CATALOG = {
     label: 'Dispute parties swapped',
     targetType: 'Dispute',
     severity: 'low',
+  },
+  ACCOUNT_BAN_CLEANUP: {
+    label: 'Banned account postings closed',
+    targetType: 'Account',
+    severity: 'medium',
+    impact:
+      'Closed the banned account’s open jobs, gigs and listings, withdrew its pending proposals and orders, and refunded fees and offer escrow.',
+  },
+  DISPUTE_ESCROW_SETTLED: {
+    label: 'Dispute escrow settled',
+    targetType: 'Dispute',
+    severity: 'high',
+    impact: 'Split a contract’s frozen escrow between the client and the freelancer.',
+  },
+  DISPUTE_TRANSACTION_REVERSED: {
+    label: 'Dispute transaction reversed',
+    targetType: 'Dispute',
+    severity: 'high',
+    impact: 'Took credits back from one account and scheduled them for another.',
+  },
+  DISPUTE_PAYOUT_RELEASED: {
+    label: 'Dispute payout released',
+    targetType: 'Dispute',
+    severity: 'medium',
+    impact: 'Paid a dispute ruling’s credits into the recipient’s Account Wallet.',
+  },
+  DISPUTE_PAYOUT_RESCHEDULED: {
+    label: 'Dispute payout rescheduled',
+    targetType: 'Dispute',
+    severity: 'low',
+    impact: 'Changed when a dispute ruling’s credits are paid out.',
+  },
+  DISPUTE_PAYOUT_CANCELLED: {
+    label: 'Dispute ruling withdrawn',
+    targetType: 'Dispute',
+    severity: 'high',
+    impact: 'Cancelled an unpaid money ruling and returned any credits it had taken back.',
   },
   VIDEO_PROJECT_FROZEN: {
     label: 'Video project frozen',

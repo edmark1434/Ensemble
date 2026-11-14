@@ -1,6 +1,10 @@
 const { pool } = require('../lib/Database');
 const { normalizeDisputePriority } = require('../lib/DisputeEnums');
-const { freezeContractEscrowForDispute, assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
+const {
+    freezeContractEscrowForDispute,
+    assertNoOpenContractDispute,
+    getPendingPayoutContractDispute,
+} = require('../lib/DisputeEscrow');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
 
@@ -26,6 +30,22 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
 
         if (job_status === 'Closed') {
             throw new Error("Cannot extend offer: this job posting is closed.");
+        }
+
+        // An offer locks the client's credits in escrow until it is answered. A deactivated
+        // freelancer cannot answer, so the offer would only strand those credits.
+        const freelancerState = await client.query(
+            `SELECT 1 FROM accounts
+             WHERE account_id = $1
+               AND LOWER(COALESCE(type, '')) = 'user'
+               AND (LOWER(COALESCE(status, '')) = 'deactivated' OR deactivated_at IS NOT NULL)`,
+            [freelancer_account_id]
+        );
+        if (freelancerState.rows.length) {
+            const error = new Error("Cannot extend offer: this freelancer has deactivated their account.");
+            error.statusCode = 409;
+            error.code = 'ACCOUNT_DEACTIVATED';
+            throw error;
         }
 
         const currentHiredCheck = await client.query(`
@@ -486,11 +506,17 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
             `, [client_account_id]);
 
             if (escrowWalletRes.rows[0] && personalWalletRes.rows[0]) {
-                await client.query(`
+                const debited = await client.query(`
                     UPDATE wallets
                     SET balance_credits = balance_credits - $1
                     WHERE wallet_id = $2 AND balance_credits >= $1
+                    RETURNING wallet_id
                 `, [transferAmount, escrowWalletRes.rows[0].wallet_id]);
+                // Without this the refund was credited even when the escrow debit did not
+                // happen, creating credits out of nothing.
+                if (!debited.rows.length) {
+                    throw new Error('Client escrow balance is lower than this offer. Nothing was refunded.');
+                }
 
                 await client.query(`
                     UPDATE wallets
@@ -863,6 +889,16 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             LIMIT 1
         `, [contractId]);
         if (existing.rows.length) throw openDisputeError();
+        // A closed case whose payout is still scheduled keeps the contract's credits earmarked;
+        // a second case would see them as unsettled escrow and could split them again.
+        const pendingPayout = await getPendingPayoutContractDispute(client, contractId);
+        if (pendingPayout) {
+            const error = new Error(
+                `Dispute ${pendingPayout.dispute_number || ''} on this contract has a payout scheduled. A new dispute can be filed once it is paid, or contact Support to appeal it.`
+            );
+            error.statusCode = 409;
+            throw error;
+        }
 
         const disputeRes = await client.query(`
             INSERT INTO disputes (

@@ -62,12 +62,24 @@ export async function adjustAccountCredits(accountId: string, amount: number, no
   return res.data.data;
 }
 
+export type CreditHoldInput = {
+  /** Shown to the member. Required to freeze. */
+  reason?: string;
+  /** Hold length in days (1–365). Omit for "until staff review". */
+  days?: number | null;
+};
+
 export async function freezeAccountCredits(
   accountId: string,
   freeze = true,
-  options?: ActionOptions
+  options?: ActionOptions,
+  hold?: CreditHoldInput
 ) {
-  const res = await api.post(`/api/admin/accounts/${accountId}/credits/freeze`, { freeze });
+  const res = await api.post(`/api/admin/accounts/${accountId}/credits/freeze`, {
+    freeze,
+    reason: hold?.reason,
+    days: hold?.days ?? undefined,
+  });
   if (!res.data?.success) throw new Error(res.data?.message || 'Credit freeze failed');
   if (!options?.silent) {
     showSuccessToast(res.data.message || (freeze ? 'Credits frozen' : 'Credits unfrozen'));

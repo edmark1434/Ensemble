@@ -241,6 +241,166 @@ function buildDisputePartySwapMessage({ disputer, disputee, notes, disputeNumber
   );
 }
 
+/** Default wait between a money ruling and the payout, and the furthest date staff may pick. */
+const DISPUTE_PAYOUT_DEFAULT_DAYS = 7;
+const DISPUTE_PAYOUT_MAX_DAYS = 90;
+
+/** "Nov 20, 2026, 8:09 AM UTC" — one fixed zone so every reader sees the same date. */
+function formatPayoutDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'the scheduled date';
+  return `${date.toLocaleString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })} UTC`;
+}
+
+function credits(amount) {
+  return `${Number(amount || 0).toLocaleString('en-US')} credit${Number(amount) === 1 ? '' : 's'}`;
+}
+
+function payoutTimingLine({ immediate, releaseAt }) {
+  return immediate
+    ? 'The credits have been paid to their Account Wallets.'
+    : `The credits stay locked in escrow until ${formatPayoutDate(releaseAt)}, when they are paid to their Account Wallets.`;
+}
+
+/**
+ * The ruling posted when staff settle a contract's frozen escrow.
+ * @param {{ client: string, freelancer: string, clientCredits: number, freelancerCredits: number,
+ *   immediate: boolean, releaseAt: Date|string, notes?: string, disputeNumber?: string }} context
+ */
+function buildDisputeSettlementMessage({
+  client,
+  freelancer,
+  clientCredits,
+  freelancerCredits,
+  immediate,
+  releaseAt,
+  notes,
+  disputeNumber,
+} = {}) {
+  const shares = [];
+  if (clientCredits > 0) shares.push(`${client} (client) receives ${credits(clientCredits)} back`);
+  if (freelancerCredits > 0) shares.push(`${freelancer} (freelancer) receives ${credits(freelancerCredits)}`);
+  return buildDisputeRulingMessage(
+    {
+      label: 'Escrow settled',
+      finding: () =>
+        `The escrow on this contract has been settled: ${shares.join(', and ')}. ${payoutTimingLine({
+          immediate,
+          releaseAt,
+        })} The contract has ended and its unfinished milestones are cancelled.`,
+    },
+    {
+      notes,
+      disputeNumber,
+      heading: 'Final decision',
+      outcomeLabel: 'Outcome',
+      closing:
+        'This case is now closed and the discussion is final. If you believe it was decided in error, contact Support to request an appeal before the payout date.',
+    }
+  );
+}
+
+/** The ruling posted when staff reverse a transaction on a dispute. */
+function buildDisputeReversalMessage({
+  from,
+  to,
+  amount,
+  transactionLabel,
+  immediate,
+  releaseAt,
+  notes,
+  disputeNumber,
+} = {}) {
+  return buildDisputeRulingMessage(
+    {
+      label: 'Transaction reversed',
+      finding: () =>
+        `${credits(amount)} from the ${transactionLabel || 'transaction'} ${
+          from ? `paid to ${from} ` : ''
+        }have been taken back and go to ${to}. ${
+          immediate
+            ? `${to} has received them.`
+            : `They stay locked in escrow until ${formatPayoutDate(releaseAt)}, when ${to} receives them.`
+        }`,
+    },
+    {
+      notes,
+      disputeNumber,
+      heading: 'Final decision',
+      outcomeLabel: 'Outcome',
+      closing:
+        'This case is now closed and the discussion is final. If you believe it was decided in error, contact Support to request an appeal before the payout date.',
+    }
+  );
+}
+
+/**
+ * Posted when the credits of a ruling move or their date changes.
+ * @param {'released'|'rescheduled'|'cancelled'|'failed'} kind
+ * @param {{ lines: string[], notes?: string, disputeNumber?: string, releaseAt?: Date|string }} context
+ */
+function buildDisputePayoutUpdateMessage(kind, { lines = [], notes, disputeNumber, releaseAt } = {}) {
+  const entries = {
+    released: {
+      heading: 'Payout released',
+      label: 'Credits paid',
+      finding: () => lines.join(' '),
+      closing: 'The credits are in the recipients’ Account Wallets.',
+    },
+    rescheduled: {
+      heading: 'Payout date changed',
+      label: `New date ${formatPayoutDate(releaseAt)}`,
+      finding: () =>
+        `${lines.join(' ')} The credits stay locked in escrow until ${formatPayoutDate(releaseAt)}.`,
+      closing: null,
+    },
+    cancelled: {
+      heading: 'Ruling withdrawn',
+      label: 'Payout cancelled',
+      finding: () => `${lines.join(' ')} No credits were paid out, and staff will decide the case again.`,
+      closing: 'The case stays open for review.',
+    },
+    failed: {
+      heading: 'Payout delayed',
+      label: 'Payout could not be completed',
+      finding: () => `${lines.join(' ')} Staff have been alerted and will complete it.`,
+      closing: null,
+    },
+  };
+  const entry = entries[kind];
+  if (!entry) return '';
+  return buildDisputeRulingMessage(
+    { label: entry.label, finding: entry.finding },
+    { notes, disputeNumber, heading: entry.heading, outcomeLabel: 'Status', closing: entry.closing }
+  );
+}
+
+/** The decision posted when staff dismiss a dispute before it goes anywhere. */
+function buildDisputeDismissMessage({ notes, disputeNumber } = {}) {
+  return buildDisputeRulingMessage(
+    {
+      label: 'Dismissed',
+      finding: () =>
+        'Staff reviewed this complaint and will not take it further. No credits move and no action is taken against either account.',
+    },
+    {
+      notes,
+      disputeNumber,
+      heading: 'Final decision',
+      outcomeLabel: 'Outcome',
+      closing:
+        'This case is now closed. If you believe it was decided in error, contact Support to request an appeal.',
+    }
+  );
+}
+
 function buildDisputeRulingMessage(
   entry,
   { disputer, disputee, notes, disputeNumber, heading, outcomeLabel, closing } = {}
@@ -278,4 +438,11 @@ module.exports = {
   buildDisputeReopenMessage,
   buildDisputeSanctionMessage,
   buildDisputePartySwapMessage,
+  buildDisputeSettlementMessage,
+  buildDisputeReversalMessage,
+  buildDisputePayoutUpdateMessage,
+  buildDisputeDismissMessage,
+  formatPayoutDate,
+  DISPUTE_PAYOUT_DEFAULT_DAYS,
+  DISPUTE_PAYOUT_MAX_DAYS,
 };

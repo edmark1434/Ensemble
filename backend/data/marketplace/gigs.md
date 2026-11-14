@@ -1,93 +1,38 @@
-# Services (Gigs) Marketplace & Discovery Ranking
+# Services (Gigs) Marketplace
 
-Routes:
-- Browse Services: `/gigs/services`
-- How Services Ranking Works: `/gigs/info`
-- Create a Service: `/gigs/create`
-- Edit a Service: `/gigs/edit/:id`
-- Service Detail Standalone Page: `/gigs/services/:id/page`
-- Service Detail Slide-out Drawer: `/gigs/services/:id`
-- Order a Service: `/gigs/services/:id/order`
-- Sent Gig Orders: `/gigs/orders/sent`
-- Sent Order Details: `/gigs/orders/sent/:orderId`
-- Incoming Gig Orders (Freelancer Dashboard): `/gigs/orders/incoming`
-- Incoming Order Details: `/gigs/orders/incoming/:orderId`
-- Saved Services: `/gigs/saved-services`
-- My Services: `/gigs/my-services`
+Routes: `/gigs/services`, `/gigs/saved-services`, `/gigs/my-services`, `/gigs/create`, `/gigs/info`
 
-Sources:
-- `frontend/src/pages/user/7_gigs/gig_ranking.ts`
-- `frontend/src/pages/user/7_gigs/gig_components/GigServicesInfoGuide.tsx`
-- `frontend/src/pages/user/7_gigs/gig_components/gig_lists.tsx`
-- `frontend/src/pages/user/7_gigs/gig_components/GigViewDetails.tsx`
-- `frontend/src/pages/user/7_gigs/gig_components/GigRichText.tsx`
-- `frontend/src/pages/user/7_gigs/gig_components/gigs_other_services.tsx`
-- `backend/repositories/GigRepositories.js`
+Ensemble Services (Gigs) let freelancers and creative teams package predefined video editing, motion design, 3D, color grading, and audio services with clear pricing tiers and delivery turnarounds.
 
----
+## Browsing and managing services
 
-## 1. Overview & Service Structure
+- **Browse Services (`/gigs/services`):** Discover packaged creative services, compare tiers, read reviews, and save favorites.
+- **Saved Services (`/gigs/saved-services`):** View services you have bookmarked.
+- **My Services (`/gigs/my-services`):** Freelancers manage, edit, pause, or inspect their published services.
+- **Service Ranking Guide (`/gigs/info`):** Read the in-app guide explaining how services are ranked.
 
-Ensemble Services (Gigs) allow freelancers and creative teams to package predefined video editing, motion design, 3D modeling, and post-production offerings with clear pricing and delivery expectations.
+## Creating a service
 
-Key components of every service:
-- **3 Pricing Tiers**: Basic, Standard, and Premium packages with distinct scope, delivery turnaround (days), revisions, and credit pricing.
-- **Project Milestones**: Structured production phases (e.g. Rough Cut, Sound & Color Polish, Final Master).
-- **Service Terms & Deliverables**: Clear expectations, revision policies, and additional work markup rates.
-- **Client Questionnaire**: Pre-order requirement forms (text, file upload, or multiple choice) required before an order enters escrow.
-- **Queue Slots**: Creator-defined concurrent order limits to ensure realistic delivery schedules.
+Route: `/gigs/create`
 
----
+Verified creators in good standing (not Restricted, Frozen, Suspended, Locked, or Banned) can publish a service listing with:
 
-## 2. 100-Point Fair Discovery Ranking Algorithm
+- **Three Pricing Tiers:** Configure **Basic**, **Standard**, and **Premium** packages with distinct scope, delivery turnaround days, revision counts, and credit pricing.
+- **Project Milestones and Terms:** Break work into sequential milestones (such as Rough Cut, Polish, and Final Master) and set custom Terms of Service and revision policies.
+- **Client Intake Questionnaire:** Add required text, file, or multiple-choice questions that buyers complete when ordering.
+- **Queue Slot Capacity:** Set how many concurrent orders you can handle so new buyers see realistic turnaround capacity.
+- **Media Gallery:** Upload a custom cover thumbnail and at least 3 high-resolution work samples (images, video reels, audio, or PDFs).
 
-All services on browse lists, search, and "Top Services" are ranked using a 100-point algorithm that balances verified trust with fair opportunity for new creators:
+Check the Current Ensemble Platform Settings document for any current listing or gig transaction fees.
 
-$$\text{Total Score} = \text{Trust Rating (40 pts)} + \text{14-Day Freshness (25 pts)} + \text{Service Completeness (20 pts)} + \text{Queue Availability (15 pts)}$$
+## How service discovery ranking works
 
-### Pillar 1: Fair Trust Rating (40 Points Max)
-- Uses Bayesian mean weighting:
-  $$\text{Score} = \frac{C \cdot m + \sum \text{ratings}}{C + n} \times \frac{40}{5.0}$$
-  where $m = 4.2$ (prior mean) and $C = 3$ (confidence weight).
-- **Newcomer Protection**: Brand-new creators with 0 reviews start at a fair **4.2★ baseline (33.6 / 40 pts)**. They are not penalized for having zero completed escrow orders on Day 1.
+Services are scored on a 100-point scale (plus subscription visibility and buyer skill-match bonuses) across three pillars:
 
-### Pillar 2: 14-Day Newcomer Spotlight (25 Points Max)
-- Brand-new services published within the last 7 days receive the full 25 points.
-- The boost gently tapers over 14 days as the creator acquires real orders and review ratings.
+1. **Service Package Content (up to 25 points, editable anytime):** Clear title and 120+ character plain-text scope (7.5 pts), complete 3-tier package pricing (6.25 pts), custom thumbnail and 3+ gallery samples (5 pts), 3 or more relevant skill tags (3.75 pts plus up to 2 pts buyer skill-match bonus), and 2+ structured milestones with Terms of Service and intake questions (2.5 pts).
+2. **Creator Trust and Standing (up to 35 points plus subscription boost):** Weighted star rating with a fair 4.2-star starting baseline for new services (22.75 pts), Creator Platform Merit score (7.70 pts), order fulfillment reliability starting at a 100% baseline for new creators (4.55 pts), and subscription visibility boost (Business +9 pts, Premium +3 pts, Free 0 pts).
+3. **Live Market and Queue Signals (up to 40 points):** 14-day listing freshness with a newcomer spotlight for services with fewer than 3 orders (19.5 pts), open queue slot availability (15 pts), buyer saves/bookmarks (3.75 pts), and active responsiveness signals.
 
-### Pillar 3: Service Completeness & Effort (20 Points Max)
-Creators control 100% of this pillar on Day 1 by following the completeness checklist:
+## The Rising badge on services
 
-| Setup Item | Score | Requirement |
-|---|---|---|
-| **Offer All 3 Pricing Tiers** | +25% | Define Basic, Standard, and Premium packages with realistic pricing and turnaround times. |
-| **Upload 3+ Gallery Samples** | +25% | Include high-resolution thumbnails, video reel previews, or before/after stills. |
-| **Define 3+ Project Milestones** | +20% | Break project workflow into sequential milestone phases. |
-| **Detailed Description & Terms** | +15% | Description $\ge 120$ characters plus explicit Terms of Service. |
-| **Add 3+ Relevant Skill Tags** | +15% | Tag specialized software/skills (e.g. After Effects, Blender, Sound Design). |
-
-### Pillar 4: Queue Capacity & Availability (15 Points Max)
-- Measures: $1.0 - \frac{\text{Active Orders}}{\text{Total Slots}}$.
-- When a busy creator's active order queue is full, their listing steps back slightly to prevent burnout, allowing available creators with open hands to be discovered.
-
----
-
-## 3. The Green "Rising" Badge
-
-The green **Rising** badge (`TrendingUp` icon + light-sweep shine animation) highlights top-effort new creators:
-- **Qualification Criteria**:
-  1. Service published within the last **7 days** ($\le 7\text{ days}$).
-  2. Fewer than **3 orders completed**.
-  3. **0 client reviews** recorded yet.
-  4. Service Completeness Score $\ge 85\%$.
-- Clicking the badge navigates users to `/gigs/info`.
-
----
-
-## 4. Service Card Badges & Indicators
-
-- **`{tiers.length} Tiers`**: Located at the bottom-left of the thumbnail with the `Layers` icon.
-- **Rating Pill**: Displays on the top-left of the thumbnail. Shows `"New"` for fresh listings with 0 reviews; otherwise displays verified client rating (e.g. `★ 5.0 (12)`).
-- **`{ordersCount} Orders`**: Indicates total completed buyer orders.
-- **`Open` / `Closed` Status**: Shows whether creator slots are available for new orders.
-- **Owner Score Breakdown Card**: Visible only to the service creator (`isOwnGig`); an expandable collapsible card revealing their live score and completeness metrics.
+New services earn the green **Rising** badge when published within the last 7 days with fewer than 3 completed orders, no prior reviews yet, and a strong package completeness score.

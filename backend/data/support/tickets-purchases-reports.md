@@ -1,39 +1,34 @@
-# Tickets, Purchases, and Reports
+# Support Tickets, Purchase Issues, and Ticket Categories
 
-Customer support route: `/landing/SubmitATicket`
+Route: `/support/ticket`
 
-Sources:
+## Signing in and submitting a ticket
 
-- `frontend/src/pages/landing/pages/page_SubmitATicket.tsx`
-- `frontend/src/pages/admin/ticketManagement/ticketTypes.ts`
-- `frontend/src/pages/user/5_assets/AssetDetails.tsx`
-- `frontend/src/pages/admin/moderation/moderationTypes.ts`
+You must be signed in to submit a ticket on `/support/ticket`. When you submit, provide a clear subject, choose the issue area and specific ticket type, fill in any requested context fields (such as selecting the related project, order, listing, contract, or job), write a clear description, and optionally attach up to 4 screenshots or files (maximum 8 MB per file).
 
-## Ticket categories
+Once submitted, you receive a ticket number. If your account is banned or locked, you can submit an appeal and reply to existing tickets and disputes directly on `/account/appeal`.
 
-The ticket catalog groups requests into:
+## Available ticket categories
 
-- Support: account access, verification, profile/settings, subscriptions, top-ups, withdrawals, billing, video editor, notifications, technical issues, and other concerns
-- Forums: forums, posts, groups, comments, and forum reports
-- Marketplace: assets, listings, purchase/delivery, seller verification, refunds, and asset quality
-- Jobs and gigs: job posts, gig posts, applications/hiring, contracts, and milestones
+The ticket form groups issues by area so your request reaches the right specialist team:
 
-## Ticket lifecycle
+- **Support:**
+  - *Account:* Sign-in and password, Account compromised, Identity verification, Profile and settings, Teams, Delete account or export data.
+  - *Billing:* Subscriptions and plans, Credits and balance, Payouts and withdrawals, Charges and receipts.
+  - *Video Editing Platform:* Editor problems, Export and rendering, Uploads and storage, Project files, Sharing and collaboration.
+  - *Messaging:* Inbox, chat, and calls; Notifications and email.
+  - *Safety and appeals:* Report a user, Copyright claim, Appeal an account penalty.
+  - *General:* Other.
+- **Forum:** Posts and replies, Forum groups, Report a post or member, Appeal a forum action.
+- **Marketplace:** Seller verification, Listing review, Asset purchase and download, File is wrong or broken, Marketplace refunds, Report a listing or seller, Asset reviews, Appeal a marketplace action.
+- **Jobs and Gigs:** Job and gig listings, Proposals and hiring, Contracts, milestones, and orders, Delivery and disputes, Cancellations and refunds, Report a listing or user, Gig reviews, Appeal a jobs action.
 
-Tickets can be Open, In Progress, Resolved, or Closed, with Low, Medium, or High priority. They may be assigned, escalated to a specialist queue, marked as waiting for a response, and linked to a report or dispute. Ticket messages distinguish staff-internal communication from messages visible to the requester or involved parties.
+## Ticket statuses
 
-## Asset purchase flow
+Tickets move through three main stages: **Open**, **In Progress**, and **Closed**. Always keep sensitive passwords, full card numbers, or private authentication codes out of ticket attachments and messages.
 
-An authenticated non-owner can purchase a published asset when the wallet has sufficient credits. The backend is authoritative for price, balance, fee, entitlement, and duplicate-purchase prevention. A successful purchase grants access without transferring creator ownership.
+## Purchase, credit, and contract problems
 
-## Purchase problems
-
-Use the Marketplace ticket types for listing, purchase/delivery, refund, or asset-quality concerns. Documentation chat cannot grant an entitlement, reverse a purchase, issue a refund, or change a wallet.
-
-## Reports
-
-A user report identifies a reporter, target type and identifier, reason, description, priority, status, assignee, and timestamps. Reports are reviewed by the appropriate staff queue. Filing a report does not itself prove a violation.
-
-## Disputes
-
-Disputes can relate to platform entities and credits. Staff permissions determine who may view, reply, assign, act, release held credits, or resolve a dispute. The assistant must not predict or guarantee an outcome.
+- **Credit top-ups or receipts:** Choose **Billing -> Credits and balance** or **Charges and receipts** and include the payment time and receipt ID so support can match the transaction.
+- **Asset purchase or broken file:** Choose **Marketplace -> Asset purchase and download**, **File is wrong or broken**, or **Marketplace refunds**, and name the asset and purchase time.
+- **Contract or milestone disagreement:** Use the contract's dispute workflow on `/contracts/dispute-form` for active contract escrow disputes, or submit a **Jobs and Gigs** ticket for listing, proposal, or order issues. For full details on reporting and disputes, see the Reports and Disputes guide.

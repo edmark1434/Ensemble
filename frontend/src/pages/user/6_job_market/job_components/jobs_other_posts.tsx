@@ -199,20 +199,22 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
           ? Array.from({ length: 3 }).map((_, idx) => (
               <div
                 key={idx}
-                className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 animate-pulse"
+                className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 overflow-hidden animate-pulse"
               >
-                <div>
-                  <div className="mb-3 h-40 w-full rounded-xl bg-gray-200 dark:bg-zinc-800" />
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
-                    <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-44 sm:h-48 w-full bg-gray-200 dark:bg-zinc-800 border-b border-gray-100 dark:border-white/5 shrink-0" />
+                <div className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
+                      <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                    </div>
+                    <div className="mb-2 h-5 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
+                    <div className="mb-4 h-8 w-full rounded bg-gray-200 dark:bg-zinc-800/60" />
                   </div>
-                  <div className="mb-2 h-5 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
-                  <div className="mb-4 h-8 w-full rounded bg-gray-200 dark:bg-zinc-800/60" />
-                </div>
-                <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
-                  <div className="h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
-                  <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
+                  <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+                    <div className="h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
+                    <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
+                  </div>
                 </div>
               </div>
             ))
@@ -227,11 +229,9 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                     navigate(`/jobs/postings/${job.id}/page`);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
-                  className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] p-4 shadow-sm hover:shadow-md dark:shadow-none transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+                  className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] overflow-hidden shadow-sm hover:shadow-md dark:shadow-none transition-all duration-300 hover:-translate-y-1 cursor-pointer"
                 >
-                  <div>
-                    {/* Thumbnail Image */}
-                    <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3 flex items-center justify-center">
+                  <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-gray-100 dark:bg-zinc-900 border-b border-gray-100 dark:border-white/5 shrink-0 flex items-center justify-center">
                       {job.thumbnail ? (
                         <img
                           src={job.thumbnail}
@@ -324,8 +324,11 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                       </div>
                     </div>
 
-                    {/* Category Pill Tags */}
-                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    {/* Card Content */}
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        {/* Category Pill Tags */}
+                        <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       <span
                         className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                           isOpen
@@ -443,6 +446,7 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                       <span>{job.timeAgo}</span>
                     </div>
                   </div>
+                </div>
                 </div>
               );
             })}

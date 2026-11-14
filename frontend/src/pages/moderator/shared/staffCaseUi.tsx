@@ -105,7 +105,7 @@ export function ConfirmDialog({
 }) {
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-2xl border border-white/10 bg-[#14151c] p-5 shadow-2xl">
+      <div className="max-h-full w-full max-w-md space-y-4 overflow-y-auto rounded-2xl border border-white/10 bg-[#14151c] p-5 shadow-2xl">
         <div>
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           <div className="mt-1 text-xs leading-relaxed text-zinc-400">{description}</div>

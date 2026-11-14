@@ -7,6 +7,10 @@ const {
 } = require('../lib/TicketEnums');
 const { normalizeDisputeType, normalizeDisputePriority } = require('../lib/DisputeEnums');
 const { snapshotTitle } = require('../lib/ReportSubject');
+const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
+
+/** Technical problems are reports about the platform, not about an item, so they never dedupe. */
+const UNDEDUPED_REPORT_TARGETS = new Set(['technical_problem']);
 
 function normalizeStatus(status) {
   // Keep dispute/report helpers on snake-ish labels; tickets use Title Case via ticketEnums.
@@ -105,6 +109,15 @@ function mapReportRow(row) {
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
+    // The account the report is against (seller, poster, member). Null for platform reports.
+    reported:
+      row.for_account_id && String(row.for_account_id) !== String(row.by_account_id || '')
+        ? {
+            accountId: row.for_account_id,
+            name: row.reported_name || 'Unknown',
+            username: row.reported_handle || '—',
+          }
+        : null,
     subjectTitle: snapshotTitle(row),
     description: row.description,
     status: String(row.status || 'open').toLowerCase(),
@@ -171,8 +184,41 @@ function mapDisputeRow(row) {
   };
 }
 
+/**
+ * A ticket escalated to Admin, or handled by an Admin, belongs to Admin. A desk that passes
+ * `excludeAdminOwned` drops it, so "Escalate to Admin" really takes it out of that queue.
+ */
+function adminOwnedExclusionSql(alias = '') {
+  const col = alias ? `${alias}.` : '';
+  return `(
+    LOWER(COALESCE(${col}escalated_to_role, '')) NOT IN ('admin', 'administrator')
+    AND (
+      ${col}handled_by_staff_id IS NULL
+      OR ${col}handled_by_staff_id NOT IN (
+        SELECT s.staff_id FROM staff s WHERE LOWER(s.role::text) IN ('admin', 'administrator')
+      )
+    )
+  )`;
+}
+
+/** Mirrors `adminOwnedExclusionSql` for a mapped ticket payload (detail routes). */
+function isAdminOwnedTicket(ticket) {
+  if (!ticket) return false;
+  const escalated = String(ticket.escalatedToRole || '').toLowerCase();
+  if (escalated === 'admin' || escalated === 'administrator') return true;
+  const role = String(ticket.assignee?.role || '').toLowerCase();
+  return role === 'admin' || role === 'administrator';
+}
+
 // Scoped ticket list. Filter by ticket types to include/exclude and by status.
-async function fetchScopedTickets({ typesIn, typesNotIn, categoriesIn, categoriesNotIn, status } = {}) {
+async function fetchScopedTickets({
+  typesIn,
+  typesNotIn,
+  categoriesIn,
+  categoriesNotIn,
+  status,
+  excludeAdminOwned = false,
+} = {}) {
   const includeTypes = typesIn || categoriesIn;
   const excludeTypes = typesNotIn || categoriesNotIn;
   const where = ['t.deleted_at IS NULL'];
@@ -186,6 +232,7 @@ async function fetchScopedTickets({ typesIn, typesNotIn, categoriesIn, categorie
     params.push(excludeTypes.map((t) => normalizeTicketType(t)));
     where.push(`NOT (t.type = ANY($${params.length}))`);
   }
+  if (excludeAdminOwned) where.push(adminOwnedExclusionSql('t'));
   if (status && status !== 'all') {
     params.push(normalizeTicketStatus(status));
     where.push(`t.status = $${params.length}`);
@@ -226,7 +273,13 @@ async function fetchScopedTickets({ typesIn, typesNotIn, categoriesIn, categorie
 }
 
 // Aggregate ticket counts for a type scope.
-async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categoriesNotIn } = {}) {
+async function scopedTicketCounts({
+  typesIn,
+  typesNotIn,
+  categoriesIn,
+  categoriesNotIn,
+  excludeAdminOwned = false,
+} = {}) {
   const includeTypes = typesIn || categoriesIn;
   const excludeTypes = typesNotIn || categoriesNotIn;
   const where = ['deleted_at IS NULL'];
@@ -239,6 +292,7 @@ async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categorie
     params.push(excludeTypes.map((t) => normalizeTicketType(t)));
     where.push(`NOT (type = ANY($${params.length}))`);
   }
+  if (excludeAdminOwned) where.push(adminOwnedExclusionSql());
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
   const result = await pool.query(
@@ -274,7 +328,13 @@ async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categorie
 }
 
 // Ticket type breakdown for a scope (for charts).
-async function scopedTicketCategoryBreakdown({ typesIn, typesNotIn, categoriesIn, categoriesNotIn } = {}) {
+async function scopedTicketCategoryBreakdown({
+  typesIn,
+  typesNotIn,
+  categoriesIn,
+  categoriesNotIn,
+  excludeAdminOwned = false,
+} = {}) {
   const includeTypes = typesIn || categoriesIn;
   const excludeTypes = typesNotIn || categoriesNotIn;
   const where = ['deleted_at IS NULL'];
@@ -287,6 +347,7 @@ async function scopedTicketCategoryBreakdown({ typesIn, typesNotIn, categoriesIn
     params.push(excludeTypes.map((t) => normalizeTicketType(t)));
     where.push(`NOT (type = ANY($${params.length}))`);
   }
+  if (excludeAdminOwned) where.push(adminOwnedExclusionSql());
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
   const result = await pool.query(
@@ -320,10 +381,14 @@ async function fetchScopedReports({ targetTypesIn, status } = {}) {
       r.by_account_id AS reporter_account_id,
       COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
       repa.handle AS reporter_handle,
+      COALESCE(fora.display_name, foru.first_name || ' ' || foru.last_name) AS reported_name,
+      fora.handle AS reported_handle,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name
     FROM reports r
     LEFT JOIN accounts repa ON repa.account_id = r.by_account_id
     LEFT JOIN users repu ON repu.account_id = repa.account_id
+    LEFT JOIN accounts fora ON fora.account_id = r.for_account_id
+    LEFT JOIN users foru ON foru.account_id = fora.account_id
     LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     ${whereSql}
@@ -372,7 +437,45 @@ async function createReport({
   subjectSnapshot = null,
 }) {
   const reportType = String(type || 'Other').trim() || 'Other';
-  const result = await pool.query(
+  const dedupe = !UNDEDUPED_REPORT_TARGETS.has(String(targetType || '').toLowerCase())
+    && reporterAccountId && targetId;
+  const client = await pool.connect();
+  let row;
+  try {
+    await client.query('BEGIN');
+    if (dedupe) {
+      // One open report per member per item. The item includes its context (reference_id),
+      // so the same person can still be reported in two different groups or teams. The lock
+      // makes a double submit wait for the first insert instead of both passing the check.
+      const contextId = String(referenceId || targetId);
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `report:${reporterAccountId}:${String(targetType).toLowerCase()}:${targetId}:${contextId}`,
+      ]);
+      const existing = await client.query(
+        `
+        SELECT report_number
+        FROM reports
+        WHERE by_account_id = $1
+          AND LOWER(target_type) = LOWER($2)
+          AND target_id = $3
+          AND reference_id = $4
+          AND deleted_at IS NULL
+          AND LOWER(COALESCE(status, 'open')) <> ALL($5::text[])
+        LIMIT 1
+        `,
+        [reporterAccountId, targetType, String(targetId), contextId, [...CLOSED_REPORT_STATUSES]]
+      );
+      if (existing.rows.length) {
+        const number = existing.rows[0].report_number;
+        const error = new Error(
+          `You already reported this${number ? ` (${number})` : ''}. Staff are reviewing it.`
+        );
+        error.statusCode = 409;
+        error.code = 'REPORT_ALREADY_OPEN';
+        throw error;
+      }
+    }
+    const result = await client.query(
     `
     INSERT INTO reports (
       report_number,
@@ -407,11 +510,25 @@ async function createReport({
       referenceId || targetId,
       subjectSnapshot ? JSON.stringify(subjectSnapshot) : null,
     ]
-  );
-  const row = result.rows[0];
-  const { applyReportAutomations } = require('../lib/ModerationPolicy');
-  const enriched = await applyReportAutomations(row);
-  return mapReportRow({ ...row, priority: enriched.priority || row.priority });
+    );
+    row = result.rows[0];
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+  // The report is saved. Activity logging and alerts are best effort, so a failure there must
+  // not tell the member their report failed (they would file it again).
+  let enriched = row;
+  try {
+    const { applyReportAutomations } = require('../lib/ModerationPolicy');
+    enriched = await applyReportAutomations(row);
+  } catch (err) {
+    console.error('Report automations skipped:', err.message);
+  }
+  return mapReportRow({ ...row, priority: enriched?.priority || row.priority });
 }
 
 // Scoped disputes list. Filter by dispute type and status.
@@ -510,6 +627,8 @@ module.exports = {
   mapTicketRow,
   mapReportRow,
   mapDisputeRow,
+  adminOwnedExclusionSql,
+  isAdminOwnedTicket,
   fetchScopedTickets,
   scopedTicketCounts,
   scopedTicketCategoryBreakdown,

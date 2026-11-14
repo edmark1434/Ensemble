@@ -40,6 +40,7 @@ const {
     postMyTicketSatisfaction,
     getPublicTicketCatalog,
     getTicketContext,
+    getTicketTeamSearch,
     createMyTechnicalReport,
 } = require('../controllers/AdminTicketsControllers');
 
@@ -70,6 +71,7 @@ router.post('/update-personal-details', [checkSession, requireAuth],updatePerson
 // Support tickets (Postgres metadata + Mongo chat)
 router.get('/ticket-catalog', getPublicTicketCatalog);
 router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
+router.get('/ticket-teams', [checkSession, requireAuth], getTicketTeamSearch);
 router.post('/tickets', [checkSession, requireAuth], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);

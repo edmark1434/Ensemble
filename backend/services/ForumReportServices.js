@@ -20,6 +20,9 @@ function validateReportDetails(typeOrReason, description) {
   if (cleanDescription.length < 20) {
     throw reportError('Report details must contain at least 20 characters');
   }
+  if (cleanDescription.length > 2000) {
+    throw reportError('Report details must not exceed 2,000 characters');
+  }
 
   return { type: cleanType, description: cleanDescription };
 }

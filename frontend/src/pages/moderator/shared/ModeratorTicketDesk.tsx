@@ -55,6 +55,7 @@ const ACCENT_LABEL: Record<Accent, string> = {
   violet: "text-violet-400",
   emerald: "text-emerald-400",
   rose: "text-rose-400",
+  amber: "text-amber-400",
 };
 
 const ACCENT_SPIN: Record<Accent, string> = {
@@ -62,6 +63,7 @@ const ACCENT_SPIN: Record<Accent, string> = {
   violet: "text-violet-400",
   emerald: "text-emerald-400",
   rose: "text-rose-400",
+  amber: "text-amber-400",
 };
 
 const ACCENT_FOCUS: Record<Accent, string> = {
@@ -69,6 +71,7 @@ const ACCENT_FOCUS: Record<Accent, string> = {
   violet: "focus:border-violet-500/40",
   emerald: "focus:border-emerald-500/40",
   rose: "focus:border-rose-500/40",
+  amber: "focus:border-amber-500/40",
 };
 
 const ACCENT_VIEW: Record<Accent, string> = {
@@ -76,6 +79,7 @@ const ACCENT_VIEW: Record<Accent, string> = {
   violet: "bg-violet-500/15 text-white shadow-[inset_0_0_0_1px_rgba(139,92,246,0.35)]",
   emerald: "bg-emerald-500/15 text-white shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)]",
   rose: "bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]",
+  amber: "bg-amber-500/15 text-white shadow-[inset_0_0_0_1px_rgba(245,158,11,0.35)]",
 };
 
 const ACCENT_ICON: Record<Accent, string> = {
@@ -83,13 +87,34 @@ const ACCENT_ICON: Record<Accent, string> = {
   violet: "text-violet-300",
   emerald: "text-emerald-300",
   rose: "text-rose-300",
+  amber: "text-amber-300",
+};
+
+const ACCENT_PRIMARY_BTN: Record<Accent, string> = {
+  sky: "bg-sky-500 hover:bg-sky-400",
+  violet: "bg-violet-500 hover:bg-violet-400",
+  emerald: "bg-emerald-500 hover:bg-emerald-400",
+  rose: "bg-rose-500 hover:bg-rose-400",
+  amber: "bg-amber-500 hover:bg-amber-400",
+};
+
+const isAdminRole = (role: string | null | undefined) => {
+  const r = String(role || "").toLowerCase();
+  return r === "admin" || r === "administrator";
 };
 
 function scopeQueueTickets(rows: SupportTicket[], queueKey: keyof typeof QUEUE_TYPES) {
   if (queueKey === "support") return rows;
   // Hard-scope specialist queues so cross-queue tickets never appear in the desk.
   const allowed = new Set(QUEUE_TYPES[queueKey].map((t) => t.toLowerCase()));
-  return rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()));
+  return rows.filter((t) => {
+    if (!allowed.has(String(t.type || t.category || "").toLowerCase())) return false;
+    // Marketplace mirrors its API: a ticket escalated to (or handled by) Admin left this desk.
+    if (queueKey === "marketplace" && (isAdminRole(t.escalatedToRole) || isAdminRole(t.assignee?.role))) {
+      return false;
+    }
+    return true;
+  });
 }
 
 /** Queue shows every ticket in scope; Mine shows the ones assigned to the viewer. */
@@ -275,10 +300,7 @@ export default function ModeratorTicketDesk({
   }
 
   return (
-    <main
-      className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10"
-      style={{ animation: "fadeIn 420ms ease" }}
-    >
+    <main className="min-h-screen md:pl-[260px]">
       {selectedId !== null && (
         <ModeratorTicketDetailModal
           ticketId={selectedId}
@@ -302,44 +324,39 @@ export default function ModeratorTicketDesk({
         />
       )}
 
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className={`text-[11px] font-semibold uppercase tracking-wide ${ACCENT_LABEL[accent]}`}>
-            {roleLabel}
-          </p>
-          <h1 className="text-2xl font-bold text-white">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
+        <div className="flex flex-col gap-4 px-6 py-4 md:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${ACCENT_LABEL[accent]}`}>
+              {roleLabel}
+            </p>
+            <h1 className="text-xl font-bold text-white">{title}</h1>
+            {subtitle && <p className="mt-1 max-w-3xl text-xs text-zinc-500">{subtitle}</p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCreatingTicket(true)}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white ${ACCENT_PRIMARY_BTN[accent]}`}
+            >
+              <Plus className="h-4 w-4" />
+              Create ticket
+            </button>
+            <button
+              type="button"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 transition hover:border-white/20 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCreatingTicket(true)}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold text-white ${
-              accent === "violet"
-                ? "bg-violet-500 hover:bg-violet-400"
-                : accent === "emerald"
-                  ? "bg-emerald-500 hover:bg-emerald-400"
-                  : accent === "rose"
-                    ? "bg-rose-500 hover:bg-rose-400"
-                    : "bg-sky-500 hover:bg-sky-400"
-            }`}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Create ticket
-          </button>
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-        </div>
-      </div>
+      </header>
 
-      <div className="mb-4 inline-flex gap-1 rounded-xl border border-white/[0.08] bg-[#14151c] p-1">
+      <div className="space-y-4 px-6 py-6 md:px-8 md:py-8">
+      <div className="inline-flex gap-1 rounded-xl border border-white/[0.08] bg-[#14151c] p-1">
         {(
           [
             { id: "queue" as const, label: "Queue", icon: Ticket, count: tickets.length },
@@ -393,7 +410,7 @@ export default function ModeratorTicketDesk({
               <h2 className="text-sm font-semibold text-white">Ticket desk</h2>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Assign, escalate, and reply from the detail modal.
+              Open a ticket to claim it, reply, change its category, send it to another desk, or escalate it to Admin.
             </p>
           </div>
           <div className="relative w-full max-w-sm">
@@ -458,8 +475,15 @@ export default function ModeratorTicketDesk({
                 {filtered.map((t) => (
                   <tr
                     key={t.id}
+                    tabIndex={0}
                     onClick={() => setSelectedId(t.id)}
-                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedId(t.id);
+                      }
+                    }}
+                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03] focus:bg-white/[0.04] focus:outline-none"
                   >
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{t.number}</p>
@@ -491,6 +515,11 @@ export default function ModeratorTicketDesk({
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col gap-1">
+                        {t.isOverdue && (
+                          <span className="w-fit rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-200">
+                            Overdue
+                          </span>
+                        )}
                         {t.waitingForResponse && (
                           <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
                             Awaiting Reply
@@ -501,7 +530,7 @@ export default function ModeratorTicketDesk({
                             {formatEscalatedLabel(t)}
                           </span>
                         )}
-                        {!t.waitingForResponse && !t.isEscalated && (
+                        {!t.waitingForResponse && !t.isEscalated && !t.isOverdue && (
                           <span className="text-xs text-zinc-600">—</span>
                         )}
                       </div>
@@ -516,6 +545,7 @@ export default function ModeratorTicketDesk({
           )}
         </div>
       </section>
+      </div>
     </main>
   );
 }

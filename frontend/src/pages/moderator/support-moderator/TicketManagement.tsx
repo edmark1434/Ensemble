@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowRightLeft,
   CheckCircle2,
   Hand,
   Inbox,
@@ -9,10 +10,12 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldAlert,
   Ticket,
   UserCog,
+  X,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
 import { peekStaffGet, staffGet } from "@/lib/staffCache";
 import {
@@ -30,7 +33,11 @@ import {
   type TicketFilterState,
   type TicketFlagFilter,
 } from "@/pages/admin/ticketManagement/ticketFilterUtils";
-import { SUPPORT_TICKET_TYPES, TICKET_TYPE_OPTIONS, type SupportTicket } from "@/pages/admin/ticketManagement/ticketTypes";
+import {
+  SUPPORT_SUBGROUPS,
+  SUPPORT_TICKET_TYPES,
+  type SupportTicket,
+} from "@/pages/admin/ticketManagement/ticketTypes";
 import CreateTicketForUserModal from "@/pages/admin/ticketManagement/CreateTicketForUserModal";
 import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { Alert, SupportOverview } from "../shared/moderatorTypes";
@@ -107,6 +114,7 @@ function filtersFromSearchParams(params: URLSearchParams): TicketFilterState {
   const status = params.get("status");
   const search = params.get("search");
   const type = params.get("type");
+  const subgroup = params.get("subgroup");
   if (assignee === "assigned" || assignee === "unassigned" || assignee === "all") {
     next.assignee = assignee as TicketAssigneeFilter;
   }
@@ -123,16 +131,23 @@ function filtersFromSearchParams(params: URLSearchParams): TicketFilterState {
   if (status) next.status = status;
   if (search) next.search = search;
   if (type) next.type = type;
+  if (subgroup && SUPPORT_SUBGROUPS.some((group) => group.label === subgroup)) {
+    next.subgroup = subgroup;
+  }
   return next;
 }
 
 function hasTicketFilterParams(params: URLSearchParams) {
-  return ["assignee", "flag", "priority", "status", "search", "type"].some((k) => params.has(k));
+  return ["assignee", "flag", "priority", "status", "search", "type", "subgroup"].some((k) =>
+    params.has(k)
+  );
 }
 
 export default function SupportTicketManagement() {
   const { user } = useGlobalState();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [routingHintOpen, setRoutingHintOpen] = useState(true);
   const paramTab = searchParams.get("tab") as TabId | null;
   const valid: TabId[] = ["overview", "tickets", "mine", "assignments"];
   const initialTab: TabId =
@@ -203,16 +218,8 @@ export default function SupportTicketManagement() {
   const handleAlertClick = (alert: Alert) => {
     const action = alert.action;
     if (!action?.tab) return;
-    if (action.tab === "disputes") {
-      window.location.assign("/moderator/support/disputes");
-      return;
-    }
-    if (action.tab === "reports") {
-      window.location.assign("/moderator/support/reports");
-      return;
-    }
-    if (action.tab === "user-team") {
-      window.location.assign("/moderator/support/user-team");
+    if (action.tab === "disputes" || action.tab === "reports" || action.tab === "user-team") {
+      navigate(`/moderator/support/${action.tab}`);
       return;
     }
     if (action.ticketFilters) {
@@ -260,11 +267,13 @@ export default function SupportTicketManagement() {
     [myTickets, myFilters]
   );
 
+  // The backend only returns support-queue tickets; a ticket escalated into Support may still
+  // carry another desk's type until it is re-categorised, so include whatever is in the data.
   const ticketTypes = useMemo(() => {
     const fromData = [
       ...new Set(allTickets.map((t) => t.type || t.category).filter(Boolean) as string[]),
     ];
-    return [...new Set([...TICKET_TYPE_OPTIONS, ...fromData])];
+    return [...new Set([...SUPPORT_TICKET_TYPES, ...fromData])];
   }, [allTickets]);
 
   const recentActivity = data?.recentActivity || data?.ticketLog || [];
@@ -337,7 +346,7 @@ export default function SupportTicketManagement() {
             </p>
             <h1 className="text-xl font-bold text-white">Ticket management</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {summary.openTickets} open tickets · {summary.totalTickets} total · @
+              Support queue only · {summary.openTickets} open · {summary.totalTickets} total · @
               {user?.username || "support"}
             </p>
           </div>
@@ -414,6 +423,34 @@ export default function SupportTicketManagement() {
           </div>
         )}
 
+        {(tab === "tickets" || tab === "mine") && routingHintOpen && (
+          <div className="flex items-start gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3">
+            <ArrowRightLeft className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
+            <div className="min-w-0 flex-1 text-sm text-sky-100/90">
+              <p className="font-medium text-sky-100">Misfiled ticket? Move it instead of answering it.</p>
+              <p className="mt-1 text-xs leading-relaxed text-sky-100/70">
+                Open the ticket and use <span className="font-medium text-sky-100">Move ticket</span> in the
+                sidebar. Pick another support type to re-categorise it here, or pick the Forum,
+                Marketplace or Jobs &amp; Gigs queue with its matching type to hand it to that desk — it
+                leaves this queue once moved. Use{" "}
+                <span className="inline-flex items-center gap-1 font-medium text-sky-100">
+                  <ShieldAlert className="h-3 w-3" />
+                  Escalate to Admin
+                </span>{" "}
+                for anything only an Admin can action. Moving a ticket clears its handler.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRoutingHintOpen(false)}
+              className="rounded-lg p-1 text-sky-200/60 transition hover:bg-white/[0.05] hover:text-sky-100"
+              aria-label="Hide routing guidance"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {tab === "overview" && (
           <OverviewTab
             summary={summary}
@@ -424,8 +461,8 @@ export default function SupportTicketManagement() {
         )}
         {tab === "tickets" && (
           <TicketsTab
-            title="Ticket desk"
-            subtitle="Triage tickets across Support, Forums, Marketplace, and Jobs queues (Admin tickets stay with Admin)."
+            title="Support ticket queue"
+            subtitle="Account, billing, video editor, messaging, safety and appeals tickets. Forum, Marketplace, Jobs and Admin tickets stay with their own desks."
             tickets={filteredTickets}
             allTickets={allTickets}
             totalCount={allTickets.length}
@@ -439,14 +476,14 @@ export default function SupportTicketManagement() {
             filters={ticketFilters}
             onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
-            showQueue
+            showQueue={false}
             showAssigneeFilters
           />
         )}
         {tab === "mine" && (
           <TicketsTab
             title="My tickets"
-            subtitle="Tickets currently assigned to you. Reply, update status, or escalate from the detail modal."
+            subtitle="Support tickets currently assigned to you. Reply, update status, re-categorise or escalate from the ticket."
             tickets={filteredMyTickets}
             allTickets={myTickets}
             totalCount={myTickets.length}
@@ -488,11 +525,12 @@ function OverviewTab({
 }) {
   const typeChart = charts.ticketTypes || charts.ticketCategories;
   const priorityChart = charts.openByPriority || charts.priorityMix;
+  const groupChart = charts.supportGroups || [];
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <SummaryCard label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} total filed`} />
+        <SummaryCard label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} support tickets filed`} />
         <SummaryCard label="Unassigned" value={summary.unassignedTickets} sub="Need a designated handler" />
         <SummaryCard label="High priority" value={summary.highPriorityTickets} sub="Open and urgent" />
         <SummaryCard
@@ -547,15 +585,25 @@ function OverviewTab({
         <ChartCard>
           <VerticalBarChart
             title="Tickets by type"
+            subtitle="Support catalog types"
             data={typeChart.map((c) => ({ label: c.label, value: c.value }))}
             color="#38bdf8"
           />
         </ChartCard>
         <ChartCard>
-          <HorizontalBarChart
-            title="Open tickets by priority"
-            data={priorityChart.map((p) => ({ label: p.label, value: p.value }))}
-          />
+          {groupChart.length ? (
+            <HorizontalBarChart
+              title="Open tickets by support group"
+              data={groupChart.map((g) => ({ label: g.label, value: g.value }))}
+              colorFrom="#0ea5e9"
+              colorTo="#38bdf8"
+            />
+          ) : (
+            <HorizontalBarChart
+              title="Open tickets by priority"
+              data={priorityChart.map((p) => ({ label: p.label, value: p.value }))}
+            />
+          )}
         </ChartCard>
       </div>
 
@@ -665,7 +713,7 @@ function TicketsTab({
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Open tickets" value={summary.openTickets} sub="Active support queue" />
+        <SummaryCard label="Open tickets" value={summary.openTickets} sub="Support queue only" />
         <SummaryCard label="Unassigned" value={summary.unassignedTickets} sub="Need a designated handler" />
         <SummaryCard label="High priority" value={summary.highPriorityTickets} sub="Open and urgent" />
         <SummaryCard
@@ -713,7 +761,7 @@ function TicketsTab({
         />
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[1060px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="px-5 py-3 font-medium">Ticket</th>
@@ -723,7 +771,8 @@ function TicketsTab({
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Handler</th>
                 <th className="px-4 py-3 font-medium">Flags</th>
-                <th className="px-5 py-3 font-medium">Updated</th>
+                <th className="px-4 py-3 font-medium">Updated</th>
+                <th className="px-5 py-3 text-right font-medium">Route</th>
               </tr>
             </thead>
             <tbody>
@@ -786,12 +835,26 @@ function TicketsTab({
                       )}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-zinc-500">{formatDateTime(t.updatedAt)}</td>
+                  <td className="px-4 py-3.5 text-xs text-zinc-500">{formatDateTime(t.updatedAt)}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenTicket(t.id);
+                      }}
+                      title="Open the ticket to re-categorise it, move it to another queue, or escalate to Admin"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-100"
+                    >
+                      <ArrowRightLeft className="h-3 w-3" />
+                      Move
+                    </button>
+                  </td>
                 </tr>
               ))}
               {tickets.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
+                  <td colSpan={9} className="px-5 py-16 text-center text-sm text-zinc-500">
                     {emptyHint}
                   </td>
                 </tr>

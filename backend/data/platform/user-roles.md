@@ -1,32 +1,29 @@
 # Ensemble User Ecosystem and Roles
 
-Ensemble is a premier platform connecting high-end video production talent with clients. To facilitate this marketplace, users fall into one of five distinct roles based on their authentication status, intent, and permissions.
+Route: `/landing/AboutUs#roles`
 
-## 1. Guests (The Window Shoppers)
-* **Status:** Unauthenticated (Not logged in).
-* **Role:** They are greeted by the "Hey Guest!" banner and can freely browse the public-facing areas of the platform. This includes viewing the discovery feed, reading job postings, exploring the asset library, and viewing public forum discussions.
-* **Limitations:** Guests cannot apply for jobs, make purchases, or post content. They must create an account to take any action.
+Every member on Ensemble uses a single unified account that can switch freely between creating, hiring, working, and selling, subject to Identity Verification (KYC) for financial and contract actions.
 
-## 2. Enthusiasts
-* **Status:** Authenticated.
-* **Role:** The hobbyists, learners, and independent creators. They use the platform for personal projects, hobbies, and exploration rather than earning freelance income.
-* **Activity:** They use the built-in video editor to practice and create. They browse the forums to learn techniques. Crucially, they actively **spend money** by buying premium assets (templates, effects) or purchasing "Top Services" to elevate their personal projects.
+## Guests
 
-## 3. Freelancers
-* **Status:** Authenticated.
-* **Role:** The professional creative talent and video editors.
-* **Activity:** They use the platform to scale their craft and earn income. They actively apply for open job postings, submit proposals to clients, and list their own "Top Services" for Clients and Enthusiasts to purchase.
+Unauthenticated visitors can browse public landing pages, read the FAQ, view public discovery feeds, browse open job postings and services, explore the asset library, and read public forum discussions. Guests cannot apply for jobs, order services, buy assets, post in forums, or open support tickets until they sign up and sign in.
 
-## 4. Clients
-* **Status:** Authenticated.
-* **Role:** The buyers and employers.
-* **Activity:** Brands, agencies, or content creators who need video production work done. They inject opportunities into the platform by posting job listings (e.g., "Need an editor for a YouTube video") and hiring Freelancers to execute those projects.
+## Enthusiasts and Creators
 
-## 5. Platform Staff (Internal)
-The internal team that manages the health, safety, and quality of the platform.
+Signed-in users who focus on personal or hobby projects can use the browser video editor, participate in community forums, and purchase assets or services to enhance their videos.
 
-* **Admins:** Have absolute, top-level control over the entire platform, user accounts, and system settings.
-* **Support Moderators:** The frontline team handling user support tickets, account issues, and general platform assistance.
-* **Marketplace Moderators:** Quality control for the "Discovery" feed, "Top Services," and the "Asset Library." They ensure listed services and assets meet the platform's high-end standards.
-* **Jobs N Gigs Moderators:** Oversee the job board to prevent spam, scams, or low-quality job postings, ensuring a safe environment for Freelancers and Clients.
-* **Forum Moderators:** Monitor community discussions, enforce community guidelines, and keep the forums civil and helpful.
+## Freelancers
+
+Creators who offer their skills for paid work can apply to open job postings (individually or as part of a team), publish packaged 3-tier services (Gigs), deliver milestones through escrow-backed contracts, and withdraw earned credits after KYC verification.
+
+## Clients
+
+Individuals, brands, and agencies seeking video or creative work can post job briefs, shortlist and approve proposals, order packaged services, fund milestone escrow, review deliverables, and manage contracts or team workspaces.
+
+## Asset Creators
+
+Creators can list Template Videos, Bundles, Images, Videos, and Audios on the Asset Marketplace to earn credit payouts whenever buyers purchase a license.
+
+## Platform Support and Moderation Team
+
+Ensemble is supported by staff and specialist moderators across Support, Forums, Marketplace, and Jobs & Gigs who review reports, resolve disputes, verify eligibility, and respond to tickets submitted through `/support/ticket`.

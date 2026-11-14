@@ -146,42 +146,42 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
           ? Array.from({ length: 3 }).map((_, idx) => (
               <div
                 key={idx}
-                className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 animate-pulse"
+                className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 overflow-hidden animate-pulse"
               >
-                <div>
-                  {/* Thumbnail Skeleton */}
-                  <div className="mb-3 h-40 w-full rounded-xl bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-44 sm:h-48 w-full bg-gray-200 dark:bg-zinc-800 border-b border-gray-100 dark:border-white/5 shrink-0" />
+                <div className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    {/* Badges Skeleton */}
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
+                      <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                    </div>
 
-                  {/* Badges Skeleton */}
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
-                    <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                    {/* Price Skeleton */}
+                    <div className="mb-2 h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
+
+                    {/* Title Skeleton */}
+                    <div className="mb-1.5 h-4 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
+
+                    {/* Description Skeleton */}
+                    <div className="mb-1 h-3 w-full rounded bg-gray-200 dark:bg-zinc-800" />
+                    <div className="mb-3 h-3 w-2/3 rounded bg-gray-200 dark:bg-zinc-800" />
+
+                    {/* Skills Skeleton */}
+                    <div className="flex gap-1.5 mb-1">
+                      <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                      <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                    </div>
                   </div>
 
-                  {/* Price Skeleton */}
-                  <div className="mb-2 h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
-
-                  {/* Title Skeleton */}
-                  <div className="mb-1.5 h-4 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
-
-                  {/* Description Skeleton */}
-                  <div className="mb-1 h-3 w-full rounded bg-gray-200 dark:bg-zinc-800" />
-                  <div className="mb-3 h-3 w-2/3 rounded bg-gray-200 dark:bg-zinc-800" />
-
-                  {/* Skills Skeleton */}
-                  <div className="flex gap-1.5 mb-1">
+                  {/* Footer Skeleton */}
+                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-zinc-800" />
+                      <div className="h-3 w-20 rounded bg-gray-200 dark:bg-zinc-800" />
+                    </div>
                     <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
-                    <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
                   </div>
-                </div>
-
-                {/* Footer Skeleton */}
-                <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-zinc-800" />
-                    <div className="h-3 w-20 rounded bg-gray-200 dark:bg-zinc-800" />
-                  </div>
-                  <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
                 </div>
               </div>
             ))
@@ -205,11 +205,9 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                     navigate(`/gigs/services/${gig.id}/page`);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
-                  className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none"
+                  className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none"
                 >
-                  <div>
-                    {/* Thumbnail Image */}
-                    <div className="relative mb-3 h-40 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
+                  <div className="relative h-44 sm:h-48 w-full overflow-hidden border-b border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900 shrink-0">
                       <img
                         src={gig.thumbnail}
                         alt={gig.title}
@@ -308,8 +306,11 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                       )}
                     </div>
 
-                    {/* Badges & Slots on Same Row */}
-                    <div className="mb-2 flex items-center justify-between gap-1.5">
+                    {/* Card Content */}
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        {/* Badges & Slots on Same Row */}
+                        <div className="mb-2 flex items-center justify-between gap-1.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span
                           className={`relative overflow-hidden rounded border px-2 py-0.5 text-[10px] font-bold ${
@@ -464,6 +465,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                       <span>{formatTimeAgo(gig.postedAt).replace(/^about\s+/i, "")}</span>
                     </div>
                   </div>
+                </div>
                 </div>
               );
             })}

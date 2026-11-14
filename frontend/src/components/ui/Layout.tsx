@@ -42,15 +42,16 @@ const Layout = () => {
   const initializeChat = useChatState((state) => state.initialize);
   useRealtimeNotifications();
 
-  // Auto-collapse sidebar when viewport is narrow (< 1024px)
+  // Auto-collapse sidebar when viewport is narrow (< 1280px / xl breakpoint)
   useEffect(() => {
     let wasAutoCollapsed = false;
     let prevWidth = window.innerWidth;
+    const COLLAPSE_BREAKPOINT = 1280;
 
     const handleResize = () => {
       const currentWidth = window.innerWidth;
-      const wentNarrow = prevWidth >= 1024 && currentWidth < 1024;
-      const wentWide = prevWidth < 1024 && currentWidth >= 1024;
+      const wentNarrow = prevWidth >= COLLAPSE_BREAKPOINT && currentWidth < COLLAPSE_BREAKPOINT;
+      const wentWide = prevWidth < COLLAPSE_BREAKPOINT && currentWidth >= COLLAPSE_BREAKPOINT;
       prevWidth = currentWidth;
 
       const currentCollapsed = useGlobalState.getState().isSidebarCollapsed;
@@ -65,7 +66,7 @@ const Layout = () => {
     };
 
     // Auto-collapse on initial mount if screen is already narrow
-    if (window.innerWidth < 1024 && !useGlobalState.getState().isSidebarCollapsed) {
+    if (window.innerWidth < COLLAPSE_BREAKPOINT && !useGlobalState.getState().isSidebarCollapsed) {
       setIsSidebarCollapsed(true);
       wasAutoCollapsed = true;
     }
@@ -290,7 +291,7 @@ const Layout = () => {
 
   return (
     <div
-      className={`flex relative w-full ${
+      className={`flex relative w-full overflow-x-clip ${
         isInboxPage ? "h-screen overflow-hidden" : "min-h-screen"
       } print:min-h-0 print:block print:w-full print:m-0 print:p-0`}
     >
@@ -298,7 +299,7 @@ const Layout = () => {
         <UserNav />
       </div>
       <main
-        className={`flex-1 transition-all duration-300 min-w-0 flex flex-col print:p-0 print:m-0 print:w-full print:block ${
+        className={`flex-1 transition-[padding-left] duration-300 min-w-0 flex flex-col overflow-x-clip print:p-0 print:m-0 print:w-full print:block ${
           isInboxPage ? "h-screen overflow-hidden" : "min-h-screen"
         }`}
         style={{ paddingLeft: marginLeft }}

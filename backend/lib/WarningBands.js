@@ -150,9 +150,9 @@ function actionAllowed(action, bandId) {
   return matrix[bandId] !== false;
 }
 
-function warningBandError(message, code = 'WARNING_RESTRICTED') {
+function warningBandError(message, code = 'WARNING_RESTRICTED', statusCode = 403) {
   const error = new Error(message);
-  error.statusCode = 403;
+  error.statusCode = statusCode;
   error.code = code;
   return error;
 }

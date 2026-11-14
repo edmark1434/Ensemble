@@ -1,44 +1,43 @@
-# Accounts, Profiles, Settings, and Verification
+# Accounts, Onboarding, Profile, and Settings
 
-Primary routes: `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/settings`, `/profile`, `/verification`
+Routes: `/signup`, `/login`, `/forgot-password`, `/reset-password`, `/settings`, `/profile`, `/account-verification-status`
 
-Route source: `frontend/src/App.tsx`
+## Creating an account and signing in
 
-Related sources:
+- **Sign up (`/signup`):** New users create an account using email and password or Google sign-in. New accounts complete email verification (`/setup/verify-email` or `/verify-email`) and onboarding steps including uploading a profile photo (`/setup/upload-image`) and completing the onboarding survey (`/setup/survey`).
+- **Sign in (`/login`):** Existing members sign in with their email/credentials or Google sign-in.
+- **Password recovery:** If you forget your password, request a reset link on `/forgot-password` and set a new password via `/reset-password`.
 
-- `frontend/src/pages/auth/Loginpage.tsx`
-- `frontend/src/pages/auth/Signuppage.tsx`
-- `frontend/src/pages/auth/ForgotPasswordPage.tsx`
-- `frontend/src/pages/auth/ResetPasswordPage.tsx`
-- `frontend/src/components/nav/Settings/user_settings.tsx`
-- `frontend/src/pages/user/9_verification/Verification.tsx`
+If your account is banned or locked, signing in directs you to `/account/appeal` to review your record and submit an appeal.
 
-## Account access
+## Profile and completion checklist
 
-- Existing users sign in at `/login`.
-- New users begin registration at `/signup`.
-- Email verification routes include `/verify-email` and `/setup/verify-email`.
-- Password recovery begins at `/forgot-password` and continues at `/reset-password` using the issued recovery information.
-- Google authentication is offered through the authentication pages when Firebase OAuth is configured.
+Route: `/profile`
 
-## Onboarding
+Your profile displays your avatar, banner, tagline, bio, introduction, skills, portfolio items, reviews, Platform Merit ring, standing chips (if any), and up to 5 pinned badges.
 
-Authenticated onboarding uses personal-details, profile-image, and survey routes:
+Completing the profile setup checklist (avatar, banner, tagline, bio, introduction, planned budget, at least 3 skills, and a portfolio item) improves how your profile presents to clients and freelancers. Completing the required profile setup items also unlocks the **Profile Complete** badge on `/notifications`.
 
-- `/setup/personal-details`
-- `/setup/upload-image`
-- `/setup/survey`
+## Account settings
 
-## Profile and settings
+Route: `/settings`
 
-- `/profile` displays the signed-in user's profile.
-- `/profile/:id` displays a selected profile.
-- `/settings` contains account, subscription, wallet, help, display, and legal settings sections.
+The Settings screen is organized into focused sections:
 
-## Verification
+- **Account Details:** Update your username, address, email, password, or personal details.
+- **Wallet:** View your Account Wallet and Escrow balances, transfer credits to another user, or request a payout to GCash or Maya (see the Credits, Wallet, and Transactions guide).
+- **Subscription:** View your active membership plan, trial status, renewal date, or manage cancellation and plan upgrades on `/credits-subscriptions`.
+- **Display:** Switch between light and dark theme and adjust display preferences.
+- **Account Record / Violations:** View your current Platform Merit, standing, active or past warnings, and timeouts.
+- **Help and Legal:** Launch the interactive Platform Walkthrough, open the FAQ (`/landing/FAQ`), submit a ticket (`/support/ticket`), or review legal policies.
 
-- `/verification` starts or displays the personal verification workflow.
-- `/account-verification-status` shows verification status.
-- `/teams/:id/business-verification` handles business verification for a selected team.
+## Deactivating and reactivating your account
 
-Verification and financial actions are account-specific. The support assistant must not claim an account was verified or modified without an authorized backend operation.
+You can voluntarily deactivate your account from the Deactivate section of `/settings`. Deactivation is not a punishment and does not lower Platform Merit:
+
+- Your profile is hidden from other members in search and profiles, while active jobs, messages, and contracts remain in place.
+- Reactivation is locked for a **72-hour cooldown** after deactivation, with a countdown showing when you can turn the account back on.
+
+## Account security tips
+
+Never share your password, verification codes, identity documents, or private payment details in chat, forums, or support attachments. If you notice suspicious logins or unauthorized changes, submit a **Sign-in and password** or **Account compromised** ticket on `/support/ticket`.

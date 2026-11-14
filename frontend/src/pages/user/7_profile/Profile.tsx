@@ -25,7 +25,7 @@ import { ProfileSetupWidget } from "./Displays/ProfileSetupWidget.tsx";
 import { MainBody } from "./Displays/Body/MainBody.tsx";
 import confetti from "canvas-confetti";
 import { Award } from "lucide-react";
-import type { TabType } from "./Displays/Body/MainBody.tsx";
+import { normalizeProfileTab, type TabType } from "./Displays/Body/MainBody.tsx";
 import type { PortfolioItem } from "./Displays/Body/Profile_Portfolio.tsx";
 
 // Badges Registry & Type Infrastructure
@@ -165,7 +165,10 @@ function standingWithMerit(standing?: PublicStanding | null): PublicStanding {
 export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const locationHook = useLocation(); const [activeTab, setActiveTab] = useState<TabType>((new URLSearchParams(locationHook.search).get("tab") as TabType) || "introduction");
+  const locationHook = useLocation();
+  const [activeTab, setActiveTab] = useState<TabType>(
+    normalizeProfileTab(new URLSearchParams(locationHook.search).get("tab"))
+  );
 
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
@@ -276,6 +279,23 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       toast.success("Unfollowed user!");
     } catch (e: any) {
       toast.error(e.response?.data?.message || "Failed to unfollow user");
+    }
+  };
+
+  const handleSaveBudget = async (budgetCredits: number | null) => {
+    try {
+      const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
+      const saved = data?.data?.budget_credits ?? null;
+      setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
+      if (saved !== null && Number(saved) > 0) {
+        toast.success(`Planned budget updated to ${Number(saved).toLocaleString()} Credits!`);
+      } else {
+        toast.success("Planned budget removed.");
+      }
+    } catch (err: any) {
+      console.error("Failed to save budget:", err);
+      toast.error(err?.response?.data?.message || "Failed to update budget");
+      throw err;
     }
   };
 
@@ -1031,10 +1051,10 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30 overflow-x-clip w-full">
       <UserHeader pageTitle="Profile" />
 
-      <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
+      <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5 min-w-0 w-full overflow-x-clip">
 
         {String(userDetails?.status || "").toLowerCase() === "deactivated" && (
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
@@ -1052,11 +1072,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             completionScore={completionScore}
             completionSteps={completionSteps}
             getProgressColor={getProgressColor}
-            onSaveBudget={async (budgetCredits) => {
-              const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
-              const saved = data?.data?.budget_credits ?? null;
-              setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
-            }}
+            onSaveBudget={handleSaveBudget}
             currentBudget={userDetails?.budget_credits ?? null}
             onWalkthroughComplete={() => {
               if (completionScore === 100) {
@@ -1117,9 +1133,9 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         />
 
         {confirmedProfileId === id && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] min-w-0">
 
-          <div className="space-y-4 h-fit">
+          <div className="space-y-4 h-fit min-w-0">
             <RatingsBudgetSideSection_ProfileDisplay
               loading={loading}
               isOwner={isOwner}
@@ -1129,11 +1145,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0}
               freelancerReviews={Number(userDetails?.freelancer_service_count || 0) + Number(userDetails?.freelancer_job_count || 0)}
               budgetCredits={userDetails?.budget_credits ?? null}
-              onSaveBudget={async (budgetCredits) => {
-                const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
-                const saved = data?.data?.budget_credits ?? null;
-                setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
-              }}
+              onSaveBudget={handleSaveBudget}
             />
             <BadgeSideSection_ProfileDisplay
               loading={loading}
@@ -1154,7 +1166,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <MainBody
               loading={loading}
               activeTab={activeTab}
@@ -1162,6 +1174,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
                 setActiveTab(tab);
               }}
               portfolioItems={portfolioItems}
+              galleryCount={galleryCount}
               services={services}
               isOwner={isOwner}
               onUploadPDF={handleUploadResume}

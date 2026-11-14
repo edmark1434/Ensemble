@@ -34,10 +34,29 @@ const JOBS_REPORT_TYPES = Object.freeze([
   'team_project',
 ]);
 
+/**
+ * Everything that is nobody else's platform: accounts, direct messages, teams and the
+ * technical problems raised from a ticket. Support still has an "all platform" view — this is
+ * the default scope for its desk, not a hard permission boundary.
+ */
+const SUPPORT_REPORT_TYPES = Object.freeze([
+  'user',
+  'account',
+  'profile',
+  'chat_message',
+  'message',
+  'technical_problem',
+  'team',
+  'team_member',
+  'appeal',
+  'other',
+]);
+
 const REPORT_QUEUE_SCOPES = Object.freeze({
   forum: FORUM_REPORT_TYPES,
   marketplace: MARKETPLACE_REPORT_TYPES,
   jobs: JOBS_REPORT_TYPES,
+  support: SUPPORT_REPORT_TYPES,
 });
 
 const CLOSED_REPORT_STATUSES = Object.freeze([
@@ -72,6 +91,7 @@ module.exports = {
   FORUM_REPORT_TYPES,
   MARKETPLACE_REPORT_TYPES,
   JOBS_REPORT_TYPES,
+  SUPPORT_REPORT_TYPES,
   REPORT_QUEUE_SCOPES,
   CLOSED_REPORT_STATUSES,
   closedReportStatusListSql,

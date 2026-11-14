@@ -264,9 +264,10 @@ function buildHistory(accountId, historyMap, activityMap = new Map()) {
   const caution =
     data.violations.some((v) => v.active !== false) || activeDisputes.length > 0;
   const activity = activityMap.get(accountId) || [];
+  // Each row weighs 1–10 (missing counts as 1), exactly like sumActiveWarningPoints.
   const activePoints = data.violations
     .filter((v) => v.active)
-    .reduce((sum, v) => sum + Number(v.points || 0), 0);
+    .reduce((sum, v) => sum + Math.min(10, Math.max(1, Math.round(Number(v.points) || 1))), 0);
 
   return {
     summaryLabel: caution
@@ -1179,15 +1180,62 @@ function sanctionReason(options = {}) {
   return reason;
 }
 
+const FULL_STANDING_ROLES = new Set(['Admin', 'Support Moderator']);
+
+function standingError(message, statusCode = 409) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+/**
+ * Status changes must make sense from where the account is now, and a ban is Admin and
+ * Support's to change. Without this, "unsuspend" or "unlock" turned any account Active —
+ * so a specialist moderator who cannot ban could still lift a ban.
+ */
+function assertStatusTransition({ key, currentStatus, actorRole }) {
+  const current = String(currentStatus || 'Active').toLowerCase();
+  const fullRole = FULL_STANDING_ROLES.has(String(actorRole || ''));
+  const lifts = {
+    unsuspend: { from: 'suspended', message: 'This account is not suspended, so there is no suspension to lift.' },
+    unlock: { from: 'locked', message: 'This account is not locked, so there is nothing to unlock.' },
+    unban: { from: 'banned', message: 'This account is not banned, so there is no ban to lift.' },
+  };
+  if (lifts[key] && current !== lifts[key].from) {
+    throw standingError(lifts[key].message);
+  }
+  if (current === 'banned' && !fullRole && !['ban', 'banned'].includes(key)) {
+    throw standingError('This account is banned. Only Admin or Support can change a ban.', 403);
+  }
+}
+
 async function updateAccountStatus(accountId, actionOrStatus, staffId = null, options = {}) {
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
-  if (key === 'suspend' || key === 'suspended') {
-    const { assertCanSuspendTarget } = require('../lib/SuspendGuards');
-    await assertCanSuspendTarget({
+  const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
+  const guardAction = ['ban', 'banned'].includes(key)
+    ? 'ban'
+    : ['lock', 'locked'].includes(key)
+      ? 'lock'
+      : ['suspend', 'suspended'].includes(key)
+        ? 'suspend'
+        : ['timeout', 'forum_timeout'].includes(key)
+          ? 'timeout'
+          : 'restore';
+  // System actions (no staff) such as the dispute ban path still pass their staff id.
+  if (staffId || options.actorAccountId) {
+    await assertCanSanctionTarget({
       actorStaffId: staffId,
       actorAccountId: options.actorAccountId || null,
       targetAccountId: accountId,
+      action: guardAction,
+    });
+  }
+  if (!['timeout', 'forum_timeout', 'clear_timeout', 'clear-timeout'].includes(key)) {
+    assertStatusTransition({
+      key,
+      currentStatus: account.status,
+      actorRole: staffId ? await staffRoleOf(staffId) : 'Admin',
     });
   }
   const { resolveStandingOptions } = require('../services/PunishmentDefServices');
@@ -1291,21 +1339,26 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const suspensionEndsAt = status === 'Suspended' ? sanctionEndsAt(resolvedOptions, 'temporary') : null;
   const banEndsAt = status === 'Banned' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const lockEndsAt = status === 'Locked' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
-  await pool.query(
+  const { restingStatusSql } = require('../lib/AccountRestriction');
+  // Lifting a penalty returns a member who had deactivated the account to Deactivated.
+  const saved = await pool.query(
     `
     UPDATE accounts
-    SET status = $1,
+    SET status = CASE WHEN $1::text = 'Active' THEN ${restingStatusSql()} ELSE $1::text END,
         suspension_ends_at = $2,
         ban_ends_at = $3,
         lock_ends_at = $4
     WHERE account_id = $5
+    RETURNING status
     `,
     [status, suspensionEndsAt, banEndsAt, lockEndsAt, accountId]
   );
+  const savedStatus = saved.rows[0]?.status || status;
+  const backToDeactivated = savedStatus !== status;
 
   await recordAccountActivity({
     accountId,
-    action: `Account status set to ${status}: ${reason}`,
+    action: `Account status set to ${savedStatus}: ${reason}`,
     eventCode: 'ACCOUNT_STATUS_CHANGED',
     referenceTable: 'accounts',
     referencePrefix: 'ACC',
@@ -1313,7 +1366,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     actorStaffId: staffId,
     metadata: {
       previousStatus: account.status,
-      status,
+      status: savedStatus,
       action: key,
       suspensionEndsAt,
       banEndsAt,
@@ -1325,21 +1378,37 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     },
   });
 
-  try {
-    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
-    await notifyAccountStatusChanged(accountId, {
-      status,
-      previousStatus: account.status,
-      action: key,
-      actorStaffId: staffId,
-      reason,
-    });
-  } catch (notifyErr) {
-    console.warn('Failed to broadcast account status change:', notifyErr.message);
+  // A deactivated member is not told the account is "Active"; they reactivate it themselves.
+  if (!backToDeactivated) {
+    try {
+      const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+      await notifyAccountStatusChanged(accountId, {
+        status,
+        previousStatus: account.status,
+        action: key,
+        actorStaffId: staffId,
+        reason,
+      });
+    } catch (notifyErr) {
+      console.warn('Failed to broadcast account status change:', notifyErr.message);
+    }
   }
 
+  // A banned account's open jobs, gigs and listings close, so no one keeps applying to,
+  // ordering from or buying from it. Every ban path (Users desk, dispute ban, report ban)
+  // comes through here. The ban is already saved; clean-up problems are reported, not fatal.
+  let banCleanup = null;
+  if (status === 'Banned') {
+    try {
+      const { closeBannedAccountListings } = require('../services/BanCleanupServices');
+      banCleanup = await closeBannedAccountListings(accountId, { staffId });
+    } catch (cleanupErr) {
+      console.error('Ban clean-up failed:', cleanupErr.message);
+      banCleanup = { failures: [{ step: 'all', id: null, message: cleanupErr.message }] };
+    }
+  }
 
-  return { accountId, status, previousStatus: account.status, suspensionEndsAt };
+  return { accountId, status: savedStatus, previousStatus: account.status, suspensionEndsAt, banCleanup };
 }
 
 async function updateAccountVerification(accountId, action, staffId, _options = {}) {
@@ -1482,124 +1551,87 @@ async function updateAccountVerification(accountId, action, staffId, _options = 
   };
 }
 
-async function adjustAccountCredits(accountId, amount, _note, staffId) {
+async function adjustAccountCredits(accountId, amount, _note, staffId, { referenceTable = null, referenceId = null } = {}) {
   await assertAccountExists(accountId);
   const delta = Number(amount);
-  if (!Number.isFinite(delta) || delta === 0) throw new Error('Credit amount must be a non-zero number');
+  if (!Number.isInteger(delta) || delta === 0) {
+    throw new Error('Credit amount must be a whole, non-zero number');
+  }
+  if (Math.abs(delta) > 1000000) throw new Error('Credit adjustments are limited to 1,000,000 at a time');
+  // No staff member adjusts their own credits, and staff accounts are Admin's to adjust.
+  if (staffId) {
+    const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+    await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: accountId, action: 'credits' });
+  }
 
   const wallet = await getAccountWallet(accountId);
   if (!wallet) throw new Error('No account wallet found for this account');
 
-  const nextBalance = Number(wallet.balance_credits || 0) + delta;
-  if (nextBalance < 0) throw new Error('Insufficient wallet balance for this adjustment');
-
-  await pool.query(`UPDATE wallets SET balance_credits = $1 WHERE wallet_id = $2`, [
-    nextBalance,
-    wallet.wallet_id,
-  ]);
-
-  // Admin grants/deductions are always Fund Transfer (note is UI-only for now).
-  await pool.query(
-    `
-    INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-    VALUES ($1, $2, 'Completed', $3, $3)
-    `,
-    [CREDIT_TRANSACTION_TYPE.FUND_TRANSFER, Math.abs(delta), wallet.wallet_id]
-  );
-
-  return {
-    accountId,
-    walletId: wallet.wallet_id,
-    balanceCredits: nextBalance,
-    adjustedBy: delta,
-    staffId: staffId || null,
-  };
-}
-
-async function freezeAccountCredits(accountId, freeze = true, staffId = null) {
-  await assertAccountExists(accountId);
-  const wallet = await getAccountWallet(accountId);
-  if (!wallet) throw new Error('No account wallet found for this account');
-
-  const balance = Number(wallet.balance_credits || 0);
-  const frozen = Number(wallet.frozen_balance_credits || 0);
-
-  if (freeze) {
-    if (balance <= 0) throw new Error('No available credits to freeze');
-    await pool.query(
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Relative and conditional: a payout or purchase landing at the same moment is kept,
+    // and a deduction can never take the balance below zero.
+    const updated = await client.query(
       `UPDATE wallets
-       SET balance_credits = 0,
-           frozen_balance_credits = $1
-       WHERE wallet_id = $2`,
-      [frozen + balance, wallet.wallet_id]
+       SET balance_credits = balance_credits + $1
+       WHERE wallet_id = $2
+         AND balance_credits + $1 >= 0
+       RETURNING balance_credits`,
+      [delta, wallet.wallet_id]
     );
-    await pool.query(
+    if (!updated.rows.length) throw new Error('Insufficient wallet balance for this adjustment');
+
+    // Admin grants/deductions are always Fund Transfer (note is UI-only for now).
+    await client.query(
       `
-      INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-      VALUES ($1, $2, 'Completed', $3, $3)
+      INSERT INTO credit_transactions (
+        type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+      )
+      VALUES ($1, $2, 'Completed', $3, $3, $4, $5)
       `,
-      [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, balance, wallet.wallet_id]
+      [CREDIT_TRANSACTION_TYPE.FUND_TRANSFER, Math.abs(delta), wallet.wallet_id, referenceTable, referenceId]
     );
-    await recordAccountActivity({
-      accountId,
-      action: `Credits frozen (${balance.toLocaleString()} credits)`,
-      eventCode: 'CREDITS_FROZEN',
-      referenceTable: 'wallets',
-      referencePrefix: 'WAL',
-      referenceId: wallet.wallet_id,
-      actorStaffId: staffId,
-      metadata: { amount: balance, frozen: true },
-    });
+    await client.query('COMMIT');
+
     return {
       accountId,
       walletId: wallet.wallet_id,
-      balanceCredits: 0,
-      frozenBalanceCredits: frozen + balance,
-      frozen: true,
+      balanceCredits: Number(updated.rows[0].balance_credits),
+      adjustedBy: delta,
+      staffId: staffId || null,
     };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+}
 
-  if (frozen <= 0) throw new Error('No frozen credits to restore');
-  await pool.query(
-    `UPDATE wallets
-     SET balance_credits = $1,
-         frozen_balance_credits = 0
-     WHERE wallet_id = $2`,
-    [balance + frozen, wallet.wallet_id]
-  );
-  await pool.query(
-    `
-    INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-    VALUES ($1, $2, 'Completed', $3, $3)
-    `,
-    [CREDIT_TRANSACTION_TYPE.ESCROW_RELEASE, frozen, wallet.wallet_id]
-  );
-  await recordAccountActivity({
-    accountId,
-    action: `Credits unfrozen (${frozen.toLocaleString()} credits)`,
-    eventCode: 'CREDITS_UNFROZEN',
-    referenceTable: 'wallets',
-    referencePrefix: 'WAL',
-    referenceId: wallet.wallet_id,
-    actorStaffId: staffId,
-    metadata: { amount: frozen, frozen: false },
-  });
-  return {
-    accountId,
-    walletId: wallet.wallet_id,
-    balanceCredits: balance + frozen,
-    frozenBalanceCredits: 0,
-    frozen: false,
-  };
+/**
+ * Staff credit hold. The workflow (reason, end date, row lock, notice) lives in
+ * CreditHoldServices; this keeps the existing export for callers.
+ * Without a lock, the old version read the balance, then wrote an absolute value, so a
+ * purchase or payout landing in between was lost or minted.
+ */
+async function freezeAccountCredits(accountId, freeze = true, staffId = null, options = {}) {
+  const holds = require('../services/CreditHoldServices');
+  if (freeze) return holds.freezeAccountCredits(accountId, options, staffId);
+  return holds.unfreezeAccountCredits(accountId, { staffId, reason: options.reason, source: 'staff' });
 }
 
 async function warnAccount(accountId, { warningId, type, reason, points, expiresAt, duration, days, endsAt } = {}, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
+  const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: accountId, action: 'warn' });
+  const { assertWarnableAccount } = require('../services/WarningBandServices');
+  await assertWarnableAccount(accountId);
 
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
   const { resolveIssuedWarning } = require('../services/WarningDefServices');
-  const issued = await resolveIssuedWarning({ warningId, type, points });
+  const issued = await resolveIssuedWarning({ warningId, type, actorRole: await staffRoleOf(staffId) });
   const warnType = issued.type;
   const warnPoints = issued.points;
   const warnReason = String(reason || '').trim();
@@ -1686,6 +1718,9 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
 async function pardonAccount(accountId, staffId, { note } = {}) {
   const account = await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a pardon');
+  // No self-pardon, and another staff member's record is Admin's to clear.
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: accountId, action: 'pardon' });
 
   const client = await pool.connect();
   try {
@@ -1721,17 +1756,21 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
     ).catch(() => null);
 
     const previousStatus = account.status;
-    await client.query(
+    const { restingStatusSql } = require('../lib/AccountRestriction');
+    // A member who had deactivated the account goes back to Deactivated, not Active.
+    const restored = await client.query(
       `
       UPDATE accounts
-      SET status = 'Active',
+      SET status = ${restingStatusSql()},
           suspension_ends_at = NULL,
           ban_ends_at = NULL,
           lock_ends_at = NULL
       WHERE account_id = $1
+      RETURNING status
       `,
       [accountId]
     );
+    const nextStatus = restored.rows[0]?.status || 'Active';
 
     await recordAccountActivity({
       accountId,
@@ -1743,7 +1782,7 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       actorStaffId: staffId,
       metadata: {
         previousStatus,
-        status: 'Active',
+        status: nextStatus,
         violationsCleared: clearedViolations.rowCount || 0,
         note: note || null,
       },
@@ -1752,17 +1791,20 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
 
     await client.query('COMMIT');
 
-    try {
-      const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
-      await notifyAccountStatusChanged(accountId, {
-        status: 'Active',
-        previousStatus,
-        action: 'pardon',
-        reason: note || 'Account pardoned — violations cleared and status restored',
-        actorStaffId: staffId,
-      });
-    } catch (notifyErr) {
-      console.warn('Failed to broadcast pardon status change:', notifyErr.message);
+    // A deactivated member is not told the account is "Active"; they reactivate it themselves.
+    if (nextStatus === 'Active') {
+      try {
+        const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+        await notifyAccountStatusChanged(accountId, {
+          status: 'Active',
+          previousStatus,
+          action: 'pardon',
+          reason: note || 'Account pardoned — violations cleared and status restored',
+          actorStaffId: staffId,
+        });
+      } catch (notifyErr) {
+        console.warn('Failed to broadcast pardon status change:', notifyErr.message);
+      }
     }
 
     try {
@@ -1777,7 +1819,7 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       pardonId: pardonRes.rows[0].pardon_id,
       pardonedAt: pardonRes.rows[0].created_at,
       previousStatus,
-      status: 'Active',
+      status: nextStatus,
       violationsCleared: clearedViolations.rowCount || 0,
       note: note || null,
     };
@@ -1793,6 +1835,8 @@ async function rescindWarning(accountId, violationId, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to rescind a warning');
   if (!violationId) throw new Error('Warning id is required');
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: accountId, action: 'rescind' });
 
   const updated = await pool.query(
     `
@@ -1824,9 +1868,23 @@ async function rescindWarning(accountId, violationId, staffId) {
     },
   });
 
+  // The member is told their merit came back; otherwise a rescind is invisible to them.
   try {
     const { refreshWarningBand } = require('../services/WarningBandServices');
-    await refreshWarningBand(accountId);
+    const next = await refreshWarningBand(accountId);
+    const { createNotificationServices } = require('../services/NotificationServices');
+    const notification = await createNotificationServices({
+      account_id: accountId,
+      message: `A warning on your account (${row.type || 'warning'}) was rescinded. Your Platform Merit is now ${meritFromWarningPoints(next?.points ?? 0)}.`,
+      is_read: false,
+      reference_table: 'violations',
+      reference_prefix: 'WARNING_UP',
+      reference_path: '/profile',
+      reference_id: row.violation_id,
+    });
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
   } catch (err) {
     console.warn('Warning band refresh after rescind failed:', err.message);
   }

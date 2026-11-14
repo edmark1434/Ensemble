@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { LogOut } from "lucide-react";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
+import { auth } from "@/pages/firebase";
+import UserLogoutModal from "@/components/nav/user_logout_modal";
 
 function formatRemaining(ms: number) {
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -20,6 +25,26 @@ export default function DeactivatedAccountScreen() {
   const [now, setNow] = useState(() => Date.now());
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const navigate = useNavigate();
+  const clearUser = useGlobalState((state) => state.clearUser);
+
+  // Deactivated members had no way out of this screen; signing out is always allowed.
+  async function confirmSignOut() {
+    setConfirmLogout(false);
+    try {
+      await api.post("/api/users/logout");
+    } catch {
+      // The local session still has to close.
+    }
+    try {
+      await signOut(auth);
+    } catch {
+      // Firebase may already be signed out.
+    }
+    clearUser();
+    navigate("/login", { replace: true });
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -61,6 +86,7 @@ export default function DeactivatedAccountScreen() {
           <li>Members cannot find or open your profile.</li>
           <li>Staff and admins can still view it in platform view.</li>
           <li>Reactivate stays locked for 72 hours from the moment you turned the account off.</li>
+          <li>After you reactivate, you can deactivate again only after 7 days.</li>
         </ul>
         <p className="mt-3 text-sm font-medium text-gray-900 dark:text-zinc-200">
           {ready
@@ -76,7 +102,20 @@ export default function DeactivatedAccountScreen() {
         >
           {pending ? "Reactivating..." : "Reactivate"}
         </button>
+        <button
+          type="button"
+          onClick={() => setConfirmLogout(true)}
+          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
       </div>
+      <UserLogoutModal
+        isOpen={confirmLogout}
+        onClose={() => setConfirmLogout(false)}
+        onConfirm={() => void confirmSignOut()}
+      />
     </div>
   );
 }

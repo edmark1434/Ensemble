@@ -472,8 +472,54 @@ async function reverseModerationActivity(activityId, staffSession = null) {
   }
 
   if (code === 'ACCOUNT_STATUS_CHANGED') {
-    const restoreTo = meta.previousStatus || 'Active';
-    await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [restoreTo, accountId]);
+    const currentRes = await pool.query(
+      `SELECT status, type, deactivated_at FROM accounts WHERE account_id = $1`,
+      [accountId]
+    );
+    const current = currentRes.rows[0];
+    if (!current) throw new Error('Account not found');
+    // Only the change that is still in force can be undone. Reversing an old suspension on an
+    // account that has since been banned used to write the old status over the ban.
+    const changedTo = String(meta.status || '').trim().toLowerCase();
+    if (changedTo && String(current.status || '').trim().toLowerCase() !== changedTo) {
+      const err = new Error(
+        `The account has changed since this entry (it is now ${current.status || 'Active'}). Change its standing from the Users desk instead.`
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+    const member = String(current.type || '').toLowerCase() === 'user';
+    const resting = member && current.deactivated_at ? 'Deactivated' : 'Active';
+    let restoreTo = meta.previousStatus || 'Active';
+    if (String(restoreTo).toLowerCase() === 'active') restoreTo = resting;
+    // Bring a restored penalty back with the clock it had, so it still ends on its own.
+    const ends = { Suspended: null, Banned: null, Locked: null };
+    if (Object.prototype.hasOwnProperty.call(ends, restoreTo)) {
+      const prior = await pool.query(
+        `SELECT metadata
+         FROM account_activity
+         WHERE account_id = $1
+           AND event_code = 'ACCOUNT_STATUS_CHANGED'
+           AND created_at < $2
+           AND LOWER(COALESCE(metadata->>'status', '')) = LOWER($3)
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [accountId, activity.createdAt || new Date(), restoreTo]
+      );
+      const priorMeta = prior.rows[0]?.metadata || {};
+      const endsAt = priorMeta.suspensionEndsAt || priorMeta.banEndsAt || priorMeta.lockEndsAt || null;
+      if (endsAt && new Date(endsAt).getTime() <= Date.now()) {
+        restoreTo = resting; // That penalty would already have run out.
+      } else {
+        ends[restoreTo] = endsAt;
+      }
+    }
+    await pool.query(
+      `UPDATE accounts
+       SET status = $1, suspension_ends_at = $2, ban_ends_at = $3, lock_ends_at = $4
+       WHERE account_id = $5`,
+      [restoreTo, ends.Suspended || null, ends.Banned || null, ends.Locked || null, accountId]
+    );
     try {
       const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
       await notifyAccountStatusChanged(accountId, {
@@ -536,30 +582,13 @@ async function reverseModerationActivity(activityId, staffSession = null) {
       );
     }
   } else if (code === 'CREDITS_FROZEN') {
-    const wallet = await pool.query(
-      `
-      SELECT w.wallet_id, w.balance_credits, w.frozen_balance_credits
-      FROM wallets w
-      INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
-      WHERE aw.account_id = $1 AND w.type = 'account wallets'
-      ORDER BY w.created_at DESC
-      LIMIT 1
-      `,
-      [accountId]
-    );
-    const row = wallet.rows[0];
-    if (!row) throw new Error('No account wallet found to unfreeze');
-    const frozen = Number(row.frozen_balance_credits || 0);
-    if (frozen <= 0) throw new Error('No frozen credits to restore');
-    await pool.query(
-      `
-      UPDATE wallets
-      SET balance_credits = balance_credits + $1,
-          frozen_balance_credits = 0
-      WHERE wallet_id = $2
-      `,
-      [frozen, row.wallet_id]
-    );
+    // Same locked, ledgered release as the Unfreeze button, and the member is told.
+    const { unfreezeAccountCredits } = require('../services/CreditHoldServices');
+    await unfreezeAccountCredits(accountId, {
+      staffId,
+      reason: 'Hold reversed from Admin Moderation',
+      source: 'reversal',
+    });
   }
 
   await markAccountActivityReversed(activityId, {

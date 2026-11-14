@@ -48,9 +48,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
     >
       {/* --- VIBRANT BACKGROUND BLUR GLOW BLOBS --- */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/2 left-1/3 -translate-y-1/2 w-72 h-72 rounded-full bg-yellow-500/10 blur-[80px] animate-pulse duration-[4s]" />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-cyan-500/10 blur-[90px] animate-pulse duration-[6s]" />
-        <div className="absolute bottom-1/3 right-1/3 w-72 h-72 rounded-full bg-purple-500/15 blur-[80px] animate-pulse duration-[5s]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-emerald-500/[0.04] blur-[100px] pointer-events-none" />
       </div>
 
       {/* ========================================================================= */}
@@ -81,7 +79,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       )}
 
       {/* --- MAIN MODAL CARD CONTAINER --- */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/95 p-8 text-center shadow-2xl min-h-[320px] flex flex-col justify-center items-center backdrop-blur-xl z-10 overflow-hidden">
+      <div className="relative w-full max-w-sm rounded-3xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#121214] p-8 text-center shadow-2xl min-h-[320px] flex flex-col justify-center items-center backdrop-blur-xl z-10 overflow-hidden">
         {status === "loading" ? (
           <div className="space-y-4 animate-fade-in flex flex-col items-center">
             <div className="relative flex items-center justify-center">
@@ -99,13 +97,13 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
           </div>
         ) : (
           <div className="animate-scale-up flex flex-col items-center w-full relative">
-            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20 text-green-400 shadow-[0_0_25px_rgba(34,197,94,0.15)]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 text-[#0d0f1a] shadow-lg shadow-green-500/30">
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.15)]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-500/30">
                 <Check className="h-5 w-5 stroke-[2.5]" />
               </div>
             </div>
 
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 tracking-tight">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-zinc-100 mb-2 tracking-tight">
               {title}
             </h3>
             <p className="text-sm text-gray-500 dark:text-zinc-400 leading-relaxed mb-6 max-w-[280px] mx-auto">
@@ -114,7 +112,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
 
             <button
               onClick={onConfirm}
-              className="w-full rounded-full bg-green-500 px-6 py-3 text-xs font-bold uppercase tracking-wider text-[#0d0f1a] transition-all hover:bg-green-400 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-green-500/20 cursor-pointer"
+              className="w-full rounded-full bg-emerald-500 px-6 py-3 text-xs font-bold uppercase tracking-wider text-zinc-950 transition-all hover:bg-emerald-400 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/20 cursor-pointer"
             >
               {buttonText}
             </button>

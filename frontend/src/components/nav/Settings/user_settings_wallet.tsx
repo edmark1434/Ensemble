@@ -4,6 +4,10 @@ import toast from "react-hot-toast";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import { constructAvatarUrl } from "@/lib/accountAvatars";
+import { useNavigate } from "react-router-dom";
+import useGlobalState from "@/lib/global_state";
+import { APPEAL_PATH, standingConditions } from "@/lib/standing";
+import { StandingConditionList } from "@/components/account/StandingDetails";
 import gcashCashoutLogo from "@/assets/gcash-cashout-logo.jpg";
 import mayaCashoutLogo from "@/assets/maya-cashout-logo.png";
 
@@ -188,8 +192,21 @@ export function UserSettingsWallet() {
       }
     };
     socket.on("cashoutUpdated", handleCashoutUpdate);
-    return () => { socket.off("cashoutUpdated", handleCashoutUpdate); };
+    // A staff credit hold placed or released while this screen is open.
+    const handleWalletChanged = () => { void fetchWallets(); };
+    window.addEventListener("ensemble:wallet-changed", handleWalletChanged);
+    return () => {
+      socket.off("cashoutUpdated", handleCashoutUpdate);
+      window.removeEventListener("ensemble:wallet-changed", handleWalletChanged);
+    };
   }, [fetchWallets]);
+
+  const navigate = useNavigate();
+  const restriction = useGlobalState((state) => state.user?.restriction);
+  const holdConditions = useMemo(
+    () => standingConditions(restriction).filter((condition) => condition.id === "credit_hold" || condition.id === "frozen_access" || condition.id === "suspended"),
+    [restriction]
+  );
 
   const accountWallet = useMemo(() => wallets.find((item) => item.type === "account wallets"), [wallets]);
   const escrowWallet = useMemo(() => wallets.find((item) => item.type === "escrow wallets"), [wallets]);
@@ -333,7 +350,20 @@ export function UserSettingsWallet() {
             <p className="mt-5 text-3xl font-bold text-gray-900 dark:text-white">{credits(escrowWallet?.balance_credits)} <span className="text-sm font-medium text-gray-500 dark:text-zinc-500">credits</span></p>
             <p className="mt-2 text-xs text-gray-500 dark:text-zinc-500">Protected contract funds · {escrowWallet?.status || "Unavailable"}</p>
           </div>
+          {Number(accountWallet?.frozen_balance_credits || 0) > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-5 sm:col-span-2">
+              <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">On hold</span><ShieldCheck className="h-5 w-5 text-amber-400" /></div>
+              <p className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">{credits(accountWallet?.frozen_balance_credits)} <span className="text-sm font-medium text-gray-500 dark:text-zinc-500">credits</span></p>
+              <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400">Still yours, but they cannot be spent, transferred or cashed out until the hold ends. See below for when and how.</p>
+            </div>
+          )}
         </div>
+      )}
+
+      {holdConditions.length > 0 && (
+        <section aria-label="Why some credits or actions are unavailable">
+          <StandingConditionList conditions={holdConditions} onAppeal={() => navigate(APPEAL_PATH)} />
+        </section>
       )}
 
       <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800">

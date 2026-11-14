@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink, FileWarning, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
+import { ExternalLink, FileWarning, Hand, History, Loader2, ShieldAlert, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { canSuspendTarget } from '@/pages/admin/userTeam/suspendRules';
+import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPresetFields';
+import type { WarningDesk } from '@/lib/warningCatalog';
 import ListingDetailModal, {
   SellerListingsModal,
+  listingStatusPill,
 } from '@/pages/moderator/marketplace-moderator/ListingDetailModal';
 import type { ModerationCase } from './moderationTypes';
 import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
@@ -39,6 +42,27 @@ function statusButtonClass(label: string, active: boolean) {
 
 const REPORT_STATUS_OPTIONS = ['open', 'in_progress', 'closed'] as const;
 const DECIDED_REPORT_STATUSES = ['resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'];
+/** Sanctioned and Denied are decisions; the backend refuses to change them by hand. */
+const FINAL_REPORT_STATUSES = ['sanctioned', 'denied'];
+/** Only these roles may ban (backend: UserTeamPermissions). */
+const BAN_ROLES = ['Admin', 'Support Moderator'];
+/** Default when no named warning is picked; matches the backend default. */
+const DEFAULT_REPORT_WARNING = 'staff_follow_up';
+
+function warningDeskForRole(role?: string | null): WarningDesk {
+  switch (role) {
+    case 'Support Moderator':
+      return 'support';
+    case 'Forum Moderator':
+      return 'forum';
+    case 'Marketplace Moderator':
+      return 'marketplace';
+    case 'Jobs N Gigs Moderator':
+      return 'jobs';
+    default:
+      return 'admin';
+  }
+}
 
 function toApiToken(value: string) {
   return String(value || '')
@@ -90,6 +114,24 @@ type ReportDetailPayload = {
       sentAt: string | null;
     } | null;
     links: { label: string; path: string }[];
+    /** Catalog context for asset, listing and purchase reports. */
+    marketplace?: {
+      assetId: string | null;
+      assetName: string | null;
+      assetStatus: string | null;
+      assetRemoved: boolean;
+      listingId: string | null;
+      listingNumber: string | null;
+      listingStatus: string | null;
+      category: string | null;
+      priceCredits: number | null;
+      purchase: {
+        licenseId: string;
+        status: string | null;
+        priceCredits: number;
+        purchasedAt: string | null;
+      } | null;
+    } | null;
     reportedAccount: {
       accountId: string;
       name: string;
@@ -98,7 +140,14 @@ type ReportDetailPayload = {
       staffRole?: string | null;
     } | null;
   };
+  /** Other reports on the same item and against the same account (this one excluded). */
+  history?: {
+    sameItem: { total: number; open: number };
+    againstAccount: { total: number; open: number; sanctioned: number };
+  };
   permissions?: DisputePermissions;
+  /** False when the report only names the reporter (e.g. a technical problem). */
+  sanctionable?: boolean;
   assignableStaff: { staffId: string | number; name: string; role: string }[];
 };
 
@@ -108,15 +157,19 @@ export function ReportCaseDetailModal({
   onUpdated,
   endpointBase = '/api/admin/reports',
   accent = 'rose',
+  listingApiBase,
 }: {
   reportId: string | number;
   onClose: () => void;
   onUpdated: () => void;
   endpointBase?: string;
   accent?: 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
+  /** Marketplace API root; when set, a report on a listed asset can open its listing review. */
+  listingApiBase?: string;
 }) {
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
   const [preview, setPreview] = useState<{ path: string; label: string } | null>(null);
+  const [reviewListingId, setReviewListingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('open');
@@ -126,14 +179,23 @@ export function ReportCaseDetailModal({
   const [sanctionType, setSanctionType] = useState('warning');
   const [sanctionReason, setSanctionReason] = useState('');
   const [sanctionDays, setSanctionDays] = useState('7');
+  const [sanctionWarningId, setSanctionWarningId] = useState(DEFAULT_REPORT_WARNING);
   const viewer = useGlobalState((state) => state.user);
-  const reported = detail?.report.reportedAccount;
+  // The reported account lives on the subject, not on the report row.
+  const reported = detail?.subject?.reportedAccount;
   const allowSuspend = canSuspendTarget({
     actorRole: viewer?.role,
     actorAccountId: viewer?.account_id || viewer?.accountId,
     targetAccountId: reported?.accountId,
     targetStaffRole: reported?.staffRole,
   });
+  const allowBan = allowSuspend && BAN_ROLES.includes(String(viewer?.role || ''));
+  const warningDesk = warningDeskForRole(viewer?.role);
+  const sanctionable = detail?.sanctionable !== false;
+  const selectedSanction =
+    (sanctionType === 'suspend' && !allowSuspend) || (sanctionType === 'ban' && !allowBan)
+      ? 'warning'
+      : sanctionType;
 
   const accentLabel =
     accent === 'sky'
@@ -359,6 +421,107 @@ export function ReportCaseDetailModal({
               ) : null}
             </div>
 
+            {detail.subject?.marketplace ? (
+              <div className="rounded-xl border border-amber-500/15 bg-amber-500/[0.03] px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300/80">
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    Marketplace listing
+                  </p>
+                  {detail.subject.marketplace.listingStatus
+                    ? listingStatusPill(detail.subject.marketplace.listingStatus)
+                    : null}
+                </div>
+                {detail.subject.marketplace.listingId ? (
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                    <div>
+                      <dt className="text-zinc-500">Listing</dt>
+                      <dd className="mt-0.5 font-mono text-zinc-200">
+                        {detail.subject.marketplace.listingNumber || '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Category</dt>
+                      <dd className="mt-0.5 text-zinc-200">{detail.subject.marketplace.category || 'Uncategorized'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Price</dt>
+                      <dd className="mt-0.5 tabular-nums text-zinc-200">
+                        {(detail.subject.marketplace.priceCredits ?? 0).toLocaleString()} credits
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">Asset</dt>
+                      <dd className="mt-0.5 text-zinc-200">
+                        {detail.subject.marketplace.assetRemoved
+                          ? 'Removed'
+                          : titleCaseLabel(detail.subject.marketplace.assetStatus || 'unknown')}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    No catalog listing is linked to this asset, so it cannot be delisted from here.
+                  </p>
+                )}
+                {detail.subject.marketplace.purchase ? (
+                  <p className="mt-2 text-xs text-zinc-400">
+                    Purchase: {detail.subject.marketplace.purchase.priceCredits.toLocaleString()} credits ·{' '}
+                    {titleCaseLabel(detail.subject.marketplace.purchase.status || 'unknown')}
+                    {detail.subject.marketplace.purchase.purchasedAt
+                      ? ` · ${formatDateTime(detail.subject.marketplace.purchase.purchasedAt)}`
+                      : ''}
+                  </p>
+                ) : null}
+                {listingApiBase && detail.subject.marketplace.listingId ? (
+                  <button
+                    type="button"
+                    onClick={() => setReviewListingId(String(detail.subject?.marketplace?.listingId))}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-500/20"
+                  >
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    Review listing (delist or send back for re-approval)
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {detail.history ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  <History className="h-3.5 w-3.5" />
+                  Report history
+                </p>
+                <div className="mt-2 grid gap-3 text-xs sm:grid-cols-2">
+                  <div>
+                    <p className="text-zinc-500">Other reports on this item</p>
+                    <p className="mt-0.5 text-sm text-zinc-100">
+                      <span className="tabular-nums">{detail.history.sameItem.total}</span>
+                      {detail.history.sameItem.open > 0 ? (
+                        <span className="ml-1.5 text-amber-200/90">({detail.history.sameItem.open} still open)</span>
+                      ) : null}
+                    </p>
+                  </div>
+                  {reported ? (
+                    <div>
+                      <p className="text-zinc-500">Other reports against {reported.handle ? `@${reported.handle}` : 'this account'}</p>
+                      <p className="mt-0.5 text-sm text-zinc-100">
+                        <span className="tabular-nums">{detail.history.againstAccount.total}</span>
+                        {detail.history.againstAccount.open > 0 ? (
+                          <span className="ml-1.5 text-amber-200/90">({detail.history.againstAccount.open} open)</span>
+                        ) : null}
+                        {detail.history.againstAccount.sanctioned > 0 ? (
+                          <span className="ml-1.5 text-rose-200/90">
+                            · {detail.history.againstAccount.sanctioned} sanctioned
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Description</p>
               <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-300">
@@ -376,7 +539,7 @@ export function ReportCaseDetailModal({
                       <button
                         key={s}
                         type="button"
-                        disabled={!alreadyAssignedToMe}
+                        disabled={!alreadyAssignedToMe || FINAL_REPORT_STATUSES.includes(toApiToken(report.status))}
                         onClick={() => setStatus(s)}
                         aria-pressed={active}
                         className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${statusButtonClass(s, active)}`}
@@ -482,7 +645,9 @@ export function ReportCaseDetailModal({
                 <div>
                   <p className="text-sm font-medium text-white">Decision</p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Sanction notifies the reporter. Deny does not.
+                    {sanctionable
+                      ? 'Sanction notifies the reporter. Deny does not.'
+                      : 'This report is about the platform, not another account, so it cannot be sanctioned. Close or deny it when it is handled.'}
                   </p>
                 </div>
                 {!alreadyAssignedToMe && (
@@ -490,21 +655,36 @@ export function ReportCaseDetailModal({
                     Claim this report before you sanction or deny it.
                   </p>
                 )}
-                {sanctionOpen && (
+                {sanctionOpen && sanctionable && (
                   <div className="space-y-2">
                     <label className="flex flex-col gap-1 text-xs text-zinc-500">
                       Sanction
                       <select
-                        value={allowSuspend || sanctionType !== 'suspend' ? sanctionType : 'warning'}
+                        value={selectedSanction}
                         onChange={(e) => setSanctionType(e.target.value)}
                         className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
                       >
                         <option value="warning">Warning</option>
                         {allowSuspend ? <option value="suspend">Suspend</option> : null}
-                        <option value="ban">Ban</option>
+                        {allowBan ? <option value="ban">Ban</option> : null}
                       </select>
                     </label>
-                    {sanctionType === 'suspend' && (
+                    {selectedSanction === 'warning' && (
+                      <>
+                        <WarningPresetFields
+                          desk={warningDesk}
+                          warningId={sanctionWarningId}
+                          reason={sanctionReason}
+                          onWarningId={setSanctionWarningId}
+                          onReason={setSanctionReason}
+                          fieldClass="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                        />
+                        <p className="text-[11px] text-zinc-500">
+                          The warned member sees the warning name and these case notes.
+                        </p>
+                      </>
+                    )}
+                    {selectedSanction === 'suspend' && (
                       <label className="flex flex-col gap-1 text-xs text-zinc-500">
                         Days
                         <input
@@ -517,47 +697,51 @@ export function ReportCaseDetailModal({
                         />
                       </label>
                     )}
-                    <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                      Reason shown to the sanctioned account
-                      <textarea
-                        value={sanctionReason}
-                        onChange={(e) => setSanctionReason(e.target.value)}
-                        rows={3}
-                        className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-                      />
-                    </label>
+                    {selectedSanction !== 'warning' && (
+                      <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                        Reason shown to the sanctioned account
+                        <textarea
+                          value={sanctionReason}
+                          onChange={(e) => setSanctionReason(e.target.value)}
+                          rows={3}
+                          className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                    )}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={saving || !alreadyAssignedToMe}
-                    onClick={() => {
-                      if (!sanctionOpen) {
-                        setSanctionReason((current) => current || titleCaseLabel(report.type));
-                        setSanctionOpen(true);
-                        return;
-                      }
-                      if (sanctionType === 'suspend' && !allowSuspend) {
-                        showErrorToast(
-                          reported &&
-                            String(reported.accountId) === String(viewer?.account_id || viewer?.accountId || '')
-                            ? 'You cannot suspend your own account'
-                            : 'Only an admin can suspend a moderator'
-                        );
-                        return;
-                      }
-                      void decide('sanction', {
-                        sanctionType,
-                        reason: sanctionReason.trim(),
-                        days: sanctionType === 'suspend' ? Number(sanctionDays) : undefined,
-                      });
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
-                  >
-                    <ShieldAlert className="h-4 w-4" />
-                    {sanctionOpen ? 'Confirm sanction' : 'Sanction'}
-                  </button>
+                  {sanctionable && (
+                    <button
+                      type="button"
+                      disabled={saving || !alreadyAssignedToMe}
+                      onClick={() => {
+                        if (!sanctionOpen) {
+                          setSanctionReason((current) => current || titleCaseLabel(report.type));
+                          setSanctionOpen(true);
+                          return;
+                        }
+                        if (!sanctionReason.trim()) {
+                          showErrorToast('Write the reason the member will see.');
+                          return;
+                        }
+                        if (selectedSanction === 'warning' && !sanctionWarningId) {
+                          showErrorToast('Pick the warning that fits this report.');
+                          return;
+                        }
+                        void decide('sanction', {
+                          sanctionType: selectedSanction,
+                          reason: sanctionReason.trim(),
+                          warningId: selectedSanction === 'warning' ? sanctionWarningId : undefined,
+                          days: selectedSanction === 'suspend' ? Number(sanctionDays) : undefined,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                    >
+                      <ShieldAlert className="h-4 w-4" />
+                      {sanctionOpen ? 'Confirm sanction' : 'Sanction'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={saving || !alreadyAssignedToMe}
@@ -580,6 +764,19 @@ export function ReportCaseDetailModal({
         title={preview?.label || detail?.subject?.headline}
         onClose={() => setPreview(null)}
       />
+      {reviewListingId && listingApiBase ? (
+        <ListingDetailModal
+          listingId={reviewListingId}
+          apiBase={listingApiBase}
+          onClose={() => setReviewListingId(null)}
+          onOpenListing={(id) => setReviewListingId(id)}
+          onUpdated={() => {
+            // The listing status shown on this case comes from the report detail.
+            void load();
+            onUpdated();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -599,7 +796,9 @@ export function ListingCaseDetailModal({
   onClose: () => void;
   onUpdated: () => void;
 }) {
-  const [listingId, setListingId] = useState(Number(caseItem.id));
+  // Listing ids are UUIDs. Number() turned them into NaN, so the API answered /listings/NaN
+  // with a 500 and the approval modal showed "Could not load this listing".
+  const [listingId, setListingId] = useState(String(caseItem.id));
   const [sellerAccountId, setSellerAccountId] = useState<number | null>(null);
 
   return (
@@ -610,6 +809,7 @@ export function ListingCaseDetailModal({
         onClose={onClose}
         onUpdated={() => onUpdated()}
         onViewSeller={(accountId) => setSellerAccountId(accountId)}
+        onOpenListing={(id) => setListingId(id)}
       />
       {sellerAccountId !== null && (
         <SellerListingsModal

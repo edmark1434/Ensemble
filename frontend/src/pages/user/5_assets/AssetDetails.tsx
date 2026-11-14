@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Bookmark,
   Calendar,
+  CalendarClock,
   Clock3,
   CornerDownRight,
   Edit3,
@@ -31,6 +32,7 @@ import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import SuccessModal from "@/components/ui/SuccessModal";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import useGlobalState from "@/lib/global_state";
@@ -126,6 +128,15 @@ export default function AssetDetails() {
   const [assetToDelete, setAssetToDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [isEditSuccessOpen, setIsEditSuccessOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isEditSuccessOpen) return;
+    const timer = setTimeout(() => {
+      setIsEditSuccessOpen(false);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [isEditSuccessOpen]);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [templateUseOpen, setTemplateUseOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
@@ -684,7 +695,6 @@ export default function AssetDetails() {
                         key={`${mediaAsset.media_asset_id}:${asset.can_download}`}
                         mediaAsset={mediaAsset}
                         canAccessOriginal={Boolean(asset.can_download && (asset.is_owner || asset.is_purchased))}
-                        audioThumbnail={asset.thumbnail_path}
                         onOpen={() => setSelectedOriginalFile(mediaAsset)}
                       />
                     ))}
@@ -696,6 +706,9 @@ export default function AssetDetails() {
 
             <dl className="mt-6 flex flex-wrap gap-3 border-t border-gray-200 pt-5 text-sm dark:border-white/10">
               <Metadata icon={Calendar} label="Published" value={formatDate(asset.created_at)} />
+              {asset.updated_at && (
+                <Metadata icon={CalendarClock} label="Updated at" value={formatDate(asset.updated_at, true)} />
+              )}
               {asset.type === "template"
                 ? <Metadata icon={Ruler} label="Dimensions" value={templatePreview ? `${templatePreview.width} × ${templatePreview.height}` : "—"} />
                 : asset.media_asset_count <= 1 && asset.type !== "audio" && <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />}
@@ -841,7 +854,7 @@ export default function AssetDetails() {
         </div>
       </main>
 
-      <AssetEditorModal open={editorOpen} asset={asset} onClose={() => setEditorOpen(false)} onSaved={(updated) => { setAsset(updated); setEditorOpen(false); showSuccessToast("Asset updated."); }} />
+      <AssetEditorModal open={editorOpen} asset={asset} onClose={() => setEditorOpen(false)} onSaved={(updated) => { setAsset(updated); setEditorOpen(false); showSuccessToast("Asset updated successfully!"); setIsEditSuccessOpen(true); }} />
       {asset.type === "template" && !isGuestView && <TemplateUseModal open={templateUseOpen} asset={asset} onClose={() => setTemplateUseOpen(false)} onCreated={handleTemplateCreated} />}
       {!asset.is_owner && !isGuestView && <AssetPurchaseModal open={purchaseOpen} asset={asset} onClose={() => setPurchaseOpen(false)} onPurchased={handlePurchased} />}
       <GuestLoginModal
@@ -851,6 +864,14 @@ export default function AssetDetails() {
         message="Please log in or create an account to purchase, like, save, comment on, or reply about this asset."
       />
       {selectedOriginalFile && <AssetOriginalModal open asset={asset} mediaAsset={selectedOriginalFile} onClose={() => setSelectedOriginalFile(null)} />}
+      <SuccessModal
+        isOpen={isEditSuccessOpen}
+        title="Asset Updated Successfully!"
+        message="Your asset package changes have been saved."
+        buttonText="Okay, got it!"
+        standalone={true}
+        onConfirm={() => setIsEditSuccessOpen(false)}
+      />
       <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : "Delete"} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); setReviewToDelete(null); } }} />
     </div>
   );
@@ -862,17 +883,20 @@ function Metadata({ icon: Icon, label, value }: { icon: typeof Calendar; label: 
 
 function MediaAssetPreview({
   mediaAsset,
-  audioThumbnail,
   canAccessOriginal,
   onOpen,
 }: {
   mediaAsset: AssetMediaFile;
-  audioThumbnail: string | null;
   canAccessOriginal: boolean;
   onOpen: () => void;
 }) {
   const [failed, setFailed] = useState(false);
-  const previewUrl = mediaUrl(mediaAsset.type === "audio" ? audioThumbnail : mediaAsset.proxy_path);
+  // Audio items only use their own specific thumbnail if one was explicitly assigned to that file
+  const previewUrl = mediaUrl(
+    mediaAsset.type === "audio"
+      ? (mediaAsset.thumbnail_path || "")
+      : (mediaAsset.thumbnail_path || mediaAsset.proxy_path)
+  );
   const format = mediaAsset.mime_type.split("/")[1] || "file";
   return (
     <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-dark-base">
@@ -893,8 +917,17 @@ function MediaAssetPreview({
             onError={() => setFailed(true)}
             className="h-full w-full object-contain transition duration-200 group-hover:scale-[1.02]"
           />
+        ) : mediaAsset.type === "audio" ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-gray-50 to-gray-100/80 p-3 text-center dark:from-zinc-900/40 dark:to-zinc-900/90">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 transition group-hover:scale-105 group-hover:bg-blue-500/15 dark:bg-blue-500/15 dark:text-blue-400">
+              <AudioLines className="h-5 w-5" />
+            </span>
+            <span className="max-w-[90%] truncate text-xs font-medium text-gray-700 dark:text-zinc-300">
+              {mediaAsset.name}
+            </span>
+          </div>
         ) : (
-          <MediaFallback icon={mediaAsset.type === "audio" ? AudioLines : mediaAsset.type === "video" ? Clapperboard : Image} className="h-full w-full" />
+          <MediaFallback icon={mediaAsset.type === "video" ? Clapperboard : Image} className="h-full w-full" />
         )}
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"><Eye className="h-7 w-7 text-white" /></span>
       </button>

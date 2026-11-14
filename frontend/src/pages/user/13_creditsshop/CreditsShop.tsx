@@ -6,6 +6,9 @@ import {
   Plus,
   Minus,
   ChevronDown,
+  Sparkles,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header.tsx";
@@ -16,6 +19,7 @@ import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { WalletIcon } from "@/components/ui/wallet-icon";
 import toast from "react-hot-toast";
+import CancelSubscriptionModal from "@/components/ui/CancelSubscriptionModal";
 
 // ---- Data models ----
 interface CreditPack {
@@ -125,6 +129,29 @@ const getSubscriptionIcon = (type: string) => {
   }
 };
 
+const getPackSavingsPercent = (pack: CreditPack, creditValuePhp = 1) => {
+  if (!pack.credits || !pack.price) return 0;
+  const standardValue = pack.credits * (creditValuePhp > 0 ? creditValuePhp : 1);
+  if (standardValue <= pack.price) return 0;
+  return Math.round(((standardValue - pack.price) / standardValue) * 100);
+};
+
+const getCreditPackImage = (pack: CreditPack, index: number) => {
+  const id = (pack.id || "").toLowerCase();
+  const name = (pack.name || "").toLowerCase();
+
+  if (id.includes("starter") || id === "pocket" || name.includes("starter") || index === 0) {
+    return "/shop/pack-1.png";
+  }
+  if (id.includes("pro") || id === "bundle" || name.includes("pro") || index === 1) {
+    return "/shop/pack-2.png";
+  }
+  if (id.includes("studio") || id === "box" || id === "vault" || name.includes("studio") || index === 2) {
+    return "/shop/pack-3.png";
+  }
+  return `/shop/pack-${(index % 3) + 1}.png`;
+};
+
 const CreditShop: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -150,6 +177,26 @@ const CreditShop: React.FC = () => {
   const [isUserSubscribed, setIsUserSubscribed] = useState(false);
   const [hasXenditPlan, setHasXenditPlan] = useState(false);
   const [isOnFreePlan, setIsOnFreePlan] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
+  const handleCancelSubscription = () => {
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancelSubscription = async () => {
+    try {
+      setIsCancelling(true);
+      const { data } = await api.post("/api/payment/cancel-subscription");
+      setUserSubscription((prev) => prev ? { ...prev, cancel_at_period_end: true } : prev);
+      toast.success(data.message || "Subscription cancellation scheduled successfully.");
+      setShowCancelModal(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // Sync tab state when URL route changes
   useEffect(() => {
@@ -434,8 +481,8 @@ const CreditShop: React.FC = () => {
   };
 
   const getMembershipButtonState = (tier: Membership) => {
-    const isFree = tier.price === 0;
-    const currentPlan = isCurrentPlan(tier.plan_id);
+    const isFree = Number(tier.price || 0) === 0 || tier.name.toLowerCase() === "free";
+    const currentPlan = isCurrentPlan(tier.plan_id) || (isFree && isOnFreePlan);
     const hasFreeTrial = tier.days_of_trials > 0;
     const hasHadTrial = Boolean(userSubscription?.trial_starts_at || userSubscription?.trial_ends_at);
     const isCurrentTrialActive = currentPlan && Boolean(userSubscription?.trial_ends_at && new Date(userSubscription.trial_ends_at) > new Date());
@@ -444,7 +491,7 @@ const CreditShop: React.FC = () => {
 
     if (currentPlan) {
       return {
-        buttonText: isCurrentTrialActive ? "Current Plan (Free Trial)" : "Current Plan",
+        buttonText: isCurrentTrialActive ? "Current Plan (Free Trial)" : isFree ? "Current Plan (Free)" : "Current Plan",
         isDisabled: true,
         isUpgrade: false,
         isDowngrade: false,
@@ -640,45 +687,74 @@ const CreditShop: React.FC = () => {
               transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
               className="space-y-6"
             >
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className={`grid gap-4 sm:grid-cols-2 ${creditPacks.length <= 3 ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
                 {creditPacks.map((pack, index) => {
                   const isBestValue = pack.id === "vault" || pack.id === "pkg-studio" || (creditPacks.length > 1 && index === creditPacks.length - 1);
+                  const packImg = getCreditPackImage(pack, index);
+                  const savingsPercent = getPackSavingsPercent(pack, creditValuePhp);
+
                   return (
                     <div
                       key={pack.id}
-                      className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl hover:border-blue-500/30 transition-all duration-300 group backdrop-blur-xl"
+                      className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 overflow-hidden shadow-sm dark:shadow-xl hover:border-blue-500/30 transition-all duration-300 group backdrop-blur-xl"
                     >
                       <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{pack.name}</h3>
-                          {isBestValue && (
-                            <span className="rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                              Best Value
-                            </span>
-                          )}
+                        {/* Seamless Top Banner Artwork (1:1 aspect-square preserves uncropped image) */}
+                        <div className="relative w-full aspect-square overflow-hidden bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-white/5">
+                          <img
+                            src={packImg}
+                            alt={pack.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none"
+                            loading="lazy"
+                          />
                         </div>
 
-                        {/* Credit Value (Top) */}
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
-                          <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                            {pack.credits.toLocaleString()}
-                            <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                        {/* Content Area Below Image */}
+                        <div className="p-5">
+                          {/* Pack Name & Two Separate Pills (Best Value & Save %) */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 min-h-[26px] mb-2">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                              {pack.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isBestValue && (
+                                <span className="relative inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/40 dark:border-amber-400/35 shadow-[0_0_12px_rgba(245,158,11,0.25)] overflow-hidden shrink-0 select-none">
+                                  <span>Best Value</span>
+                                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 dark:via-white/35 to-transparent animate-shine-gleam pointer-events-none" />
+                                </span>
+                              )}
+                              {savingsPercent > 0 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0 select-none">
+                                  Save {savingsPercent}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Credit Value */}
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                            <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                              {pack.credits.toLocaleString()}
+                              <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                            </p>
+                          </div>
+
+                          {/* Peso Value */}
+                          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
+                            {formatPHP(pack.price)}
                           </p>
                         </div>
-
-                        {/* Peso Value (Under) */}
-                        <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
-                          {formatPHP(pack.price)}
-                        </p>
                       </div>
 
-                      <button
-                        onClick={() => handlePackCheckout(pack)}
-                        className="mt-6 w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20"
-                      >
-                        Buy Pack
-                      </button>
+                      <div className="px-5 pb-5">
+                        <button
+                          onClick={() => handlePackCheckout(pack)}
+                          className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                        >
+                          Buy Pack
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -777,14 +853,63 @@ const CreditShop: React.FC = () => {
           {/* MEMBERSHIP SECTION */}
           {activeTab === "membership" && (
             <motion.div
-              data-tour="credits-plans-grid"
               key="membership"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-              className="grid gap-x-6 gap-y-3 md:grid-cols-3 items-stretch"
+              className="space-y-6"
             >
+              {/* Active Subscription Banner with Cancel Action */}
+              {isUserSubscribed && !isOnFreePlan && userSubscription && (
+                <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                        userSubscription.cancel_at_period_end
+                          ? "bg-rose-500/20 text-rose-500 dark:text-rose-400 border-rose-500/40"
+                          : userSubscription.trial_ends_at && new Date(userSubscription.trial_ends_at) > new Date()
+                          ? "bg-amber-500/20 text-amber-500 dark:text-amber-400 border-amber-500/40"
+                          : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
+                      }`}>
+                        {userSubscription.cancel_at_period_end
+                          ? "Cancels at period end"
+                          : userSubscription.trial_ends_at && new Date(userSubscription.trial_ends_at) > new Date()
+                          ? "Free Trial Active"
+                          : "Active Subscription"}
+                      </span>
+                      <span className="text-xs text-gray-700 dark:text-zinc-300 font-bold">
+                        {getCurrentPlan()?.name || "Premium Member"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400">
+                      {userSubscription.cancel_at_period_end
+                        ? `Cancellation is scheduled. Your access remains active until ${userSubscription.current_period_end ? new Date(userSubscription.current_period_end).toLocaleDateString() : "the end of the cycle"}.`
+                        : userSubscription.trial_ends_at && new Date(userSubscription.trial_ends_at) > new Date()
+                        ? `Free trial ends on ${new Date(userSubscription.trial_ends_at).toLocaleDateString()}.`
+                        : userSubscription.current_period_end
+                        ? `Renews on ${new Date(userSubscription.current_period_end).toLocaleDateString()}.`
+                        : "Recurring membership active."}
+                    </p>
+                  </div>
+                  {!userSubscription.cancel_at_period_end && (
+                    <button
+                      type="button"
+                      onClick={handleCancelSubscription}
+                      disabled={isCancelling}
+                      className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap self-start sm:self-center"
+                    >
+                      {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                      {isCancelling ? "Cancelling..." : "Cancel Subscription"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div
+                data-tour="credits-plans-grid"
+                className="grid gap-x-6 gap-y-3 md:grid-cols-3 items-stretch"
+              >
               {memberships.map((tier) => {
                 const isFree = tier.price === 0;
                 const isPremium = tier.name.toLowerCase() === "premium";
@@ -954,30 +1079,45 @@ const CreditShop: React.FC = () => {
                       </ul>
                     </div>
 
-                    <button
-                      onClick={() => handleMembershipCheckout(tier)}
-                      disabled={isDisabled}
-                      className={`md:mt-3 w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
-                        isDisabled
-                          ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
-                          : isUpgrade && hasXenditPlan && !isOnFreePlan
-                          ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
-                          : isDowngrade && hasXenditPlan && !isOnFreePlan
-                          ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
-                          : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
-                      }`}
-                    >
-                      {buttonText}
-                      {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                        <span className="ml-1.5 text-xs">↑</span>
+                    <div className="md:mt-3 w-full flex flex-col gap-2">
+                      <button
+                        onClick={() => handleMembershipCheckout(tier)}
+                        disabled={isDisabled}
+                        className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
+                          isDisabled
+                            ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
+                            : isUpgrade && hasXenditPlan && !isOnFreePlan
+                            ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
+                            : isDowngrade && hasXenditPlan && !isOnFreePlan
+                            ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
+                            : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
+                        }`}
+                      >
+                        {buttonText}
+                        {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                          <span className="ml-1.5 text-xs">↑</span>
+                        )}
+                        {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                          <span className="ml-1.5 text-xs">↓</span>
+                        )}
+                      </button>
+
+                      {isCurrent && !isFree && !userSubscription?.cancel_at_period_end && (
+                        <button
+                          type="button"
+                          onClick={handleCancelSubscription}
+                          disabled={isCancelling}
+                          className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                          {isCancelling ? "Cancelling..." : "Cancel Subscription"}
+                        </button>
                       )}
-                      {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                        <span className="ml-1.5 text-xs">↓</span>
-                      )}
-                    </button>
+                    </div>
                   </div>
                 );
               })}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -986,6 +1126,15 @@ const CreditShop: React.FC = () => {
         <p className="mt-10 text-center text-xs text-gray-500 dark:text-zinc-500">
           Payments are processed securely via Xendit. Prices shown in Philippine Pesos (PHP).
         </p>
+
+        <CancelSubscriptionModal
+          isOpen={showCancelModal}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={handleConfirmCancelSubscription}
+          isCancelling={isCancelling}
+          planName={getCurrentPlan()?.name || "current"}
+          endDate={userSubscription?.trial_ends_at || userSubscription?.current_period_end}
+        />
       </div>
     </div>
   );

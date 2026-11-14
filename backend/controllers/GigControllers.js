@@ -516,7 +516,8 @@ async function unshortlistGigOrderController(req, res) {
 async function reportGigController(req, res) {
     try {
         const { submitGigReport } = require('../services/MemberReportServices');
-        const report = await submitGigReport(req.params.id, req.body, req.session);
+        // The gigs router authenticates with requireAuth only, so the identity is on req.user.
+        const report = await submitGigReport(req.params.id, req.body, req.session || req.user);
         return res.status(201).json({ success: true, message: 'Report submitted', report });
     } catch (err) {
         const status = err.statusCode || 500;

@@ -7,6 +7,7 @@ const {
   getMarketplaceTickets,
   getMarketplaceReports,
 } = require('../repositories/MarketplaceModeratorRepositories');
+const { getListingOriginalAccess } = require('../services/MarketplaceListingFileServices');
 const {
   getTicketDetail,
   updateTicket,
@@ -14,12 +15,61 @@ const {
   getReportDetail,
   updateReport,
 } = require('../repositories/AdminTicketsRepositories');
-const {
-  getViolationsAndRestrictions,
-  issueViolation,
-  updateAccountRestriction,
-} = require('../repositories/ModeratorRepositories');
 const { MARKETPLACE_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
+const { ticketInStaffQueue } = require('../lib/TicketQueueScope');
+
+/**
+ * The marketplace desk may only read or act on tickets filed under a marketplace type that
+ * Admin has not taken over (escalated to Admin, or handled by an Admin) — the same rule the
+ * queue list applies.
+ */
+function isMarketplaceTicket(ticket) {
+  return ticketInStaffQueue('Marketplace Moderator', {
+    type: ticket?.type || ticket?.category,
+    escalatedToRole: ticket?.escalatedToRole,
+    handlerRole: ticket?.assignee?.role,
+  });
+}
+
+async function loadScopedTicket(req, res) {
+  const detail = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
+  if (!detail) {
+    res.status(404).json({ success: false, message: 'Ticket not found' });
+    return null;
+  }
+  if (!isMarketplaceTicket(detail.ticket)) {
+    res.status(403).json({ success: false, message: 'Ticket is outside the marketplace queue' });
+    return null;
+  }
+  return detail;
+}
+
+/**
+ * Route guard for the shared message edit/delete handlers, so a marketplace moderator cannot
+ * reach a message on a ticket outside this queue by guessing its id.
+ */
+async function requireMarketplaceTicket(req, res, next) {
+  try {
+    if (await loadScopedTicket(req, res)) next();
+  } catch (err) {
+    console.error('Error checking marketplace ticket scope:', err);
+    res.status(500).json({ success: false, message: 'Failed to load ticket' });
+  }
+}
+
+/** Caller mistakes from `updateTicket` (bad move target, missing type, no permission). */
+function ticketUpdateClientStatus(message) {
+  const msg = String(message || '');
+  if (/only a moderator or admin|only the assigned|assign yourself|permission/i.test(msg)) return 403;
+  if (
+    /not valid for|type is required|only be changed when escalating|unknown escalate role|unknown ticket action|invalid|already has a handler|use assign myself|already filed|another desk|pick a ticket|open this ticket/i.test(
+      msg
+    )
+  ) {
+    return 400;
+  }
+  return null;
+}
 
 async function getOverview(req, res) {
   try {
@@ -37,6 +87,8 @@ async function getListings(req, res) {
       status: req.query.status,
       search: req.query.search,
       category: req.query.category,
+      sort: req.query.sort,
+      limit: req.query.limit,
     });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -45,8 +97,18 @@ async function getListings(req, res) {
   }
 }
 
+/** Listing and account ids are UUIDs; anything else is a missing record, not a server fault. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value) {
+  return UUID_PATTERN.test(String(value || ''));
+}
+
 async function getListingDetail(req, res) {
   try {
+    if (!isUuid(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
     const data = await getMarketplaceListingDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
@@ -58,6 +120,9 @@ async function getListingDetail(req, res) {
 
 async function getSellerListings(req, res) {
   try {
+    if (!isUuid(req.params.accountId)) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
     const data = await getSellerMarketplaceListings(req.params.accountId);
     if (!data) return res.status(404).json({ success: false, message: 'Account not found' });
     res.status(200).json({ success: true, data });
@@ -67,8 +132,33 @@ async function getSellerListings(req, res) {
   }
 }
 
+/** Signed link to one original upload on a listing (`?download=1` for an attachment). */
+async function getListingFileOriginal(req, res) {
+  try {
+    const download = ['1', 'true', 'yes'].includes(String(req.query.download || '').toLowerCase());
+    const data = await getListingOriginalAccess(
+      req.params.id,
+      req.params.mediaAssetId,
+      { download },
+      req.session
+    );
+    res.set('Cache-Control', 'private, no-store');
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err?.statusCode || 500;
+    if (status >= 500) console.error('Error preparing listing file access:', err);
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Failed to open the original file',
+    });
+  }
+}
+
 async function patchListing(req, res) {
   try {
+    if (!isUuid(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
     const data = await reviewMarketplaceListing(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
@@ -85,7 +175,7 @@ async function patchListing(req, res) {
 
 async function getTickets(req, res) {
   try {
-    const data = await getMarketplaceTickets();
+    const data = await getMarketplaceTickets({ status: req.query.status });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching marketplace tickets:', err);
@@ -95,8 +185,8 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
-    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    const data = await loadScopedTicket(req, res);
+    if (!data) return;
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching ticket detail:', err);
@@ -104,31 +194,29 @@ async function getTicket(req, res) {
   }
 }
 
+/**
+ * Update a marketplace ticket. `{ action: 'recategorize', type }` corrects the category inside
+ * this desk; `assigned_role` + `type` sends it to another desk or escalates it to Admin, after
+ * which it leaves this queue.
+ */
 async function patchTicket(req, res) {
   try {
+    if (!(await loadScopedTicket(req, res))) return;
     const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error updating ticket:', err);
-    const msg =
-      err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-        ? err.message
-        : 'Failed to update ticket';
+    const status = err?.statusCode || ticketUpdateClientStatus(err?.message) || 500;
+    if (status >= 500) console.error('Error updating ticket:', err);
     res
-      .status(
-        err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-          ? 400
-          : 500
-      )
-      .json({ success: false, message: msg });
+      .status(status)
+      .json({ success: false, message: status < 500 ? err.message : 'Failed to update ticket' });
   }
 }
 
 async function postTicketMessage(req, res) {
   try {
+    if (!(await loadScopedTicket(req, res))) return;
     const { body, isInternal, attachments } = req.body;
     if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
@@ -141,40 +229,6 @@ async function postTicketMessage(req, res) {
     const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
     const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
     res.status(status).json({ success: false, message: msg });
-  }
-}
-
-async function getRestrictions(req, res) {
-  try {
-    const data = await getViolationsAndRestrictions();
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error fetching restrictions:', err);
-    res.status(500).json({ success: false, message: 'Failed to load restrictions' });
-  }
-}
-
-async function postViolation(req, res) {
-  try {
-    const { accountId, warningId, type, title, reason, points } = req.body;
-    if (!accountId || !(warningId || type || title)) {
-      return res.status(400).json({ success: false, message: 'accountId and a predefined warning are required' });
-    }
-    const data = await issueViolation(accountId, { warningId, type: type || title, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error issuing violation:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to issue violation' });
-  }
-}
-
-async function patchRestriction(req, res) {
-  try {
-    const data = await updateAccountRestriction(req.params.id, req.body.action || req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt, reason: req.body?.reason, punishmentId: req.body?.punishmentId || req.body?.punishment_id, customDuration: req.body?.customDuration === true || req.body?.custom_duration === true });
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error updating account restriction:', err);
-    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to update restriction' });
   }
 }
 
@@ -324,18 +378,17 @@ async function patchDisputeMessage(req, res) {
 }
 
 module.exports = {
+  requireMarketplaceTicket,
   getOverview,
   getListings,
   getListingDetail,
   getSellerListings,
   patchListing,
+  getListingFileOriginal,
   getTickets,
   getTicket,
   patchTicket,
   postTicketMessage,
-  getRestrictions,
-  postViolation,
-  patchRestriction,
   getReports,
   getReport,
   patchReport,

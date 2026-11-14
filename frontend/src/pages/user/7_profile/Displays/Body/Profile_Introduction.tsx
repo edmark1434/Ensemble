@@ -916,7 +916,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                         disabled={isGeneratingAi}
                         value={aiAbout}
                         onChange={(e) => setAiAbout(e.target.value)}
-                        placeholder="e.g. 5+ years experience editing YouTube long-form content and gaming montages. Specialized in Premiere Pro, After Effects, sound design, color grading, and retention-focused storytelling..."
+                        placeholder="e.g. 5+ years experience editing YouTube long-form content and high-retention short-form videos. Specialized in dynamic sound design, kinetic captions, cinematic color grading, and storytelling..."
                         className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-900 dark:text-white outline-none focus:border-blue-500 transition-colors resize-none leading-relaxed custom-scrollbar"
                       />
                     </div>

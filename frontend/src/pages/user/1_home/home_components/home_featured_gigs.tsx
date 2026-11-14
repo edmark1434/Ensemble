@@ -115,11 +115,9 @@ export const HomeFeaturedGigs: React.FC = () => {
             <div
               key={gig.id}
               onClick={() => navigate(`/gigs/services/${gig.id}/page`)}
-              className={`group flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none relative ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
+              className={`group flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none relative ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
             >
-              <div>
-                {/* Thumbnail Image */}
-                <div className="relative mb-3 h-40 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
+              <div className="relative h-44 sm:h-48 w-full overflow-hidden border-b border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900 shrink-0">
                   {gig.thumbnail ? (
                     <img
                       src={gig.thumbnail}
@@ -206,8 +204,11 @@ export const HomeFeaturedGigs: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Badges & Slots on Same Row */}
-                <div className="mb-2 flex items-center justify-between gap-1.5">
+                {/* Card Content */}
+                <div className="p-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    {/* Badges & Slots on Same Row */}
+                    <div className="mb-2 flex items-center justify-between gap-1.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className={`relative overflow-hidden rounded border px-2 py-0.5 text-[10px] font-bold ${
@@ -344,6 +345,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                   <span>{formatTimeAgo(gig.postedAt).replace(/^about\s+/i, "")}</span>
                 </div>
               </div>
+            </div>
             </div>
           );
         })}

@@ -2,18 +2,17 @@ const router = require('express').Router();
 const checkSession = require('../middleware/CheckSession');
 const requireStaffRole = require('../middleware/RequireStaffRole');
 const {
+  requireMarketplaceTicket,
   getOverview,
   getListings,
   getListingDetail,
   getSellerListings,
   patchListing,
+  getListingFileOriginal,
   getTickets,
   getTicket,
   patchTicket,
   postTicketMessage,
-  getRestrictions,
-  postViolation,
-  patchRestriction,
   getReports: getMarketplaceReports,
   getReport: getMarketplaceReport,
   patchReport: patchMarketplaceReport,
@@ -54,13 +53,26 @@ router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOve
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
+router.get(
+  '/marketplace/listings/:id/media/:mediaAssetId/original',
+  [checkSession, marketplaceModerator],
+  getListingFileOriginal
+);
 router.get('/marketplace/users/:accountId/listings', [checkSession, marketplaceModerator], getSellerListings);
 router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTickets);
 router.get('/marketplace/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/marketplace/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
 router.post('/marketplace/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
-router.patch('/marketplace/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
-router.delete('/marketplace/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
+router.patch(
+  '/marketplace/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  patchAdminTicketMessage
+);
+router.delete(
+  '/marketplace/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  deleteAdminTicketMessage
+);
 router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
 router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
 router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);
@@ -81,13 +93,19 @@ router.patch(
 router.get('/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
 router.post('/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
-router.patch('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
-router.delete('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
+router.patch(
+  '/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  patchAdminTicketMessage
+);
+router.delete(
+  '/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  deleteAdminTicketMessage
+);
 
-router.get('/restrictions', [checkSession, marketplaceModerator], getRestrictions);
-router.get('/restrictions/lookup', [checkSession, marketplaceModerator], lookupRestrictionAccounts);
-router.post('/restrictions/violations', [checkSession, marketplaceModerator], postViolation);
-router.patch('/restrictions/accounts/:id', [checkSession, marketplaceModerator], patchRestriction);
+// Marketplace moderation enforcement happens inside a report case, so this console has no
+// standalone restrictions desk. The other consoles keep their `/<desk>/restrictions` routes.
 
 // ─── Support Moderator ───────────────────────────────────────────────────
 router.get('/support/overview', [checkSession, supportModerator], SupportModerator.getOverview);
@@ -107,10 +125,9 @@ router.post('/support/disputes/:id/financial-resolution', [checkSession, support
 router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);
 router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
 router.patch('/support/disputes/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchDisputeMessage);
-router.get('/support/restrictions', [checkSession, supportModerator], SupportModerator.getRestrictions);
-router.get('/support/restrictions/lookup', [checkSession, supportModerator], lookupRestrictionAccounts);
-router.post('/support/restrictions/violations', [checkSession, supportModerator], SupportModerator.postViolation);
-router.patch('/support/restrictions/accounts/:id', [checkSession, supportModerator], SupportModerator.patchRestriction);
+
+// Support enforcement happens inside a report case and in User & Team → Users, so this console
+// has no standalone restrictions desk. The forum and jobs consoles keep theirs.
 
 // ─── Forum Moderator ─────────────────────────────────────────────────────
 router.get('/forum/overview', [checkSession, forumModerator], ForumModerator.getOverview);
@@ -151,8 +168,16 @@ router.get('/jobs/tickets', [checkSession, jobsModerator], JobsModerator.getTick
 router.get('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.getTicket);
 router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.patchTicket);
 router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
-router.patch('/jobs/tickets/:id/messages/:messageId', [checkSession, jobsModerator], patchAdminTicketMessage);
-router.delete('/jobs/tickets/:id/messages/:messageId', [checkSession, jobsModerator], deleteAdminTicketMessage);
+router.patch(
+  '/jobs/tickets/:id/messages/:messageId',
+  [checkSession, jobsModerator, JobsModerator.requireJobsTicket],
+  patchAdminTicketMessage
+);
+router.delete(
+  '/jobs/tickets/:id/messages/:messageId',
+  [checkSession, jobsModerator, JobsModerator.requireJobsTicket],
+  deleteAdminTicketMessage
+);
 router.get('/jobs/reports', [checkSession, jobsModerator], JobsModerator.getReports);
 router.get('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.getReport);
 router.patch('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.patchReport);
@@ -169,9 +194,8 @@ router.get('/jobs/postings', [checkSession, jobsModerator], JobsModerator.getPos
 router.get('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.getPosting);
 router.patch('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.patchPosting);
 router.get('/jobs/users/:accountId/history', [checkSession, jobsModerator], JobsModerator.getUserHistory);
-router.get('/jobs/restrictions', [checkSession, jobsModerator], JobsModerator.getRestrictions);
-router.get('/jobs/restrictions/lookup', [checkSession, jobsModerator], lookupRestrictionAccounts);
-router.post('/jobs/restrictions/violations', [checkSession, jobsModerator], JobsModerator.postViolation);
-router.patch('/jobs/restrictions/accounts/:id', [checkSession, jobsModerator], JobsModerator.patchRestriction);
+
+// Jobs & Gigs enforcement is taken inside a report case (or from User & Team → Users), so
+// this console has no standalone restrictions desk. Forum still keeps its own.
 
 module.exports = router;

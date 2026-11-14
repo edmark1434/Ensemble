@@ -33,6 +33,7 @@ const {
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,
   notifyDisputeParties,
+  notifyDisputeHandler,
   resolveDisputeReplyTarget,
   emitDisputeState,
 } = require('./DisputeChatRepositories');
@@ -49,7 +50,13 @@ const {
   buildDisputeReopenMessage,
   buildDisputeSanctionMessage,
   buildDisputePartySwapMessage,
+  buildDisputeDismissMessage,
+  DISPUTE_RESOLUTIONS,
+  DISPUTE_REOPEN_REASONS,
+  DISPUTE_PAYOUT_DEFAULT_DAYS,
+  DISPUTE_PAYOUT_MAX_DAYS,
 } = require('../lib/DisputeResolutions');
+const { listDisputePayouts, planReversalRoute } = require('./DisputeFinancialRepositories');
 const {
   ROLE_TO_TICKET_TYPES,
   TICKET_TYPES,
@@ -75,6 +82,7 @@ const {
   normalizeDisputeVisibility,
 } = require('../lib/DisputeEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
+const { creatableTypesForRole } = require('../lib/TicketQueueScope');
 const {
   FORUM_REPORT_TYPES,
   MARKETPLACE_REPORT_TYPES,
@@ -419,6 +427,13 @@ async function createStaffTicketForAccount(input, session) {
 
   const staff = await resolveDisputeStaffId(session);
   if (!staff?.staff_id) throw ticketError('Staff profile not found', 403);
+
+  // A specialist desk only works its own ticket types, so it may only open those: a ticket it
+  // opened under another desk's type would vanish from its queue the moment it was created.
+  const deskTypes = creatableTypesForRole(staff.role || session?.role);
+  if (deskTypes && !deskTypes.includes(type)) {
+    throw ticketError('Pick a ticket type handled by your desk', 400);
+  }
 
   let handledBy = input?.handledByStaffId ?? input?.assignedStaffId ?? null;
   if (input?.assignToMe) handledBy = staff.staff_id;
@@ -1534,7 +1549,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     pendingInvites,
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
     savedTranscript: await latestTicketTranscript(ticketId),
-    autoClosesAt: ticketAutoClosesAt(ticket),
+    autoClosesAt: ticketAutoClosesAt({ ...ticket, appealDecision: row.appeal_decision || null }),
     scheduledCloseAt: row.scheduled_close_at || null,
     appealDecision: row.appeal_decision || null,
     appealDecidedAt: row.appeal_decided_at || null,
@@ -1821,8 +1836,15 @@ async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorSta
 
 const TICKET_AUTO_CLOSE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Inactivity only closes a ticket that is waiting on the member: staff spoke last and the
+ * member went quiet. A ticket waiting on staff never closes on its own, and neither does an
+ * appeal that has no decision yet — it would vanish without anyone ruling on it.
+ */
 function ticketAutoClosesAt(ticket) {
   if (!ticket || isClosedStatus(ticket.status)) return null;
+  if (ticket.type === APPEAL_TICKET_TYPE && !ticket.appealDecision) return null;
+  if (String(ticket.lastMessageAuthorType || '').toLowerCase() !== 'staff') return null;
   const last = ticket.lastMessageAt || ticket.createdAt;
   if (!last) return null;
   return new Date(new Date(last).getTime() + TICKET_AUTO_CLOSE_MS).toISOString();
@@ -1907,17 +1929,22 @@ async function generateTicketTranscript(ticketId, staffSession) {
 }
 
 async function autoCloseInactiveTickets() {
+  // Waiting on the member only (staff replied last), never an undecided appeal.
   const result = await pool.query(
     `SELECT ticket_id, account_id, ticket_number
      FROM tickets
      WHERE deleted_at IS NULL
        AND status NOT IN ('Closed', 'Resolved')
+       AND LOWER(COALESCE(last_message_author_type, '')) = 'staff'
+       AND NOT (type = $1 AND appeal_decision IS NULL)
        AND COALESCE(last_message_at, created_at) < NOW() - INTERVAL '7 days'
      ORDER BY COALESCE(last_message_at, created_at) ASC
-     LIMIT 25`
+     LIMIT 25`,
+    [APPEAL_TICKET_TYPE]
   );
   let closed = 0;
   for (const row of result.rows) {
+    // Re-check inside the update: the member may have replied since the select.
     const updated = await pool.query(
       `UPDATE tickets
        SET status = 'Closed',
@@ -1926,6 +1953,8 @@ async function autoCloseInactiveTickets() {
        WHERE ticket_id = $1
          AND deleted_at IS NULL
          AND status NOT IN ('Closed', 'Resolved')
+         AND LOWER(COALESCE(last_message_author_type, '')) = 'staff'
+         AND COALESCE(last_message_at, created_at) < NOW() - INTERVAL '7 days'
        RETURNING ticket_id`,
       [row.ticket_id]
     );
@@ -1939,7 +1968,7 @@ async function autoCloseInactiveTickets() {
     await recordTicketEvent({
       ticketId: row.ticket_id,
       eventType: 'status',
-      summary: 'Auto-closed after 7 days without activity',
+      summary: 'Auto-closed after 7 days without a reply from the member',
     });
     await saveTicketCloseTranscript(row.ticket_id, { reason: 'auto' });
     await notifyTicketClosed({
@@ -1983,7 +2012,7 @@ async function scheduleTicketClose(ticketId, staffSession, closesAtInput) {
   if (!isStaffSession(staffSession)) throw ticketError('Only staff can schedule a close', 403);
   const closesAt = parseScheduledCloseAt(closesAtInput);
   const existing = await pool.query(
-    `SELECT ticket_id, status, ticket_number, account_id
+    `SELECT ticket_id, status, ticket_number, account_id, type, appeal_decision, handled_by_staff_id
      FROM tickets
      WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
@@ -1991,6 +2020,10 @@ async function scheduleTicketClose(ticketId, staffSession, closesAtInput) {
   if (!existing.rows.length) return null;
   const row = existing.rows[0];
   if (isClosedStatus(row.status)) throw ticketError('This ticket is already closed', 400);
+  if (row.type === APPEAL_TICKET_TYPE && !row.appeal_decision) {
+    throw ticketError('Decide this appeal (accept or deny) instead of scheduling it to close.', 409);
+  }
+  await assertMayChangeTicketState(row, staffSession);
   try {
     await pool.query(
       `UPDATE tickets
@@ -2593,14 +2626,19 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     if (row.handled_by_staff_id && !perms.isAdmin) {
       throw new Error('This ticket already has a handler. They must release the case first.');
     }
-    await pool.query(
+    // Two staff claiming at once: only the first finds it unassigned (Admin may take over).
+    const claimed = await pool.query(
       `UPDATE tickets
        SET handled_by_staff_id = $1,
            status = CASE WHEN status = 'Open' THEN 'In Progress' ELSE status END,
            updated_at = NOW()
-       WHERE ticket_id = $2 AND deleted_at IS NULL`,
-      [staff.staff_id, ticketId]
+       WHERE ticket_id = $2 AND deleted_at IS NULL
+         AND ($3::boolean OR handled_by_staff_id IS NULL)`,
+      [staff.staff_id, ticketId, Boolean(perms.isAdmin)]
     );
+    if (!claimed.rowCount) {
+      throw ticketError('Someone else just claimed this ticket. Refresh to see who.', 409);
+    }
     if (normalizeTicketStatus(row.status) === 'Open') {
       await recordTicketEvent({
         ticketId,
@@ -2653,7 +2691,82 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     return getTicketDetail(ticketId, staffSession);
   }
 
+  if (action === 'recategorize') {
+    return recategorizeTicket(ticketId, patch, staff, perms, staffSession);
+  }
+
   throw new Error(`Unknown ticket action: ${action}`);
+}
+
+/**
+ * Correct a misfiled ticket's category inside the desk that already owns it. Unlike a move to
+ * another desk, the handler and status stay as they are and the ticket is not flagged as
+ * escalated. Moving to another desk's type still goes through `assigned_role`.
+ */
+async function recategorizeTicket(ticketId, patch, staff, perms, staffSession) {
+  const current = await pool.query(
+    `SELECT type, status, priority FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!current.rows.length) return null;
+  const row = current.rows[0];
+
+  if (isClosedStatus(row.status)) {
+    throw ticketError('Open this ticket before changing its category.', 400);
+  }
+  if (!perms.canAct) {
+    throw ticketError('Only the assigned handler or an Admin can change this ticket.', 403);
+  }
+  if (!isValidTicketType(patch.type)) {
+    throw ticketError('Pick a ticket category.', 400);
+  }
+
+  const fromType = normalizeTicketType(row.type);
+  const toType = normalizeTicketType(patch.type);
+  if (fromType === toType) {
+    throw ticketError(`This ticket is already filed as ${toType}.`, 400);
+  }
+  // An account-penalty appeal carries a decision and a 12-month hold; it is not a category.
+  if (fromType === APPEAL_TICKET_TYPE || toType === APPEAL_TICKET_TYPE) {
+    throw ticketError('Account-penalty appeals cannot change category.', 400);
+  }
+  const fromQueue = inferTicketAssignableQueue(fromType);
+  const toQueue = inferTicketAssignableQueue(toType);
+  if (fromQueue !== toQueue && !perms.isAdmin) {
+    throw ticketError('That category belongs to another desk. Use Send to another desk instead.', 400);
+  }
+
+  const reason = String(patch.reason || '').trim().slice(0, 500);
+  // Same rule as a move: a category with a non-default priority (e.g. copyright) sets it.
+  const defaultPriority = defaultPriorityForType(toType);
+  const nextPriority =
+    defaultPriority !== 'Medium' ? defaultPriority : normalizeTicketPriority(row.priority);
+  const priorityChanged = nextPriority !== normalizeTicketPriority(row.priority);
+
+  await pool.query(
+    `UPDATE tickets SET type = $1, priority = $2, updated_at = NOW()
+     WHERE ticket_id = $3 AND deleted_at IS NULL`,
+    [toType, nextPriority, ticketId]
+  );
+
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'recategorize',
+    summary: `Category changed from ${fromType} to ${toType}${reason ? ` — ${reason}` : ''}`,
+    actorStaffId: staff.staff_id,
+    actorAccountId: sessionAccountId(staffSession),
+    metadata: { from: fromType, to: toType, reason: reason || null },
+  });
+  if (priorityChanged) {
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'priority',
+      summary: `Priority set to ${nextPriority}`,
+      actorStaffId: staff.staff_id,
+    });
+  }
+  await announceTicketState(ticketId);
+  return getTicketDetail(ticketId, staffSession);
 }
 
 async function updateTicket(ticketId, patch, staffSession) {
@@ -2674,7 +2787,8 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   const currentRow = await pool.query(
-    `SELECT handled_by_staff_id, status, type, account_id, ticket_number FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT handled_by_staff_id, status, priority, type, account_id, ticket_number, appeal_decision
+     FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!currentRow.rows.length) return null;
@@ -2688,6 +2802,26 @@ async function updateTicket(ticketId, patch, staffSession) {
     staff,
     sessionStaffId(staffSession)
   );
+
+  // Someone else's ticket is theirs to close, reopen or re-prioritise (Admin may override).
+  const changesState =
+    (patch.status !== undefined && normalizeTicketStatus(patch.status) !== normalizeTicketStatus(currentStatus)) ||
+    (patch.priority !== undefined &&
+      normalizeTicketPriority(patch.priority) !== normalizeTicketPriority(currentTicket.priority));
+  if (changesState && !patch.assigned_role && !ticketPerms.canAct) {
+    throw ticketError('Only the assigned handler or an Admin can change this ticket.', 403);
+  }
+  // An appeal ends with a decision (accept / deny), which records the outcome and any
+  // 12-month hold. A bare close would drop it with no ruling at all.
+  if (
+    currentTicket.type === APPEAL_TICKET_TYPE &&
+    !currentTicket.appeal_decision &&
+    patch.status !== undefined &&
+    isClosedStatus(patch.status) &&
+    !isClosedStatus(currentStatus)
+  ) {
+    throw ticketError('Decide this appeal (accept or deny) to close it.', 409);
+  }
 
   if (patch.assigned_role) {
     const catalog = await getTicketCatalog();
@@ -2863,11 +2997,20 @@ async function updateTicket(ticketId, patch, staffSession) {
       });
     }
     if (patch.assigned_role) {
+      const moveReason = String(patch.reason || '').trim().slice(0, 500);
       await recordTicketEvent({
         ticketId,
         eventType: 'escalate',
-        summary: `Moved to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}`,
+        summary: `Moved to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}${
+          moveReason ? ` — ${moveReason}` : ''
+        }`,
         actorStaffId,
+        metadata: {
+          fromType: normalizeTicketType(currentTicket.type),
+          toRole: patch.assigned_role,
+          toType: patch.type ? normalizeTicketType(patch.type) : null,
+          reason: moveReason || null,
+        },
       });
     }
     if (patch.handled_by_staff_id !== undefined) {
@@ -2934,6 +3077,38 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   return getTicketDetail(ticketId, staffSession);
+}
+
+/** The columns a desk's queue scope is decided on (see lib/TicketQueueScope). */
+async function getTicketQueueFacts(ticketId) {
+  const result = await pool.query(
+    `SELECT t.type, t.escalated_to_role, st.role AS handler_role
+     FROM tickets t
+     LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
+     WHERE t.ticket_id::text = $1 AND t.deleted_at IS NULL`,
+    [String(ticketId)]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    type: row.type,
+    escalatedToRole: row.escalated_to_role || null,
+    handlerRole: row.handler_role || null,
+  };
+}
+
+/**
+ * Status, priority and close-scheduling belong to the ticket's handler (or Admin). An
+ * unassigned ticket may be triaged by any staff role that works the queue.
+ */
+async function assertMayChangeTicketState(ticketRow, staffSession) {
+  const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
+  const staff = await resolveDisputeStaffId(staffSession);
+  const perms = buildTicketPermissions(ticketRow, staff, sessionStaffId(staffSession));
+  if (!perms.canAct) {
+    throw ticketError('Only the assigned handler or an Admin can change this ticket.', 403);
+  }
+  return perms;
 }
 
 function assertStaffMayAnswerTicket(ticketRow, staffSession) {
@@ -3465,13 +3640,21 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (row.handled_by_staff_id && !perms.isAdmin) {
       throw new Error('This dispute already has a handler. They must release the case first.');
     }
-    await pool.query(
+    // Two Support Moderators claiming at once: only the first update finds the case unassigned.
+    const claimed = await pool.query(
       `UPDATE disputes
        SET handled_by_staff_id = $1,
            updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
+       WHERE dispute_id = $2
+         AND ($3::boolean OR handled_by_staff_id IS NULL)`,
+      [staff.staff_id, disputeId, Boolean(perms.isAdmin)]
     );
+    if (!claimed.rowCount) {
+      const error = new Error('Someone else just claimed this dispute. Refresh to see who.');
+      error.statusCode = 409;
+      throw error;
+    }
+    await emitDisputeState(disputeId, { reason: 'handler_changed' });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3496,6 +3679,7 @@ async function updateDispute(disputeId, patch, staffSession) {
         [disputeId, staff.staff_id]
       );
     }
+    await emitDisputeState(disputeId, { reason: 'handler_changed' });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3536,6 +3720,20 @@ async function updateDispute(disputeId, patch, staffSession) {
          WHERE dispute_id = $2`,
         [nextAssignee, disputeId]
       );
+      if (nextNorm) {
+        try {
+          await notifyDisputeHandler(
+            { dispute_id: disputeId, handled_by_staff_id: nextAssignee },
+            {
+              message: `You were assigned dispute ${row.dispute_number || ''}.`.replace(/\s+\./, '.'),
+              path: `/disputes/${disputeId}`,
+            }
+          );
+        } catch (err) {
+          console.warn('Dispute assignment notice skipped:', err.message);
+        }
+      }
+      await emitDisputeState(disputeId, { reason: 'handler_changed' });
     }
 
     const otherKeys = Object.keys(patch).filter(
@@ -3552,9 +3750,14 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (action === 'approve') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before approving.');
+    if (String(refreshed.status || '').toLowerCase() === 'closed') {
+      throw disputeDecisionError('This dispute is closed. Reopen it before making it public.');
+    }
+    // Making a case public moves it out of the review queue; it never pulls a case that is
+    // already further along (awaiting response, under review) back to "open".
     await pool.query(
       `UPDATE disputes
-       SET status = 'open',
+       SET status = CASE WHEN status = 'pending_review' THEN 'open'::dispute_status ELSE status END,
            visibility = TRUE,
            updated_at = NOW()
        WHERE dispute_id = $1`,
@@ -3646,7 +3849,8 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
     if (notes.length > 2000) throw new Error('Resolution notes are too long.');
 
-    await pool.query(
+    // Guarded on status so a settle or second resolve landing at the same moment wins once.
+    const closedNow = await pool.query(
       `
       UPDATE disputes
       SET status = 'closed',
@@ -3655,9 +3859,13 @@ async function updateDispute(disputeId, patch, staffSession) {
           resolved_at = NOW(),
           updated_at = NOW()
       WHERE dispute_id = $3
+        AND status <> 'closed'
       `,
       [resolution.key, notes, disputeId]
     );
+    if (!closedNow.rowCount) {
+      throw disputeDecisionError('This dispute was just closed by someone else. Refresh to see the decision.');
+    }
 
     await recordAccountActivity({
       accountId: refreshed.by_account_id || refreshed.for_account_id,
@@ -3707,16 +3915,23 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (action === 'dismiss') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
-    await pool.query(
+    const notes = String(patch.resolution_notes || '').trim();
+    if (notes.length > 2000) throw disputeDecisionError('Resolution notes are too long.');
+    // Dismissing keeps the case's visibility. A private complaint that goes nowhere must not
+    // land on both profiles and the public page just because it was closed.
+    const dismissed = await pool.query(
       `UPDATE disputes
        SET status = 'closed',
-           visibility = TRUE,
-           resolution_notes = COALESCE($1, resolution_notes),
+           resolution_notes = COALESCE(NULLIF($1, ''), resolution_notes),
            resolved_at = NOW(),
            updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [patch.resolution_notes || null, disputeId]
+       WHERE dispute_id = $2
+         AND status <> 'closed'`,
+      [notes, disputeId]
     );
+    if (!dismissed.rowCount) {
+      throw disputeDecisionError('This dispute is already closed. Reopen it first.');
+    }
     await recordAccountActivity({
       accountId: refreshed.by_account_id || refreshed.for_account_id,
       action: `Dispute ${refreshed.dispute_number || disputeId} dismissed`,
@@ -3725,9 +3940,28 @@ async function updateDispute(disputeId, patch, staffSession) {
       referencePrefix: 'DIS',
       referenceId: disputeId,
       actorStaffId: staff.staff_id,
-      metadata: { status: 'closed' },
+      metadata: { status: 'closed', visibility: Boolean(refreshed.visibility) },
     });
-    await emitDisputeState(disputeId);
+    try {
+      await postDisputeDecisionMessage(
+        refreshed,
+        staffSession,
+        buildDisputeDismissMessage({ notes, disputeNumber: refreshed.dispute_number || null }),
+        { audience: refreshed.visibility ? 'public' : 'disputer', notify: false, asSystem: true }
+      );
+    } catch (err) {
+      console.warn('Dispute dismissal message skipped:', err.message);
+    }
+    try {
+      await notifyDisputeParties(refreshed, {
+        message: `Dispute ${refreshed.dispute_number || ''} was dismissed and closed.`.replace(/\s+was/, ' was'),
+        path: refreshed.visibility ? `/disputes/${disputeId}` : '/contracts/disputes',
+        onlyFiler: !refreshed.visibility,
+      });
+    } catch (err) {
+      console.warn('Dispute dismissal notice skipped:', err.message);
+    }
+    await emitDisputeState(disputeId, { reason: 'dismissed' });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3749,6 +3983,18 @@ async function updateDispute(disputeId, patch, staffSession) {
   }
 
   const normalized = normalizeDisputeStatusPatch(patch);
+  // Closing and reopening are decisions with a recorded reason and a message for both
+  // parties; a bare status edit would skip both. Route them through Resolve / Reopen.
+  const currentStatus = String(refreshed.status || '').toLowerCase();
+  if (normalized.status !== undefined && normalized.status !== currentStatus) {
+    if (normalized.status === 'closed') {
+      throw disputeDecisionError('Use Resolve to close a dispute so the outcome is recorded and posted.');
+    }
+    if (currentStatus === 'closed') {
+      throw disputeDecisionError('Use Reopen to bring a closed dispute back, so the reason is recorded.');
+    }
+  }
+  if (normalized.status === currentStatus) delete normalized.status;
   const allowed = [
     'status',
     'priority',
@@ -3950,6 +4196,10 @@ async function loadDisputeCaseFile(row) {
       rev.credit_transaction_id AS reversed_by_transaction_id,
       src_w.type AS source_wallet_type,
       dst_w.type AS destination_wallet_type,
+      src_w.wallet_id AS source_wallet_id,
+      dst_w.wallet_id AS destination_wallet_id,
+      src_aw.account_id AS source_account_id,
+      dst_aw.account_id AS destination_account_id,
       COALESCE(src_a.display_name, src_u.first_name || ' ' || src_u.last_name, 'Platform') AS source_name,
       src_a.handle AS source_handle,
       COALESCE(dst_a.display_name, dst_u.first_name || ' ' || dst_u.last_name, 'Platform') AS destination_name,
@@ -3969,16 +4219,22 @@ async function loadDisputeCaseFile(row) {
     WHERE ct.related_dispute_id = $1
       OR ($2::uuid IS NOT NULL AND ct.credit_transaction_id = $2::uuid)
       OR (ct.reference_table = 'contracts' AND ct.reference_id = ANY($3::uuid[]))
-      OR (ct.reference_table = 'contract_milestones' AND ct.reference_id = ANY($4::uuid[]))
+      OR (
+        ct.reference_table IN ('contract_milestones', 'contract_milestone_revisions')
+        AND ct.reference_id = ANY($4::uuid[])
+      )
       OR ct.reverses_credit_transaction_id IN (
            SELECT credit_transaction_id FROM credit_transactions
            WHERE related_dispute_id = $1
               OR ($2::uuid IS NOT NULL AND credit_transaction_id = $2::uuid)
               OR (reference_table = 'contracts' AND reference_id = ANY($3::uuid[]))
-              OR (reference_table = 'contract_milestones' AND reference_id = ANY($4::uuid[]))
+              OR (
+                reference_table IN ('contract_milestones', 'contract_milestone_revisions')
+                AND reference_id = ANY($4::uuid[])
+              )
          )
     ORDER BY ct.created_at ASC
-    LIMIT 80
+    LIMIT 120
     `,
     [
       row.dispute_id,
@@ -4045,6 +4301,63 @@ async function loadDisputeCaseFile(row) {
 
   const contractTitleById = new Map(contractResult.rows.map((contract) => [contract.contract_id, contract.title]));
   const milestoneNameById = new Map(milestoneResult.rows.map((milestone) => [milestone.contract_milestone_id, milestone.name]));
+  const linkedContractRow = linkedContractId
+    ? contractResult.rows.find((contract) => String(contract.contract_id) === String(linkedContractId))
+    : null;
+  const parties = linkedContractRow
+    ? {
+        client_account_id: linkedContractRow.client_account_id,
+        freelancer_account_id: linkedContractRow.freelancer_account_id,
+      }
+    : null;
+  const nameByAccount = new Map();
+  if (linkedContractRow) {
+    nameByAccount.set(String(linkedContractRow.client_account_id), {
+      name: linkedContractRow.client_name,
+      handle: linkedContractRow.client_handle || null,
+    });
+    nameByAccount.set(String(linkedContractRow.freelancer_account_id), {
+      name: linkedContractRow.freelancer_name,
+      handle: linkedContractRow.freelancer_handle || null,
+    });
+  }
+  // A reversal that is already scheduled counts as taken, even before its ledger row exists.
+  let scheduledReversalIds = new Set();
+  try {
+    const scheduled = await pool.query(
+      `SELECT reverses_credit_transaction_id FROM dispute_payouts
+       WHERE dispute_id = $1 AND kind = 'reversal' AND status IN ('scheduled', 'failed')
+         AND reverses_credit_transaction_id IS NOT NULL`,
+      [row.dispute_id]
+    );
+    scheduledReversalIds = new Set(scheduled.rows.map((r) => String(r.reverses_credit_transaction_id)));
+  } catch (err) {
+    if (err.code !== '42P01') throw err;
+  }
+  const milestoneContractById = new Map(
+    milestoneResult.rows.map((milestone) => [String(milestone.contract_milestone_id), String(milestone.contract_id)])
+  );
+  // The case file also lists the parties' other contracts for context; only this dispute's
+  // own contract (and anything linked to the dispute) can be reversed from here.
+  const inDisputeScope = (tx) => {
+    if (String(tx.related_dispute_id || '') === String(row.dispute_id)) return true;
+    if (String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || '')) return true;
+    if (!linkedContractId) return false;
+    if (tx.reference_table === 'contracts') return String(tx.reference_id) === String(linkedContractId);
+    if (['contract_milestones', 'contract_milestone_revisions'].includes(tx.reference_table)) {
+      return milestoneContractById.get(String(tx.reference_id)) === String(linkedContractId);
+    }
+    return false;
+  };
+  const referenceLabelFor = (tx) => {
+    if (tx.reference_table === 'contracts') return contractTitleById.get(tx.reference_id) || 'Contract';
+    if (tx.reference_table === 'contract_milestones') return milestoneNameById.get(tx.reference_id) || 'Milestone';
+    if (tx.reference_table === 'contract_milestone_revisions') {
+      return `Paid revision · ${milestoneNameById.get(tx.reference_id) || 'Milestone'}`;
+    }
+    if (tx.reference_table === 'disputes') return 'Dispute payout';
+    return tx.reference_table || null;
+  };
 
   return {
     contracts: contractResult.rows.map((contract) => ({
@@ -4066,10 +4379,35 @@ async function loadDisputeCaseFile(row) {
     })),
     transactions: transactionResult.rows.map((tx) => {
       const status = String(tx.status || '');
-      const alreadyReversed = Boolean(tx.reversed_by_transaction_id) || status === 'Reversed';
+      const alreadyReversed =
+        Boolean(tx.reversed_by_transaction_id) ||
+        status === 'Reversed' ||
+        scheduledReversalIds.has(String(tx.credit_transaction_id));
       const tiedToThisDispute =
         String(tx.related_dispute_id || '') === String(row.dispute_id) ||
         String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || '');
+      // Same routing the server applies when staff confirm, so the dialog can say exactly
+      // whose credits are taken and who receives them — or why this one can't be reversed.
+      const route = planReversalRoute({
+        source: {
+          wallet_id: tx.source_wallet_id,
+          type: tx.source_wallet_type,
+          account_id: tx.source_account_id,
+        },
+        destination: {
+          wallet_id: tx.destination_wallet_id,
+          type: tx.destination_wallet_type,
+          account_id: tx.destination_account_id,
+        },
+        parties,
+        hasContract: Boolean(linkedContractId),
+      });
+      const recipient = route.allowed
+        ? nameByAccount.get(String(route.recipientAccountId)) ||
+          (String(route.recipientAccountId) === String(tx.source_account_id)
+            ? { name: tx.source_name, handle: tx.source_handle || null }
+            : null)
+        : null;
       return {
         id: tx.credit_transaction_id,
         type: tx.type,
@@ -4077,11 +4415,7 @@ async function loadDisputeCaseFile(row) {
         status: tx.status,
         createdAt: tx.created_at,
         referenceTable: tx.reference_table || null,
-        referenceLabel: tx.reference_table === 'contracts'
-          ? contractTitleById.get(tx.reference_id) || 'Contract'
-          : tx.reference_table === 'contract_milestones'
-            ? milestoneNameById.get(tx.reference_id) || 'Milestone'
-            : tx.reference_table || null,
+        referenceLabel: referenceLabelFor(tx),
         sourceName: tx.source_name,
         sourceHandle: tx.source_handle || null,
         sourceWallet: walletLabel(tx.source_wallet_type),
@@ -4091,11 +4425,28 @@ async function loadDisputeCaseFile(row) {
         tiedToThisDispute,
         reversesTransactionId: tx.reverses_credit_transaction_id || null,
         reversedByTransactionId: tx.reversed_by_transaction_id || null,
+        reversalScheduled: scheduledReversalIds.has(String(tx.credit_transaction_id)),
+        reversal: {
+          allowed: Boolean(route.allowed) && inDisputeScope(tx),
+          reason: !inDisputeScope(tx)
+            ? 'This transaction belongs to another contract between these accounts.'
+            : route.allowed
+              ? null
+              : route.reason,
+          fromName: tx.destination_name,
+          fromHandle: tx.destination_handle || null,
+          toName: recipient?.name || (route.allowed ? 'Original sender' : null),
+          toHandle: recipient?.handle || null,
+          toRole: route.allowed ? route.recipientRole || null : null,
+        },
+        inDisputeScope: inDisputeScope(tx),
         reversible:
           status === 'Completed' &&
           !alreadyReversed &&
           !tx.reverses_credit_transaction_id &&
-          !row.financial_resolution_at,
+          !row.financial_resolution_at &&
+          inDisputeScope(tx) &&
+          Boolean(route.allowed),
       };
     }),
     relatedDisputes: relatedResult.rows.map((dispute) => ({
@@ -4154,6 +4505,27 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     chatAvailable = false;
   }
 
+  let payouts = [];
+  try {
+    payouts = (await listDisputePayouts(pool, disputeId)).map(mapDisputePayout);
+  } catch (err) {
+    console.error('Error loading dispute payouts:', err.message);
+  }
+  const waiting = payouts.filter((p) => ['scheduled', 'failed'].includes(p.status));
+  const closed = String(row.status || '').toLowerCase() === 'closed';
+
+  // The exact text the server posts, so the console preview never drifts from it.
+  const names = {
+    disputer: row.initiator_handle ? `@${row.initiator_handle}` : row.initiator_name || 'The disputer',
+    disputee: row.respondent_handle ? `@${row.respondent_handle}` : row.respondent_name || 'The disputee',
+    disputeNumber: row.dispute_number || null,
+  };
+  const withPreview = (options, entries, build) =>
+    options.map((option) => {
+      const entry = entries.find((item) => item.key === option.key);
+      return entry ? { ...option, preview: build(entry, names) } : option;
+    });
+
   return {
     dispute: mapDisputeRow(row),
     caseFile,
@@ -4163,9 +4535,55 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     permissions,
     assignableQueue: 'disputes',
     assignableStaff,
+    payouts,
+    payoutState: {
+      waiting: waiting.length,
+      // Auto-release only runs on closed cases; a reopened case holds its payouts.
+      paused: waiting.length > 0 && !closed,
+      failed: waiting.filter((p) => p.status === 'failed').length,
+      nextReleaseAt:
+        waiting
+          .map((p) => (p.releaseAt ? new Date(p.releaseAt) : null))
+          .filter((date) => date && !Number.isNaN(date.getTime()))
+          .sort((a, b) => a.getTime() - b.getTime())[0] || null,
+      canCancel: waiting.length > 0 && !closed && !payouts.some((p) => p.status === 'paid'),
+    },
+    payoutPolicy: {
+      defaultDays: DISPUTE_PAYOUT_DEFAULT_DAYS,
+      maxDays: DISPUTE_PAYOUT_MAX_DAYS,
+    },
     // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
-    resolutionOptions: listDisputeResolutionOptions(),
-    reopenOptions: listDisputeReopenOptions(),
+    resolutionOptions: withPreview(
+      listDisputeResolutionOptions(),
+      DISPUTE_RESOLUTIONS,
+      buildDisputeResolutionMessage
+    ),
+    reopenOptions: withPreview(listDisputeReopenOptions(), DISPUTE_REOPEN_REASONS, buildDisputeReopenMessage),
+  };
+}
+
+function mapDisputePayout(row) {
+  const holder = row.holder_handle ? `@${row.holder_handle}` : row.holder_name || null;
+  return {
+    id: String(row.dispute_payout_id),
+    kind: row.kind,
+    status: row.status,
+    amount: Number(row.amount_credits || 0),
+    recipientAccountId: row.recipient_account_id || null,
+    recipientRole: row.recipient_role || null,
+    recipientName: row.recipient_name || 'Member',
+    recipientHandle: row.recipient_handle || null,
+    heldIn: `${walletLabel(row.source_wallet_type)}${holder ? ` · ${holder}` : ''}`,
+    paysInto: walletLabel(row.destination_wallet_type),
+    releaseAt: row.release_at || null,
+    paidAt: row.paid_at || null,
+    cancelledAt: row.cancelled_at || null,
+    cancelReason: row.cancel_reason || null,
+    failureReason: row.failure_reason || null,
+    attempts: Number(row.attempts || 0),
+    creditTransactionId: row.credit_transaction_id || null,
+    reversesTransactionId: row.reverses_credit_transaction_id || null,
+    createdAt: row.created_at || null,
   };
 }
 
@@ -4451,6 +4869,9 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
   if (String(row.sanction_type || '').toLowerCase() === 'ban') {
     throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
   }
+  if (String(row.status || '').toLowerCase() === 'closed') {
+    throw disputeDecisionError('This dispute is closed. Reopen it before deciding it again.');
+  }
 
   const handle = row.respondent_handle ? `@${row.respondent_handle}` : 'the respondent';
   const name = row.respondent_name || 'The respondent';
@@ -4550,6 +4971,13 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms, patch =
   if (banned) {
     message += '\n\nThe permanent ban from the earlier decision stays in place until a staff member lifts it.';
   }
+  const waitingPayouts = (await listDisputePayouts(pool, disputeId)).filter((p) =>
+    ['scheduled', 'failed'].includes(p.status)
+  );
+  if (waitingPayouts.length) {
+    message +=
+      '\n\nThe payout from the earlier ruling is paused while the case is reviewed. No credits move until staff confirm or withdraw it.';
+  }
 
   try {
     await postDisputeDecisionMessage(row, staffSession, message, {
@@ -4587,7 +5015,7 @@ async function reopenDispute(disputeId, row, staff, staffSession, perms, patch =
     console.warn('Dispute reopen notice skipped:', err.message);
   }
 
-  await emitDisputeState(disputeId);
+  await emitDisputeState(disputeId, { reason: 'reopened' });
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -4612,9 +5040,10 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
   if (notes.length > 2000) throw disputeDecisionError('The note is too long.');
 
   const chatId = await getDisputeChatId(disputeId);
-  if (chatId && !isMongoReady()) {
+  // Even a case with no discussion yet needs Mongo: the swap is always announced there.
+  if (!isMongoReady()) {
     const error = new Error(
-      'MongoDB is not connected — the discussion cannot be relabelled, so the parties were not swapped.'
+      'MongoDB is not connected — the discussion cannot be relabelled or notified, so the parties were not swapped.'
     );
     error.statusCode = 503;
     throw error;
@@ -4726,11 +5155,31 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
     console.warn('Dispute party swap notice skipped:', err.message);
   }
 
-  await emitDisputeState(disputeId);
+  await emitDisputeState(disputeId, { reason: 'parties_swapped' });
   return getDisputeDetail(disputeId, staffSession);
 }
 
 const REPORT_DECISIONS = new Set(['deny', 'sanction']);
+/** Statuses a handler may set by hand. Sanctioned and Denied come only from a decision. */
+const REPORT_EDITABLE_STATUSES = new Set([
+  'open', 'in_progress', 'under_review', 'escalated', 'closed', 'resolved', 'dismissed',
+]);
+/** A decided report is final, so it cannot be reopened and sanctioned a second time. */
+const REPORT_FINAL_STATUSES = new Set(['sanctioned', 'denied']);
+const REPORT_PRIORITIES = new Set(['low', 'medium', 'high']);
+/** Reports about the platform itself; their account columns point at the reporter. */
+const UNSANCTIONABLE_REPORT_TARGETS = new Set(['technical_problem']);
+
+function reportStatusToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+/** Whether a report names someone other than the reporter who could be sanctioned. */
+function reportCanBeSanctioned(row) {
+  if (!row?.for_account_id) return false;
+  if (UNSANCTIONABLE_REPORT_TARGETS.has(reportStatusToken(row.target_type))) return false;
+  return String(row.for_account_id) !== String(row.by_account_id || '');
+}
 
 function reportDecisionError(message, statusCode = 400) {
   const error = new Error(message);
@@ -4758,7 +5207,7 @@ async function notifyReportReporter(row, message) {
   }
 }
 
-async function applyReportSanction(row, patch, staffId) {
+async function applyReportSanction(row, patch, staffId, staffRole = null) {
   const accountId = row.for_account_id;
   if (!accountId) throw reportDecisionError('This report is not tied to an account');
   const reason = String(patch?.reason || '').trim();
@@ -4766,9 +5215,18 @@ async function applyReportSanction(row, patch, staffId) {
   const sanctionType = String(patch?.sanctionType || patch?.sanction_type || 'warning').toLowerCase();
   const days = patch?.days;
   const { warnAccount, updateAccountStatus } = require('./AdminUserTeamRepositories');
+  // A report decision is held to the same role rules as the Users desk: specialist
+  // moderators may warn and suspend, and only Admin or Support may ban.
+  if (['suspend', 'suspended', 'ban', 'banned'].includes(sanctionType)) {
+    const { assertStatusActionAllowed } = require('../lib/UserTeamPermissions');
+    assertStatusActionAllowed({ role: staffRole }, sanctionType.startsWith('ban') ? 'ban' : 'suspend');
+  }
 
   if (sanctionType === 'warning' || sanctionType === 'warn') {
-    return warnAccount(accountId, { warningId: 'staff_follow_up', reason, days }, staffId);
+    // Staff pick the named warning that fits (checked against their desk in warnAccount);
+    // Staff follow-up stays the default when none is chosen.
+    const warningId = String(patch?.warningId || patch?.warning_id || '').trim() || 'staff_follow_up';
+    return warnAccount(accountId, { warningId, reason }, staffId);
   }
   if (sanctionType === 'suspend' || sanctionType === 'suspended') {
     if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');
@@ -4810,23 +5268,48 @@ async function decideReport(reportId, action, patch, staffSession) {
   if (action !== 'deny' && action !== 'sanction') {
     throw reportDecisionError('Choose sanction or deny.', 400);
   }
-
-  let nextStatus = 'denied';
-  let violationId = null;
-  if (action === 'sanction') {
-    const sanction = await applyReportSanction(row, patch, staff.staff_id);
-    violationId = sanction?.violationId || null;
-    nextStatus = 'sanctioned';
+  // A technical-problem report stores the reporter as its account, so "sanctioning" it would
+  // punish the member who reported a bug.
+  if (action === 'sanction' && !reportCanBeSanctioned(row)) {
+    throw reportDecisionError(
+      'This report does not name another account to sanction. Close or deny it instead.',
+      409
+    );
   }
 
-  await pool.query(
+  const nextStatus = action === 'sanction' ? 'sanctioned' : 'denied';
+  // Claim the decision first, so a double click or a second staff member cannot apply the
+  // sanction twice. If the sanction then fails, the report goes back to where it was.
+  const claimed = await pool.query(
     `UPDATE reports
-     SET status = $1,
-         violation_id = COALESCE($2, violation_id),
-         updated_at = NOW()
-     WHERE report_id = $3 AND deleted_at IS NULL`,
-    [nextStatus, violationId, reportId]
+     SET status = $1, updated_at = NOW()
+     WHERE report_id = $2 AND deleted_at IS NULL AND status = $3
+     RETURNING report_id`,
+    [nextStatus, reportId, row.status]
   );
+  if (!claimed.rowCount) {
+    throw reportDecisionError('This report was just decided. Refresh to see the outcome.', 409);
+  }
+
+  let violationId = null;
+  if (action === 'sanction') {
+    try {
+      const sanction = await applyReportSanction(row, patch, staff.staff_id, staff.role);
+      violationId = sanction?.violationId || null;
+    } catch (error) {
+      await pool.query(
+        `UPDATE reports SET status = $1, updated_at = NOW() WHERE report_id = $2`,
+        [row.status, reportId]
+      );
+      throw error;
+    }
+    if (violationId) {
+      await pool.query(
+        `UPDATE reports SET violation_id = $1 WHERE report_id = $2`,
+        [violationId, reportId]
+      );
+    }
+  }
 
   await recordAccountActivity({
     accountId: row.for_account_id || row.by_account_id,
@@ -4879,12 +5362,18 @@ async function updateReport(reportId, patch, staffSession = null) {
       throw new Error('This report already has a handler. Ask Admin to reassign it.');
     }
 
-    await pool.query(
+    // Guarded in SQL: if two staff claim at once, the second gets a 409 instead of silently
+    // taking the case from the first. Admin may still take over a claimed report.
+    const claimed = await pool.query(
       `UPDATE reports
        SET assigned_staff_id = $1, updated_at = NOW()
-       WHERE report_id = $2 AND deleted_at IS NULL`,
-      [staff.staff_id, reportId]
+       WHERE report_id = $2 AND deleted_at IS NULL
+         AND (assigned_staff_id IS NULL OR assigned_staff_id = $1 OR $3::boolean)`,
+      [staff.staff_id, reportId, Boolean(perms.isAdmin)]
     );
+    if (!claimed.rowCount) {
+      throw reportDecisionError('Another staff member just claimed this report. Refresh to see who.', 409);
+    }
     const row = fresh.rows[0];
     await recordAccountActivity({
       accountId: row.for_account_id || row.by_account_id,
@@ -4940,6 +5429,31 @@ async function updateReport(reportId, patch, staffSession = null) {
     [reportId]
   );
   if (!fresh.rows.length) return null;
+
+  // Hand edits are validated: a status the handler re-sends unchanged is ignored, a decided
+  // report stays decided, and Sanctioned/Denied can only come from a decision.
+  patch = { ...(patch || {}) };
+  if (patch.status !== undefined) {
+    const currentStatus = reportStatusToken(fresh.rows[0].status || 'open');
+    const nextStatus = reportStatusToken(patch.status);
+    if (nextStatus === currentStatus) {
+      delete patch.status;
+    } else if (REPORT_FINAL_STATUSES.has(currentStatus)) {
+      throw reportDecisionError(`This report was already ${currentStatus}. That decision is final.`, 409);
+    } else if (REPORT_FINAL_STATUSES.has(nextStatus)) {
+      throw reportDecisionError('Use Sanction or Deny to decide a report.', 400);
+    } else if (!REPORT_EDITABLE_STATUSES.has(nextStatus)) {
+      throw reportDecisionError('Choose a valid report status.', 400);
+    } else {
+      patch.status = nextStatus;
+    }
+  }
+  if (patch.priority !== undefined) {
+    const priority = String(patch.priority || '').trim().toLowerCase();
+    if (!REPORT_PRIORITIES.has(priority)) throw reportDecisionError('Choose low, medium or high priority.', 400);
+    patch.priority = priority;
+  }
+
   const currentAssignee = fresh.rows[0].assigned_staff_id;
   const staffForAssign = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const reportPerms = buildReportPermissions(fresh.rows[0], staffForAssign, staffSession);
@@ -5047,6 +5561,62 @@ function buildReportPermissions(row, staff, session = null) {
   };
 }
 
+/**
+ * Repeat-report signal for a case: other reports on the same item, and every report and
+ * sanction against the same account. Excludes the report being viewed.
+ */
+async function getReportHistory(row) {
+  const empty = {
+    sameItem: { total: 0, open: 0 },
+    againstAccount: { total: 0, open: 0, sanctioned: 0 },
+  };
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(target_type, '')) = LOWER(COALESCE($2, ''))
+            AND target_id::text = COALESCE($3, '')
+        )::int AS same_item_total,
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(target_type, '')) = LOWER(COALESCE($2, ''))
+            AND target_id::text = COALESCE($3, '')
+            AND LOWER(COALESCE(status, 'open')) <> ALL($5::text[])
+        )::int AS same_item_open,
+        COUNT(*) FILTER (WHERE $4::text IS NOT NULL AND for_account_id::text = $4)::int AS account_total,
+        COUNT(*) FILTER (
+          WHERE $4::text IS NOT NULL AND for_account_id::text = $4
+            AND LOWER(COALESCE(status, 'open')) <> ALL($5::text[])
+        )::int AS account_open,
+        COUNT(*) FILTER (
+          WHERE $4::text IS NOT NULL AND for_account_id::text = $4 AND LOWER(status) = 'sanctioned'
+        )::int AS account_sanctioned
+      FROM reports
+      WHERE deleted_at IS NULL AND report_id <> $1
+      `,
+      [
+        row.report_id,
+        row.target_type || null,
+        row.target_id != null ? String(row.target_id) : null,
+        reportCanBeSanctioned(row) ? String(row.for_account_id) : null,
+        [...CLOSED_REPORT_STATUSES],
+      ]
+    );
+    const r = result.rows[0] || {};
+    return {
+      sameItem: { total: Number(r.same_item_total || 0), open: Number(r.same_item_open || 0) },
+      againstAccount: {
+        total: Number(r.account_total || 0),
+        open: Number(r.account_open || 0),
+        sanctioned: Number(r.account_sanctioned || 0),
+      },
+    };
+  } catch (error) {
+    console.warn('Report history skipped:', error.message);
+    return empty;
+  }
+}
+
 async function getReportDetail(reportId, staffSession = null, options = {}) {
   const reportResult = await pool.query(
     `
@@ -5078,8 +5648,12 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     includeStaffId: row.assigned_staff_id,
   });
 
-  const subject = await buildReportSubject(row);
+  const [subject, history] = await Promise.all([
+    buildReportSubject(row),
+    getReportHistory(row),
+  ]);
   return {
+    history,
     report: mapReportRow({
       ...row,
       reporter_name: row.reporter_name,
@@ -5088,6 +5662,8 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     }),
     subject,
     permissions: buildReportPermissions(row, staff, staffSession),
+    // False for technical-problem reports and anything that only names the reporter.
+    sanctionable: reportCanBeSanctioned(row),
     assignableQueue: normalizeQueueKey(queueKey),
     assignableStaff,
   };
@@ -5158,13 +5734,122 @@ const PICKER_LISTS = {
   job: 'jobs',
 };
 
+const TICKET_TEAM_VISIBLE_SQL = `
+  t.deleted_at IS NULL
+  AND a.deleted_at IS NULL
+  AND (
+    t.visibility = 'Public'
+    OR EXISTS (
+      SELECT 1
+      FROM team_members tm
+      JOIN users member_user ON member_user.user_id = tm.user_id
+      WHERE tm.team_id = t.team_id
+        AND member_user.account_id = $1
+    )
+  )
+`;
+
+function ticketTeamLabel(row) {
+  const name = String(row.label || '').trim() || 'Team';
+  const handle = String(row.handle || '').trim();
+  return handle ? `${name} (@${handle})` : name;
+}
+
+async function searchTicketTeams(accountId, rawQuery) {
+  const query = String(rawQuery || '').replace(/^@/, '').trim();
+  if (query.length > 80) throw ticketError('Search is too long', 400);
+  const escaped = escapeTicketSearch(query);
+  const hasQuery = query.length > 0;
+  const result = await pool.query(
+    `
+    SELECT t.team_id AS id, a.display_name AS label, a.handle,
+      EXISTS (
+        SELECT 1
+        FROM team_members tm
+        JOIN users member_user ON member_user.user_id = tm.user_id
+        WHERE tm.team_id = t.team_id
+          AND member_user.account_id = $1
+      ) AS related
+    FROM teams t
+    JOIN accounts a ON a.account_id = t.account_id
+    WHERE ${TICKET_TEAM_VISIBLE_SQL}
+      AND (
+        $2::boolean = FALSE
+        OR a.display_name ILIKE $3 ESCAPE '\\'
+        OR a.handle ILIKE $3 ESCAPE '\\'
+      )
+      AND ($2::boolean = TRUE OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        JOIN users member_user ON member_user.user_id = tm.user_id
+        WHERE tm.team_id = t.team_id
+          AND member_user.account_id = $1
+      ))
+    ORDER BY
+      CASE
+        WHEN LOWER(a.handle) = LOWER($4) OR LOWER(a.display_name) = LOWER($4) THEN 0
+        WHEN LOWER(a.display_name) ILIKE $5 ESCAPE '\\' OR LOWER(a.handle) ILIKE $5 ESCAPE '\\' THEN 1
+        ELSE 2
+      END,
+      related DESC,
+      a.display_name ASC
+    LIMIT 8
+    `,
+    [accountId, hasQuery, `%${escaped}%`, query, `${escaped}%`]
+  );
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    label: String(row.label || 'Team'),
+    handle: row.handle ? String(row.handle) : null,
+  }));
+}
+
+async function findVisibleTicketTeam(accountId, needle) {
+  const byId = TICKET_ACCOUNT_UUID.test(needle);
+  const result = await pool.query(
+    `
+    SELECT t.team_id AS id, a.display_name AS label, a.handle
+    FROM teams t
+    JOIN accounts a ON a.account_id = t.account_id
+    WHERE ${TICKET_TEAM_VISIBLE_SQL}
+      AND (
+        ($2::boolean AND t.team_id = $3::uuid)
+        OR (
+          NOT $2::boolean
+          AND (LOWER(a.display_name) = LOWER($4) OR LOWER(a.handle) = LOWER($4))
+        )
+      )
+    LIMIT 2
+    `,
+    [accountId, byId, byId ? needle : null, needle]
+  );
+  if (result.rows.length !== 1) return null;
+  return {
+    id: String(result.rows[0].id),
+    label: String(result.rows[0].label || 'Team'),
+    handle: result.rows[0].handle ? String(result.rows[0].handle) : null,
+  };
+}
+
+async function resolveTicketTeamAnswer(accountId, row) {
+  const needle = String(row.value || '').replace(/^@/, '').trim();
+  if (!needle) return row;
+  const team = await findVisibleTicketTeam(accountId, needle);
+  if (!team) throw ticketError('Choose a team from the suggestions', 400);
+  return { ...row, value: ticketTeamLabel(team).slice(0, 2000), id: team.id };
+}
+
 async function resolveFormAnswers(accountId, type, rows) {
   const { fieldsForType } = require('../lib/TicketFormFields');
   const definitions = new Map(fieldsForType(type).map((field) => [field.key, field]));
-  const needsPicker = rows.some((row) => definitions.get(row.key)?.picker);
+  const needsPicker = rows.some((row) => {
+    const picker = definitions.get(row.key)?.picker;
+    return picker && picker !== 'team';
+  });
   const pickers = needsPicker && accountId ? await getTicketPickers(accountId) : null;
-  return rows.map((row) => {
+  return Promise.all(rows.map(async (row) => {
     const field = definitions.get(row.key);
+    if (field?.picker === 'team') return resolveTicketTeamAnswer(accountId, row);
     const listName = field?.picker ? PICKER_LISTS[field.picker] : null;
     if (!listName || !pickers) return row;
     const options = pickers[listName] || [];
@@ -5177,7 +5862,7 @@ async function resolveFormAnswers(accountId, type, rows) {
       throw ticketError(`Choose a ${field.label.toLowerCase()} from your account`, 400);
     }
     return row;
-  });
+  }));
 }
 
 async function buildSubmissionContext(accountId, clientContext, explicitEmail = null) {
@@ -5315,16 +6000,28 @@ const APPEAL_DECISIONS = {
 
 async function assertCanFileAppeal(accountId) {
   const hold = await pool.query(
-    `SELECT permanently_denied, blocked_until
-     FROM account_appeal_holds
-     WHERE account_id = $1`,
+    `SELECT h.permanently_denied, h.blocked_until,
+            -- A penalty issued after the denied appeal is a new case, and may be appealed.
+            EXISTS (
+              SELECT 1 FROM account_activity act
+              WHERE act.account_id = h.account_id
+                AND act.created_at > h.decided_at
+                AND (
+                  (act.event_code = 'ACCOUNT_STATUS_CHANGED'
+                    AND LOWER(COALESCE(act.metadata->>'status', '')) IN ('banned', 'locked', 'suspended'))
+                  -- Users desk and report warnings log ACCOUNT_WARNED, restriction desks VIOLATION_ISSUED.
+                  OR act.event_code IN ('FORUM_TIMEOUT', 'ACCOUNT_WARNED', 'VIOLATION_ISSUED', 'WARNING_ISSUED', 'CREDITS_FROZEN')
+                )
+            ) AS new_penalty_since
+     FROM account_appeal_holds h
+     WHERE h.account_id = $1`,
     [accountId]
   );
   const row = hold.rows[0];
   if (row?.permanently_denied) {
     throw ticketError('This account cannot submit another appeal.', 403);
   }
-  if (row?.blocked_until && new Date(row.blocked_until).getTime() > Date.now()) {
+  if (row?.blocked_until && new Date(row.blocked_until).getTime() > Date.now() && !row.new_penalty_since) {
     const when = new Date(row.blocked_until).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -5345,7 +6042,46 @@ async function assertCanFileAppeal(accountId) {
   if (open.rows.length) {
     throw ticketError('You already have an open appeal. Reply on that ticket instead.', 409);
   }
+  // An appeal answers a penalty. With nothing active, a denial would still start the
+  // 12-month hold and block the member from appealing a real penalty later.
+  const penalty = await pool.query(
+    `
+    SELECT
+      LOWER(COALESCE(a.status, 'active')) IN ('banned', 'suspended', 'locked') AS standing,
+      EXISTS (
+        SELECT 1 FROM restrictions r
+        WHERE r.account_id = a.account_id
+          AND LOWER(r.type) IN ('forum_timeout', 'timeout')
+          AND r.starts_at <= NOW()
+          AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      ) AS timeout,
+      EXISTS (
+        SELECT 1 FROM violations v
+        WHERE v.account_id = a.account_id
+          AND v.deleted_at IS NULL
+          AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open', 'pending')
+          AND (v.expires_at IS NULL OR v.expires_at > NOW())
+      ) AS warning,
+      -- Credits held by staff are a penalty the member can ask to have lifted.
+      EXISTS (
+        SELECT 1 FROM account_wallets aw
+        JOIN wallets w ON w.wallet_id = aw.wallet_id
+        WHERE aw.account_id = a.account_id
+          AND w.type = 'account wallets'
+          AND w.frozen_balance_credits > 0
+      ) AS credit_hold
+    FROM accounts a
+    WHERE a.account_id = $1
+    `,
+    [accountId]
+  );
+  const found = penalty.rows[0];
+  if (!found || (!found.standing && !found.timeout && !found.warning && !found.credit_hold)) {
+    throw ticketError('There is no active penalty on this account to appeal.', 400);
+  }
 }
+
+const APPEAL_DECIDER_ROLES = new Set(['admin', 'administrator', 'support moderator']);
 
 async function decideTicketAppeal(ticketId, decision, staffSession) {
   if (!isStaffSession(staffSession)) throw ticketError('Only staff can decide an appeal', 403);
@@ -5353,7 +6089,7 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
   if (!normalized) throw ticketError('Choose accept, deny, or deny permanently', 400);
 
   const current = await pool.query(
-    `SELECT ticket_id, ticket_number, type, account_id, appeal_decision
+    `SELECT ticket_id, ticket_number, type, account_id, appeal_decision, handled_by_staff_id
      FROM tickets
      WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
@@ -5364,20 +6100,61 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
   if (ticket.appeal_decision) throw ticketError('This appeal already has a decision', 409);
   if (!ticket.account_id) throw ticketError('This appeal has no account to update', 400);
 
+  // Appeals are Support's (and Admin's) to decide, and only by whoever is handling this one.
   const staff = await resolveDisputeStaffId(staffSession);
   const staffId = staff?.staff_id || null;
+  const role = String(staff?.role || staffSession?.role || '').toLowerCase();
+  if (!APPEAL_DECIDER_ROLES.has(role)) {
+    throw ticketError('Only Support or Admin can decide an appeal.', 403);
+  }
+  const isAdmin = role === 'admin' || role === 'administrator';
+  const assignee = normalizeStaffId(ticket.handled_by_staff_id);
+  if (!isAdmin && (!assignee || assignee !== normalizeStaffId(staffId))) {
+    throw ticketError('Claim this appeal before deciding it.', 403);
+  }
+  if (sessionAccountId(staffSession) && String(sessionAccountId(staffSession)) === String(ticket.account_id)) {
+    throw ticketError('You cannot decide an appeal on your own account.', 403);
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Lock and re-check, so two staff deciding at once cannot both apply a decision.
+    const locked = await client.query(
+      `SELECT appeal_decision FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [ticket.ticket_id]
+    );
+    if (!locked.rows.length) throw ticketError('Ticket not found', 404);
+    if (locked.rows[0].appeal_decision) throw ticketError('This appeal already has a decision', 409);
     if (normalized === 'accepted') {
+      // The penalty ends within 24 hours — never later than it was already going to end.
       await client.query(
         `UPDATE accounts
-         SET ban_ends_at = CASE WHEN LOWER(status) = 'banned' THEN NOW() + INTERVAL '24 hours' ELSE ban_ends_at END,
-             lock_ends_at = CASE WHEN LOWER(status) = 'locked' THEN NOW() + INTERVAL '24 hours' ELSE lock_ends_at END,
-             suspension_ends_at = CASE WHEN LOWER(status) = 'suspended' THEN NOW() + INTERVAL '24 hours' ELSE suspension_ends_at END
+         SET ban_ends_at = CASE WHEN LOWER(status) = 'banned'
+               THEN LEAST(COALESCE(ban_ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+               ELSE ban_ends_at END,
+             lock_ends_at = CASE WHEN LOWER(status) = 'locked'
+               THEN LEAST(COALESCE(lock_ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+               ELSE lock_ends_at END,
+             suspension_ends_at = CASE WHEN LOWER(status) = 'suspended'
+               THEN LEAST(COALESCE(suspension_ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+               ELSE suspension_ends_at END
          WHERE account_id = $1`,
         [ticket.account_id]
       );
+      // A forum timeout is a penalty too; it ends on the same clock.
+      await client.query(
+        `UPDATE restrictions
+         SET ends_at = LEAST(COALESCE(ends_at, 'infinity'::timestamptz), NOW() + INTERVAL '24 hours')
+         WHERE account_id = $1
+           AND LOWER(type) IN ('forum_timeout', 'timeout')
+           AND starts_at <= NOW()
+           AND (ends_at IS NULL OR ends_at > NOW())`,
+        [ticket.account_id]
+      );
+      // Held credits come back on the same clock; the one-minute job returns them.
+      const { endCreditHoldWithin24Hours } = require('./CreditHoldRepositories');
+      await endCreditHoldWithin24Hours(client, ticket.account_id);
     }
     const hold = normalized === 'denied_permanent'
       ? { decision: 'denied_permanent', permanent: true }
@@ -5436,7 +6213,7 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
       ? 'appeal_denied'
       : 'appeal_denied_permanent';
   const action = normalized === 'accepted'
-    ? 'Appeal accepted. Penalty ends in 24 hours.'
+    ? 'Appeal accepted. Penalty (and any credit hold) ends in 24 hours.'
     : normalized === 'denied'
       ? 'Appeal denied. Next appeal is available in 12 months.'
       : 'Appeal denied permanently.';
@@ -5501,6 +6278,7 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
+  getTicketQueueFacts,
   listParticipantTicketIds,
   searchTicketParticipants,
   addTicketParticipant,
@@ -5511,6 +6289,7 @@ module.exports = {
   createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,
+  searchTicketTeams,
   nextTicketNumber,
   nextDisputeNumber,
   updateTicket,

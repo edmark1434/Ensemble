@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 // Modals
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal";
 import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal";
+import CancelSubscriptionModal from "@/components/ui/CancelSubscriptionModal";
 
 // Modular Tab Components
 import { UserSettingsAccountDetails } from "./user_settings_accountdetails";
@@ -34,13 +35,19 @@ export default function UserSettings() {
   const globalUser = useGlobalState((state) => state.user);
 
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<TabType>(location.state?.tab || "display");
+  const searchParams = new URLSearchParams(location.search);
+  const initialTab = (searchParams.get("tab") as TabType) || location.state?.tab || "display";
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   useEffect(() => {
-    if (location.state?.tab && location.state.tab !== activeTab) {
-      setActiveTab(location.state.tab);
+    const params = new URLSearchParams(location.search);
+    const tabFromUrlOrState = (params.get("tab") as TabType) || location.state?.tab;
+    if (tabFromUrlOrState && tabFromUrlOrState !== activeTab) {
+      setActiveTab(tabFromUrlOrState);
     }
-  }, [location.state?.tab]);
+  }, [location.search, location.state?.tab]);
+
+  const focusAddress = searchParams.get("focus") === "address" || location.state?.focus === "address";
   const isWalkthroughActive = useTourStore((state) => state.isWalkthroughActive);
   const currentStepIndex = useTourStore((state) => state.currentStepIndex);
   const currentTourStep = isWalkthroughActive ? WALKTHROUGH_STEPS[currentStepIndex] : null;
@@ -96,6 +103,7 @@ export default function UserSettings() {
     status: "Active",
   });
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
     if (!path) return "";
@@ -124,9 +132,10 @@ export default function UserSettings() {
       const accountId = globalUser?.account_id;
 
       if (accountId) {
-        const [profileRes, subRes] = await Promise.all([
+        const [profileRes, subRes, subListRes] = await Promise.all([
           api.get(`/api/accounts/profile/${accountId}`),
           api.get(`/api/subscription/plan-details`).catch(() => null),
+          api.get(`/api/subscription`).catch(() => null),
         ]);
 
         const rawProfile = profileRes.data.data || profileRes.data.profile || {};
@@ -146,6 +155,8 @@ export default function UserSettings() {
         setUsername(fetchedUsername);
         setAddress(fetchedAddress);
         setEmail(fetchedEmail);
+        setPassword("");
+        setConfirmPassword("");
 
         setInitialValues({
           username: fetchedUsername,
@@ -158,14 +169,29 @@ export default function UserSettings() {
         let avatar = rawProfile.avatar_preset_url || rawProfile.avatar_url;
         setAvatarUrl(constructAvatarUrl(avatar));
 
-        if (subRes?.data?.planDetails) {
+        const planDetails = subRes?.data?.planDetails;
+        const subList = subListRes?.data?.subscription;
+        const activeSubFromList = Array.isArray(subList)
+          ? subList.find((s: any) => s.xendit_plan_id) || subList[0]
+          : null;
+
+        if (planDetails && (!planDetails.plan_name?.toLowerCase().includes("free") || !activeSubFromList?.xendit_plan_id)) {
           setSubscription({
-            plan_name: subRes.data.planDetails.plan_name || "Free Member",
-            status: subRes.data.planDetails.status || "Active",
-            renews_at: subRes.data.planDetails.renews_at,
-            cancel_at_period_end: Boolean(subRes.data.planDetails.cancel_at_period_end),
-            trial_starts_at: subRes.data.planDetails.trial_starts_at,
-            trial_ends_at: subRes.data.planDetails.trial_ends_at,
+            plan_name: planDetails.plan_name || "Free Member",
+            status: planDetails.status || "Active",
+            renews_at: planDetails.renews_at || activeSubFromList?.current_period_end,
+            cancel_at_period_end: Boolean(planDetails.cancel_at_period_end ?? activeSubFromList?.cancel_at_period_end),
+            trial_starts_at: planDetails.trial_starts_at || activeSubFromList?.trial_starts_at,
+            trial_ends_at: planDetails.trial_ends_at || activeSubFromList?.trial_ends_at,
+          });
+        } else if (activeSubFromList) {
+          setSubscription({
+            plan_name: activeSubFromList.name || (activeSubFromList.xendit_plan_id ? "Premium" : "Free Member"),
+            status: activeSubFromList.status || "Active",
+            renews_at: activeSubFromList.current_period_end,
+            cancel_at_period_end: Boolean(activeSubFromList.cancel_at_period_end),
+            trial_starts_at: activeSubFromList.trial_starts_at,
+            trial_ends_at: activeSubFromList.trial_ends_at,
           });
         }
       }
@@ -288,18 +314,21 @@ export default function UserSettings() {
   };
 
  
-  const handleCancelSubscription = async () => {
-    if (confirm("Are you sure you want to cancel your current subscription?")) {
-      try {
-        setIsCancellingSubscription(true);
-        const { data } = await api.post("/api/payment/cancel-subscription");
-        setSubscription((prev) => ({ ...prev, cancel_at_period_end: true }));
-        toast.success(data.message || "Subscription cancellation scheduled successfully.");
-      } catch (err: any) {
-        toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
-      } finally {
-        setIsCancellingSubscription(false);
-      }
+  const handleCancelSubscription = () => {
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancelSubscription = async () => {
+    try {
+      setIsCancellingSubscription(true);
+      const { data } = await api.post("/api/payment/cancel-subscription");
+      setSubscription((prev) => ({ ...prev, cancel_at_period_end: true }));
+      toast.success(data.message || "Subscription cancellation scheduled successfully.");
+      setShowCancelModal(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
+    } finally {
+      setIsCancellingSubscription(false);
     }
   };
   const navCategories = [
@@ -357,8 +386,12 @@ export default function UserSettings() {
             </div>
           </div>
           {isDirty && (
-            <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 animate-pulse">
-              ● Unsaved Changes Detected
+            <span className="inline-flex items-center gap-2 text-xs font-semibold px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 shadow-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span>Unsaved Changes Detected</span>
             </span>
           )}
         </div>
@@ -415,6 +448,8 @@ export default function UserSettings() {
               >
                 {activeTab === "account" && (
                   <UserSettingsAccountDetails
+                    isLoading={loading}
+                    highlightAddress={focusAddress}
                     fullName={fullName}
                     birthdate={birthdate}
                     username={username}
@@ -544,6 +579,15 @@ export default function UserSettings() {
           joinedDate: profileData.joinedDate || "",
         }}
         onSave={() => fetchSettings()}
+      />
+
+      <CancelSubscriptionModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleConfirmCancelSubscription}
+        isCancelling={isCancellingSubscription}
+        planName={subscription.plan_name}
+        endDate={subscription.trial_ends_at || subscription.renews_at}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 const {
   getTicketsOverview,
   getTicketDetail,
+  getTicketQueueFacts,
   listParticipantTicketIds,
   searchTicketParticipants,
   addTicketParticipant,
@@ -13,6 +14,7 @@ const {
   cancelScheduledTicketClose,
   createSupportTicket,
   getTicketPickers,
+  searchTicketTeams,
   getTicketCatalog,
   updateTicket,
   addTicketMessage,
@@ -38,6 +40,25 @@ const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 const { createStaffTicketService } = require('../services/TicketServices');
 const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
+const { ticketInStaffQueue } = require('../lib/TicketQueueScope');
+
+/**
+ * Guard for the shared `/api/staff/tickets/:id/*` routes: a specialist moderator may only
+ * transcribe, schedule, invite on or decide tickets that are in their own desk's queue.
+ */
+async function requireTicketInStaffQueue(req, res, next) {
+  try {
+    const facts = await getTicketQueueFacts(req.params.id);
+    if (!facts) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (!ticketInStaffQueue(req.session?.role, facts)) {
+      return res.status(403).json({ success: false, message: 'Ticket is outside your queue' });
+    }
+    return next();
+  } catch (err) {
+    console.error('Error checking ticket queue scope:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load ticket' });
+  }
+}
 
 async function getAdminTicketsOverview(req, res) {
   try {
@@ -334,6 +355,24 @@ async function getTicketContext(req, res) {
   }
 }
 
+async function getTicketTeamSearch(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const data = await searchTicketTeams(accountId, req.query?.q);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    if (status >= 500) console.error('Error searching ticket teams:', err);
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Failed to search teams',
+    });
+  }
+}
+
 async function getPublicTicketCatalog(_req, res) {
   try {
     const { getPublicTicketTypeDetails } = require('../lib/TicketEnums');
@@ -366,15 +405,18 @@ async function createPublicTicket(req, res) {
       priority,
       description,
     } = req.body;
-    const { APPEAL_TICKET_TYPE } = require('../lib/AccountRestriction');
+    const { APPEAL_TICKET_TYPE, appealTicketsOnly } = require('../lib/AccountRestriction');
     let ticketType = type || category || 'Other';
-    const appealOnly = Boolean(req.accountAccess?.banned || req.accountAccess?.locked);
+    // Banned, locked and suspended members may still appeal, and do nothing else here.
+    const appealOnly = appealTicketsOnly(req.accountAccess);
     if (appealOnly) {
       if (String(type || category || APPEAL_TICKET_TYPE).trim() !== APPEAL_TICKET_TYPE) {
         return res.status(403).json({
           success: false,
           code: req.accountAccess.code || 'ACCOUNT_BANNED',
-          message: 'This account can only open an appeal ticket.',
+          message: req.accountAccess?.suspended
+            ? 'While your account is suspended you can only open an appeal ticket.'
+            : 'This account can only open an appeal ticket.',
         });
       }
       ticketType = APPEAL_TICKET_TYPE;
@@ -576,6 +618,14 @@ async function postMyTicketMessage(req, res) {
     if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
     if (!sessionCanReadTicket(existing, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
+    }
+    const { APPEAL_TICKET_TYPE, appealTicketsOnly } = require('../lib/AccountRestriction');
+    if (appealTicketsOnly(req.accountAccess) && existing.ticket?.type !== APPEAL_TICKET_TYPE) {
+      return res.status(403).json({
+        success: false,
+        code: req.accountAccess.code || 'ACCOUNT_BANNED',
+        message: 'While this penalty is active you can only reply on your appeal ticket.',
+      });
     }
     const data = await addTicketMessage(
       req.params.id,
@@ -815,6 +865,7 @@ async function postMyTicketSatisfaction(req, res) {
 }
 
 module.exports = {
+  requireTicketInStaffQueue,
   getAdminTicketsOverview,
   getAdminTicketDetail,
   createAdminTicket,
@@ -832,6 +883,7 @@ module.exports = {
   patchAdminReport,
   getPublicTicketCatalog,
   getTicketContext,
+  getTicketTeamSearch,
   createPublicTicket,
   listMyTickets,
   listMyDisputes,

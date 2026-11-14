@@ -75,9 +75,12 @@ async function getAccountByHandle(handle) {
     }
 }
 
+const DEACTIVATION_COLUMNS = `account_id, type, status, deactivated_at, reactivation_available_at, deactivation_available_at`;
+
 async function getAccountDeactivation(accountId) {
     const result = await pool.query(
-        `SELECT a.account_id, a.type, a.status, a.deactivated_at, a.reactivation_available_at
+        `SELECT a.account_id, a.type, a.status, a.deactivated_at, a.reactivation_available_at,
+                a.deactivation_available_at
          FROM accounts a
          LEFT JOIN users u ON u.account_id = a.account_id
          WHERE a.deleted_at IS NULL
@@ -88,37 +91,96 @@ async function getAccountDeactivation(accountId) {
     return result.rows[0] || null;
 }
 
+/**
+ * Turn a member account off. Conditional on the account still being Active and the
+ * re-deactivation cooldown being over, so a staff ban or a second tab cannot race it.
+ */
 async function deactivateAccount(accountId, cooldownHours) {
     const result = await pool.query(
         `UPDATE accounts
          SET status = 'Deactivated',
              deactivated_at = NOW(),
-             reactivation_available_at = NOW() + ($2::int * INTERVAL '1 hour')
+             reactivation_available_at = NOW() + ($2::int * INTERVAL '1 hour'),
+             deactivation_available_at = NULL
          WHERE account_id = $1
-           AND type = 'User'
+           AND LOWER(type) = 'user'
            AND deleted_at IS NULL
-           AND LOWER(status) = 'active'
-         RETURNING account_id, type, status, deactivated_at, reactivation_available_at`,
+           AND LOWER(COALESCE(status, 'active')) = 'active'
+           AND (deactivation_available_at IS NULL OR deactivation_available_at <= NOW())
+         RETURNING ${DEACTIVATION_COLUMNS}`,
         [accountId, cooldownHours]
     );
     return result.rows[0] || null;
 }
 
-async function reactivateAccount(accountId) {
+/** Turn it back on and start the cooldown before it can be turned off again. */
+async function reactivateAccount(accountId, redeactivateCooldownDays) {
     const result = await pool.query(
         `UPDATE accounts
          SET status = 'Active',
              deactivated_at = NULL,
-             reactivation_available_at = NULL
+             reactivation_available_at = NULL,
+             deactivation_available_at = NOW() + ($2::int * INTERVAL '1 day')
          WHERE account_id = $1
-           AND type = 'User'
+           AND LOWER(type) = 'user'
            AND deleted_at IS NULL
            AND LOWER(status) = 'deactivated'
-           AND reactivation_available_at <= NOW()
-         RETURNING account_id, type, status, deactivated_at, reactivation_available_at`,
-        [accountId]
+           AND (reactivation_available_at IS NULL OR reactivation_available_at <= NOW())
+         RETURNING ${DEACTIVATION_COLUMNS}`,
+        [accountId, redeactivateCooldownDays]
     );
     return result.rows[0] || null;
+}
+
+/**
+ * What would be stranded if this member disappeared: contracts still running or waiting on a
+ * signature, and disputes still open on either side. Deactivation waits until these are done.
+ */
+async function countDeactivationBlockers(accountId) {
+    const result = await pool.query(
+        `SELECT
+           (
+             SELECT COUNT(DISTINCT c.contract_id)::int
+             FROM contracts c
+             LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+             LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+             LEFT JOIN jobs j ON j.job_id = p.job_id
+             LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+             LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+             LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+             LEFT JOIN gigs g ON g.gig_id = gt.gig_id
+             WHERE LOWER(c.status) IN ('active', 'waiting', 'pending signature')
+               AND $1::uuid IN (j.client_account_id, p.freelancer_account_id, gr.client_account_id, g.freelancer_account_id)
+           ) AS live_contracts,
+           (
+             SELECT COUNT(*)::int
+             FROM disputes d
+             WHERE d.deleted_at IS NULL
+               AND d.status <> 'closed'
+               AND $1::uuid IN (d.by_account_id, d.for_account_id)
+           ) AS open_disputes`,
+        [accountId]
+    );
+    const row = result.rows[0] || {};
+    return {
+        liveContracts: Number(row.live_contracts || 0),
+        openDisputes: Number(row.open_disputes || 0),
+    };
+}
+
+/** True when a member chose to deactivate, including while a penalty covers the status. */
+async function isAccountDeactivated(accountId, client = pool) {
+    if (!accountId) return false;
+    const result = await client.query(
+        `SELECT 1
+         FROM accounts
+         WHERE account_id::text = $1
+           AND LOWER(COALESCE(type, '')) = 'user'
+           AND (LOWER(COALESCE(status, '')) = 'deactivated' OR deactivated_at IS NOT NULL)
+         LIMIT 1`,
+        [String(accountId)]
+    );
+    return result.rows.length > 0;
 }
 
 async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 100, role = null, includeDeactivated = false, targetAccountId = null) {
@@ -196,7 +258,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 100,
          WHERE a.type = 'User'
            AND a.deleted_at IS NULL
            AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive')
-           AND ($3::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated')
+           AND ($3::boolean = TRUE OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL))
            AND ($1::uuid IS NULL OR a.account_id <> $1::uuid)`;
            
     const values = [excludeAccountId || null, limit, Boolean(includeDeactivated)];
@@ -524,7 +586,7 @@ async function getFollowers(accountId, includeDeactivated = false) {
             INNER JOIN accounts a ON a.account_id = af.follower_id
             LEFT JOIN files f ON f.file_id = a.avatar_file_id
             WHERE af.followed_id = $1
-              AND ($2::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated')
+              AND ($2::boolean = TRUE OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL))
             ORDER BY af.created_at DESC;
         `;
         const result = await pool.query(query, [accountId, Boolean(includeDeactivated)]);
@@ -547,7 +609,7 @@ async function getFollowing(accountId, includeDeactivated = false) {
             INNER JOIN accounts a ON a.account_id = af.followed_id
             LEFT JOIN files f ON f.file_id = a.avatar_file_id
             WHERE af.follower_id = $1
-              AND ($2::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated')
+              AND ($2::boolean = TRUE OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL))
             ORDER BY af.created_at DESC;
         `;
         const result = await pool.query(query, [accountId, Boolean(includeDeactivated)]);
@@ -811,6 +873,8 @@ module.exports = {
     getAccountDeactivation,
     deactivateAccount,
     reactivateAccount,
+    countDeactivationBlockers,
+    isAccountDeactivated,
     searchUserAccountsByHandle,
     getAccountWalletRepositories,
     checkAccountId,

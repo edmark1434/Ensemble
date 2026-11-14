@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, HelpCircle, Lock, LogIn, MessageCircleQuestion, MessageSquare, UserPlus } from "lucide-react";
+import { Heart, HelpCircle, Lock, LogIn, MessageCircleQuestion, MessageSquare, UserPlus, X } from "lucide-react";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
@@ -14,13 +14,243 @@ interface TicketField {
   kind: "text" | "select" | "multiselect" | "checkbox" | "textarea";
   required?: boolean;
   options?: string[];
-  picker?: "project" | "order" | "listing" | "contract" | "job";
+  picker?: "project" | "order" | "listing" | "contract" | "job" | "team";
   when?: { key: string; equals?: string; oneOf?: string[] };
 }
 
 interface PickerOption {
   id: string;
   label: string;
+}
+
+interface TeamSuggestion {
+  id: string;
+  label: string;
+  handle?: string | null;
+}
+
+function TeamTagField({
+  value,
+  onChange,
+  required,
+  disabled,
+  theme,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  required: boolean;
+  disabled: boolean;
+  theme: string;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focusAfterClear = useRef(false);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState<TeamSuggestion[]>([]);
+  const [selected, setSelected] = useState<TeamSuggestion | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const dark = theme === "dark";
+
+  useEffect(() => {
+    if (!value) setSelected(null);
+  }, [value]);
+
+  useEffect(() => {
+    if (!focusAfterClear.current || selected) return;
+    focusAfterClear.current = false;
+    inputRef.current?.focus();
+  }, [selected]);
+
+  useEffect(() => {
+    const node = inputRef.current;
+    if (!node || selected) return;
+    node.setCustomValidity(required ? "Choose a team from the suggestions" : "");
+  }, [required, selected, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || selected) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setSearchError(null);
+    const handle = window.setTimeout(async () => {
+      try {
+        const response = await api.get("/api/users/ticket-teams", {
+          params: { q: query.trim() },
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        const rows = Array.isArray(response.data?.data) ? response.data.data : [];
+        setOptions(rows);
+        setActiveIndex(0);
+      } catch {
+        if (controller.signal.aborted) return;
+        setOptions([]);
+        setSearchError("Team search is unavailable.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, query.trim() ? 200 : 0);
+    return () => {
+      controller.abort();
+      window.clearTimeout(handle);
+    };
+  }, [open, query, selected]);
+
+  const choose = (option: TeamSuggestion) => {
+    setSelected(option);
+    setQuery("");
+    setOpen(false);
+    onChange(option.id);
+  };
+
+  const clear = () => {
+    focusAfterClear.current = true;
+    setSelected(null);
+    setQuery("");
+    setOpen(true);
+    onChange("");
+  };
+
+  const fieldStyle: React.CSSProperties = {
+    width: "100%",
+    background: dark ? "#18181b" : "#ffffff",
+    border: `1px solid ${dark ? "#27272a" : "#e5e7eb"}`,
+    borderRadius: 10,
+    padding: "14px",
+    color: dark ? "#ffffff" : "#111827",
+    outline: "none",
+  };
+
+  if (selected && value) {
+    return (
+      <div>
+        <div
+          className="flex items-center justify-between gap-3"
+          style={fieldStyle}
+        >
+          <span className="min-w-0 truncate text-sm">
+            <span className="font-semibold">{selected.label}</span>
+            {selected.handle ? (
+              <span className="ml-2 font-normal text-gray-500 dark:text-zinc-400">@{selected.handle}</span>
+            ) : null}
+          </span>
+          <button
+            type="button"
+            onClick={clear}
+            disabled={disabled}
+            aria-label={`Remove ${selected.label}`}
+            className="shrink-0 rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">Tagged team. Remove it to choose a different one.</p>
+      </div>
+    );
+  }
+
+  const listId = "ticket-team-suggestions";
+  const status = options.length > 0
+    ? null
+    : loading
+      ? "Searching…"
+      : searchError
+        ? searchError
+        : query.trim()
+          ? "No teams match that name."
+          : "Type a team name to search.";
+
+  return (
+    <div ref={rootRef}>
+      <div className="relative">
+      <input
+        ref={inputRef}
+        id="ticket-team"
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open && options[activeIndex] ? `${listId}-${options[activeIndex].id}` : undefined}
+        required={required}
+        disabled={disabled}
+        autoComplete="off"
+        placeholder="Type a team name"
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+          if (!value) return;
+          onChange("");
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            if (!open) {
+              setOpen(true);
+              return;
+            }
+            setActiveIndex((index) => Math.min(index + 1, Math.max(options.length - 1, 0)));
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setActiveIndex((index) => Math.max(index - 1, 0));
+          } else if (event.key === "Enter" && open) {
+            event.preventDefault();
+            const option = options[activeIndex];
+            if (option) choose(option);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        style={fieldStyle}
+      />
+      {open && (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-[10px] border border-gray-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {status ? (
+            <li className="px-3 py-2 text-sm text-gray-500 dark:text-zinc-400">{status}</li>
+          ) : options.map((option, index) => (
+            <li key={option.id} id={`${listId}-${option.id}`} role="option" aria-selected={index === activeIndex}>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(option)}
+                onMouseEnter={() => setActiveIndex(index)}
+                className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm ${
+                  index === activeIndex
+                    ? "bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white"
+                    : "text-gray-800 dark:text-zinc-200"
+                }`}
+              >
+                <span className="truncate font-medium">{option.label}</span>
+                {option.handle ? (
+                  <span className="shrink-0 text-gray-500 dark:text-zinc-500">@{option.handle}</span>
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      </div>
+      <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">Type a team name, then choose it from the list.</p>
+    </div>
+  );
 }
 
 interface TicketTypeDetail {
@@ -415,7 +645,7 @@ const PageSubmitATicket: React.FC = () => {
               const setValue = (value: string) => setFieldValues((current) => ({ ...current, [field.key]: value }));
               return (
                 <div key={field.key}>
-                  <label style={labelStyle}>
+                  <label htmlFor={field.picker === "team" ? "ticket-team" : undefined} style={labelStyle}>
                     {field.label}
                     {required ? " *" : " (optional)"}
                   </label>
@@ -458,6 +688,14 @@ const PageSubmitATicket: React.FC = () => {
                       value={fieldValues[field.key] || ""}
                       onChange={(e) => setValue(e.target.value)}
                       style={{ ...fieldStyle, resize: "vertical" }}
+                    />
+                  ) : field.picker === "team" ? (
+                    <TeamTagField
+                      value={fieldValues[field.key] || ""}
+                      onChange={setValue}
+                      required={required}
+                      disabled={submitting}
+                      theme={theme}
                     />
                   ) : pickerOptions.length > 0 ? (
                     <select

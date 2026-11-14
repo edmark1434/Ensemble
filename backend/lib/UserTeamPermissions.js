@@ -1,7 +1,7 @@
 /**
  * User & Team capability matrix by staff role.
- * Forum + Marketplace + Jobs & Gigs: enforce from reports only (warn / suspend / lock + view).
- * Admin + Support: full toolkit.
+ * Forum + Marketplace + Jobs & Gigs: view users/teams; warn / suspend / lock only.
+ * Admin + Support: full toolkit (ban, credits, verification, pardons).
  */
 
 const FULL_STATUS_ACTIONS = [
@@ -56,6 +56,7 @@ function canAccessUserTeam(session) {
   );
 }
 
+/** Full team management (credits/verification/ban). Listing teams uses canAccessUserTeam. */
 function canManageTeams(session) {
   return isAdminOrSupport(session);
 }

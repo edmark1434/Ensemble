@@ -52,18 +52,7 @@ async function notifyAccountWarned(accountId, warningData = {}) {
     console.warn('Warning realtime socket broadcast failed:', err.message);
   }
 
-  if (warningData.autoSuspended) {
-    try {
-      await notifyAccountStatusChanged(accountId, {
-        status: 'Suspended',
-        previousStatus: 'Active',
-        action: 'auto_suspend',
-        reason: 'Auto-suspended after exceeding active warning threshold',
-      });
-    } catch (err) {
-      console.warn('Auto-suspension notification failed:', err.message);
-    }
-  }
+  // An auto-suspension is announced once, by maybeAutoSuspendAfterWarning, which applied it.
 
   return notification;
 }

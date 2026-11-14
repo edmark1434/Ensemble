@@ -206,6 +206,8 @@ export type DisputeResolutionOption = {
   label: string;
   hint: string;
   requiresNote?: boolean;
+  /** The exact message the server posts for this choice (without staff notes). */
+  preview?: string;
 };
 
 export type UserReport = {
@@ -214,6 +216,8 @@ export type UserReport = {
   reporter: TicketPerson;
   targetType: string;
   targetId: string | null;
+  /** The account the report is against (seller, poster, member); null for platform reports. */
+  reported?: { accountId: string; name: string; username: string } | null;
   subjectTitle?: string | null;
   type: string;
   description: string | null;

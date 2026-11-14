@@ -68,6 +68,47 @@ async function getCreditTransactionsByAccountId(accountId) {
     return result.rows;
 }
 
+/**
+ * Dispute payouts that will land in one of this account's wallets but have not been paid
+ * yet. They have no ledger row until they are paid, so the history shows them separately.
+ */
+async function getPendingDisputePayoutsByAccountId(accountId) {
+    try {
+        const result = await pool.query(
+            `
+            SELECT
+                p.dispute_payout_id,
+                p.kind,
+                p.amount_credits,
+                p.status,
+                p.release_at,
+                p.created_at,
+                p.transaction_type,
+                p.source_wallet_id,
+                p.destination_wallet_id,
+                d.dispute_id,
+                d.dispute_number,
+                d.status AS dispute_status,
+                destination_wallet.type AS destination_wallet_type
+            FROM dispute_payouts p
+            INNER JOIN account_wallets aw ON aw.wallet_id = p.destination_wallet_id
+            INNER JOIN disputes d ON d.dispute_id = p.dispute_id
+            INNER JOIN wallets destination_wallet ON destination_wallet.wallet_id = p.destination_wallet_id
+            WHERE aw.account_id = $1
+              AND p.status IN ('scheduled', 'failed')
+              AND d.deleted_at IS NULL
+            ORDER BY p.release_at ASC, p.dispute_payout_id ASC
+            `,
+            [accountId]
+        );
+        return result.rows;
+    } catch (error) {
+        // The payouts table arrives with a migration; until then there is nothing pending.
+        if (error.code === '42P01') return [];
+        throw error;
+    }
+}
+
 async function getAccountWalletSummaryByAccountId(accountId) {
     const query = `
         SELECT
@@ -89,5 +130,6 @@ async function getAccountWalletSummaryByAccountId(accountId) {
 
 module.exports = {
     getCreditTransactionsByAccountId,
+    getPendingDisputePayoutsByAccountId,
     getAccountWalletSummaryByAccountId,
 };

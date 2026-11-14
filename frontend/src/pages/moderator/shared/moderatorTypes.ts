@@ -58,6 +58,58 @@ export type DisputeCaseTransaction = {
   reversesTransactionId?: string | null;
   reversedByTransactionId?: string | null;
   reversible?: boolean;
+  /** Belongs to this dispute's contract (the case file also lists the parties' other contracts). */
+  inDisputeScope?: boolean;
+  /** A reversal of this transaction is scheduled and waiting to pay out. */
+  reversalScheduled?: boolean;
+  /** Where a reversal would take the credits from and who would receive them. */
+  reversal?: {
+    allowed: boolean;
+    reason: string | null;
+    fromName: string;
+    fromHandle: string | null;
+    toName: string | null;
+    toHandle: string | null;
+    toRole: "client" | "freelancer" | null;
+  };
+};
+
+/** One recipient's share of a money ruling, paid on `releaseAt`. */
+export type DisputePayout = {
+  id: string;
+  kind: "escrow_refund" | "escrow_release" | "reversal";
+  status: "scheduled" | "paid" | "cancelled" | "failed";
+  amount: number;
+  recipientAccountId: string | null;
+  recipientRole: "client" | "freelancer" | null;
+  recipientName: string;
+  recipientHandle: string | null;
+  /** Wallet the credits stay locked in until release, e.g. "Escrow wallets · @maria". */
+  heldIn: string;
+  paysInto: string;
+  releaseAt: string | null;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  failureReason: string | null;
+  attempts: number;
+  creditTransactionId: string | null;
+  reversesTransactionId: string | null;
+  createdAt: string | null;
+};
+
+export type DisputePayoutState = {
+  waiting: number;
+  /** Waiting payouts do not auto-release while the case is reopened. */
+  paused: boolean;
+  failed: number;
+  nextReleaseAt: string | null;
+  canCancel: boolean;
+};
+
+export type DisputePayoutPolicy = {
+  defaultDays: number;
+  maxDays: number;
 };
 
 export type DisputeCaseRelated = {
@@ -95,6 +147,9 @@ export type DisputeDetail = {
   assignableStaff: { staffId: number | string; name: string; role: string }[];
   resolutionOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
   reopenOptions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputeResolutionOption[];
+  payouts?: DisputePayout[];
+  payoutState?: DisputePayoutState;
+  payoutPolicy?: DisputePayoutPolicy;
 };
 
 export type Alert = {
@@ -117,16 +172,70 @@ export type StaffWorkloadLite = {
   totalOpen: number;
 };
 
+/** Response health for the Support desk header (`queueHealth` on the overview payload). */
+export type SupportQueueHealth = {
+  oldestOpenAt: string | null;
+  oldestUnassignedAt: string | null;
+  awaitingFirstReply: number;
+  firstReplyBreached: number;
+  openOver72h: number;
+  openOver7d: number;
+  closedLast24h: number;
+  closedLast7d: number;
+  avgFirstReplyHours: number | null;
+  avgResolutionHours: number | null;
+  avgSatisfaction: number | null;
+  ratedTickets: number;
+};
+
+export type SupportDisputeHealth = {
+  oldestOpenAt: string | null;
+  unassigned: number;
+  highPriority: number;
+  resolvedLast7d: number;
+};
+
+/** Counts for the signed-in moderator only; null when the staff profile could not be resolved. */
+export type SupportMyQueue = {
+  openTickets: number;
+  awaitingReply: number;
+  highPriority: number;
+  closedLast7d: number;
+  openDisputes: number;
+  openReports: number;
+};
+
+export type SupportGroupLoad = {
+  label: string;
+  open: number;
+  total: number;
+  types: string[];
+};
+
 export type SupportOverview = {
   lastUpdated: string;
+  scope?: {
+    queue: string;
+    label: string;
+    ticketTypes: string[];
+    reportTargets: string[];
+  };
   summary: {
     openTickets: number;
     totalTickets: number;
     unassignedTickets: number;
     highPriorityTickets: number;
+    inProgressTickets?: number;
+    escalatedTickets?: number;
     resolvedTickets: number;
     openReports: number;
     totalReports: number;
+    openScopedReports?: number;
+    totalScopedReports?: number;
+    unassignedReports?: number;
+    highPriorityReports?: number;
+    resolvedReports?: number;
+    reportsThisWeek?: number;
     openDisputes: number;
     totalDisputes: number;
     creditsAtRisk: number;
@@ -138,14 +247,21 @@ export type SupportOverview = {
     activeViolations: number;
     activeRestrictions: number;
   };
+  queueHealth?: SupportQueueHealth;
+  disputeHealth?: SupportDisputeHealth;
+  myQueue?: SupportMyQueue | null;
+  groupLoad?: SupportGroupLoad[];
   charts: {
     ticketStatusMix: ChartSegment[];
     ticketCategories: ChartSegment[];
     ticketTypes?: ChartSegment[];
     priorityMix: ChartSegment[];
     openByPriority?: ChartSegment[];
+    supportGroups?: ChartSegment[];
+    reportStatusMix?: ChartSegment[];
+    reportTargets?: ChartSegment[];
     disputeStatusMix: ChartSegment[];
-    activityTrend: { day: string; tickets: number; messages: number }[];
+    activityTrend: { day: string; tickets: number; closed?: number; messages: number }[];
   };
   tickets?: SupportTicket[];
   recentTickets: SupportTicket[];
@@ -217,6 +333,7 @@ export type ForumOverview = {
   };
   recentTickets: SupportTicket[];
   flaggedReports: UserReport[];
+  staffWorkload?: StaffWorkloadLite[];
   alerts: Alert[];
   notice: string | null;
   dataSources: { tables: string[]; persisted: boolean };
@@ -272,8 +389,49 @@ export type ForumDiscussionDetail = {
   }[];
 };
 
+/** "Is the desk keeping up?" numbers for the Jobs & Gigs dashboard (`queueHealth`). */
+export type JobsQueueHealth = {
+  oldestOpenTicketAt: string | null;
+  ticketsOver48h: number;
+  ticketsOver7d: number;
+  ticketsNeverAnswered: number;
+  ticketsResolvedLast7d: number;
+  avgTicketResolutionHours: number | null;
+  avgFirstReplyHours: number | null;
+  oldestOpenReportAt: string | null;
+  reportsOver48h: number;
+  reportsClosedLast7d: number;
+  oldestOpenDisputeAt: string | null;
+  disputesOver7d: number;
+  unassignedDisputes: number;
+  disputesResolvedLast7d: number;
+  postingsLast24h: number;
+  staleActivePostings: number;
+  stalePendingProposals: number;
+  stalePendingRequests: number;
+  postingActionsLast7d: number;
+  postingActionsLast24h: number;
+  lastPostingActionAt: string | null;
+};
+
+/** A job or gig with unresolved reports against it (`flaggedPostings`). */
+export type JobsFlaggedPosting = {
+  reportId: string;
+  reportNumber: string;
+  reportType: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+  postingType: "job" | "gig" | null;
+  postingId: string;
+  postingTitle: string;
+  openReports: number;
+};
+
 export type JobsOverview = {
   lastUpdated: string;
+  queueHealth?: JobsQueueHealth;
+  flaggedPostings?: JobsFlaggedPosting[];
   summary: {
     openTickets: number;
     totalTickets: number;
@@ -325,20 +483,11 @@ export type JobsOverview = {
     contractStatusMix: ChartSegment[];
     jobCategories?: ChartSegment[];
     experienceLevels?: ChartSegment[];
+    postingCategories?: ChartSegment[];
     postingTrend: { day: string; jobs: number; gigs: number }[];
   };
   recentTickets: SupportTicket[];
-  recentPostings?: {
-    id: string;
-    postNumber: string;
-    type: "job" | "gig";
-    title: string;
-    status: string;
-    applicantCount: number;
-    contractCount: number;
-    author: { accountId: string; name: string; handle: string };
-    createdAt: string;
-  }[];
+  recentPostings?: JobsGigsPosting[];
   flaggedReports?: UserReport[];
   disputes: Dispute[];
   staffWorkload?: StaffWorkloadLite[];
@@ -354,11 +503,14 @@ export type JobsGigsPosting = {
   description: string | null;
   status: string;
   paymentType: string;
+  category?: string | null;
   experienceLevel: string | null;
   rateCreditsMin: number | null;
   rateCreditsMax: number | null;
   applicantCount: number;
   contractCount: number;
+  /** Unresolved reports filed against this posting. */
+  openReportCount?: number;
   tags: string[];
   author: { accountId: string; name: string; handle: string };
   createdAt: string;
@@ -368,6 +520,31 @@ export type JobsGigsPosting = {
 };
 
 export type PostingAttachment = { fileId: string; name: string; mimeType: string; sizeBytes: number };
+
+/** A report filed against one posting, shown in the posting review modal. */
+export type PostingReport = {
+  id: string;
+  number: string;
+  type: string;
+  status: string;
+  priority: string;
+  description: string | null;
+  reporter: { name: string; handle: string };
+  createdAt: string;
+  updatedAt: string | null;
+};
+
+/** One past moderation action on a posting, from `account_activity`. */
+export type PostingModerationEntry = {
+  id: string;
+  action: string;
+  eventCode: string;
+  previousStatus: string | null;
+  status: string | null;
+  reason: string | null;
+  actor: { name: string; role: string } | null;
+  createdAt: string;
+};
 
 export type PostingContract = {
   id: string;
@@ -413,6 +590,9 @@ export type JobPostingDetail = {
     createdAt: string;
   }[];
   contracts: PostingContract[];
+  category?: string | null;
+  reports?: PostingReport[];
+  moderationHistory?: PostingModerationEntry[];
 };
 
 export type GigPostingDetail = {
@@ -450,6 +630,9 @@ export type GigPostingDetail = {
     createdAt: string;
   }[];
   contracts: PostingContract[];
+  category?: string | null;
+  reports?: PostingReport[];
+  moderationHistory?: PostingModerationEntry[];
 };
 
 export type JobsGigsPostingDetail = JobPostingDetail | GigPostingDetail;

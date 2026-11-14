@@ -1,6 +1,6 @@
 # Current Ensemble Plans
 
-This document is generated from active records in the PostgreSQL plans table.
+This document lists the subscription plans currently offered on Ensemble. It is refreshed automatically when the support knowledge base is updated, so these values take priority over any older figures. Plans are managed from the subscription plans page (`/credits-subscriptions`).
 
 ## Available subscription plans
 

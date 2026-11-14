@@ -21,7 +21,7 @@ const {
   getAdminAccountActivity,
 } = require('../controllers/AdminUserTeamControllers');
 
-/** Admin + Support: full User & Team. Forum/Marketplace: read + limited enforcement. */
+/** Admin + Support: full User & Team. Forum/Marketplace/Jobs: read + limited enforcement. */
 const requireUserTeamAccess = requireStaffRole([
   'Admin',
   'Support Moderator',
@@ -29,7 +29,7 @@ const requireUserTeamAccess = requireStaffRole([
   'Marketplace Moderator',
   'Jobs N Gigs Moderator',
 ]);
-/** Credits, verification, pardons, team management, ban — Admin/Support only. */
+/** Credits, verification, pardons, ban — Admin/Support only. Team list is readable by all User & Team roles. */
 const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);
 const {
   getAdminEconomyOverview,
@@ -100,7 +100,7 @@ router.get('/staff/roles', [checkSession, requireAdmin], getAdminStaffRoles);
 router.post('/staff', [checkSession, requireAdmin], createAdminStaff);
 router.patch('/staff/:staffId', [checkSession, requireAdmin], patchAdminStaff);
 router.delete('/staff/:staffId', [checkSession, requireAdmin], deleteAdminStaff);
-router.get('/teams-management', [checkSession, requireUserTeamFullWrite], getAdminTeamsManagement);
+router.get('/teams-management', [checkSession, requireUserTeamAccess], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminUsersManagement);
 router.get('/accounts/:accountId/verification-details', [checkSession, requireUserTeamFullWrite], getAdminUserVerificationDetails);
 router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
@@ -133,13 +133,17 @@ router.delete('/moderation/forum/discussions/:discussionId/comments/:commentId',
 /** Marketplace / Jobs control + Restrictions — same controllers as moderator desks. */
 const MarketplaceModerator = require('../controllers/MarketplaceModeratorControllers');
 const JobsModerator = require('../controllers/JobsModeratorControllers');
-const SupportModerator = require('../controllers/SupportModeratorControllers');
-const { lookupRestrictionAccounts } = require('../controllers/RestrictionDeskControllers');
+const RestrictionDesk = require('../controllers/RestrictionDeskControllers');
 
 router.get('/moderation/marketplace/overview', [checkSession, requireAdmin], MarketplaceModerator.getOverview);
 router.get('/moderation/marketplace/listings', [checkSession, requireAdmin], MarketplaceModerator.getListings);
 router.get('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.getListingDetail);
 router.patch('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.patchListing);
+router.get(
+  '/moderation/marketplace/listings/:id/media/:mediaAssetId/original',
+  [checkSession, requireAdmin],
+  MarketplaceModerator.getListingFileOriginal
+);
 router.get(
   '/moderation/marketplace/users/:accountId/listings',
   [checkSession, requireAdmin],
@@ -152,10 +156,10 @@ router.get('/moderation/jobs/postings/:type/:id', [checkSession, requireAdmin], 
 router.patch('/moderation/jobs/postings/:type/:id', [checkSession, requireAdmin], JobsModerator.patchPosting);
 router.get('/moderation/jobs/users/:accountId/history', [checkSession, requireAdmin], JobsModerator.getUserHistory);
 
-router.get('/restrictions', [checkSession, requireAdmin], SupportModerator.getRestrictions);
-router.get('/restrictions/lookup', [checkSession, requireAdmin], lookupRestrictionAccounts);
-router.post('/restrictions/violations', [checkSession, requireAdmin], SupportModerator.postViolation);
-router.patch('/restrictions/accounts/:id', [checkSession, requireAdmin], SupportModerator.patchRestriction);
+router.get('/restrictions', [checkSession, requireAdmin], RestrictionDesk.getRestrictions);
+router.get('/restrictions/lookup', [checkSession, requireAdmin], RestrictionDesk.lookupRestrictionAccounts);
+router.post('/restrictions/violations', [checkSession, requireAdmin], RestrictionDesk.postViolation);
+router.patch('/restrictions/accounts/:id', [checkSession, requireAdmin], RestrictionDesk.patchRestriction);
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);

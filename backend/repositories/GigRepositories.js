@@ -729,7 +729,11 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             tm.visibility as "teamVisibility",
 
-            (tm.team_id IS NOT NULL) as "isTeam"
+            (tm.team_id IS NOT NULL) as "isTeam",
+
+            (LOWER(COALESCE(a.type, '')) = 'user'
+              AND (LOWER(COALESCE(a.status, '')) = 'deactivated' OR a.deactivated_at IS NOT NULL)
+            ) as "sellerDeactivated"
 
         FROM gigs g
 
@@ -745,9 +749,12 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
     const res = accountId ? await pool.query(query, [accountId]) : await pool.query(query);
 
+    // A deactivated seller's gigs leave browse; the seller still sees their own.
+    const visibleRows = res.rows.filter(
+        (row) => !row.sellerDeactivated || actorIds.map(String).includes(String(row.freelancer_account_id))
+    );
 
-
-    return res.rows.map(row => {
+    return visibleRows.map(row => {
 
         const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
 
@@ -1178,11 +1185,17 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 
             `SELECT g.freelancer_account_id, g.title AS gig_title,
 
-                    g.freelancer_account_id = ANY($3::uuid[]) AS is_affiliated_listing
+                    g.freelancer_account_id = ANY($3::uuid[]) AS is_affiliated_listing,
+
+                    (LOWER(COALESCE(seller.type, '')) = 'user'
+                      AND (LOWER(COALESCE(seller.status, '')) = 'deactivated' OR seller.deactivated_at IS NOT NULL)
+                    ) AS seller_deactivated
 
              FROM gigs g
 
              JOIN gig_tiers gt ON gt.gig_id = g.gig_id
+
+             LEFT JOIN accounts seller ON seller.account_id = g.freelancer_account_id
 
              WHERE g.gig_id = $1 AND gt.gig_tier_id = $2
 
@@ -1199,6 +1212,18 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
             const error = new Error('Gig or selected tier is unavailable.');
 
             error.statusCode = 404;
+
+            throw error;
+
+        }
+
+        if (check.rows[0].seller_deactivated) {
+
+            const error = new Error('This seller has deactivated their account, so the gig is not taking orders right now.');
+
+            error.statusCode = 409;
+
+            error.code = 'ACCOUNT_DEACTIVATED';
 
             throw error;
 

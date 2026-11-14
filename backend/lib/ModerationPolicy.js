@@ -41,9 +41,9 @@ async function evaluateUserContent() {
 }
 
 /**
- * When marketplace listing review is on, queue or update a pending marketplace_listings row
- * and return the status that should be persisted on market_assets ('draft').
- * When off, returns requestedStatus unchanged.
+ * Queue or update a pending marketplace_listings row for moderator approval and return
+ * the status that should be persisted on market_assets ('draft').
+ * Already-published assets keep published status when their details are edited.
  */
 async function resolveMarketplacePublishStatus({
   accountId,
@@ -60,9 +60,8 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
-  const { assertWarningAllows, listingReviewForced } = require('../services/WarningBandServices');
+  const { assertWarningAllows } = require('../services/WarningBandServices');
   await assertWarningAllows(accountId, 'publish_asset');
-  const watchReview = await listingReviewForced(accountId);
 
   // If the asset is ALREADY published, updating its details preserves published status
   if (currentStatus === 'published') {
@@ -89,11 +88,7 @@ async function resolveMarketplacePublishStatus({
     return { status: requestedStatus, queued: false };
   }
 
-  // Global marketplace listing review was removed; only force-watched accounts are queued.
-  if (!watchReview) {
-    return { status: requestedStatus, queued: false };
-  }
-
+  // New publishes always enter the moderator review queue before going live.
   try {
     // Check if an existing listing already exists for this market_asset_id
     let existingListing = null;
@@ -220,14 +215,27 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   );
   if (!previous.rows.length) return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
   const previousStatus = previous.rows[0].status;
-  if (String(previousStatus).toLowerCase() === 'suspended') {
+  const current = String(previousStatus).toLowerCase();
+  if (current === 'suspended') {
     return { suspended: false, alreadySuspended: true, activeCount, max: AUTO_SUSPEND_POINTS };
   }
+  // A ban or lock is stricter than a suspension. Writing Suspended over it would turn a
+  // permanent ban into a 7-day suspension that then lifts to Active.
+  if (current === 'banned' || current === 'locked') {
+    return { suspended: false, stricterStanding: current, activeCount, max: AUTO_SUSPEND_POINTS };
+  }
 
-  await pool.query(
-    `UPDATE accounts SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day') WHERE account_id = $1`,
+  // Guarded again in SQL, in case a ban landed between the read and this write.
+  const applied = await pool.query(
+    `UPDATE accounts
+     SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day')
+     WHERE account_id = $1
+       AND LOWER(COALESCE(status, 'active')) NOT IN ('banned', 'locked', 'suspended')`,
     [accountId, days]
   );
+  if (!applied.rowCount) {
+    return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
+  }
   await recordAccountActivity({
     accountId,
     action: `Auto-suspended ${days} day(s) after ${activeCount} active warning point(s)`,
@@ -247,9 +255,15 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     },
   });
 
+  // The one suspension notice for this crossing. notifyAccountWarned does not send another.
   try {
-    const { notifyAccountSuspended } = require('../services/AccountStandingServices');
-    await notifyAccountSuspended(accountId);
+    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+    await notifyAccountStatusChanged(accountId, {
+      status: 'Suspended',
+      previousStatus,
+      action: 'auto_suspend',
+      reason: 'Auto-suspended after exceeding active warning threshold',
+    });
   } catch (notifyErr) {
     console.error('Failed to notify auto-suspended account:', notifyErr);
   }
@@ -296,7 +310,7 @@ async function applyReportAutomations(reportRow, { staffId = null } = {}) {
     } catch {}
   }
 
-  return { ...reportRow, priority, ticketAutoCreated };
+  return { ...reportRow, priority };
 }
 
 /**
@@ -309,16 +323,20 @@ async function sendMarketplaceListingNotification({
   title,
   status,
   rejectionReason = null,
+  moderationNote = null,
 }) {
   if (!accountId) return;
   const assetTitle = String(title || 'Untitled Asset').trim();
+  const note = String(moderationNote || '').trim();
   let message = '';
   if (status === 'approved') {
     message = `Your asset "${assetTitle}" has been approved by moderators and is now published to the Marketplace!`;
   } else if (status === 'rejected') {
     message = `Your asset "${assetTitle}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''} You can edit the asset to address this feedback and resubmit.`;
   } else if (status === 'delisted') {
-    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.`;
+    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.${note ? ` Reason: ${note}` : ''}`;
+  } else if (status === 'pending') {
+    message = `Your asset "${assetTitle}" was removed from the Marketplace and is being re-reviewed by moderators.${note ? ` Reason: ${note}` : ''}`;
   } else {
     return;
   }
@@ -344,6 +362,7 @@ async function sendMarketplaceListingNotification({
           marketAssetId,
           status,
           rejectionReason,
+          moderationNote: note || null,
         });
       }
     } catch (wsErr) {

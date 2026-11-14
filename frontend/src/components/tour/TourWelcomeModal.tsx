@@ -12,7 +12,7 @@ interface TourWelcomeModalProps {
 
 const T = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
-  fontMono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  fontMono: "'Plus Jakarta Sans', sans-serif",
 } as const;
 
 const WALKTHROUGH_VIDEOS = [
@@ -167,21 +167,22 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
 
   return (
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5"
-        style={{ fontFamily: T.fontDisplay }}
-      >
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-          onClick={() => {
-            playClick();
-            onClose();
-          }}
-        />
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5"
+          style={{ fontFamily: T.fontDisplay }}
+        >
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => {
+              playClick();
+              onClose();
+            }}
+          />
 
         {/* Architectural Blueprint Modal Window */}
         <motion.div
@@ -304,27 +305,6 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
             />
 
             <div style={{ position: 'relative', zIndex: 2 }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  padding: '4px 10px',
-                  border: `1px solid ${accentColor}`,
-                  background: isDark ? 'rgba(18, 18, 20, 0.75)' : 'rgba(255, 255, 255, 0.85)',
-                  color: accentColor,
-                  fontFamily: T.fontMono,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  marginBottom: 12,
-                }}
-              >
-                <Sparkles size={12} />
-                <span>PLATFORM WALKTHROUGH • INTERACTIVE GUIDE</span>
-              </div>
-
               <h2
                 style={{
                   fontSize: 'clamp(22px, 3.2vw, 30px)',
@@ -639,6 +619,7 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
               type="button"
               onClick={() => {
                 playClick();
+                onClose();
                 onStart(activeRole);
               }}
               onMouseEnter={playHover}
@@ -673,6 +654,7 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

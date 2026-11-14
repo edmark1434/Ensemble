@@ -5,11 +5,22 @@ exports.up = (pgm) => {
     INSERT INTO features (feature_id, feature_key, name, description)
     VALUES ('ad9810a7-2825-424e-9521-6fbbc05bc6ea', 'render_workers', 'Render Workers', 'Lambda workers used per video export');
 
+    -- Plan ids differ per environment, so resolve plans by name like the rest of this seed.
     INSERT INTO plan_features (plan_id, feature_id, value)
-    VALUES
-      ('44541c21-0811-421f-8ad5-0e85f5cffea0', 'ad9810a7-2825-424e-9521-6fbbc05bc6ea', '2'),
-      ('4613a2ba-8fe3-4b9f-aa93-8dc2f09cbd28', 'ad9810a7-2825-424e-9521-6fbbc05bc6ea', '21'),
-      ('a010fbca-bf0f-4e87-9e52-c9ffc35821e2', 'ad9810a7-2825-424e-9521-6fbbc05bc6ea', '40');
+    SELECT p.plan_id, 'ad9810a7-2825-424e-9521-6fbbc05bc6ea', workers.value
+    FROM plans p
+    JOIN (VALUES ('free', '2'), ('premium', '21'), ('business', '40')) AS workers(plan_name, value)
+      ON LOWER(p.name) = workers.plan_name;
+
+    -- The render server pauses Lambda starts without worker counts, so fail loudly instead.
+    DO $$
+    BEGIN
+      IF (SELECT COUNT(*) FROM plan_features
+          WHERE feature_id = 'ad9810a7-2825-424e-9521-6fbbc05bc6ea') < 3 THEN
+        RAISE EXCEPTION 'render_workers seed needs plans named Free, Premium and Business';
+      END IF;
+    END
+    $$;
 
     INSERT INTO configuration
       (configuration_key, name, description, current_value_literal, default_value_literal)

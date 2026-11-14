@@ -21,45 +21,129 @@
         "enabled": true
     },
     {
+        "category": "public",
+        "name": "Pricing and Membership Plans",
+        "url": "/landing/Pricing",
+        "file": "public/pricing.md",
+        "enabled": true
+    },
+    {
+        "category": "public",
+        "name": "Ensemble Use Cases by User Type",
+        "url": "/landing/usecase/client",
+        "file": "public/use-cases.md",
+        "enabled": true
+    },
+    {
+        "category": "public",
+        "name": "Feedback and Supporting Ensemble",
+        "url": "/landing/SendAFeedback",
+        "file": "public/support-us-and-feedback.md",
+        "enabled": true
+    },
+    {
         "category": "platform",
-        "name": "About Ensemble",
+        "name": "About Ensemble and Platform Features",
         "url": "/landing/AboutUs",
         "file": "platform/about-and-features.md",
         "enabled": true
     },
     {
+        "category": "platform",
+        "name": "Platform History and Background",
+        "url": "/landing/AboutUs#history",
+        "file": "platform/history-and-background.md",
+        "enabled": true
+    },
+    {
+        "category": "platform",
+        "name": "Ensemble User Ecosystem and Roles",
+        "url": "/landing/AboutUs#roles",
+        "file": "platform/user-roles.md",
+        "enabled": true
+    },
+    {
+        "category": "platform",
+        "name": "Home, Discovery, Profiles, and Notifications",
+        "url": "/discovery",
+        "file": "platform/home-discovery-profiles.md",
+        "enabled": true
+    },
+    {
         "category": "account",
-        "name": "Account and Verification",
+        "name": "Accounts, Onboarding, Profile, and Settings",
         "url": "/settings",
         "file": "account/account-and-verification.md",
         "enabled": true
     },
     {
         "category": "verification",
-        "name": "Personal and Team Verification Guide",
+        "name": "Personal Identity Verification (KYC)",
         "url": "/account-verification-status",
-        "file": "verification/verification.md",
+        "file": "verification/personal-verification.md",
+        "enabled": true
+    },
+    {
+        "category": "verification",
+        "name": "Team Business Verification",
+        "url": "/teams#business-verification",
+        "file": "verification/team-business-verification.md",
+        "enabled": true
+    },
+    {
+        "category": "policy",
+        "name": "Platform Merit",
+        "url": "/profile#platform-merit",
+        "file": "policy/platform-merit.md",
+        "enabled": true
+    },
+    {
+        "category": "policy",
+        "name": "Warnings and Account Limits",
+        "url": "/profile#warnings-and-limits",
+        "file": "policy/warnings-and-account-limits.md",
+        "enabled": true
+    },
+    {
+        "category": "policy",
+        "name": "Account Standing and Appeals",
+        "url": "/account/appeal",
+        "file": "policy/account-standing-and-appeals.md",
+        "enabled": true
+    },
+    {
+        "category": "policy",
+        "name": "Ensemble Badges",
+        "url": "/profile#badges",
+        "file": "policy/badges.md",
+        "enabled": true
+    },
+    {
+        "category": "governance",
+        "name": "Reports and Disputes",
+        "url": "/contracts/disputes",
+        "file": "governance/reports-and-disputes.md",
         "enabled": true
     },
     {
         "category": "collaboration",
-        "name": "Collaboration Workspace",
+        "name": "Projects, Editor, Teams, Workspaces, and Dashboard",
         "url": "/projects",
         "file": "collaboration/collaboration.md",
         "enabled": true
     },
     {
-        "category": "communication",
-        "name": "Chat, Inbox, Calls, and Meetings",
-        "url": "/inbox/*",
-        "file": "communication/chat-and-calls.md",
+        "category": "collaboration",
+        "name": "Community Forums",
+        "url": "/forums",
+        "file": "collaboration/forums.md",
         "enabled": true
     },
     {
-        "category": "collaboration",
-        "name": "Forums",
-        "url": "/forums",
-        "file": "collaboration/forums.md",
+        "category": "communication",
+        "name": "Chat, Inbox, Calls, and Meetings",
+        "url": "/inbox",
+        "file": "communication/chat-and-calls.md",
         "enabled": true
     },
     {
@@ -71,65 +155,58 @@
     },
     {
         "category": "marketplace",
-        "name": "Job Market, Postings, and Ranking Algorithm",
+        "name": "Job Market and Job Postings",
         "url": "/jobs/postings",
         "file": "marketplace/jobs.md",
         "enabled": true
     },
     {
         "category": "marketplace",
-        "name": "Services (Gigs) and Discovery Ranking Algorithm",
+        "name": "Services (Gigs) Marketplace",
         "url": "/gigs/services",
         "file": "marketplace/gigs.md",
         "enabled": true
     },
     {
         "category": "work",
-        "name": "Jobs, Proposals, Gigs, and Contracts",
-        "url": "/jobs/postings",
-        "file": "work/jobs-gigs-contracts.md",
+        "name": "Job Proposals and Hiring",
+        "url": "/jobs/proposals",
+        "file": "work/proposals-and-hiring.md",
+        "enabled": true
+    },
+    {
+        "category": "work",
+        "name": "Gig Orders",
+        "url": "/gigs/orders",
+        "file": "work/gig-orders.md",
+        "enabled": true
+    },
+    {
+        "category": "work",
+        "name": "Contracts, Milestones, Escrow, and Delivery Dashboard",
+        "url": "/contracts",
+        "file": "work/contracts-and-milestones.md",
         "enabled": true
     },
     {
         "category": "payments",
-        "name": "Credits and Transactions",
+        "name": "Credits, Subscriptions, Wallet, Cashouts, and Transactions",
         "url": "/credits",
         "file": "payments/credits-and-transactions.md",
         "enabled": true
     },
     {
         "category": "support",
-        "name": "Support and Notifications",
-        "url": "/landing/SubmitATicket",
+        "name": "Support Channels and Getting Help",
+        "url": "/landing/AskOurChatbot",
         "file": "support/support.md",
         "enabled": true
     },
     {
         "category": "support",
-        "name": "Tickets, Purchases, and Reports",
-        "url": "/landing/SubmitATicket",
+        "name": "Support Tickets, Purchase Issues, and Ticket Categories",
+        "url": "/support/ticket",
         "file": "support/tickets-purchases-reports.md",
-        "enabled": true
-    },
-    {
-        "category": "governance",
-        "name": "Moderation, Violations, Reports, and Disputes",
-        "url": "/admin/moderation",
-        "file": "governance/moderation-and-violations.md",
-        "enabled": true
-    },
-    {
-        "category": "operations",
-        "name": "Administration",
-        "url": "/admin/dashboard",
-        "file": "operations/admin.md",
-        "enabled": true
-    },
-    {
-        "category": "operations",
-        "name": "Specialist Moderator Portals",
-        "url": "/moderator/support",
-        "file": "operations/moderator-portals.md",
         "enabled": true
     },
     {
@@ -151,20 +228,6 @@
         "name": "Current Ensemble Plans",
         "url": "/credits-subscriptions#current-plans",
         "file": "generated/plans.md",
-        "enabled": true
-    },
-    {
-        "url": "/landing/AboutUs",
-        "category": "platform",
-        "name": "Platform History and Background",
-        "file": "platform/history-and-background.md",
-        "enabled": true
-    },
-    {
-        "category": "platform",
-        "name": "Ensemble User Ecosystem and Roles",
-        "url": "/landing/AboutUs",
-        "file": "platform/user-roles.md",
         "enabled": true
     }
 ]

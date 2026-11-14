@@ -81,7 +81,7 @@ function conversationalResponse(question) {
 }
 
 function isPublicDocument(doc) {
-  const blocked = ['/admin', '/moderator', '/staff'];
+  const blocked = ['/admin', '/moderator', '/staff', '/api'];
   let pathname = doc.url;
   try { pathname = new URL(doc.url).pathname; } catch { /* relative route */ }
   return !blocked.some((prefix) => pathname.startsWith(prefix));
@@ -113,14 +113,41 @@ function rerankDocuments(question, documents) {
 }
 
 const ROUTE_LABELS = {
-  '/verification': 'personal verification page',
   '/account-verification-status': 'verification status page',
-  '/landing/SubmitATicket': 'support ticket page',
+  '/support/ticket': 'support ticket page',
+  '/account/appeal': 'account appeal page',
   '/credits-subscriptions': 'subscription plans page',
   '/credits': 'credits page',
+  '/credits/checkout': 'credits checkout page',
   '/transactions': 'transaction history',
   '/settings': 'account settings',
+  '/profile': 'profile page',
+  '/notifications': 'notifications page',
+  '/discovery': 'discovery page',
+  '/home': 'home feed',
+  '/projects': 'projects page',
+  '/teams': 'teams page',
+  '/workspaces': 'workspaces page',
+  '/forums': 'forums page',
+  '/inbox': 'inbox',
+  '/assets': 'asset marketplace',
+  '/jobs/postings': 'job postings page',
+  '/jobs/proposals': 'proposals page',
+  '/gigs/services': 'services marketplace',
+  '/gigs/orders': 'gig orders page',
+  '/contracts': 'contracts page',
+  '/contracts/disputes': 'disputes page',
+  '/contracts/dispute-form': 'dispute filing form',
+  '/dashboard': 'delivery dashboard',
   '/forgot-password': 'password recovery page',
+  '/landing/Pricing': 'pricing page',
+  '/landing/FAQ': 'FAQ page',
+  '/landing/HowToHire': 'how to hire guide',
+  '/landing/HowToWork': 'how to work guide',
+  '/landing/AboutUs': 'about Ensemble page',
+  '/landing/TermsOfService': 'Terms of Service',
+  '/landing/PrivacyPolicy': 'Privacy Policy',
+  '/landing/AskOurChatbot': 'support chatbot page',
 };
 
 function routeLabel(route) {

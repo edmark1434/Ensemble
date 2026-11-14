@@ -1,6 +1,6 @@
 import UserTeamPage from '@/pages/admin/userTeam/UserTeamPage';
 
-/** Marketplace-scoped User & Team: view, warn, suspend/lock — no bans, credits, teams, or verification. */
+/** Marketplace-scoped User & Team: users & teams — warn/suspend/lock only (no bans, credits, or verification). */
 export default function MarketplaceUserTeam() {
   return <UserTeamPage variant="marketplace" />;
 }

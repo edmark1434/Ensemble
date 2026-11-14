@@ -232,11 +232,9 @@ export const HomeFeaturedJobs: React.FC = () => {
           <div
             key={job.id}
             onClick={() => navigate(`/jobs/postings/${job.id}`)}
-            className={`group flex flex-col justify-between rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
+            className={`group flex flex-col justify-between rounded-2xl border overflow-hidden transition-all duration-300 hover:-translate-y-1 cursor-pointer border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
           >
-            <div>
-              {/* Thumbnail Image */}
-              <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3 flex items-center justify-center">
+            <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-gray-100 dark:bg-zinc-900 border-b border-gray-100 dark:border-white/5 shrink-0 flex items-center justify-center">
                 {job.thumbnail ? (
                   <img
                     src={job.thumbnail}
@@ -328,8 +326,11 @@ export const HomeFeaturedJobs: React.FC = () => {
                 </div>
               </div>
 
-              {/* Category Pill Tags */}
-              <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              {/* Card Content */}
+              <div className="p-4 flex-1 flex flex-col justify-between">
+                <div>
+                  {/* Category Pill Tags */}
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
                 <span
                   className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                     job.status?.toLowerCase() === "open" || !job.status
@@ -443,6 +444,7 @@ export const HomeFeaturedJobs: React.FC = () => {
                 <span>{job.timeAgo}</span>
               </div>
             </div>
+          </div>
           </div>
           );
         })}

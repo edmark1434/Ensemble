@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Check, Coins, Edit2, HelpCircle, Star, Trash2, Trophy, X, Briefcase } from "lucide-react";
+import { Check, Edit2, HelpCircle, ShieldCheck, Star, Trash2, Trophy, X, Briefcase } from "lucide-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import { getRatingTierTag } from "./RatingsSection_ProfileDisplay";
 import { DEFAULT_MERIT, meritBandLabel, meritColor } from "@/lib/merit";
 
@@ -102,134 +103,114 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
               </p>
             </div>
           </div>
-          {isOwner && onSaveBudget && !isEditing && (
-            <button onClick={startEdit} className={headerButtonClass} title="Edit budget">
-              <Edit2 className="h-3 w-3" />
-            </button>
-          )}
+
         </div>
       </div>
 
-      <div className="p-3 rounded-xl bg-gray-50/80 dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-3 shadow-2xs">
-        <div className="min-w-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 block">
-            Platform Merit
-          </span>
-          <p className="mt-1 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-            {meritBand}. Starts at {DEFAULT_MERIT}.
-          </p>
-        </div>
-        <div className="relative inline-flex items-center justify-center shrink-0 w-[64px] h-[64px] select-none">
-          <svg width={64} height={64} className="-rotate-90">
+      {/* 1. PLATFORM MERIT SECTION */}
+      <div className="p-3 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200/70 dark:border-white/5 flex items-center gap-3.5 shadow-xs">
+        {/* Circular Gauge on Left */}
+        <div className="relative inline-flex items-center justify-center shrink-0 w-12 h-12 select-none">
+          <svg width={48} height={48} className="-rotate-90">
             <circle
-              cx={32}
-              cy={32}
-              r={26}
+              cx={24}
+              cy={24}
+              r={19}
               className="stroke-gray-200 dark:stroke-white/10"
-              strokeWidth={6}
+              strokeWidth={4.5}
               fill="none"
             />
             <circle
-              cx={32}
-              cy={32}
-              r={26}
+              cx={24}
+              cy={24}
+              r={19}
               className="transition-all duration-700 ease-out"
               style={{ stroke: ringColor }}
-              strokeWidth={6}
-              strokeDasharray={2 * Math.PI * 26}
-              strokeDashoffset={2 * Math.PI * 26 - (safeMerit / 100) * (2 * Math.PI * 26)}
+              strokeWidth={4.5}
+              strokeDasharray={2 * Math.PI * 19}
+              strokeDashoffset={2 * Math.PI * 19 - (safeMerit / 100) * (2 * Math.PI * 19)}
               strokeLinecap="round"
               fill="none"
             />
           </svg>
           <span
-            className="absolute inset-0 flex items-center justify-center text-sm font-bold font-mono tracking-tight"
+            className="absolute inset-0 flex items-center justify-center text-xs font-black tracking-tight"
             style={{ color: ringColor }}
           >
             {safeMerit}
           </span>
         </div>
-      </div>
 
-      {/* 1. RATINGS SECTION (HIGHLIGHT TOTAL BIGGER) */}
-      <div className="p-3 rounded-xl bg-gray-50/80 dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/10 flex items-stretch justify-between gap-3 shadow-2xs">
-        
-        {/* Left: Total Platform Rating (Hero / Highlighted Bigger) */}
-        <div className="flex-1 min-w-0 pr-1 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
-              <Trophy className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
-              <span>Total Rating</span>
-            </div>
-
-            <div className="flex items-baseline gap-1 mt-1">
-              <Star className="h-5 w-5 fill-amber-400 text-amber-400 shrink-0 self-center" />
-              <span className="text-2xl font-black font-mono tracking-tight text-gray-900 dark:text-white">
-                {avgRating ? avgRating.toFixed(1) : "0.0"}
-              </span>
-              <span className="text-[11px] font-mono text-gray-400 dark:text-zinc-500">
-                ({totalReviews})
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-1.5">
-            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${totalTier.badgeClass}`}>
-              {totalTier.label}
+        {/* Platform Merit Info on Right */}
+        <div className="min-w-0 space-y-0.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 block">
+            Platform Merit
+          </span>
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="text-xs font-bold text-gray-700 dark:text-zinc-200">
+              {meritBand}
             </span>
           </div>
         </div>
-
-        {/* Right: Freelance Sub-rating */}
-        <div className="w-[100px] shrink-0 pl-3 border-l border-gray-200 dark:border-white/5 flex flex-col justify-between text-right">
-          <div>
-            <span className="text-[10px] font-medium text-gray-400 dark:text-zinc-500 flex items-center justify-end gap-1">
-              <Briefcase className="h-3 w-3 text-zinc-400 shrink-0" />
-              <span>Freelance</span>
-            </span>
-
-            <div className="flex items-center justify-end gap-1 mt-1.5">
-              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 shrink-0" />
-              <span className="text-sm font-bold font-mono text-gray-900 dark:text-white">
-                {freelancerRating ? freelancerRating.toFixed(1) : "0.0"}
-              </span>
-              <span className="text-[10px] font-mono text-gray-400 dark:text-zinc-500">
-                ({freelancerReviews})
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-1.5 flex justify-end">
-            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${freelancerTier.badgeClass}`}>
-              {freelancerReviews > 0 ? freelancerTier.label : "None"}
-            </span>
-          </div>
-        </div>
-
       </div>
 
-      {/* 2. BUDGET SECTION (BELOW BOTH RATINGS) */}
+      {/* 2. RATINGS SECTION */}
+      <div className="p-3 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200/70 dark:border-white/5 space-y-2.5 shadow-xs">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+            <Trophy className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+            <span>Total Rating</span>
+          </div>
+
+          {/* Unique Tier Tag */}
+          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${totalTier.badgeClass}`}>
+            {totalTier.label}
+          </span>
+        </div>
+
+        {/* Hero Rating Row */}
+        <div className="flex items-baseline gap-2">
+          <Star className="h-5 w-5 fill-amber-400 text-amber-400 shrink-0 self-center" />
+          <span className="text-2xl font-black tracking-tight text-gray-900 dark:text-white leading-none">
+            {avgRating ? avgRating.toFixed(1) : "0.0"}
+          </span>
+          <span className="text-[11px] font-medium text-gray-400 dark:text-zinc-500">
+            ({totalReviews} {totalReviews === 1 ? "review" : "reviews"})
+          </span>
+        </div>
+
+        {/* Freelance Sub-Stat Pill Below */}
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[10px] shadow-2xs">
+          <Briefcase className="h-3 w-3 text-zinc-400 shrink-0" />
+          <span className="text-gray-500 dark:text-zinc-400 font-medium">Freelance:</span>
+          <span className="font-bold text-gray-900 dark:text-white">
+            {freelancerRating ? freelancerRating.toFixed(1) : "0.0"}
+          </span>
+          <span className="text-gray-400 dark:text-zinc-500 font-medium">({freelancerReviews})</span>
+        </div>
+      </div>
+
+      {/* 3. BUDGET SECTION */}
       {!isEditing ? (
-        <div className="p-3 rounded-xl bg-gray-50/60 dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-2 shadow-2xs">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center shrink-0">
-              <Coins className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-            </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 block">
-                Planned Budget
-              </span>
-              <div className="truncate">
-                {budgetCredits !== null && Number(budgetCredits) > 0 ? (
-                  <span className="text-xs font-bold font-mono text-gray-900 dark:text-white" title={`${budgetCredits.toLocaleString()} credits`}>
-                    {budgetCredits.toLocaleString()} <span className="text-[10px] font-normal text-gray-400 font-sans">Credits</span>
+        <div className="p-3 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-200/70 dark:border-white/5 flex items-center justify-between gap-3 shadow-xs">
+          <div className="min-w-0 space-y-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500 block">
+              Planned Budget
+            </span>
+            <div className="truncate">
+              {budgetCredits !== null && Number(budgetCredits) > 0 ? (
+                <div className="flex items-center gap-1.5" title={`${budgetCredits.toLocaleString()} credits`}>
+                  <CreditIcon className="h-4 w-4 shrink-0" />
+                  <span className="text-xs font-bold text-gray-900 dark:text-white">
+                    {budgetCredits.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">Credits</span>
                   </span>
-                ) : (
-                  <span className="text-xs text-gray-400 dark:text-zinc-500 italic">
-                    Not set
-                  </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-400 dark:text-zinc-500 italic">
+                  Not set
+                </span>
+              )}
             </div>
           </div>
 
@@ -237,9 +218,10 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
             <button
               type="button"
               onClick={startEdit}
-              className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 hover:text-black dark:hover:text-white px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer shrink-0 border border-transparent hover:border-gray-200 dark:hover:border-white/10"
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-all duration-200 cursor-pointer group/btn shrink-0"
+              title={budgetCredits !== null ? "Edit Planned Budget" : "Set Planned Budget"}
             >
-              {budgetCredits !== null ? "Edit" : "Set Budget"}
+              <Edit2 className="h-3 w-3 transition-transform duration-200 group-hover/btn:rotate-12" />
             </button>
           )}
         </div>
@@ -248,10 +230,10 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
         <div className="p-3 rounded-xl bg-gray-50/90 dark:bg-zinc-900/90 border border-gray-300 dark:border-zinc-700 space-y-2.5 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300 flex items-center gap-1.5">
-              <Coins className="h-3.5 w-3.5 text-zinc-500" />
+              <CreditIcon className="h-3.5 w-3.5 shrink-0" />
               Set Planned Budget
             </span>
-            <span className="text-[10px] text-gray-400 font-mono">Credits</span>
+            <span className="text-[10px] text-gray-400 font-medium">Credits</span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -265,7 +247,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
                 if (e.key === "Escape") setIsEditing(false);
               }}
               placeholder="e.g. 5,000"
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-zinc-500 font-mono"
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-zinc-500"
             />
             <button 
               onClick={() => void submit()} 

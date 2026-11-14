@@ -28,7 +28,7 @@ function limitedEnforcementCaps(
 ): UserTeamCapabilities {
   return {
     variant,
-    showTeamsTab: false,
+    showTeamsTab: true,
     canCredits: false,
     canVerification: false,
     canBan: false,

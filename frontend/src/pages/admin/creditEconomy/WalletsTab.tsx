@@ -40,6 +40,10 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
   const [sortBy, setSortBy] = useState('credits');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Freezing needs a reason the members will see, so a bulk freeze asks for one first.
+  const [bulkHoldOpen, setBulkHoldOpen] = useState(false);
+  const [bulkHoldReason, setBulkHoldReason] = useState('');
+  const [bulkHoldDays, setBulkHoldDays] = useState('');
 
   const typeOptions = useMemo(
     () => uniqueOptions(wallets.map((w) => w.accountType)),
@@ -128,13 +132,33 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
     if (actionId !== 'freeze' && actionId !== 'unfreeze') return;
 
     const freeze = actionId === 'freeze';
+    if (freeze && !bulkHoldOpen) {
+      setBulkHoldOpen(true);
+      return;
+    }
+    const holdDays = bulkHoldDays === '' ? null : Number(bulkHoldDays);
+    if (freeze) {
+      if (bulkHoldReason.trim().length < 5) {
+        showErrorToast('Write the reason members will see (at least 5 characters)');
+        return;
+      }
+      if (holdDays !== null && (!Number.isInteger(holdDays) || holdDays < 1 || holdDays > 365)) {
+        showErrorToast('Hold length must be whole days from 1 to 365');
+        return;
+      }
+    }
     setBulkBusy(true);
     let ok = 0;
     let failed = 0;
     try {
       for (const wallet of selectedWallets) {
         try {
-          await freezeAccountCredits(String(wallet.accountId), freeze, { silent: true });
+          await freezeAccountCredits(
+            String(wallet.accountId),
+            freeze,
+            { silent: true },
+            freeze ? { reason: bulkHoldReason.trim(), days: holdDays } : undefined
+          );
           ok += 1;
         } catch {
           failed += 1;
@@ -147,6 +171,11 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
           }`
         );
         setSelectedIds(new Set());
+        if (freeze) {
+          setBulkHoldOpen(false);
+          setBulkHoldReason('');
+          setBulkHoldDays('');
+        }
         onChanged?.();
       } else {
         showErrorToast('Bulk credit action failed for all selected wallets');
@@ -223,6 +252,49 @@ export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabPro
           onAction={(id) => void handleBulkAction(id)}
         />
       </div>
+      {bulkHoldOpen && (
+        <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-amber-500/[0.04] px-4 py-3 sm:flex-row sm:items-end">
+          <label className="flex-1 text-xs font-medium text-zinc-300">
+            Reason members will see ({selectedWallets.length} selected)
+            <input
+              value={bulkHoldReason}
+              onChange={(e) => setBulkHoldReason(e.target.value)}
+              maxLength={500}
+              placeholder="e.g. Payment provider investigation"
+              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
+            />
+          </label>
+          <label className="text-xs font-medium text-zinc-300 sm:w-44">
+            Release after (days)
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={bulkHoldDays}
+              onChange={(e) => setBulkHoldDays(e.target.value)}
+              placeholder="Until review"
+              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={bulkBusy || selectedWallets.length === 0}
+              onClick={() => void handleBulkAction('freeze')}
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
+            >
+              Freeze selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkHoldOpen(false)}
+              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-zinc-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[860px] text-left text-sm">

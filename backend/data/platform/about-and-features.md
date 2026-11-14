@@ -2,40 +2,16 @@
 
 Routes: `/`, `/landing/AboutUs`
 
-Sources:
+Ensemble is a real-time collaborative video production and creative marketplace platform built by RavenLabs Development to reduce friction between Clients, Freelancers, and Asset Creators.
 
-- `frontend/src/pages/LandingPage.tsx`
-- `frontend/src/pages/landing/section_Features.tsx`
-- `frontend/src/pages/landing/pages/page_AboutUs.tsx`
+## Core platform features
 
-## About Ensemble
+- **Collaborative Browser Video Editor:** Edit multi-track video timelines directly in your browser with real-time team presence, eliminating repeated file exports and large-file handoffs.
+- **AI Auto Captioning:** Search spoken words and phrases across clips to jump directly to exact dialogue moments on the timeline.
+- **Auto Dead-Air Cleanup:** Remove silent pauses in one click to tighten rough cuts before exporting.
+- **Creative Marketplace:** Discover, buy, and sell Template Videos, Bundles, Images, Videos, and Audios on `/assets`, and import purchased items straight into your editor timeline.
+- **Jobs, Proposals, and Services (Gigs):** Clients can post production briefs or order packaged services, while Freelancers and Teams can pitch proposals or list tiered service packages backed by escrow milestones.
+- **Integrated Chat, Calls, and Meetings:** Coordinate projects through direct and group conversations, browser audio/video calls, and Google Meet scheduling in `/inbox`.
+- **Progress Tracking and Dashboards:** Track active contract deliverables, review queues, mutual ratings, and archived work on `/dashboard` and `/contracts`.
 
-The About page describes Ensemble as a structure-first, real-time video collaboration application intended to reduce friction in film-production workflows. The page identifies RavenLabs Development as the engineering team.
-
-## Advertised feature areas
-
-### AI caption navigation
-
-The landing page describes searching for a word or phrase to locate where it was spoken in a video.
-
-### Seamless collaboration
-
-The platform presents real-time team editing and shared workflows intended to reduce repeated rendering and large-file handoffs.
-
-### Automatic dead-air cleanup
-
-The landing page advertises one-click silence removal to streamline an edit before export.
-
-### Creative marketplace
-
-Users can discover, buy, and sell creative assets. The platform also provides job and gig areas for hiring and offering services.
-
-### Integrated chat and calls
-
-The interface includes messaging, direct and group conversations, browser calls, and Google Meet-connected meeting flows.
-
-### Progress tracking
-
-Dashboard routes display tasks, reviews, archived items, milestones, and progress-related views.
-
-These are feature descriptions from the current frontend. Availability can still depend on authentication, account permissions, configured providers, and the status of the corresponding backend service.
+Feature availability may depend on account sign-in, Identity Verification (KYC), active subscription tier, and account standing.

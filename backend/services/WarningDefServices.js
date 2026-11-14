@@ -79,7 +79,37 @@ async function listWarningDefsService() {
   return (await listWarningDefs()).map(withLadder);
 }
 
-async function resolveIssuedWarning({ warningId, type } = {}) {
+const DESK_BY_ROLE = Object.freeze({
+  Admin: 'admin',
+  'Support Moderator': 'support',
+  'Forum Moderator': 'forum',
+  'Marketplace Moderator': 'marketplace',
+  'Jobs N Gigs Moderator': 'jobs',
+});
+
+/** Desk a staff role issues warnings from (same keys as `warning_defs.desks`). */
+function warningDeskForRole(role) {
+  const { normalizeStaffRole } = require('../lib/StaffEnums');
+  return DESK_BY_ROLE[normalizeStaffRole(role, null)] || null;
+}
+
+/**
+ * The picker only lists a desk's rows, but the API takes any slug. Admin and Support may issue
+ * every row; a specialist moderator only rows whose `desks` include their desk.
+ */
+function assertWarningIssuableByRole(issued, role) {
+  const desk = warningDeskForRole(role);
+  if (desk === 'admin' || desk === 'support') return;
+  if (!desk || !Array.isArray(issued?.desks) || !issued.desks.includes(desk)) {
+    throw serviceError('Your desk cannot issue this warning. Pick one from your warning list.', 403);
+  }
+}
+
+/**
+ * @param {{ warningId?: string, type?: string, actorRole?: string|null }} input
+ *   `actorRole` is the issuing staff member's role; the row must be on that role's desk.
+ */
+async function resolveIssuedWarning({ warningId, type, actorRole } = {}) {
   const slug = String(warningId || '').trim();
   const label = String(type || '').trim();
   let preset = null;
@@ -98,16 +128,19 @@ async function resolveIssuedWarning({ warningId, type } = {}) {
     throw serviceError('Pick a predefined warning. Points are locked to that warning.');
   }
   const points = clampWarningPoints(preset.points);
-  return {
+  const issued = {
     warningId: preset.slug || preset.id,
     type: preset.label,
     points,
     category: preset.category,
+    desks: Array.isArray(preset.desks) ? preset.desks : ['admin'],
     durationDays: clampDurationDays(
       preset.durationDays ?? preset.duration_days,
       warningDurationDays(points)
     ),
   };
+  assertWarningIssuableByRole(issued, actorRole);
+  return issued;
 }
 
 async function createWarningDefService(body) {
@@ -169,6 +202,7 @@ module.exports = {
   listWarningCatalog,
   listWarningDefsService,
   resolveIssuedWarning,
+  warningDeskForRole,
   createWarningDefService,
   updateWarningDefService,
   deleteWarningDefService,

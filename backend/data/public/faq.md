@@ -2,36 +2,45 @@
 
 Route: `/landing/FAQ`
 
-Source: `frontend/src/pages/landing/pages/page_FAQ.tsx`
+## Can a single account be used as both a Client and a Freelancer?
 
-## Is it free to post a project listing?
+Yes. Every Ensemble account is unified. You can switch between hiring talent as a Client, selling services or submitting job proposals as a Freelancer, and uploading media as an Asset Creator. Before engaging in financial or contractual transactions, you complete a one-time Identity Verification (KYC) on `/account-verification-status`.
 
-The FAQ states that posting a job request in the creative marketplace is free. A client funds contract milestones after selecting a freelancer.
+## What are the two ways a Client can hire a Freelancer on Ensemble?
 
-## How do parallel real-time editing workflows work?
+You can hire a Freelancer in two ways:
 
-The FAQ describes team members working concurrently with asset configurations, caption markers, and edit structures without locally rendering large source-video chunks.
+1. **Post a Job:** Publish a job on `/jobs/postings` or `/jobs/create`, receive individual or team proposals, shortlist and approve one, and then offer them a contract to hire them.
+2. **Order a Service (Gig):** Browse `/discovery` or `/gigs/services` to find a service that matches your work, place a service order, and once the Freelancer accepts your order, offer the contract to hire them.
 
-## What marketplace fee is charged?
+## Is it free to post a job or browse Discovery and Services?
 
-The public FAQ says Ensemble uses a platform commission, but it does not publish a fixed percentage on this page. Do not quote a percentage from this route.
+Browsing Freelancer portfolios on `/discovery` and `/gigs/services` is free. Clients fund contract milestones in escrow when offering and activating a contract. Check the current platform settings document for any current posting or platform fees.
 
-## How does contract escrow protect funds?
+## How does contract escrow protect both Clients and Freelancers?
 
-The FAQ describes milestone budgets being held in platform escrow after a client signs a project agreement. It says funds transfer to the creative professional after the client reviews and approves the completed deliverable.
+When a contract is established, milestone credits are locked in a platform escrow hold. Clients know funds are not released until deliverables are reviewed and approved, and Freelancers can work knowing the milestone budget is already secured upfront.
 
-## Are raw media assets stored securely?
+## What happens if a Client does not respond to a submitted milestone?
 
-The FAQ describes media as isolated in secure cloud storage and encrypted at rest. It also states that the user's creative intellectual property remains theirs.
+Clients have 5 calendar days for Job Contracts and 3 days for Gig Contracts to review submitted deliverables. If no approval, revision request, or dispute is opened within that window, the platform automatically approves the milestone and releases the escrow credits to the Freelancer.
 
-## Is private footage used to train public AI models?
+## What happens if a Freelancer misses a milestone deadline?
 
-The FAQ states that private video assets are not used for public model training.
+If a deadline passes without a submission, the milestone enters Overdue status and both parties are notified. The Client can either grant a deadline extension or cancel the overdue milestone to receive a 100% credit refund to their wallet.
 
-## What export tiers are described?
+## What digital items can I buy or sell on the Asset Marketplace?
 
-The FAQ describes 720p for free users, 1080p for Premium, and 2K–4K ProRes deliverables for Business accounts. Treat these as public page claims; confirm current plan availability on the pricing page before purchase guidance.
+Creators can buy and sell Template Videos, multi-asset Bundles, Images, Videos, and Audios on `/assets`. Purchased items are added directly to your Purchased library so you can access and import them into the browser video editor.
 
-## How are marketplace and gig earnings received?
+## How do real-time collaboration, AI Auto Captioning, and Auto Dead-Air Cleanup work?
 
-The FAQ says completed asset sales and milestone payouts are routed to the creator's dashboard wallet. External withdrawal requires an eligible verified account and the applicable payout workflow.
+Ensemble's browser video editor syncs timeline edits across team members in real time, includes integrated chat and video calls, lets you search spoken dialogue across clips with AI Auto Captioning, and removes silent pauses with one-click Auto Dead-Air Cleanup.
+
+## Are my raw video files secure, and does AI train on my private footage?
+
+Project media is stored in isolated, encrypted cloud storage. Ensemble processes your audio and video only to power your workspace features and never uses your private footage to train public AI models.
+
+## How do payouts work for completed contracts and Asset Marketplace sales?
+
+Approved contract milestones and Asset Marketplace sales credit your Ensemble wallet balance. Verified users can withdraw earned credits through supported cashout channels (such as GCash and Maya) from the Wallet tab in `/settings`. Check the current platform settings document for minimum payout and withdrawal fee details.

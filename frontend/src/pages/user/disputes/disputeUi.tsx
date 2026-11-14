@@ -306,6 +306,13 @@ const RULING_TONES = {
     barDark: "bg-amber-500/20 text-amber-100",
     icon: "text-amber-500",
   },
+  payout: {
+    shell: "border-emerald-300 bg-emerald-50/80 dark:border-emerald-400/40 dark:bg-emerald-500/[0.07]",
+    shellDark: "border-emerald-400/40 bg-emerald-500/[0.07]",
+    bar: "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100",
+    barDark: "bg-emerald-500/20 text-emerald-100",
+    icon: "text-emerald-500",
+  },
 } as const;
 
 /**
@@ -385,7 +392,7 @@ export function DisputeDecisionCard({
           <ShieldCheckIcon className={tone.icon} />
           <span className={`text-[11px] font-bold ${strong}`}>Dispute Resolution</span>
           <span className={`text-[11px] ${muted}`}>
-            · {ruling.kind === "parties" ? "Ensemble platform notice" : "Ensemble platform decision"}
+            · {ruling.kind === "parties" || ruling.kind === "payout" ? "Ensemble platform notice" : "Ensemble platform decision"}
           </span>
         </div>
 
@@ -412,6 +419,102 @@ function ShieldCheckIcon({ className = "" }: { className?: string }) {
       <path d="M12 3l7 3v6c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z" />
       <path d="M9 12l2 2 4-4" />
     </svg>
+  );
+}
+
+/** The money side of a ruling as the two parties see it (`settlement` on dispute payloads). */
+export type DisputeSettlement = {
+  kind: "escrow_settle" | "transaction_reverse" | null;
+  decidedAt: string | null;
+  /** The case was reopened, so waiting payouts are on hold. */
+  paused: boolean;
+  payouts: {
+    id: string;
+    kind: "escrow_refund" | "escrow_release" | "reversal";
+    amount: number;
+    status: "scheduled" | "paid" | "failed" | "cancelled";
+    releaseAt: string | null;
+    paidAt: string | null;
+    recipientRole: "client" | "freelancer" | null;
+    recipientName: string;
+    recipientHandle: string | null;
+    isYou: boolean;
+  }[];
+};
+
+function payoutLine(payout: DisputeSettlement["payouts"][number], paused: boolean) {
+  if (payout.status === "paid") return { text: `Paid ${formatWhen(payout.paidAt)}`, tone: "paid" as const };
+  if (payout.status === "failed") return { text: "Delayed — staff are completing it", tone: "warn" as const };
+  if (paused) return { text: "On hold while the case is reviewed again", tone: "warn" as const };
+  return { text: `Arrives ${formatWhen(payout.releaseAt)}`, tone: "waiting" as const };
+}
+
+const PAYOUT_TONES = {
+  paid: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200",
+  waiting: "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200",
+  warn: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200",
+};
+
+/**
+ * Who receives what from a dispute ruling, and when. Credits stay locked in escrow until the
+ * payout date (7 days after the ruling by default), which leaves time to ask for an appeal.
+ */
+export function DisputeSettlementCard({ settlement }: { settlement?: DisputeSettlement | null }) {
+  if (!settlement || !settlement.payouts?.length) return null;
+  const waiting = settlement.payouts.some((p) => p.status === "scheduled" || p.status === "failed");
+  const mine = settlement.payouts.filter((p) => p.isYou).reduce((sum, p) => sum + p.amount, 0);
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-gray-200 px-5 py-3 dark:border-white/10">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 dark:text-zinc-400">
+          {settlement.kind === "transaction_reverse" ? "Reversal" : "Settlement"}
+        </p>
+        <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">
+          {mine > 0
+            ? `${mine.toLocaleString()} credits ${waiting ? "are coming" : "were paid"} to you`
+            : "How the credits were split"}
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-white/5">
+        {settlement.payouts.map((payout) => {
+          const line = payoutLine(payout, settlement.paused);
+          const who = payout.isYou
+            ? "You"
+            : payout.recipientHandle
+              ? `@${payout.recipientHandle}`
+              : payout.recipientName;
+          return (
+            <li key={payout.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                  {who}
+                  {payout.recipientRole ? (
+                    <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-zinc-400">
+                      {payout.recipientRole === "client" ? "Client" : "Freelancer"}
+                    </span>
+                  ) : null}
+                </p>
+                <span
+                  className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${PAYOUT_TONES[line.tone]}`}
+                >
+                  {line.text}
+                </span>
+              </div>
+              <p className="text-base font-extrabold tabular-nums text-gray-900 dark:text-white">
+                {payout.amount.toLocaleString()}
+                <span className="ml-1 text-xs font-medium text-gray-500 dark:text-zinc-400">credits</span>
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+      {waiting ? (
+        <p className="border-t border-gray-200 px-5 py-3 text-xs leading-relaxed text-gray-500 dark:border-white/10 dark:text-zinc-400">
+          The credits stay locked in escrow until the payout date, then go to the Account Wallet. If you
+          think the ruling is wrong, contact Support to appeal before then.
+        </p>
+      ) : null}
+    </Card>
   );
 }
 

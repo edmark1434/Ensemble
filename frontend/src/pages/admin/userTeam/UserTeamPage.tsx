@@ -66,8 +66,8 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
     () =>
       ALL_TABS.filter((t) => {
         if (t.id === 'teams') return caps.showTeamsTab;
-        // Specialist mod desks already have a dedicated Restrictions route.
-        if (t.id === 'restrictions') return variant === 'admin';
+        // Restrictions + survey responses are Admin-only (mods use desk-scoped tools).
+        if (t.id === 'restrictions' || t.id === 'survey-responses') return variant === 'admin';
         return true;
       }),
     [caps.showTeamsTab, variant]
@@ -118,7 +118,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
             <p className="mt-1 text-xs text-zinc-500">
               Signed in as @{user?.username || meta.fallbackUser}
               {variant === 'forum' || variant === 'marketplace' || variant === 'jobs'
-                ? ' · Warn, suspend, and lock only — no bans, credits, or team management'
+                ? ' · Warn, suspend, and lock users & teams — no bans, credits, or verification'
                 : ''}
             </p>
           </div>
@@ -175,7 +175,11 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
           />
         )}
         {tab === 'teams' && caps.showTeamsTab && (
-          <TeamsTab refreshToken={refreshToken} onStatsLoaded={setTeamsPending} />
+          <TeamsTab
+            refreshToken={refreshToken}
+            onStatsLoaded={setTeamsPending}
+            capabilities={caps}
+          />
         )}
         {tab === 'users' && (
           <UsersTab
@@ -185,7 +189,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
           />
         )}
         {tab === 'restrictions' && <RestrictionsTab />}
-        {tab === 'survey-responses' && (
+        {tab === 'survey-responses' && variant === 'admin' && (
           <SurveyResponsesTab refreshToken={refreshToken} />
         )}
       </div>

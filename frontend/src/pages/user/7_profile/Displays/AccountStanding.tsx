@@ -82,7 +82,7 @@ export function standingBadges(standing?: PublicStanding | null) {
   if (standing.forumTimeout) {
     badges.push({ label: 'Timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
   }
-  // Open disputes are listed on Active History / Dispute History tabs — not as a header badge.
+  // Open disputes are listed on the Disputes tab — not as a header badge.
   return badges;
 }
 
@@ -145,8 +145,11 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
   }, []);
 
   const badges = standingBadges(record);
+  // The backend merit is authoritative (the warnings list is capped and only a recent slice).
   const displayedMerit = record
-    ? meritFromWarnings(record.warnings)
+    ? Number.isFinite(Number(record.merit))
+      ? Number(record.merit)
+      : meritFromWarnings(record.warnings)
     : DEFAULT_MERIT;
 
   return (
