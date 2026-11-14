@@ -2,11 +2,13 @@ const router = require('express').Router();
 const checkSession = require('../middleware/CheckSession');
 const requireStaffRole = require('../middleware/RequireStaffRole');
 const {
+  requireMarketplaceTicket,
   getOverview,
   getListings,
   getListingDetail,
   getSellerListings,
   patchListing,
+  getListingFileOriginal,
   getTickets,
   getTicket,
   patchTicket,
@@ -51,13 +53,26 @@ router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOve
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
+router.get(
+  '/marketplace/listings/:id/media/:mediaAssetId/original',
+  [checkSession, marketplaceModerator],
+  getListingFileOriginal
+);
 router.get('/marketplace/users/:accountId/listings', [checkSession, marketplaceModerator], getSellerListings);
 router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTickets);
 router.get('/marketplace/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/marketplace/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
 router.post('/marketplace/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
-router.patch('/marketplace/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
-router.delete('/marketplace/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
+router.patch(
+  '/marketplace/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  patchAdminTicketMessage
+);
+router.delete(
+  '/marketplace/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  deleteAdminTicketMessage
+);
 router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
 router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
 router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);
@@ -78,8 +93,16 @@ router.patch(
 router.get('/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
 router.post('/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
-router.patch('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
-router.delete('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
+router.patch(
+  '/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  patchAdminTicketMessage
+);
+router.delete(
+  '/tickets/:id/messages/:messageId',
+  [checkSession, marketplaceModerator, requireMarketplaceTicket],
+  deleteAdminTicketMessage
+);
 
 // Marketplace moderation enforcement happens inside a report case, so this console has no
 // standalone restrictions desk. The other consoles keep their `/<desk>/restrictions` routes.

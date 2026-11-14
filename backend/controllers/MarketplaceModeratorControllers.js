@@ -7,6 +7,7 @@ const {
   getMarketplaceTickets,
   getMarketplaceReports,
 } = require('../repositories/MarketplaceModeratorRepositories');
+const { getListingOriginalAccess } = require('../services/MarketplaceListingFileServices');
 const {
   getTicketDetail,
   updateTicket,
@@ -15,12 +16,19 @@ const {
   updateReport,
 } = require('../repositories/AdminTicketsRepositories');
 const { MARKETPLACE_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
-const { MARKETPLACE_TYPES, normalizeTicketType } = require('../lib/TicketEnums');
+const { ticketInStaffQueue } = require('../lib/TicketQueueScope');
 
-/** The marketplace desk may only read or act on tickets filed under a marketplace type. */
+/**
+ * The marketplace desk may only read or act on tickets filed under a marketplace type that
+ * Admin has not taken over (escalated to Admin, or handled by an Admin) — the same rule the
+ * queue list applies.
+ */
 function isMarketplaceTicket(ticket) {
-  const type = normalizeTicketType(ticket?.type || ticket?.category, null);
-  return Boolean(type && MARKETPLACE_TYPES.includes(type));
+  return ticketInStaffQueue('Marketplace Moderator', {
+    type: ticket?.type || ticket?.category,
+    escalatedToRole: ticket?.escalatedToRole,
+    handlerRole: ticket?.assignee?.role,
+  });
 }
 
 async function loadScopedTicket(req, res) {
@@ -34,6 +42,33 @@ async function loadScopedTicket(req, res) {
     return null;
   }
   return detail;
+}
+
+/**
+ * Route guard for the shared message edit/delete handlers, so a marketplace moderator cannot
+ * reach a message on a ticket outside this queue by guessing its id.
+ */
+async function requireMarketplaceTicket(req, res, next) {
+  try {
+    if (await loadScopedTicket(req, res)) next();
+  } catch (err) {
+    console.error('Error checking marketplace ticket scope:', err);
+    res.status(500).json({ success: false, message: 'Failed to load ticket' });
+  }
+}
+
+/** Caller mistakes from `updateTicket` (bad move target, missing type, no permission). */
+function ticketUpdateClientStatus(message) {
+  const msg = String(message || '');
+  if (/only a moderator or admin|only the assigned|assign yourself|permission/i.test(msg)) return 403;
+  if (
+    /not valid for|type is required|only be changed when escalating|unknown escalate role|unknown ticket action|invalid|already has a handler|use assign myself|already filed|another desk|pick a ticket|open this ticket/i.test(
+      msg
+    )
+  ) {
+    return 400;
+  }
+  return null;
 }
 
 async function getOverview(req, res) {
@@ -62,8 +97,18 @@ async function getListings(req, res) {
   }
 }
 
+/** Listing and account ids are UUIDs; anything else is a missing record, not a server fault. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value) {
+  return UUID_PATTERN.test(String(value || ''));
+}
+
 async function getListingDetail(req, res) {
   try {
+    if (!isUuid(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
     const data = await getMarketplaceListingDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
@@ -75,6 +120,9 @@ async function getListingDetail(req, res) {
 
 async function getSellerListings(req, res) {
   try {
+    if (!isUuid(req.params.accountId)) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
     const data = await getSellerMarketplaceListings(req.params.accountId);
     if (!data) return res.status(404).json({ success: false, message: 'Account not found' });
     res.status(200).json({ success: true, data });
@@ -84,8 +132,33 @@ async function getSellerListings(req, res) {
   }
 }
 
+/** Signed link to one original upload on a listing (`?download=1` for an attachment). */
+async function getListingFileOriginal(req, res) {
+  try {
+    const download = ['1', 'true', 'yes'].includes(String(req.query.download || '').toLowerCase());
+    const data = await getListingOriginalAccess(
+      req.params.id,
+      req.params.mediaAssetId,
+      { download },
+      req.session
+    );
+    res.set('Cache-Control', 'private, no-store');
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err?.statusCode || 500;
+    if (status >= 500) console.error('Error preparing listing file access:', err);
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Failed to open the original file',
+    });
+  }
+}
+
 async function patchListing(req, res) {
   try {
+    if (!isUuid(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
     const data = await reviewMarketplaceListing(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
@@ -102,7 +175,7 @@ async function patchListing(req, res) {
 
 async function getTickets(req, res) {
   try {
-    const data = await getMarketplaceTickets();
+    const data = await getMarketplaceTickets({ status: req.query.status });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching marketplace tickets:', err);
@@ -121,6 +194,11 @@ async function getTicket(req, res) {
   }
 }
 
+/**
+ * Update a marketplace ticket. `{ action: 'recategorize', type }` corrects the category inside
+ * this desk; `assigned_role` + `type` sends it to another desk or escalates it to Admin, after
+ * which it leaves this queue.
+ */
 async function patchTicket(req, res) {
   try {
     if (!(await loadScopedTicket(req, res))) return;
@@ -128,20 +206,11 @@ async function patchTicket(req, res) {
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error updating ticket:', err);
-    const msg =
-      err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-        ? err.message
-        : 'Failed to update ticket';
+    const status = err?.statusCode || ticketUpdateClientStatus(err?.message) || 500;
+    if (status >= 500) console.error('Error updating ticket:', err);
     res
-      .status(
-        err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-          ? 400
-          : 500
-      )
-      .json({ success: false, message: msg });
+      .status(status)
+      .json({ success: false, message: status < 500 ? err.message : 'Failed to update ticket' });
   }
 }
 
@@ -309,11 +378,13 @@ async function patchDisputeMessage(req, res) {
 }
 
 module.exports = {
+  requireMarketplaceTicket,
   getOverview,
   getListings,
   getListingDetail,
   getSellerListings,
   patchListing,
+  getListingFileOriginal,
   getTickets,
   getTicket,
   patchTicket,

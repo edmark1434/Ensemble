@@ -82,6 +82,7 @@ const {
   normalizeDisputeVisibility,
 } = require('../lib/DisputeEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
+const { creatableTypesForRole } = require('../lib/TicketQueueScope');
 const {
   FORUM_REPORT_TYPES,
   MARKETPLACE_REPORT_TYPES,
@@ -426,6 +427,13 @@ async function createStaffTicketForAccount(input, session) {
 
   const staff = await resolveDisputeStaffId(session);
   if (!staff?.staff_id) throw ticketError('Staff profile not found', 403);
+
+  // A specialist desk only works its own ticket types, so it may only open those: a ticket it
+  // opened under another desk's type would vanish from its queue the moment it was created.
+  const deskTypes = creatableTypesForRole(staff.role || session?.role);
+  if (deskTypes && !deskTypes.includes(type)) {
+    throw ticketError('Pick a ticket type handled by your desk', 400);
+  }
 
   let handledBy = input?.handledByStaffId ?? input?.assignedStaffId ?? null;
   if (input?.assignToMe) handledBy = staff.staff_id;
@@ -2683,7 +2691,82 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     return getTicketDetail(ticketId, staffSession);
   }
 
+  if (action === 'recategorize') {
+    return recategorizeTicket(ticketId, patch, staff, perms, staffSession);
+  }
+
   throw new Error(`Unknown ticket action: ${action}`);
+}
+
+/**
+ * Correct a misfiled ticket's category inside the desk that already owns it. Unlike a move to
+ * another desk, the handler and status stay as they are and the ticket is not flagged as
+ * escalated. Moving to another desk's type still goes through `assigned_role`.
+ */
+async function recategorizeTicket(ticketId, patch, staff, perms, staffSession) {
+  const current = await pool.query(
+    `SELECT type, status, priority FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!current.rows.length) return null;
+  const row = current.rows[0];
+
+  if (isClosedStatus(row.status)) {
+    throw ticketError('Open this ticket before changing its category.', 400);
+  }
+  if (!perms.canAct) {
+    throw ticketError('Only the assigned handler or an Admin can change this ticket.', 403);
+  }
+  if (!isValidTicketType(patch.type)) {
+    throw ticketError('Pick a ticket category.', 400);
+  }
+
+  const fromType = normalizeTicketType(row.type);
+  const toType = normalizeTicketType(patch.type);
+  if (fromType === toType) {
+    throw ticketError(`This ticket is already filed as ${toType}.`, 400);
+  }
+  // An account-penalty appeal carries a decision and a 12-month hold; it is not a category.
+  if (fromType === APPEAL_TICKET_TYPE || toType === APPEAL_TICKET_TYPE) {
+    throw ticketError('Account-penalty appeals cannot change category.', 400);
+  }
+  const fromQueue = inferTicketAssignableQueue(fromType);
+  const toQueue = inferTicketAssignableQueue(toType);
+  if (fromQueue !== toQueue && !perms.isAdmin) {
+    throw ticketError('That category belongs to another desk. Use Send to another desk instead.', 400);
+  }
+
+  const reason = String(patch.reason || '').trim().slice(0, 500);
+  // Same rule as a move: a category with a non-default priority (e.g. copyright) sets it.
+  const defaultPriority = defaultPriorityForType(toType);
+  const nextPriority =
+    defaultPriority !== 'Medium' ? defaultPriority : normalizeTicketPriority(row.priority);
+  const priorityChanged = nextPriority !== normalizeTicketPriority(row.priority);
+
+  await pool.query(
+    `UPDATE tickets SET type = $1, priority = $2, updated_at = NOW()
+     WHERE ticket_id = $3 AND deleted_at IS NULL`,
+    [toType, nextPriority, ticketId]
+  );
+
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'recategorize',
+    summary: `Category changed from ${fromType} to ${toType}${reason ? ` — ${reason}` : ''}`,
+    actorStaffId: staff.staff_id,
+    actorAccountId: sessionAccountId(staffSession),
+    metadata: { from: fromType, to: toType, reason: reason || null },
+  });
+  if (priorityChanged) {
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'priority',
+      summary: `Priority set to ${nextPriority}`,
+      actorStaffId: staff.staff_id,
+    });
+  }
+  await announceTicketState(ticketId);
+  return getTicketDetail(ticketId, staffSession);
 }
 
 async function updateTicket(ticketId, patch, staffSession) {
@@ -2914,11 +2997,20 @@ async function updateTicket(ticketId, patch, staffSession) {
       });
     }
     if (patch.assigned_role) {
+      const moveReason = String(patch.reason || '').trim().slice(0, 500);
       await recordTicketEvent({
         ticketId,
         eventType: 'escalate',
-        summary: `Moved to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}`,
+        summary: `Moved to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}${
+          moveReason ? ` — ${moveReason}` : ''
+        }`,
         actorStaffId,
+        metadata: {
+          fromType: normalizeTicketType(currentTicket.type),
+          toRole: patch.assigned_role,
+          toType: patch.type ? normalizeTicketType(patch.type) : null,
+          reason: moveReason || null,
+        },
       });
     }
     if (patch.handled_by_staff_id !== undefined) {
@@ -2985,6 +3077,24 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   return getTicketDetail(ticketId, staffSession);
+}
+
+/** The columns a desk's queue scope is decided on (see lib/TicketQueueScope). */
+async function getTicketQueueFacts(ticketId) {
+  const result = await pool.query(
+    `SELECT t.type, t.escalated_to_role, st.role AS handler_role
+     FROM tickets t
+     LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
+     WHERE t.ticket_id::text = $1 AND t.deleted_at IS NULL`,
+    [String(ticketId)]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    type: row.type,
+    escalatedToRole: row.escalated_to_role || null,
+    handlerRole: row.handler_role || null,
+  };
 }
 
 /**
@@ -5451,6 +5561,62 @@ function buildReportPermissions(row, staff, session = null) {
   };
 }
 
+/**
+ * Repeat-report signal for a case: other reports on the same item, and every report and
+ * sanction against the same account. Excludes the report being viewed.
+ */
+async function getReportHistory(row) {
+  const empty = {
+    sameItem: { total: 0, open: 0 },
+    againstAccount: { total: 0, open: 0, sanctioned: 0 },
+  };
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(target_type, '')) = LOWER(COALESCE($2, ''))
+            AND target_id::text = COALESCE($3, '')
+        )::int AS same_item_total,
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(target_type, '')) = LOWER(COALESCE($2, ''))
+            AND target_id::text = COALESCE($3, '')
+            AND LOWER(COALESCE(status, 'open')) <> ALL($5::text[])
+        )::int AS same_item_open,
+        COUNT(*) FILTER (WHERE $4::text IS NOT NULL AND for_account_id::text = $4)::int AS account_total,
+        COUNT(*) FILTER (
+          WHERE $4::text IS NOT NULL AND for_account_id::text = $4
+            AND LOWER(COALESCE(status, 'open')) <> ALL($5::text[])
+        )::int AS account_open,
+        COUNT(*) FILTER (
+          WHERE $4::text IS NOT NULL AND for_account_id::text = $4 AND LOWER(status) = 'sanctioned'
+        )::int AS account_sanctioned
+      FROM reports
+      WHERE deleted_at IS NULL AND report_id <> $1
+      `,
+      [
+        row.report_id,
+        row.target_type || null,
+        row.target_id != null ? String(row.target_id) : null,
+        reportCanBeSanctioned(row) ? String(row.for_account_id) : null,
+        [...CLOSED_REPORT_STATUSES],
+      ]
+    );
+    const r = result.rows[0] || {};
+    return {
+      sameItem: { total: Number(r.same_item_total || 0), open: Number(r.same_item_open || 0) },
+      againstAccount: {
+        total: Number(r.account_total || 0),
+        open: Number(r.account_open || 0),
+        sanctioned: Number(r.account_sanctioned || 0),
+      },
+    };
+  } catch (error) {
+    console.warn('Report history skipped:', error.message);
+    return empty;
+  }
+}
+
 async function getReportDetail(reportId, staffSession = null, options = {}) {
   const reportResult = await pool.query(
     `
@@ -5482,8 +5648,12 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     includeStaffId: row.assigned_staff_id,
   });
 
-  const subject = await buildReportSubject(row);
+  const [subject, history] = await Promise.all([
+    buildReportSubject(row),
+    getReportHistory(row),
+  ]);
   return {
+    history,
     report: mapReportRow({
       ...row,
       reporter_name: row.reporter_name,
@@ -6108,6 +6278,7 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
+  getTicketQueueFacts,
   listParticipantTicketIds,
   searchTicketParticipants,
   addTicketParticipant,

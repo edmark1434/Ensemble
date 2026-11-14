@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
-import ReportDesk from './ReportDesk';
+import ReportDesk, { type ReportDeskPreset } from './ReportDesk';
 import type { UserReport } from './moderatorTypes';
 
 type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
@@ -49,6 +50,7 @@ export default function ModeratorReportsPage({
   accent,
   deskLabel,
   scopeOptions,
+  listingApiBase,
 }: {
   roleLabel: string;
   subtitle: string;
@@ -57,7 +59,22 @@ export default function ModeratorReportsPage({
   deskLabel?: string;
   /** First option is the default and is requested without a `scope` param. */
   scopeOptions?: ReportScopeOption[];
+  /** Marketplace API root, so a report case can open the linked listing review. */
+  listingApiBase?: string;
 }) {
+  const [searchParams] = useSearchParams();
+  // Dashboard cards deep-link here with ?q= / ?status= / ?priority= / ?assignee=.
+  const preset = useMemo<ReportDeskPreset>(
+    () => ({
+      search: searchParams.get('q'),
+      status: searchParams.get('status'),
+      priority: searchParams.get('priority'),
+      assignee: searchParams.get('assignee'),
+    }),
+    // Read once on mount; the desk owns its filters after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
   const defaultScope = scopeOptions?.[0]?.id ?? null;
   const [scope, setScope] = useState<string | null>(defaultScope);
   const paramsFor = (value: string | null) =>
@@ -187,6 +204,8 @@ export default function ModeratorReportsPage({
           loading={loading}
           handlers={handlers}
           deskLabel={activeScope ? activeScope.label : deskLabel}
+          preset={preset}
+          listingApiBase={listingApiBase}
         />
       </div>
     </main>

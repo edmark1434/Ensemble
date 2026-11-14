@@ -98,11 +98,23 @@ const ACCENT_PRIMARY_BTN: Record<Accent, string> = {
   amber: "bg-amber-500 hover:bg-amber-400",
 };
 
+const isAdminRole = (role: string | null | undefined) => {
+  const r = String(role || "").toLowerCase();
+  return r === "admin" || r === "administrator";
+};
+
 function scopeQueueTickets(rows: SupportTicket[], queueKey: keyof typeof QUEUE_TYPES) {
   if (queueKey === "support") return rows;
   // Hard-scope specialist queues so cross-queue tickets never appear in the desk.
   const allowed = new Set(QUEUE_TYPES[queueKey].map((t) => t.toLowerCase()));
-  return rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()));
+  return rows.filter((t) => {
+    if (!allowed.has(String(t.type || t.category || "").toLowerCase())) return false;
+    // Marketplace mirrors its API: a ticket escalated to (or handled by) Admin left this desk.
+    if (queueKey === "marketplace" && (isAdminRole(t.escalatedToRole) || isAdminRole(t.assignee?.role))) {
+      return false;
+    }
+    return true;
+  });
 }
 
 /** Queue shows every ticket in scope; Mine shows the ones assigned to the viewer. */
@@ -398,7 +410,7 @@ export default function ModeratorTicketDesk({
               <h2 className="text-sm font-semibold text-white">Ticket desk</h2>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Assign, escalate, and reply from the detail modal.
+              Open a ticket to claim it, reply, change its category, send it to another desk, or escalate it to Admin.
             </p>
           </div>
           <div className="relative w-full max-w-sm">
@@ -463,8 +475,15 @@ export default function ModeratorTicketDesk({
                 {filtered.map((t) => (
                   <tr
                     key={t.id}
+                    tabIndex={0}
                     onClick={() => setSelectedId(t.id)}
-                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedId(t.id);
+                      }
+                    }}
+                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03] focus:bg-white/[0.04] focus:outline-none"
                   >
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{t.number}</p>
@@ -496,6 +515,11 @@ export default function ModeratorTicketDesk({
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col gap-1">
+                        {t.isOverdue && (
+                          <span className="w-fit rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-200">
+                            Overdue
+                          </span>
+                        )}
                         {t.waitingForResponse && (
                           <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
                             Awaiting Reply
@@ -506,7 +530,7 @@ export default function ModeratorTicketDesk({
                             {formatEscalatedLabel(t)}
                           </span>
                         )}
-                        {!t.waitingForResponse && !t.isEscalated && (
+                        {!t.waitingForResponse && !t.isEscalated && !t.isOverdue && (
                           <span className="text-xs text-zinc-600">—</span>
                         )}
                       </div>

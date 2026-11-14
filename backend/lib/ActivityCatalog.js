@@ -153,6 +153,18 @@ const EVENT_CATALOG = {
     severity: 'medium',
     impact: 'Approved or rejected a listing, which controls its visibility in the marketplace.',
   },
+  LISTING_FILE_VIEWED: {
+    label: 'Listing original opened',
+    targetType: 'Marketplace listing',
+    severity: 'low',
+    impact: "A staff member opened the seller's original upload while reviewing the listing.",
+  },
+  LISTING_FILE_DOWNLOADED: {
+    label: 'Listing original downloaded',
+    targetType: 'Marketplace listing',
+    severity: 'medium',
+    impact: "A staff member downloaded the seller's original upload while reviewing the listing.",
+  },
   DISPUTE_APPROVED: { label: 'Dispute approved', targetType: 'Dispute', severity: 'medium' },
   DISPUTE_DISMISSED: { label: 'Dispute dismissed', targetType: 'Dispute', severity: 'medium' },
   DISPUTE_RESOLVED: { label: 'Dispute resolved', targetType: 'Dispute', severity: 'medium' },

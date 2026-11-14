@@ -517,6 +517,11 @@ export default function TicketDetailModalShell({
   const [escalateType, setEscalateType] = useState<string>('');
   const [confirmEscalate, setConfirmEscalate] = useState(false);
   const [confirmEscalateAdmin, setConfirmEscalateAdmin] = useState(false);
+  /** Same-desk category correction for a misfiled ticket. */
+  const [recategorizeType, setRecategorizeType] = useState('');
+  const [confirmRecategorize, setConfirmRecategorize] = useState(false);
+  /** Optional note recorded on the ticket timeline with a move, escalation or category change. */
+  const [moveReason, setMoveReason] = useState('');
   const [personQuery, setPersonQuery] = useState('');
   const [personResults, setPersonResults] = useState<{
     accountId: string;
@@ -554,10 +559,29 @@ export default function TicketDetailModalShell({
     return r === 'admin' || r === 'administrator';
   };
 
-  const escalateRoles = (detail?.escalateRoles?.length
-    ? detail.escalateRoles
-    : [...ESCALATE_ROLE_OPTIONS]
-  ).filter((r) => !isAdminQueue(r));
+  const typesForRole = (data: TicketDetail | null, role: string) =>
+    data?.escalateByRole?.[role]?.length ? data.escalateByRole[role] : escalateTypesForRole(role);
+
+  /** The moderator desk that owns a ticket type (Admin-only types fall back to Support). */
+  const ownerRoleFor = (data: TicketDetail | null, type: string) => {
+    const owner =
+      data?.typeDetails?.find((d) => d.label === type)?.queueRole ||
+      Object.entries(data?.escalateByRole || {}).find(
+        ([role, types]) => !isAdminQueue(role) && types.includes(type)
+      )?.[0] ||
+      'Support Moderator';
+    return isAdminQueue(owner) ? 'Support Moderator' : owner;
+  };
+
+  /** Desks a ticket can be sent to: every moderator queue except the one that owns it now. */
+  const otherDeskRoles = (data: TicketDetail | null, ownerRole: string) =>
+    (data?.escalateRoles?.length ? data.escalateRoles : [...ESCALATE_ROLE_OPTIONS]).filter(
+      (r) => !isAdminQueue(r) && r !== ownerRole
+    );
+
+  const currentOwnerRole = ownerRoleFor(detail, currentType);
+  const escalateRoles = otherDeskRoles(detail, currentOwnerRole);
+  const sameDeskTypes = typesForRole(detail, currentOwnerRole).filter((type) => type !== currentType);
 
   const escalateTypeOptions = useMemo(() => {
     const fromApi = detail?.escalateByRole?.[escalateRole];
@@ -612,14 +636,13 @@ export default function TicketDetailModalShell({
     const t = ticketTypeOf(data.ticket);
     setCurrentType(t);
     setAssigneeId(data.ticket.assignee?.staffId?.toString() || '');
-    const ownerRole =
-      data.typeDetails?.find((d) => d.label === t)?.queueRole ||
-      Object.entries(data.escalateByRole || {}).find(([, types]) => types.includes(t))?.[0] ||
-      'Support Moderator';
-    const modRole = isAdminQueue(ownerRole) ? 'Support Moderator' : ownerRole;
-    setEscalateRole(modRole);
-    const opts = data.escalateByRole?.[modRole] || escalateTypesForRole(modRole);
+    // "Send to another desk" starts on the first desk that is not this ticket's owner.
+    const ownerRole = ownerRoleFor(data, t);
+    const targetRole = otherDeskRoles(data, ownerRole)[0] || ownerRole;
+    setEscalateRole(targetRole);
+    const opts = typesForRole(data, targetRole);
     setEscalateType(opts.includes(t) ? t : opts[0] || '');
+    setRecategorizeType('');
   };
 
   const load = async () => {
@@ -888,8 +911,10 @@ export default function TicketDetailModalShell({
         assigned_role: role,
         type,
         handled_by_staff_id: null,
+        reason: moveReason.trim() || undefined,
       });
-      showSuccessToast(`Moved to ${role} as ${type}`);
+      setMoveReason('');
+      showSuccessToast(isAdminQueue(role) ? 'Escalated to Admin' : `Sent to ${role} as ${type}`);
       onUpdated();
       if (closeAfter) {
         onClose();
@@ -922,6 +947,67 @@ export default function TicketDetailModalShell({
     const type = adminTypes.includes(currentType) ? currentType : adminTypes[0] || currentType;
     await escalateTo('Admin', type, true);
   };
+
+  /** Fix a misfiled category inside this desk: handler and status are kept. */
+  const recategorize = async () => {
+    if (!recategorizeType || !sameDeskTypes.includes(recategorizeType)) {
+      showErrorToast('Pick the category this ticket belongs in');
+      return;
+    }
+    setConfirmRecategorize(false);
+    setSaving(true);
+    try {
+      await api.patch(`${endpointBase}/${ticketId}`, {
+        action: 'recategorize',
+        type: recategorizeType,
+        reason: moveReason.trim() || undefined,
+      });
+      setMoveReason('');
+      showSuccessToast(`Category changed to ${recategorizeType}`);
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to change the category'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderTypeOptions = (allowed: string[]) =>
+    TICKET_TYPE_GROUPS.flatMap((group) => {
+      const buckets = group.subgroups?.length
+        ? group.subgroups.map((sub) => ({ label: `${group.label} · ${sub.label}`, types: sub.types }))
+        : [{ label: group.label, types: group.types }];
+      return buckets
+        .map((bucket) => {
+          const items = bucket.types.filter((type) => allowed.includes(type));
+          if (!items.length) return null;
+          return (
+            <optgroup key={bucket.label} label={bucket.label}>
+              {items.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </optgroup>
+          );
+        })
+        .filter(Boolean);
+    });
+
+  const reasonField = (
+    <div>
+      <FieldLabel>Note for the timeline (optional)</FieldLabel>
+      <textarea
+        value={moveReason}
+        onChange={(event) => setMoveReason(event.target.value.slice(0, 500))}
+        rows={3}
+        placeholder="Why this ticket is moving, so the next handler has context"
+        className={`${FIELD} resize-none`}
+      />
+      <p className="mt-1 text-right text-[10px] text-zinc-600">{moveReason.length}/500</p>
+    </div>
+  );
 
   const uploadScreenshots = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -1974,7 +2060,7 @@ export default function TicketDetailModalShell({
                 )}
 
                 {allowEscalate && (
-                  <SidebarSection title="Move ticket">
+                  <SidebarSection title="Category & routing">
                     <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                       <p className="text-[10px] uppercase tracking-wide text-zinc-500">Current type</p>
                       <p className="mt-0.5 text-sm text-white">{currentType || '—'}</p>
@@ -1987,70 +2073,118 @@ export default function TicketDetailModalShell({
                         </p>
                       ) : null}
                     </div>
-                    {canEscalate ? (
+                    {ticketClosed ? (
+                      <p className="text-[11px] text-zinc-500">Reopen this ticket to change its category or move it.</p>
+                    ) : canEscalate ? (
                       <>
-                        <p className="text-[11px] text-zinc-500">Moving a ticket unassigns the current handler.</p>
-                        {allowEscalateToAdmin && (
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={() => setConfirmEscalateAdmin(true)}
-                            className={`${BTN.admin} w-full`}
-                          >
-                            <ShieldAlert className="h-3.5 w-3.5" />
-                            Escalate to Admin
-                          </button>
+                        {!isAppeal && sameDeskTypes.length > 0 && (
+                          <div className="space-y-2 rounded-lg border border-white/[0.06] p-3">
+                            <div>
+                              <p className="text-xs font-medium text-zinc-200">Change category</p>
+                              <p className="mt-0.5 text-[11px] text-zinc-500">
+                                Filed under the wrong {currentOwnerRole.replace(/ Moderator$/, '')} type? Fix it
+                                here. The handler and status stay the same.
+                              </p>
+                            </div>
+                            <select
+                              value={recategorizeType}
+                              onChange={(e) => setRecategorizeType(e.target.value)}
+                              disabled={!perms?.canAct}
+                              className={FIELD}
+                              aria-label="New category"
+                            >
+                              <option value="">Choose the right category…</option>
+                              {renderTypeOptions(sameDeskTypes)}
+                            </select>
+                            {recategorizeType ? (
+                              <p className="text-[11px] text-zinc-600">
+                                {detail?.typeDetails?.find((d) => d.label === recategorizeType)?.description}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMoveReason('');
+                                setConfirmRecategorize(true);
+                              }}
+                              disabled={saving || !recategorizeType || !perms?.canAct}
+                              className={`${BTN.neutral} w-full`}
+                            >
+                              Change category
+                            </button>
+                            {!perms?.canAct && (
+                              <p className="text-[11px] text-amber-200/80">
+                                Only the assigned handler or an Admin can change the category.
+                              </p>
+                            )}
+                          </div>
                         )}
-                        <div>
-                          <FieldLabel>Moderator queue</FieldLabel>
-                          <select value={escalateRole} onChange={(e) => onEscalateRoleChange(e.target.value)} className={FIELD}>
-                            {escalateRoles.map((r) => (
-                              <option key={r} value={r}>
-                                {r}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <FieldLabel>Type</FieldLabel>
-                          <select value={escalateType} onChange={(e) => setEscalateType(e.target.value)} className={FIELD}>
-                            {TICKET_TYPE_GROUPS.flatMap((group) => {
-                              const buckets = group.subgroups?.length
-                                ? group.subgroups.map((sub) => ({
-                                    label: `${group.label} · ${sub.label}`,
-                                    types: sub.types,
-                                  }))
-                                : [{ label: group.label, types: group.types }];
-                              return buckets
-                                .map((bucket) => {
-                                  const items = bucket.types.filter((type) => escalateTypeOptions.includes(type));
-                                  if (!items.length) return null;
-                                  return (
-                                    <optgroup key={bucket.label} label={bucket.label}>
-                                      {items.map((opt) => (
-                                        <option key={opt} value={opt}>
-                                          {opt}
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  );
-                                })
-                                .filter(Boolean);
-                            })}
-                          </select>
-                          <p className="mt-1.5 text-[11px] text-zinc-600">
-                            {escalateTypeMeta?.description ||
-                              `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmEscalate(true)}
-                          disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
-                          className={`${BTN.warn} w-full`}
-                        >
-                          Move to this queue
-                        </button>
+
+                        {escalateRoles.length > 0 && (
+                          <div className="space-y-2 rounded-lg border border-white/[0.06] p-3">
+                            <div>
+                              <p className="text-xs font-medium text-zinc-200">Send to another desk</p>
+                              <p className="mt-0.5 text-[11px] text-zinc-500">
+                                Belongs to a different team. The ticket leaves this queue and the handler is cleared.
+                              </p>
+                            </div>
+                            <div>
+                              <FieldLabel>Desk</FieldLabel>
+                              <select value={escalateRole} onChange={(e) => onEscalateRoleChange(e.target.value)} className={FIELD}>
+                                {escalateRoles.map((r) => (
+                                  <option key={r} value={r}>
+                                    {r}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <FieldLabel>Category on that desk</FieldLabel>
+                              <select value={escalateType} onChange={(e) => setEscalateType(e.target.value)} className={FIELD}>
+                                {renderTypeOptions(escalateTypeOptions)}
+                              </select>
+                              <p className="mt-1.5 text-[11px] text-zinc-600">
+                                {escalateTypeMeta?.description ||
+                                  `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMoveReason('');
+                                setConfirmEscalate(true);
+                              }}
+                              disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
+                              className={`${BTN.warn} w-full`}
+                            >
+                              Send to {escalateRole.replace(/ Moderator$/, '')} desk
+                            </button>
+                          </div>
+                        )}
+
+                        {allowEscalateToAdmin && (
+                          <div className="space-y-2 rounded-lg border border-violet-500/15 bg-violet-500/[0.03] p-3">
+                            <div>
+                              <p className="text-xs font-medium text-zinc-200">Escalate to Admin</p>
+                              <p className="mt-0.5 text-[11px] text-zinc-500">
+                                Needs a decision above this desk (refund exception, legal or policy call). Admin owns it
+                                from then on.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => {
+                                setMoveReason('');
+                                setConfirmEscalateAdmin(true);
+                              }}
+                              className={`${BTN.admin} w-full`}
+                            >
+                              <ShieldAlert className="h-3.5 w-3.5" />
+                              Escalate to Admin
+                            </button>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <p className="text-[11px] text-zinc-500">Only the handler, a moderator, or an admin can move this ticket.</p>
@@ -2289,39 +2423,66 @@ export default function TicketDetailModalShell({
           </ConfirmDialog>
         )}
 
-        {confirmEscalate && (
+        {confirmRecategorize && (
           <ConfirmDialog
-            title="Move this ticket?"
+            title="Change this ticket's category?"
             description={
               <>
-                Queue: <span className="text-zinc-200">{escalateRole}</span> · Type:{' '}
-                <span className="text-zinc-200">{escalateType}</span>
+                <span className="text-zinc-200">{currentType}</span> →{' '}
+                <span className="text-zinc-200">{recategorizeType}</span>
                 <span className="mt-1.5 block text-zinc-500">
-                  You will be unassigned.
-                  {isAdminQueue(escalateRole) ? ' Support Moderators will no longer see this ticket.' : ''}
+                  The ticket stays on this desk with the same handler and status. The change is recorded on
+                  the timeline.
                 </span>
               </>
             }
-            confirmLabel="Move ticket"
-            busyLabel="Moving…"
+            confirmLabel="Change category"
+            busyLabel="Saving…"
+            busy={saving}
+            confirmClassName={BTN.neutral}
+            onCancel={() => setConfirmRecategorize(false)}
+            onConfirm={() => void recategorize()}
+          >
+            {reasonField}
+          </ConfirmDialog>
+        )}
+
+        {confirmEscalate && (
+          <ConfirmDialog
+            title={`Send this ticket to the ${escalateRole.replace(/ Moderator$/, '')} desk?`}
+            description={
+              <>
+                Desk: <span className="text-zinc-200">{escalateRole}</span> · Category:{' '}
+                <span className="text-zinc-200">{escalateType}</span>
+                <span className="mt-1.5 block text-zinc-500">
+                  It leaves this desk&apos;s queue, opens unassigned on theirs, and you are unassigned.
+                </span>
+              </>
+            }
+            confirmLabel="Send ticket"
+            busyLabel="Sending…"
             busy={saving}
             confirmClassName={BTN.warn}
             onCancel={() => setConfirmEscalate(false)}
             onConfirm={() => void escalateTo(escalateRole, escalateType, isAdminQueue(escalateRole))}
-          />
+          >
+            {reasonField}
+          </ConfirmDialog>
         )}
 
         {confirmEscalateAdmin && allowEscalateToAdmin && (
           <ConfirmDialog
-            title="Hand this ticket to Admin?"
-            description="It becomes an Admin ticket and you are unassigned. Support Moderators will no longer see it."
+            title="Escalate this ticket to Admin?"
+            description="It becomes an Admin ticket, leaves this desk's queue, and you are unassigned. Tell Admin what decision you need."
             confirmLabel="Escalate to Admin"
             busyLabel="Escalating…"
             busy={saving}
             confirmClassName={BTN.admin}
             onCancel={() => setConfirmEscalateAdmin(false)}
             onConfirm={() => void escalateToAdmin()}
-          />
+          >
+            {reasonField}
+          </ConfirmDialog>
         )}
 
         {appealChoice && (

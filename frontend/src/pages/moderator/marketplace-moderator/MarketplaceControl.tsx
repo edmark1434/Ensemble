@@ -18,6 +18,7 @@ import {
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import { mediaUrl } from '@/pages/user/5_assets/assetTypes';
 import RowActionsMenu, { type MenuItem } from '@/pages/admin/userTeam/components/RowActionsMenu';
 import ListingDetailModal, {
   SellerListingsModal,
@@ -228,7 +229,7 @@ export default function MarketplaceControl({
     () => !peekStaffGet(listingsUrl, firstParams)?.data?.success
   );
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sellerAccountId, setSellerAccountId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [prompt, setPrompt] = useState<{
@@ -606,7 +607,7 @@ export default function MarketplaceControl({
                           <div className="flex items-start gap-3">
                             {l.thumbnailUrl ? (
                               <img
-                                src={`${import.meta.env.VITE_CLOUDFRONT_URL}/${l.thumbnailUrl}`}
+                                src={mediaUrl(l.thumbnailUrl)}
                                 alt=""
                                 className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
                               />
@@ -733,6 +734,7 @@ export default function MarketplaceControl({
           onClose={() => setSelectedId(null)}
           onUpdated={() => void refreshAll()}
           onViewSeller={(accountId) => setSellerAccountId(accountId)}
+          onOpenListing={(id) => setSelectedId(id)}
         />
       )}
 
