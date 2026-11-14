@@ -146,12 +146,12 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
   const nextMarker = sortedMarkers.find((m) => m.frame > currentFrame);
 
   const handleJumpToPrev = () => {
-    const frame = prevMarker ? prevMarker.frame : 0;
+    const frame = isLargeScreen && prevMarker ? prevMarker.frame : 0;
     playerRef?.current?.seekTo(frame);
     scrollTimelineToFrame(frame, prevMarker ? "marker" : "start", timelineOffsetX);
   };
   const handleJumpToNext = () => {
-    const frame = nextMarker ? nextMarker.frame : durationFrames;
+    const frame = isLargeScreen && nextMarker ? nextMarker.frame : durationFrames;
     playerRef?.current?.seekTo(frame);
     scrollTimelineToFrame(frame, nextMarker ? "marker" : "end", timelineOffsetX);
   };
@@ -194,16 +194,17 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
     <div
       ref={sceneContainerRef}
       data-scene-container=""
-      className="relative flex flex-col w-full h-full bg-card"
+      className="relative flex min-h-0 min-w-0 flex-col w-full h-full bg-card"
       onMouseMove={handleMouseMove}
+      onPointerDown={handleMouseMove}
     >
-      {!isLargeScreen && !isFullscreen && !viewOnly && (
-        <div className=" top-0 left-0 right-0 z-500 bg-primary text-black text-xs font-medium text-center py-1.5 px-2">
-          Mobile view is only in preview mode for now
+      {!isLargeScreen && !isFullscreen && (
+        <div className="relative z-10 shrink-0 bg-primary text-black text-xs font-medium text-center py-1.5 px-2">
+          Mobile preview is view only
         </div>
       )}
 
-      <div className="flex-1 relative overflow-hidden">
+      <div className="min-h-0 flex-1 relative overflow-hidden">
         <CropModal />
         <MarketAssetLicensing>
         {!isLargeScreen && trackItemIds.length === 0 ? (
@@ -220,9 +221,9 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
       </div>
 
       <div className={cn(
-        "grid grid-cols-3 items-center p-2 pt-0 bg-card transition-opacity duration-300",
+        "relative z-20 grid shrink-0 grid-cols-3 items-center p-2 pt-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-card transition-opacity duration-300",
         isFullscreen && " pt-2 absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm",
-        isFullscreen && !showControls && "opacity-0 pointer-events-none"
+        isFullscreen && isLargeScreen && !showControls && "opacity-0 pointer-events-none"
       )}>
         <div className="text-xs flex items-center gap-1 px-2">
         <span
@@ -238,11 +239,12 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
         </span>
         </div>
 
-        <div className="flex justify-center gap-1">
+        <div className="flex justify-center gap-0.5 sm:gap-1">
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                className="hidden lg:inline-flex"
+                className="size-8 sm:size-9"
+                aria-label={isLargeScreen && prevMarker ? "Jump to last marker" : "Jump to start"}
                 onClick={handleJumpToPrev}
                 disabled={trackItemIds.length === 0 || currentFrame === 0}
                 variant={"ghost"}
@@ -254,7 +256,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
               side={"bottom"} align="center" sideOffset={1}
               className={"flex gap-2 items-center"}
             >
-              {prevMarker ? (
+              {isLargeScreen && prevMarker ? (
                 <>
                   Jump to last marker
                   <KbdGroup>
@@ -274,6 +276,8 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
+                className="size-8 sm:size-9"
+                aria-label={playing ? "Pause" : "Play"}
                 onClick={() => { playing ? handlePause() : handlePlay(); }}
                 disabled={trackItemIds.length === 0}
                 variant={"ghost"}
@@ -292,7 +296,8 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                className="hidden lg:inline-flex"
+                className="size-8 sm:size-9"
+                aria-label={isLargeScreen && nextMarker ? "Jump to next marker" : "Jump to end"}
                 onClick={handleJumpToNext}
                 disabled={trackItemIds.length === 0 || currentFrame >= durationFrames}
                 variant={"ghost"}
@@ -304,7 +309,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
               side={"bottom"} align="center" sideOffset={1}
               className={"flex gap-2 items-center"}
             >
-              {nextMarker ? (
+              {isLargeScreen && nextMarker ? (
                 <>
                   Jump to next marker
                   <KbdGroup>
@@ -322,10 +327,12 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
           </Tooltip>
         </div>
 
-        <div className="flex justify-end gap-1">
+        <div className="flex justify-end gap-0.5 sm:gap-1">
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
+                className="size-8 sm:size-9"
+                aria-label={muted ? "Unmute audio" : "Mute audio"}
                 onClick={handleMute}
                 disabled={trackItemIds.length === 0}
                 variant={"ghost"}
@@ -349,6 +356,8 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
+                className="size-8 sm:size-9"
+                aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
                 onClick={handleFullscreen}
                 disabled={trackItemIds.length === 0}
                 variant={"ghost"}
@@ -411,8 +420,8 @@ const Panels = ({
 // built for that viewport yet.
   if (!isLargeScreen) {
     return (
-      <div className="relative flex h-full w-full flex-col bg-background">
-        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} viewOnly={viewOnly} />
+      <div className="relative flex min-h-0 min-w-0 h-full w-full flex-col bg-background">
+        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} viewOnly={viewOnly} />
         <div aria-hidden inert style={{
           position: "absolute",
           top: -99999,
@@ -421,7 +430,7 @@ const Panels = ({
           height: 300,
           pointerEvents: "none"
         }}>
-          <Timeline key={timelineKey} stateManager={stateManager} />
+          <Timeline key={timelineKey} stateManager={stateManager} readOnly />
           <MenuItem />
         </div>
       </div>
@@ -636,7 +645,13 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   } = useLayoutStore();
 
   const isLargeScreen = useIsLargeScreen();
-  const viewOnly = !canEdit; // kept as `viewOnly` since ScenePlayer / useKeyboardShortcuts already take this name
+  const viewOnly = !canEdit || !isLargeScreen;
+
+  useEffect(() => {
+    if (viewOnly) {
+      stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+    }
+  }, [viewOnly]);
 
   useTimelineEvents();
   useProjectFonts();
@@ -698,7 +713,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useKeyboardShortcuts(stateManager, collab?.undoManager, viewOnly, canComment);
+  useKeyboardShortcuts(stateManager, collab?.undoManager, viewOnly, canComment, !isLargeScreen);
 
   useEffect(() => {
     useStore.getState().setStateManager(stateManager);
@@ -732,7 +747,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   return (
     <ViewOnlyProvider value={viewOnly}>
       <CanCommentProvider value={canComment}>
-        <div className="flex h-screen w-screen flex-col bg-background">
+        <div className="flex h-dvh w-full min-w-0 flex-col overflow-hidden bg-background">
           <Navbar
             user={null}
             stateManager={stateManager}
@@ -744,7 +759,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
             templateSource={collab?.ready ? { doc: collab.doc, blockId: collab.target.kind === "block" ? collab.target.id : undefined } : undefined}
           />
 
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 min-w-0">
             {isLargeScreen ? (
               <ResizablePanelGroup direction="horizontal" className="h-full w-full">
                 <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">

@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import React from "react";
 import { useViewOnly } from "../hooks/use-view-only";
 import { useCanComment } from "../hooks/use-can-comment";
+import { useIsLargeScreen } from "@/hooks/use-media-query";
 
 interface ShortcutsModalProps {
   open: boolean;
@@ -127,7 +128,17 @@ const KeyCombo = ({ keys }: { keys: string[] }) => (
 export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
   const viewOnly = useViewOnly();
   const canComment = useCanComment();
-  const shortcuts = SHORTCUTS.map((category) => ({
+  const isLargeScreen = useIsLargeScreen();
+  const shortcuts: ShortcutCategory[] = !isLargeScreen ? [{
+    title: "Mobile preview",
+    items: [
+      { label: "Play or pause", keys: ["Space"] },
+      { label: "Jump to start", keys: ["Home"] },
+      { label: "Jump to end", keys: ["End"] },
+      { label: "Toggle fullscreen", keys: ["F"] },
+      { label: "Mute audio", keys: ["Ctrl", "M"] },
+    ],
+  }] : SHORTCUTS.map((category) => ({
     ...category,
     items: category.items.filter((item) =>
       item.access === "view" || (item.access === "comment" ? canComment : !viewOnly)
@@ -146,8 +157,8 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="z-[300] md:max-w-7xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
-        <DialogHeader className="px-6 -mt-0.75 flex flex-row gap-4">
+      <DialogContent className={cn("z-[300] w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] border bg-card px-2 py-8 gap-6 overflow-y-auto", isLargeScreen ? "max-w-7xl sm:max-w-7xl" : "max-w-md sm:max-w-md")}>
+        <DialogHeader className="px-4 pr-12 lg:px-6 -mt-0.75 flex flex-wrap flex-row items-center gap-3 text-left">
           <DialogTitle className="text-md font-semibold">Keyboard shortcuts</DialogTitle>
           <KbdGroup>
             <Kbd className="bg-zinc-800 border-zinc-700 text-zinc-300 min-w-6">
@@ -159,9 +170,9 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
             </Kbd>
           </KbdGroup>
         </DialogHeader>
-        <div className="px-6">
+        <div className="px-4 lg:px-6">
           {/* gap-8 (32px) between columns of the same category; a category change adds ml-6 on top = 56px, divider sits at half (-right-7 = 28px) */}
-          <div className="flex gap-8">
+          <div className={cn("flex gap-8", !isLargeScreen && "flex-col")}>
             {shortcuts.map((category, index) => (
               <div
                 key={category.title + index}
@@ -183,12 +194,12 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
                     <div
                       key={item.label}
                       className={cn(
-                        "flex items-center justify-between text-sm",
+                        "flex items-center justify-between gap-4 text-sm",
                         item.disabled ? "opacity-40" : ""
                       )}
                     >
                       <span className="text-zinc-300">{item.label}</span>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <KeyCombo keys={item.keys} />
                         {item.alt && (
                           <>

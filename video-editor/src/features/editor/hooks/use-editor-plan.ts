@@ -13,6 +13,8 @@ export function useEditorPlan() {
         plan: "Free" | "Premium" | "Business";
         maxHeight: number;
         maxFps: number;
+        canRemoveEnsembleWatermark: boolean;
+        watermarkRemovalPlan: "Premium" | "Business" | null;
         planOptions: { plan: "Free" | "Premium" | "Business"; maxHeight: number; maxFps: number }[];
         upgradeUrl: string;
       }>;

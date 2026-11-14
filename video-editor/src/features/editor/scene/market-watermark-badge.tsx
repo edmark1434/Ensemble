@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import useStore from "../store/use-store";
 import { getMarketAssetId, useMarketLicenses } from "../store/use-market-licenses";
 import { getTargetById } from "../utils/target";
+import { exitFullscreenForModal } from "../utils/exit-fullscreen-for-modal";
 
 export function MarketWatermarkBadge({ container, transforming }: { container: HTMLDivElement | null; transforming: boolean }) {
   const activeIds = useStore(state => state.activeIds);
@@ -41,7 +42,7 @@ export function MarketWatermarkBadge({ container, transforming }: { container: H
   return createPortal(<button ref={buttonRef} type="button" data-market-purchase="" style={{ visibility: "hidden" }}
     className="absolute z-[210] inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-2.5 text-xs font-medium text-foreground shadow-md hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
-    onClick={event => { event.stopPropagation(); openPurchase(assetId); }}>
+    onClick={async event => { event.stopPropagation(); if (await exitFullscreenForModal()) openPurchase(assetId); }}>
     <Sparkles className="size-3.5" />Remove watermarks
   </button>, container);
 }

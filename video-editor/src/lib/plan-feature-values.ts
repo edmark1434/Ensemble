@@ -2,6 +2,14 @@ export class PlanConfigurationError extends Error {
   constructor() { super("Your plan limits are unavailable. Please try again later."); }
 }
 
+// This feature describes whether branding is required, not removal access.
+export function parseWatermarkRequired(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "enabled") return true;
+  if (normalized === "disabled") return false;
+  throw new PlanConfigurationError();
+}
+
 export function parseExportResolution(value: string | undefined): number {
   const normalized = value?.trim().toLowerCase();
   const kResolutions: Record<string, number> = { "2k": 1440, "4k": 2160, "8k": 4320 };

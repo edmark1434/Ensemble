@@ -40,7 +40,10 @@ export function useKeyboardShortcuts(
   undoManager?: Y.UndoManager,
   viewOnly?: boolean,
   canComment?: boolean,
+  mobilePreview?: boolean,
 ) {
+  const mobilePreviewRef = useRef(mobilePreview);
+  mobilePreviewRef.current = mobilePreview;
   const viewOnlyRef = useRef(viewOnly);
   viewOnlyRef.current = viewOnly;
   const canCommentRef = useRef(canComment);
@@ -105,6 +108,14 @@ export function useKeyboardShortcuts(
         e.preventDefault();
         const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
         setShortcutsModalOpen(!isShortcutsModalOpen);
+        return;
+      }
+
+      // Mobile preview exposes only playback controls, even with a keyboard attached.
+      if (mobilePreviewRef.current) {
+        const playbackKey = !mod && !e.altKey && !e.shiftKey && ["Space", "Home", "End", "KeyF"].includes(e.code);
+        const muteKey = mod && !e.altKey && !e.shiftKey && e.code === "KeyM";
+        if (!playbackKey && !muteKey) return;
       }
 
       // play / pause
@@ -617,7 +628,7 @@ export function useKeyboardShortcuts(
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code !== "KeyC") return;
 
-      if (cKeyDownRef.current && !cComboUsedRef.current && canCommentRef.current) {
+      if (cKeyDownRef.current && !cComboUsedRef.current && canCommentRef.current && !mobilePreviewRef.current) {
         startComment();
       }
 

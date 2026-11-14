@@ -36,11 +36,14 @@ import { MarketExportPurchaseModal } from "./modals/market-export-purchase-modal
 import { getSafeCurrentFrame } from "@/features/editor/utils/time";
 import { useEditorPlan } from "./hooks/use-editor-plan";
 import { PlanIcon } from "./components/plan-icon";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useEnsembleWatermark } from "./hooks/use-ensemble-watermark";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
   const { data: policy, isError: planError, refetch: refetchPlan } = useEditorPlan();
   const maxFps = policy?.maxFps ?? 0;
+  const { canRemove, showWatermark, setShowWatermark } = useEnsembleWatermark();
   const {
     actions,
     type,
@@ -207,6 +210,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       projectName: exportName,
       projectId,
       marketDraft,
+      ensembleWatermark: type !== "audio" && showWatermark,
       background,
       size,
       type,
@@ -307,7 +311,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
         align="end"
         className="pointer-events-none z-[250] w-auto border-none bg-transparent p-0 shadow-none"
       >
-        <DraggablePanel title="Export" onClose={() => { setOpen(false); setAssetStepScope(null); }} onBack={showAssetStep ? () => setAssetStepScope(null) : undefined} className="w-72">
+        <DraggablePanel title="Export" onClose={() => { setOpen(false); setAssetStepScope(null); }} onBack={showAssetStep ? () => setAssetStepScope(null) : undefined} className="w-96">
           {showAssetStep ? <>
             <h3 className="text-sm font-semibold">This {inScene ? "scene" : "project"} contains paid assets</h3>
             {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : !licensesReady ? <Button disabled>Checking asset licenses…</Button> : unpaidIds.length > 0 ? <>
@@ -372,6 +376,16 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
 
           <div className="space-y-3">
             {planError && <p role="alert" className="text-xs text-red-500">Unable to load your plan. <button type="button" className="underline" onClick={() => void refetchPlan()}>Try again</button></p>}
+            {type !== "audio" && policy && <div className="space-y-2 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox id="ensemble-watermark" checked={showWatermark} disabled={!canRemove} onCheckedChange={value => setShowWatermark(value === true)} />
+                <Label htmlFor="ensemble-watermark" className="text-sm">Made in Ensemble watermark</Label>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">Uses your plan, including in shared projects.</p>
+              {!canRemove && <Button variant="outline" size="sm" className="w-full" onClick={() => window.open(policy.upgradeUrl, "_blank", "noopener,noreferrer")}>
+                {policy.watermarkRemovalPlan && <PlanIcon plan={policy.watermarkRemovalPlan} />} Upgrade to remove
+              </Button>}
+            </div>}
             {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" className="w-full" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : <Button disabled={!licensesReady || !policy} onClick={() => { if (unpaidIds.length) setAssetStepScope(scopeKey); else handleExport(); }} className="w-full">{!policy ? "Loading your plan…" : licensesReady ? `Export ${inScene ? "scene" : "project"}` : "Checking asset licenses…"}</Button>}
           </div>
           </>}

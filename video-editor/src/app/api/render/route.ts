@@ -23,6 +23,21 @@ export async function POST(request: NextRequest) {
     const policy = await getVideoUploadPolicy(session.userId);
     const planError = getExportPlanError(body, policy);
     if (planError) return NextResponse.json({ message: planError.message }, { status: planError.status });
+    // The exporting user's current subscription is authoritative, never a
+    // collaborator's tier or a saved/client-provided watermark flag.
+    body.ensembleWatermark = body.type !== "audio" &&
+      (!policy.canRemoveEnsembleWatermark || body.ensembleWatermark !== false);
+    const renderHeaders = await renderServerHeaders(session.userId, true);
+    if (body.type !== "audio") {
+      // Older renderers either strip the overlay or enforce hardcoded tiers.
+      const capabilityResponse = await fetch(`${RENDER_SERVER_URL}/renders/capabilities`, {
+        headers: renderHeaders, cache: "no-store",
+      });
+      const capabilities = capabilityResponse.ok ? await capabilityResponse.json() : null;
+      if (capabilities?.ensembleWatermark !== true || capabilities?.ensembleWatermarkPlanFeatures !== true) return NextResponse.json({
+        message: "Watermark settings are temporarily unavailable. Please try again later.",
+      }, { status: 503 });
+    }
     const bitrateError = getVideoExportBitrateError(body);
     if ((await missingUploadSources(mediaSources(body, 0, false))).length) return NextResponse.json({ message: "This export contains missing media. Replace or remove the deleted uploads before exporting." }, { status: 422 });
     if (bitrateError) return NextResponse.json({ message: bitrateError }, { status: 400 });
@@ -44,7 +59,7 @@ export async function POST(request: NextRequest) {
       item.details.src = sources.get(key)!;
     }
     const response = await fetch(`${RENDER_SERVER_URL}/renders`, {
-      method: "POST", headers: { "Content-Type": "application/json", ...await renderServerHeaders(session.userId, true) },
+      method: "POST", headers: { "Content-Type": "application/json", ...renderHeaders },
       body: JSON.stringify(body),
     });
     const data = await response.json();
