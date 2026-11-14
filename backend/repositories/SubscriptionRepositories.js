@@ -60,7 +60,14 @@ async function getAllPlanRepositories() {
 
 async function getSubcriptionByUserIdRepositories(userId) {
     try{
-        const query = `SELECT * FROM subscriptions WHERE user_id = $1`;
+        const query = `
+            SELECT * FROM subscriptions
+            WHERE user_id = $1
+            ORDER BY
+                CASE WHEN xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+                updated_at DESC,
+                created_at DESC
+        `;
         const result = await pool.query(query, [userId]);
         return result.rows;
     }catch(err){

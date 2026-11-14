@@ -1,13 +1,17 @@
-# Active Task: Fix Live vs Local Subscription Plan Recognition in Asset Posting Limits
+# Active Task: Add Subscription Cancellation and Disable Free Plan Button
 
 ## Implementation Objective
 
-Ensure `readAssetPostingEligibility` in `backend/repositories/AssetRepositories.js` identifies active user subscriptions consistently with `SubscriptionRepositories.js` (including `TRIALING` status, case-insensitive plan precedence, and fallback subscriptions). Provide clear operational instructions for the live server (backend restart, frontend build, database migrations).
+Add a cancellation button in Settings (Subscription Details tab) and in the Subscription plans tab (`/credits-subscriptions`) that triggers the backend subscription cancellation endpoint (`/api/payment/cancel-subscription`), and disable the Free plan button so it never displays an active "Subscribe Plan" action.
 
 ## Acceptance Criteria
 
-- [x] Align `readAssetPostingEligibility` subscription resolution with `SubscriptionRepositories.js`:
-  - Support `s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING')`.
-  - Order active subscriptions by plan priority (`Business` -> `Premium` -> others) and recency (`s.updated_at DESC, s.created_at DESC`).
-  - Provide a fallback subscription query for expired/unconfirmed periods before falling back to `default_free_plan`.
-- [x] Provide operational guidance for live deployment (service restart, static asset build, migration check).
+- [x] In `UserSettingsSubscriptionDetails.tsx`:
+  - Free plan card displays a disabled button (`"Free Tier"`) instead of `"Subscribe Plan"`.
+  - Cancellation button is available for paid subscriptions (both `ACTIVE` and `TRIALING`) when not yet scheduled for cancellation.
+- [x] In `CreditsShop.tsx`:
+  - Free plan card displays a disabled button (`"Free Tier"` / disabled) rather than an active subscription action.
+  - Subscription Plans tab includes an action for active/trialing paid subscribers to cancel their subscription.
+  - Cancellation triggers `POST /api/payment/cancel-subscription` and updates state in real time.
+- [x] In backend (`PaymentServices.js` / `SubscriptionRepositories.js`):
+  - Ensure `cancelSubscription` robustly resolves the active subscription with an active recurring plan ID (`xendit_plan_id`).

@@ -1416,7 +1416,11 @@ async function processSubscriptionPayment(req, res) {
 async function cancelSubscription(req,res){
     const { userId } = req.session;
     const subscriptionDetails = await getSubcriptionByUserIdRepositories(userId);
-    const subscription = subscriptionDetails[0];
+    const subscription = subscriptionDetails.find(
+        (s) => s.xendit_plan_id && !s.cancel_at_period_end
+    ) || subscriptionDetails.find(
+        (s) => s.xendit_plan_id
+    ) || subscriptionDetails[0];
     if (!subscription) {
         return res.status(404).json({ error: "No subscription found for this user" });
     }

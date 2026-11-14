@@ -246,7 +246,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
           </button>
 
           {/* Cancel button is hidden if user is on Free Plan */}
-          {!isFreePlan && !subscription.cancel_at_period_end && subscription.status.toLowerCase() === "active" && (
+          {!isFreePlan && !subscription.cancel_at_period_end && ["active", "trialing", "trial"].includes((subscription.status || "").toLowerCase()) && (
             <button
               type="button"
               onClick={onCancelSubscription}
@@ -315,11 +315,31 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
 
                   {/* Action Button */}
                   {plan.current ? (
+                    <div className="flex flex-col gap-2 mt-auto w-full">
+                      <button
+                        disabled
+                        className="w-full py-3.5 rounded-lg border border-gray-200 dark:border-white/10 bg-transparent text-gray-400 dark:text-zinc-500 text-sm font-semibold cursor-not-allowed flex items-center justify-center"
+                      >
+                        {isTrialActive ? "Currently on Free Trial" : isFreePlan ? "Default Plan" : "Your Current Plan"}
+                      </button>
+                      {!isFreePlan && !subscription.cancel_at_period_end && ["active", "trialing", "trial"].includes((subscription.status || "").toLowerCase()) && (
+                        <button
+                          type="button"
+                          onClick={onCancelSubscription}
+                          disabled={isCancelling}
+                          className="w-full py-2 rounded-lg text-xs font-semibold border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-1.5"
+                        >
+                          {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                          {isCancelling ? "Cancelling..." : "Cancel Subscription"}
+                        </button>
+                      )}
+                    </div>
+                  ) : plan.name.toLowerCase().includes("free") || plan.price === "Free" ? (
                     <button
                       disabled
-                      className="w-full py-3.5 rounded-lg border border-gray-200 dark:border-white/10 bg-transparent text-gray-400 dark:text-zinc-500 text-sm font-semibold cursor-not-allowed flex items-center justify-center mt-auto"
+                      className="w-full py-3.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 text-sm font-semibold cursor-not-allowed flex items-center justify-center mt-auto"
                     >
-                      {isTrialActive ? "Currently on Free Trial" : "Your Current Plan"}
+                      Free Tier
                     </button>
                   ) : (
                     <button
