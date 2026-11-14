@@ -55,7 +55,10 @@ function mapListingRow(row) {
     description: row.description,
     category: row.category,
     priceCredits: Number(row.price_credits || 0),
-    thumbnailUrl: row.thumbnail_url || row.cover_path || null,
+    // The real asset cover wins; legacy thumbnail_url only covers rows without an asset.
+    thumbnailUrl: row.cover_path || row.thumbnail_url || null,
+    thumbnailMime: row.cover_path ? row.cover_mime || null : null,
+    assetType: row.listing_asset_type || null,
     marketAssetId: row.market_asset_id || null,
     status: row.status,
     rejectionReason: row.rejection_reason,
@@ -80,24 +83,62 @@ const LISTING_SELECT = `
     COALESCE(sa.display_name, su.first_name || ' ' || su.last_name) AS submitter_name,
     sa.handle AS submitter_handle,
     COALESCE(ra.display_name, rs.first_name || ' ' || rs.last_name) AS reviewer_name,
-    (
-      -- Listings created from the asset flow never set thumbnail_url; use the asset's cover.
-      SELECT cover_file.path
-      FROM market_asset_thumbnails cover_link
-      JOIN media_assets cover_media ON cover_media.media_asset_id = cover_link.media_asset_id
-        AND cover_media.deleted_at IS NULL
-      JOIN files cover_file ON cover_file.file_id = cover_media.thumbnail_file_id
-        AND cover_file.deleted_at IS NULL
-      WHERE cover_link.market_asset_id = l.market_asset_id
-        AND cover_file.path NOT LIKE 'asset-originals/%'
-      ORDER BY cover_link.position, cover_media.media_asset_id
-      LIMIT 1
-    ) AS cover_path
+    cover.path AS cover_path,
+    cover.mime_type AS cover_mime,
+    COALESCE(
+      (
+        SELECT typed_media.type
+        FROM market_media_assets typed_link
+        JOIN media_assets typed_media ON typed_media.media_asset_id = typed_link.media_asset_id
+        WHERE typed_link.market_asset_id = l.market_asset_id
+          AND typed_media.deleted_at IS NULL
+        ORDER BY typed_link.position, typed_media.media_asset_id
+        LIMIT 1
+      ),
+      CASE WHEN EXISTS (
+        SELECT 1 FROM market_ydoc_assets typed_template
+        WHERE typed_template.market_asset_id = l.market_asset_id
+      ) THEN 'template' END
+    ) AS listing_asset_type
   FROM marketplace_listings l
   LEFT JOIN accounts sa ON sa.account_id = l.submitted_by_account_id
   LEFT JOIN users su ON su.account_id = sa.account_id
   LEFT JOIN staff rs ON rs.staff_id = l.reviewed_by_staff_id
   LEFT JOIN accounts ra ON ra.account_id = rs.account_id
+  -- Listings from the asset flow never set thumbnail_url. Use the asset's own cover: a showcase
+  -- image, else the first content file's poster, else an image's watermarked proxy. Private
+  -- originals (image thumbnails can point at them) are never returned.
+  LEFT JOIN LATERAL (
+    SELECT cover_file.path, cover_file.mime_type
+    FROM (
+      SELECT 0 AS rank, thumb_link.position, thumb_media.thumbnail_file_id AS file_id
+      FROM market_asset_thumbnails thumb_link
+      JOIN media_assets thumb_media ON thumb_media.media_asset_id = thumb_link.media_asset_id
+        AND thumb_media.deleted_at IS NULL
+      WHERE thumb_link.market_asset_id = l.market_asset_id
+      UNION ALL
+      SELECT 1, content_link.position, content_media.thumbnail_file_id
+      FROM market_media_assets content_link
+      JOIN media_assets content_media ON content_media.media_asset_id = content_link.media_asset_id
+        AND content_media.deleted_at IS NULL
+      WHERE content_link.market_asset_id = l.market_asset_id
+      UNION ALL
+      SELECT 2, content_link.position, content_media.proxy_file_id
+      FROM market_media_assets content_link
+      JOIN media_assets content_media ON content_media.media_asset_id = content_link.media_asset_id
+        AND content_media.deleted_at IS NULL
+        AND content_media.type = 'image'
+      WHERE content_link.market_asset_id = l.market_asset_id
+    ) candidate
+    JOIN files cover_file ON cover_file.file_id = candidate.file_id
+      AND cover_file.deleted_at IS NULL
+    WHERE cover_file.path NOT LIKE 'asset-originals/%'
+      AND (cover_file.mime_type LIKE 'image/%' OR cover_file.mime_type = 'video/mp4')
+    ORDER BY candidate.rank,
+      CASE WHEN cover_file.mime_type LIKE 'image/%' THEN 0 ELSE 1 END,
+      candidate.position
+    LIMIT 1
+  ) cover ON TRUE
 `;
 
 /** Queue order the desk can ask for. Pending always floats to the top of the default view. */

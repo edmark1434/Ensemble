@@ -8,7 +8,6 @@ import {
   History,
   LayoutTemplate,
   Loader2,
-  Package,
   ShieldCheck,
   ShoppingBag,
   Tag,
@@ -23,6 +22,7 @@ import ListingFileInspector, {
   formatDuration,
   type InspectorTarget,
 } from './ListingFileInspector';
+import ListingThumb from './ListingThumb';
 import {
   LISTING_ACTIONS,
   ListingReasonDialog,
@@ -469,7 +469,8 @@ export default function ListingDetailModal({
   const crossSellerFileMatches = fileDuplicates.filter((d) => !d.sameSeller).length;
   const reports = listing?.reports;
   const seller = listing?.seller;
-  const cover = asset?.thumbnails?.[0]?.path || listing?.thumbnailUrl || null;
+  // Same cover the queue row shows, so the header matches the row that was clicked.
+  const cover = listing?.thumbnailUrl || asset?.thumbnails?.[0]?.path || null;
   const isTemplate = asset?.type === 'template';
   const selectedId =
     target?.kind === 'file' ? target.file.mediaAssetId : target?.kind === 'showcase' ? target.thumb.mediaAssetId : null;
@@ -487,17 +488,13 @@ export default function ListingDetailModal({
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-6 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            {cover ? (
-              <img
-                src={cloudUrl(cover)}
-                alt=""
-                className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
-              />
-            ) : (
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-600 ring-1 ring-white/10">
-                <Package className="h-5 w-5" />
-              </span>
-            )}
+            <ListingThumb
+              path={cover}
+              mimeType={cover === listing?.thumbnailUrl ? listing?.thumbnailMime : null}
+              assetType={asset?.type || listing?.assetType}
+              title={listing?.title}
+              size="md"
+            />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-[11px] text-zinc-500">{listing?.number || '…'}</span>

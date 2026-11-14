@@ -132,7 +132,12 @@ export type MarketplaceListing = {
   description: string | null;
   category: string | null;
   priceCredits: number;
+  /** Cover path: the asset's showcase image or content poster, else a legacy thumbnail URL. */
   thumbnailUrl: string | null;
+  /** MIME type of the cover; video posters are short mp4 clips, not images. */
+  thumbnailMime?: string | null;
+  /** Content type of the linked asset (image, video, audio, template). */
+  assetType?: string | null;
   marketAssetId?: string | null;
   asset?: ListingLinkedAsset | null;
   status: 'pending' | 'approved' | 'rejected' | 'delisted';
