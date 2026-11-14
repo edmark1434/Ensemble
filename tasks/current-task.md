@@ -1,16 +1,13 @@
-# Active Task: Enforce Subscription Asset Posting Limits & Live UI Feedback
+# Active Task: Fix Live vs Local Subscription Plan Recognition in Asset Posting Limits
 
 ## Implementation Objective
 
-Ensure asset library upload and posting respects the user's subscription plan feature (`asset_posts`), properly counting published and in-review marketplace submissions so Free tier users cannot exceed their 1 asset post limit, while providing real-time UI display updates (`{used} / {limit} Uploaded`) and a dedicated upgrade modal when the limit is reached instead of a toast warning.
+Ensure `readAssetPostingEligibility` in `backend/repositories/AssetRepositories.js` identifies active user subscriptions consistently with `SubscriptionRepositories.js` (including `TRIALING` status, case-insensitive plan precedence, and fallback subscriptions). Provide clear operational instructions for the live server (backend restart, frontend build, database migrations).
 
 ## Acceptance Criteria
 
-- [x] `readAssetPostingEligibility` includes both `published` assets and in-review submissions (`status = 'draft'` with `marketplace_listings.status = 'pending'`).
-- [x] `readAssetPostingEligibility` includes a fallback to the default Free plan when no active subscription record exists in `subscriptions`.
-- [x] `readAssetPostingEligibility` returns `plan_name` for clear user context.
-- [x] Soft-deleted and rejected assets do not count against the user's asset post quota.
-- [x] Editing an existing asset excludes the current asset from the limit check (`excludeAssetId`).
-- [x] Display `{number}/max_number` immediately and automatically increments upon uploading, and syncs on upload completion/deletion/socket events.
-- [x] Small Upgrade Limit modal (`AssetLimitModal`) created and displayed instead of toast warning when the limit is reached, with a direct button to upgrade subscription.
-- [ ] User verification (`pnpm typecheck`).
+- [x] Align `readAssetPostingEligibility` subscription resolution with `SubscriptionRepositories.js`:
+  - Support `s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING')`.
+  - Order active subscriptions by plan priority (`Business` -> `Premium` -> others) and recency (`s.updated_at DESC, s.created_at DESC`).
+  - Provide a fallback subscription query for expired/unconfirmed periods before falling back to `default_free_plan`.
+- [x] Provide operational guidance for live deployment (service restart, static asset build, migration check).
