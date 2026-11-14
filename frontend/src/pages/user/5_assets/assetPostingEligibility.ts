@@ -9,6 +9,7 @@ export interface AssetPostingEligibility {
   used: number;
   remaining: number | null;
   message: string | null;
+  planName?: string;
 }
 
 export async function getAssetPostingEligibility(): Promise<AssetPostingEligibility> {

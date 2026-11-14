@@ -22,6 +22,7 @@ import { getAssetPostingEligibility, type AssetPostingEligibility } from "./asse
 import useGlobalState from "@/lib/global_state";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import AssetLimitModal from "./AssetLimitModal";
 
 type FilterType = "all" | AssetType;
 type AssetView = "discover" | "mine" | "purchased" | "saved" | "liked";
@@ -143,6 +144,7 @@ export default function AssetsLibrary() {
   const [engagementPending, setEngagementPending] = useState<Set<string>>(new Set());
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [uploadSuccessOpen, setUploadSuccessOpen] = useState(false);
+  const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [successModalInfo, setSuccessModalInfo] = useState({
     title: "Asset Uploaded Successfully!",
     message: "Your asset package has been submitted successfully to your library.",
@@ -210,11 +212,13 @@ export default function AssetsLibrary() {
   }, [loadAssets]);
 
   useEffect(() => {
-    if (!savedUploadIds || view !== "mine") return;
+    if (!savedUploadIds) return;
+    void fetchEligibility();
+    if (view !== "mine") return;
     const controller = new AbortController();
     void loadAssets(controller.signal);
     return () => controller.abort();
-  }, [savedUploadIds, view, loadAssets]);
+  }, [savedUploadIds, view, loadAssets, fetchEligibility]);
 
   useEffect(() => {
     for (const upload of uploads) {
@@ -252,18 +256,35 @@ export default function AssetsLibrary() {
   useEffect(() => {
     const handleStatusUpdate = () => {
       void loadAssets();
+      void fetchEligibility();
+    };
+    const handleAssetUploaded = () => {
+      void fetchEligibility();
+      void loadAssets();
+    };
+    const handleLimitReached = () => {
+      setLimitModalOpen(true);
     };
     socket.on("assetStatusUpdated", handleStatusUpdate);
     socket.on("notification", handleStatusUpdate);
+    window.addEventListener("assetUploaded", handleAssetUploaded);
+    window.addEventListener("assetLimitReached", handleLimitReached);
     return () => {
       socket.off("assetStatusUpdated", handleStatusUpdate);
       socket.off("notification", handleStatusUpdate);
+      window.removeEventListener("assetUploaded", handleAssetUploaded);
+      window.removeEventListener("assetLimitReached", handleLimitReached);
     };
-  }, [loadAssets]);
+  }, [loadAssets, fetchEligibility]);
 
   const openCreate = async (snapshot?: TemplateDraft) => {
     if (isGuestView) {
       setIsGuestLoginOpen(true);
+      return;
+    }
+
+    if (eligibility && !eligibility.unlimited && eligibility.limit !== null && eligibility.used >= eligibility.limit) {
+      setLimitModalOpen(true);
       return;
     }
     
@@ -284,12 +305,16 @@ export default function AssetsLibrary() {
         setEditorOpen(false);
         return;
       }
-      const eligibility = await getAssetPostingEligibility();
+      const data = await getAssetPostingEligibility();
       if (request !== createRequest.current) return;
-      setEligibility(eligibility);
-      if (!eligibility.allowed) {
+      setEligibility(data);
+      if (!data.allowed) {
         setEditorOpen(false);
-        showErrorToast(eligibility.message || "Asset posting is unavailable for this account.");
+        if (data.code === "ASSET_POST_LIMIT_REACHED" || (!data.unlimited && data.limit !== null && data.used >= data.limit)) {
+          setLimitModalOpen(true);
+        } else {
+          showErrorToast(data.message || "Asset posting is unavailable for this account.");
+        }
         return;
       }
     } catch (error) {
@@ -373,10 +398,23 @@ export default function AssetsLibrary() {
     setEditingAsset(null);
     showSuccessToast("Asset uploaded successfully!");
     setUploadSuccessOpen(true);
+    setEligibility((current) => current ? {
+      ...current,
+      used: current.unlimited ? current.used : current.used + 1,
+      remaining: current.unlimited ? null : Math.max(0, (current.limit || 0) - (current.used + 1)),
+      allowed: current.unlimited ? true : (current.used + 1) < (current.limit || 0),
+    } : null);
+    void fetchEligibility();
   };
   const pendingUploads = view === "mine" ? ownUploads : [];
   const queuedAssetIds = new Set(pendingUploads.map((upload) => upload.asset?.market_asset_id));
   const visibleAssets = assets.filter((item) => !queuedAssetIds.has(item.market_asset_id));
+  const activeUploadsCount = ownUploads.filter((item) =>
+    !item.asset?.market_asset_id && (item.stage === "preparing" || item.stage === "uploading" || item.stage === "saving")
+  ).length;
+  const displayUsed = eligibility
+    ? (eligibility.unlimited ? eligibility.used : Math.min(eligibility.limit ?? (eligibility.used + activeUploadsCount), eligibility.used + activeUploadsCount))
+    : 0;
 
   const confirmDelete = async () => {
     if (!deletingAsset || deleting) return;
@@ -539,11 +577,11 @@ export default function AssetsLibrary() {
             {view === "mine" && eligibility && (
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-500/10 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20">
-                  {eligibility.unlimited ? "Unlimited uploads" : `${eligibility.used} / ${eligibility.limit} Uploaded`}
+                  {eligibility.unlimited ? "Unlimited uploads" : `${displayUsed} / ${eligibility.limit} Uploaded`}
                 </span>
                 {!eligibility.unlimited && (
                   <button 
-                    onClick={() => navigate("/credits-subscriptions")}
+                    onClick={() => setLimitModalOpen(true)}
                     className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
                   >
                     <div 
@@ -668,6 +706,14 @@ export default function AssetsLibrary() {
 
       <AssetEditorModal open={editorOpen && !templateDraft && editingAsset?.type !== "template"} checkingEligibility={checkingPostEligibility} asset={editingAsset} onClose={closeEditor} onSaved={onSaved} onQueued={onUploadQueued} />
       <TemplateAssetModal open={editorOpen && (!!templateDraft || editingAsset?.type === "template")} checkingEligibility={checkingPostEligibility} asset={editingAsset} snapshot={templateDraft} onClose={closeEditor} onSaved={onSaved} onQueued={onUploadQueued} />
+      <AssetLimitModal
+        isOpen={limitModalOpen}
+        onClose={() => setLimitModalOpen(false)}
+        limit={eligibility?.limit}
+        used={displayUsed}
+        planName={eligibility?.planName}
+        message={eligibility?.code === "ASSET_POST_LIMIT_REACHED" ? (eligibility.message || undefined) : undefined}
+      />
       <GuestLoginModal
         isOpen={isGuestLoginOpen}
         onClose={() => setIsGuestLoginOpen(false)}
