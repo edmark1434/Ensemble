@@ -101,9 +101,17 @@ async function runUpload(id: string, input: UploadInput) {
       ...(input.type === "template" ? { ydocSnapshotId: input.snapshotId } : {}),
     });
     update({ asset: response.data.asset, stage: "processing" });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("assetUploaded", { detail: { asset: response.data.asset } }));
+    }
   } catch (error) {
-    const response = (error as { response?: { data?: { error?: string; message?: string } } })?.response;
-    update({ stage: "failed", error: response?.data?.error || response?.data?.message
-      || (error instanceof Error ? error.message : "Unable to upload this asset.") });
+    const response = (error as { response?: { data?: { error?: string; message?: string; code?: string } } })?.response;
+    const errorCode = response?.data?.code;
+    const errorMessage = response?.data?.error || response?.data?.message
+      || (error instanceof Error ? error.message : "Unable to upload this asset.");
+    if (errorCode === "ASSET_POST_LIMIT_REACHED" && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("assetLimitReached", { detail: { message: errorMessage } }));
+    }
+    update({ stage: "failed", error: errorMessage });
   }
 }

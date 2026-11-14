@@ -380,7 +380,13 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
       } catch (requestError) {
         const message = errorMessage(requestError);
         setError(message);
-        if (errorCode(requestError) === "ASSET_POST_LIMIT_REACHED") showErrorToast(message);
+        if (errorCode(requestError) === "ASSET_POST_LIMIT_REACHED") {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("assetLimitReached", { detail: { message } }));
+          } else {
+            showErrorToast(message);
+          }
+        }
       } finally { setSaving(false); }
       return;
     }

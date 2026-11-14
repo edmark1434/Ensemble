@@ -340,6 +340,7 @@ function normalizeAssetPostingEligibility(row) {
     limit,
     used,
     remaining: unlimited ? null : Math.max(0, (limit || 0) - used),
+    planName: row?.plan_name || 'Free',
   };
 }
 
@@ -358,16 +359,28 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
        WHERE u.account_id = $1
        LIMIT 1
      ), active_subscription AS (
-       SELECT s.plan_id
+       SELECT s.plan_id, p.name AS plan_name
        FROM subscriptions s
        JOIN identity ON identity.user_id = s.user_id
+       JOIN plans p ON p.plan_id = s.plan_id
        WHERE UPPER(s.status) = 'ACTIVE'
+         AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
        ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC
        LIMIT 1
+     ), default_free_plan AS (
+       SELECT p.plan_id, p.name AS plan_name
+       FROM plans p
+       WHERE p.amount_php_cents = 0 OR LOWER(p.name) = 'free'
+       ORDER BY p.amount_php_cents ASC
+       LIMIT 1
+     ), effective_plan AS (
+       SELECT
+         COALESCE((SELECT plan_id FROM active_subscription), (SELECT plan_id FROM default_free_plan)) AS plan_id,
+         COALESCE((SELECT plan_name FROM active_subscription), (SELECT plan_name FROM default_free_plan), 'Free') AS plan_name
      ), entitlement AS (
        SELECT pf.value
-       FROM active_subscription subscription
-       JOIN plan_features pf ON pf.plan_id = subscription.plan_id
+       FROM effective_plan ep
+       JOIN plan_features pf ON pf.plan_id = ep.plan_id
        JOIN features feature ON feature.feature_id = pf.feature_id
        WHERE feature.feature_key IN ('asset_post', 'asset_posts')
        ORDER BY CASE WHEN feature.feature_key = 'asset_post' THEN 0 ELSE 1 END
@@ -375,19 +388,24 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
      ), usage AS (
        SELECT COUNT(DISTINCT ma.market_asset_id)::int AS posted_count
        FROM market_assets ma
-       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id, status AS listing_status
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
          ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
        JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
        WHERE owner_user.account_id = $1
-         AND ma.status = 'published'
+         AND (
+           ma.status = 'published'
+           OR (ma.status = 'draft' AND listing_owner.listing_status = 'pending')
+         )
          AND ($2::uuid IS NULL OR ma.market_asset_id <> $2::uuid)
          AND ma.deleted_at IS NULL
      )
      SELECT identity.user_id, identity.is_verified,
-            entitlement.value AS feature_value, usage.posted_count
+            entitlement.value AS feature_value, usage.posted_count,
+            effective_plan.plan_name
      FROM identity
      CROSS JOIN usage
+     CROSS JOIN effective_plan
      LEFT JOIN entitlement ON TRUE`,
     [accountId, excludeAssetId]
   );
