@@ -102,9 +102,17 @@ async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
                        FROM SUBSCRIPTIONS S
                        JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
                        WHERE S.USER_ID = $1
-                         AND (S.STATUS IS NULL OR UPPER(S.STATUS) IN ('ACTIVE', 'TRIALING'))
-                         AND (S.CURRENT_PERIOD_END IS NULL OR S.CURRENT_PERIOD_END > CURRENT_TIMESTAMP)
+                         AND (S.STATUS IS NULL OR UPPER(S.STATUS) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+                         AND (
+                           S.CURRENT_PERIOD_END IS NULL
+                           OR S.CURRENT_PERIOD_END > CURRENT_TIMESTAMP
+                           OR (S.TRIAL_ENDS_AT IS NOT NULL AND S.TRIAL_ENDS_AT > CURRENT_TIMESTAMP)
+                         )
                        ORDER BY
+                         CASE
+                           WHEN S.XENDIT_PLAN_ID IS NOT NULL THEN 1
+                           ELSE 2
+                         END,
                          CASE
                            WHEN LOWER(P.NAME) = 'business' THEN 1
                            WHEN LOWER(P.NAME) = 'premium' THEN 2
@@ -121,7 +129,17 @@ async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
                                    FROM SUBSCRIPTIONS S
                                    JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
                                    WHERE S.USER_ID = $1
-                                   ORDER BY S.UPDATED_AT DESC, S.CREATED_AT DESC
+                                   ORDER BY
+                                     CASE
+                                       WHEN S.XENDIT_PLAN_ID IS NOT NULL THEN 1
+                                       ELSE 2
+                                     END,
+                                     CASE
+                                       WHEN LOWER(P.NAME) = 'business' THEN 1
+                                       WHEN LOWER(P.NAME) = 'premium' THEN 2
+                                       ELSE 3
+                                     END,
+                                     S.UPDATED_AT DESC, S.CREATED_AT DESC
                                    LIMIT 1`;
             result = await pool.query(fallbackQuery, [userId]);
         }

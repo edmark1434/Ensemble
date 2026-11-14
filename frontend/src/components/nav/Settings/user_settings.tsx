@@ -132,9 +132,10 @@ export default function UserSettings() {
       const accountId = globalUser?.account_id;
 
       if (accountId) {
-        const [profileRes, subRes] = await Promise.all([
+        const [profileRes, subRes, subListRes] = await Promise.all([
           api.get(`/api/accounts/profile/${accountId}`),
           api.get(`/api/subscription/plan-details`).catch(() => null),
+          api.get(`/api/subscription`).catch(() => null),
         ]);
 
         const rawProfile = profileRes.data.data || profileRes.data.profile || {};
@@ -168,14 +169,29 @@ export default function UserSettings() {
         let avatar = rawProfile.avatar_preset_url || rawProfile.avatar_url;
         setAvatarUrl(constructAvatarUrl(avatar));
 
-        if (subRes?.data?.planDetails) {
+        const planDetails = subRes?.data?.planDetails;
+        const subList = subListRes?.data?.subscription;
+        const activeSubFromList = Array.isArray(subList)
+          ? subList.find((s: any) => s.xendit_plan_id) || subList[0]
+          : null;
+
+        if (planDetails && (!planDetails.plan_name?.toLowerCase().includes("free") || !activeSubFromList?.xendit_plan_id)) {
           setSubscription({
-            plan_name: subRes.data.planDetails.plan_name || "Free Member",
-            status: subRes.data.planDetails.status || "Active",
-            renews_at: subRes.data.planDetails.renews_at,
-            cancel_at_period_end: Boolean(subRes.data.planDetails.cancel_at_period_end),
-            trial_starts_at: subRes.data.planDetails.trial_starts_at,
-            trial_ends_at: subRes.data.planDetails.trial_ends_at,
+            plan_name: planDetails.plan_name || "Free Member",
+            status: planDetails.status || "Active",
+            renews_at: planDetails.renews_at || activeSubFromList?.current_period_end,
+            cancel_at_period_end: Boolean(planDetails.cancel_at_period_end ?? activeSubFromList?.cancel_at_period_end),
+            trial_starts_at: planDetails.trial_starts_at || activeSubFromList?.trial_starts_at,
+            trial_ends_at: planDetails.trial_ends_at || activeSubFromList?.trial_ends_at,
+          });
+        } else if (activeSubFromList) {
+          setSubscription({
+            plan_name: activeSubFromList.name || (activeSubFromList.xendit_plan_id ? "Premium" : "Free Member"),
+            status: activeSubFromList.status || "Active",
+            renews_at: activeSubFromList.current_period_end,
+            cancel_at_period_end: Boolean(activeSubFromList.cancel_at_period_end),
+            trial_starts_at: activeSubFromList.trial_starts_at,
+            trial_ends_at: activeSubFromList.trial_ends_at,
           });
         }
       }

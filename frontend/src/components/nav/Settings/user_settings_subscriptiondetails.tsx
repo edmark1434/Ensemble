@@ -246,7 +246,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
           </button>
 
           {/* Cancel button is hidden if user is on Free Plan */}
-          {!isFreePlan && !subscription.cancel_at_period_end && ["active", "trialing", "trial"].includes((subscription.status || "").toLowerCase()) && (
+          {!isFreePlan && !subscription.cancel_at_period_end && (
             <button
               type="button"
               onClick={onCancelSubscription}
@@ -322,7 +322,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
                       >
                         {isTrialActive ? "Currently on Free Trial" : isFreePlan ? "Default Plan" : "Your Current Plan"}
                       </button>
-                      {!isFreePlan && !subscription.cancel_at_period_end && ["active", "trialing", "trial"].includes((subscription.status || "").toLowerCase()) && (
+                      {!isFreePlan && !subscription.cancel_at_period_end && (
                         <button
                           type="button"
                           onClick={onCancelSubscription}
