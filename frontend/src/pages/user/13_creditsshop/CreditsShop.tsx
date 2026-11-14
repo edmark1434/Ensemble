@@ -1079,39 +1079,41 @@ const CreditShop: React.FC = () => {
                       </ul>
                     </div>
 
-                    <button
-                      onClick={() => handleMembershipCheckout(tier)}
-                      disabled={isDisabled}
-                      className={`md:mt-3 w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
-                        isDisabled
-                          ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
-                          : isUpgrade && hasXenditPlan && !isOnFreePlan
-                          ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
-                          : isDowngrade && hasXenditPlan && !isOnFreePlan
-                          ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
-                          : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
-                      }`}
-                    >
-                      {buttonText}
-                      {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                        <span className="ml-1.5 text-xs">↑</span>
-                      )}
-                      {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                        <span className="ml-1.5 text-xs">↓</span>
-                      )}
-                    </button>
-
-                    {isCurrent && !isFree && !userSubscription?.cancel_at_period_end && (
+                    <div className="md:mt-3 w-full flex flex-col gap-2">
                       <button
-                        type="button"
-                        onClick={handleCancelSubscription}
-                        disabled={isCancelling}
-                        className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleMembershipCheckout(tier)}
+                        disabled={isDisabled}
+                        className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
+                          isDisabled
+                            ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
+                            : isUpgrade && hasXenditPlan && !isOnFreePlan
+                            ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
+                            : isDowngrade && hasXenditPlan && !isOnFreePlan
+                            ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
+                            : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
+                        }`}
                       >
-                        {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
-                        {isCancelling ? "Cancelling..." : "Cancel Subscription"}
+                        {buttonText}
+                        {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                          <span className="ml-1.5 text-xs">↑</span>
+                        )}
+                        {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                          <span className="ml-1.5 text-xs">↓</span>
+                        )}
                       </button>
-                    )}
+
+                      {isCurrent && !isFree && !userSubscription?.cancel_at_period_end && (
+                        <button
+                          type="button"
+                          onClick={handleCancelSubscription}
+                          disabled={isCancelling}
+                          className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                          {isCancelling ? "Cancelling..." : "Cancel Subscription"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

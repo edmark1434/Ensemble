@@ -228,7 +228,9 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
             {subscription.plan_name || "Free Tier"}
           </h3>
           <p className="text-xs text-gray-600 dark:text-zinc-400">
-            {isTrialActive
+            {subscription.cancel_at_period_end
+              ? `Access remains active until ${subscription.renews_at || subscription.trial_ends_at ? new Date(subscription.renews_at || subscription.trial_ends_at!).toLocaleDateString() : "the end of your billing cycle"}. Your plan will not renew and no further charges will occur.`
+              : isTrialActive
               ? `Your free trial ends on ${new Date(subscription.trial_ends_at!).toLocaleDateString()}. Your first recurring billing of ${activePlanDetails.price} will occur on this date.`
               : subscription.renews_at
               ? `Renews automatically on ${new Date(subscription.renews_at).toLocaleDateString()}`
@@ -246,7 +248,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
           </button>
 
           {/* Cancel button is hidden if user is on Free Plan */}
-          {!isFreePlan && !subscription.cancel_at_period_end && ["active", "trialing", "trial"].includes((subscription.status || "").toLowerCase()) && (
+          {!isFreePlan && !subscription.cancel_at_period_end && (
             <button
               type="button"
               onClick={onCancelSubscription}
@@ -322,7 +324,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
                       >
                         {isTrialActive ? "Currently on Free Trial" : isFreePlan ? "Default Plan" : "Your Current Plan"}
                       </button>
-                      {!isFreePlan && !subscription.cancel_at_period_end && ["active", "trialing", "trial"].includes((subscription.status || "").toLowerCase()) && (
+                      {!isFreePlan && !subscription.cancel_at_period_end && (
                         <button
                           type="button"
                           onClick={onCancelSubscription}

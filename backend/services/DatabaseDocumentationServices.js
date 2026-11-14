@@ -88,7 +88,7 @@ ${present(plan.description, 'No description is currently available.')}
 
   return `# Current Ensemble Plans
 
-This document lists the subscription plans currently offered on Ensemble. It is refreshed automatically when the support knowledge base is updated, so these values take priority over any older figures. Plans are managed from the subscription plans page (`/credits-subscriptions`).
+This document lists the subscription plans currently offered on Ensemble. It is refreshed automatically when the support knowledge base is updated, so these values take priority over any older figures. Plans are managed from the subscription plans page (\`/credits-subscriptions\`).
 
 ## Available subscription plans
 
