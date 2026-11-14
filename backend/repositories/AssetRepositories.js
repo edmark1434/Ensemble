@@ -363,9 +363,28 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
        FROM subscriptions s
        JOIN identity ON identity.user_id = s.user_id
        JOIN plans p ON p.plan_id = s.plan_id
-       WHERE UPPER(s.status) = 'ACTIVE'
+       WHERE (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
          AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
-       ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC
+       ORDER BY
+         CASE
+           WHEN LOWER(p.name) = 'business' THEN 1
+           WHEN LOWER(p.name) = 'premium' THEN 2
+           ELSE 3
+         END,
+         s.updated_at DESC, s.created_at DESC
+       LIMIT 1
+     ), subscription_fallback AS (
+       SELECT s.plan_id, p.name AS plan_name
+       FROM subscriptions s
+       JOIN identity ON identity.user_id = s.user_id
+       JOIN plans p ON p.plan_id = s.plan_id
+       ORDER BY
+         CASE
+           WHEN LOWER(p.name) = 'business' THEN 1
+           WHEN LOWER(p.name) = 'premium' THEN 2
+           ELSE 3
+         END,
+         s.updated_at DESC, s.created_at DESC
        LIMIT 1
      ), default_free_plan AS (
        SELECT p.plan_id, p.name AS plan_name
@@ -375,8 +394,17 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
        LIMIT 1
      ), effective_plan AS (
        SELECT
-         COALESCE((SELECT plan_id FROM active_subscription), (SELECT plan_id FROM default_free_plan)) AS plan_id,
-         COALESCE((SELECT plan_name FROM active_subscription), (SELECT plan_name FROM default_free_plan), 'Free') AS plan_name
+         COALESCE(
+           (SELECT plan_id FROM active_subscription),
+           (SELECT plan_id FROM subscription_fallback),
+           (SELECT plan_id FROM default_free_plan)
+         ) AS plan_id,
+         COALESCE(
+           (SELECT plan_name FROM active_subscription),
+           (SELECT plan_name FROM subscription_fallback),
+           (SELECT plan_name FROM default_free_plan),
+           'Free'
+         ) AS plan_name
      ), entitlement AS (
        SELECT pf.value
        FROM effective_plan ep

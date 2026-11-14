@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 // Modals
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal";
 import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal";
+import CancelSubscriptionModal from "@/components/ui/CancelSubscriptionModal";
 
 // Modular Tab Components
 import { UserSettingsAccountDetails } from "./user_settings_accountdetails";
@@ -102,6 +103,7 @@ export default function UserSettings() {
     status: "Active",
   });
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
     if (!path) return "";
@@ -296,18 +298,21 @@ export default function UserSettings() {
   };
 
  
-  const handleCancelSubscription = async () => {
-    if (confirm("Are you sure you want to cancel your current subscription?")) {
-      try {
-        setIsCancellingSubscription(true);
-        const { data } = await api.post("/api/payment/cancel-subscription");
-        setSubscription((prev) => ({ ...prev, cancel_at_period_end: true }));
-        toast.success(data.message || "Subscription cancellation scheduled successfully.");
-      } catch (err: any) {
-        toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
-      } finally {
-        setIsCancellingSubscription(false);
-      }
+  const handleCancelSubscription = () => {
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancelSubscription = async () => {
+    try {
+      setIsCancellingSubscription(true);
+      const { data } = await api.post("/api/payment/cancel-subscription");
+      setSubscription((prev) => ({ ...prev, cancel_at_period_end: true }));
+      toast.success(data.message || "Subscription cancellation scheduled successfully.");
+      setShowCancelModal(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
+    } finally {
+      setIsCancellingSubscription(false);
     }
   };
   const navCategories = [
@@ -558,6 +563,15 @@ export default function UserSettings() {
           joinedDate: profileData.joinedDate || "",
         }}
         onSave={() => fetchSettings()}
+      />
+
+      <CancelSubscriptionModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleConfirmCancelSubscription}
+        isCancelling={isCancellingSubscription}
+        planName={subscription.plan_name}
+        endDate={subscription.trial_ends_at || subscription.renews_at}
       />
     </div>
   );
