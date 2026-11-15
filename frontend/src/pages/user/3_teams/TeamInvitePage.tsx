@@ -97,7 +97,7 @@ export default function TeamInvitePage() {
       setJoining(true);
       try {
         await api.patch(`/api/teams/${team.team_id}/invitations/accept`);
-        showSuccessToast(`Welcome to ${team.display_name}!`);
+        showSuccessToast("Join request submitted. Awaiting team leader approval.");
         navigate(`/teams/${team.team_id}`);
       } catch (err: unknown) {
         const msg =
@@ -337,12 +337,12 @@ export default function TeamInvitePage() {
                     {joining ? (
                       <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
-                        Joining Team...
+                        Submitting Request...
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="h-4 w-4" />
-                        <span>Join Team</span>
+                        <span>Accept Invitation & Request to Join</span>
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}

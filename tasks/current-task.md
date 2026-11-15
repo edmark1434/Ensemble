@@ -1,8 +1,12 @@
 # Active Task: Free 1080p uploads with 720p exports
+# Active Task: Fix Team Taskboard, Video Projects Loading, and Invitation Approval Flow
 
 ## Implementation Objective
 
 Raise Free video upload quality to 1080p for both the asset library and editor while keeping its separate export limit at 720p.
+1. Fix task creation and saving errors in Team Taskboard by passing `teamId={team.team_id}` from `SelectedTeam.tsx` and adding defensive fallback handling in `TeamTaskboard.tsx`.
+2. Fix infinite skeleton loading in Team Video Projects by passing `teamId={team.team_id}` from `SelectedTeam.tsx` and adding fallback resolution and proper loading termination in `TeamVideoProjectsTab.tsx`.
+3. Fix team invitation flow so that invited users do NOT automatically appear in the active Members tab upon invitation. Instead, the invited user accepts the invitation to request to join (`status = 'Pending'`), which then appears in the team owner's Pending Requests tab for review and approval.
 
 ## Acceptance Criteria
 

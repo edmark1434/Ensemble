@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -1047,7 +1047,7 @@ export default function SelectedTeam() {
 
         {membership?.status === "Invited" && (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
-            <span className="text-emerald-200">You have been invited to join this Team!</span>
+            <span className="text-emerald-200">You have been invited to join this Team! Accept to submit your request to join for team approval.</span>
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() =>
@@ -1059,7 +1059,7 @@ export default function SelectedTeam() {
                 }
                 className="cursor-pointer rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-4 py-1.5 text-xs font-bold text-white transition shadow-sm"
               >
-                Accept invitation
+                Accept & Request to Join
               </button>
               <button
                 onClick={() => void mutate("/invitations/decline", "patch")}
@@ -1682,11 +1682,16 @@ function TeamTabContent({
   onLoadTransactions: (page?: number) => void;
   onReview: () => void;
 }) {
+  const activeMembers = useMemo(
+    () => members.filter((member) => (member.status || "Active") === "Active"),
+    [members]
+  );
+
   if (active === "overview") {
     return (
       <TeamOverviewTab
         team={team}
-        members={members}
+        members={activeMembers}
         reviews={reviews}
         wallet={wallet}
         canAddFunds={canAddFunds}
@@ -1704,7 +1709,8 @@ function TeamTabContent({
     return (
       <TeamTaskboard
         team={team}
-        members={members}
+        teamId={team.team_id}
+        members={activeMembers}
         canManage={canManage}
         onBackToOverview={() => onSelectTab("overview")}
       />
@@ -1727,8 +1733,8 @@ function TeamTabContent({
       <TeamOverviewSection
         team={team}
         teamName={team.display_name}
-        memberCount={members.length}
-        members={members}
+        memberCount={activeMembers.length}
+        members={activeMembers}
       />
     );
   }
@@ -1737,6 +1743,7 @@ function TeamTabContent({
     return (
       <TeamVideoProjectsTab
         team={team}
+        teamId={team.team_id}
         teamName={team.display_name}
         canManage={canManage}
         isOwner={isOwner}
@@ -2013,7 +2020,7 @@ function TeamTabContent({
     <div className="space-y-4 font-['Plus_Jakarta_Sans',sans-serif]">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-gray-900 dark:text-white">
-          Team Members ({members.length})
+          Team Members ({activeMembers.length})
         </h3>
         {canManage && (
           <button
@@ -2027,7 +2034,7 @@ function TeamTabContent({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {members.map((member) => (
+        {activeMembers.map((member) => (
           <div
             key={member.team_member_id}
             className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 shadow-xs flex items-center justify-between"

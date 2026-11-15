@@ -783,31 +783,31 @@ async function updateTeamTask(teamId, taskId, data) {
   let idx = 3;
 
   if (data.title !== undefined) {
-    fields.push(`title = ${idx++}`);
+    fields.push(`title = $${idx++}`);
     values.push(data.title.trim());
   }
   if (data.description !== undefined) {
-    fields.push(`description = ${idx++}`);
+    fields.push(`description = $${idx++}`);
     values.push(data.description ? data.description.trim() : null);
   }
   if (data.status !== undefined) {
-    fields.push(`status = ${idx++}`);
+    fields.push(`status = $${idx++}`);
     values.push(data.status);
   }
   if (data.priority !== undefined) {
-    fields.push(`priority = ${idx++}`);
+    fields.push(`priority = $${idx++}`);
     values.push(data.priority);
   }
   if (data.due_at !== undefined) {
-    fields.push(`due_at = ${idx++}`);
+    fields.push(`due_at = $${idx++}`);
     values.push(data.due_at || null);
   }
   if (data.assignee_account_id !== undefined) {
-    fields.push(`assignee_account_id = ${idx++}`);
+    fields.push(`assignee_account_id = $${idx++}`);
     values.push(data.assignee_account_id || null);
   }
   if (data.sort_order !== undefined) {
-    fields.push(`sort_order = ${idx++}`);
+    fields.push(`sort_order = $${idx++}`);
     values.push(Number(data.sort_order) || 0);
   }
 

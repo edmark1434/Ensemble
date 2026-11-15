@@ -45,7 +45,8 @@ interface VideoProject {
 }
 
 interface TeamVideoProjectsTabProps {
-  teamId: string;
+  teamId?: string;
+  team?: any;
   teamName?: string;
   canManage?: boolean;
   isOwner?: boolean;
@@ -99,12 +100,14 @@ const resolveAvatarPath = (path?: string | null) => {
 };
 
 export const TeamVideoProjectsTab: React.FC<TeamVideoProjectsTabProps> = ({
-  teamId,
+  teamId: propTeamId,
+  team,
   teamName,
   canManage = true,
   isOwner = false,
   teamLeaderName,
 }) => {
+  const teamId = propTeamId || team?.team_id || team?.id || "";
   const [projects, setProjects] = useState<VideoProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -121,6 +124,10 @@ export const TeamVideoProjectsTab: React.FC<TeamVideoProjectsTabProps> = ({
   const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || "http://localhost:3000";
 
   const fetchProjects = async () => {
+    if (!teamId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await api.get(`/api/teams/${teamId}/video-projects`);
@@ -138,6 +145,8 @@ export const TeamVideoProjectsTab: React.FC<TeamVideoProjectsTabProps> = ({
   useEffect(() => {
     if (teamId) {
       void fetchProjects();
+    } else {
+      setLoading(false);
     }
   }, [teamId]);
 

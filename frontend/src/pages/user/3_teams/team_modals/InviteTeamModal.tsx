@@ -86,7 +86,7 @@ export const InviteTeamModal: React.FC<InviteTeamModalProps> = ({
     try {
       const [limitRes, membersRes] = await Promise.all([
         api.get(`/api/teams/${team.team_id}/member-limit`),
-        api.get(`/api/teams/${team.team_id}/members`),
+        api.get(`/api/teams/${team.team_id}/members`, { params: { status: "all" } }),
       ]);
       if (limitRes.data?.success && limitRes.data.data) {
         setLimitData(limitRes.data.data);
