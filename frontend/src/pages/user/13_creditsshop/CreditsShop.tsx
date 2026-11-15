@@ -55,7 +55,7 @@ interface Membership {
 const hiddenFeatureKeys = new Set(["tools", "render_queue", "export_speed", "render_workers"]);
 
 const featureOrder = [
-  "export_resolution", "export_frame_rate", "personal_upload_storage", "watermark",
+  "export_resolution", "export_frame_rate", "personal_upload_storage", "video_upload_resolution", "watermark",
   "collaborators", "projects", "team_creation", "asset_posts", "profile_visibility", "badge",
 ];
 

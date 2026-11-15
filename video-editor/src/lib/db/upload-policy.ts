@@ -43,7 +43,7 @@ export async function readExportPlanFeatures() {
     JOIN plan_features pf ON pf.plan_id = p.plan_id
     JOIN features f ON f.feature_id = pf.feature_id
     WHERE LOWER(p.name) IN ('free', 'premium', 'business')
-      AND f.feature_key IN ('export_resolution', 'export_frame_rate', 'watermark')
+      AND f.feature_key IN ('export_resolution', 'export_frame_rate', 'watermark', 'video_upload_resolution')
     ORDER BY CASE LOWER(p.name) WHEN 'free' THEN 0 WHEN 'premium' THEN 1 ELSE 2 END, p.plan_id
   `.execute(db)).rows;
 }

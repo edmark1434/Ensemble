@@ -12,6 +12,8 @@ export function useEditorPlan() {
       return response.json() as Promise<{
         plan: "Free" | "Premium" | "Business";
         maxHeight: number;
+        maxUploadHeight: number;
+        maxUploadWidth: number;
         maxFps: number;
         canRemoveEnsembleWatermark: boolean;
         watermarkRemovalPlan: "Premium" | "Business" | null;

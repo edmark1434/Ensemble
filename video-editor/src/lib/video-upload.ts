@@ -9,7 +9,7 @@ import { HeadObjectCommand, GetObjectCommand, PutObjectCommand, DeleteObjectComm
 import { s3Client, S3_BUCKET_NAME, buildPublicUrl, sanitizeFileName } from "@/lib/s3";
 import { normalizeVideoOriginal } from "@/lib/video-original";
 import { MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
-import { getVideoUploadPolicy } from "@/lib/upload-policy";
+import { getVideoUploadResolutionLimit } from "@/lib/upload-policy";
 
 export async function discardVideoUpload(filePath: string) {
   await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET_NAME, Key: filePath }));
@@ -61,8 +61,8 @@ export async function prepareVideoUpload(options: {
       });
       await pipeline(object.Body as Readable, limiter, createWriteStream(inputPath));
     }
-    const policy = await getVideoUploadPolicy(userId);
-    const normalized = await normalizeVideoOriginal(inputPath, workDir, policy.maxHeight);
+    const maxUploadHeight = await getVideoUploadResolutionLimit(userId);
+    const normalized = await normalizeVideoOriginal(inputPath, workDir, maxUploadHeight);
     const finalName = normalized.changed ? `${path.parse(fileName).name}.mp4` : fileName;
     const finalType = normalized.changed ? "video/mp4" : contentType;
     finalPath = `uploads/${userId}/${randomUUID()}/${sanitizeFileName(finalName)}`;
