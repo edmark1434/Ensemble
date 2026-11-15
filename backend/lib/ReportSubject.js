@@ -185,11 +185,52 @@ function contractSummary(contract) {
 async function lookupAsset(assetId) {
   if (!assetId) return null;
   const result = await pool.query(
-    `SELECT market_asset_id, name, description, deleted_at
+    `SELECT market_asset_id, name, description, status, deleted_at
      FROM market_assets WHERE market_asset_id::text = $1 LIMIT 1`,
     [String(assetId)]
   );
   return result.rows[0] || null;
+}
+
+/** The newest catalog listing for a market asset (what staff delist or re-review). */
+async function lookupListingForAsset(marketAssetId) {
+  if (!marketAssetId) return null;
+  const result = await pool.query(
+    `SELECT listing_id, listing_number, title, category, price_credits, status, market_asset_id
+     FROM marketplace_listings
+     WHERE market_asset_id::text = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [String(marketAssetId)]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Catalog context for an asset, listing or purchase report: the listing staff can act on and
+ * the state of the asset behind it. Null when nothing in the catalog matches.
+ */
+function marketplaceContext({ asset = null, listing = null, purchase = null } = {}) {
+  if (!asset && !listing && !purchase) return null;
+  return {
+    assetId: asset?.market_asset_id || listing?.market_asset_id || purchase?.market_asset_id || null,
+    assetName: asset?.name || purchase?.asset_name || listing?.title || null,
+    assetStatus: asset?.status || null,
+    assetRemoved: Boolean(asset?.deleted_at),
+    listingId: listing?.listing_id ?? null,
+    listingNumber: listing?.listing_number || null,
+    listingStatus: listing?.status || null,
+    category: listing?.category || null,
+    priceCredits: listing ? Number(listing.price_credits || 0) : null,
+    purchase: purchase
+      ? {
+          licenseId: purchase.market_asset_license_id,
+          status: purchase.status || null,
+          priceCredits: Number(purchase.price_credits || 0),
+          purchasedAt: purchase.purchased_at || null,
+        }
+      : null,
+  };
 }
 
 async function lookupListing(listingId) {
@@ -251,6 +292,7 @@ async function buildReportSubject(row) {
   let previewBody = snapshot?.body || null;
   let available = false;
   let message = null;
+  let marketplace = null;
 
   if (accountId) {
     pushLink(links, 'Open reported account', profileLink(accountId));
@@ -332,6 +374,8 @@ async function buildReportSubject(row) {
       }
     } else if (targetType === 'asset' || referenceTable === 'market_assets') {
       const asset = await lookupAsset(targetId);
+      const listing = await lookupListingForAsset(asset?.market_asset_id || targetId);
+      marketplace = marketplaceContext({ asset, listing });
       if (asset && !asset.deleted_at) {
         available = true;
         headline = asset.name || headline;
@@ -340,6 +384,8 @@ async function buildReportSubject(row) {
       }
     } else if (targetType === 'listing' || referenceTable === 'marketplace_listings') {
       const listing = await lookupListing(targetId || referenceId);
+      const asset = listing?.market_asset_id ? await lookupAsset(listing.market_asset_id) : null;
+      marketplace = marketplaceContext({ asset, listing });
       if (listing) {
         available = true;
         headline = listing.title || headline;
@@ -357,6 +403,8 @@ async function buildReportSubject(row) {
       }
     } else if (targetType === 'purchase' || targetType === 'order' || referenceTable === 'market_asset_licenses') {
       const purchase = await lookupPurchase(targetId || referenceId);
+      const listing = purchase?.market_asset_id ? await lookupListingForAsset(purchase.market_asset_id) : null;
+      marketplace = marketplaceContext({ listing, purchase });
       if (purchase && !purchase.deleted_at) {
         available = true;
         headline = purchase.asset_name ? `Purchase of ${purchase.asset_name}` : headline;
@@ -479,6 +527,7 @@ async function buildReportSubject(row) {
     linkable,
     message,
     links,
+    marketplace,
     reportedAccount: accountId
       ? {
           accountId: String(accountId),

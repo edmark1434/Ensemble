@@ -6,8 +6,11 @@ import { getBackgroundFillStyle } from "./styles";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import useStore from "../store/use-store";
 import { RenderVisibleItems } from "@/features/editor/player/render-visible-items";
+import { EnsembleWatermark } from "./ensemble-watermark";
+import { useEnsembleWatermark } from "../hooks/use-ensemble-watermark";
 
 const Composition = () => {
+  const { showWatermark } = useEnsembleWatermark();
   const [editableTextId, setEditableTextId] = useState<string | null>(null);
   const {
     trackItemIds,
@@ -209,6 +212,7 @@ const Composition = () => {
         onTextBlur={onTextBlur}
         editableTextId={editableTextId}
       />
+      {showWatermark && <EnsembleWatermark width={size.width} height={size.height} />}
     </>
   );
 };

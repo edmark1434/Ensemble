@@ -24,6 +24,7 @@ import useStore, { IBackground } from "@/features/editor/store/use-store";
 export interface RenderPayload extends IDesign {
   projectId: string;
   marketDraft: boolean;
+  ensembleWatermark: boolean;
   projectName: string;
   background: IBackground;
   type: ExportType;

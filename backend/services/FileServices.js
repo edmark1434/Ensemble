@@ -450,6 +450,20 @@ async function generateProtectedAssetPreviewUrl(path, filename, contentType) {
     return generateProtectedAssetUrl(path, filename, contentType, 'inline');
 }
 
+// Staff reviewing a listing stream originals (long video seeks re-request the URL range),
+// so their links outlive the 60 second purchaser links but still expire.
+const STAFF_INSPECTION_URL_EXPIRY = 15 * 60;
+
+async function generateProtectedAssetInspectionUrl(path, filename, contentType, download = false) {
+    return generateProtectedAssetUrl(
+        path,
+        filename,
+        contentType,
+        download ? 'attachment' : 'inline',
+        STAFF_INSPECTION_URL_EXPIRY
+    );
+}
+
 module.exports = {
     getAllProfileFilesServices,
     generateUploadUrl,
@@ -459,5 +473,7 @@ module.exports = {
     generateOnboardingAvatarUploadUrl,
     generateProtectedAssetDownloadUrl,
     generateProtectedAssetPreviewUrl,
-    generateProtectedAssetRenderUrl
+    generateProtectedAssetRenderUrl,
+    generateProtectedAssetInspectionUrl,
+    STAFF_INSPECTION_URL_EXPIRY
 };

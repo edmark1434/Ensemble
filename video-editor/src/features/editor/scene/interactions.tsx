@@ -1,4 +1,5 @@
 import { MarketWatermarkBadge } from "./market-watermark-badge";
+import { EnsembleWatermarkControl } from "./ensemble-watermark-control";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Selection, Moveable } from "@interactify/toolkit";
 import { getIdFromClassName, isCanvasItemAtTime } from "../utils/scene";
@@ -434,7 +435,7 @@ export function SceneInteractions({
       .on("dragStart", (e) => {
         isDraggingRef.current = false;
         const target = e.inputEvent.target as HTMLDivElement;
-        if (target?.closest("[data-market-purchase]")) { e.stop(); return; }
+        if (target?.closest("[data-market-purchase], [data-ensemble-watermark-control]")) { e.stop(); return; }
         dragStartEnd = false;
 
         // Ask Moveable directly whether this element is currently a registered
@@ -492,8 +493,9 @@ export function SceneInteractions({
     setSelection(selection);
     return () => {
       selection.destroy();
+      setSelection(undefined);
     };
-  }, []);
+  }, [viewOnly]);
 
   // Double-click a Scene on the canvas to open it — the player-canvas
   // counterpart to timeline.tsx's `canvas.on("mouse:dblclick", ...)`.
@@ -533,7 +535,7 @@ export function SceneInteractions({
 
     container.addEventListener("dblclick", onDblClick);
     return () => container.removeEventListener("dblclick", onDblClick);
-  }, []);
+  }, [viewOnly]);
 
   useEffect(() => {
     const activeSelectionSubscription = stateManager.subscribeToActiveIds(
@@ -804,6 +806,8 @@ export function SceneInteractions({
           portalTarget
         )}
       {!viewOnly && <MarketWatermarkBadge container={portalTarget} transforming={transforming} />}
+      {!viewOnly && <EnsembleWatermarkControl container={portalTarget} transforming={transforming}
+        onSelect={() => stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" })} />}
       {!viewOnly && (
         <Moveable
           ref={moveableRef}

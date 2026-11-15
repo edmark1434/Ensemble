@@ -332,7 +332,7 @@ export default function Navbar({
                 </KbdGroup>
               </TooltipContent>
             </Tooltip>
-          {canComment && <CommentsButton />}
+          {isLargeScreen && canComment && <CommentsButton />}
           {!preview && <DownloadPopover stateManager={stateManager} />}
 
           {canShare && (

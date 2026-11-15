@@ -1,6 +1,7 @@
 const {
   getTicketsOverview,
   getTicketDetail,
+  getTicketQueueFacts,
   listParticipantTicketIds,
   searchTicketParticipants,
   addTicketParticipant,
@@ -39,6 +40,25 @@ const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 const { createStaffTicketService } = require('../services/TicketServices');
 const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
+const { ticketInStaffQueue } = require('../lib/TicketQueueScope');
+
+/**
+ * Guard for the shared `/api/staff/tickets/:id/*` routes: a specialist moderator may only
+ * transcribe, schedule, invite on or decide tickets that are in their own desk's queue.
+ */
+async function requireTicketInStaffQueue(req, res, next) {
+  try {
+    const facts = await getTicketQueueFacts(req.params.id);
+    if (!facts) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (!ticketInStaffQueue(req.session?.role, facts)) {
+      return res.status(403).json({ success: false, message: 'Ticket is outside your queue' });
+    }
+    return next();
+  } catch (err) {
+    console.error('Error checking ticket queue scope:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load ticket' });
+  }
+}
 
 async function getAdminTicketsOverview(req, res) {
   try {
@@ -845,6 +865,7 @@ async function postMyTicketSatisfaction(req, res) {
 }
 
 module.exports = {
+  requireTicketInStaffQueue,
   getAdminTicketsOverview,
   getAdminTicketDetail,
   createAdminTicket,

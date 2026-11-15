@@ -116,7 +116,17 @@ const DEFAULT_ADVANCED: AdvancedFilters = {
 };
 
 const CLOSED = new Set(['resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned']);
-const IN_REVIEW = new Set(['in_review', 'in review', 'in_progress', 'in progress']);
+// Every non-open working status the report API can store (handlers set under_review / escalated).
+const IN_REVIEW = new Set([
+  'in_review',
+  'in review',
+  'in_progress',
+  'in progress',
+  'under_review',
+  'under review',
+  'escalated',
+]);
+const STATUS_FILTERS: StatusFilter[] = ['all', 'open_queue', 'open', 'in_review', 'resolved', 'dismissed'];
 const PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
 
 function normalizeToken(value: string) {
@@ -124,6 +134,28 @@ function normalizeToken(value: string) {
     .toLowerCase()
     .replace(/[_-]+/g, ' ')
     .trim();
+}
+
+/** Deep-link presets (e.g. from a dashboard card): `?q=`, `?status=`, `?priority=`, `?assignee=`. */
+export type ReportDeskPreset = {
+  search?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  assignee?: string | null;
+};
+
+function presetStatus(value?: string | null): StatusFilter {
+  return STATUS_FILTERS.includes(value as StatusFilter) ? (value as StatusFilter) : 'open_queue';
+}
+
+function presetAdvanced(preset?: ReportDeskPreset): AdvancedFilters {
+  const priority = String(preset?.priority || '').toLowerCase();
+  const assignee = String(preset?.assignee || '').toLowerCase();
+  return {
+    ...DEFAULT_ADVANCED,
+    priority: ['high', 'medium', 'low'].includes(priority) ? (priority as PriorityFilter) : 'all',
+    assignee: assignee === 'unassigned' || assignee === 'assigned' ? assignee : 'all',
+  };
 }
 
 export default function ReportDesk({
@@ -134,6 +166,8 @@ export default function ReportDesk({
   loading = false,
   handlers = [],
   deskLabel,
+  preset,
+  listingApiBase,
 }: {
   reports: UserReport[];
   onUpdated: () => void;
@@ -142,12 +176,17 @@ export default function ReportDesk({
   loading?: boolean;
   handlers?: { id: string | number; name: string; role?: string }[];
   deskLabel?: string;
+  preset?: ReportDeskPreset;
+  /** Marketplace API root; lets a case open the linked listing to delist or re-review it. */
+  listingApiBase?: string;
 }) {
   const theme = ACCENT[accent];
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open_queue');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [advanced, setAdvanced] = useState<AdvancedFilters>(DEFAULT_ADVANCED);
+  const [search, setSearch] = useState(() => preset?.search || '');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => presetStatus(preset?.status));
+  const [advancedOpen, setAdvancedOpen] = useState(
+    () => presetAdvanced(preset).priority !== 'all' || presetAdvanced(preset).assignee !== 'all'
+  );
+  const [advanced, setAdvanced] = useState<AdvancedFilters>(() => presetAdvanced(preset));
   const [handlerSearch, setHandlerSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
@@ -283,8 +322,11 @@ export default function ReportDesk({
         r.number,
         r.type,
         r.description,
+        r.subjectTitle,
         r.reporter?.name,
         r.reporter?.username,
+        r.reported?.name,
+        r.reported?.username,
         r.targetType,
         r.targetId,
         r.assignee?.name,
@@ -371,7 +413,7 @@ export default function ReportDesk({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search number, reporter, target, type…"
+                placeholder="Search number, item, reporter, reported account…"
                 className={`w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 ${theme.focus}`}
               />
             </div>
@@ -566,8 +608,15 @@ export default function ReportDesk({
                 {filtered.map((r) => (
                   <tr
                     key={String(r.id)}
+                    tabIndex={0}
                     onClick={() => setSelectedId(r.id)}
-                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedId(r.id);
+                      }
+                    }}
+                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03] focus:bg-white/[0.04] focus:outline-none"
                   >
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{r.number}</p>
@@ -585,9 +634,13 @@ export default function ReportDesk({
                       <p className="max-w-[160px] truncate text-zinc-200">
                         {titleCase(r.targetType) || '—'}
                       </p>
-                      {r.targetId && (
-                        <p className="truncate text-[11px] text-zinc-600">{r.targetId}</p>
-                      )}
+                      {r.reported ? (
+                        <p className="max-w-[160px] truncate text-[11px] text-zinc-500">
+                          Against @{r.reported.username || '—'}
+                        </p>
+                      ) : r.targetId ? (
+                        <p className="max-w-[160px] truncate text-[11px] text-zinc-600">{r.targetId}</p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-zinc-200">{r.reporter?.name || '—'}</p>
@@ -643,6 +696,7 @@ export default function ReportDesk({
           reportId={selectedId}
           endpointBase={endpointBase}
           accent={accent}
+          listingApiBase={listingApiBase}
           onClose={() => setSelectedId(null)}
           onUpdated={onUpdated}
         />

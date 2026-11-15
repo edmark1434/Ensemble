@@ -39,7 +39,7 @@ export function TimelineMarketPriceBadges({ readOnly }: { readOnly: boolean }) {
     return () => { unsubscribe(); };
   }, [timeline, items, assets]);
   if (readOnly) return null;
-  return <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+  return <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden">
     {Object.values(items).map(item => {
       const assetId = getMarketAssetId(item);
       const asset = assetId ? assets[assetId] : null;

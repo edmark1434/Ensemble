@@ -109,6 +109,15 @@ function mapReportRow(row) {
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
+    // The account the report is against (seller, poster, member). Null for platform reports.
+    reported:
+      row.for_account_id && String(row.for_account_id) !== String(row.by_account_id || '')
+        ? {
+            accountId: row.for_account_id,
+            name: row.reported_name || 'Unknown',
+            username: row.reported_handle || '—',
+          }
+        : null,
     subjectTitle: snapshotTitle(row),
     description: row.description,
     status: String(row.status || 'open').toLowerCase(),
@@ -175,8 +184,41 @@ function mapDisputeRow(row) {
   };
 }
 
+/**
+ * A ticket escalated to Admin, or handled by an Admin, belongs to Admin. A desk that passes
+ * `excludeAdminOwned` drops it, so "Escalate to Admin" really takes it out of that queue.
+ */
+function adminOwnedExclusionSql(alias = '') {
+  const col = alias ? `${alias}.` : '';
+  return `(
+    LOWER(COALESCE(${col}escalated_to_role, '')) NOT IN ('admin', 'administrator')
+    AND (
+      ${col}handled_by_staff_id IS NULL
+      OR ${col}handled_by_staff_id NOT IN (
+        SELECT s.staff_id FROM staff s WHERE LOWER(s.role::text) IN ('admin', 'administrator')
+      )
+    )
+  )`;
+}
+
+/** Mirrors `adminOwnedExclusionSql` for a mapped ticket payload (detail routes). */
+function isAdminOwnedTicket(ticket) {
+  if (!ticket) return false;
+  const escalated = String(ticket.escalatedToRole || '').toLowerCase();
+  if (escalated === 'admin' || escalated === 'administrator') return true;
+  const role = String(ticket.assignee?.role || '').toLowerCase();
+  return role === 'admin' || role === 'administrator';
+}
+
 // Scoped ticket list. Filter by ticket types to include/exclude and by status.
-async function fetchScopedTickets({ typesIn, typesNotIn, categoriesIn, categoriesNotIn, status } = {}) {
+async function fetchScopedTickets({
+  typesIn,
+  typesNotIn,
+  categoriesIn,
+  categoriesNotIn,
+  status,
+  excludeAdminOwned = false,
+} = {}) {
   const includeTypes = typesIn || categoriesIn;
   const excludeTypes = typesNotIn || categoriesNotIn;
   const where = ['t.deleted_at IS NULL'];
@@ -190,6 +232,7 @@ async function fetchScopedTickets({ typesIn, typesNotIn, categoriesIn, categorie
     params.push(excludeTypes.map((t) => normalizeTicketType(t)));
     where.push(`NOT (t.type = ANY($${params.length}))`);
   }
+  if (excludeAdminOwned) where.push(adminOwnedExclusionSql('t'));
   if (status && status !== 'all') {
     params.push(normalizeTicketStatus(status));
     where.push(`t.status = $${params.length}`);
@@ -230,7 +273,13 @@ async function fetchScopedTickets({ typesIn, typesNotIn, categoriesIn, categorie
 }
 
 // Aggregate ticket counts for a type scope.
-async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categoriesNotIn } = {}) {
+async function scopedTicketCounts({
+  typesIn,
+  typesNotIn,
+  categoriesIn,
+  categoriesNotIn,
+  excludeAdminOwned = false,
+} = {}) {
   const includeTypes = typesIn || categoriesIn;
   const excludeTypes = typesNotIn || categoriesNotIn;
   const where = ['deleted_at IS NULL'];
@@ -243,6 +292,7 @@ async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categorie
     params.push(excludeTypes.map((t) => normalizeTicketType(t)));
     where.push(`NOT (type = ANY($${params.length}))`);
   }
+  if (excludeAdminOwned) where.push(adminOwnedExclusionSql());
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
   const result = await pool.query(
@@ -278,7 +328,13 @@ async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categorie
 }
 
 // Ticket type breakdown for a scope (for charts).
-async function scopedTicketCategoryBreakdown({ typesIn, typesNotIn, categoriesIn, categoriesNotIn } = {}) {
+async function scopedTicketCategoryBreakdown({
+  typesIn,
+  typesNotIn,
+  categoriesIn,
+  categoriesNotIn,
+  excludeAdminOwned = false,
+} = {}) {
   const includeTypes = typesIn || categoriesIn;
   const excludeTypes = typesNotIn || categoriesNotIn;
   const where = ['deleted_at IS NULL'];
@@ -291,6 +347,7 @@ async function scopedTicketCategoryBreakdown({ typesIn, typesNotIn, categoriesIn
     params.push(excludeTypes.map((t) => normalizeTicketType(t)));
     where.push(`NOT (type = ANY($${params.length}))`);
   }
+  if (excludeAdminOwned) where.push(adminOwnedExclusionSql());
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
   const result = await pool.query(
@@ -324,10 +381,14 @@ async function fetchScopedReports({ targetTypesIn, status } = {}) {
       r.by_account_id AS reporter_account_id,
       COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
       repa.handle AS reporter_handle,
+      COALESCE(fora.display_name, foru.first_name || ' ' || foru.last_name) AS reported_name,
+      fora.handle AS reported_handle,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name
     FROM reports r
     LEFT JOIN accounts repa ON repa.account_id = r.by_account_id
     LEFT JOIN users repu ON repu.account_id = repa.account_id
+    LEFT JOIN accounts fora ON fora.account_id = r.for_account_id
+    LEFT JOIN users foru ON foru.account_id = fora.account_id
     LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     ${whereSql}
@@ -566,6 +627,8 @@ module.exports = {
   mapTicketRow,
   mapReportRow,
   mapDisputeRow,
+  adminOwnedExclusionSql,
+  isAdminOwnedTicket,
   fetchScopedTickets,
   scopedTicketCounts,
   scopedTicketCategoryBreakdown,

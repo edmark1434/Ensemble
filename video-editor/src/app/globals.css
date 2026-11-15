@@ -205,6 +205,12 @@
 }
 
 @layer base {
+    html {
+        /* Default UI density in every environment. Keep canvas/document pixels
+           unscaled so hit testing, text measurement and exports stay aligned. */
+        font-size: 90%;
+    }
+
     * {
         @apply border-border outline-ring/50;
     }

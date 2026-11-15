@@ -140,6 +140,11 @@ router.get('/moderation/marketplace/listings', [checkSession, requireAdmin], Mar
 router.get('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.getListingDetail);
 router.patch('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.patchListing);
 router.get(
+  '/moderation/marketplace/listings/:id/media/:mediaAssetId/original',
+  [checkSession, requireAdmin],
+  MarketplaceModerator.getListingFileOriginal
+);
+router.get(
   '/moderation/marketplace/users/:accountId/listings',
   [checkSession, requireAdmin],
   MarketplaceModerator.getSellerListings

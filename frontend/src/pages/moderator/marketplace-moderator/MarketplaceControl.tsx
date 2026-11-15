@@ -18,6 +18,7 @@ import {
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import ListingThumb from './ListingThumb';
 import RowActionsMenu, { type MenuItem } from '@/pages/admin/userTeam/components/RowActionsMenu';
 import ListingDetailModal, {
   SellerListingsModal,
@@ -228,7 +229,7 @@ export default function MarketplaceControl({
     () => !peekStaffGet(listingsUrl, firstParams)?.data?.success
   );
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sellerAccountId, setSellerAccountId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [prompt, setPrompt] = useState<{
@@ -604,17 +605,12 @@ export default function MarketplaceControl({
                         </td>
                         <td className="max-w-[280px] px-4 py-3.5 align-top">
                           <div className="flex items-start gap-3">
-                            {l.thumbnailUrl ? (
-                              <img
-                                src={`${import.meta.env.VITE_CLOUDFRONT_URL}/${l.thumbnailUrl}`}
-                                alt=""
-                                className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
-                              />
-                            ) : (
-                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-600 ring-1 ring-white/10">
-                                <Package className="h-4 w-4" />
-                              </span>
-                            )}
+                            <ListingThumb
+                              path={l.thumbnailUrl}
+                              mimeType={l.thumbnailMime}
+                              assetType={l.assetType}
+                              title={l.title}
+                            />
                             <div className="min-w-0">
                               <p className="truncate font-medium text-zinc-100">{l.title}</p>
                               <p className="mt-0.5 line-clamp-1 text-[11px] text-zinc-600">
@@ -733,6 +729,7 @@ export default function MarketplaceControl({
           onClose={() => setSelectedId(null)}
           onUpdated={() => void refreshAll()}
           onViewSeller={(accountId) => setSellerAccountId(accountId)}
+          onOpenListing={(id) => setSelectedId(id)}
         />
       )}
 
