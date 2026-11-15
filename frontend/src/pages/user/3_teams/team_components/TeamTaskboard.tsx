@@ -61,7 +61,8 @@ export interface TeamMember {
 }
 
 interface TeamTaskboardProps {
-  teamId: string;
+  teamId?: string;
+  team?: any;
   members: TeamMember[];
   canManage?: boolean;
   onBackToOverview?: () => void;
@@ -130,11 +131,13 @@ const getInitials = (name?: string | null) => {
 };
 
 export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
-  teamId,
+  teamId: propTeamId,
+  team,
   members,
   canManage = true,
   onBackToOverview,
 }) => {
+  const teamId = propTeamId || team?.team_id || team?.id || "";
   const { user, theme } = useGlobalState();
   const currentAccountId = user?.account_id || user?.id;
   const isDark = theme === "dark" || (theme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -163,6 +166,10 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
 
   // Fetch team tasks
   const fetchTasks = useCallback(async () => {
+    if (!teamId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await api.get(`/api/teams/${teamId}/tasks`);
