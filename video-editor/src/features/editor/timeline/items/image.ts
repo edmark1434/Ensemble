@@ -159,6 +159,7 @@ class Image extends Resizable {
   }
 
   public loadImage() {
+    if (this.src?.startsWith("pending-upload:")) return;
     const src = this.thumbnailSrc ?? this.src;
     if (isMissingMediaSource(this.src) || !src) {
       this.isLoading = false;

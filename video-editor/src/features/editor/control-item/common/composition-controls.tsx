@@ -6,9 +6,12 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Check, ChevronDown, Link, Unlink } from "lucide-react";
+import { Check, ChevronDown, Info, Link, Unlink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ColorPickerField } from "./color-picker-field";
+import { PlanIcon } from "../../components/plan-icon";
+import { useEditorPlan } from "../../hooks/use-editor-plan";
+import { canResizeComposition, COMPOSITION_SIZE_PLAN_MESSAGE } from "@/lib/composition-size-plan";
 
 const FRAME_RATE_OPTIONS = [3, 15, 24, 30, 60];
 
@@ -129,16 +132,19 @@ export const SizeFields = ({
   width,
   height,
   onCommit,
-  disabled = false
+  disabled: disabledByRole = false
 }: {
   width: number;
   height: number;
   onCommit: (width: number, height: number) => void;
   disabled?: boolean;
 }) => {
+  const { data: policy } = useEditorPlan();
+  const disabled = disabledByRole || !canResizeComposition(policy?.plan);
   const [isLinked, setIsLinked] = useState(true);
 
   const commitDimension = (field: "width" | "height", nextValue: number) => {
+    if (disabled) return;
     let nextW = field === "width" ? nextValue : width;
     let nextH = field === "height" ? nextValue : height;
 
@@ -156,50 +162,56 @@ export const SizeFields = ({
   };
 
   return (
-    <div className="flex gap-2">
-      <div className="flex gap-2 flex-5">
-        <SizeDimension
-          field="width"
-          label="Width"
-          value={width}
-          isLinked={isLinked}
-          onCommit={commitDimension}
-          disabled={disabled}
-        />
-        <SizeDimension
-          field="height"
-          label="Height"
-          value={height}
-          isLinked={isLinked}
-          onCommit={commitDimension}
-          disabled={disabled}
-        />
-      </div>
-      <div className="flex flex-col gap-2 flex-1">
-        <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
-        <div className="flex gap-1 flex-1">
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={isLinked ? "default" : "secondary"}
-                size="icon"
-                onClick={() => setIsLinked((prev) => !prev)}
-                disabled={disabled}
-                aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
-                aria-pressed={isLinked}
-                className="flex-1"
-              >
-                {isLinked ? <Link size={16} /> : <Unlink size={16} />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent
-              side={"bottom"} align="center" sideOffset={1}
-              className={"flex gap-2 items-center"}
-            >
-              {isLinked ? "Unlink dimensions" : "Link dimensions"}
-            </TooltipContent>
-          </Tooltip>
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        <div className="flex gap-2 flex-5">
+          <SizeDimension
+            field="width"
+            label="Width"
+            value={width}
+            isLinked={isLinked}
+            onCommit={commitDimension}
+            disabled={disabled}
+          />
+          <SizeDimension
+            field="height"
+            label="Height"
+            value={height}
+            isLinked={isLinked}
+            onCommit={commitDimension}
+            disabled={disabled}
+          />
         </div>
+        <div className="flex flex-col gap-2 flex-1">
+          <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
+          <div className="flex gap-1 flex-1">
+            <Tooltip delayDuration={10}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={isLinked ? "default" : "secondary"}
+                  size="icon"
+                  onClick={() => setIsLinked((prev) => !prev)}
+                  disabled={disabled}
+                  aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
+                  aria-pressed={isLinked}
+                  className="flex-1"
+                >
+                  {isLinked ? <Link size={16} /> : <Unlink size={16} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent
+                side={"bottom"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                {isLinked ? "Unlink dimensions" : "Link dimensions"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 items-start text-xs text-muted-foreground text-pretty">
+        <Info size={16} className="shrink-0" />
+        <span>{COMPOSITION_SIZE_PLAN_MESSAGE}</span>
       </div>
     </div>
   );
@@ -227,6 +239,7 @@ const SizeDimension = ({
   }, [value]);
 
   const handleBlur = () => {
+    if (disabled) return;
     if (localValue === "") {
       setLocalValue(Math.round(value));
       return;
@@ -250,8 +263,9 @@ const SizeDimension = ({
 
   return (
     <div className="flex flex-col gap-2 flex-1">
-      <div className="flex flex-1 items-center text-xs text-muted-foreground">
+      <div className="flex flex-1 items-center gap-1 text-xs text-muted-foreground" title={COMPOSITION_SIZE_PLAN_MESSAGE}>
         {label}
+        <PlanIcon plan="Premium" className="size-4" />
       </div>
       <div className="flex gap-2">
         <div className="relative w-full">

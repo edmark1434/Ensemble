@@ -7,10 +7,16 @@ import { Button } from "@/components/ui/button";
 import useUploadStore from "@/features/editor/store/use-upload-store";
 import { useIsMediumScreen } from "@/hooks/use-media-query";
 import UploadModal from "@/features/editor/modals/upload-modal";
-import { useFileDropUpload } from "../hooks/use-file-drop-upload";
+import { useMediaStorage } from "../hooks/use-media-storage";
 import { cn } from "@/lib/utils";
+import { useViewOnly } from "../hooks/use-view-only";
+import { UploadDropOverlay } from "../components/upload-drop-overlay";
 
-const SceneEmpty = () => {
+const SceneEmpty = ({ onFileDrag, isFileDragOver, dropError }: {
+  onFileDrag: (event: React.DragEvent<HTMLDivElement>) => void;
+  isFileDragOver: boolean;
+  dropError: string | null;
+}) => {
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -44,7 +50,8 @@ const SceneEmpty = () => {
 
   const { setShowUploadModal } = useUploadStore();
   const isMediumScreen = useIsMediumScreen();
-  const { startUpload, dragError, uploadsDisabled } = useFileDropUpload();
+  const { uploadsDisabled } = useMediaStorage();
+  const viewOnly = useViewOnly();
 
   return (
     <div
@@ -54,45 +61,46 @@ const SceneEmpty = () => {
       <UploadModal />
 
       {!isLoading ? (
-        <DroppableArea
-          onDragStateChange={setIsDraggingOver}
-          onFilesDropped={startUpload}
-          filesDisabled={uploadsDisabled}
+        <div
+          onDragEnterCapture={onFileDrag}
+          onDragOverCapture={onFileDrag}
+          onDragLeaveCapture={onFileDrag}
+          onDropCapture={onFileDrag}
           style={{ width: desiredSize.width, height: desiredSize.height }}
-          className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed bg-card text-center transition-colors duration-200 ease-in-out ${
-            dragError
-              ? "border-red-500 bg-red-500/10"
-              : isDraggingOver
-                ? "border-primary bg-primary/10"
-                : "border-border"
-          }`}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         >
-          <div className={cn(
-            "flex items-center justify-center gap-4 p-2",
-            size.height >= size.width ? "flex-col" : "flex-row",
-          )}
+          {!viewOnly && <UploadDropOverlay isDragOver={isFileDragOver} error={dropError} />}
+          <DroppableArea
+            onDragStateChange={setIsDraggingOver}
+            disabled={viewOnly}
+            style={{ width: desiredSize.width, height: desiredSize.height }}
+            className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed bg-card text-center transition-colors duration-200 ease-in-out ${
+              isDraggingOver
+                  ? "border-primary bg-primary/10"
+                  : "border-border"
+            }`}
           >
-            {dragError ? (
-              <p className="text-sm font-medium text-red-500">{dragError}</p>
-            ) : (
-              <>
-                <Button
-                  className="flex h-9 gap-2 cursor-pointer"
-                  variant="default"
-                  size={isMediumScreen ? "sm" : "icon"}
-                  onClick={() => setShowUploadModal(true)}
-                  disabled={uploadsDisabled}
-                >
-                  <Plus width={16} />
-                  <span className="hidden md:block">Upload files</span>
-                </Button>
-                <div className="flex flex-col gap-px">
-                  <p className="text-sm text-muted-foreground/70">or drag and drop files here</p>
-                </div>
-              </>
+            <div className={cn(
+              "flex items-center justify-center gap-4 p-2",
+              size.height >= size.width ? "flex-col" : "flex-row",
             )}
+            >
+                  <Button
+                    className="flex h-9 gap-2 cursor-pointer"
+                    variant="default"
+                    size={isMediumScreen ? "sm" : "icon"}
+                    onClick={() => setShowUploadModal(true)}
+                    disabled={viewOnly || uploadsDisabled}
+                  >
+                    <Plus width={16} />
+                    <span className="hidden md:block">Upload files</span>
+                  </Button>
+                  <div className="flex flex-col gap-px">
+                    <p className="text-sm text-muted-foreground/70">or drag and drop files here</p>
+                  </div>
+            </div>
+          </DroppableArea>
           </div>
-        </DroppableArea>
       ) : (
         <div
           className="fixed top-0 left-0 z-50 flex h-screen w-screen flex-col items-center justify-center gap-4 bg-card">

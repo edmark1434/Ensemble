@@ -19,7 +19,13 @@ const Draggable: React.FC<DraggableProps> = ({
 
   const handleDragStart = (e: React.DragEvent<HTMLElement>) => {
     setIsDragging(true);
-    e.dataTransfer.setDragImage(new Image(), 0, 0); // Hides default preview
+    // An unloaded Image can fall back to a screenshot of the media card.
+    const dragImage = document.createElement("canvas");
+    dragImage.width = dragImage.height = 1;
+    dragImage.style.cssText = "position:fixed;left:0;top:0;pointer-events:none";
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => dragImage.remove(), 0);
     e.dataTransfer.setData(JSON.stringify(data), JSON.stringify(data));
     e.dataTransfer.effectAllowed = "move";
 

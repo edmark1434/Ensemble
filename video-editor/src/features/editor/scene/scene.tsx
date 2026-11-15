@@ -1,5 +1,5 @@
 import { Player } from "../player";
-import { useRef, useImperativeHandle, forwardRef, useEffect } from "react";
+import { useRef, useImperativeHandle, forwardRef, useEffect, type DragEvent } from "react";
 import useStore from "../store/use-store";
 import StateManager from "@designcombo/state";
 import SceneEmpty from "./empty";
@@ -8,6 +8,9 @@ import useZoom from "../hooks/use-zoom";
 import { SceneInteractions } from "./interactions";
 import { SceneRef } from "./scene.types";
 import { CanvasPreviewZoomContext } from "../components/media-placeholder";
+import { UploadDropOverlay } from "../components/upload-drop-overlay";
+import { useFileDropUpload } from "../hooks/use-file-drop-upload";
+import { getCurrentTime } from "../utils/time";
 
 const Scene = forwardRef<
   SceneRef,
@@ -18,6 +21,20 @@ const Scene = forwardRef<
 >(({ stateManager, viewOnly }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { size, trackItemIds } = useStore();
+  const fileDrop = useFileDropUpload();
+  const handleFileDrag = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files") && !event.dataTransfer.files.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (viewOnly) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    if (event.type === "dragenter") fileDrop.handleDragEnter(event);
+    else if (event.type === "dragover") fileDrop.handleDragOver(event);
+    else if (event.type === "dragleave") fileDrop.handleDragLeave(event);
+    else if (event.type === "drop") fileDrop.handleDrop(event, getCurrentTime());
+  };
   const { zoom, handlePinch, recalculateZoom } = useZoom(
     containerRef as React.RefObject<HTMLDivElement>,
     size
@@ -54,8 +71,22 @@ const Scene = forwardRef<
       }}
       ref={containerRef}
     >
-      {trackItemIds.length === 0 && <SceneEmpty />}
+      {!viewOnly && trackItemIds.length > 0 && (
+        <div
+          className="pointer-events-none absolute z-[60]"
+          style={{ width: size.width * zoom, height: size.height * zoom }}
+        >
+          <UploadDropOverlay isDragOver={fileDrop.isDragOver} error={fileDrop.dragError} />
+        </div>
+      )}
+      {trackItemIds.length === 0 && (
+        <SceneEmpty onFileDrag={handleFileDrag} isFileDragOver={fileDrop.isDragOver} dropError={fileDrop.dragError} />
+      )}
       <div
+        onDragEnterCapture={handleFileDrag}
+        onDragOverCapture={handleFileDrag}
+        onDragLeaveCapture={handleFileDrag}
+        onDropCapture={handleFileDrag}
         style={{
           width: size.width,
           height: size.height,

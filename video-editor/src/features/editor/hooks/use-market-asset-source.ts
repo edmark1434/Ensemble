@@ -1,5 +1,5 @@
 import { useMissingMedia } from "../store/use-missing-media";
-import { isMissingMediaSource } from "../utils/missing-media";
+import { isMissingMediaSource, isPendingMediaSource } from "../utils/missing-media";
 import { useContext, useEffect } from "react";
 import type { ITrackItem } from "@designcombo/types";
 import { getMarketAssetId, useMarketLicenses } from "../store/use-market-licenses";
@@ -31,6 +31,7 @@ export function useMarketAssetSource(item: ITrackItem): string | null {
   }, [isRendering, source, item.type, prepareImage]);
   // The batch loader covers the timeline and nested scenes. Media components
   // consume its result instead of issuing duplicate license requests on mount.
+  if (isPendingMediaSource(item.details.src)) return null;
   if (isRendering) return item.details.src;
   if (missing || isMissingMediaSource(item.details.src)) return null;
   return readyMarketPlaybackSource(item, projectId, status, preparedImages);

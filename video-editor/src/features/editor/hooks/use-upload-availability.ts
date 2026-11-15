@@ -6,7 +6,7 @@ import { useMissingMedia } from "../store/use-missing-media";
 
 export function useUploadAvailability() {
   const { projectId, trackItemIds, trackItemsMap } = useStore();
-  const key = JSON.stringify([...new Set(mediaSources({ trackItemIds, trackItemsMap }))].sort());
+  const key = JSON.stringify([...new Set(mediaSources({ trackItemIds, trackItemsMap }).filter(src => !src.startsWith("pending-upload:")))].sort());
   const { data } = useQuery({
     queryKey: ["upload-availability", projectId, key],
     enabled: !!projectId,

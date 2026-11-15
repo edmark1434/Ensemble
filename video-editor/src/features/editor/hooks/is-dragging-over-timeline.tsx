@@ -23,11 +23,22 @@ export const useIsDraggingOverTimeline = () => {
     // container, which never happens on a successful drop there —
     // so without this, the flag gets stuck true after every drop.
     const resetOnDragEnd = () => setIsDraggingOverTimeline(false);
+    // Capture also covers native files and events stopped by the drop handlers.
+    // A floating media-card preview must never cover the timeline placeholder.
+    const updateOnDragOver = (event: DragEvent) => {
+      const bounds = document.getElementById("timeline-container")?.getBoundingClientRect();
+      setIsDraggingOverTimeline(!!bounds && event.clientX >= bounds.left && event.clientX <= bounds.right &&
+        event.clientY >= bounds.top && event.clientY <= bounds.bottom);
+    };
+    document.addEventListener("dragover", updateOnDragOver, true);
     document.addEventListener("dragend", resetOnDragEnd);
+    document.addEventListener("drop", resetOnDragEnd);
 
     return () => {
       dragEventsSubscription.unsubscribe();
+      document.removeEventListener("dragover", updateOnDragOver, true);
       document.removeEventListener("dragend", resetOnDragEnd);
+      document.removeEventListener("drop", resetOnDragEnd);
     };
   }, []);
 

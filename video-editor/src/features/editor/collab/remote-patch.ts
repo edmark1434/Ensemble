@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import type { ITrackItem } from "@designcombo/types";
 import { CollabSchema, createCollabSchema } from "./ydoc-schema";
 import { attachWsProvider } from "./ws-provider";
 import { createSession, endSession, toArrayBuffer } from "./persistence";
@@ -125,5 +126,22 @@ export function patchProjectSceneDetails(
   const origin = `${userId}:project-scene-patch`;
   return patchRemoteDoc(projectId, userId, { kind: "project", id: projectId }, "patchProjectSceneDetails", origin, schema => {
     applySceneDetailsPatch(schema, sceneItemId, patch, origin);
+  });
+}
+
+export function patchPendingUpload(
+  projectId: string, userId: string, target: CollabTarget, itemId: string,
+  expectedSrc: string, update: (item: ITrackItem) => ITrackItem,
+): Promise<void> {
+  const origin = `${userId}:upload-complete`;
+  return patchRemoteDoc(projectId, userId, target, "patchPendingUpload", origin, schema => {
+    const entry = schema.trackItems.get(itemId);
+    if (!entry || entry.get("details")?.src !== expectedSrc) return;
+    const item = update(entry.toJSON() as ITrackItem);
+    schema.doc.transact(() => {
+      for (const key of ["details", "metadata", "duration", "trim", "display"] as const) entry.set(key, item[key]);
+      const duration = Math.max(0, ...Array.from(schema.trackItems.values()).map(value => value.get("display")?.to || 0));
+      schema.meta.set("duration", duration);
+    }, origin);
   });
 }

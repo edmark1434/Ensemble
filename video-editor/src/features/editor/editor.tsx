@@ -69,6 +69,7 @@ import { useProjectFonts } from "@/features/editor/hooks/use-project-fonts";
 import SceneRemovedModal from "./modals/scene-removed-modal";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 import { useSnapshotPreview, useSnapshotDocument } from "./hooks/use-snapshot-preview";
+import { installOptimisticAdds } from "./utils/optimistic-add";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -646,6 +647,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
 
   const isLargeScreen = useIsLargeScreen();
   const viewOnly = !canEdit || !isLargeScreen;
+  useEffect(() => installOptimisticAdds(stateManager, () => !viewOnly), [viewOnly]);
 
   useEffect(() => {
     if (viewOnly) {

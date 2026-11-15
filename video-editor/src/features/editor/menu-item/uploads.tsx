@@ -10,6 +10,7 @@ import Draggable from "@/components/shared/draggable";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import useUploadStore from "../store/use-upload-store";
 import UploadModal from "@/features/editor/modals/upload-modal";
+import { UploadDropOverlay } from "../components/upload-drop-overlay";
 import {
   AudioLines,
   Image as ImageIcon,
@@ -1186,19 +1187,7 @@ export const Uploads = () => {
     >
       <UploadModal />
 
-      {(isDragOver || dragError) && (
-        <div
-          className={`pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-md border border-dashed ${
-            dragError ? "border-red-500 bg-red-500/10" : "border-primary bg-primary/10"
-          }`}
-        >
-          {dragError && (
-            <span className="rounded bg-card/90 px-3 py-1 text-sm font-medium text-red-500">
-        {dragError}
-      </span>
-          )}
-        </div>
-      )}
+      <UploadDropOverlay isDragOver={isDragOver} error={dragError} />
 
       <div className="flex flex-col gap-4 p-4 pb-2">
         <Button

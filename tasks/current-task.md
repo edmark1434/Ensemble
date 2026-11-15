@@ -1,28 +1,16 @@
-# Active Task: Free 1080p uploads with 720p exports
+# Active Task: Optimistic timeline additions and local-file drag previews
 
-## Implementation Objective
-
-Raise Free video upload quality to 1080p for both the asset library and editor while keeping its separate export limit at 720p.
-
-## Acceptance Criteria
-
-- The original unapplied upload-feature migration seeds Free video_upload_resolution at 1080p. Premium remains 1080p and Business 4K. Free export_resolution stays 720p. Include reversible down behavior.
-- The plans page displays the database-backed feature immediately after personal_upload_storage.
-- Asset-library video finalization resolves the uploader's active/trialing subscription (or Free fallback) and reads the configured upload feature from PostgreSQL.
-- Editor file and URL video uploads read video_upload_resolution independently of export_resolution.
-- Oversized videos are downscaled using the existing normalizer, preserving aspect ratio, orientation handling and the no-upscaling rule.
-- Existing uploads, images, export quality/FPS limits and watermark logic remain unchanged.
-- Upload notices and upgrade suggestions reflect actual upload limits. Missing/invalid current values do not fall back to hardcoded limits or grant uncapped uploads.
-- Preserve existing user changes; do not run builds, type checks, lint, tests or other verification commands.
-
-## Implementation Status
-
-- User confirmed the original migration has not run. Updated its Free seed directly to 1080p and removed the unnecessary follow-up migration. Existing database-driven display and enforcement pick up the change after migration.
-- Added backend/migrations/1828500000000_video-upload-resolution-plan-feature.js with up/down seed behavior. The legacy Studio name receives the same seed as Business.
-- Added video_upload_resolution after storage in the plans-page feature order.
-- Replaced hardcoded asset-library tier caps with repository reads and strict service parsing. Existing FileServices video normalization now consumes that dynamic policy.
-- Added a dedicated editor upload-limit reader used by prepareVideoUpload for file and URL imports.
-- The editor policy response retains export maxHeight/maxWidth and adds maxUploadHeight/maxUploadWidth. Upload notice text and upgrade suggestions now use the separate upload feature.
-- Updated architecture/API documentation.
-- Migration prepared, not applied. Apply backend migrations before deploying this code; the new feature is required by the policy readers.
-- No builds, type checks, lint, tests or other verification commands run.
+- Restore canvas drops for library items and local media.
+- Insert menu/upload-library media immediately; finish metadata loading by updating that item's ID against current state so concurrent additions cannot overwrite each other.
+- Local timeline files use the native menu-item preview, snapping and lane placement. Canvas files use the playhead, matching canvas menu drops.
+- Accepted local files insert loading clips before uploading, then resolve those same clips in their original project/scene; deleted clips are not resurrected.
+- Preserve placement and edits made during loading, and retain magnetic-lane behavior.
+- Text insertion must not wait for fonts to load.
+- Drag previews remain plain labeled track placeholders, without media. Suppress the browser's card screenshot and floating media-card preview over the timeline.
+- Use the existing upload queue, file size and batch limits, storage checks and feedback.
+- Respect view-only mode and keep pending imports from inserting into a different project or scene.
+- Every local-file drop opens the Uploads tab, including rejected batches.
+- Canvas and timeline reuse the Uploads menu overlay for hover and validation messages.
+- Canvas file handling lives outside the scaled artboard so overlay text stays at normal UI size and errors survive the empty canvas disappearing.
+- No builds, type checks, lint or tests run.
+- Drop hit areas and overlays are limited to the populated/empty artboard and the timeline ruler/lanes. Timeline header is excluded; playhead positioning stays relative to its original container.

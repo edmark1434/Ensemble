@@ -120,6 +120,7 @@ class Audio extends Trimmable {
   }
 
   private async initialize() {
+    if (this.src?.startsWith("pending-upload:")) return;
     if (isMissingMediaSource(this.src)) {
       this.barData = undefined;
       this.bars = [];

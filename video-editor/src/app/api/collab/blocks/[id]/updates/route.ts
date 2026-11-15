@@ -8,6 +8,8 @@ import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { isProjectFrozen } from "@/lib/db/projects";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { canApplyCompositionUpdate } from "@/lib/collab/composition-size-policy";
+import { COMPOSITION_SIZE_PLAN_MESSAGE } from "@/lib/composition-size-plan";
 
 export async function POST(
   req: NextRequest,
@@ -36,6 +38,10 @@ export async function POST(
   }
 
   const body = Buffer.from(await req.arrayBuffer());
+
+  if (!(await canApplyCompositionUpdate(decoded.userId, { kind: "block", id: blockId }, body))) {
+    return NextResponse.json({ error: COMPOSITION_SIZE_PLAN_MESSAGE }, { status: 403 });
+  }
 
   await db.transaction().execute(async (trx) => {
     const activity = await trx

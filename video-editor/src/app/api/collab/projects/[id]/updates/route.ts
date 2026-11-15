@@ -9,6 +9,8 @@ import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 import { compactProject } from "@/lib/collab/persistence-store";
 import { isProjectFrozen } from "@/lib/db/projects";
+import { canApplyCompositionUpdate } from "@/lib/collab/composition-size-policy";
+import { COMPOSITION_SIZE_PLAN_MESSAGE } from "@/lib/composition-size-plan";
 
 const COMPACT_AFTER_UPDATE_COUNT = 200;
 
@@ -48,6 +50,9 @@ export async function POST(
   }
 
   try {
+    if (!(await canApplyCompositionUpdate(decoded.userId, { kind: "project", id: projectId }, buf))) {
+      return NextResponse.json({ error: COMPOSITION_SIZE_PLAN_MESSAGE }, { status: 403 });
+    }
     await db.transaction().execute(async (trx) => {
       const activity = await trx
         .insertInto("session_activities")

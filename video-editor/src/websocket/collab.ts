@@ -19,6 +19,7 @@ import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { isProjectFrozen } from "@/lib/db/projects";
 import { liveRooms } from "@/lib/collab/live-rooms";
 import { markProjectDirty, onProjectRoomEmpty } from "@/lib/collab/thumbnail-service";
+import { canApplyCompositionUpdate } from "@/lib/collab/composition-size-policy";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -337,7 +338,7 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     ws.send(encoding.toUint8Array(awarenessEncoder));
   }
 
-  const handleMessage = (data: Buffer) => {
+  const handleMessage = async (data: Buffer) => {
     const info = room.clients.get(ws);
     if (!info) return;
 
@@ -360,10 +361,14 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
         encoding.writeVarUint(doneEncoder, MESSAGE_SYNC_DONE);
         ws.send(encoding.toUint8Array(doneEncoder));
       } else if (info.canWrite) {
-        if (innerType === syncProtocol.messageYjsSyncStep2) {
-          syncProtocol.readSyncStep2(decoder, room.doc, ws);
-        } else if (innerType === syncProtocol.messageYjsUpdate) {
-          syncProtocol.readUpdate(decoder, room.doc, ws);
+        if (innerType === syncProtocol.messageYjsSyncStep2 || innerType === syncProtocol.messageYjsUpdate) {
+          const update = decoding.readVarUint8Array(decoder);
+          if (!(await canApplyCompositionUpdate(decoded.userId, target, update, room.doc))) {
+            ws.close(4003, "Changing size requires Premium or Business");
+            return;
+          }
+          if (!info.canWrite || ws.readyState !== WebSocket.OPEN) return;
+          Y.applyUpdate(room.doc, update, ws);
         }
         if (encoding.length(encoder) > 1) ws.send(encoding.toUint8Array(encoder));
       }
@@ -374,8 +379,15 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
   // Replay whatever arrived while we were still verifying auth / loading
   // the room, in order, before listening for anything new.
-  for (const data of pendingMessages) handleMessage(data);
-  ws.on("message", handleMessage);
+  // Preserve per-client update order while dimension authorization awaits the DB.
+  let messageQueue = Promise.resolve();
+  const enqueueMessage = (data: Buffer) => {
+    messageQueue = messageQueue.then(() => handleMessage(data)).catch(() => {
+      ws.close(1011, "Unable to process collaboration update");
+    });
+  };
+  for (const data of pendingMessages) enqueueMessage(data);
+  ws.on("message", enqueueMessage);
 
   const recheckTimer = setInterval(() => void recheck(), ACCESS_RECHECK_MS);
 

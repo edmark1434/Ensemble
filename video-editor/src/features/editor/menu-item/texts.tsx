@@ -50,10 +50,8 @@ export const Texts = () => {
     };
   }, []);
 
-  const handleAddText = async () => {
-    const { fontName, fontUrl } = defaultFont.fontName
-      ? defaultFont
-      : await getFontDetails();
+  const handleAddText = () => {
+    const { fontName, fontUrl } = defaultFont;
 
     const time = getCurrentTime();
     const clipDuration = TEXT_ADD_PAYLOAD.display.to - TEXT_ADD_PAYLOAD.display.from;
@@ -81,10 +79,8 @@ export const Texts = () => {
     });
   };
 
-  const handleAddPresetText = async (preset: any) => {
-    const { fontName, fontUrl } = defaultFont.fontName
-      ? defaultFont
-      : await getFontDetails();
+  const handleAddPresetText = (preset: any) => {
+    const { fontName, fontUrl } = defaultFont;
 
     const time = getCurrentTime();
     const clipDuration = TEXT_ADD_PAYLOAD.display.to - TEXT_ADD_PAYLOAD.display.from;

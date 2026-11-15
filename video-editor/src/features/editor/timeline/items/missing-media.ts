@@ -7,6 +7,7 @@ export function drawMissingMedia(
   const state = useStore.getState();
   const availability = useMissingMedia.getState();
   const src = state.trackItemsMap[item.id]?.details?.src;
+  if (src?.startsWith("pending-upload:")) return false;
   if (availability.projectId !== state.projectId || !availability.missing.has(src)) return false;
   ctx.save();
   ctx.globalAlpha *= 0.4;

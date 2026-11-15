@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DroppableArea } from "./droppable";
+import { useViewOnly } from "../hooks/use-view-only";
 
 const SceneBoard = ({
   size,
@@ -9,11 +10,13 @@ const SceneBoard = ({
   children: React.ReactNode;
 }) => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const viewOnly = useViewOnly();
 
   return (
     <DroppableArea
       id="artboard"
       onDragStateChange={setIsDraggingOver}
+      disabled={viewOnly}
       style={{
         width: size.width,
         height: size.height

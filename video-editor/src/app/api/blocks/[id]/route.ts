@@ -6,6 +6,8 @@ import { updateBlock, getBlockProjectId } from "@/lib/db/blocks";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { canPatchCompositionSize } from "@/lib/collab/composition-size-policy";
+import { COMPOSITION_SIZE_PLAN_MESSAGE } from "@/lib/composition-size-plan";
 
 export async function PATCH(
   req: NextRequest,
@@ -41,6 +43,10 @@ export async function PATCH(
   }
   if (height !== undefined && (typeof height !== "number" || height <= 0)) {
     return NextResponse.json({ error: "Invalid height" }, { status: 400 });
+  }
+
+  if (!(await canPatchCompositionSize(decoded.userId, { kind: "block", id }, { width, height }))) {
+    return NextResponse.json({ error: COMPOSITION_SIZE_PLAN_MESSAGE }, { status: 403 });
   }
 
   await updateBlock({ blockId: id, name, width, height });

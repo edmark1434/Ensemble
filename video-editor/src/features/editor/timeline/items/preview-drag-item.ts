@@ -78,8 +78,13 @@ class PreviewTrackItem extends PreviewTrackItemBase {
   }
 
   public _render(ctx: CanvasRenderingContext2D) {
-    this.drawFill(ctx);      // paint background first
-    super._render(ctx);      // fill is transparent, so this only draws text/thumbnail on top
+    this.drawFill(ctx);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    ctx.clip();
+    this.drawTextIdentity(ctx);
+    ctx.restore();
     this.updateSelected(ctx);
   }
 

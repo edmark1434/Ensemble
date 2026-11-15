@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { toast } from "sonner";
 import { processUpload, type UploadCallbacks } from "@/utils/upload-service";
 import useStore from "./use-store";
+import type { UploadedMedia } from "../utils/insert-uploaded-media";
 
 interface UploadFile {
   id: string;
@@ -19,6 +20,8 @@ interface UploadFile {
   width?: number;
   height?: number;
   durationSeconds?: number;
+  onUploaded?: (upload: UploadedMedia) => void;
+  onFailed?: () => void;
 }
 
 interface IUploadStore {
@@ -167,10 +170,12 @@ const useUploadStore = create<IUploadStore>()(
                 } else {
                   // File uploads return a single object
                   setUploads((prev) => [...prev, uploadData]);
+                  upload.onUploaded?.(uploadData);
                 }
               }
             })
             .catch((error) => {
+              upload.onFailed?.();
               console.error("Upload failed:", error);
             });
         }

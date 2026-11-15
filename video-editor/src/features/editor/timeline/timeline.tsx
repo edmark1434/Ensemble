@@ -1,6 +1,9 @@
 import { useMissingMedia } from "../store/use-missing-media";
 import { TimelineMarketPriceBadges } from "./market-price-badges";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useFileDropUpload } from "../hooks/use-file-drop-upload";
+import { UploadDropOverlay } from "../components/upload-drop-overlay";
+import { LocalFileDrag } from "./local-file-drag";
 import Header from "./header";
 import Ruler from "./ruler";
 import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
@@ -174,12 +177,15 @@ const getItemRect = (item: any): { left: number; top: number; width: number; hei
 
 const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true }: { stateManager: StateManager; readOnly?: boolean; allowSceneNavigation?: boolean }) => {
   const preview = useSnapshotPreview();
+  const fileDrop = useFileDropUpload();
   // prevent duplicate scroll events
   const canScrollRef = useRef(false);
   const [scrollLeft, setScrollLeft] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropAreaRef = useRef<HTMLDivElement>(null);
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<CanvasTimeline | null>(null);
+  const localFileDragRef = useRef<LocalFileDrag | null>(null);
   useEffect(() => useMissingMedia.subscribe(() => {
     const canvas = canvasRef.current;
     canvas?.getObjects().forEach(object => { object.dirty = true; });
@@ -634,6 +640,8 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
 
     return () => {
       unsubscribeTransitionZOrder();
+      localFileDragRef.current?.cancel();
+      localFileDragRef.current = null;
       canvas.purge();
       // Clear the store's reference to this now-destroyed canvas. Without
       // this, remounting Timeline (e.g. toggling mobile/desktop view) never
@@ -1190,9 +1198,46 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     syncCanvasTransitions(canvas, transitionsMap, "timeline: local edit");
   }, [transitionsMap]);
 
+  // Capture native files before Fabric tries to interpret them as editor drags.
+  const handleFileDrag = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files") && !event.dataTransfer.files.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = dropAreaRef.current?.getBoundingClientRect();
+    const inside = bounds && event.clientX >= bounds.left && event.clientX <= bounds.right &&
+      event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+    if (!inside) {
+      localFileDragRef.current?.cancel();
+      event.dataTransfer.dropEffect = "none";
+      fileDrop.clearDragOver();
+      return;
+    }
+    event.dataTransfer.dropEffect = readOnly ? "none" : "copy";
+    if (readOnly) { localFileDragRef.current?.cancel(); return; }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const drag = localFileDragRef.current ??= new LocalFileDrag(canvas);
+    if (event.type === "dragenter") { fileDrop.handleDragEnter(event); drag.over(event.nativeEvent); return; }
+    if (event.type === "dragover") { fileDrop.handleDragOver(event); drag.over(event.nativeEvent); return; }
+    if (event.type === "dragleave") {
+      fileDrop.handleDragLeave(event);
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) drag.cancel();
+      return;
+    }
+    if (event.type !== "drop") return;
+
+    const units = Math.max(0, canvas.getScenePoint(event.nativeEvent).x);
+    const placement = drag.drop(event.nativeEvent) ?? { time: unitsToTimeMs(units, scale.zoom) };
+    fileDrop.handleDrop(event, placement);
+  };
+
   return (
     <div
       ref={timelineContainerRef}
+      onDragEnterCapture={handleFileDrag}
+      onDragOverCapture={handleFileDrag}
+      onDragLeaveCapture={handleFileDrag}
+      onDropCapture={handleFileDrag}
       id="timeline-container"
       className="relative w-full overflow-hidden bg-card py-0"
       style={{
@@ -1210,30 +1255,35 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
         timelineHeight={timelineHeight}
         stateManager={stateManager}
       />
-      <Ruler
-        onClick={onClickRuler}
-        scrollLeft={scrollLeft}
-        onScroll={onRulerScroll}
-      />
       <Playhead scrollLeft={scrollLeft} />
-      <div className="flex">
-        <div
-          style={{
-            width: 0
-          }}
-          className="relative flex-none"
+      <div ref={dropAreaRef} className="relative">
+        {!readOnly && (
+          <UploadDropOverlay isDragOver={fileDrop.isDragOver} error={fileDrop.dragError} className="z-50" />
+        )}
+        <Ruler
+          onClick={onClickRuler}
+          scrollLeft={scrollLeft}
+          onScroll={onRulerScroll}
         />
-        <div style={{ height: canvasSize.height }} className="relative flex-1">
+        <div className="flex">
           <div
-            style={{ height: canvasSize.height }}
-            ref={containerRef}
-            className="absolute top-0 w-full"
-          >
-            <canvas id="designcombo-timeline-canvas" ref={canvasElRef} />
-            <TimelineMarketPriceBadges readOnly={readOnly} />
+            style={{
+              width: 0
+            }}
+            className="relative flex-none"
+          />
+          <div style={{ height: canvasSize.height }} className="relative flex-1">
+            <div
+              style={{ height: canvasSize.height }}
+              ref={containerRef}
+              className="absolute top-0 w-full"
+            >
+              <canvas id="designcombo-timeline-canvas" ref={canvasElRef} />
+              <TimelineMarketPriceBadges readOnly={readOnly} />
+            </div>
           </div>
         </div>
-      </div>
+        </div>
     </div>
   );
 };

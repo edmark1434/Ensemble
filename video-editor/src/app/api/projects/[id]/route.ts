@@ -7,6 +7,8 @@ import { isProjectFrozen, updateProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
+import { canPatchCompositionSize } from "@/lib/collab/composition-size-policy";
+import { COMPOSITION_SIZE_PLAN_MESSAGE } from "@/lib/composition-size-plan";
 
 // The caller's current role in this project — lets the editor refresh its
 // role while a session stays open. 403 = not (or no longer) a member.
@@ -79,6 +81,10 @@ export async function PATCH(
   }
   if (height !== undefined && (typeof height !== "number" || height <= 0)) {
     return NextResponse.json({ error: "Invalid height" }, { status: 400 });
+  }
+
+  if (!(await canPatchCompositionSize(decoded.userId, { kind: "project", id }, { width, height }))) {
+    return NextResponse.json({ error: COMPOSITION_SIZE_PLAN_MESSAGE }, { status: 403 });
   }
 
   await updateProject({ projectId: id, name, width, height });

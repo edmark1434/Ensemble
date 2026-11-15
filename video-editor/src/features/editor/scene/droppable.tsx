@@ -1,7 +1,7 @@
 import { dispatch } from "@designcombo/events";
 import { ADD_AUDIO, ADD_IMAGE, ADD_TEXT, ADD_VIDEO } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 import { ITrackItem } from "@designcombo/types";
 import { getCurrentTime } from "@/features/editor/utils/time";
 
@@ -24,7 +24,7 @@ interface DroppableAreaProps {
   style?: React.CSSProperties;
   onDragStateChange?: (isDragging: boolean) => void;
   onFilesDropped?: (files: File[]) => void;
-  filesDisabled?: boolean;
+  disabled?: boolean;
   id?: string;
 }
 
@@ -38,10 +38,8 @@ const isNativeFileDrag = (e: React.DragEvent<HTMLDivElement>): boolean =>
 const useDragAndDrop = (
   onDragStateChange?: (isDragging: boolean) => void,
   onFilesDropped?: (files: File[]) => void,
-  filesDisabled = false
+  disabled = false
 ) => {
-  const [isPointerInside, setIsPointerInside] = useState(false);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const handleDrop = useCallback((draggedData: DraggedData) => {
     const payload = { ...draggedData, id: generateId() } as ITrackItem;
@@ -85,52 +83,26 @@ const useDragAndDrop = (
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
 
+      if (disabled) { e.dataTransfer.dropEffect = "none"; return; }
       if (isNativeFileDrag(e)) {
-        if (filesDisabled) { e.dataTransfer.dropEffect = "none"; return; }
-        setIsDraggingOver(true);
-        setIsPointerInside(true);
-        onDragStateChange?.(true);
-        return;
-      }
-
-      try {
-        const draggedDataString = e.dataTransfer?.types[0] as string;
-        if (!draggedDataString) return;
-        const draggedData: DraggedData = JSON.parse(draggedDataString);
-
-        if (!Object.values(AcceptedDropTypes).includes(draggedData.type))
-          return;
-        setIsDraggingOver(true);
-        setIsPointerInside(true);
-        onDragStateChange?.(true);
-      } catch (error) {
-        console.error("Error parsing dragged data:", error);
-      }
-    },
-    [onDragStateChange, filesDisabled]
-  );
-
-  const onDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      if (isNativeFileDrag(e) && filesDisabled) { e.dataTransfer.dropEffect = "none"; return; }
-      if (isPointerInside) {
-        setIsDraggingOver(true);
+        e.dataTransfer.dropEffect = "copy";
+        onDragStateChange?.(!!onFilesDropped);
+      } else if (e.dataTransfer.types.some((type) => type.startsWith("{"))) {
+        e.dataTransfer.dropEffect = "move";
         onDragStateChange?.(true);
       }
     },
-    [isPointerInside, onDragStateChange, filesDisabled]
+    [onDragStateChange, onFilesDropped, disabled]
   );
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
-      if (isNativeFileDrag(e) && filesDisabled) return;
-      if (!isDraggingOver) return;
-      setIsDraggingOver(false);
       onDragStateChange?.(false);
+      if (disabled) return;
 
-      if (isNativeFileDrag(e)) {
+      if (e.dataTransfer.files.length || isNativeFileDrag(e)) {
+        e.stopPropagation();
         const files = Array.from(e.dataTransfer.files || []);
         if (files.length > 0) {
           onFilesDropped?.(files);
@@ -139,31 +111,30 @@ const useDragAndDrop = (
       }
 
       try {
-        const draggedDataString = e.dataTransfer?.types[0] as string;
-        const draggedData = JSON.parse(
-          e.dataTransfer!.getData(draggedDataString)
-        );
+        const key = e.dataTransfer.types.find((type) => type.startsWith("{"));
+        if (!key) return;
+        const draggedData: DraggedData = JSON.parse(e.dataTransfer.getData(key));
+        if (!Object.values(AcceptedDropTypes).includes(draggedData?.type)) return;
+        e.stopPropagation();
         handleDrop(draggedData);
       } catch (error) {
         console.error("Error parsing dropped data:", error);
       }
     },
-    [isDraggingOver, onDragStateChange, handleDrop, onFilesDropped, filesDisabled]
+    [onDragStateChange, handleDrop, onFilesDropped, disabled]
   );
 
   const onDragLeave = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
-      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-        setIsDraggingOver(false);
-        setIsPointerInside(false);
+      if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) {
         onDragStateChange?.(false);
       }
     },
     [onDragStateChange]
   );
 
-  return { onDragEnter, onDragOver, onDrop, onDragLeave, isDraggingOver };
+  return { onDragEnter, onDrop, onDragLeave };
 };
 
 export const DroppableArea: React.FC<DroppableAreaProps> = ({
@@ -172,18 +143,18 @@ export const DroppableArea: React.FC<DroppableAreaProps> = ({
   style,
   onDragStateChange,
   onFilesDropped,
-  filesDisabled,
+  disabled,
   id
 }) => {
-  const { onDragEnter, onDragOver, onDrop, onDragLeave } =
-    useDragAndDrop(onDragStateChange, onFilesDropped, filesDisabled);
+  const { onDragEnter, onDrop, onDragLeave } =
+    useDragAndDrop(onDragStateChange, onFilesDropped, disabled);
 
   return (
     <div
       id={id}
       onDragEnter={onDragEnter}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
+      onDropCapture={onDrop}
+      onDragOverCapture={onDragEnter}
       onDragLeave={onDragLeave}
       className={className}
       style={style}
