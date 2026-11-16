@@ -339,19 +339,21 @@ async function processTopUpPayment(req, res) {
     let accountName = {};
 if (!req.session) {
     const response = await pool.query(
-        `SELECT user_id, first_name, last_name, email
+        `SELECT user_id, first_name, last_name, email_address
          FROM users
          WHERE user_id = $1`,
         [req.body.userId]
     );
 
-    accountName = response.rows[0];
+    accountName = response.rows[0] || {};
 }
 
-let userId = accountName.user_id || req.session.userId;
-userId = userId, 10; // Ensure userId is an integer
+let userId = accountName.user_id || req.session?.userId || req.session?.user_id;
 // 1. Try Redis
 let customerId = await redisClient.get(`customerId:${userId}`); 
+if (customerId === 'undefined' || customerId === 'null') {
+    customerId = null;
+}
 
 // 2. Fallback to DB
 if (!customerId) {
@@ -377,20 +379,20 @@ const customerPayload = await getCustomerPayload(req);
 
         capture_method: "AUTOMATIC",
 
-        // Always save the card
+        // Allow user to opt into saving payment method
         allow_save_payment_method: "OPTIONAL",
 
         ...customerPayload,
 
-        // channel_properties: {
-        //     cards: {
-        //         card_on_file_type: "CUSTOMER_UNSCHEDULED"
-        //     }
-        // },
+        channel_properties: {
+            cards: {
+                card_on_file_type: "CUSTOMER_UNSCHEDULED"
+            }
+        },
         metadata: {
             item_name: validated.itemName,
             credits: String(validated.credits),
-            user_id: `${accountName.user_id || req.session.userId }`
+            user_id: `${userId}`
         },
 
         success_return_url:
@@ -401,7 +403,7 @@ const customerPayload = await getCustomerPayload(req);
 
     };
     const topUpPayload = {
-        user_id: accountName.user_id || req.session.userId,
+        user_id: userId,
         amount: validated.amount,
         currency: validated.currency,
         credits: validated.credits,
@@ -470,13 +472,18 @@ const customerPayload = await getCustomerPayload(req);
                 channelCode: response.data.channel_code,
                 redirectUrl: response.data.payment_link_url,
                 expired_at: response.data.expires_at,
-            }
+            };
 
-            await Promise.all([
-                updateUserCustomerId(accountName.user_id || req.session.userId, response.data.customer_id),
-                updatePayment(updatePaymentPayload),
-                redisClient.set(`customerId:${accountName.user_id || req.session.userId}`, response.data.customer_id, 'EX', 60 * 60 * 24 * 30) // Cache for 30 days
-            ]);
+            const tasks = [updatePayment(updatePaymentPayload)];
+            if (response.data.customer_id) {
+                tasks.push(updateUserCustomerId(userId, response.data.customer_id));
+                tasks.push(redisClient.set(`customerId:${userId}`, response.data.customer_id, 'EX', 60 * 60 * 24 * 30));
+            }
+            if (response.data.payment_session_id) {
+                tasks.push(redisClient.set(`user_pending_save_session:${userId}`, response.data.payment_session_id, 'EX', 86400));
+                tasks.push(redisClient.set(`save_session_user:${response.data.payment_session_id}`, String(userId), 'EX', 86400));
+            }
+            await Promise.all(tasks);
             return res.json({
                 paymentSessionId: response.data.payment_session_id,
                 paymentLink: response.data.payment_link_url
@@ -796,6 +803,10 @@ async function savePaymentMethod(data) {
         if (paymentTokenId && payment.user_id) {
             return await savePaymentTokenForUser(payment.user_id, paymentTokenId, data);
         }
+        const sessionId = data.payment_session_id || payment.payment_session_id;
+        if (sessionId && payment.user_id) {
+            return await savePaymentMethodFromSession(sessionId, payment.user_id);
+        }
     } catch (err) {
         console.error("Error in savePaymentMethod:", err.message);
     }
@@ -809,15 +820,15 @@ async function getCustomerPayload(req) {
     // 1. Get user data
     if (!req.session) {
         const response = await pool.query(
-            `SELECT user_id, first_name, last_name, email
+            `SELECT user_id, first_name, last_name, email_address
              FROM users
              WHERE user_id = $1`,
             [req.body.userId]
         );
-        accountName = response.rows[0];
+        accountName = response.rows[0] || {};
         userId = accountName.user_id;
     } else {
-        userId = req.session.userId;
+        userId = req.session.userId || req.session.user_id;
         // Get user data from session or database
         if (!req.session.first_name) {
             const response = await pool.query(
@@ -826,34 +837,40 @@ async function getCustomerPayload(req) {
                  WHERE user_id = $1`,
                 [userId]
             );
-            accountName = response.rows[0];
+            accountName = response.rows[0] || {};
         } else {
             accountName = {
                 first_name: req.session.first_name,
                 last_name: req.session.last_name,
-                email: req.session.email
+                email_address: req.session.email || req.session.email_address
             };
         }
     }
 
     // 2. Try Redis for existing customer_id
     let customerId = await redisClient.get(`customerId:${userId}`);
+    if (customerId === 'undefined' || customerId === 'null') {
+        customerId = null;
+    }
     console.log(`📊 Redis customerId for ${userId}:`, customerId);
 
     // 3. Fallback to DB
     if (!customerId) {
         const result = await pool.query(
-            `SELECT customer_id
+            `SELECT customer_id, email_address, first_name, last_name
              FROM users
              WHERE user_id = $1`,
             [userId]
         );
         customerId = result.rows[0]?.customer_id || null;
+        if (!accountName.first_name && result.rows[0]) {
+            accountName = result.rows[0];
+        }
         console.log(`📊 DB customerId for ${userId}:`, customerId);
         
         // If found in DB, cache it in Redis
         if (customerId) {
-            await redisClient.set(`customerId:${userId}`, customerId);
+            await redisClient.set(`customerId:${userId}`, customerId, 'EX', 60 * 60 * 24 * 30);
             await updateUserCustomerId(userId, customerId); // Ensure DB is updated
         }
     }
@@ -868,8 +885,8 @@ async function getCustomerPayload(req) {
     } else {
         // ✅ New customer - create with unique reference_id
         const firstName = accountName.first_name || req.session?.displayName?.split(" ")[0] || "User";
-        const lastName = accountName.last_name || req.session?.displayName?.split(" ").slice(1).join(" ") || "Unknown";
-        const email = accountName.email || req.session?.email || `user_${userId}@example.com`;
+        const lastName = accountName.last_name || req.session?.displayName?.split(" ").slice(1).join(" ") || "Customer";
+        const email = accountName.email_address || accountName.email || req.session?.email || `user_${userId}@example.com`;
         
         // ✅ Generate unique reference_id with timestamp
         const timestamp = Date.now();

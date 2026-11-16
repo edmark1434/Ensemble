@@ -1,8 +1,12 @@
-# Active Task: Stop shared-network 429s and add admin rate-limit monitoring
+# Active Task: Fix Xendit Top-Up Checkout Payment Method Saving
 
 ## Implementation Objective
 
-Several people using the platform at once get `429 Too many requests`. The API limiter counted every request per IP, so members sharing one public IP (alpha testers on the same Wi-Fi) shared one budget. Polling pages also exhausted the 600-per-15-minute `general` budget alone (team project workspace: 7 GETs every 8 s ≈ 790 per 15 min). Fix the limiter and give admins a monitor for traffic, 429s and IP pass-through.
+When users check "Save this payment method for future payments" in the Xendit checkout portal during a top-up, Xendit returned `API_VALIDATION_ERROR`.
+Enable proper payment method saving in checkout sessions:
+1. Restore and configure `channel_properties.cards` with `card_on_file_type: "CUSTOMER_UNSCHEDULED"` in `processTopUpPayment`.
+2. Fix customer email resolution (`email_address`) and customer creation in `getCustomerPayload`.
+3. Ensure webhook and session completion handlers properly capture and save the payment token/method when a customer opts to save their card during checkout.
 
 ## Acceptance Criteria
 
@@ -12,9 +16,15 @@ Several people using the platform at once get `429 Too many requests`. The API l
 - `TRUST_PROXY` accepts a numeric hop count; existing address-list values behave as before.
 - Admin Analytics → Traffic & rate limits shows requests/429s per minute, policy limits, busiest windows (with reset), shared IPs, recent 429s, store errors, and an IP pass-through check for the admin's own request.
 - Docs updated (security, api, frontend, caching). No builds, type checks or lint run (user verifies with `pnpm typecheck`).
+- `processTopUpPayment` includes `channel_properties: { cards: { card_on_file_type: "CUSTOMER_UNSCHEDULED" } }`.
+- `getCustomerPayload` safely reads `email_address` and provides valid customer details.
+- When Xendit fires `payment_session.completed` / `payment_token.activated` or when payment completes with a saved card, the payment token is vaulted and linked to the user.
+- No verification commands run (`pnpm typecheck` reserved for user).
 
 ## Implementation Status
 
-- Done. Backend: `middleware/RateLimiter.js`, `lib/RateLimitMonitor.js`, `services/RateLimitMonitorServices.js`, `controllers/AdminRateLimitControllers.js`, `routes/Admin.js`, `routes/Chat.js`, `routes/Ticket.js`, `Server.js`.
-- Frontend: `pages/admin/analytics/components/RateLimitMonitorPanel.tsx`, `pages/admin/analytics/AnalyticsPage.tsx`.
-- Previous task (alpha testing survey) is complete: `reports/Ensemble alpha testing survey.md`, `reports/Ensemble SUS and acceptance testing questionnaire.md`.
+- Fixed in `backend/services/PaymentServices.js`:
+  - Uncommented and configured `channel_properties.cards.card_on_file_type = "CUSTOMER_UNSCHEDULED"` in `processTopUpPayment`.
+  - Added session mapping (`user_pending_save_session:${userId}` and `save_session_user:${sessionId}`) in Redis to guarantee reconciliation when saving cards during topup.
+  - Enhanced `savePaymentMethod` to also sync via `savePaymentMethodFromSession` using `payment_session_id`.
+  - Fixed SQL column `email_address` and email resolution in `getCustomerPayload` and `processTopUpPayment`.
