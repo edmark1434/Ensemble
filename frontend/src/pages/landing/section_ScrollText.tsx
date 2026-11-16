@@ -447,6 +447,12 @@ const Crosshair: React.FC<{
   </span>
 );
 
+const COLLAB_GIFS = [
+  "/features/en-collab-1.gif",
+  "/features/en-collab-2.gif",
+  "/features/en-collab-3.gif",
+] as const;
+
 const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
   const navigate = useNavigate();
   const blissHoverAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -454,6 +460,16 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
   const clickAudioRef = useRef<HTMLAudioElement | null>(null);
   const theme = useGlobalState((state) => state.theme);
   const isDark = theme === "dark";
+  const [isCollabHovered, setIsCollabHovered] = useState(false);
+  const [activeCollabGif, setActiveCollabGif] = useState(0);
+
+  useEffect(() => {
+    if (isCollabHovered) return;
+    const timer = window.setInterval(() => {
+      setActiveCollabGif((prev) => (prev + 1) % COLLAB_GIFS.length);
+    }, 4500);
+    return () => window.clearInterval(timer);
+  }, [isCollabHovered]);
 
   useEffect(() => {
     blissHoverAudioRef.current = new Audio("/sounds/blisshover.mp3");
@@ -1133,9 +1149,13 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
             </div>
           </FadeInScroll>
 
-          {/* Framed Full-Width Collaboration Screenshot */}
+          {/* Framed Full-Width Collaboration Screenshot & Looping GIFs */}
           <div
-            onMouseEnter={playMinimalHover}
+            onMouseEnter={() => {
+              playMinimalHover();
+              setIsCollabHovered(true);
+            }}
+            onMouseLeave={() => setIsCollabHovered(false)}
             style={{
               padding: "clamp(14px, 2.5vw, 28px) clamp(18px, 4vw, 40px)",
               background: isDark ? "#0d0d10" : "#f8fafc",
@@ -1172,16 +1192,38 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
                 <span>LIVE PRESENCE: 3 EDITORS ACTIVE</span>
               </div>
 
-              <img
-                src="/gallery_images/new/gallery/collab.png"
-                alt="Ensemble Real-Time Video Editor Collaboration"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  display: "block",
-                  objectFit: "cover",
-                }}
-              />
+              <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
+                <img
+                  src="/gallery_images/new/gallery/collab.png"
+                  alt="Ensemble Real-Time Video Editor Collaboration"
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                    objectFit: "cover",
+                    opacity: isCollabHovered ? 1 : 0,
+                    transition: "opacity 0.5s ease-in-out",
+                  }}
+                />
+                {COLLAB_GIFS.map((gifSrc, idx) => (
+                  <img
+                    key={gifSrc}
+                    src={gifSrc}
+                    alt={`Ensemble Real-Time Video Editor Collaboration Demo ${idx + 1}`}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      display: "block",
+                      objectFit: "cover",
+                      opacity: !isCollabHovered && activeCollabGif === idx ? 1 : 0,
+                      transition: "opacity 0.65s ease-in-out",
+                      pointerEvents: "none",
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
