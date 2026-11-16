@@ -282,14 +282,14 @@ const CreditShop: React.FC = () => {
           setHasXenditPlan(hasValidPlan);
 
           const freePlan = sortedPlans.find(p => p.price === 0 || p.name.toLowerCase() === "free");
-          const isFreePlan = !sub.plan_id || (freePlan ? sub.plan_id === freePlan.plan_id : false) || !hasValidPlan;
+          const isFreePlan = !sub.plan_id || (freePlan ? sub.plan_id === freePlan.plan_id : false);
           setIsOnFreePlan(isFreePlan);
 
           const status = sub.status?.toUpperCase() || "";
           const isTrialActive = Boolean(sub.trial_ends_at && new Date(sub.trial_ends_at) > new Date());
           const isActiveOrTrialing = status === "ACTIVE" || status === "TRIALING" || status === "TRIAL" || isTrialActive;
 
-          const subscribed = hasValidPlan && isActiveOrTrialing;
+          const subscribed = !isFreePlan && isActiveOrTrialing;
 
           setIsUserSubscribed(subscribed);
           console.log(`===== SUBSCRIPTION STATUS =====`);
@@ -416,7 +416,7 @@ const CreditShop: React.FC = () => {
     console.log(`isOnFreePlan: ${isOnFreePlan}`);
     console.log(`Current plan:`, currentPlan);
 
-    if (isUserSubscribed && hasXenditPlan && !isOnFreePlan && currentPlan && userSubscription) {
+    if (isUserSubscribed && !isOnFreePlan && currentPlan && userSubscription) {
       if (membership.price > currentPlan.price) {
         isUpgrade = true;
         const proratedAmount = calculateProratedAmount(
@@ -511,7 +511,7 @@ const CreditShop: React.FC = () => {
       };
     }
 
-    if (isUserSubscribed && hasXenditPlan && !isOnFreePlan) {
+    if (isUserSubscribed && !isOnFreePlan) {
       const currentPlanDetails = getCurrentPlan();
       if (currentPlanDetails) {
         if (tier.price > currentPlanDetails.price) {
@@ -967,13 +967,13 @@ const CreditShop: React.FC = () => {
                       </div>
                     )}
 
-                    {isUpgrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
+                    {isUpgrade && !isCurrent && !isOnFreePlan && (
                       <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
                         Upgrade
                       </div>
                     )}
 
-                    {isDowngrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
+                    {isDowngrade && !isCurrent && !isOnFreePlan && (
                       <div className="absolute -top-3 left-4 bg-amber-500 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
                         Downgrade
                       </div>
@@ -1086,18 +1086,18 @@ const CreditShop: React.FC = () => {
                         className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
                           isDisabled
                             ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
-                            : isUpgrade && hasXenditPlan && !isOnFreePlan
+                            : isUpgrade && !isOnFreePlan
                             ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
-                            : isDowngrade && hasXenditPlan && !isOnFreePlan
+                            : isDowngrade && !isOnFreePlan
                             ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
                             : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
                         }`}
                       >
                         {buttonText}
-                        {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                        {isUpgrade && !isDisabled && !isOnFreePlan && (
                           <span className="ml-1.5 text-xs">↑</span>
                         )}
-                        {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                        {isDowngrade && !isDisabled && !isOnFreePlan && (
                           <span className="ml-1.5 text-xs">↓</span>
                         )}
                       </button>
