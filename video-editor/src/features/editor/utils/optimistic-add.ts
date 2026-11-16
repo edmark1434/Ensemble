@@ -21,9 +21,10 @@ let capture: ((event: EventBusData) => void) | null = null;
 export function captureMediaPlacement(run: () => void): AddPlacement | undefined {
   let placement: AddPlacement | undefined;
   capture = ({ value }) => {
-    placement = { time: Math.max(0, value?.payload.display.from ?? 0), ...value?.options };
-    const track = manager?.getState().tracks[placement.trackIndex ?? 0];
-    if (!placement.isNewTrack && track) placement.targetTrackId = track.id;
+    const captured: AddPlacement = { time: Math.max(0, value?.payload.display.from ?? 0), ...value?.options };
+    const track = manager?.getState().tracks[captured.trackIndex ?? 0];
+    if (!captured.isNewTrack && track) captured.targetTrackId = track.id;
+    placement = captured;
   };
   try { run(); } finally { capture = null; }
   return placement;

@@ -50,7 +50,15 @@
 - Direct member additions and share-link redemption check the cap inside the membership transaction, serialized by project and owner locks. Removing the last collaborator releases a slot under the same locks. Link creation checks capacity but does not reserve a slot; previously issued links are checked again when redeemed. Limit failures on add/link creation return 409 with `COLLABORATIVE_PROJECT_LIMIT`; invalid plan configuration fails closed. No migration is needed.
 
 
+## Editor workspace panel
+
+- Editor `GET /api/projects/:id/workspace` verifies the signed editor session, active project membership, and linked workspace access. It resolves project links across the workspace junction, primary project, job and gig references, and returns only the viewer's current contract milestones and explicitly assigned tasks. Contractual workspaces group their member contracts under the same team; regular team workspaces keep their member/manager boundary.
+- Milestones are selected per contract, respecting direct freelancer, assigned subcontractor milestone, or contributing team membership. Assigned tasks include other members' milestones. Milestone progress counts the linked milestone tasks; personal progress counts all assigned tasks, deduplicated by task ID. Finished tasks determine the percentage; empty totals display 0%. Past-due unfinished tasks outside review count as overdue.
+- This read-only endpoint uses existing tables and private/no-store responses. The Workspace right panel refreshes on open, focus, reconnect and every 30 seconds while visible. No new migration or dependency is required.
+
 ## External providers
+
+- Editor caption submission resolves trusted marketplace proxy URLs through `media_assets.proxy_file_id` to `original_file_id` for active, published audio/video assets. Only the transcription provider receives an expiring S3 URL for the clean original; editor playback, caption source associations and export licensing are unchanged. This caption-only lookup also works for unlicensed previews. Unavailable clean sources return 422, and provider error details are withheld because they can contain signed URLs. Existing session and paid-plan checks still apply; other source URLs retain their normal transcription path.
 
 - Set authentication and idempotency headers server-side.
 - Configure timeouts and distinguish provider rejection from temporary transport failure.
