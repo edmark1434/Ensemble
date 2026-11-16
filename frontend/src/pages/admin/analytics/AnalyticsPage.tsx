@@ -40,8 +40,12 @@ import AnalyticsFilters, {
   type AnalyticsFilterState,
 } from './components/AnalyticsFilters';
 import PlatformEconomyAnalytics from './components/PlatformEconomyAnalytics';
+import RateLimitMonitorPanel from './components/RateLimitMonitorPanel';
 
-type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health' | 'feedback';
+type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health' | 'traffic' | 'feedback';
+
+// Tabs that load their own data instead of the analytics overview.
+const STANDALONE_TABS: TabId[] = ['traffic', 'feedback'];
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
@@ -50,6 +54,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'economy', label: 'Credits', icon: Coins },
   { id: 'finance', label: 'Platform finance & transactions', icon: BadgeDollarSign },
   { id: 'health', label: 'Platform health', icon: Shield },
+  { id: 'traffic', label: 'Traffic & rate limits', icon: Activity },
   { id: 'feedback', label: 'Feedback', icon: Star },
 ];
 
@@ -141,7 +146,7 @@ export default function AnalyticsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health', 'feedback'];
+  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health', 'traffic', 'feedback'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
   const [data, setData] = useState<PlatformAnalytics | null>(() => {
@@ -231,7 +236,9 @@ export default function AnalyticsPage() {
     return [...years].sort((a, b) => b - a);
   }, [data]);
 
-  if (loading && tab !== 'feedback') {
+  const standalone = STANDALONE_TABS.includes(tab);
+
+  if (loading && !standalone) {
     return (
       <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className="h-10 w-10 animate-spin text-rose-400" />
@@ -239,7 +246,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  if (!data && tab !== 'feedback') {
+  if (!data && !standalone) {
     return (
       <main className="p-8 md:pl-[284px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
@@ -266,10 +273,12 @@ export default function AnalyticsPage() {
             <p className="mt-1 text-xs text-zinc-500">
               {tab === 'feedback'
                 ? `Suggestions & ratings · @${user?.username || 'admin'}`
-                : `${filterActive ? `${filteredMembers.length} filtered` : kpis?.totalMembers ?? '—'} members · engagement ${kpis?.engagementScore ?? '—'}/100 · @${user?.username || 'admin'}`}
+                : tab === 'traffic'
+                  ? `API request volume, 429 responses & IP pass-through · @${user?.username || 'admin'}`
+                  : `${filterActive ? `${filteredMembers.length} filtered` : kpis?.totalMembers ?? '—'} members · engagement ${kpis?.engagementScore ?? '—'}/100 · @${user?.username || 'admin'}`}
             </p>
           </div>
-          {tab !== 'feedback' && (
+          {!standalone && (
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-[200px] flex-1 lg:w-72">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
@@ -311,8 +320,9 @@ export default function AnalyticsPage() {
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
         {tab === 'feedback' && <AdminFeedbacksPanel />}
+        {tab === 'traffic' && <RateLimitMonitorPanel />}
 
-        {tab !== 'feedback' && data && (
+        {!standalone && data && (
           <>
         <AnalyticsFilters
           filters={filters}

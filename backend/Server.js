@@ -12,7 +12,10 @@ const { csrfProtection } = require('./middleware/CsrfProtection');
 const { createCorsOriginValidator, getAllowedOrigins } = require('./lib/CorsOrigins');
 
 const app = express();
-app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
+// TRUST_PROXY: a hop count ("4") or Express address list ("loopback, 10.0.0.0/8").
+// Env values are strings, and Express would read "4" as an IP address, so parse counts.
+const trustProxy = String(process.env.TRUST_PROXY || '').trim() || 'loopback';
+app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
 
 // Websocket server setup
 const httpServer = createServer(app);

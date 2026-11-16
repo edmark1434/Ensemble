@@ -177,6 +177,11 @@
 - Editor export requests carry projectId and an explicit marketDraft flag. The signed editor session supplies the render identity (including status/cancellation requests); client identity headers are not trusted. Internal render-source checks membership and the actual project license for every market media file. Licensed media uses protected originals; unlicensed media is rejected for clean export and uses a validated generated proxy only for explicit drafts. Export never makes a purchase.
 - Render source URLs expire after 24 hours to allow queueing and are inserted only into the render job copy, never project history. The render server progress endpoints return only format/type/project name from job input and redact raw error details; they do not expose source URLs. Existing 60-second preview/download URL expiry is unchanged.
 
+## Rate-limit monitor
+
+- `GET /api/admin/rate-limits` (Admin, `no-store`) returns the in-process monitor: per-minute allowed/blocked history for the last 60 minutes, per-policy totals, live windows sorted by usage (`active`, each with its Redis `key`), `sharedIps` (addresses used by several accounts), recent 429 `events` (retries of one request within a minute are grouped as `repeats`), `policies`, the counter `store` (`redis` or `memory`), limiter `storeErrors` and `clientIp` (how the API resolved the caller's IP against `CF-Connecting-IP` / `X-Forwarded-For`).
+- `POST /api/admin/rate-limits/reset` `{ key }` deletes one live window. The key must match `rate-limit:v2:<policy>:(acct|ip):<subject>`; anything else is 400.
+
 ## Support tickets
 
 - Members file their own tickets with `POST /api/users/tickets`. The requester is always the signed-in account. `fields` holds that type's answers. A project, listing, order, contract, or job picker sends the record id; the server stores the name beside it and rejects an id the account does not own. The Teams type sends a team id from `GET /api/users/ticket-teams?q=`, which returns public teams plus any team the account has a membership on, including private ones. The server stores that team's name and id, and rejects a team the account cannot see. `context` (`browser`, `device`, `page`) is stored with the account snapshot on the ticket. Ticket detail returns `formValues` and `submissionContext` separately.
