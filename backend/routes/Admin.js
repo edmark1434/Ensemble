@@ -193,6 +193,10 @@ router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
 
 router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
 
+const { getAdminRateLimits, postAdminRateLimitReset } = require('../controllers/AdminRateLimitControllers');
+router.get('/rate-limits', [checkSession, requireAdmin], getAdminRateLimits);
+router.post('/rate-limits/reset', [checkSession, requireAdmin], postAdminRateLimitReset);
+
 const {
   getAdminBadgeCatalog,
   getAdminBadgeRequirementTypes,

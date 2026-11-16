@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -329,47 +329,83 @@ export const TeamProjectWorkspace: React.FC = () => {
     setSearchParams({ tab });
   };
 
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const lastLoadTimeRef = useRef<number>(0);
+  const rateLimitedUntilRef = useRef<number>(0);
+  const loadedTeamIdRef = useRef<string | undefined>(id);
+
   const loadProjectData = useCallback(async (silent = false) => {
     if (!id) return;
-    try {
-      if (!silent) setIsLoading(true);
-      const [projRes, tasksRes, contractsRes, historyRes, membersRes, milestonesRes, videoProjectsRes] = await Promise.all([
-        api.get(`/api/team-projects/${id}`),
-        api.get(`/api/team-projects/${id}/taskboard`),
-        api.get(`/api/team-projects/${id}/contracts`),
-        api.get(`/api/team-projects/${id}/history`),
-        api.get(`/api/team-projects/${id}/members`),
-        api.get(`/api/team-projects/${id}/milestones`),
-        api.get(`/api/team-projects/${id}/video-projects`).catch(() => ({ data: { data: [] } })),
-      ]);
 
-      const pData = projRes.data?.data;
-      setProject(pData);
-      setEditTitle(pData?.project_title || '');
-      setEditDescription(pData?.project_description || '');
-
-      setTaskboardTasks(tasksRes.data?.data || []);
-      const cList = contractsRes.data?.data || [];
-      setContracts(cList);
-
-      const unreviewed = cList.find((c: any) =>
-        (c.contract_status === 'Done' ||
-          (c.milestones?.length > 0 && c.milestones.every((m: any) => m.status === 'completed'))) &&
-        !c.user_has_reviewed
-      );
-      if (unreviewed && id && !sessionStorage.getItem(`review_dismissed_${id}`) && !rateModalConfig.isOpen) {
-        setIsCompletionModalOpen(true);
-      }
-      setHistory(historyRes.data?.data || []);
-      setMembers(membersRes.data?.data || []);
-      setMilestones(milestonesRes.data?.data || []);
-      setLinkedProjects(videoProjectsRes.data?.data || []);
-    } catch (err: any) {
-      console.error('Error loading team project workspace:', err);
-      showErrorToast(err?.response?.data?.message || 'Failed to load project workspace');
-    } finally {
-      if (!silent) setIsLoading(false);
+    if (loadedTeamIdRef.current !== id) {
+      loadedTeamIdRef.current = id;
+      inFlightRef.current = null;
+      lastLoadTimeRef.current = 0;
+      rateLimitedUntilRef.current = 0;
     }
+
+    const nowMs = Date.now();
+    if (silent) {
+      if (nowMs < rateLimitedUntilRef.current) return;
+      if (nowMs - lastLoadTimeRef.current < 2000) return;
+    }
+
+    if (inFlightRef.current) {
+      return inFlightRef.current;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        if (!silent) setIsLoading(true);
+        const [projRes, tasksRes, contractsRes, historyRes, membersRes, milestonesRes, videoProjectsRes] = await Promise.all([
+          api.get(`/api/team-projects/${id}`),
+          api.get(`/api/team-projects/${id}/taskboard`),
+          api.get(`/api/team-projects/${id}/contracts`),
+          api.get(`/api/team-projects/${id}/history`),
+          api.get(`/api/team-projects/${id}/members`),
+          api.get(`/api/team-projects/${id}/milestones`),
+          api.get(`/api/team-projects/${id}/video-projects`).catch(() => ({ data: { data: [] } })),
+        ]);
+
+        const pData = projRes.data?.data;
+        setProject(pData);
+        setEditTitle(pData?.project_title || '');
+        setEditDescription(pData?.project_description || '');
+
+        setTaskboardTasks(tasksRes.data?.data || []);
+        const cList = contractsRes.data?.data || [];
+        setContracts(cList);
+
+        const unreviewed = cList.find((c: any) =>
+          (c.contract_status === 'Done' ||
+            (c.milestones?.length > 0 && c.milestones.every((m: any) => m.status === 'completed'))) &&
+          !c.user_has_reviewed
+        );
+        if (unreviewed && id && !sessionStorage.getItem(`review_dismissed_${id}`) && !rateModalConfig.isOpen) {
+          setIsCompletionModalOpen(true);
+        }
+        setHistory(historyRes.data?.data || []);
+        setMembers(membersRes.data?.data || []);
+        setMilestones(milestonesRes.data?.data || []);
+        setLinkedProjects(videoProjectsRes.data?.data || []);
+        lastLoadTimeRef.current = Date.now();
+      } catch (err: any) {
+        console.error('Error loading team project workspace:', err);
+        lastLoadTimeRef.current = Date.now();
+        if (err?.response?.status === 429) {
+          rateLimitedUntilRef.current = Date.now() + 60000;
+        }
+        if (!silent) {
+          showErrorToast(err?.response?.data?.message || 'Failed to load project workspace');
+        }
+      } finally {
+        inFlightRef.current = null;
+        if (!silent) setIsLoading(false);
+      }
+    })();
+
+    inFlightRef.current = requestPromise;
+    return requestPromise;
   }, [id]);
 
   useEffect(() => {
@@ -382,13 +418,33 @@ export const TeamProjectWorkspace: React.FC = () => {
       socket.connect();
     }
 
-    const handleRealtimeRefresh = () => {
-      loadProjectData(true);
+    let realtimeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRealtimeRefresh = (eventData?: any) => {
+      const eventTeamId = eventData?.team_id || eventData?.teamId;
+      if (eventTeamId && id && String(eventTeamId) !== String(id)) {
+        return;
+      }
+      if (realtimeTimer) {
+        clearTimeout(realtimeTimer);
+      }
+      realtimeTimer = setTimeout(() => {
+        realtimeTimer = null;
+        void loadProjectData(true);
+      }, 300);
+    };
+
+    const handleRealtimeRefresh = (eventData?: any) => {
+      scheduleRealtimeRefresh(eventData);
     };
 
     const handleProjectCompleted = (data: any) => {
-      loadProjectData(true);
-      if (!data?.team_id || data?.team_id === id) {
+      const eventTeamId = data?.team_id || data?.teamId;
+      if (eventTeamId && id && String(eventTeamId) !== String(id)) {
+        return;
+      }
+      scheduleRealtimeRefresh(data);
+      if (!eventTeamId || String(eventTeamId) === String(id)) {
         setIsCompletionModalOpen(true);
       }
     };
@@ -402,19 +458,22 @@ export const TeamProjectWorkspace: React.FC = () => {
     socket.on('contractReviewUpdated', handleRealtimeRefresh);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadProjectData(true);
+      if (document.visibilityState === 'visible' && Date.now() - lastLoadTimeRef.current >= 15000) {
+        void loadProjectData(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        loadProjectData(true);
+        void loadProjectData(true);
       }
-    }, 8000);
+    }, 60000);
 
     return () => {
+      if (realtimeTimer) {
+        clearTimeout(realtimeTimer);
+      }
       socket.off('dashboardTaskUpdated', handleRealtimeRefresh);
       socket.off('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
       socket.off('milestoneStatusUpdated', handleRealtimeRefresh);
@@ -425,7 +484,7 @@ export const TeamProjectWorkspace: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(pollInterval);
     };
-  }, [loadProjectData]);
+  }, [id, loadProjectData]);
 
   const handleEditProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1054,7 +1113,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               members={members}
               contracts={contracts}
               milestones={milestones}
-              onTasksUpdated={(silent?: boolean) => loadProjectData(silent)}
+              onTasksUpdated={loadProjectData}
               projectTitle={project.project_title || project.job_title}
               isReadOnly={isLockedOrArchived}
             />
@@ -1079,7 +1138,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               videoProjects={linkedProjects}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
-              onUpdated={(silent?: boolean) => loadProjectData(silent)}
+              onUpdated={loadProjectData}
               onNavigateTab={handleTabChange}
             />
           )}
