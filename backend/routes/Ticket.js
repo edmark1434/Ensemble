@@ -7,7 +7,8 @@ const { createRateLimiter } = require('../middleware/RateLimiter');
 const limiter = createRateLimiter('ticketCreate', {
   windowMs: 15 * 60 * 1000,
   accountLimit: 100,
-  ipLimit: 100,
+  anonymousLimit: 100,
+  networkLimit: 1000,
   message: 'Too many requests, please try again later.',
 });
 

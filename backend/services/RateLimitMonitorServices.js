@@ -33,7 +33,7 @@ function describeClientIp({ resolvedIp, socketIp, forwardedFor, cloudflareIp }) 
       message = 'The API sees your real IP: it matches the address Cloudflare reports.';
     } else {
       status = 'problem';
-      message = `The API resolved ${resolved || 'nothing'}, but Cloudflare reports ${cloudflare}. TRUST_PROXY does not match the number of proxies in front of the API, so visitors may share one rate-limit bucket.`;
+      message = `The API resolved ${resolved || 'nothing'}, but Cloudflare reports ${cloudflare}. TRUST_PROXY does not match the number of proxies in front of the API, so every signed-out visitor shares one network ceiling (signed-in people are unaffected).`;
     }
   } else if (hops > 0) {
     if (resolved === normalizeIp(socketIp)) {

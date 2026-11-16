@@ -18,7 +18,8 @@ const router = express.Router();
 const chatLimiter = createRateLimiter('chat', {
   windowMs: 60 * 1000,
   accountLimit: 10,
-  ipLimit: 20,
+  anonymousLimit: 10,
+  networkLimit: 200,
   message: 'Too many chatbot requests. Please wait a minute and try again.',
 });
 
