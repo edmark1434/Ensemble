@@ -38,7 +38,6 @@ import {
   useInboxUploadMedia,
 } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
-import socket from '@/lib/socket';
 import {
   SubmissionProgressModal,
   formatBytes,
@@ -133,29 +132,6 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
     }
   }, [milestones, selectedMilestoneId]);
 
-  // Real-time synchronization for milestone submissions and revisions
-  useEffect(() => {
-    if (!socket.connected) {
-      socket.connect();
-    }
-
-    const handleRealtimeRefresh = () => {
-      onUpdated(true);
-    };
-
-    socket.on('dashboardTaskUpdated', handleRealtimeRefresh);
-    socket.on('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
-    socket.on('milestoneStatusUpdated', handleRealtimeRefresh);
-    socket.on('milestone_status_updated', handleRealtimeRefresh);
-
-    return () => {
-      socket.off('dashboardTaskUpdated', handleRealtimeRefresh);
-      socket.off('teamTaskWorkspaceUpdated', handleRealtimeRefresh);
-      socket.off('milestoneStatusUpdated', handleRealtimeRefresh);
-      socket.off('milestone_status_updated', handleRealtimeRefresh);
-    };
-  }, [onUpdated]);
-
   const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(false);
 
   // Switch selected milestone and reset transient input states
@@ -195,7 +171,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
   const [deliverableType, setDeliverableType] = useState<'video_project' | 'external_link'>('video_project');
 
   useEffect(() => {
-    if (videoProjects && videoProjects.length > 0) {
+    if (videoProjects !== undefined) {
       setWorkspaceVideoProjects(videoProjects);
     } else if (teamId) {
       api.get(`/api/team-projects/${teamId}/video-projects`)
