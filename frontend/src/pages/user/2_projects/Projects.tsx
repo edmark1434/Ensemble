@@ -132,6 +132,7 @@ const Projects: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const user = useGlobalState((state) => state.user);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hoveredProject, setHoveredProject] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -216,6 +217,22 @@ const Projects: React.FC = () => {
   const lastRefreshAtRef = useRef(0);
 
   const loadProjects = useCallback(async () => {
+    if (isGuestMode) {
+      ++fetchSeqRef.current;
+      setPersonalProjects([]);
+      setSharedProjects([]);
+      setRecentProjects([]);
+      setTrashProjects([]);
+      setLoadError(null);
+      setLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
+    if (!user?.account_id) {
+      return;
+    }
+
     // a background refresh mid-rename could briefly flip the name back
     if (renameInFlightRef.current || mutationInFlightRef.current) return;
 
@@ -255,7 +272,7 @@ const Projects: React.FC = () => {
         setIsRefreshing(false);
       }
     }
-  }, []);
+  }, [isGuestMode, user?.account_id]);
 
   const handleProjectAction = async (project: Project, action: ProjectAction): Promise<boolean> => {
     if (mutationInFlightRef.current || renameInFlightRef.current) return false;
@@ -292,6 +309,14 @@ const Projects: React.FC = () => {
   };
 
   useEffect(() => {
+    if (isGuestMode) {
+      void loadProjects();
+      return;
+    }
+    if (!user?.account_id) {
+      return;
+    }
+
     loadProjects();
 
     const refreshIfVisible = () => {
@@ -311,7 +336,7 @@ const Projects: React.FC = () => {
       window.removeEventListener("focus", refreshIfVisible);
       clearInterval(interval);
     };
-  }, [loadProjects]);
+  }, [isGuestMode, user?.account_id, loadProjects]);
 
   useEffect(() => {
     setOpenTeamFolderId(null);

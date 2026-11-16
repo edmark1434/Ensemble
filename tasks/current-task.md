@@ -1,13 +1,11 @@
-# Active Task: Fix Workspace 429 Too Many Requests on Live Server
+# Active Task: Fix Guest Mode 401 Error on Projects Page
 
 ## Implementation Objective
 
-Eliminate redundant and overly aggressive API fetching in the Workspace view (`TeamProjectWorkspace.tsx` and `ProjectSubmissionsTab.tsx`) so live users do not exhaust the backend `general` rate limit (600 GET requests per 15 minutes per IP) and receive `429 Too Many Requests`.
+Prevent `Projects.tsx` from calling authenticated `/api/projects` endpoints (and triggering `/api/users/refresh-token` 401 responses and the `"Unable to refresh projects. Please try again."` error banner) when the user is in Guest mode or before an authenticated session is resolved.
 
 ## Acceptance Criteria
 
-- `TeamProjectWorkspace.tsx` deduplicates concurrent `loadProjectData` calls, skips rapid silent refreshes within 2 seconds, backs off silent polling for 60 seconds after a 429 response, and suppresses error toasts for silent background refreshes.
-- `TeamProjectWorkspace.tsx` filters socket refreshes by `team_id` / `teamId` when present, debounces socket-triggered refreshes by 300ms, throttles `visibilitychange` refreshes to at least 15 seconds between loads, and increases fallback polling from 8s to 60s.
-- `TeamProjectWorkspace.tsx` passes `loadProjectData` directly to `onTasksUpdated` and `onUpdated` without creating inline arrow functions on every 1-second timer render.
-- `ProjectSubmissionsTab.tsx` removes duplicate Socket.IO listeners and avoids firing a redundant `/video-projects` request when `videoProjects` is provided by `TeamProjectWorkspace` (even when empty).
+- In `frontend/src/pages/user/2_projects/Projects.tsx`, `loadProjects` resets project lists, clears `loadError`, stops loading/refreshing, and returns early when `isGuestMode` is `true`.
+- `loadProjects` and the refresh `useEffect` return early without calling `/api/projects` or registering visibility/focus/interval polling when `!user?.account_id` or `isGuestMode` is `true`.
 - No builds, type checks, lint, tests, or other verification commands run.
