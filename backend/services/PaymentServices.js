@@ -379,8 +379,8 @@ const customerPayload = await getCustomerPayload(req);
 
         capture_method: "AUTOMATIC",
 
-        // Allow user to opt into saving payment method
-        allow_save_payment_method: "OPTIONAL",
+        // Disable saving payment method during top-up checkout
+        allow_save_payment_method: "DISABLED",
 
         ...customerPayload,
 
