@@ -179,8 +179,8 @@
 
 ## Rate-limit monitor
 
-- `GET /api/admin/rate-limits` (Admin, `no-store`) returns the in-process monitor: per-minute allowed/blocked history for the last 60 minutes, per-policy totals, live windows sorted by usage (`active`, each with its Redis `key`), `sharedIps` (addresses used by several accounts), recent 429 `events` (retries of one request within a minute are grouped as `repeats`), `policies`, the counter `store` (`redis` or `memory`), limiter `storeErrors` and `clientIp` (how the API resolved the caller's IP against `CF-Connecting-IP` / `X-Forwarded-For`).
-- `POST /api/admin/rate-limits/reset` `{ key }` deletes one live window. The key must match `rate-limit:v2:<policy>:(acct|ip):<subject>`; anything else is 400.
+- `GET /api/admin/rate-limits` (Admin, `no-store`) returns the in-process monitor: per-minute allowed/blocked history for the last 60 minutes, per-policy totals, live windows sorted by usage (`active`, each with its Redis `key` and `scope`: `account`, `device` or `ip` for the signed-out network ceiling), `sharedIps` (addresses used by several accounts or signed-out browsers, with the highest network-ceiling usage), recent 429 `events` (retries of one request within a minute are grouped as `repeats`), `policies`, the counter `store` (`redis` or `memory`), limiter `storeErrors` and `clientIp` (how the API resolved the caller's IP against `CF-Connecting-IP` / `X-Forwarded-For`).
+- `POST /api/admin/rate-limits/reset` `{ key }` deletes one live window. The key must match `rate-limit:v2:<policy>:(acct|dev|ip):<subject>`; anything else is 400.
 
 ## Support tickets
 

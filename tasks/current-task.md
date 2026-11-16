@@ -6,7 +6,7 @@ Several people using the platform at once get `429 Too many requests`. The API l
 
 ## Acceptance Criteria
 
-- Signed-in requests are rate limited per account (session must exist in Redis); signed-out requests per IP; login/signup stays per IP.
+- People sharing an IP (same Wi-Fi) do not affect each other: signed-in requests count only per account (session must exist in Redis), with no IP limit; signed-out requests count per browser (signed `ens_rl` cookie) plus a high per-IP network ceiling meant only as an abuse backstop. Login/signup counts per browser plus network.
 - Everyday read/write policies use one-minute windows with budgets that fit legitimate polling.
 - Chat and ticket route limiters use the same Redis store and monitor instead of in-memory `express-rate-limit`.
 - `TRUST_PROXY` accepts a numeric hop count; existing address-list values behave as before.

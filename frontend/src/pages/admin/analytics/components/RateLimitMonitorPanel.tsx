@@ -4,7 +4,8 @@ import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { ChartCard, LineChart } from './AnalyticsCharts';
 
-type Scope = 'account' | 'ip';
+// account: signed in · device: one signed-out browser · ip: ceiling for all signed-out traffic from one network
+type Scope = 'account' | 'device' | 'ip';
 
 type RateLimitMonitor = {
   startedAt: string;
@@ -14,7 +15,7 @@ type RateLimitMonitor = {
   currentMinute: { minute: string; allowed: number; blocked: number };
   history: { minute: string; allowed: number; blocked: number }[];
   policyTotals: Record<string, { allowed: number; blocked: number }>;
-  liveBuckets: { total: number; accounts: number; ips: number; nearLimit: number; blocked: number };
+  liveBuckets: { total: number; accounts: number; devices: number; ips: number; nearLimit: number; blocked: number };
   active: {
     key: string;
     policy: string;
@@ -30,7 +31,7 @@ type RateLimitMonitor = {
     lastSeen: string;
     lastRequest: string;
   }[];
-  sharedIps: { ip: string; accounts: number; anonymousRequests: number; requests: number }[];
+  sharedIps: { ip: string; accounts: number; devices: number; signedOutRequests: number; highestCeilingPct: number }[];
   events: {
     key: string;
     at: string;
@@ -46,7 +47,14 @@ type RateLimitMonitor = {
     limit: number;
   }[];
   storeErrors: { count: number; lastAt: string | null; lastMessage: string | null };
-  policies: { name: string; kind: 'api' | 'route'; windowSeconds: number; accountLimit: number | null; ipLimit: number }[];
+  policies: {
+    name: string;
+    kind: 'api' | 'route';
+    windowSeconds: number;
+    accountLimit: number | null;
+    anonymousLimit: number;
+    networkLimit: number;
+  }[];
   store: 'redis' | 'memory';
   clientIp: {
     status: 'ok' | 'problem' | 'unverified' | 'direct';
@@ -103,8 +111,15 @@ function secondsUntil(value: string) {
 
 function subjectName(row: { scope: Scope; label: string | null; subject: string }) {
   if (row.scope === 'account') return row.label || `Account ${row.subject}`;
+  if (row.scope === 'device') return `Browser ${row.subject.slice(0, 6)}`;
   return row.subject;
 }
+
+const SCOPE_BADGES: Record<Scope, { label: string; className: string }> = {
+  account: { label: 'Account', className: 'border-sky-500/30 bg-sky-500/10 text-sky-200' },
+  device: { label: 'Signed-out browser', className: 'border-violet-500/30 bg-violet-500/10 text-violet-200' },
+  ip: { label: 'Network ceiling', className: 'border-amber-500/30 bg-amber-500/10 text-amber-100' },
+};
 
 function Stat({ label, value, sub, tone = 'default' }: { label: string; value: string | number; sub?: string; tone?: 'default' | 'warn' | 'bad' }) {
   const color = tone === 'bad' ? 'text-red-300' : tone === 'warn' ? 'text-amber-200' : 'text-white';
@@ -118,13 +133,10 @@ function Stat({ label, value, sub, tone = 'default' }: { label: string; value: s
 }
 
 function ScopeBadge({ scope }: { scope: Scope }) {
+  const badge = SCOPE_BADGES[scope];
   return (
-    <span
-      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-        scope === 'account' ? 'border-sky-500/30 bg-sky-500/10 text-sky-200' : 'border-white/10 bg-white/[0.04] text-zinc-300'
-      }`}
-    >
-      {scope === 'account' ? 'Account' : 'IP'}
+    <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
+      {badge.label}
     </span>
   );
 }
@@ -322,8 +334,12 @@ export default function RateLimitMonitorPanel() {
           sub={`${blockRate.toFixed(blockRate > 0 && blockRate < 1 ? 2 : 1)}% of requests`}
           tone={data.lastHour.blocked > 0 ? 'bad' : 'default'}
         />
-        <Stat label="Active accounts" value={data.liveBuckets.accounts} sub="With a live rate-limit window" />
-        <Stat label="Anonymous IPs" value={data.liveBuckets.ips} sub="Signed-out traffic" />
+        <Stat label="Active accounts" value={data.liveBuckets.accounts} sub="Each has its own budget" />
+        <Stat
+          label="Signed-out browsers"
+          value={data.liveBuckets.devices}
+          sub={`From ${data.liveBuckets.ips} network${data.liveBuckets.ips === 1 ? '' : 's'}`}
+        />
         <Stat
           label="Near or over limit"
           value={data.liveBuckets.nearLimit}
@@ -345,14 +361,18 @@ export default function RateLimitMonitorPanel() {
       </ChartCard>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Section title="Limits" subtitle="Signed-in requests count per account; signed-out requests count per IP.">
+        <Section
+          title="Limits"
+          subtitle="Signed-in people count per account and are never limited by IP. Signed-out people count per browser; the network ceiling caps all signed-out traffic from one IP."
+        >
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] bg-[#0c0d12] text-[10px] uppercase tracking-wide text-zinc-600">
                 <th className={TH}>Policy</th>
                 <th className={TH}>Window</th>
                 <th className={TH}>Per account</th>
-                <th className={TH}>Per IP</th>
+                <th className={TH}>Per browser</th>
+                <th className={TH}>Network ceiling</th>
                 <th className={TH}>Last hour</th>
               </tr>
             </thead>
@@ -366,8 +386,9 @@ export default function RateLimitMonitorPanel() {
                       <span className="ml-1.5 font-mono text-[10px] text-zinc-600">{p.name}</span>
                     </td>
                     <td className={`${TD} text-zinc-400`}>{formatWindow(p.windowSeconds)}</td>
-                    <td className={`${TD} tabular-nums`}>{p.accountLimit ?? <span className="text-zinc-600">IP only</span>}</td>
-                    <td className={`${TD} tabular-nums`}>{p.ipLimit}</td>
+                    <td className={`${TD} tabular-nums`}>{p.accountLimit ?? <span className="text-zinc-600">Per browser</span>}</td>
+                    <td className={`${TD} tabular-nums`}>{p.anonymousLimit}</td>
+                    <td className={`${TD} tabular-nums`}>{p.networkLimit.toLocaleString()}</td>
                     <td className={`${TD} tabular-nums`}>
                       {(usage?.allowed || 0) + (usage?.blocked || 0)}
                       {usage?.blocked ? <span className="ml-1.5 text-red-300">({usage.blocked} blocked)</span> : null}
@@ -379,14 +400,18 @@ export default function RateLimitMonitorPanel() {
           </table>
         </Section>
 
-        <Section title="Shared networks" subtitle="IPs used by several signed-in accounts (campus or office Wi-Fi), or by signed-out traffic.">
+        <Section
+          title="Shared networks"
+          subtitle="IPs used by several people at once (campus or office Wi-Fi). Each person still has their own budget."
+        >
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] bg-[#0c0d12] text-[10px] uppercase tracking-wide text-zinc-600">
                 <th className={TH}>IP</th>
                 <th className={TH}>Accounts</th>
+                <th className={TH}>Signed-out browsers</th>
                 <th className={TH}>Signed-out requests</th>
-                <th className={TH}>Requests in window</th>
+                <th className={TH}>Ceiling used</th>
               </tr>
             </thead>
             <tbody>
@@ -399,13 +424,20 @@ export default function RateLimitMonitorPanel() {
                       {row.accounts}
                     </span>
                   </td>
-                  <td className={`${TD} tabular-nums`}>{row.anonymousRequests}</td>
-                  <td className={`${TD} tabular-nums`}>{row.requests}</td>
+                  <td className={`${TD} tabular-nums`}>{row.devices}</td>
+                  <td className={`${TD} tabular-nums`}>{row.signedOutRequests}</td>
+                  <td
+                    className={`${TD} tabular-nums ${
+                      row.highestCeilingPct >= 100 ? 'text-red-300' : row.highestCeilingPct >= 80 ? 'text-amber-200' : 'text-zinc-400'
+                    }`}
+                  >
+                    {row.highestCeilingPct}%
+                  </td>
                 </tr>
               ))}
               {data.sharedIps.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
                     No shared addresses right now.
                   </td>
                 </tr>
@@ -436,7 +468,7 @@ export default function RateLimitMonitorPanel() {
                     <ScopeBadge scope={row.scope} />
                     <span className={row.scope === 'ip' ? 'font-mono text-xs' : ''}>{subjectName(row)}</span>
                   </div>
-                  {row.scope === 'account' && <p className="mt-0.5 font-mono text-[10px] text-zinc-600">{row.ip}</p>}
+                  {row.scope !== 'ip' && <p className="mt-0.5 font-mono text-[10px] text-zinc-600">{row.ip}</p>}
                 </td>
                 <td className={TD}>{policyLabel(row.policy)}</td>
                 <td className={TD}>
