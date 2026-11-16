@@ -53,6 +53,6 @@ export interface ILayoutState {
   controlsPanelRef: React.RefObject<HTMLDivElement | null> | null;
   setControlsPanelRef: (ref: React.RefObject<HTMLDivElement | null>) => void;
 
-  activeRightItem: "controls" | "comments" | "saves";
-  setActiveRightItem: (item: "controls" | "comments" | "saves") => void;
+  activeRightItem: "controls" | "comments" | "saves" | "workspace";
+  setActiveRightItem: (item: "controls" | "comments" | "saves" | "workspace") => void;
 }

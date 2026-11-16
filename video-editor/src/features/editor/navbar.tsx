@@ -55,6 +55,7 @@ import { canManageSharing } from "@/features/editor/types/editor-role";
 import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
 import { CommentsButton } from "@/features/editor/comments/comments-button";
+import { WorkspaceButton } from "@/features/editor/workspace/workspace-button";
 import { useSnapshotPreview } from "./hooks/use-snapshot-preview";
 
 export default function Navbar({
@@ -88,6 +89,12 @@ export default function Navbar({
 
   const projectRole = useProjectRole(preview ? undefined : projectId);
   const canShare = !preview && canManageSharing(projectRole);
+
+  useEffect(() => {
+    if (!preview && projectId) return;
+    const layout = useLayoutStore.getState();
+    if (layout.activeRightItem === "workspace") layout.setActiveRightItem("controls");
+  }, [preview, projectId]);
 
   useEffect(() => {
     setTitle(projectName);
@@ -333,6 +340,7 @@ export default function Navbar({
               </TooltipContent>
             </Tooltip>
           {isLargeScreen && canComment && <CommentsButton />}
+          {isLargeScreen && !preview && projectId && <WorkspaceButton />}
           {!preview && <DownloadPopover stateManager={stateManager} />}
 
           {canShare && (

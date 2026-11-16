@@ -14,7 +14,8 @@ export async function GET(
     const transcript = await res.json();
 
     if (transcript.status === "error") {
-      return NextResponse.json({ status: "error", message: transcript.error }, { status: 200 });
+      // Provider errors can contain the server-only signed original URL.
+      return NextResponse.json({ status: "error", message: "Transcription failed. Try again." }, { status: 200 });
     }
     if (transcript.status !== "completed") {
       return NextResponse.json({ status: "processing" }, { status: 200 });

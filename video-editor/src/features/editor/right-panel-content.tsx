@@ -2,6 +2,7 @@ import React from "react";
 import { ControlItem } from "./control-item";
 import useLayoutStore from "./store/use-layout-store";
 import { CommentsPanel } from "./comments/comments-panel";
+import { WorkspacePanel } from "./workspace/workspace-panel";
 
 // Placeholder panel - swap this out for the real Saves implementation
 // once it exists.
@@ -23,6 +24,7 @@ export const RightPanelContent = ({
       <div className="flex w-full h-full">
         {activeRightItem === "controls" && <ControlItem />}
         {activeRightItem === "comments" && <CommentsPanel />}
+        {activeRightItem === "workspace" && <WorkspacePanel />}
         {activeRightItem === "saves" && <SavesPanel />}
       </div>
     </div>
