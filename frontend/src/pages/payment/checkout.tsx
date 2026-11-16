@@ -305,7 +305,7 @@ const CheckoutPage: React.FC = () => {
   const handleSubscribe = async () => {
     if (!checkoutItem) return;
 
-    if (!selectedPaymentMethod) {
+    if (!selectedPaymentMethod && !checkoutItem.isDowngrade) {
       setError("Please select a payment method");
       return;
     }
@@ -338,10 +338,10 @@ const CheckoutPage: React.FC = () => {
         window.location.href = data.payment_link;
       } else if (
         response.status === 200 &&
-        (data?.subscriptionUpdate?.reference_id || data.reference_id)
+        (data?.subscriptionUpdate?.reference_id || data.reference_id || data?.success || checkoutItem.isDowngrade)
       ) {
-        setReferenceNumber(data?.subscriptionUpdate?.reference_id || data.reference_id);
-        setSuccessMessage(data?.message || "Subscription payment processed successfully");
+        setReferenceNumber(data?.subscriptionUpdate?.reference_id || data.reference_id || `SUB-${checkoutItem.id}`);
+        setSuccessMessage(data?.message || (checkoutItem.isDowngrade ? "Plan downgraded successfully!" : "Subscription payment processed successfully"));
         sessionStorage.removeItem("ensemble_checkout_item");
         setIsSuccess(true);
       } else {
@@ -1263,7 +1263,7 @@ const CheckoutPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSubscribe}
-                  disabled={isProcessing || !selectedPaymentMethod}
+                  disabled={isProcessing || (!checkoutItem.isDowngrade && !selectedPaymentMethod)}
                   className={`w-full py-3 text-xs font-bold text-white rounded-xl transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                     checkoutItem.isUpgrade
                       ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
