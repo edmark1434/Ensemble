@@ -19,8 +19,8 @@ console, the only moderator role that may adjust or freeze credits.
 
 ## Acceptance criteria
 
-- `GET /api/admin/economy-overview`, `/economy/wallets`, `/economy/wallets/:walletId`, `/economy/ledger`,
-  `/economy/holds` allow Admin and Support Moderator. Support never sees staff wallets or staff ledger rows.
+- `GET /api/admin/economy-overview`, `/economy/wallets` (holds via `?hold=`), `/economy/wallets/:walletId`,
+  `/economy/ledger` allow Admin and Support Moderator. Support never sees staff wallets or staff ledger rows.
 - Overview: supply (spendable, held, escrow, platform), 30-day flow with daily series, in-flight credits
   (pending ledger, cashouts, dispute payouts), hold health, real top spenders/earners, top holders,
   recent adjustments, actionable alerts that open the right tab with filters.
