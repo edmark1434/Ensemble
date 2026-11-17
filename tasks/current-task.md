@@ -1,3 +1,28 @@
+# Active Task (video editor): Export fails in production with "Invalid request origin."
+
+## Implementation Objective
+
+Editor API writes (export, media status, uploads, transcription, market asset/template actions) must accept
+same-origin browser requests on `https://editor.ensemble.software` behind Cloudflare.
+
+## Cause fixed
+
+Routes compared the `Origin` header with `request.nextUrl.origin`. `server.ts` passes `hostname`/`port` to
+`next()`, so in production `nextUrl.origin` is the internal listener (`http://localhost:3000`), never the public
+URL, and every check returned 403. New helper `video-editor/src/lib/auth/request-origin.ts`
+(`isSameOriginRequest`) compares the Origin host with `X-Forwarded-Host`/`Host` (as Next.js does for Server
+Actions); all 9 call sites use it. A missing Origin is still rejected (uploads keep allowing it, as before).
+
+## Acceptance criteria
+
+- Export, media status checks, uploads, transcription and market actions work on the deployed editor.
+- A request whose Origin is another site, `null`, or missing is still rejected with 403.
+- Local dev (`http://localhost:3000`) keeps working.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`, redeploy editor).
+
+---
+
 # Active Task (staff console session): Dialogs hidden or cut off; phone layout
 
 ## Implementation Objective

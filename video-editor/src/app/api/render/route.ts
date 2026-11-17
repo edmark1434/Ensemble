@@ -1,6 +1,7 @@
 import { renderServerHeaders } from "@/lib/render-server";
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { MARKET_UUID, marketAssetBackend } from "@/lib/market-asset-backend";
 import { collectMarketExportItems } from "@/features/editor/utils/market-export-assets";
 import { getVideoExportBitrateError } from "@/lib/export-bitrate";
@@ -13,7 +14,7 @@ import { PlanConfigurationError } from "@/lib/plan-feature-values";
 const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL || "http://localhost:3001";
 
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
   const session = token ? await verifyEditorSession(token) : null;
   if (!session) return NextResponse.json({ message: "Sign in to export." }, { status: 401 });

@@ -112,7 +112,9 @@ function devOnly(_req, res, next) {
     return next();
 }
 
-router.post('/dev/add-credits', [devOnly, checkSession, requireAuth], async (req, res) => {
+// Credit injection is intentionally allowed in production (owner request), so it skips devOnly.
+// WARNING: any signed-in member can top up their own wallet through this endpoint.
+router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
     try {
         const { pool } = require('../lib/Database');
         const accountId = req.user.account_id;

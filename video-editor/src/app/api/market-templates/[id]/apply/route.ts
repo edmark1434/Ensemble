@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { MARKET_UUID } from "@/lib/market-asset-backend";
 import { readPublishedMarketTemplate } from "@/lib/db/template-copy";
 import { authorizeTemplateInsertion, saveTemplateInsertion } from "@/lib/db/template-insertion";
@@ -7,7 +8,7 @@ import { prepareTemplateCopy } from "@/lib/template-use-service";
 import { decodeTemplate } from "@/lib/collab/template-copy";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
   const session = token ? await verifyEditorSession(token) : null;
   if (!session) return NextResponse.json({ error: "Sign in to use templates." }, { status: 401 });

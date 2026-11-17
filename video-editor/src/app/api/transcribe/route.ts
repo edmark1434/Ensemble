@@ -2,11 +2,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { getVideoUploadPolicy } from "@/lib/upload-policy";
 import { resolveTranscriptionSource, TranscriptionSourceError } from "@/lib/transcription-source";
 
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
   const session = token ? await verifyEditorSession(token) : null;
   if (!session) return NextResponse.json({ message: "Sign in to generate captions." }, { status: 401 });
