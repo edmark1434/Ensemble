@@ -661,8 +661,8 @@ async function fetchFlow({ days = 30 } = {}) {
     `
     WITH days AS (
       SELECT generate_series(
-        (CURRENT_DATE - ($1::int - 1)),
-        CURRENT_DATE,
+        (CURRENT_DATE - ($1::int - 1))::timestamp,
+        CURRENT_DATE::timestamp,
         INTERVAL '1 day'
       )::date AS day
     ),

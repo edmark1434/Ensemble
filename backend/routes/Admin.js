@@ -34,8 +34,12 @@ const requireUserTeamAccess = requireStaffRole([
 const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);
 const {
   getAdminEconomyOverview,
+  getAdminEconomyWallets,
+  getAdminEconomyLedger,
   getAdminWalletDetail,
 } = require('../controllers/AdminEconomyControllers');
+/** Credits & Economy desk: Admin, and Support Moderator (no staff wallets; enforced in the service). */
+const requireEconomyAccess = requireStaffRole(['Admin', 'Support Moderator']);
 const {
   getAdminVideos,
   getAdminVideo,
@@ -117,8 +121,10 @@ router.post('/accounts/:accountId/warnings/:violationId/rescind', [checkSession,
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/accounts/:accountId/profile', [checkSession, requireUserTeamAccess], getAdminAccountProfileDetails);
-router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
-router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
+router.get('/economy-overview', [checkSession, requireEconomyAccess], getAdminEconomyOverview);
+router.get('/economy/wallets', [checkSession, requireEconomyAccess], getAdminEconomyWallets);
+router.get('/economy/wallets/:walletId', [checkSession, requireEconomyAccess], getAdminWalletDetail);
+router.get('/economy/ledger', [checkSession, requireEconomyAccess], getAdminEconomyLedger);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/moderation/videos', [checkSession, requireAdmin], getAdminVideos);
 router.get('/moderation/videos/:projectId', [checkSession, requireAdmin], getAdminVideo);
