@@ -121,6 +121,7 @@ import {
   SupportDisputes,
   SupportUserTeam,
   SupportReports,
+  SupportCreditsWallets,
   JobsModeratorLayout,
   JobsModeratorDashboard,
   JobsGigsControl,
@@ -440,6 +441,7 @@ function App() {
           {/* Restrictions removed: enforce from a report case or User & Team → Users. */}
           <Route path='restrictions' element={<Navigate to="/moderator/support/user-team" replace />} />
           <Route path='user-team' element={<SupportUserTeam />} />
+          <Route path='credits' element={<SupportCreditsWallets />} />
           <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 

@@ -6,6 +6,7 @@ const {
   recordAccountActivity,
   fetchActivityForAccounts,
 } = require('./AccountActivityRepositories');
+const { fetchLastActivityForAccounts } = require('./AdminAccountProfileRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -58,7 +59,7 @@ function mapUserRow(row) {
     forumTimeout: Boolean(row.forum_timeout),
     verificationStatus: mapVerificationLabel(row.verification_status),
     joinedAt: row.created_at,
-    lastSeenAt: row.created_at,
+    lastSeenAt: null,
     hasAvatar: Boolean(row.avatar_file_id),
     avatarPath: row.avatar_path || null,
     staffRole: row.staff_role || null,
@@ -745,7 +746,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       (
         SELECT COUNT(*)::int
         FROM team_members tm
-        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL
+        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL AND tm.status = 'Active'
       ) AS member_count,
       EXISTS (
         SELECT 1 FROM restrictions r
@@ -799,13 +800,14 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
     INNER JOIN accounts a ON a.account_id = u.account_id
     WHERE tm.team_id = ANY($1::uuid[])
       AND tm.deleted_at IS NULL
+      AND tm.status = 'Active'
     ORDER BY
-      CASE WHEN LOWER(tm.role) LIKE '%leader%' THEN 0 ELSE 1 END,
-      tm.joined_at ASC
+      CASE LOWER(tm.role) WHEN 'owner' THEN 0 WHEN 'leader' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END,
+      tm.joined_at ASC NULLS LAST
     `,
     [teamIds]
   );
-  const [membersResult, [creditMap, historyMap, activityMap, assetStats]] = await Promise.all([
+  const [membersResult, [creditMap, historyMap, activityMap, assetStats, lastActivityMap]] = await Promise.all([
     membersRequest,
     enrich
       ? Promise.all([
@@ -823,8 +825,9 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
             `,
             [accountIds]
           ).catch(() => ({ rows: [] })),
+          fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
         ])
-      : [new Map(), new Map(), new Map(), { rows: [] }],
+      : [new Map(), new Map(), new Map(), { rows: [] }, new Map()],
   ]);
 
   const membersByTeam = new Map();
@@ -855,7 +858,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       name: row.display_name || row.handle || 'Unknown',
       email: '',
       username: row.handle,
-      role: 'Team Leader',
+      role: 'Owner',
     };
     const teamName = row.display_name || row.handle || 'Unnamed team';
     const assets = assetsByAccount.get(row.account_id) || { listing_count: 0, listing_value: 0 };
@@ -877,11 +880,12 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       leaderEmail: leader.email,
       memberCount: members.length || Number(row.member_count || 0),
       members,
-      email: leader.email || `${(row.handle || 'team').toLowerCase()}@ensemble.app`,
+      // Teams have no mailbox of their own; staff contact the owner.
+      email: leader.email || '',
       verificationStatus: mapVerificationLabel(row.verification_status, { forTeam: true }),
       status: normalizeStatus(row.status),
       forumTimeout: Boolean(row.forum_timeout),
-      lastSeenAt: row.created_at,
+      lastSeenAt: lastActivityMap.get(row.account_id) || null,
       createdAt: row.created_at,
       stats: {
         totalAssets: Number(assets.listing_count || 0),
@@ -969,7 +973,7 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const [creditMap, historyMap, activityMap, assetStats, membershipsMap] = await Promise.all([
+  const [creditMap, historyMap, activityMap, assetStats, membershipsMap, lastActivityMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
     fetchActivityForAccounts(accountIds),
@@ -985,6 +989,7 @@ async function getUsersManagement() {
         ).catch(() => ({ rows: [] }))
       : { rows: [] },
     fetchTeamMembershipsForUsers(userIds),
+    fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
   ]);
   const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
 
@@ -993,6 +998,7 @@ async function getUsersManagement() {
     const history = buildHistory(u.accountId, historyMap, activityMap);
     return {
       ...rest,
+      lastSeenAt: lastActivityMap.get(u.accountId) || null,
       profileId: `USR-${String(u.id).slice(0, 8).toUpperCase()}`,
       teams: membershipsMap.get(u.id) || [],
       creditActivity: creditMap.get(u.accountId) || [],
@@ -1551,13 +1557,40 @@ async function updateAccountVerification(accountId, action, staffId, _options = 
   };
 }
 
-async function adjustAccountCredits(accountId, amount, _note, staffId, { referenceTable = null, referenceId = null } = {}) {
-  await assertAccountExists(accountId);
+function creditAdjustError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+const MIN_ADJUSTMENT_REASON = 5;
+const MAX_ADJUSTMENT_CREDITS = 1000000;
+
+/**
+ * Staff grant (+) or deduction (−) on an account wallet.
+ *
+ * The ledger row is a self-transfer (source = destination) with the unsigned amount, so the
+ * direction, reason and actor are stored on a CREDITS_ADJUSTED account_activity row written
+ * in the same transaction and referencing the ledger row. Staff desks read the sign from it.
+ */
+async function adjustAccountCredits(accountId, amount, note, staffId, { referenceTable = null, referenceId = null } = {}) {
+  try {
+    await assertAccountExists(accountId);
+  } catch {
+    throw creditAdjustError('Account not found', 404);
+  }
   const delta = Number(amount);
   if (!Number.isInteger(delta) || delta === 0) {
-    throw new Error('Credit amount must be a whole, non-zero number');
+    throw creditAdjustError('Credit amount must be a whole, non-zero number');
   }
-  if (Math.abs(delta) > 1000000) throw new Error('Credit adjustments are limited to 1,000,000 at a time');
+  if (Math.abs(delta) > MAX_ADJUSTMENT_CREDITS) {
+    throw creditAdjustError('Credit adjustments are limited to 1,000,000 at a time');
+  }
+  const reason = String(note || '').trim();
+  if (reason.length < MIN_ADJUSTMENT_REASON) {
+    throw creditAdjustError('Write why you are changing these credits (at least 5 characters)');
+  }
+  if (reason.length > 500) throw creditAdjustError('Keep the reason under 500 characters');
   // No staff member adjusts their own credits, and staff accounts are Admin's to adjust.
   if (staffId) {
     const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
@@ -1565,40 +1598,79 @@ async function adjustAccountCredits(accountId, amount, _note, staffId, { referen
   }
 
   const wallet = await getAccountWallet(accountId);
-  if (!wallet) throw new Error('No account wallet found for this account');
+  if (!wallet) throw creditAdjustError('No account wallet found for this account', 404);
 
   const client = await pool.connect();
+  let result;
   try {
     await client.query('BEGIN');
     // Relative and conditional: a payout or purchase landing at the same moment is kept,
-    // and a deduction can never take the balance below zero.
+    // and a deduction can never take the spendable balance below zero.
     const updated = await client.query(
       `UPDATE wallets
        SET balance_credits = balance_credits + $1
        WHERE wallet_id = $2
          AND balance_credits + $1 >= 0
-       RETURNING balance_credits`,
+       RETURNING balance_credits, frozen_balance_credits`,
       [delta, wallet.wallet_id]
     );
-    if (!updated.rows.length) throw new Error('Insufficient wallet balance for this adjustment');
+    if (!updated.rows.length) {
+      throw creditAdjustError(
+        'Not enough spendable credits for this deduction. Held credits cannot be deducted; release the hold first.',
+        409
+      );
+    }
 
-    // Admin grants/deductions are always Fund Transfer (note is UI-only for now).
-    await client.query(
+    const ledger = await client.query(
       `
       INSERT INTO credit_transactions (
         type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
       )
       VALUES ($1, $2, 'Completed', $3, $3, $4, $5)
+      RETURNING credit_transaction_id
       `,
       [CREDIT_TRANSACTION_TYPE.FUND_TRANSFER, Math.abs(delta), wallet.wallet_id, referenceTable, referenceId]
     );
+    const creditTransactionId = ledger.rows[0].credit_transaction_id;
+    const balanceCredits = Number(updated.rows[0].balance_credits);
+
+    // Same transaction as the money move: no adjustment exists without its audit row.
+    await client.query(
+      `
+      INSERT INTO account_activity (
+        account_id, action, event_code, reference_table, reference_prefix, reference_id,
+        actor_staff_id, metadata
+      ) VALUES ($1, $2, 'CREDITS_ADJUSTED', 'credit_transactions', 'CTX', $3, $4, $5::jsonb)
+      `,
+      [
+        accountId,
+        `Credits ${delta > 0 ? 'granted' : 'deducted'} (${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}): ${reason}`,
+        String(creditTransactionId),
+        staffId || null,
+        JSON.stringify({
+          delta,
+          amount: Math.abs(delta),
+          direction: delta > 0 ? 'grant' : 'deduction',
+          reason,
+          balanceBefore: balanceCredits - delta,
+          balanceAfter: balanceCredits,
+          walletId: wallet.wallet_id,
+          creditTransactionId,
+          sourceTable: referenceTable,
+          sourceId: referenceId,
+        }),
+      ]
+    );
     await client.query('COMMIT');
 
-    return {
+    result = {
       accountId,
       walletId: wallet.wallet_id,
-      balanceCredits: Number(updated.rows[0].balance_credits),
+      creditTransactionId,
+      balanceCredits,
+      frozenBalanceCredits: Number(updated.rows[0].frozen_balance_credits || 0),
       adjustedBy: delta,
+      reason,
       staffId: staffId || null,
     };
   } catch (error) {
@@ -1606,6 +1678,47 @@ async function adjustAccountCredits(accountId, amount, _note, staffId, { referen
     throw error;
   } finally {
     client.release();
+  }
+
+  await announceCreditAdjustment(accountId, result);
+  return result;
+}
+
+/** Durable notice first, then the live push, so the member's open tab refreshes its wallet. */
+async function announceCreditAdjustment(accountId, { walletId, adjustedBy, reason, balanceCredits }) {
+  const amount = Math.abs(adjustedBy).toLocaleString();
+  const message =
+    adjustedBy > 0
+      ? `Staff added ${amount} credits to your Account Wallet. Reason: ${reason}`
+      : `Staff removed ${amount} credits from your Account Wallet. Reason: ${reason} If you think this is a mistake, contact support.`;
+  let notification = null;
+  try {
+    const { createNotification } = require('./NotificationRepositories');
+    notification = await createNotification({
+      account_id: accountId,
+      message,
+      is_read: false,
+      reference_table: 'wallets',
+      reference_prefix: 'CREDITS_ADJUSTED',
+      reference_path: '/transactions',
+      reference_id: walletId || accountId,
+    });
+  } catch (err) {
+    console.warn('Credit adjustment notification skipped:', err.message);
+  }
+  try {
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io) {
+      if (notification) io.to(String(accountId)).emit('notification', notification);
+      io.to(String(accountId)).emit('account:credits_adjusted', {
+        accountId,
+        adjustedBy,
+        balanceCredits,
+      });
+    }
+  } catch (err) {
+    console.warn('Credit adjustment broadcast skipped:', err.message);
   }
 }
 

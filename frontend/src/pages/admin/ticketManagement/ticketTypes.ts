@@ -514,6 +514,340 @@ export type TicketDetail = {
   scheduledCloseAt?: string | null;
   appealDecision?: 'accepted' | 'denied' | 'denied_permanent' | null;
   appealDecidedAt?: string | null;
+  /** Only present when loaded with `?include=case`; null when it failed to build. */
+  caseContext?: TicketCaseContext | null;
+};
+
+/* ---------- Category case file (backend/repositories/TicketCaseRepositories.js) ---------- */
+
+export type CaseKind = 'appeal' | 'marketplace' | 'jobs' | 'forum' | 'billing' | 'account' | 'editor' | 'safety' | 'general';
+
+export type CaseAccountSummary = {
+  accountId: string;
+  name: string;
+  handle: string | null;
+  type: string | null;
+  joinedAt: string | null;
+  status: string;
+  statusEndsAt: string | null;
+  merit: number | null;
+  warningPoints: number;
+  warningBandLabel: string | null;
+  warningBandEndsAt: string | null;
+  forumTimeout: boolean;
+  forumTimeoutEndsAt: string | null;
+  creditsFrozen: boolean;
+  frozenCredits: number;
+  creditsFrozenUntil: string | null;
+  creditsFrozenReason: string | null;
+  deactivated: boolean;
+  identityVerified: boolean;
+  identityVerifiedAt: string | null;
+  counts: {
+    activeWarnings: number;
+    totalWarnings: number;
+    totalDisputes: number;
+    openDisputesAgainst: number;
+    reportsAgainst: number;
+    totalTickets: number;
+  };
+};
+
+export type CaseTicketRef = { id: string; number: string; type: string; status: string; requester?: string; createdAt: string };
+export type CaseReportRef = {
+  id: string;
+  number: string;
+  type: string;
+  status: string;
+  priority?: string;
+  targetType?: string;
+  reporter?: string;
+  createdAt: string;
+};
+
+export type CaseAppeal = {
+  area: 'account' | 'forum' | 'marketplace' | 'jobs';
+  decidable: boolean;
+  decision: 'accepted' | 'denied' | 'denied_permanent' | null;
+  decidedAt: string | null;
+  reasonGiven: string | null;
+  evidence: string | null;
+  referencedCase:
+    | { found: false; query: string }
+    | {
+        found: true;
+        query: string;
+        kind: 'warning' | 'restriction' | 'dispute' | 'report' | 'ticket' | 'listing';
+        id: string;
+        number: string | null;
+        title: string | null;
+        status: string | null;
+        detail: string | null;
+        belongsToRequester: boolean;
+        createdAt: string | null;
+      }
+    | null;
+  record: {
+    warnings: {
+      id: string;
+      number: string | null;
+      type: string;
+      reason: string | null;
+      points: number;
+      status: string;
+      active: boolean;
+      issuedBy: string;
+      createdAt: string;
+      expiresAt: string | null;
+    }[];
+    restrictions: {
+      id: string;
+      type: string;
+      module: string | null;
+      active: boolean;
+      issuedBy: string;
+      startsAt: string;
+      endsAt: string | null;
+      warningId: string | null;
+    }[];
+    history: {
+      id: string;
+      eventCode: string;
+      action: string;
+      status: string | null;
+      previousStatus: string | null;
+      reason: string | null;
+      endsAt: string | null;
+      disputeNumber: string | null;
+      actor: { name: string; role: string } | null;
+      createdAt: string;
+    }[];
+  } | null;
+  appeals: {
+    previous: {
+      id: string;
+      number: string;
+      type: string;
+      status: string;
+      decision: 'accepted' | 'denied' | 'denied_permanent' | null;
+      decidedAt: string | null;
+      createdAt: string;
+    }[];
+    hold: {
+      decision: string;
+      permanentlyDenied: boolean;
+      blockedUntil: string | null;
+      active: boolean;
+      decidedAt: string;
+      ticketId: string | null;
+    } | null;
+  } | null;
+  areaActions: { id: string; label: string; number: string | null; status: string | null; reason: string | null; at: string }[] | null;
+  reportsAgainst: CaseReportRef[] | null;
+};
+
+export type CaseListing = {
+  id: string;
+  number: string | null;
+  title: string;
+  category: string | null;
+  status: string;
+  priceCredits: number;
+  assetType: string | null;
+  marketAssetId: string | null;
+  rejectionReason: string | null;
+  moderationNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  seller: {
+    accountId: string | null;
+    name: string;
+    handle: string | null;
+    status: string | null;
+    merit: number | null;
+    listings: { total: number; approved: number; rejected: number; delisted: number; pending: number } | null;
+  };
+  asset: {
+    id: string;
+    name: string;
+    status: string;
+    stats: {
+      activeLicenses: number;
+      refundedLicenses: number;
+      likes: number;
+      reviews: number;
+      averageRating: number | null;
+    } | null;
+    files: { name: string; type: string | null; sizeBytes: number | null; processingStatus: string | null; processingError: string | null }[];
+  } | null;
+  reports: { open: number; total: number; items: { id: string; number: string; type: string; status: string; isOpen: boolean; createdAt: string }[] };
+  history: { id: string; action: string; actorName?: string | null; status: string | null; reason: string | null; createdAt: string }[];
+  duplicateSignals: number;
+};
+
+export type CaseMarketplace = {
+  role: 'buyer' | 'seller';
+  listing: CaseListing | null;
+  purchase: {
+    assetName: string | null;
+    licenses: {
+      id: string;
+      status: string;
+      priceCredits: number;
+      purchasedAt: string;
+      assignedProject: string | null;
+      assignedAt: string | null;
+      transactionId: string | null;
+      transactionStatus: string | null;
+    }[];
+  } | null;
+  buyer: { purchases: number; refunded: number; spentCredits: number } | null;
+  sellerListings: { id: string; number: string | null; title: string; status: string; priceCredits: number; rejectionReason: string | null; createdAt: string }[] | null;
+  reportedSeller: CaseAccountSummary | null;
+  reportedText: string | null;
+  relatedTickets: CaseTicketRef[];
+};
+
+export type CaseContract = {
+  id: string;
+  title: string;
+  type: string | null;
+  paymentType: string | null;
+  status: string;
+  rateCredits: number;
+  startsAt: string | null;
+  deadlineAt: string | null;
+  createdAt: string | null;
+  requesterRole: 'client' | 'freelancer' | null;
+  client: CaseAccountSummary | null;
+  freelancer: CaseAccountSummary | null;
+  milestones: { id: string; index: number; name: string; status: string; credits: number; deadlineAt: string | null; startedAt: string | null }[];
+  milestoneTotals: { count: number; credits: number; completed: number };
+  disputes: { id: string; number: string; title: string; status: string; public: boolean; filedByRequester: boolean; openedAt: string }[];
+  transactions: { id: string; type: string; credits: number; status: string; createdAt: string }[];
+};
+
+export type CasePosting = {
+  id: string;
+  kind: 'job' | 'gig';
+  title: string;
+  status: string;
+  createdAt: string;
+  owner: { accountId: string; name: string; handle: string | null };
+  reports: CaseReportRef[];
+  history: { id: string; status: string | null; previousStatus: string | null; reason: string | null; actor: string; createdAt: string }[];
+};
+
+export type CaseJobs = {
+  contract: CaseContract | null;
+  posting: CasePosting | null;
+  reportedMember: CaseAccountSummary | null;
+  proposalId: string | null;
+  desiredOutcome: string | null;
+  activity: { jobs: number; gigs: number; contracts: number } | null;
+  relatedTickets: CaseTicketRef[];
+};
+
+export type CaseForum = {
+  post: {
+    id: string;
+    title: string;
+    status: string;
+    isLocked: boolean;
+    isSticky: boolean;
+    groupName: string | null;
+    author: string | null;
+    commentCount: number;
+    removedComments: number;
+    createdAt: string | null;
+    removedAt: string | null;
+    reports: CaseReportRef[];
+  } | null;
+  group: {
+    id: string;
+    name: string;
+    status: string;
+    owner: string | null;
+    memberCount: number;
+    discussionCount: number;
+    removedDiscussionCount: number;
+    createdAt: string | null;
+    deletedAt: string | null;
+  } | null;
+  reportedMember: CaseAccountSummary | null;
+  restrictions: { id: string; type: string; active: boolean; startsAt: string; endsAt: string | null }[] | null;
+};
+
+export type CaseBilling =
+  | { restricted: true }
+  | {
+      restricted: false;
+      wallet: { balanceCredits: number; frozenCredits: number; status: string | null } | null;
+      subscription: { plan: string; status: string | null; since: string | null; trialEndsAt: string | null; recurring: boolean } | null;
+      referencedTransaction:
+        | { found: false; query: string }
+        | {
+            found: true;
+            query: string;
+            kind: 'payment' | 'credit' | 'cashout';
+            id: string;
+            reference: string | null;
+            status: string;
+            type: string | null;
+            amount: number | null;
+            credits: number | null;
+            belongsToRequester: boolean;
+            createdAt: string;
+          }
+        | null;
+    };
+
+export type CaseAccount = {
+  verification: {
+    verified: boolean;
+    verifiedAt?: string | null;
+    kycStatus?: string | null;
+    status?: string | null;
+    expiresAt?: string | null;
+    submittedAt?: string | null;
+    updatedAt?: string | null;
+  } | null;
+  recentChanges: { id: string; action: string; eventCode: string; createdAt: string }[] | null;
+  team: { id: string; name: string; handle: string | null; status: string; createdAt: string } | null;
+};
+
+export type CaseEditor = {
+  project: {
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+    deleted: boolean;
+    members: number;
+    requesterIsMember: boolean;
+  } | null;
+};
+
+export type CaseSafety = {
+  reportedMember: CaseAccountSummary | null;
+  reportsAgainst: CaseReportRef[] | null;
+  infringingListings: CaseListing[] | null;
+};
+
+export type TicketCaseContext = {
+  kind: CaseKind;
+  requester: CaseAccountSummary | null;
+  otherOpenTickets: CaseTicketRef[];
+  notes: string[];
+  appeal?: CaseAppeal | null;
+  marketplace?: CaseMarketplace | null;
+  jobs?: CaseJobs | null;
+  forum?: CaseForum | null;
+  billing?: CaseBilling | null;
+  account?: CaseAccount | null;
+  editor?: CaseEditor | null;
+  safety?: CaseSafety | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

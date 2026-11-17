@@ -6,7 +6,6 @@ import {
   Flag,
   Hand,
   Info,
-  Loader2,
   Lock,
   MessageSquare,
   MessagesSquare,
@@ -28,6 +27,7 @@ import { ReportCaseDetailModal } from '@/pages/admin/moderation/CaseDetailModals
 import ModeratorTicketDetailModal from '../shared/ModeratorTicketDetailModal';
 import type { Alert, ForumOverview } from '../shared/moderatorTypes';
 import { PriorityBadge, StatusBadge, titleCaseWords } from '../shared/ui';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const OVERVIEW_URL = '/api/moderator/forum/overview';
 
@@ -179,9 +179,7 @@ export default function ForumModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

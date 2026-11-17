@@ -7,6 +7,7 @@ import type {
   DisputePayoutState,
 } from "./moderatorTypes";
 import { DisputePayoutsList } from "./DisputePayoutUi";
+import { StaffStandingSummary, StatusPill, caseWhen } from "./StaffStandingSummary";
 
 function when(value?: string | null) {
   if (!value) return "—";
@@ -155,13 +156,35 @@ export default function DisputeCaseFilePanel({
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">Disputer</p>
-            <p className="mt-1 text-sm text-white">{person(dispute.initiator.name, dispute.initiator.username)}</p>
-            <p className="text-xs text-zinc-500">Filed this dispute</p>
+            {caseFile?.parties?.initiator ? (
+              <div className="mt-1">
+                <StaffStandingSummary account={caseFile.parties.initiator} compact />
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-white">{person(dispute.initiator.name, dispute.initiator.username)}</p>
+            )}
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Filed this dispute
+              {caseFile?.parties?.initiator
+                ? ` · ${caseFile.parties.initiator.counts.totalDisputes} dispute(s), ${caseFile.parties.initiator.counts.reportsAgainst} report(s) against them`
+                : ''}
+            </p>
           </div>
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-300/80">Disputee</p>
-            <p className="mt-1 text-sm text-white">{person(dispute.respondent.name, dispute.respondent.username)}</p>
-            <p className="text-xs text-zinc-500">Named in this dispute</p>
+            {caseFile?.parties?.respondent ? (
+              <div className="mt-1">
+                <StaffStandingSummary account={caseFile.parties.respondent} compact />
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-white">{person(dispute.respondent.name, dispute.respondent.username)}</p>
+            )}
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Named in this dispute
+              {caseFile?.parties?.respondent
+                ? ` · ${caseFile.parties.respondent.counts.totalDisputes} dispute(s), ${caseFile.parties.respondent.counts.reportsAgainst} report(s) against them`
+                : ''}
+            </p>
           </div>
         </div>
       </Section>
@@ -360,6 +383,30 @@ export default function DisputeCaseFilePanel({
           </ul>
         )}
       </Section>
+
+      {caseFile?.relatedTickets ? (
+        <Section title="Support tickets about this contract" count={caseFile.relatedTickets.length}>
+          {caseFile.relatedTickets.length === 0 ? (
+            <Empty>No support tickets name this contract.</Empty>
+          ) : (
+            <ul className="space-y-2">
+              {caseFile.relatedTickets.map((ticket) => (
+                <li key={ticket.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-zinc-200">
+                      {ticket.number} · {ticket.type}
+                    </p>
+                    <p className="text-[11px] text-zinc-500">
+                      {[ticket.requester, caseWhen(ticket.createdAt)].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <StatusPill status={ticket.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      ) : null}
     </div>
   );
 }

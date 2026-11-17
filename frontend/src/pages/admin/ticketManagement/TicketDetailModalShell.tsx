@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ClipboardList, Copy, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
+import { Briefcase, ClipboardList, Copy, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
+import TicketCasePanel, { AppealStandingBrief, CASE_TAB_LABEL } from './TicketCasePanel';
+import type { TicketCaseContext } from './ticketTypes';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
@@ -550,7 +552,12 @@ export default function TicketDetailModalShell({
     kind: 'user' | 'staff';
     role: string;
   } | null>(null);
-  const [tab, setTab] = useState<'conversation' | 'details'>('conversation');
+  const [tab, setTab] = useState<'conversation' | 'case' | 'details'>('conversation');
+  /** Category case file; kept apart from `detail` because update responses do not carry it. */
+  const [caseContext, setCaseContext] = useState<TicketCaseContext | null | undefined>(undefined);
+  const [caseLoading, setCaseLoading] = useState(false);
+  const caseRequestRef = useRef(0);
+  const caseTypeRef = useRef<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -645,15 +652,44 @@ export default function TicketDetailModalShell({
     setRecategorizeType('');
   };
 
+  const takeCase = (data: TicketDetail, requestId: number) => {
+    if (requestId !== caseRequestRef.current) return;
+    caseTypeRef.current = ticketTypeOf(data.ticket);
+    setCaseContext(data.caseContext === undefined ? null : data.caseContext);
+  };
+
   const load = async () => {
     setLoading(true);
+    setCaseLoading(true);
+    setCaseContext(undefined);
+    const requestId = ++caseRequestRef.current;
     try {
-      const res = await api.get(`${endpointBase}/${ticketId}`);
-      if (res.data?.success) applyLoadedTicket(res.data.data as TicketDetail, true);
+      const res = await api.get(`${endpointBase}/${ticketId}`, { params: { include: 'case' } });
+      if (res.data?.success) {
+        const data = res.data.data as TicketDetail;
+        applyLoadedTicket(data, true);
+        takeCase(data, requestId);
+      }
     } catch {
       showErrorToast('Failed to load ticket');
+      if (requestId === caseRequestRef.current) setCaseContext(null);
     } finally {
       setLoading(false);
+      if (requestId === caseRequestRef.current) setCaseLoading(false);
+    }
+  };
+
+  /** Re-read only the case file (after a decision, a category change, or a retry). */
+  const loadCase = async () => {
+    const requestId = ++caseRequestRef.current;
+    setCaseLoading(true);
+    try {
+      const res = await api.get(`${endpointBase}/${ticketId}`, { params: { include: 'case' } });
+      if (res.data?.success) takeCase(res.data.data as TicketDetail, requestId);
+    } catch {
+      if (requestId === caseRequestRef.current) setCaseContext((current) => (current === undefined ? null : current));
+    } finally {
+      if (requestId === caseRequestRef.current) setCaseLoading(false);
     }
   };
 
@@ -688,6 +724,14 @@ export default function TicketDetailModalShell({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, endpointBase]);
+
+  // A category change (or a move to another desk) changes which records the case file shows.
+  const loadedType = detail ? ticketTypeOf(detail.ticket) : null;
+  useEffect(() => {
+    if (!loadedType || caseTypeRef.current === null || caseTypeRef.current === loadedType) return;
+    void loadCase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedType]);
 
   useEffect(() => {
     const query = personQuery.replace(/^@/, '').trim();
@@ -1127,6 +1171,8 @@ export default function TicketDetailModalShell({
       if (response.data?.data) setDetail(response.data.data as TicketDetail);
       setAppealChoice(null);
       showSuccessToast(response.data?.message || 'Appeal decision saved');
+      // The decision changes the member's standing and appeal hold shown in the case file.
+      void loadCase();
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to decide this appeal'));
@@ -1362,11 +1408,14 @@ export default function TicketDetailModalShell({
                 onChange={setTab}
                 tabs={[
                   { id: 'conversation', label: `Conversation (${detail.messages.length})`, icon: MessageSquare },
+                  { id: 'case', label: caseContext ? CASE_TAB_LABEL[caseContext.kind] : 'Case', icon: Briefcase },
                   { id: 'details', label: 'Details', icon: ClipboardList },
                 ] as const}
               />
 
-              {tab === 'conversation' ? (
+              {tab === 'case' ? (
+                <TicketCasePanel context={caseContext} loading={caseLoading} onRetry={() => void loadCase()} />
+              ) : tab === 'conversation' ? (
                 <>
                   <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                     {detail.chatAvailable === false && (
@@ -1850,6 +1899,10 @@ export default function TicketDetailModalShell({
                     <p className="text-[11px] leading-relaxed text-zinc-500">
                       Accepting ends the penalty in 24 hours. Denying lets them appeal again in 12 months. Deny permanently blocks every future appeal. Each choice closes the ticket.
                     </p>
+                    {!detail.appealDecision ? <AppealStandingBrief context={caseContext} /> : null}
+                    <button type="button" onClick={() => setTab('case')} className="text-left text-[11px] font-medium text-sky-300 hover:underline">
+                      Review record, punishments and past appeals →
+                    </button>
                     {detail.appealDecision ? (
                       <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-200">
                         {detail.appealDecision === 'accepted'
@@ -1883,6 +1936,18 @@ export default function TicketDetailModalShell({
                         </div>
                       </div>
                     )}
+                  </SidebarSection>
+                )}
+
+                {!isAppeal && /^Appeal a /.test(ticketTypeOf(t)) && (
+                  <SidebarSection title="Area appeal">
+                    <p className="text-[11px] leading-relaxed text-zinc-500">
+                      This appeal has no accept / deny step. Review the actions in the case file, reverse the one that was wrong
+                      from its desk (restore the listing or posting, lift the timeout, rescind the warning), then reply and close the ticket.
+                    </p>
+                    <button type="button" onClick={() => setTab('case')} className="text-left text-[11px] font-medium text-sky-300 hover:underline">
+                      Open the case file →
+                    </button>
                   </SidebarSection>
                 )}
 
@@ -2507,7 +2572,9 @@ export default function TicketDetailModalShell({
             confirmClassName={appealChoice === 'accept' ? BTN.success : appealChoice === 'deny' ? BTN.warn : BTN.danger}
             onCancel={() => setAppealChoice(null)}
             onConfirm={() => void decideAppeal()}
-          />
+          >
+            <AppealStandingBrief context={caseContext} />
+          </ConfirmDialog>
         )}
       </div>
     </div>

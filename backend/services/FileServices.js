@@ -77,7 +77,8 @@ const UPLOAD_POLICIES = {
     gig_thumbnails: { types: IMAGE_TYPES, imageLimit: 5 * MB },
     gig_galleries: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], imageLimit: 20 * MB, videoLimit: 50 * MB },
     gig_orders: { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES, 'application/pdf', ...ARCHIVE_TYPES], imageLimit: 20 * MB, videoLimit: 100 * MB, audioLimit: 25 * MB, pdfLimit: 20 * MB, archiveLimit: 100 * MB },
-    'ticket-attachments': { types: IMAGE_TYPES, imageLimit: 8 * MB },
+    // Ticket and appeal evidence: screenshots, PDF documents and short screen recordings.
+    'ticket-attachments': { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES], imageLimit: 8 * MB, pdfLimit: 15 * MB, videoLimit: 50 * MB },
 };
 
 function getUploadPolicy(folder, contentType) {

@@ -90,7 +90,7 @@ function isTicketClientError(message) {
 
 async function getAdminTicketDetail(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session);
+    const data = await getTicketDetail(req.params.id, req.session, { includeCase: req.query?.include === 'case' });
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -390,6 +390,16 @@ async function getPublicTicketCatalog(_req, res) {
   }
 }
 
+// Same limits the appeal page shows (frontend/src/pages/user/account/appeal/appealShared.ts).
+function appealLengthError(subject, description, fields) {
+  if (subject.length > 200) return 'Subject must be 200 characters or less';
+  if (description.length < 10) return 'Description must be at least 10 characters';
+  if (description.length > 5000) return 'Description must be 5,000 characters or less';
+  if (String(fields?.case_id || '').trim().length > 80) return 'Case ID must be 80 characters or less';
+  if (String(fields?.evidence || '').trim().length > 2000) return 'Supporting evidence must be 2,000 characters or less';
+  return null;
+}
+
 async function createPublicTicket(req, res) {
   try {
     const requesterAccountId = req.session?.account_id || req.session?.accountId || null;
@@ -430,6 +440,10 @@ async function createPublicTicket(req, res) {
     }
     if (!description?.trim()) {
       return res.status(400).json({ success: false, message: 'Description is required' });
+    }
+    if (ticketType === APPEAL_TICKET_TYPE) {
+      const appealError = appealLengthError(subjectOrReason, description.trim(), req.body?.fields);
+      if (appealError) return res.status(400).json({ success: false, message: appealError });
     }
 
     const requesterEmail = req.body?.email || req.session?.email || req.session?.email_address || null;

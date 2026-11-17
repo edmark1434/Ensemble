@@ -36,6 +36,7 @@ export const SupportTicketManagement = lazyWithPreload(() => import('@/pages/mod
 export const SupportDisputes = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Disputes'));
 export const SupportUserTeam = lazyWithPreload(() => import('@/pages/moderator/support-moderator/UserTeam'));
 export const SupportReports = lazyWithPreload(() => import('@/pages/moderator/support-moderator/Reports'));
+export const SupportCreditsWallets = lazyWithPreload(() => import('@/pages/moderator/support-moderator/CreditsWallets'));
 export const JobsModeratorLayout = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Layout'));
 export const JobsModeratorDashboard = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Dashboard'));
 export const JobsGigsControl = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/JobsGigsControl'));
@@ -51,7 +52,7 @@ const CONSOLE_PAGES: Record<StaffConsole, Preloadable[]> = {
   staff: [StaffDashboard, StaffPlatformPreviewPage],
   forum: [ForumModeratorDashboard, ForumDiscussion, ForumGroups, ForumTicketManagement, ForumReports, ForumUserTeam, ForumDisputes, ForumRestrictions, StaffPlatformPreviewPage],
   marketplace: [MarketplaceModeratorDashboard, MarketplaceControl, MarketplaceTicketManagement, MarketplaceReports, MarketplaceUserTeam, MarketplaceDisputes, StaffPlatformPreviewPage],
-  support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, StaffPlatformPreviewPage],
+  support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, SupportCreditsWallets, StaffPlatformPreviewPage],
   jobs: [JobsModeratorDashboard, JobsGigsControl, JobsTicketManagement, JobsDisputes, JobsReports, JobsUserTeam, StaffPlatformPreviewPage],
 };
 
