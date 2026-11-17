@@ -18,7 +18,12 @@ takes the file extension from the export format when the URL has none.
 - Paid exports still download.
 - Another user's job, or a missing or expired output, returns 401/410, and the modal shows "Download expired".
 
-## Status: Implemented — awaiting user verification.
+## Status: Still failing for free users after the proxy fix
+
+Free exports take about 3 minutes and then show "Download expired"; Business exports download fine. Most likely
+the renderer's local signed link has a short TTL that starts at job creation or queue time, not at completion,
+so slow free-queue jobs expire before the download. The renderer is outside this repo. `[render-download]` logs
+(no URLs or secrets) in the download route show which step fails and the link's expiry parameter.
 
 ---
 
@@ -58,6 +63,18 @@ when the contract ends in the same transaction (Pay now, staff release, backgrou
   ruling, complaint, activity, guidelines) and a slide-in drawer on phones/tablets.
 - Public discussion payload adds `createdAt`, `updatedAt`, `resolvedAt`.
 
+## Follow-up: profile pictures, @mention links, Enter to send
+
+- Backend `decorateDisputeView` (DisputeChatRepositories) batch-loads avatar paths (`accounts.avatar_file_id`,
+  else newest `account_profile_files`) and resolves "@handle" → account id. Public discussion, the parties'
+  dispute detail and the staff dispute detail return `authorAvatar` per message, `avatar` per party and a
+  `mentions` map (parties' handles always included). Live `disputeMessage` / `disputeMessageUpdated` payloads
+  carry `authorAvatar` and that message's `mentions`. A failed lookup only drops pictures and links.
+- `Avatar` takes `src` (stored path, resolved with `resolveAvatarPath`; initials on missing/broken image) and
+  `dark`. `MentionText` links known handles (`/profile/:id`; staff consoles open the main-site profile in a new
+  tab). Used in replies, rulings, complaints, the staff header/parties list and Inbox ruling cards.
+- Public dispute page: Enter sends, Shift+Enter adds a line (ignored during IME composition).
+
 ## Acceptance criteria
 
 - Settle escrow with Pay now: payouts are `paid`, both Account Wallets are credited, the contract ends, and
@@ -65,6 +82,8 @@ when the contract ends in the same transaction (Pay now, staff release, backgrou
 - Parties see every ruling card in the dispute page, their dispute list and their Inbox thread.
 - The public page works on phone, tablet and desktop; only the thread scrolls; filters, reply, attachments,
   jump-to-latest and live updates keep working.
+- Every dispute view (community, disputer, disputee, staff) shows real profile pictures where a member has one.
+- "@handle" of an existing account is a link to that profile in messages and rulings; unknown handles stay text.
 
 ## Status: Implemented — awaiting user verification (`pnpm typecheck`).
 

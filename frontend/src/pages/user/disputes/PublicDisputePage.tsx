@@ -86,6 +86,12 @@ function upsertDiscussionMessage(list: DiscussionMessage[], next: DiscussionMess
   return copy;
 }
 
+/** Add the mention links a live or saved message brought with it. */
+function withMentions(current: Discussion, extra?: Record<string, string> | null): Discussion {
+  if (!extra || !Object.keys(extra).length) return current;
+  return { ...current, mentions: { ...(current.mentions || {}), ...extra } };
+}
+
 function sameAuthor(a: DiscussionMessage, b: DiscussionMessage) {
   if (a.senderAccountId && b.senderAccountId) return String(a.senderAccountId) === String(b.senderAccountId);
   return (a.authorName || "") === (b.authorName || "") && (a.authorRole || "") === (b.authorRole || "");
@@ -209,6 +215,8 @@ export default function PublicDisputePage() {
       message_id_reply?: string | null;
       authorType?: string | null;
       author_type?: string | null;
+      authorAvatar?: string | null;
+      mentions?: Record<string, string>;
       attachments?: DisputeAttachment[];
     }) => {
       if (!payload?.disputeId || String(payload.disputeId) !== String(id)) return;
@@ -235,7 +243,7 @@ export default function PublicDisputePage() {
         );
         if (!existing && !(payload.body || payload.message_content)) return current;
         return {
-          ...current,
+          ...withMentions(current, payload.mentions),
           messages: upsertDiscussionMessage(current.messages || [], {
             id: String(messageId),
             authorName: payload.authorName || payload.author_name || existing?.authorName || "Member",
@@ -254,6 +262,7 @@ export default function PublicDisputePage() {
               payload.replyToId ?? payload.message_id_reply ?? existing?.replyToId ?? null,
             authorType: payload.authorType ?? payload.author_type ?? existing?.authorType ?? null,
             senderAccountId: senderId ?? existing?.senderAccountId ?? null,
+            authorAvatar: payload.authorAvatar ?? existing?.authorAvatar ?? null,
             attachments: payload.attachments ?? existing?.attachments ?? [],
           }),
         };
@@ -465,6 +474,18 @@ export default function PublicDisputePage() {
     const parentId = replyToId;
     // Party and community replies stay private to author + staff until staff publishes.
     const heldForReview = !(discussion?.isParty);
+    // The reader's own picture for the reply shown while it sends.
+    const myAvatar =
+      discussion?.viewerRole === "disputer"
+        ? discussion.initiator?.avatar
+        : discussion?.viewerRole === "disputee"
+          ? discussion.respondent?.avatar
+          : (discussion?.messages || []).find(
+              (item) =>
+                viewerAccountId &&
+                item.authorAvatar &&
+                String(item.senderAccountId) === String(viewerAccountId)
+            )?.authorAvatar;
     followRef.current = true;
     // Show the reader's own reply even if they were filtering to rulings.
     setFilter("all");
@@ -484,6 +505,7 @@ export default function PublicDisputePage() {
                 pendingReview: heldForReview,
                 replyToId: parentId,
                 senderAccountId: viewerAccountId ? String(viewerAccountId) : null,
+                authorAvatar: myAvatar || null,
                 attachments: pendingFiles.map((media) => ({
                   attachment_id: media.id,
                   attachment_type: media.type,
@@ -511,7 +533,9 @@ export default function PublicDisputePage() {
         ...(uploaded.length ? { attachments: uploaded } : {}),
       });
       toast.success(res.data?.message || "Comment posted to the discussion.");
-      const saved = res.data?.data?.message as DiscussionMessage | undefined;
+      const saved = res.data?.data?.message as
+        | (DiscussionMessage & { mentions?: Record<string, string> })
+        | undefined;
       const nextChatId = res.data?.data?.chatId;
       const savedAudience = String(saved?.audience || "author_and_staff").toLowerCase();
       const savedPending =
@@ -522,7 +546,7 @@ export default function PublicDisputePage() {
         if (!current) return current;
         const withoutPending = (current.messages || []).filter((item) => String(item.id) !== pendingId);
         return {
-          ...current,
+          ...withMentions(current, saved?.mentions),
           chatId: nextChatId ? String(nextChatId) : current.chatId,
           messages: saved?.id
             ? upsertDiscussionMessage(withoutPending, {
@@ -536,6 +560,7 @@ export default function PublicDisputePage() {
                 replyToId: saved.replyToId ?? res.data?.data?.replyToId ?? parentId,
                 senderAccountId:
                   saved.senderAccountId ?? (viewerAccountId ? String(viewerAccountId) : null),
+                authorAvatar: saved.authorAvatar ?? myAvatar ?? null,
                 attachments: saved.attachments || [],
               })
             : withoutPending,
@@ -843,6 +868,7 @@ export default function PublicDisputePage() {
                                 <DisputeDecisionCard
                                   body={message.body}
                                   when={pending ? "Sending…" : formatWhen(message.createdAt)}
+                                  mentions={discussion.mentions}
                                 >
                                   <DisputeAttachments
                                     attachments={message.attachments}
@@ -884,6 +910,7 @@ export default function PublicDisputePage() {
                               mine={mine}
                               pending={pending}
                               viewerRole={discussion.viewerRole}
+                              mentions={discussion.mentions}
                               canReply={Boolean(discussion.canComment)}
                               animate={animate}
                               onReply={() => startReply(String(message.id))}
@@ -963,7 +990,12 @@ export default function PublicDisputePage() {
                           value={comment}
                           onChange={(event) => setComment(event.target.value)}
                           onKeyDown={(event) => {
-                            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                            // Enter sends; Shift+Enter adds a line. Never mid-IME composition.
+                            if (
+                              event.key === "Enter" &&
+                              !event.shiftKey &&
+                              !event.nativeEvent.isComposing
+                            ) {
                               event.preventDefault();
                               void sendComment();
                             }
@@ -994,10 +1026,12 @@ export default function PublicDisputePage() {
                               title="Attach images or files (max 4)"
                             />
                             <span className="hidden text-[11px] text-gray-400 md:inline dark:text-zinc-500">
-                              <kbd className="rounded border border-gray-200 px-1 font-sans text-[10px] dark:border-white/10">Ctrl</kbd>
+                              <kbd className="rounded border border-gray-200 px-1 font-sans text-[10px] dark:border-white/10">Enter</kbd>
+                              {" to send · "}
+                              <kbd className="rounded border border-gray-200 px-1 font-sans text-[10px] dark:border-white/10">Shift</kbd>
                               {" + "}
                               <kbd className="rounded border border-gray-200 px-1 font-sans text-[10px] dark:border-white/10">Enter</kbd>
-                              {" to send"}
+                              {" new line"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">

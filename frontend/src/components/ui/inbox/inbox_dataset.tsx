@@ -3,6 +3,10 @@ export interface Members {
   role: string;
   status?: "active" | "left" | "removed";
   joined_at: Date | string;
+  /** Filled in by the inbox API from the member's account. */
+  name?: string;
+  username?: string | null;
+  avatar_preset_url?: string | null;
 }
 
 export interface PinnedMessage {

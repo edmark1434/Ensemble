@@ -983,6 +983,11 @@ const InboxMain = () => {
         body: message.message_content,
       })
     ) {
+      // The thread's members are the people a ruling names, so their handles link to profiles.
+      const mentions: Record<string, string> = {};
+      for (const member of selectedConversation?.members || []) {
+        if (member.username) mentions[member.username.toLowerCase()] = String(member.account_id);
+      }
       return (
         <div
           key={message._id}
@@ -992,6 +997,7 @@ const InboxMain = () => {
           <DisputeDecisionCard
             body={message.message_content}
             when={formatWhen(message.created_at ? String(message.created_at) : null)}
+            mentions={mentions}
           />
         </div>
       );

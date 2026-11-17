@@ -4,6 +4,8 @@ export type TicketPerson = {
   name: string;
   username?: string;
   email?: string | null;
+  /** Stored profile picture path (dispute parties). */
+  avatar?: string | null;
 };
 
 export type TicketAssignee = {
@@ -102,6 +104,8 @@ export type TicketMessage = {
   authorType: string;
   authorName: string;
   authorRole?: string | null;
+  /** Stored profile picture path of the author (dispute threads). */
+  authorAvatar?: string | null;
   body: string;
   attachments?: TicketAttachment[];
   isInternal: boolean;

@@ -23,12 +23,16 @@ async function proxyOutput(request: NextRequest, params: Promise<{ id: string }>
     });
     const statusData = await statusResponse.json().catch(() => null);
     if (!statusResponse.ok || statusData?.status !== "completed" || typeof statusData?.videoUrl !== "string") {
+      console.warn("[render-download] job not downloadable", {
+        statusCode: statusResponse.status, jobStatus: statusData?.status ?? null, hasVideoUrl: typeof statusData?.videoUrl === "string",
+      });
       return NextResponse.json({ message: "This export is no longer available." }, { status: 410 });
     }
 
     const renderOrigin = new URL(RENDER_SERVER_URL).origin;
     const outputUrl = new URL(statusData.videoUrl, RENDER_SERVER_URL);
     if (outputUrl.protocol !== "https:" && outputUrl.protocol !== "http:") {
+      console.warn("[render-download] unsupported output protocol", { protocol: outputUrl.protocol });
       return NextResponse.json({ message: "This export is no longer available." }, { status: 410 });
     }
 
@@ -39,6 +43,16 @@ async function proxyOutput(request: NextRequest, params: Promise<{ id: string }>
       headers: outputUrl.origin === renderOrigin ? renderHeaders : undefined,
     });
     if (!upstream.ok) {
+      // Never log the link itself (it is a signed URL); only where it points and
+      // any expiry parameter, to tell an expired link from a missing file.
+      const expiryParams = Object.fromEntries([...outputUrl.searchParams].filter(([key]) =>
+        /^(expires?|exp|x-amz-date|x-amz-expires)$/i.test(key)));
+      console.warn("[render-download] output fetch failed", {
+        upstreamStatus: upstream.status, method: request.method, internal: outputUrl.origin === renderOrigin,
+        host: outputUrl.host, path: outputUrl.pathname.replace(/[^/]+$/, "<file>"),
+        expiryParams, now: new Date().toISOString(),
+        jobCreatedAt: statusData.createdAt ?? null, jobCompletedAt: statusData.completedAt ?? statusData.finishedAt ?? null,
+      });
       return NextResponse.json({ message: "This export is no longer available." }, { status: 410 });
     }
 
@@ -52,7 +66,8 @@ async function proxyOutput(request: NextRequest, params: Promise<{ id: string }>
     if (length) headers.set("Content-Length", length);
 
     return new NextResponse(request.method === "HEAD" ? null : upstream.body, { status: 200, headers });
-  } catch {
+  } catch (error) {
+    console.warn("[render-download] request failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Render server unavailable" }, { status: 503 });
   }
 }

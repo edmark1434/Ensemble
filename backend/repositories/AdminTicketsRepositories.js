@@ -28,6 +28,7 @@ const {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  decorateDisputeView,
   swapDisputePartyLabels,
   createDisputeMessage,
   updateDisputeMessageAudience,
@@ -4568,10 +4569,26 @@ async function getDisputeDetail(disputeId, staffSession = null) {
       return entry ? { ...option, preview: build(entry, names) } : option;
     });
 
+  // Profile pictures for every author and both parties, and "@handle" → profile links.
+  const view = await decorateDisputeView(messages, {
+    accountIds: [row.by_account_id, row.for_account_id],
+    // The parties' own handles too: the console header links them.
+    texts: [
+      row.description,
+      row.reason,
+      row.initiator_handle ? `@${row.initiator_handle}` : null,
+      row.respondent_handle ? `@${row.respondent_handle}` : null,
+    ],
+  });
+  const dispute = mapDisputeRow(row);
+  dispute.initiator.avatar = view.avatars.get(String(row.by_account_id)) || null;
+  dispute.respondent.avatar = view.avatars.get(String(row.for_account_id)) || null;
+
   return {
-    dispute: mapDisputeRow(row),
+    dispute,
     caseFile,
-    messages,
+    messages: view.messages,
+    mentions: view.mentions,
     chatId,
     chatAvailable,
     permissions,

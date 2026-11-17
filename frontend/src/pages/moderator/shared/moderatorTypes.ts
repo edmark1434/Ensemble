@@ -153,6 +153,8 @@ export type DisputeDetail = {
   dispute: Dispute;
   caseFile?: DisputeCaseFile;
   messages: TicketMessage[];
+  /** Lower-cased handle → account id, for "@handle" profile links. */
+  mentions?: Record<string, string>;
   chatId?: string | null;
   chatAvailable?: boolean;
   permissions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputePermissions;

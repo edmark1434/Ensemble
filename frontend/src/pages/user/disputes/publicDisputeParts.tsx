@@ -18,13 +18,14 @@ import {
   Card,
   DisputeAttachments,
   DisputeSettlementCard,
+  MentionText,
   RoleChip,
   audienceNotice,
   formatWhen,
   isDisputeDecision,
   parseDisputeRuling,
 } from "./disputeUi";
-import type { DisputeAttachment, DisputeSettlement, ViewerRole } from "./disputeUi";
+import type { DisputeAttachment, DisputeSettlement, MentionMap, ViewerRole } from "./disputeUi";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -41,6 +42,8 @@ export type DiscussionMessage = {
   replyToId?: string | null;
   authorType?: string | null;
   senderAccountId?: string | null;
+  /** Stored profile picture path of the author; null for rulings and members without one. */
+  authorAvatar?: string | null;
   attachments?: DisputeAttachment[];
 };
 
@@ -48,6 +51,7 @@ export type DiscussionPerson = {
   accountId?: string | null;
   name?: string;
   handle?: string | null;
+  avatar?: string | null;
 };
 
 export type Discussion = {
@@ -68,6 +72,8 @@ export type Discussion = {
   commentsNeedApproval?: boolean;
   /** Parties only: who receives what from the ruling, and when. */
   settlement?: DisputeSettlement | null;
+  /** Lower-cased handle → account id, for "@handle" profile links. */
+  mentions?: MentionMap;
   chatId?: string | null;
   messages: DiscussionMessage[];
 };
@@ -200,7 +206,7 @@ export function PartyTile({
   const right = align === "right";
   const content = (
     <>
-      <Avatar name={name} role={role} size="md" />
+      <Avatar name={name} role={role} size="md" src={person?.avatar} />
       <span className={`min-w-0 ${right ? "sm:text-right" : ""}`}>
         <span className={`flex items-center gap-1.5 ${right ? "sm:justify-end" : ""}`}>
           <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{name}</span>
@@ -386,7 +392,7 @@ function viewerPart(discussion: Discussion, signedIn: boolean) {
   };
 }
 
-function ComplaintText({ text }: { text: string }) {
+function ComplaintText({ text, mentions }: { text: string; mentions?: MentionMap }) {
   const [open, setOpen] = useState(false);
   const long = text.length > 320;
   return (
@@ -396,7 +402,7 @@ function ComplaintText({ text }: { text: string }) {
           long && !open ? "line-clamp-6" : ""
         }`}
       >
-        {text}
+        <MentionText text={text} mentions={mentions} />
       </p>
       {long ? (
         <button
@@ -480,7 +486,7 @@ export function CasePanel({
 
       {discussion.description ? (
         <Panel title="Original complaint" icon={<FileText className="h-3 w-3" />}>
-          <ComplaintText text={discussion.description} />
+          <ComplaintText text={discussion.description} mentions={discussion.mentions} />
         </Panel>
       ) : null}
 
@@ -584,6 +590,7 @@ export function ThreadMessage({
   mine,
   pending,
   viewerRole,
+  mentions,
   canReply,
   animate,
   onReply,
@@ -596,6 +603,7 @@ export function ThreadMessage({
   mine: boolean;
   pending: boolean;
   viewerRole: ViewerRole;
+  mentions?: MentionMap;
   canReply: boolean;
   animate: boolean;
   onReply: () => void;
@@ -625,7 +633,7 @@ export function ThreadMessage({
             {pending ? "" : clockTime(message.createdAt)}
           </span>
         ) : (
-          <Avatar name={message.authorName} role={message.authorRole} />
+          <Avatar name={message.authorName} role={message.authorRole} src={message.authorAvatar} />
         )}
       </div>
 
@@ -663,7 +671,7 @@ export function ThreadMessage({
           {message.replyToId ? <QuotedMessage parent={parent} onJump={onJumpToParent} /> : null}
           {message.body ? (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
-              {message.body}
+              <MentionText text={message.body} mentions={mentions} />
             </p>
           ) : null}
           <DisputeAttachments attachments={message.attachments} onPreview={(url) => onPreview(url)} />
