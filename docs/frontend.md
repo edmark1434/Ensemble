@@ -42,6 +42,7 @@
 - Platform Feedback lives under Analytics → Feedback (`/admin/analytics?tab=feedback`). Legacy `/admin/feedbacks` redirects there.
 - API traffic and 429 monitoring lives under Analytics → Traffic & rate limits (`/admin/analytics?tab=traffic`, `analytics/components/RateLimitMonitorPanel`). Like Feedback, it is a standalone tab (`STANDALONE_TABS`) that loads its own data, not the analytics overview. It polls `/api/admin/rate-limits` every 10 seconds while the page is visible and auto-refresh is on.
 - Staff ban, suspend, and timeout pickers load `/api/admin/punishment-catalog` (or `/api/moderator/punishment-catalog`). The catalog duration is the default. Staff may override it and must still write a reason.
+- The appeal page (`/account/appeal`, `pages/user/account/AccountAccessPage.tsx`) composes `appeal/AppealForm` and `appeal/CaseInbox`; per-penalty copy and length limits live in `appeal/appealShared.ts` (limits mirror `appealLengthError` in `AdminTicketsControllers.js`). It hides the form while an appeal is open or nothing is appealable, blocks replies on non-appeal tickets for banned/locked/suspended members, and polls tickets every 20 seconds while visible.
 - User-facing screens say **Platform Merit**, never “warning points.” Merit is `100 − active warning points` from standing (`frontend/src/lib/merit.ts`). Staff desks keep warning-point language.
 - Follow the existing dark Ensemble theme, spacing, typography, borders, and controls.
 - Do not introduce gradients or visually unrelated component systems unless requested.

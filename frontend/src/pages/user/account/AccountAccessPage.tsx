@@ -1,61 +1,58 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { LogOut, Send } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ClipboardList, Clock, Gavel, LogOut, ShieldCheck } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { auth } from '@/pages/firebase';
-import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { AccountRecordSection } from '@/pages/user/7_profile/Displays/AccountStanding';
 import UserLogoutModal from '@/components/nav/user_logout_modal';
-import { StandingConditionList } from '@/components/account/StandingDetails';
-import { standingConditions } from '@/lib/standing';
+import { StandingConditionList, conditionIcon, toneClasses } from '@/components/account/StandingDetails';
+import { formatStandingWhen, nextStandingChange, standingConditions } from '@/lib/standing';
+import { isAppealLimitedMember } from '@/lib/appealAccess';
+import AppealForm from './appeal/AppealForm';
+import CaseInbox from './appeal/CaseInbox';
+import {
+  type CaseSelection,
+  type DisputeRow,
+  type TicketRow,
+  DEFAULT_PENALTY_COPY,
+  PENALTY_COPY,
+  isAppealTicket,
+  isClosedStatus,
+} from './appeal/appealShared';
 
-type TicketRow = {
-  id: string;
-  number?: string;
-  subject?: string;
-  type?: string;
-  status?: string;
-  updatedAt?: string;
-};
+const FONT = { fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
-type TicketMessage = {
-  id: string;
-  senderId?: string | null;
-  authorType?: string;
-  authorName?: string;
-  body?: string;
-  messageType?: string;
-  createdAt?: string;
-};
+const STEPS = [
+  { title: 'File one appeal', body: 'Explain what happened. You can keep one appeal open at a time.' },
+  { title: 'Staff review it', body: 'Support reads your account record and may ask questions on the ticket.' },
+  { title: 'You get a decision', body: 'Accepted appeals take effect within 24 hours. A denial starts a 12-month wait.' },
+];
 
-type DisputeRow = {
-  id: string;
-  number?: string;
-  title?: string;
-  status?: string;
-  reason?: string;
-  updatedAt?: string;
-};
+function refreshCurrentUser() {
+  return api
+    .get('api/users/me')
+    .then((res) => {
+      if (res.data?.user) useGlobalState.getState().setUser(res.data.user);
+    })
+    .catch(() => undefined);
+}
 
-type DisputeMessage = {
-  id: string;
-  senderId?: string | null;
-  authorType?: string;
-  authorName?: string;
-  body?: string;
-  messageType?: string;
-  createdAt?: string;
-};
-
-type ThreadMessage = TicketMessage;
-
-function formatWhen(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString();
+function Card({
+  children,
+  className = '',
+  borderClass = 'border-gray-200 dark:border-white/10',
+}: {
+  children: ReactNode;
+  className?: string;
+  borderClass?: string;
+}) {
+  return (
+    <section className={`rounded-2xl border bg-white dark:bg-dark-surface ${borderClass} ${className}`}>
+      {children}
+    </section>
+  );
 }
 
 export default function AccountAccessPage() {
@@ -63,106 +60,77 @@ export default function AccountAccessPage() {
   const clearUser = useGlobalState((state) => state.clearUser);
   const navigate = useNavigate();
   const restriction = user?.restriction;
+  const accountId = String(user?.account_id || '');
+
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
-  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
-  const [ticketMessages, setTicketMessages] = useState<TicketMessage[]>([]);
-  const [openDisputeId, setOpenDisputeId] = useState<string | null>(null);
-  const [disputeDetail, setDisputeDetail] = useState<{ reason?: string; messages: DisputeMessage[] } | null>(null);
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
-  const [reply, setReply] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [listsLoading, setListsLoading] = useState(true);
+  const [listsError, setListsError] = useState(false);
+  const [selection, setSelection] = useState<CaseSelection | null>(null);
   const [showRecord, setShowRecord] = useState(false);
-  const threadEndRef = useRef<HTMLDivElement>(null);
-  const replyRef = useRef<HTMLTextAreaElement>(null);
+  const inboxRef = useRef<HTMLDivElement>(null);
+  const decidedRef = useRef(new Set<string>());
+  const listsLoadedRef = useRef(false);
 
-  async function loadLists() {
+  const conditions = useMemo(() => standingConditions(restriction), [restriction]);
+  const primary = conditions[0] || null;
+
+  // Banned and locked members live on this page; suspended and timed-out members come here
+  // from their banner to appeal and can go back to the site.
+  const appealOnly =
+    isAppealLimitedMember(user) || conditions.some((c) => c.id === 'banned' || c.id === 'locked');
+  const canLeave = !appealOnly;
+  // Matches `appealTicketsOnly` on the backend: these members reply only on the appeal ticket.
+  const replyLimited = appealOnly || conditions.some((c) => c.id === 'suspended');
+  const hasPenalty = conditions.length > 0 || appealOnly;
+  const copy = primary ? PENALTY_COPY[primary.id] : DEFAULT_PENALTY_COPY;
+
+  const loadLists = useCallback(async () => {
     const [ticketResult, disputeResult] = await Promise.allSettled([
       api.get('/api/users/tickets'),
       api.get('/api/users/disputes'),
     ]);
-    if (ticketResult.status === 'fulfilled') {
-      setTickets(ticketResult.value.data?.data || []);
-    }
-    if (disputeResult.status === 'fulfilled') {
-      setDisputes(disputeResult.value.data?.data || []);
-    }
-    if (ticketResult.status === 'rejected' && disputeResult.status === 'rejected') {
-      throw ticketResult.reason;
-    }
-  }
-
-  useEffect(() => {
-    void loadLists().catch(() => {
-      showErrorToast('Could not load your tickets and disputes.');
-    });
+    if (ticketResult.status === 'fulfilled') setTickets(ticketResult.value.data?.data || []);
+    if (disputeResult.status === 'fulfilled') setDisputes(disputeResult.value.data?.data || []);
+    const failed = ticketResult.status === 'rejected' && disputeResult.status === 'rejected';
+    // A failed background refresh keeps what is already shown.
+    if (!failed) listsLoadedRef.current = true;
+    setListsError(failed && !listsLoadedRef.current);
+    setListsLoading(false);
+    if (failed) throw ticketResult.reason;
   }, []);
 
-  async function openTicket(id: string) {
-    setOpenTicketId(id);
-    setOpenDisputeId(null);
-    const res = await api.get(`/api/users/tickets/${id}`);
-    setTicketMessages(res.data?.data?.messages || []);
+  useEffect(() => {
+    void loadLists().catch(() => undefined);
+  }, [loadLists]);
+
+  // When a penalty's clock runs out, re-read the standing so the page reflects it.
+  const nextChange = nextStandingChange(conditions);
+  useEffect(() => {
+    if (!nextChange) return;
+    const delay = Math.max(0, nextChange - Date.now()) + 5000;
+    if (delay > 2147483000) return; // setTimeout overflows past ~24.8 days.
+    const timer = window.setTimeout(() => void refreshCurrentUser(), delay);
+    return () => window.clearTimeout(timer);
+  }, [nextChange]);
+
+  const handleAppealDecision = useCallback((ticketId: string) => {
+    if (decidedRef.current.has(ticketId)) return;
+    decidedRef.current.add(ticketId);
+    void refreshCurrentUser();
+  }, []);
+
+  const openAppeal = tickets.find((ticket) => isAppealTicket(ticket) && !isClosedStatus(ticket.status)) || null;
+
+  function openCase(next: CaseSelection) {
+    setSelection(next);
+    window.requestAnimationFrame(() => inboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
-  async function openDispute(id: string) {
-    setOpenDisputeId(id);
-    setOpenTicketId(null);
-    const res = await api.get(`/api/users/disputes/${id}`);
-    setDisputeDetail({
-      reason: res.data?.data?.reason,
-      messages: res.data?.data?.messages || [],
-    });
-  }
-
-  async function submitAppeal(event: FormEvent) {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      const res = await api.post('/api/users/tickets', {
-        subject: subject.trim(),
-        description: description.trim(),
-        type: 'Appeal an account penalty',
-        category: 'Appeal an account penalty',
-        fields: {
-          case_id: 'Not provided',
-          why_reverse: description.trim(),
-        },
-      });
-      setSubject('');
-      setDescription('');
-      showSuccessToast('Appeal submitted.');
-      const createdId = res.data?.data?.ticketId as string | undefined;
-      await loadLists();
-      if (createdId) await openTicket(createdId);
-    } catch (err) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      showErrorToast(message || 'Could not submit the appeal.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const selectedTicket = tickets.find((ticket) => ticket.id === openTicketId) || null;
-  const ticketClosed = selectedTicket?.status === 'Closed' || selectedTicket?.status === 'Resolved';
-
-  async function sendReply() {
-    if (!openTicketId || !reply.trim() || ticketClosed || saving) return;
-    const body = reply.trim();
-    setSaving(true);
-    setReply('');
-    try {
-      await api.post(`/api/users/tickets/${openTicketId}/messages`, { body });
-      await openTicket(openTicketId);
-    } catch (err) {
-      setReply(body);
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      showErrorToast(message || 'Could not send that reply.');
-    } finally {
-      setSaving(false);
-    }
+  async function handleSubmitted(ticketId: string | null) {
+    await loadLists().catch(() => undefined);
+    if (ticketId) openCase({ kind: 'ticket', id: ticketId });
   }
 
   async function confirmSignOut() {
@@ -181,288 +149,221 @@ export default function AccountAccessPage() {
     navigate('/login', { replace: true });
   }
 
-  const accountId = String(user?.account_id || '');
-  const activeMessages: ThreadMessage[] = openTicketId ? ticketMessages : (disputeDetail?.messages || []);
-
-  // Banned and locked members live on this page; suspended and timed-out members come here
-  // from their banner to appeal and can go back to the site.
-  const statusWord = String(restriction?.status || user?.status || '').toLowerCase();
-  const conditions = standingConditions(restriction);
-  const penalty: 'locked' | 'banned' | 'suspended' | 'credits' | 'frozen' | 'timeout' =
-    statusWord === 'locked' || restriction?.locked
-      ? 'locked'
-      : statusWord === 'banned' || restriction?.banned
-        ? 'banned'
-        : statusWord === 'suspended' || restriction?.suspended
-          ? 'suspended'
-          : restriction?.creditsFrozen
-            ? 'credits'
-            : restriction?.warningFrozen
-              ? 'frozen'
-              : 'timeout';
-  const penaltyCopy = {
-    locked: { tag: 'Locked', title: 'Your account is locked', form: 'Ask to unlock this account' },
-    banned: { tag: 'Banned', title: 'Your account is banned', form: 'Appeal this ban' },
-    suspended: { tag: 'Suspended', title: 'Your account is suspended', form: 'Appeal this suspension' },
-    credits: { tag: 'Credits on hold', title: 'Some of your credits are on hold', form: 'Ask for your credits back' },
-    frozen: { tag: 'Frozen access', title: 'Your account has Frozen access', form: 'Appeal a warning' },
-    timeout: { tag: 'Penalty', title: 'Appeal an account penalty', form: 'Appeal this penalty' },
-  }[penalty];
-  const canLeave = penalty !== 'locked' && penalty !== 'banned';
-
-  useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [activeMessages.length, openTicketId, openDisputeId]);
-
-  function messageIsOwn(message: ThreadMessage) {
-    if (message.senderId && accountId) return message.senderId === accountId;
-    return String(message.authorType || '').toLowerCase() === 'user';
-  }
+  const tone = toneClasses(primary?.tone || 'rose');
+  const HeroIcon = primary ? conditionIcon(primary.id) : ShieldCheck;
+  const heroTitle = primary?.title || (hasPenalty ? 'Your account has a penalty' : 'Your account is in good standing');
+  const heroBody =
+    restriction?.message ||
+    primary?.summary ||
+    (hasPenalty
+      ? 'You can sign in only to file an appeal and view your tickets and disputes.'
+      : 'There is nothing on your account to appeal right now.');
+  const heroEnds = primary ? (primary.endsAt ? `Ends ${formatStandingWhen(primary.endsAt)}` : primary.openEnded) : null;
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-white">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-white/10">
-        <p className="text-sm font-semibold tracking-wide">Ensemble</p>
-        <div className="flex items-center gap-2">
-          {canLeave ? (
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white" style={FONT}>
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-dark-base/95">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Ensemble</span>
+            <span className="hidden h-5 w-px bg-gray-200 sm:block dark:bg-white/10" />
+            <span className="hidden truncate text-sm text-gray-500 sm:block dark:text-zinc-400">Account standing & appeals</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {canLeave ? (
+              <button
+                type="button"
+                onClick={() => navigate('/home')}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Back to Ensemble</span>
+                <span className="sm:hidden">Back</span>
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => navigate('/home')}
-              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"
+              onClick={() => setConfirmLogout(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
             >
-              Back to Ensemble
+              <LogOut className="h-4 w-4" />
+              Sign out
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setConfirmLogout(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
+          </div>
         </div>
       </header>
-      <UserLogoutModal
-        isOpen={confirmLogout}
-        onClose={() => setConfirmLogout(false)}
-        onConfirm={() => void confirmSignOut()}
-      />
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
-          {penaltyCopy.tag}
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{penaltyCopy.title}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-          {restriction?.message ||
-            (canLeave
-              ? 'Tell staff why this penalty should be lifted. If they accept, it ends within 24 hours.'
-              : 'You can sign in only to file an appeal and view your tickets and disputes.')}
-        </p>
-      </section>
+      <UserLogoutModal isOpen={confirmLogout} onClose={() => setConfirmLogout(false)} onConfirm={() => void confirmSignOut()} />
 
-      {conditions.length ? (
-        <section aria-label="What is on your account">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">What is on your account</h2>
-          <StandingConditionList conditions={conditions} />
-        </section>
-      ) : null}
-
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowRecord((open) => !open)}
-          className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-white"
-        >
-          {showRecord ? 'Hide account record' : 'View account record'}
-        </button>
-        {showRecord ? (
-          <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
-            <AccountRecordSection />
-          </div>
-        ) : null}
-      </div>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{penaltyCopy.form}</h2>
-        <form className="mt-4 flex flex-col gap-3" onSubmit={submitAppeal}>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            Subject
-            <input
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              required
-              className="mt-1 w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            />
-          </label>
-          <label className="text-sm text-zinc-600 dark:text-zinc-300">
-            What happened
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              required
-              rows={5}
-              className="mt-1 w-full rounded-xl border border-zinc-200 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={saving}
-            className="self-start rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {saving ? 'Sending…' : 'Submit appeal'}
-          </button>
-        </form>
-      </section>
-
-      <section className="flex h-[36rem] overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
-        <aside className="flex w-72 shrink-0 flex-col border-r border-zinc-200 dark:border-white/10">
-          <div className="border-b border-zinc-200 px-4 py-3 dark:border-white/10">
-            <h2 className="text-sm font-semibold">Tickets</h2>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {tickets.length === 0 ? <p className="px-4 py-3 text-sm text-zinc-500">No tickets yet.</p> : null}
-            {tickets.map((ticket) => (
-              <button
-                key={ticket.id}
-                type="button"
-                onClick={() => void openTicket(ticket.id)}
-                className={`w-full border-b border-zinc-100 px-4 py-3 text-left dark:border-white/5 ${
-                  openTicketId === ticket.id ? 'bg-blue-500/10' : 'hover:bg-zinc-50 dark:hover:bg-white/5'
-                }`}
-              >
-                <span className="block truncate text-sm font-medium">{ticket.subject || ticket.number || 'Ticket'}</span>
-                <span className="mt-1 block truncate text-xs text-zinc-500">
-                  {ticket.number || 'Ticket'} · {ticket.status}
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
+        {/* Status summary */}
+        <Card borderClass={hasPenalty ? tone.border : undefined}>
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:p-6">
+            <span
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                hasPenalty ? tone.icon : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+              }`}
+            >
+              <HeroIcon className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                    hasPenalty ? tone.chip : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                  }`}
+                >
+                  {primary?.label || (hasPenalty ? 'Penalty' : 'Good standing')}
                 </span>
-              </button>
-            ))}
-            <div className="border-b border-zinc-200 px-4 py-3 dark:border-white/10">
-              <h2 className="text-sm font-semibold">Disputes</h2>
-            </div>
-            {disputes.length === 0 ? <p className="px-4 py-3 text-sm text-zinc-500">No disputes.</p> : null}
-            {disputes.map((dispute) => (
-              <button
-                key={dispute.id}
-                type="button"
-                onClick={() => void openDispute(dispute.id)}
-                className={`w-full border-b border-zinc-100 px-4 py-3 text-left dark:border-white/5 ${
-                  openDisputeId === dispute.id ? 'bg-blue-500/10' : 'hover:bg-zinc-50 dark:hover:bg-white/5'
-                }`}
-              >
-                <span className="block truncate text-sm font-medium">{dispute.title || dispute.number || 'Dispute'}</span>
-                <span className="mt-1 block truncate text-xs text-zinc-500">
-                  {dispute.number || 'Dispute'} · {dispute.status}
-                </span>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
-          {!openTicketId && !openDisputeId ? (
-            <div className="flex flex-1 items-center justify-center px-6 text-sm text-zinc-500">
-              Select a ticket to reply, or a dispute to read.
-            </div>
-          ) : (
-            <>
-              <div className="border-b border-zinc-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-zinc-900">
-                <p className="truncate text-sm font-semibold">
-                  {selectedTicket
-                    ? (selectedTicket.subject || selectedTicket.number || 'Ticket')
-                    : (disputes.find((dispute) => dispute.id === openDisputeId)?.title || 'Dispute')}
-                </p>
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  {selectedTicket
-                    ? `${selectedTicket.number || 'Ticket'} · ${selectedTicket.status || 'Open'}`
-                    : `${disputes.find((dispute) => dispute.id === openDisputeId)?.number || 'Dispute'} · ${disputes.find((dispute) => dispute.id === openDisputeId)?.status || ''}`}
-                </p>
+                {conditions.length > 1 ? (
+                  <span className="text-xs text-gray-500 dark:text-zinc-400">+{conditions.length - 1} more on your account</span>
+                ) : null}
               </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-                <div className="mt-auto flex flex-col">
-                  {activeMessages.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-zinc-500">No messages yet.</p>
-                  ) : null}
-                  {activeMessages.map((message) => {
-                    if (String(message.messageType || message.authorType || '').toLowerCase() === 'system') {
-                      return (
-                        <div key={message.id} className="my-3 flex justify-center">
-                          <span className="rounded-full bg-white px-4 py-1.5 text-xs text-zinc-500 dark:bg-white/5">
-                            {message.body}
-                          </span>
-                        </div>
-                      );
-                    }
-                    const own = messageIsOwn(message);
-                    const name = own ? 'You' : (String(message.authorType || '').toLowerCase() === 'staff' ? 'Staff' : (message.authorName || 'Staff'));
-                    return (
-                      <div key={message.id} className={`my-2 flex ${own ? 'flex-row-reverse' : 'flex-row'}`}>
-                        <div className="flex max-w-[75%] flex-col">
-                          <span className={`mb-1 px-1 text-[11px] font-medium text-zinc-500 ${own ? 'self-end' : 'self-start'}`}>
-                            {name} · {formatWhen(message.createdAt)}
-                          </span>
-                          <div
-                            className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                              own
-                                ? 'rounded-br-none bg-blue-600 text-white'
-                                : 'rounded-bl-none border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-700/50 dark:bg-zinc-800 dark:text-zinc-100'
-                            }`}
-                          >
-                            {message.body}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={threadEndRef} />
-                </div>
-              </div>
-              {openDisputeId ? (
-                <div className="border-t border-zinc-200 bg-white p-4 text-center text-sm text-zinc-500 dark:border-white/10 dark:bg-zinc-900">
-                  You can read this dispute here. Replies stay on the ticket with support.
-                </div>
-              ) : ticketClosed ? (
-                <div className="border-t border-zinc-200 bg-white p-4 text-center text-sm text-zinc-500 dark:border-white/10 dark:bg-zinc-900">
-                  This ticket is closed. You cannot reply.
-                </div>
-              ) : (
-                <div className="flex items-end gap-2 border-t border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-                  <textarea
-                    ref={replyRef}
-                    value={reply}
-                    rows={1}
-                    placeholder="Type a message..."
-                    onChange={(event) => {
-                      setReply(event.target.value);
-                      const el = event.target;
-                      el.style.height = 'auto';
-                      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void sendReply();
-                      }
-                    }}
-                    className="max-h-40 min-h-10 flex-1 resize-none rounded-2xl border border-zinc-300 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-white/15 dark:bg-white/5"
-                  />
+              <h1 className="mt-2 text-xl font-bold text-gray-900 sm:text-2xl dark:text-white">{heroTitle}</h1>
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-zinc-300">{heroBody}</p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                {heroEnds ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-gray-600 dark:border-white/10 dark:text-zinc-300">
+                    <Clock className="h-3.5 w-3.5" /> {heroEnds}
+                  </span>
+                ) : null}
+                {openAppeal ? (
                   <button
                     type="button"
-                    onClick={() => void sendReply()}
-                    disabled={saving || !reply.trim()}
-                    className="rounded-xl bg-blue-600 p-2.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Send message"
+                    onClick={() => openCase({ kind: 'ticket', id: openAppeal.id })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 font-medium text-blue-700 transition hover:bg-blue-500/15 dark:text-blue-300"
                   >
-                    <Send className="h-5 w-5" />
+                    <Gavel className="h-3.5 w-3.5" /> Appeal {openAppeal.number || ''} · {openAppeal.status || 'Open'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
+          {/* What is on the account, and the record */}
+          <div className="flex min-w-0 flex-col gap-6">
+            {conditions.length ? (
+              <section aria-labelledby="appeal-conditions">
+                <h2 id="appeal-conditions" className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">
+                  What is on your account
+                </h2>
+                <StandingConditionList conditions={conditions} />
+              </section>
+            ) : null}
+
+            <Card>
+              <button
+                type="button"
+                onClick={() => setShowRecord((open) => !open)}
+                aria-expanded={showRecord}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-zinc-300">
+                  <ClipboardList className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">Account record</span>
+                  <span className="block text-xs text-gray-500 dark:text-zinc-400">
+                    Warnings, penalties and Platform Merit. Case IDs for your appeal are listed here.
+                  </span>
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${showRecord ? 'rotate-180' : ''}`} />
+              </button>
+              {showRecord ? (
+                <div className="border-t border-gray-200 px-5 py-5 dark:border-white/10">
+                  <AccountRecordSection />
+                </div>
+              ) : null}
+            </Card>
+          </div>
+
+          {/* Appeal panel */}
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-24">
+            <Card className="p-5">
+              {listsLoading ? (
+                <div className="space-y-3">
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+                  <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+                  <div className="h-24 animate-pulse rounded-xl bg-gray-100 dark:bg-white/5" />
+                </div>
+              ) : openAppeal ? (
+                <div className="flex flex-col gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                    <Gavel className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">Your appeal is with staff</h2>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
+                      {openAppeal.number ? `${openAppeal.number} · ` : ''}
+                      {openAppeal.status || 'Open'}
+                      {openAppeal.updatedAt ? ` · updated ${formatStandingWhen(openAppeal.updatedAt)}` : ''}
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-zinc-300">
+                    You can have one open appeal at a time. Add anything new as a reply on that ticket.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openCase({ kind: 'ticket', id: openAppeal.id })}
+                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                  >
+                    Open the conversation
                   </button>
                 </div>
+              ) : hasPenalty ? (
+                <AppealForm
+                  title={copy.formTitle}
+                  subjectPlaceholder={copy.subjectPlaceholder}
+                  outcome={copy.outcome}
+                  onSubmitted={handleSubmitted}
+                />
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">Nothing to appeal</h2>
+                  <p className="text-sm text-gray-500 dark:text-zinc-400">
+                    Appeals are for active penalties. Your past tickets and disputes are still below.
+                  </p>
+                </div>
               )}
-            </>
-          )}
+            </Card>
+
+            {hasPenalty ? (
+              <Card className="p-5">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">How appeals work</h2>
+                <ol className="mt-3 space-y-3">
+                  {STEPS.map((step, index) => (
+                    <li key={step.title} className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-white/5 dark:text-zinc-300">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900 dark:text-white">{step.title}</span>
+                        <span className="block text-xs leading-relaxed text-gray-500 dark:text-zinc-400">{step.body}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            ) : null}
+          </aside>
         </div>
-      </section>
-    </div>
+
+        <div ref={inboxRef} className="scroll-mt-24">
+          <CaseInbox
+            tickets={tickets}
+            disputes={disputes}
+            listsLoading={listsLoading}
+            listsError={listsError}
+            selection={selection}
+            onSelect={setSelection}
+            onRefreshLists={loadLists}
+            accountId={accountId}
+            replyLimited={replyLimited}
+            onAppealDecision={handleAppealDecision}
+          />
+        </div>
+      </main>
     </div>
   );
 }

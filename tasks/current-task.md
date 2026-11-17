@@ -1,25 +1,22 @@
-# Active Task: Fix Subscription Downgrade (Business to Premium)
+# Active Task: Appeal page redesign and fixes (`/account/appeal`)
 
 ## Implementation Objective
 
-Fix subscription downgrade flow across backend and frontend so that downgrading from Business to Premium works smoothly:
-1. In `backend/services/PaymentServices.js`:
-   - If `subscription.xendit_plan_id` is present, update the Xendit recurring plan via PATCH.
-   - If `!subscription.xendit_plan_id` (e.g. test, promotional, or local plan), allow downgrading the local database plan directly without erroring.
-   - Update `plan_id: planDetails.plan_id` in `updateSubscriptionBySubscriptionId` so the subscription tier actually updates in the database.
-   - Ensure SQL queries reference valid columns (`email_address` on `users` table instead of non-existent `email`).
-   - Return `success: true` and a valid reference/ID in the response for clean frontend reconciliation.
-2. In `frontend/src/pages/payment/checkout.tsx`:
-   - In `handleSubscribe`, recognize successful downgrade responses (when `response.status === 200` and `data?.message` or `data?.success` or `data?.subscriptionUpdate`) and show the success confirmation state.
-   - For downgrades without a new payment method selection, do not block or disable the button; use existing or local plan update.
-3. In `frontend/src/pages/user/13_creditsshop/CreditsShop.tsx`:
-   - Relax `hasXenditPlan` requirement on `isFreePlan` check so paid users with `xendit_plan_id = null` are not falsely identified as free plan users.
-   - Accurately display "Downgrade to [Plan]" buttons and badges for lower tier plans.
+Make the appeal page (`frontend/src/pages/user/account/AccountAccessPage.tsx`) match the current Ensemble UI
+(`dark-base` / `dark-surface` tokens, Plus Jakarta Sans, blue primary buttons, no gradients) and fix its functional lapses.
 
-## Status: Completed
+## Acceptance criteria
 
-All acceptance criteria satisfied:
-- Downgrade button correctly triggers downgrade checkout item.
-- Downgrade request succeeds locally and via Xendit if recurring plan exists.
-- Database records updated `plan_id`.
-- User verification preference preserved (no automatic verification commands run).
+- Uses the theme tokens and controls of the rest of the member site; responsive down to phone width.
+- The appeal form is hidden when the member already has an open appeal (backend returns 409); the open appeal is shown instead.
+- The form is hidden when there is no active penalty (backend returns 400).
+- Optional Case ID and supporting-evidence fields are sent (`fields.case_id`, `fields.evidence`); inline field errors.
+- Appeal subject/description length is validated on the backend too (subject ≤ 200, description 10–5,000, evidence ≤ 2,000).
+- Banned, locked and suspended members cannot reply on non-appeal tickets in the UI (backend already returns 403).
+- Opening a ticket or dispute shows loading and error states and ignores stale responses.
+- Staff replies show up without a reload (poll while the page is visible).
+- Opening the page no longer scrolls the window to the thread; only the thread scrolls.
+- Appeal decisions (accepted / denied / denied permanently) are shown on the ticket.
+- Copy is accurate per penalty (accepted appeals do not lift warnings).
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
