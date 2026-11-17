@@ -16,6 +16,7 @@ const {
   getAdminVerificationDetails,
   applyAdminDiditVerificationAction,
 } = require('../services/AdminVerificationServices');
+const { getAdminAccountProfile } = require('../services/AdminAccountProfileServices');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -274,7 +275,27 @@ async function getAdminAccountActivity(req, res) {
   }
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function getAdminAccountProfileDetails(req, res) {
+  if (!UUID_PATTERN.test(String(req.params.accountId || ''))) {
+    return res.status(400).json({ success: false, message: 'A valid accountId is required' });
+  }
+  try {
+    const data = await getAdminAccountProfile(req.params.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err.statusCode === 404 ? 404 : 500;
+    if (status === 500) console.error('Error fetching account profile:', err);
+    res.status(status).json({
+      success: false,
+      message: status === 404 ? 'Account not found' : 'Failed to load account profile',
+    });
+  }
+}
+
 module.exports = {
+  getAdminAccountProfileDetails,
   getAdminTeamsManagement,
   getAdminUsersManagement,
   getAdminUserVerificationDetails,

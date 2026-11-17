@@ -10,11 +10,13 @@ import {
   type DisputeRow,
   type ThreadMessage,
   type TicketRow,
+  APPEAL_LIMITS,
   errorMessage,
   isAppealTicket,
   isClosedStatus,
   statusPillClass,
 } from './appealShared';
+import { AttachButton, MessageAttachments, PendingFileList, uploadPendingFiles, usePendingFiles } from './appealAttachments';
 
 const POLL_MS = 20_000;
 
@@ -25,6 +27,8 @@ type ThreadState = {
   status?: string;
   type?: string;
   appealDecision?: AppealDecision;
+  /** Dispute only: mirrors the checks in `postPublicDisputeComment`. */
+  dispute?: { visible: boolean; filedByMe: boolean; limited: boolean };
 };
 
 const EMPTY_THREAD: ThreadState = { loading: false, error: null, messages: [] };
@@ -136,6 +140,8 @@ export default function CaseInbox({
   const [thread, setThread] = useState<ThreadState>(EMPTY_THREAD);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const replyFiles = usePendingFiles();
+  const clearReplyFiles = replyFiles.clear;
   const requestRef = useRef(0);
   const selectionRef = useRef<CaseSelection | null>(selection);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -160,9 +166,13 @@ export default function CaseInbox({
         loading: false,
         error: null,
         messages: data.messages || [],
-        status: data.ticket?.status,
+        status: target.kind === 'ticket' ? data.ticket?.status : data.status,
         type: data.ticket?.type,
         appealDecision: data.ticket?.appealDecision ?? null,
+        dispute:
+          target.kind === 'dispute'
+            ? { visible: Boolean(data.visibility), filedByMe: Boolean(data.filedByMe), limited: Boolean(data.limited) }
+            : undefined,
       });
     } catch (err) {
       if (requestId !== requestRef.current || silent) return;
@@ -173,12 +183,13 @@ export default function CaseInbox({
   useEffect(() => {
     lastCountRef.current = 0;
     setReply('');
+    clearReplyFiles();
     if (selection) void loadThread(selection);
     else {
       requestRef.current += 1;
       setThread(EMPTY_THREAD);
     }
-  }, [selection, loadThread]);
+  }, [selection, loadThread, clearReplyFiles]);
 
   // Staff replies arrive without a reload: refresh while the tab is visible.
   useEffect(() => {
@@ -210,27 +221,62 @@ export default function CaseInbox({
   const ticketClosed = isClosedStatus(ticketStatus);
   const blockedByPenalty = replyLimited && !isAppealTicket({ type: ticketType });
 
+  // Disputes: the backend blocks writes for banned, locked and suspended members, closed
+  // disputes, and private disputes the member did not file.
+  const disputeStatus = thread.status || selectedDispute?.status;
+  const disputeClosed = isClosedStatus(disputeStatus);
+  const disputeInfo = thread.dispute;
+  const disputeCanReply = Boolean(
+    disputeInfo && !replyLimited && !disputeClosed && !disputeInfo.limited && (disputeInfo.visible || disputeInfo.filedByMe)
+  );
+  const disputeReadOnlyReason = replyLimited
+    ? 'While this penalty is active, disputes are read-only.'
+    : disputeClosed
+      ? 'This dispute is closed. The discussion is read-only.'
+      : disputeInfo && !disputeInfo.visible && !disputeInfo.filedByMe
+        ? 'You can reply once staff open this dispute.'
+        : 'This dispute is read-only.';
+
+  const canCompose =
+    selection?.kind === 'ticket' ? !ticketClosed && !blockedByPenalty : selection?.kind === 'dispute' && disputeCanReply;
+  const replyMax = selection?.kind === 'dispute' ? APPEAL_LIMITS.disputeReply : APPEAL_LIMITS.description;
+
   async function sendReply() {
-    if (!selection || selection.kind !== 'ticket') return;
+    if (!selection || !canCompose || sending || thread.loading) return;
     const body = reply.trim();
-    if (!body || sending || ticketClosed || blockedByPenalty) return;
+    const files = replyFiles.files;
+    if (!body && !files.length) return;
+    const target = selection;
     setSending(true);
     setReply('');
     if (replyRef.current) replyRef.current.style.height = 'auto';
     try {
-      await api.post(`/api/users/tickets/${selection.id}/messages`, { body });
-      await loadThread(selection, true);
+      const attachments = await uploadPendingFiles(
+        files,
+        target.kind === 'ticket' ? 'ticket-attachments' : 'chat-attachments'
+      );
+      const payload = { body, ...(attachments.length ? { attachments } : {}) };
+      if (target.kind === 'ticket') {
+        await api.post(`/api/users/tickets/${target.id}/messages`, payload);
+      } else {
+        await api.post(`/api/accounts/disputes/${target.id}/messages`, payload);
+      }
+      if (selectionRef.current?.kind === target.kind && selectionRef.current.id === target.id) {
+        replyFiles.clear();
+        await loadThread(target, true);
+      }
       void onRefreshLists().catch(() => undefined);
     } catch (err) {
       setReply(body);
-      showErrorToast(errorMessage(err, 'Could not send that reply.'));
+      showErrorToast(errorMessage(err, err instanceof Error && err.message ? err.message : 'Could not send that reply.'));
     } finally {
       setSending(false);
     }
   }
 
   function messageIsOwn(message: ThreadMessage) {
-    if (message.senderId && accountId) return message.senderId === accountId;
+    const sender = message.senderId || message.senderAccountId;
+    if (sender && accountId) return String(sender) === accountId;
     return String(message.authorType || '').toLowerCase() === 'user';
   }
 
@@ -252,7 +298,7 @@ export default function CaseInbox({
         </span>
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">Tickets and disputes</h2>
-          <p className="text-xs text-gray-500 dark:text-zinc-400">Reply to staff on your appeal and read your disputes. Updates every few seconds.</p>
+          <p className="text-xs text-gray-500 dark:text-zinc-400">Reply to staff and attach screenshots or files. Updates every few seconds.</p>
         </div>
       </div>
 
@@ -321,7 +367,7 @@ export default function CaseInbox({
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
               <LifeBuoy className="h-8 w-8 text-gray-300 dark:text-zinc-700" />
               <p className="text-sm font-medium text-gray-700 dark:text-zinc-300">Pick a conversation</p>
-              <p className="max-w-xs text-xs text-gray-500 dark:text-zinc-500">Open a ticket to reply to staff, or a dispute to read it.</p>
+              <p className="max-w-xs text-xs text-gray-500 dark:text-zinc-500">Open a ticket or dispute to read it and reply.</p>
             </div>
           ) : (
             <>
@@ -382,15 +428,18 @@ export default function CaseInbox({
                             <span className={`mb-1 px-1 text-[11px] font-medium text-gray-500 dark:text-zinc-500 ${own ? 'self-end' : 'self-start'}`}>
                               {name} · {formatStandingWhen(message.createdAt)}
                             </span>
-                            <div
-                              className={`whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm ${
-                                own
-                                  ? 'rounded-br-md bg-blue-600 text-white'
-                                  : 'rounded-bl-md border border-gray-200 bg-white text-gray-900 dark:border-white/10 dark:bg-dark-elevated dark:text-zinc-100'
-                              }`}
-                            >
-                              {message.body}
-                            </div>
+                            {message.body ? (
+                              <div
+                                className={`whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm ${own ? 'self-end' : 'self-start'} ${
+                                  own
+                                    ? 'rounded-br-md bg-blue-600 text-white'
+                                    : 'rounded-bl-md border border-gray-200 bg-white text-gray-900 dark:border-white/10 dark:bg-dark-elevated dark:text-zinc-100'
+                                }`}
+                              >
+                                {message.body}
+                              </div>
+                            ) : null}
+                            <MessageAttachments attachments={message.attachments} own={own} />
                           </div>
                         </div>
                       );
@@ -399,57 +448,96 @@ export default function CaseInbox({
                 )}
               </div>
 
-              {selection.kind === 'dispute' ? (
+              {selection.kind === 'dispute' && disputeInfo && !disputeCanReply ? (
                 <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 dark:border-white/10 dark:bg-dark-surface dark:text-zinc-400">
-                  <span>Disputes are read-only here.</span>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/disputes/${selection.id}`)}
-                    className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    Open dispute page <ExternalLink className="h-3.5 w-3.5" />
-                  </button>
+                  <span>{disputeReadOnlyReason}</span>
+                  {!replyLimited ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/disputes/${selection.id}`)}
+                      className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Open dispute page <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
-              ) : ticketClosed ? (
+              ) : selection.kind === 'ticket' && ticketClosed ? (
                 <div className="border-t border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-500 dark:border-white/10 dark:bg-dark-surface dark:text-zinc-400">
                   This ticket is closed. You cannot reply.
                 </div>
-              ) : blockedByPenalty ? (
+              ) : selection.kind === 'ticket' && blockedByPenalty ? (
                 <div className="border-t border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-500 dark:border-white/10 dark:bg-dark-surface dark:text-zinc-400">
                   While this penalty is active you can only reply on your appeal ticket.
                 </div>
               ) : (
-                <div className="flex items-end gap-2 border-t border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-dark-surface">
-                  <textarea
-                    ref={replyRef}
-                    value={reply}
-                    rows={1}
-                    disabled={thread.loading}
-                    aria-label="Reply to staff"
-                    placeholder="Write a reply… (Shift + Enter for a new line)"
-                    onChange={(event) => {
-                      setReply(event.target.value);
-                      const el = event.target;
-                      el.style.height = 'auto';
-                      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                <div
+                  className="flex flex-col gap-2 border-t border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-dark-surface"
+                  onDragOver={(event) => {
+                    if (canCompose && event.dataTransfer.types.includes('Files')) event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    if (!canCompose || sending) return;
+                    event.preventDefault();
+                    replyFiles.add(event.dataTransfer.files);
+                  }}
+                >
+                  {selection.kind === 'dispute' ? (
+                    <p className="flex flex-wrap items-center gap-x-2 px-1 text-xs text-gray-500 dark:text-zinc-500">
+                      <span>Only you and staff see your replies until staff share them.</span>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/disputes/${selection.id}`)}
+                        className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Open dispute page <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </p>
+                  ) : null}
+                  <PendingFileList files={replyFiles.files} onRemove={replyFiles.remove} disabled={sending} />
+                  <div className="flex items-end gap-2">
+                    <AttachButton
+                      onPick={replyFiles.add}
+                      disabled={sending || thread.loading || !canCompose}
+                      count={replyFiles.files.length}
+                    />
+                    <textarea
+                      ref={replyRef}
+                      value={reply}
+                      rows={1}
+                      maxLength={replyMax}
+                      disabled={thread.loading || !canCompose}
+                      aria-label={selection.kind === 'dispute' ? 'Reply on this dispute' : 'Reply to staff'}
+                      placeholder="Write a reply… (Shift + Enter for a new line)"
+                      onPaste={(event) => {
+                        const pasted = Array.from(event.clipboardData.files || []);
+                        if (!pasted.length) return;
                         event.preventDefault();
-                        void sendReply();
-                      }
-                    }}
-                    className="max-h-40 min-h-10 flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-white/10 dark:bg-dark-base dark:text-white dark:placeholder:text-zinc-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void sendReply()}
-                    disabled={sending || !reply.trim()}
-                    className="rounded-xl bg-blue-600 p-2.5 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Send reply"
-                  >
-                    {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                  </button>
+                        replyFiles.add(pasted);
+                      }}
+                      onChange={(event) => {
+                        setReply(event.target.value);
+                        const el = event.target;
+                        el.style.height = 'auto';
+                        el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault();
+                          void sendReply();
+                        }
+                      }}
+                      className="max-h-40 min-h-10 flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-white/10 dark:bg-dark-base dark:text-white dark:placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void sendReply()}
+                      disabled={sending || !canCompose || (!reply.trim() && !replyFiles.files.length)}
+                      className="rounded-xl bg-blue-600 p-2.5 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="Send reply"
+                    >
+                      {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                    </button>
+                  </div>
                 </div>
               )}
             </>

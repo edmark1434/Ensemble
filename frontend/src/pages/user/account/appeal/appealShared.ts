@@ -1,4 +1,5 @@
 import type { StandingConditionId } from '@/lib/standing';
+import type { ThreadAttachment } from './appealAttachments';
 
 /** Must match `APPEAL_TICKET_TYPE` in `backend/lib/AccountRestriction.js`. */
 export const APPEAL_TICKET_TYPE = 'Appeal an account penalty';
@@ -9,6 +10,8 @@ export const APPEAL_LIMITS = {
   description: 5000,
   caseId: 80,
   evidence: 2000,
+  /** `postPublicDisputeComment` rejects longer dispute replies. */
+  disputeReply: 2000,
 } as const;
 
 export type TicketRow = {
@@ -32,11 +35,15 @@ export type DisputeRow = {
 
 export type ThreadMessage = {
   id: string;
+  /** Ticket messages. */
   senderId?: string | null;
+  /** Dispute messages. */
+  senderAccountId?: string | null;
   authorType?: string;
   authorName?: string;
   body?: string;
   messageType?: string;
+  attachments?: ThreadAttachment[];
   createdAt?: string;
 };
 

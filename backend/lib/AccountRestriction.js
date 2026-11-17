@@ -822,6 +822,9 @@ const BANNED_WRITE_ALLOWLIST = [
   /^\/api\/users\/refresh-token$/,
   /^\/api\/users\/tickets$/,
   /^\/api\/users\/tickets\/[^/]+\/messages$/,
+  // Evidence for the appeal ticket. The file controller limits these to `ticket-attachments`.
+  /^\/api\/files\/upload-url$/,
+  /^\/api\/files\/finalize$/,
 ];
 
 function appealRequestAllowed(req) {
@@ -943,6 +946,9 @@ const SUSPENDED_WRITE_ALLOWLIST = [
   // ticket type, exactly as it does for banned and locked members.
   /^\/api\/users\/tickets(?:\?|$)/,
   /^\/api\/users\/tickets\/[^/]+\/messages(?:\?|$)/,
+  // Appeal evidence uploads; the file controller limits these to `ticket-attachments`.
+  /^\/api\/files\/upload-url(?:\?|$)/,
+  /^\/api\/files\/finalize(?:\?|$)/,
 ];
 
 /** Banned, locked and suspended members may only open or answer an appeal ticket. */

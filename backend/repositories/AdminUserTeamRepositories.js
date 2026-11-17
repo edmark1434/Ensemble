@@ -6,6 +6,7 @@ const {
   recordAccountActivity,
   fetchActivityForAccounts,
 } = require('./AccountActivityRepositories');
+const { fetchLastActivityForAccounts } = require('./AdminAccountProfileRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -58,7 +59,7 @@ function mapUserRow(row) {
     forumTimeout: Boolean(row.forum_timeout),
     verificationStatus: mapVerificationLabel(row.verification_status),
     joinedAt: row.created_at,
-    lastSeenAt: row.created_at,
+    lastSeenAt: null,
     hasAvatar: Boolean(row.avatar_file_id),
     avatarPath: row.avatar_path || null,
     staffRole: row.staff_role || null,
@@ -745,7 +746,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       (
         SELECT COUNT(*)::int
         FROM team_members tm
-        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL
+        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL AND tm.status = 'Active'
       ) AS member_count,
       EXISTS (
         SELECT 1 FROM restrictions r
@@ -799,13 +800,14 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
     INNER JOIN accounts a ON a.account_id = u.account_id
     WHERE tm.team_id = ANY($1::uuid[])
       AND tm.deleted_at IS NULL
+      AND tm.status = 'Active'
     ORDER BY
-      CASE WHEN LOWER(tm.role) LIKE '%leader%' THEN 0 ELSE 1 END,
-      tm.joined_at ASC
+      CASE LOWER(tm.role) WHEN 'owner' THEN 0 WHEN 'leader' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END,
+      tm.joined_at ASC NULLS LAST
     `,
     [teamIds]
   );
-  const [membersResult, [creditMap, historyMap, activityMap, assetStats]] = await Promise.all([
+  const [membersResult, [creditMap, historyMap, activityMap, assetStats, lastActivityMap]] = await Promise.all([
     membersRequest,
     enrich
       ? Promise.all([
@@ -823,8 +825,9 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
             `,
             [accountIds]
           ).catch(() => ({ rows: [] })),
+          fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
         ])
-      : [new Map(), new Map(), new Map(), { rows: [] }],
+      : [new Map(), new Map(), new Map(), { rows: [] }, new Map()],
   ]);
 
   const membersByTeam = new Map();
@@ -855,7 +858,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       name: row.display_name || row.handle || 'Unknown',
       email: '',
       username: row.handle,
-      role: 'Team Leader',
+      role: 'Owner',
     };
     const teamName = row.display_name || row.handle || 'Unnamed team';
     const assets = assetsByAccount.get(row.account_id) || { listing_count: 0, listing_value: 0 };
@@ -877,11 +880,12 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       leaderEmail: leader.email,
       memberCount: members.length || Number(row.member_count || 0),
       members,
-      email: leader.email || `${(row.handle || 'team').toLowerCase()}@ensemble.app`,
+      // Teams have no mailbox of their own; staff contact the owner.
+      email: leader.email || '',
       verificationStatus: mapVerificationLabel(row.verification_status, { forTeam: true }),
       status: normalizeStatus(row.status),
       forumTimeout: Boolean(row.forum_timeout),
-      lastSeenAt: row.created_at,
+      lastSeenAt: lastActivityMap.get(row.account_id) || null,
       createdAt: row.created_at,
       stats: {
         totalAssets: Number(assets.listing_count || 0),
@@ -969,7 +973,7 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const [creditMap, historyMap, activityMap, assetStats, membershipsMap] = await Promise.all([
+  const [creditMap, historyMap, activityMap, assetStats, membershipsMap, lastActivityMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
     fetchActivityForAccounts(accountIds),
@@ -985,6 +989,7 @@ async function getUsersManagement() {
         ).catch(() => ({ rows: [] }))
       : { rows: [] },
     fetchTeamMembershipsForUsers(userIds),
+    fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
   ]);
   const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
 
@@ -993,6 +998,7 @@ async function getUsersManagement() {
     const history = buildHistory(u.accountId, historyMap, activityMap);
     return {
       ...rest,
+      lastSeenAt: lastActivityMap.get(u.accountId) || null,
       profileId: `USR-${String(u.id).slice(0, 8).toUpperCase()}`,
       teams: membershipsMap.get(u.id) || [],
       creditActivity: creditMap.get(u.accountId) || [],

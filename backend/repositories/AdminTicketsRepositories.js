@@ -1524,7 +1524,21 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     showPayments ? listTicketPaymentEvidence(row.account_id) : Promise.resolve(null),
   ]);
 
+  // The category case file (standing, listing, contract…) is only built when a staff desk asks
+  // for it, so the many internal re-reads after an update stay cheap.
+  let caseContext;
+  if (staffSession && options.includeCase) {
+    try {
+      const { getTicketCaseContext } = require('./TicketCaseRepositories');
+      caseContext = await getTicketCaseContext(row, { role });
+    } catch (err) {
+      console.error('Error building ticket case context:', err.message);
+      caseContext = null;
+    }
+  }
+
   return {
+    ...(caseContext !== undefined ? { caseContext } : {}),
     ticket,
     messages,
     chatId,
@@ -4490,6 +4504,19 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   } catch (err) {
     console.error('Error loading dispute case file:', err.message);
   }
+  if (staffSession) {
+    // Who each side is on the platform, and the support tickets filed about the same contract.
+    try {
+      const { getDisputePartyStanding, ticketsReferencing } = require('./TicketCaseRepositories');
+      const [parties, relatedTickets] = await Promise.all([
+        getDisputePartyStanding(row.by_account_id, row.for_account_id),
+        row.contract_id ? ticketsReferencing(row.contract_id, null) : Promise.resolve([]),
+      ]);
+      caseFile = { ...caseFile, parties, relatedTickets };
+    } catch (err) {
+      console.error('Error loading dispute party standing:', err.message);
+    }
+  }
 
   try {
     chatId = await getDisputeChatId(disputeId);
@@ -5960,12 +5987,19 @@ async function getTicketPickers(accountId) {
     ),
     safeTicketRows(
       `
-      SELECT c.contract_id AS id, COALESCE(j.title, c.contract_id::text) AS label
+      -- Job contracts and gig orders, so either can be named on a jobs ticket.
+      SELECT c.contract_id AS id,
+             COALESCE(j.title, CASE WHEN g.title IS NOT NULL THEN 'Gig order: ' || g.title END, c.contract_id::text) AS label
       FROM contracts c
       LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
       LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
       LEFT JOIN jobs j ON j.job_id = p.job_id
+      LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+      LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+      LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+      LEFT JOIN gigs g ON g.gig_id = gt.gig_id
       WHERE j.client_account_id = $1 OR p.freelancer_account_id = $1
+         OR gr.client_account_id = $1 OR g.freelancer_account_id = $1
       ORDER BY c.created_at DESC
       LIMIT 50
       `,
@@ -5975,7 +6009,12 @@ async function getTicketPickers(accountId) {
       `
       SELECT id, label FROM (
         SELECT job_id AS id, title AS label, created_at FROM jobs WHERE client_account_id = $1
-        UNION ALL
+        UNION
+        -- Freelancers file "Proposals and hiring" about jobs they applied to.
+        SELECT j.job_id, j.title, j.created_at
+        FROM proposals pr JOIN jobs j ON j.job_id = pr.job_id
+        WHERE pr.freelancer_account_id = $1
+        UNION
         SELECT gig_id AS id, title AS label, created_at FROM gigs WHERE freelancer_account_id = $1
       ) items
       ORDER BY created_at DESC

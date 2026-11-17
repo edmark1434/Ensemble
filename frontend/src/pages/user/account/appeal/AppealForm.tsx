@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { APPEAL_LIMITS, APPEAL_TICKET_TYPE, errorMessage } from './appealShared';
+import { ATTACHMENT_HINT, AttachButton, PendingFileList, uploadPendingFiles, usePendingFiles } from './appealAttachments';
 
 const inputClass =
   'mt-1.5 w-full rounded-xl border bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-dark-base dark:text-white dark:placeholder:text-zinc-600';
@@ -30,6 +31,7 @@ export default function AppealForm({
   const [evidence, setEvidence] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
+  const evidenceFiles = usePendingFiles();
 
   function validate(): Errors {
     const text = description.trim();
@@ -50,6 +52,7 @@ export default function AppealForm({
     const why = description.trim();
     setSubmitting(true);
     try {
+      const attachments = await uploadPendingFiles(evidenceFiles.files, 'ticket-attachments');
       const res = await api.post('/api/users/tickets', {
         subject: subject.trim() || subjectPlaceholder,
         description: why,
@@ -60,15 +63,17 @@ export default function AppealForm({
           why_reverse: why,
           evidence: evidence.trim(),
         },
+        ...(attachments.length ? { attachments } : {}),
       });
       setSubject('');
       setCaseId('');
       setDescription('');
       setEvidence('');
+      evidenceFiles.clear();
       showSuccessToast('Appeal submitted. Staff will reply on the ticket.');
       await onSubmitted((res.data?.data?.ticketId as string | undefined) || null);
     } catch (err) {
-      showErrorToast(errorMessage(err, 'Could not submit the appeal.'));
+      showErrorToast(errorMessage(err, err instanceof Error && err.message ? err.message : 'Could not submit the appeal.'));
     } finally {
       setSubmitting(false);
     }
@@ -142,6 +147,28 @@ export default function AppealForm({
           className={`${inputClass} ${fieldBorder(false)} resize-y`}
         />
       </label>
+
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">
+            Images and files <span className="font-normal text-gray-400 dark:text-zinc-500">(optional)</span>
+          </span>
+          <AttachButton
+            onPick={evidenceFiles.add}
+            disabled={submitting}
+            count={evidenceFiles.files.length}
+            className="-my-1.5 -mr-1.5"
+          />
+        </div>
+        <p className="mt-0.5 text-xs text-gray-400 dark:text-zinc-500">
+          Screenshots, receipts or documents that support your appeal. {ATTACHMENT_HINT}
+        </p>
+        {evidenceFiles.files.length ? (
+          <div className="mt-2">
+            <PendingFileList files={evidenceFiles.files} onRemove={evidenceFiles.remove} disabled={submitting} />
+          </div>
+        ) : null}
+      </div>
 
       <button
         type="submit"

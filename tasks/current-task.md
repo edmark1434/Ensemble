@@ -1,22 +1,29 @@
-# Active Task: Appeal page redesign and fixes (`/account/appeal`)
+# Active Task: Category case files for staff ticket and dispute views
 
 ## Implementation Objective
 
-Make the appeal page (`frontend/src/pages/user/account/AccountAccessPage.tsx`) match the current Ensemble UI
-(`dark-base` / `dark-surface` tokens, Plus Jakarta Sans, blue primary buttons, no gradients) and fix its functional lapses.
+In every staff/admin ticket desk, show the records each ticket category is about, so staff do not have to
+look them up elsewhere. Add the missing standing context to the dispute desk.
 
 ## Acceptance criteria
 
-- Uses the theme tokens and controls of the rest of the member site; responsive down to phone width.
-- The appeal form is hidden when the member already has an open appeal (backend returns 409); the open appeal is shown instead.
-- The form is hidden when there is no active penalty (backend returns 400).
-- Optional Case ID and supporting-evidence fields are sent (`fields.case_id`, `fields.evidence`); inline field errors.
-- Appeal subject/description length is validated on the backend too (subject ≤ 200, description 10–5,000, evidence ≤ 2,000).
-- Banned, locked and suspended members cannot reply on non-appeal tickets in the UI (backend already returns 403).
-- Opening a ticket or dispute shows loading and error states and ignores stale responses.
-- Staff replies show up without a reload (poll while the page is visible).
-- Opening the page no longer scrolls the window to the thread; only the thread scrolls.
-- Appeal decisions (accepted / denied / denied permanently) are shown on the ticket.
-- Copy is accurate per penalty (accepted appeals do not lift warnings).
+- Ticket detail has a Case tab whose layout depends on the ticket category:
+  - Appeals: requester standing, what accepting lifts (and that warnings stay), active punishments with issuer,
+    standing history with reasons and staff, area-specific actions (listings, postings, forum), past warnings,
+    previous appeals with decisions, active denial hold, the member's reason/evidence, and the Case ID resolved
+    to a real warning/dispute/report/ticket/listing (flagged if not on the requester's account).
+  - Marketplace: listing (status, rejection/moderation note, reviewer, files and processing errors, reports,
+    review history, copyright signals, seller standing), the requester's licenses for the asset, buyer stats or
+    seller listings, reported seller, other tickets about the item.
+  - Jobs & Gigs: contract (status, rate, requester role, both parties' standing, milestones, disputes on the
+    contract, escrow transactions), posting (status, reports, moderation history), reported member, related tickets.
+  - Forum: post (status, lock/pin, comments, reports), group, reported member, requester's forum restrictions.
+  - Billing (Admin/Support only): wallet, plan, and the quoted transaction checked against the requester.
+  - Account / editor / safety: verification status, team, recent sign-in changes; project; reported member or infringing listings.
+- The appeal decision sidebar and confirm dialog show what is active now and what accepting lifts.
+- Area appeals (forum/marketplace/jobs) explain how they are resolved.
+- Dispute case file shows both parties' standing and support tickets about the same contract.
+- Contract picker includes gig orders; job picker includes jobs the member applied to.
+- Case data is staff-only, desk-scoped, read-only, and fault-isolated per section.
 
 ## Status: Implemented — awaiting user verification (`pnpm typecheck`).

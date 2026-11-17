@@ -19,6 +19,7 @@ const {
   postAdminRescindWarning,
   postAdminAccountPardon,
   getAdminAccountActivity,
+  getAdminAccountProfileDetails,
 } = require('../controllers/AdminUserTeamControllers');
 
 /** Admin + Support: full User & Team. Forum/Marketplace/Jobs: read + limited enforcement. */
@@ -115,6 +116,7 @@ router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], 
 router.post('/accounts/:accountId/warnings/:violationId/rescind', [checkSession, requireUserTeamAccess], postAdminRescindWarning);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
+router.get('/accounts/:accountId/profile', [checkSession, requireUserTeamAccess], getAdminAccountProfileDetails);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
