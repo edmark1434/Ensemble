@@ -1,12 +1,17 @@
-# Active Task: Collaborative Video Editor Showcase GIF Loop & Hover Image
+# Active Task: Subcontractor Verification Badge & Unverified Dimming
 
 ## Implementation Objective
 
-Update the "Inside the Collaborative Video Editor" showcase in `frontend/src/pages/landing/section_ScrollText.tsx` so it plays `/features/en-collab-1.gif`, `/features/en-collab-2.gif`, and `/features/en-collab-3.gif` in a continuous loop with smooth crossfade transitions by default, and smoothly transitions to `/gallery_images/new/gallery/collab.png` when hovered.
+Update the subcontractor search and nomination flow in `frontend/src/pages/user/3_teams/team_modals/SubcontractProposalModal.tsx` (and enforce in `backend/repositories/TeamProjectRepositories.js`) so that:
+- Verified platform specialists display the verified badge (`/icons/verification/lvl2_verified.png`) in search results and selected candidate cards.
+- Unverified specialists still appear in search results, but are visually dimmed (`opacity-50`, `cursor-not-allowed`), cannot be selected, and clearly indicate why they are disabled (not verified on the platform).
+- Backend `createSubcontractProposal` rejects unverified candidates with a `422` error.
 
 ## Acceptance Criteria
 
-- By default (not hovered), the showcase cycles through `en-collab-1.gif`, `en-collab-2.gif`, and `en-collab-3.gif` in a loop with smooth opacity crossfades.
-- On hover, the showcase pauses the cycle and smoothly fades to `/gallery_images/new/gallery/collab.png`; on mouse leave, it smoothly resumes the looping GIFs.
-- Existing layout, telemetry strip, and sizing remain intact without layout shift.
-- No builds, type checks, lint, tests, or other verification commands run.
+- Verified specialists show the verified badge in the search dropdown and selected candidate list and can be added.
+- Unverified specialists remain visible in search results, appear dimmed, cannot be clicked/added, and display a clear "Not verified on platform" / "Unverified" indicator explaining why.
+- Search dropdown and candidate list use Glide-style listbox styling with a thin vertical scrollbar (`gs-listbox-scroll` / `scroll-thin`), and the milestone scope selector uses `GlideSelect`.
+- Subcontracting terms note reminds the lead to know who they are subcontracting to and that the owner must confirm the invitation after inviting.
+- Backend `createSubcontractProposal` validates `verifications.is_verified = true` for every candidate.
+- No builds, type checks, lint, or other verification commands run unless explicitly requested.

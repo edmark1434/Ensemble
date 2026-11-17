@@ -111,7 +111,7 @@ const COLUMNS = [
   },
   {
     id: 'review',
-    label: 'ON REVIEW',
+    label: 'IN REVIEW',
     badgeClass: 'bg-amber-600 text-white border border-amber-500',
     iconColor: 'text-amber-500',
     dotType: 'solid-amber',
@@ -143,7 +143,7 @@ export const getStatusBadgeConfig = (status?: string) => {
       };
     case 'review':
       return {
-        label: 'ON REVIEW',
+        label: 'IN REVIEW',
         btnClass: 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/60',
         icon: <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 shrink-0" />,
       };
@@ -178,7 +178,7 @@ export const STATUS_OPTIONS = [
   },
   {
     id: 'review' as const,
-    label: 'ON REVIEW',
+    label: 'IN REVIEW',
     icon: <Clock className="w-3 h-3 text-amber-500 shrink-0" />,
     textColor: 'text-amber-600 dark:text-amber-400',
   },
@@ -267,6 +267,30 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const isSubcontractor = Boolean(
     currentMember?.is_subcontractor || currentMember?.team_role === 'Subcontractor'
   );
+  const isContractOwner = useMemo(
+    () =>
+      (contracts || []).some(
+        (c: any) => String(c.freelancer_account_id).trim() === String(currentUserAccountId).trim()
+      ),
+    [contracts, currentUserAccountId]
+  );
+  const currentTeamRole = String(currentMember?.team_role || currentMember?.role || '').toLowerCase();
+  const isTeamLeader = [
+    'owner',
+    'admin',
+    'leader',
+    'team leader',
+    'manager',
+    'representative',
+  ].includes(currentTeamRole);
+  const canManageAssignees = !isReadOnly && !isClient && (isContractOwner || isTeamLeader);
+  const assignableMembers = useMemo(
+    () =>
+      (members || []).filter(
+        (m: any) => !m.is_client && String(m.team_role || '').toLowerCase() !== 'client'
+      ),
+    [members]
+  );
   const subcontractorMilestoneId = currentMember?.assigned_milestone_id;
   const subcontractorMilestoneTitle =
     currentMember?.assigned_milestone_title || currentMember?.milestone_role;
@@ -300,6 +324,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
   const [activePriorityMenuTaskId, setActivePriorityMenuTaskId] = useState<string | null>(null);
+  const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
 
 
   // Kanban 4 Selection & Drag-and-Drop state
@@ -743,16 +768,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       : (currentMilestone.contract_milestone_id ? String(currentMilestone.contract_milestone_id) : null);
     const mTitle = currentMilestone.milestone_title ? currentMilestone.milestone_title.trim().toLowerCase() : null;
 
-    // Filter tasks belonging to this milestone
-    const mTasks = localTasks.filter((t) => {
-      if (mId && (String(t.job_milestone_id) === mId || String(t.contract_milestone_id) === mId)) {
-        return true;
-      }
-      if (mTitle && t.milestone_title && t.milestone_title.trim().toLowerCase() === mTitle) {
-        return true;
-      }
-      return false;
-    });
+    // Filter tasks belonging to this milestone (or all tasks if 'all' is selected)
+    const mTasks =
+      selectedProgressMilestoneId === 'all'
+        ? localTasks
+        : localTasks.filter((t) => {
+            if (mId && (String(t.job_milestone_id) === mId || String(t.contract_milestone_id) === mId)) {
+              return true;
+            }
+            if (mTitle && t.milestone_title && t.milestone_title.trim().toLowerCase() === mTitle) {
+              return true;
+            }
+            return false;
+          });
 
     const total = mTasks.length;
     const done = mTasks.filter((t) => normalizeStatus(t.status) === 'completed').length;
@@ -883,7 +911,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
         status: newStatus,
       });
-      showSuccessToast(`Task moved to ${newStatus === 'review' ? 'On Review' : newStatus.replace('_', ' ')}`);
+      showSuccessToast(`Task moved to ${newStatus === 'review' ? 'In Review' : newStatus.replace('_', ' ')}`);
       onTasksUpdated?.(true);
     } catch (err: any) {
       // Revert optimistic update
@@ -893,6 +921,128 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       );
       showErrorToast(err?.response?.data?.message || 'Failed to update task');
     }
+  };
+
+  const handleToggleTaskAssignee = async (task: TaskItem, targetAccountId: string) => {
+    if (!canManageAssignees) return;
+    const currentIds =
+      Array.isArray(task.assignees) && task.assignees.length > 0
+        ? task.assignees.map((a) => String(a.account_id))
+        : task.assignee_account_id
+        ? [String(task.assignee_account_id)]
+        : [];
+    const targetIdStr = String(targetAccountId);
+    const exists = currentIds.includes(targetIdStr);
+    const nextIds = exists
+      ? currentIds.filter((id) => id !== targetIdStr)
+      : [...currentIds, targetIdStr];
+
+    const nextAssignees = assignableMembers
+      .filter((m: any) => nextIds.includes(String(m.account_id)))
+      .map((m: any) => ({
+        account_id: String(m.account_id),
+        display_name: m.display_name || m.name || 'Member',
+        handle: m.handle || '',
+        avatar_path: m.avatar_path,
+      }));
+
+    const primary = nextAssignees[0];
+    setLocalTasks((prev) =>
+      prev.map((t) =>
+        t.task_id === task.task_id
+          ? {
+              ...t,
+              assignees: nextAssignees,
+              assignee_account_id: primary?.account_id,
+              assignee_name: primary?.display_name,
+              assignee_handle: primary?.handle,
+              assignee_avatar_path: primary?.avatar_path,
+            }
+          : t
+      )
+    );
+
+    try {
+      await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
+        assignee_account_ids: nextIds,
+      });
+      onTasksUpdated?.(true);
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Failed to update task assignees');
+      onTasksUpdated?.(true);
+    }
+  };
+
+  const renderAssigneeListCell = (
+    list: Array<{ account_id?: string; display_name?: string; handle?: string; avatar_path?: string }>,
+    fallbackName?: string,
+    fallbackAvatar?: string,
+    options?: { firstNameOnly?: boolean; showSingleHandle?: string }
+  ) => {
+    const items =
+      Array.isArray(list) && list.length > 0
+        ? list
+        : fallbackName
+        ? [{ display_name: fallbackName, avatar_path: fallbackAvatar, handle: options?.showSingleHandle }]
+        : [];
+
+    if (items.length === 0) {
+      return (
+        <div className="flex items-center gap-1.5 truncate">
+          <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <User className="w-3 h-3 text-zinc-400 shrink-0" />
+          </div>
+          <span className="text-zinc-500 dark:text-zinc-400 truncate">Unassigned</span>
+        </div>
+      );
+    }
+
+    const formatName = (name?: string) => {
+      const n = name || 'User';
+      return options?.firstNameOnly ? n.split(' ')[0] : n;
+    };
+
+    const fullTitle = items.map((a) => a.display_name || 'Member').join(', ');
+    const labelText =
+      items.length <= 2
+        ? items.map((a) => formatName(a.display_name)).join(', ')
+        : `${items.slice(0, 2).map((a) => formatName(a.display_name)).join(', ')} +${items.length - 2}`;
+
+    return (
+      <div className="flex items-center gap-1.5 min-w-0" title={fullTitle}>
+        <div className="flex items-center -space-x-1.5 shrink-0">
+          {items.slice(0, 3).map((a, idx) => (
+            <div
+              key={a.account_id || idx}
+              className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-300 ring-1 ring-white dark:ring-zinc-900"
+            >
+              {a.avatar_path ? (
+                <img
+                  src={constructAvatarUrl(a.avatar_path, a.display_name || 'User')}
+                  alt={a.display_name || 'User'}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(a.display_name);
+                  }}
+                  className="w-full h-full object-cover block shrink-0"
+                />
+              ) : (
+                <span>{getInitials(a.display_name)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="min-w-0">
+          <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate block">
+            {labelText}
+          </span>
+          {items.length === 1 && options?.showSingleHandle && (
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate block">
+              @{options.showSingleHandle}
+            </span>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Assignees can set priority for their tasks themselves
@@ -1050,6 +1200,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         job_milestone_id: newTaskMilestone || null,
         status: defaultColForAdd,
         due_at: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
+        ...(canManageAssignees && newTaskAssignee ? { assignee_account_ids: [newTaskAssignee] } : {}),
       });
 
       showSuccessToast('Task created successfully');
@@ -1105,9 +1256,30 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setIsAddModalOpen(true);
   };
 
-  // Filter tasks based on search & assignee filter
+  // Filter tasks based on milestone selection, search, & assignee filter
   const filteredTasks = useMemo(() => {
+    const activeMsId =
+      selectedProgressMilestoneId !== 'all' && currentMilestone
+        ? String(currentMilestone.job_milestone_id || currentMilestone.contract_milestone_id || '')
+        : '';
+    const activeMsTitle =
+      selectedProgressMilestoneId !== 'all' && currentMilestone?.milestone_title
+        ? currentMilestone.milestone_title.trim().toLowerCase()
+        : '';
+
     return localTasks.filter((t) => {
+      if (displayMode !== 'gantt' && selectedProgressMilestoneId !== 'all' && (activeMsId || activeMsTitle)) {
+        const matchesMsId =
+          activeMsId &&
+          (String(t.job_milestone_id || '') === activeMsId ||
+            String(t.contract_milestone_id || '') === activeMsId);
+        const matchesMsTitle =
+          activeMsTitle &&
+          t.milestone_title &&
+          t.milestone_title.trim().toLowerCase() === activeMsTitle;
+        if (!matchesMsId && !matchesMsTitle) return false;
+      }
+
       if (filterAssignee === 'me') {
         const match =
           String(t.assignee_account_id) === String(currentUserAccountId) ||
@@ -1131,7 +1303,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
       return true;
     });
-  }, [localTasks, filterAssignee, currentUserAccountId, searchQuery]);
+  }, [localTasks, filterAssignee, currentUserAccountId, searchQuery, selectedProgressMilestoneId, currentMilestone, displayMode]);
 
   const renderSidePanelContent = (task: TaskItem) => {
     const taskCode = taskCodeMap[task.task_id] || '#TSK';
@@ -1157,7 +1329,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               <span>{statusCfg.label}</span>
             </span>
             {isLocked && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
                 <Lock className="w-3 h-3" />
                 <span>Locked</span>
               </span>
@@ -1181,27 +1353,129 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         {/* Attributes Box (Screenshot 2: rounded grouped box with rows) */}
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-dark-base p-3.5 space-y-2.5 text-xs">
           {/* Assignee Row */}
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Assignee</span>
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
-                {task.assignee_avatar_path ? (
-                  <img
-                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                    alt={task.assignee_name || 'Assignee'}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                    }}
-                    className="w-full h-full object-cover"
-                  />
+          <div className="relative space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-zinc-500 dark:text-zinc-400 font-medium pt-0.5 shrink-0">
+                {Array.isArray(task.assignees) && task.assignees.length > 1 ? 'Assignees' : 'Assignee'}
+              </span>
+              <div className="flex items-center justify-end gap-2 flex-wrap">
+                {Array.isArray(task.assignees) && task.assignees.length > 0 ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {task.assignees.map((a, aIdx) => (
+                      <div
+                        key={a.account_id || aIdx}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                          {a.avatar_path ? (
+                            <img
+                              src={constructAvatarUrl(a.avatar_path, a.display_name || 'User')}
+                              alt={a.display_name || 'Assignee'}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = getFallbackAvatarUrl(a.display_name);
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{getInitials(a.display_name)}</span>
+                          )}
+                        </div>
+                        <span className="font-semibold text-zinc-900 dark:text-white">
+                          {a.display_name || 'Assignee'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <span>{getInitials(task.assignee_name)}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                      {task.assignee_avatar_path ? (
+                        <img
+                          src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                          alt={task.assignee_name || 'Assignee'}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{getInitials(task.assignee_name)}</span>
+                      )}
+                    </div>
+                    <span className="font-semibold text-zinc-900 dark:text-white">
+                      {task.assignee_name || 'Unassigned'}
+                    </span>
+                  </div>
+                )}
+                {canManageAssignees && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAssigneePickerOpen((prev) => !prev);
+                    }}
+                    className="px-2 py-0.5 rounded-md text-[10px] font-semibold border border-zinc-200 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer shrink-0"
+                  >
+                    {isAssigneePickerOpen ? 'Done' : 'Reassign'}
+                  </button>
                 )}
               </div>
-              <span className="font-semibold text-zinc-900 dark:text-white">
-                {task.assignee_name || 'Unassigned'}
-              </span>
             </div>
+
+            {canManageAssignees && isAssigneePickerOpen && (
+              <div
+                role="listbox"
+                aria-label="Reassign task"
+                className="gs-listbox-scroll max-h-44 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1 space-y-0.5 shadow-lg"
+              >
+                {assignableMembers.map((m: any) => {
+                  const mId = String(m.account_id);
+                  const currentIds =
+                    Array.isArray(task.assignees) && task.assignees.length > 0
+                      ? task.assignees.map((a) => String(a.account_id))
+                      : task.assignee_account_id
+                      ? [String(task.assignee_account_id)]
+                      : [];
+                  const isAssigned = currentIds.includes(mId);
+                  const displayName = m.display_name || m.name || 'Member';
+                  const isSub = Boolean(m.is_subcontractor || m.team_role === 'Subcontractor');
+                  return (
+                    <button
+                      key={mId}
+                      type="button"
+                      onClick={() => void handleToggleTaskAssignee(task, mId)}
+                      className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[9px] font-bold shrink-0">
+                          {m.avatar_path ? (
+                            <img
+                              src={constructAvatarUrl(m.avatar_path, displayName)}
+                              alt={displayName}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = getFallbackAvatarUrl(displayName);
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{getInitials(displayName)}</span>
+                          )}
+                        </div>
+                        <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                          {displayName}
+                        </span>
+                        {isSub && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-blue-500/15 text-blue-500 shrink-0">
+                            Sub
+                          </span>
+                        )}
+                      </div>
+                      {isAssigned && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Priority Row */}
@@ -1416,8 +1690,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           </h4>
           <div className="p-3 rounded-xl bg-zinc-50/50 dark:bg-dark-base border border-zinc-200/80 dark:border-zinc-800 text-xs space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">
-                {getInitials(task.assignee_name || 'Team')}
+              <div className="w-5 h-5 rounded-full overflow-hidden bg-blue-600/20 text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0 border border-zinc-200 dark:border-zinc-700">
+                {task.assignee_avatar_path ? (
+                  <img
+                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'Contributor')}
+                    alt={task.assignee_name || 'Contributor'}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{getInitials(task.assignee_name || 'Team')}</span>
+                )}
               </div>
               <span className="font-semibold text-zinc-900 dark:text-white">
                 {task.assignee_name || 'Contributor'}
@@ -1605,7 +1890,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     return (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
                         <Clock className="w-2.5 h-2.5" />
-                        <span>ON REVIEW</span>
+                        <span>IN REVIEW</span>
                       </span>
                     );
                   }
@@ -1649,9 +1934,25 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200/80 dark:border-zinc-700"
                 >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProgressMilestoneId('all');
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      selectedProgressMilestoneId === 'all'
+                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-2xs'
+                        : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    All
+                  </button>
                   {milestones.map((m: any, mIdx: number) => {
                     const mId = String(m.job_milestone_id || m.contract_milestone_id || mIdx);
-                    const isSelected = String(currentMilestoneStats.milestone.job_milestone_id || currentMilestoneStats.milestone.contract_milestone_id || '') === mId;
+                    const isSelected =
+                      selectedProgressMilestoneId !== 'all' &&
+                      String(currentMilestoneStats.milestone.job_milestone_id || currentMilestoneStats.milestone.contract_milestone_id || '') === mId;
                     const order = getMilestoneOrder(m, mIdx);
                     return (
                       <button
@@ -1766,7 +2067,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       </span>
                       <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
                         <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        <span>{currentMilestoneStats.review} On Review</span>
+                        <span>{currentMilestoneStats.review} In Review</span>
                       </span>
                       <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
                         <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -2033,7 +2334,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 : isSelected
                                 ? 'ring-2 ring-zinc-900 dark:ring-white border-zinc-900 dark:border-white shadow-md'
                                 : 'border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/25 hover:shadow-xs hover:bg-zinc-50/70 dark:hover:bg-[#161822]'
-                            } ${isLocked ? 'opacity-85' : ''}`}
+                            } ${isLocked ? 'opacity-60' : ''}`}
                           >
                             {/* Top Row: Dot + Task Code + Locked Badge + Drag Grip */}
                             <div className="flex items-center justify-between gap-2 mb-2">
@@ -2044,7 +2345,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 </span>
                                 {isLocked && (
                                   <span
-                                    className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 font-bold ml-1 px-1 py-0.5 rounded-[2px] bg-amber-500/10 border border-amber-500/20"
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 font-bold ml-1 px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700"
                                     title="Locked waiting for earlier milestone"
                                   >
                                     <Lock className="w-2.5 h-2.5 shrink-0" />
@@ -2271,11 +2572,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       ) : (
                         groupTasks.map((task) => {
                           const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
+                          const isLocked = isTaskActuallyLocked(task);
 
                           return (
                             <div
                               key={task.task_id}
-                              className="grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 text-xs transition"
+                              onClick={() => setSelectedTaskId(task.task_id)}
+                              className={`grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 text-xs transition cursor-pointer ${
+                                isLocked ? 'opacity-60' : ''
+                              }`}
                             >
                               {/* Name with Bullet */}
                               <div className="col-span-5 flex items-center gap-2.5 min-w-0">
@@ -2298,27 +2603,25 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 <span className="font-semibold text-zinc-900 dark:text-white truncate">
                                   {task.title}
                                 </span>
+                                {isLocked && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                    title="Locked waiting for earlier milestone"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Locked</span>
+                                  </span>
+                                )}
                               </div>
 
                               {/* Assignee */}
-                              <div className="col-span-2 flex items-center gap-1.5 truncate">
-                                <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                                  {task.assignee_avatar_path ? (
-                                    <img
-                                      src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                      alt={task.assignee_name || 'User'}
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                      }}
-                                      className="w-full h-full object-cover block shrink-0"
-                                    />
-                                  ) : (
-                                    <User className="w-3 h-3 text-zinc-400 shrink-0" />
-                                  )}
-                                </div>
-                                <span className="text-zinc-600 dark:text-zinc-300 truncate">
-                                  {task.assignee_name ? task.assignee_name.split(' ')[0] : 'Unassigned'}
-                                </span>
+                              <div className="col-span-2 min-w-0">
+                                {renderAssigneeListCell(
+                                  task.assignees || [],
+                                  task.assignee_name,
+                                  task.assignee_avatar_path,
+                                  { firstNameOnly: true }
+                                )}
                               </div>
 
                               {/* Due Date: Editable by assignee, bounded by milestone timeline. No "Set date" text */}
@@ -2568,10 +2871,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 ) : (
                   filteredTasks.map((task, rIdx) => {
                     const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
+                    const isLocked = isTaskActuallyLocked(task);
 
                     return (
-                      <tr key={task.task_id} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 transition">
-                        <td className="py-2.5 px-3 text-center border-r border-zinc-100 dark:border-zinc-800/80">
+                      <tr
+                        key={task.task_id}
+                        onClick={() => setSelectedTaskId(task.task_id)}
+                        className={`hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 transition cursor-pointer ${
+                          isLocked ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <td
+                          onClick={(e) => e.stopPropagation()}
+                          className="py-2.5 px-3 text-center border-r border-zinc-100 dark:border-zinc-800/80"
+                        >
                           <input type="checkbox" className="rounded border-zinc-300 text-blue-600" />
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono text-zinc-400 dark:text-zinc-500 border-r border-zinc-100 dark:border-zinc-800/80">
@@ -2591,28 +2904,23 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             <span className="font-semibold text-zinc-900 dark:text-white">
                               {task.title}
                             </span>
+                            {isLocked && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                title="Locked waiting for earlier milestone"
+                              >
+                                <Lock className="w-2.5 h-2.5 shrink-0" />
+                                <span>Locked</span>
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                              {task.assignee_avatar_path ? (
-                                <img
-                                  src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                  alt={task.assignee_name || 'User'}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                  }}
-                                  className="w-full h-full object-cover block shrink-0"
-                                />
-                              ) : (
-                                <User className="w-3 h-3 text-zinc-400 shrink-0" />
-                              )}
-                            </div>
-                            <span className="text-zinc-700 dark:text-zinc-300">
-                              {task.assignee_name || 'Unassigned'}
-                            </span>
-                          </div>
+                          {renderAssigneeListCell(
+                            task.assignees || [],
+                            task.assignee_name,
+                            task.assignee_avatar_path
+                          )}
                         </td>
                         {/* Status Column */}
                         <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
@@ -2969,32 +3277,36 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             </span>
                           </div>
 
-                          {/* Assigned Contributor */}
-                          <div className="col-span-6 flex items-center gap-1.5 truncate">
-                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                              {m.assignee_avatar_path ? (
-                                <img
-                                  src={constructAvatarUrl(m.assignee_avatar_path, m.assignee_name || 'Contributor')}
-                                  alt={m.assignee_name || 'Contributor'}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.assignee_name);
-                                  }}
-                                  className="w-full h-full object-cover block shrink-0"
-                                />
-                              ) : (
-                                <User className="w-3 h-3 text-zinc-400 shrink-0" />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate block">
-                                {m.assignee_name || 'Unassigned'}
-                              </span>
-                              {m.assignee_handle && (
-                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 block truncate">
-                                  @{m.assignee_handle}
-                                </span>
-                              )}
-                            </div>
+                          {/* Assigned Contributor(s) */}
+                          <div className="col-span-6 min-w-0">
+                            {(() => {
+                              const mId = String(m.job_milestone_id || m.contract_milestone_id || m.id || '');
+                              const contributorMap = new Map<string, any>();
+                              if (m.assignee_account_id || m.assignee_name) {
+                                const key = String(m.assignee_account_id || m.assignee_name);
+                                contributorMap.set(key, {
+                                  account_id: m.assignee_account_id,
+                                  display_name: m.assignee_name,
+                                  handle: m.assignee_handle,
+                                  avatar_path: m.assignee_avatar_path,
+                                });
+                              }
+                              filteredTasks.forEach((t) => {
+                                const tMsId = String(t.contract_milestone_id || t.job_milestone_id || '');
+                                if (mId && tMsId !== mId) return;
+                                (t.assignees || []).forEach((a) => {
+                                  if (!a?.account_id) return;
+                                  const key = String(a.account_id);
+                                  if (!contributorMap.has(key)) contributorMap.set(key, a);
+                                });
+                              });
+                              return renderAssigneeListCell(
+                                Array.from(contributorMap.values()),
+                                m.assignee_name,
+                                m.assignee_avatar_path,
+                                { showSingleHandle: m.assignee_handle }
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -3147,10 +3459,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     taskStartCol = Math.max(mRange.startCol, Math.min(taskStartCol, mRange.endCol));
                     taskColSpan = Math.max(1, Math.min(taskColSpan, mRange.endCol - taskStartCol + 1));
 
+                    const isLocked = isTaskActuallyLocked(task);
+
                     return (
                       <div
                         key={task.task_id}
-                        className="grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-zinc-100 dark:border-zinc-800/40"
+                        onClick={() => setSelectedTaskId(task.task_id)}
+                        className={`grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-zinc-100 dark:border-zinc-800/40 cursor-pointer ${
+                          isLocked ? 'opacity-60' : ''
+                        }`}
                       >
                         {/* Task & Assignee Info */}
                         <div className="col-span-5 grid grid-cols-12 gap-2 items-center pr-2">
@@ -3166,35 +3483,34 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               <div className="w-3 h-3 rounded-full border border-dashed border-zinc-400 shrink-0" />
                             )}
                             <div className="min-w-0">
-                              <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate block">
-                                {task.title}
-                              </span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate">
+                                  {task.title}
+                                </span>
+                                {isLocked && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[9px] text-zinc-600 dark:text-zinc-400 font-bold px-1 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                    title="Locked waiting for earlier milestone"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Locked</span>
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] text-blue-500 truncate block">
                                 M{displayMOrder}: {task.milestone_title || taskMilestone?.milestone_title || `Milestone ${displayMOrder}`}
                               </span>
                             </div>
                           </div>
 
-                          {/* Assigned Member */}
-                          <div className="col-span-6 flex items-center justify-between gap-1.5 truncate">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                                {task.assignee_avatar_path ? (
-                                  <img
-                                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                    alt={task.assignee_name || 'User'}
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                    }}
-                                    className="w-full h-full object-cover block shrink-0"
-                                  />
-                                ) : (
-                                  <User className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                                )}
-                              </div>
-                              <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                                {task.assignee_name || 'Unassigned'}
-                              </span>
+                          {/* Assigned Member(s) */}
+                          <div className="col-span-6 flex items-center justify-between gap-1.5 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              {renderAssigneeListCell(
+                                task.assignees || [],
+                                task.assignee_name,
+                                task.assignee_avatar_path
+                              )}
                             </div>
 
                             <Flag className={`w-3 h-3 shrink-0 ${priorityConfig.color}`} title={`Priority: ${priorityConfig.label}`} />
@@ -3341,10 +3657,29 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Assignee
                   </label>
-                  <div className="w-full text-xs px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700 h-[32px]">
-                    <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span>You (Auto-assigned)</span>
-                  </div>
+                  {canManageAssignees ? (
+                    <GlideSelect
+                      options={assignableMembers.map((m: any) => ({
+                        value: String(m.account_id),
+                        label: m.display_name || m.name || 'Member',
+                      }))}
+                      value={newTaskAssignee}
+                      onChange={(val) => setNewTaskAssignee(val)}
+                      size="sm"
+                      fullWidth={true}
+                      radius={12}
+                      surfaceColor={isDark ? '#18181b' : '#ffffff'}
+                      highlightColor={isDark ? '#27272a' : '#f4f4f5'}
+                      textColor={isDark ? '#f4f4f5' : '#09090b'}
+                      borderColor={isDark ? '#27272a' : '#e4e4e7'}
+                      accentColor={isDark ? '#ffffff' : '#09090b'}
+                    />
+                  ) : (
+                    <div className="w-full text-xs px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700 h-[32px]">
+                      <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span>You (Auto-assigned)</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
