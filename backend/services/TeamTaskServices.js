@@ -229,7 +229,9 @@ async function reconcileOverdueTeamTasksServices(limit = 100) {
           is_read: false,
           reference_table: 'team_workspace_tasks',
           reference_prefix: 'TEAM_TASK_DUE',
-          reference_path: `/teams/${task.team_id}/tasks/${task.contract_id}`,
+          reference_path: task.is_team_project
+            ? `/team-project/${task.team_id}?tab=taskboard&taskId=${task.task_id}`
+            : `/teams/${task.team_id}/tasks/${task.contract_id}`,
           reference_id: task.task_id,
           account_id: accountId,
         });

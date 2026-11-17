@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   AlignLeft,
@@ -332,6 +333,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
   // Kanban 4 Selection & Drag-and-Drop state
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const targetTaskId = searchParams.get('taskId');
+    if (!targetTaskId || localTasks.length === 0) return;
+    const matched = localTasks.find((t) => String(t.task_id) === String(targetTaskId));
+    if (matched) {
+      setSelectedTaskId(matched.task_id);
+      const next = new URLSearchParams(searchParams);
+      next.delete('taskId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, localTasks, setSearchParams]);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
 
@@ -1093,6 +1107,50 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     return nowPlusOneStr;
   };
 
+  const formatTimeBeforeDue = (task: TaskItem) => {
+    const norm = normalizeStatus(task.status);
+    if (norm === 'completed' || isTaskMilestoneCompleted(task)) return null;
+    if (!task.due_at) return null;
+    const diffMs = new Date(task.due_at).getTime() - Date.now();
+    if (Number.isNaN(diffMs)) return null;
+
+    if (diffMs <= 0) {
+      const absMin = Math.max(1, Math.floor(Math.abs(diffMs) / 60000));
+      if (absMin < 60) return { label: `Overdue ${absMin}m`, isOverdue: true, isUrgent: true };
+      const absHrs = Math.floor(absMin / 60);
+      if (absHrs < 24) return { label: `Overdue ${absHrs}h`, isOverdue: true, isUrgent: true };
+      const absDays = Math.floor(absHrs / 24);
+      return { label: `Overdue ${absDays}d`, isOverdue: true, isUrgent: true };
+    }
+
+    const totalMin = Math.max(1, Math.ceil(diffMs / 60000));
+    if (totalMin < 60) {
+      return { label: `${totalMin}m from now`, isOverdue: false, isUrgent: true };
+    }
+    const totalHrs = Math.floor(totalMin / 60);
+    if (totalHrs < 24) {
+      return {
+        label: `${totalHrs} ${totalHrs === 1 ? 'hr' : 'hrs'} from now`,
+        isOverdue: false,
+        isUrgent: totalHrs <= 2,
+      };
+    }
+    const days = Math.floor(totalHrs / 24);
+    const remHrs = totalHrs % 24;
+    return {
+      label: remHrs > 0 ? `${days}d ${remHrs}h from now` : `${days} ${days === 1 ? 'day' : 'days'} from now`,
+      isOverdue: false,
+      isUrgent: false,
+    };
+  };
+
+  const isTaskOverdue = (t: TaskItem) => {
+    const norm = normalizeStatus(t.status);
+    if (norm === 'completed' || isTaskMilestoneCompleted(t)) return false;
+    if (t.due_at) return new Date(t.due_at).getTime() < Date.now();
+    return t.status === 'overdue';
+  };
+
   const toLocalDateTimeInputValue = (val?: string | null) => {
     if (!val) return '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return `${val}T23:59`;
@@ -1153,7 +1211,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     const prevDueDate = task.due_at;
     // Optimistic seamless update
     setLocalTasks((prev) =>
-      prev.map((t) => (t.task_id === task.task_id ? { ...t, due_at: newDueDate ? new Date(newDueDate).toISOString() : undefined } : t))
+      prev.map((t) =>
+        t.task_id === task.task_id
+          ? {
+              ...t,
+              due_at: newDueDate ? new Date(newDueDate).toISOString() : undefined,
+              ...(newDueDate && t.status === 'overdue' ? { status: 'todo' as const } : {}),
+            }
+          : t
+      )
     );
 
     try {
@@ -1546,6 +1612,32 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 <span>Locked</span>
               </span>
             )}
+            {(() => {
+              const dueBadge = formatTimeBeforeDue(task);
+              if (isTaskOverdue(task)) {
+                return (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{dueBadge?.isOverdue ? dueBadge.label : 'Overdue'}</span>
+                  </span>
+                );
+              }
+              if (dueBadge) {
+                return (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      dueBadge.isUrgent
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                        : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                    }`}
+                  >
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span>{dueBadge.label}</span>
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
           <button
             type="button"
@@ -2599,6 +2691,36 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     <span>Locked</span>
                                   </span>
                                 )}
+                                {(() => {
+                                  const dueBadge = formatTimeBeforeDue(task);
+                                  if (isTaskOverdue(task)) {
+                                    return (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[10px] text-rose-600 dark:text-rose-400 font-bold ml-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 shrink-0"
+                                        title="Task is past its due date & time"
+                                      >
+                                        <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                        <span>{dueBadge?.isOverdue ? dueBadge.label : 'Overdue'}</span>
+                                      </span>
+                                    );
+                                  }
+                                  if (dueBadge) {
+                                    return (
+                                      <span
+                                        className={`inline-flex items-center gap-1 text-[10px] font-semibold ml-1 px-1.5 py-0.5 rounded-full border shrink-0 ${
+                                          dueBadge.isUrgent
+                                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                                            : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                                        }`}
+                                        title={`Due: ${formatDueDateTime(task.due_at)}`}
+                                      >
+                                        <Clock className="w-2.5 h-2.5 shrink-0" />
+                                        <span>{dueBadge.label}</span>
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
 
                               <div
@@ -2644,10 +2766,21 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   </span>
                                 )}
 
-                                {/* Due Date Preview */}
-                                {task.due_at && (
-                                  <span className="text-[10px] text-zinc-400 shrink-0">
-                                    {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                {/* Start & End Date/Time Preview */}
+                                {(task.starts_at || task.due_at) && (
+                                  <span
+                                    className={`text-[10px] truncate ${
+                                      isTaskOverdue(task)
+                                        ? 'text-rose-500 font-semibold'
+                                        : 'text-zinc-400'
+                                    }`}
+                                    title={`${task.starts_at ? `Start: ${formatDueDateTime(task.starts_at)}` : ''}${task.starts_at && task.due_at ? ' → ' : ''}${task.due_at ? `End: ${formatDueDateTime(task.due_at)}` : ''}`}
+                                  >
+                                    {task.starts_at && task.due_at
+                                      ? `${formatDueDateTime(task.starts_at, true)} → ${formatDueDateTime(task.due_at, true)}`
+                                      : task.due_at
+                                      ? `Due ${formatDueDateTime(task.due_at, true)}`
+                                      : `Start ${formatDueDateTime(task.starts_at, true)}`}
                                   </span>
                                 )}
                               </div>
@@ -2857,6 +2990,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   >
                                     <Lock className="w-2.5 h-2.5 shrink-0" />
                                     <span>Locked</span>
+                                  </span>
+                                )}
+                                {isTaskOverdue(task) && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-rose-500 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 shrink-0"
+                                    title="Task is past its due date & time"
+                                  >
+                                    <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Overdue</span>
                                   </span>
                                 )}
                               </div>
@@ -3152,6 +3294,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               >
                                 <Lock className="w-2.5 h-2.5 shrink-0" />
                                 <span>Locked</span>
+                              </span>
+                            )}
+                            {isTaskOverdue(task) && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[10px] text-rose-500 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 shrink-0"
+                                title="Task is past its due date & time"
+                              >
+                                <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                <span>Overdue</span>
                               </span>
                             )}
                           </div>
@@ -3788,6 +3939,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   >
                                     <Lock className="w-2.5 h-2.5 shrink-0" />
                                     <span>Locked</span>
+                                  </span>
+                                )}
+                                {isTaskOverdue(task) && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[9px] text-rose-500 font-bold px-1 py-0.2 rounded bg-rose-500/10 border border-rose-500/25 shrink-0"
+                                    title="Task is past its due date & time"
+                                  >
+                                    <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Overdue</span>
                                   </span>
                                 )}
                               </div>

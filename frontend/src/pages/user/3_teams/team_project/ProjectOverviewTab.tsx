@@ -345,7 +345,18 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
           {/* ROW 1: Total Milestones (0/2) | Total Tasks (0/4) | Current Milestone | Credit Pool */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Milestones Card */}
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleSubTabChange('milestones')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleSubTabChange('milestones');
+            }
+          }}
+          className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/40 dark:hover:border-blue-500/40 transition cursor-pointer shadow-xs flex flex-col justify-between"
+        >
           <div>
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">
@@ -369,7 +380,18 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
         </div>
 
         {/* Total Tasks Card */}
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onSelectTab?.('taskboard')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectTab?.('taskboard');
+            }
+          }}
+          className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/40 dark:hover:border-blue-500/40 transition cursor-pointer shadow-xs flex flex-col justify-between"
+        >
           <div>
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">
@@ -393,7 +415,18 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
         </div>
 
         {/* Current Milestone Card */}
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleSubTabChange('milestones')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleSubTabChange('milestones');
+            }
+          }}
+          className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/40 dark:hover:border-blue-500/40 transition cursor-pointer shadow-xs flex flex-col justify-between"
+        >
           <div>
             <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">Current Milestone</span>

@@ -1037,16 +1037,27 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   }
 
   const normalizedStatus = status === 'review' ? 'in_review' : status;
+  const resetOverdueOnFutureDue =
+    !normalizedStatus &&
+    due_at !== undefined &&
+    due_at !== null &&
+    due_at !== 'CLEAR' &&
+    new Date(due_at).getTime() > nowMs;
 
   const updateRes = await pool.query(`
     UPDATE team_workspace_tasks
        SET title = COALESCE($1, title),
            description = COALESCE($2, description),
-           status = COALESCE($3, status),
+           status = CASE
+             WHEN $3::text IS NOT NULL THEN $3::text
+             WHEN $9::boolean = TRUE AND status = 'overdue' THEN 'todo'
+             ELSE status
+           END,
            checklist = COALESCE($4, checklist),
            priority = COALESCE($5, priority),
            starts_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE starts_at END,
            due_at = CASE WHEN $7 = 'CLEAR' THEN NULL WHEN $7 IS NOT NULL THEN $7::timestamptz ELSE due_at END,
+           overdue_notified_at = CASE WHEN $9::boolean = TRUE THEN NULL ELSE overdue_notified_at END,
            completed_at = CASE WHEN $3 = 'completed' THEN NOW() WHEN $3 IS NOT NULL AND $3 != 'completed' THEN NULL ELSE completed_at END,
            updated_at = NOW()
      WHERE task_id = $8
@@ -1059,7 +1070,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     priority || null,
     starts_at !== undefined ? starts_at : null,
     due_at !== undefined ? due_at : null,
-    taskId
+    taskId,
+    resetOverdueOnFutureDue
   ]);
 
   // Update task assignees if requested by contract owner or team leader

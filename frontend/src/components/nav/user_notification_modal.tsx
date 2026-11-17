@@ -91,6 +91,18 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       }
     }
 
+    // For overdue team task notifications, include taskId so the task modal opens automatically
+    if (
+      (notification.reference_prefix === "TEAM_TASK_DUE" ||
+        notification.reference_prefix === "TEAM_TASK_STATUS_CHANGED") &&
+      notification.reference_id &&
+      referencePath &&
+      !referencePath.includes("taskId=")
+    ) {
+      const sep = referencePath.includes("?") ? "&" : "?";
+      referencePath = `${referencePath}${sep}taskId=${encodeURIComponent(notification.reference_id)}`;
+    }
+
     const directConversationMatch = referencePath.match(
       /^\/inbox\/(?!direct(?:\/|$)|marketplace(?:\/|$))([^/?#]+)/
     );
