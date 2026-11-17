@@ -1557,13 +1557,40 @@ async function updateAccountVerification(accountId, action, staffId, _options = 
   };
 }
 
-async function adjustAccountCredits(accountId, amount, _note, staffId, { referenceTable = null, referenceId = null } = {}) {
-  await assertAccountExists(accountId);
+function creditAdjustError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+const MIN_ADJUSTMENT_REASON = 5;
+const MAX_ADJUSTMENT_CREDITS = 1000000;
+
+/**
+ * Staff grant (+) or deduction (−) on an account wallet.
+ *
+ * The ledger row is a self-transfer (source = destination) with the unsigned amount, so the
+ * direction, reason and actor are stored on a CREDITS_ADJUSTED account_activity row written
+ * in the same transaction and referencing the ledger row. Staff desks read the sign from it.
+ */
+async function adjustAccountCredits(accountId, amount, note, staffId, { referenceTable = null, referenceId = null } = {}) {
+  try {
+    await assertAccountExists(accountId);
+  } catch {
+    throw creditAdjustError('Account not found', 404);
+  }
   const delta = Number(amount);
   if (!Number.isInteger(delta) || delta === 0) {
-    throw new Error('Credit amount must be a whole, non-zero number');
+    throw creditAdjustError('Credit amount must be a whole, non-zero number');
   }
-  if (Math.abs(delta) > 1000000) throw new Error('Credit adjustments are limited to 1,000,000 at a time');
+  if (Math.abs(delta) > MAX_ADJUSTMENT_CREDITS) {
+    throw creditAdjustError('Credit adjustments are limited to 1,000,000 at a time');
+  }
+  const reason = String(note || '').trim();
+  if (reason.length < MIN_ADJUSTMENT_REASON) {
+    throw creditAdjustError('Write why you are changing these credits (at least 5 characters)');
+  }
+  if (reason.length > 500) throw creditAdjustError('Keep the reason under 500 characters');
   // No staff member adjusts their own credits, and staff accounts are Admin's to adjust.
   if (staffId) {
     const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
@@ -1571,40 +1598,79 @@ async function adjustAccountCredits(accountId, amount, _note, staffId, { referen
   }
 
   const wallet = await getAccountWallet(accountId);
-  if (!wallet) throw new Error('No account wallet found for this account');
+  if (!wallet) throw creditAdjustError('No account wallet found for this account', 404);
 
   const client = await pool.connect();
+  let result;
   try {
     await client.query('BEGIN');
     // Relative and conditional: a payout or purchase landing at the same moment is kept,
-    // and a deduction can never take the balance below zero.
+    // and a deduction can never take the spendable balance below zero.
     const updated = await client.query(
       `UPDATE wallets
        SET balance_credits = balance_credits + $1
        WHERE wallet_id = $2
          AND balance_credits + $1 >= 0
-       RETURNING balance_credits`,
+       RETURNING balance_credits, frozen_balance_credits`,
       [delta, wallet.wallet_id]
     );
-    if (!updated.rows.length) throw new Error('Insufficient wallet balance for this adjustment');
+    if (!updated.rows.length) {
+      throw creditAdjustError(
+        'Not enough spendable credits for this deduction. Held credits cannot be deducted; release the hold first.',
+        409
+      );
+    }
 
-    // Admin grants/deductions are always Fund Transfer (note is UI-only for now).
-    await client.query(
+    const ledger = await client.query(
       `
       INSERT INTO credit_transactions (
         type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
       )
       VALUES ($1, $2, 'Completed', $3, $3, $4, $5)
+      RETURNING credit_transaction_id
       `,
       [CREDIT_TRANSACTION_TYPE.FUND_TRANSFER, Math.abs(delta), wallet.wallet_id, referenceTable, referenceId]
     );
+    const creditTransactionId = ledger.rows[0].credit_transaction_id;
+    const balanceCredits = Number(updated.rows[0].balance_credits);
+
+    // Same transaction as the money move: no adjustment exists without its audit row.
+    await client.query(
+      `
+      INSERT INTO account_activity (
+        account_id, action, event_code, reference_table, reference_prefix, reference_id,
+        actor_staff_id, metadata
+      ) VALUES ($1, $2, 'CREDITS_ADJUSTED', 'credit_transactions', 'CTX', $3, $4, $5::jsonb)
+      `,
+      [
+        accountId,
+        `Credits ${delta > 0 ? 'granted' : 'deducted'} (${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}): ${reason}`,
+        String(creditTransactionId),
+        staffId || null,
+        JSON.stringify({
+          delta,
+          amount: Math.abs(delta),
+          direction: delta > 0 ? 'grant' : 'deduction',
+          reason,
+          balanceBefore: balanceCredits - delta,
+          balanceAfter: balanceCredits,
+          walletId: wallet.wallet_id,
+          creditTransactionId,
+          sourceTable: referenceTable,
+          sourceId: referenceId,
+        }),
+      ]
+    );
     await client.query('COMMIT');
 
-    return {
+    result = {
       accountId,
       walletId: wallet.wallet_id,
-      balanceCredits: Number(updated.rows[0].balance_credits),
+      creditTransactionId,
+      balanceCredits,
+      frozenBalanceCredits: Number(updated.rows[0].frozen_balance_credits || 0),
       adjustedBy: delta,
+      reason,
       staffId: staffId || null,
     };
   } catch (error) {
@@ -1612,6 +1678,47 @@ async function adjustAccountCredits(accountId, amount, _note, staffId, { referen
     throw error;
   } finally {
     client.release();
+  }
+
+  await announceCreditAdjustment(accountId, result);
+  return result;
+}
+
+/** Durable notice first, then the live push, so the member's open tab refreshes its wallet. */
+async function announceCreditAdjustment(accountId, { walletId, adjustedBy, reason, balanceCredits }) {
+  const amount = Math.abs(adjustedBy).toLocaleString();
+  const message =
+    adjustedBy > 0
+      ? `Staff added ${amount} credits to your Account Wallet. Reason: ${reason}`
+      : `Staff removed ${amount} credits from your Account Wallet. Reason: ${reason} If you think this is a mistake, contact support.`;
+  let notification = null;
+  try {
+    const { createNotification } = require('./NotificationRepositories');
+    notification = await createNotification({
+      account_id: accountId,
+      message,
+      is_read: false,
+      reference_table: 'wallets',
+      reference_prefix: 'CREDITS_ADJUSTED',
+      reference_path: '/transactions',
+      reference_id: walletId || accountId,
+    });
+  } catch (err) {
+    console.warn('Credit adjustment notification skipped:', err.message);
+  }
+  try {
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io) {
+      if (notification) io.to(String(accountId)).emit('notification', notification);
+      io.to(String(accountId)).emit('account:credits_adjusted', {
+        accountId,
+        adjustedBy,
+        balanceCredits,
+      });
+    }
+  } catch (err) {
+    console.warn('Credit adjustment broadcast skipped:', err.message);
   }
 }
 

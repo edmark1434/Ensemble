@@ -162,11 +162,21 @@ async function postAdminAccountCreditAdjust(req, res) {
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
-    const data = await adjustAccountCredits(accountId, amount, note, staffIdFromSession(req.session));
-    res.status(200).json({ success: true, data, message: 'Credits adjusted' });
+    const data = await adjustAccountCredits(accountId, amount, note ?? req.body?.reason, staffIdFromSession(req.session));
+    const verb = data.adjustedBy > 0 ? 'Granted' : 'Deducted';
+    res.status(200).json({
+      success: true,
+      data,
+      message: `${verb} ${Math.abs(data.adjustedBy).toLocaleString()} credits. The member has been notified.`,
+    });
   } catch (err) {
-    console.error('Error adjusting credits:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to adjust credits' });
+    // Every expected refusal carries a statusCode; anything else is internal and stays generic.
+    const status = Number(err.statusCode) || 500;
+    if (status >= 500) console.error('Error adjusting credits:', err);
+    res.status(status >= 500 ? 500 : status).json({
+      success: false,
+      message: status >= 500 ? 'Failed to adjust credits' : err.message || 'Failed to adjust credits',
+    });
   }
 }
 

@@ -1,29 +1,35 @@
-# Active Task: Category case files for staff ticket and dispute views
+# Active Task: Credits & Economy desk (Admin + Support Moderator)
 
 ## Implementation Objective
 
-In every staff/admin ticket desk, show the records each ticket category is about, so staff do not have to
-look them up elsewhere. Add the missing standing context to the dispute desk.
+Rebuild Admin → Credits & Economy into an accurate, auditable operations desk for credit supply, holds,
+staff adjustments, the ledger, and per-wallet investigation. Share the same desk with the Support Moderator
+console, the only moderator role that may adjust or freeze credits.
+
+## Flaws fixed
+
+- Wallet modal's Freeze/Unfreeze button had no handler; there was no way to adjust credits anywhere in the UI.
+- Staff adjustments stored `abs(delta)` with source = destination and dropped the note, so deductions were
+  indistinguishable from grants and had no reason, actor, audit row, or member notice.
+- "Total credits" excluded held (frozen) credits; "frozen" was also true for any suspended account.
+- "Top credit buyers" ranked balances; "spent"/"revenue" were the sum of the member's own listing prices.
+- Audit log: last 100 rows only, client-side filters, every row labelled "Credited", one party shown.
+- Overview loaded every wallet plus up to 2000 ledger rows on each visit; no indexes on ledger wallet/date columns.
+- Controller called the repository directly; API errors were always 400.
 
 ## Acceptance criteria
 
-- Ticket detail has a Case tab whose layout depends on the ticket category:
-  - Appeals: requester standing, what accepting lifts (and that warnings stay), active punishments with issuer,
-    standing history with reasons and staff, area-specific actions (listings, postings, forum), past warnings,
-    previous appeals with decisions, active denial hold, the member's reason/evidence, and the Case ID resolved
-    to a real warning/dispute/report/ticket/listing (flagged if not on the requester's account).
-  - Marketplace: listing (status, rejection/moderation note, reviewer, files and processing errors, reports,
-    review history, copyright signals, seller standing), the requester's licenses for the asset, buyer stats or
-    seller listings, reported seller, other tickets about the item.
-  - Jobs & Gigs: contract (status, rate, requester role, both parties' standing, milestones, disputes on the
-    contract, escrow transactions), posting (status, reports, moderation history), reported member, related tickets.
-  - Forum: post (status, lock/pin, comments, reports), group, reported member, requester's forum restrictions.
-  - Billing (Admin/Support only): wallet, plan, and the quoted transaction checked against the requester.
-  - Account / editor / safety: verification status, team, recent sign-in changes; project; reported member or infringing listings.
-- The appeal decision sidebar and confirm dialog show what is active now and what accepting lifts.
-- Area appeals (forum/marketplace/jobs) explain how they are resolved.
-- Dispute case file shows both parties' standing and support tickets about the same contract.
-- Contract picker includes gig orders; job picker includes jobs the member applied to.
-- Case data is staff-only, desk-scoped, read-only, and fault-isolated per section.
+- `GET /api/admin/economy-overview`, `/economy/wallets`, `/economy/wallets/:walletId`, `/economy/ledger`,
+  `/economy/holds` allow Admin and Support Moderator. Support never sees staff wallets or staff ledger rows.
+- Overview: supply (spendable, held, escrow, platform), 30-day flow with daily series, in-flight credits
+  (pending ledger, cashouts, dispute payouts), hold health, real top spenders/earners, top holders,
+  recent adjustments, actionable alerts that open the right tab with filters.
+- Wallets: server-side search, filters, sort and paging; hold detail; bulk freeze/release with reason.
+- Holds tab: every active hold with reason, end date, who placed it, overdue/expiring flags; release with note.
+- Ledger: server-side search/filters/date range/paging; both parties, direction, reference, adjustment reason;
+  CSV export of the current page.
+- Wallet detail: balances, hold, lifetime in/out, paginated ledger, adjust (reason required) and freeze/release.
+- Adjustments: reason ≥ 5 chars, atomic `CREDITS_ADJUSTED` activity with signed delta, member notification.
+- Support Moderator console has a **Credits & Wallets** page using the same desk.
 
 ## Status: Implemented — awaiting user verification (`pnpm typecheck`).
