@@ -1,3 +1,75 @@
+# Active Task (video editor): Free-plan export finishes but shows "Download expired"
+
+## Implementation Objective
+
+A successful export must download for every plan, including free users on the local render queue.
+
+## Cause (inferred; renderer source is not in this repo)
+
+The modal sends a browser `HEAD` to the render server's `videoUrl` and shows "Download expired" if that fails.
+Local-queue (free) outputs are expiring signed links on the internal render server (`127.0.0.1:4003`), which
+the browser cannot reach. The status route now rewrites a completed `videoUrl` to the new same-origin
+`/api/render/[id]/download` (GET/HEAD), which checks the session and ownership, then streams the file. The modal
+takes the file extension from the export format when the URL has none.
+
+## Acceptance criteria
+
+- A completed free-plan export downloads with the right file name and extension instead of showing "Download expired".
+- Paid exports still download.
+- Another user's job, or a missing or expired output, returns 401/410, and the modal shows "Download expired".
+
+## Status: Implemented — awaiting user verification.
+
+---
+
+# Active Task: Dispute "Pay now" pays nobody; rulings for parties; public dispute page revamp
+
+## Implementation Objective
+
+1. Settling escrow with **Pay now** must actually move the credits to the client and freelancer.
+2. The disputer and disputee see platform rulings (decision / reopen / settlement / payout) as the same
+   verdict card staff see, including in their Inbox dispute thread.
+3. The public dispute page (`/disputes/:id`, community + parties view) is redesigned: professional,
+   live, responsive.
+
+## Cause fixed (Pay now)
+
+`endContractAfterSettlement` → `syncContractWorkspacesArchived` → `syncTeamWorkspaceArchivedStatus`
+inserted a `team_workspace_activity` row with `actor_account_id = NULL` (column is NOT NULL) and swallowed
+the error with `.catch(() => {})`. Inside the settlement transaction that aborted it, so `COMMIT` silently
+became `ROLLBACK`: no payouts, no ledger rows, dispute not closed — yet the ruling message ("credits have
+been paid") and the activity log were still written. Only contracts with a team workspace hit it, and only
+when the contract ends in the same transaction (Pay now, staff release, background release).
+
+- The archive activity row is skipped when there is no actor, and errors are no longer swallowed.
+- `DisputeFinancialRepositories` commits through `commitOrThrow`, which throws `COMMIT_ROLLED_BACK` (500)
+  if Postgres answered COMMIT with ROLLBACK, so a lost ruling can never report success again.
+- Data note: DIS-787553 shows three "Escrow settled" rulings (Nov 17) that never took effect. Its 750
+  credits are still in the freelancer's escrow wallet and the contract is still Active. The case is
+  reopened, so staff can settle it again.
+
+## Changes (UI)
+
+- Inbox (`inbox_main.tsx`): dispute-thread rulings render as `DisputeDecisionCard`.
+- `PublicDisputePage.tsx` + new `publicDisputeParts.tsx`: case header (chips, title, filed/updated, parties
+  "vs"), case progress stepper, thread filters (All / Rulings / Parties & staff / Community) with counts,
+  day dividers, grouped consecutive replies, relative times, live/reconnecting indicator (refetch on
+  reconnect), auto-growing composer, case column on desktop (progress, your part, settlement, latest
+  ruling, complaint, activity, guidelines) and a slide-in drawer on phones/tablets.
+- Public discussion payload adds `createdAt`, `updatedAt`, `resolvedAt`.
+
+## Acceptance criteria
+
+- Settle escrow with Pay now: payouts are `paid`, both Account Wallets are credited, the contract ends, and
+  the dispute is closed. If anything inside fails, staff get an error and nothing is announced.
+- Parties see every ruling card in the dispute page, their dispute list and their Inbox thread.
+- The public page works on phone, tablet and desktop; only the thread scrolls; filters, reply, attachments,
+  jump-to-latest and live updates keep working.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
+
+---
+
 # Active Task (video editor): Export fails in production with "Invalid request origin."
 
 ## Implementation Objective
@@ -12,6 +84,14 @@ Routes compared the `Origin` header with `request.nextUrl.origin`. `server.ts` p
 URL, and every check returned 403. New helper `video-editor/src/lib/auth/request-origin.ts`
 (`isSameOriginRequest`) compares the Origin host with `X-Forwarded-Host`/`Host` (as Next.js does for Server
 Actions); all 9 call sites use it. A missing Origin is still rejected (uploads keep allowing it, as before).
+
+## Remaining (ops, outside this repo)
+
+After the origin fix, video export returns 503 "Watermark settings are temporarily unavailable". Confirmed cause:
+the renderer at `http://127.0.0.1:4003` (secret OK) answers `GET /renders/capabilities` with 404 "Job not found",
+i.e. it is the unpatched build with no capabilities route, so it does not advertise `ensembleWatermark` +
+`ensembleWatermarkPlanFeatures` on `GET /renders/capabilities`. It needs the companion renderer patch from
+`f8fd01db` (`tasks/render-server-ensemble-watermark.patch`, never committed; see `docs/architecture.md`).
 
 ## Acceptance criteria
 

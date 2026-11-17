@@ -94,6 +94,8 @@ export interface Message {
   sender_id: number | string;
   author_type?: "staff" | "user" | string;
   author_name?: string;
+  /** Dispute threads: `resolution` marks a platform ruling, else disputer / disputee / staff. */
+  author_role?: string | null;
   message_type: string;
   message_content: string;
   message_id_reply: string;

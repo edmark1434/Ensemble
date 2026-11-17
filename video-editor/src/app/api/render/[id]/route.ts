@@ -45,6 +45,12 @@ export async function GET(
       );
     }
 
+    // Never hand the browser the render server's own link (local-queue outputs
+    // point at the internal host); downloads go through the editor instead.
+    if (statusData?.status === "completed" && statusData?.videoUrl) {
+      statusData.videoUrl = `/api/render/${encodeURIComponent(id)}/download`;
+    }
+
     return NextResponse.json(statusData, { status: 200 });
   } catch (error) {
     console.error(error);

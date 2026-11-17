@@ -114,7 +114,8 @@ const DownloadProgressModal = () => {
       if (current.jobId !== jobId || current.output !== output || !current.displayProgressModal) return;
       if (!headResponse.ok) throw new Error("Render output is no longer available.");
 
-      const extension = new URL(output.url).pathname.split(".").pop() || "mp4";
+      const lastSegment = new URL(output.url, window.location.href).pathname.split("/").pop() ?? "";
+      const extension = (lastSegment.includes(".") ? lastSegment.split(".").pop() : output.type) || "mp4";
       download(output.url, `${sanitizeFilename(output.projectName ?? projectName)}.${extension}`);
 
       actions.setDownloadStatus("requested");

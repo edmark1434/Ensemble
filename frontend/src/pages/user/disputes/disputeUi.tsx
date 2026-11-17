@@ -176,7 +176,21 @@ function LockIcon() {
   );
 }
 
-export function Avatar({ name, role }: { name?: string | null; role?: string | null }) {
+const AVATAR_SIZES = {
+  sm: "h-8 w-8 text-xs",
+  md: "h-10 w-10 text-sm",
+  lg: "h-12 w-12 text-base",
+} as const;
+
+export function Avatar({
+  name,
+  role,
+  size = "sm",
+}: {
+  name?: string | null;
+  role?: string | null;
+  size?: keyof typeof AVATAR_SIZES;
+}) {
   const key = roleKey(role);
   const initial = String(name || "?").trim().charAt(0).toUpperCase() || "?";
   const tone =
@@ -188,7 +202,7 @@ export function Avatar({ name, role }: { name?: string | null; role?: string | n
           ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
           : "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-zinc-200";
   return (
-    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${tone}`}>
+    <span className={`flex shrink-0 items-center justify-center rounded-full font-bold ${AVATAR_SIZES[size]} ${tone}`}>
       {initial}
     </span>
   );
