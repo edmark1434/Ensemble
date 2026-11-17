@@ -1143,8 +1143,15 @@ export default function ModeratorDisputeDetailModal({
   const dispute = detail?.dispute;
   const closed = dispute ? isDisputeClosed(toApiToken(dispute.status)) || Boolean(dispute.isClosed) : false;
   const banned = String(dispute?.sanctionType || "").toLowerCase() === "ban";
+  // Filed after the contract ended: its milestone payments are final, so no settle or reversal.
+  const conductOnly = Boolean(dispute?.conductOnly);
   const canSettle = Boolean(
-    dispute && canDecide && !closed && !dispute.financialResolution && Number(dispute.creditAmount || 0) > 0
+    dispute &&
+      canDecide &&
+      !closed &&
+      !conductOnly &&
+      !dispute.financialResolution &&
+      Number(dispute.creditAmount || 0) > 0
   );
   const canDismiss = Boolean(
     dispute && canDecide && adminMode && !closed && toApiToken(dispute.status) === "pending_review"
@@ -2147,6 +2154,15 @@ export default function ModeratorDisputeDetailModal({
           >
             {resolveMode === "choose" ? (
               <div className="space-y-2">
+                {conductOnly ? (
+                  <p className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-300">
+                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
+                    <span>
+                      This dispute was filed after the contract ended. Its milestone payments are final,
+                      so credits can't be refunded or reversed. Record an outcome, or sanction a party.
+                    </span>
+                  </p>
+                ) : null}
                 {canSettle ? (
                   <button
                     type="button"
@@ -2248,7 +2264,7 @@ export default function ModeratorDisputeDetailModal({
                     ) : null}
                   </div>
                 ) : null}
-                {escrowRemaining > 0 ? (
+                {escrowRemaining > 0 && !conductOnly ? (
                   <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
                     {escrowRemaining.toLocaleString()} credits are still frozen. Closing without settling
                     unfreezes them and the contract carries on as before. Use Settle escrow if the money

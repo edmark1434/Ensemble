@@ -197,6 +197,8 @@ export type Dispute = {
   resolutionOutcome?: string | null;
   resolutionOutcomeLabel?: string | null;
   isClosed?: boolean;
+  /** Filed after the contract ended: staff can record an outcome or sanction, but never move credits. */
+  conductOnly?: boolean;
   financialResolution?: DisputeFinancialResolution | null;
 };
 

@@ -205,7 +205,7 @@ export default function CreateTicketForUserModal({
       <button type="button" className="absolute inset-0 bg-black/70" onClick={submitting ? undefined : onClose} aria-label="Close" />
       <form
         onSubmit={submit}
-        className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl"
+        className="relative flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl"
       >
         <div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-4">
           <div>

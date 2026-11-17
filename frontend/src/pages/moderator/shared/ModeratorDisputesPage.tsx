@@ -96,7 +96,7 @@ export default function ModeratorDisputesPage({
 
   return (
     <main
-      className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10"
+      className="relative min-h-screen px-6 py-8 md:pl-[260px] md:px-10"
       style={{ animation: 'fadeIn 420ms ease' }}
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">

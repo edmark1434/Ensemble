@@ -30,6 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import {
   type ContractActiveDispute,
+  type ContractDisputeFiling,
   contractDisputeHeadline,
   contractDisputePath,
 } from "./contractDispute";
@@ -131,6 +132,7 @@ export interface DetailedContract {
   // Milestones
   milestones: MilestoneItem[];
   activeDispute?: ContractActiveDispute | null;
+  disputeFiling?: ContractDisputeFiling | null;
 }
 
 // ============================================================================
@@ -309,6 +311,7 @@ export const Contracts: React.FC = () => {
         portfolioDuration: c.portfolio_use_duration_seconds || 60,
         milestones: mappedMilestones,
         activeDispute: c.active_dispute || null,
+        disputeFiling: c.dispute_filing || null,
       };
     });
   }, []);

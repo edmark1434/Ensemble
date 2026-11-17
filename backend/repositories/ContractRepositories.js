@@ -4,6 +4,9 @@ const {
     freezeContractEscrowForDispute,
     assertNoOpenContractDispute,
     getPendingPayoutContractDispute,
+    isContractEnded,
+    DISPUTE_FILING_WINDOW_DAYS,
+    disputeFilingBlock,
 } = require('../lib/DisputeEscrow');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
@@ -604,6 +607,83 @@ async function openDisputesForContracts(contractIds, viewerAccountIds) {
     return map;
 }
 
+/**
+ * Whether the viewer may file a new dispute on each contract, under the same rules
+ * `createContractDispute` enforces (an open dispute is reported separately as `active_dispute`):
+ * { canFile, code, reason, endedAt, windowEndsAt, previousDispute }. `previousDispute` is the
+ * viewer's own earlier case, so its id and number are theirs to see.
+ */
+async function disputeFilingForContracts(contractIds, viewerAccountIds) {
+    const map = new Map();
+    const ids = [...new Set((contractIds || []).filter(Boolean).map(String))];
+    const viewers = [...new Set((viewerAccountIds || []).filter(Boolean).map(String))];
+    if (!ids.length || !viewers.length) return map;
+
+    let contractsRes;
+    let previousRes;
+    try {
+        [contractsRes, previousRes] = await Promise.all([
+            pool.query(`
+                SELECT
+                    contract_id,
+                    status,
+                    ended_at,
+                    ended_at + make_interval(days => $2::int) AS window_ends_at,
+                    (ended_at IS NOT NULL
+                     AND ended_at + make_interval(days => $2::int) < CURRENT_TIMESTAMP) AS window_closed
+                FROM contracts
+                WHERE contract_id = ANY($1::uuid[])
+            `, [ids, DISPUTE_FILING_WINDOW_DAYS]),
+            pool.query(`
+                SELECT DISTINCT ON (contract_id)
+                    contract_id,
+                    dispute_id,
+                    dispute_number,
+                    status,
+                    visibility
+                FROM disputes
+                WHERE contract_id = ANY($1::uuid[])
+                  AND by_account_id = ANY($2::uuid[])
+                  AND deleted_at IS NULL
+                ORDER BY contract_id, created_at DESC
+            `, [ids, viewers]),
+        ]);
+    } catch (err) {
+        // Before migration 1828800000000_contract-ended-at the column is missing; the contract
+        // list must still load, and filing itself reports the problem.
+        if (err.code === '42703') return map;
+        throw err;
+    }
+
+    const previousByContract = new Map(previousRes.rows.map((row) => [String(row.contract_id), row]));
+    for (const row of contractsRes.rows) {
+        const previous = previousByContract.get(String(row.contract_id)) || null;
+        const ended = isContractEnded(row.status);
+        const block = disputeFilingBlock({
+            previousDispute: previous,
+            windowClosed: ended && Boolean(row.window_closed),
+        });
+        map.set(String(row.contract_id), {
+            canFile: !block,
+            code: block?.code || null,
+            reason: block?.message || null,
+            endedAt: ended ? row.ended_at || null : null,
+            windowEndsAt: ended ? row.window_ends_at || null : null,
+            previousDispute: previous
+                ? {
+                    id: previous.dispute_id,
+                    number: previous.dispute_number || null,
+                    visibility: Boolean(previous.visibility),
+                    status: previous.status,
+                    viewerRole: 'disputer',
+                    filedByViewer: true,
+                }
+                : null,
+        });
+    }
+    return map;
+}
+
 async function getContractsByUserId(accountIds) {
     const query = `
         SELECT 
@@ -811,10 +891,15 @@ async function getContractsByUserId(accountIds) {
     `;
     const res = await pool.query(query, [accountIds]);
     const rows = res.rows;
-    const disputes = await openDisputesForContracts(rows.map((row) => row.contract_id), accountIds);
+    const contractIds = rows.map((row) => row.contract_id);
+    const [disputes, filing] = await Promise.all([
+        openDisputesForContracts(contractIds, accountIds),
+        disputeFilingForContracts(contractIds, accountIds),
+    ]);
     return rows.map((row) => ({
         ...row,
         active_dispute: disputes.get(String(row.contract_id)) || null,
+        dispute_filing: filing.get(String(row.contract_id)) || null,
     }));
 }
 
@@ -900,6 +985,40 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             throw error;
         }
 
+        // An ended contract can still be disputed (to report conduct) for a limited window, but
+        // its milestone payments are final: the case is flagged so staff can only record an
+        // outcome or sanction a party. The window is compared in SQL (timestamps have no zone).
+        const statusRes = await client.query(`
+            SELECT
+                status,
+                (ended_at IS NOT NULL
+                 AND ended_at + make_interval(days => $2::int) < CURRENT_TIMESTAMP) AS window_closed
+            FROM contracts
+            WHERE contract_id = $1
+        `, [contractId, DISPUTE_FILING_WINDOW_DAYS]);
+        const contractEndedAtFiling = isContractEnded(statusRes.rows[0]?.status);
+
+        // Each side files one dispute per contract; rulings are final and are reopened, not refiled.
+        const previousRes = await client.query(`
+            SELECT dispute_id, dispute_number
+            FROM disputes
+            WHERE contract_id = $1
+              AND by_account_id = $2
+              AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+        `, [contractId, userAccId]);
+        const filingBlock = disputeFilingBlock({
+            previousDispute: previousRes.rows[0] || null,
+            windowClosed: contractEndedAtFiling && Boolean(statusRes.rows[0]?.window_closed),
+        });
+        if (filingBlock) {
+            const error = new Error(filingBlock.message);
+            error.statusCode = 409;
+            error.code = filingBlock.code;
+            throw error;
+        }
+
         const disputeRes = await client.query(`
             INSERT INTO disputes (
                 dispute_number,
@@ -915,9 +1034,10 @@ async function createContractDispute(accountIds, contractId, { reason, details }
                 visibility,
                 created_at,
                 updated_at,
-                contract_id
+                contract_id,
+                contract_ended_at_filing
             ) VALUES (
-                $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), false, NOW(), NOW(), $8
+                $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), false, NOW(), NOW(), $8, $9
             ) RETURNING *
         `, [
             disputeNumber,
@@ -928,6 +1048,7 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             respondentId,
             creditAmount,
             contractId,
+            contractEndedAtFiling,
         ]);
         const frozen = await freezeContractEscrowForDispute(client, {
             disputeId: disputeRes.rows[0].dispute_id,

@@ -113,7 +113,7 @@ export default function BulkActionsMenu({
               ? { top: coords.top, left: coords.left }
               : { top: -9999, left: -9999, visibility: 'hidden' }
           }
-          className="fixed z-[200] max-h-[min(360px,calc(100vh-16px))] min-w-[220px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a1b24] py-1 shadow-2xl"
+          className="fixed z-[200] max-h-[min(360px,calc(100dvh-16px))] min-w-[220px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a1b24] py-1 shadow-2xl"
         >
           {noSelection ? (
             <p className="px-4 py-3 text-xs text-zinc-500">Select rows with the checkboxes first.</p>

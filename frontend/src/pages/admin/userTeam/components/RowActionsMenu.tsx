@@ -192,7 +192,7 @@ export default function RowActionsMenu({
               ? { top: coords.top, left: coords.left }
               : { top: -9999, left: -9999, visibility: 'hidden' }
           }
-          className="fixed z-[200] max-h-[min(420px,calc(100vh-16px))] w-[236px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a1b24] py-1.5 shadow-2xl"
+          className="fixed z-[200] max-h-[min(420px,calc(100dvh-16px))] w-[236px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a1b24] py-1.5 shadow-2xl"
         >
           {status && (
             <div className="border-b border-white/[0.06] px-3 pb-2 pt-1.5">

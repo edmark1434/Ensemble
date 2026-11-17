@@ -299,7 +299,7 @@ export default function SupportTicketManagement() {
 
   if (error || !data) {
     return (
-      <main className="relative z-10 p-8 md:pl-[260px]">
+      <main className="relative p-8 md:pl-[260px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
           {error || "Failed to load ticket management data"}
           <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">
@@ -313,7 +313,7 @@ export default function SupportTicketManagement() {
   const { summary, charts, alerts, staffWorkload } = data;
 
   return (
-    <main className="relative z-10 min-h-screen md:pl-[260px]">
+    <main className="relative min-h-screen md:pl-[260px]">
       {selectedTicketId != null && (
         <ModeratorTicketDetailModal
           ticketId={selectedTicketId}

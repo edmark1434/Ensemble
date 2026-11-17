@@ -231,7 +231,7 @@ export function AdminSubscriptionsTab() {
       {/* Edit Modal */}
       {editingPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#111218] border border-white/10 rounded-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
+          <div className="bg-[#111218] border border-white/10 rounded-2xl w-full max-w-3xl flex flex-col max-h-[90dvh] overflow-hidden shadow-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/[0.02]">
               <div>

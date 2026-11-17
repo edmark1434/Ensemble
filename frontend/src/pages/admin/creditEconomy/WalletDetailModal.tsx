@@ -180,7 +180,7 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]" role="dialog" aria-modal="true">
         <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-        <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
+        <div className="relative flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
           <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

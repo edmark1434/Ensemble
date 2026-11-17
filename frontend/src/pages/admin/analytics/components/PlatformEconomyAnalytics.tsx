@@ -1731,7 +1731,7 @@ export default function PlatformEconomyAnalytics({
           onClick={() => setActiveMetricModal(null)}
         >
           <div
-            className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#0f1016] p-6 shadow-2xl text-left"
+            className="relative w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl border border-white/10 bg-[#0f1016] p-6 shadow-2xl text-left"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}

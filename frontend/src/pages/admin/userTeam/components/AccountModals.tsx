@@ -111,7 +111,7 @@ function ModalShell({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
+      <div className="relative max-h-[90dvh] w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
         <div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-4">
           <div>
             <h2 className="text-lg font-bold text-white">{title}</h2>
@@ -121,7 +121,7 @@ function ModalShell({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="max-h-[calc(90vh-140px)] overflow-y-auto px-6 py-5">{children}</div>
+        <div className="max-h-[calc(90dvh-140px)] overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="border-t border-white/[0.08] px-6 py-4">{footer}</div>}
       </div>
     </div>

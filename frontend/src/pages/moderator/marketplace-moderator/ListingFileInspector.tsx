@@ -72,7 +72,7 @@ function MediaStage({
   watermarked: boolean;
   onError: () => void;
 }) {
-  const height = large ? 'max-h-[80vh]' : 'max-h-[420px]';
+  const height = large ? 'max-h-[80dvh]' : 'max-h-[420px]';
   // The watermarked preview mirrors what buyers see, so it keeps the member-side protections.
   const protect = watermarked
     ? { onContextMenu: (event: React.MouseEvent) => event.preventDefault() }

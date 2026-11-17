@@ -13,6 +13,41 @@ export type ContractActiveDispute = {
   filedByViewer?: boolean;
 };
 
+/**
+ * Whether this viewer may file a new dispute on a contract (`dispute_filing` from the contracts API).
+ * Each side files one dispute per contract, and an ended contract can be disputed for 30 days.
+ * The server enforces both; an open dispute is reported separately as `active_dispute`.
+ */
+export type ContractDisputeFiling = {
+  canFile: boolean;
+  code?: "DISPUTE_ALREADY_FILED" | "DISPUTE_WINDOW_CLOSED" | null;
+  reason?: string | null;
+  endedAt?: string | null;
+  windowEndsAt?: string | null;
+  /** The viewer's own earlier dispute on this contract. */
+  previousDispute?: ContractActiveDispute | null;
+};
+
+/** Short label for a contract the viewer can no longer dispute, or null when they can. */
+export function contractDisputeBlockLabel(filing?: ContractDisputeFiling | null): string | null {
+  if (!filing || filing.canFile) return null;
+  if (filing.code === "DISPUTE_ALREADY_FILED") return "You already filed a dispute";
+  if (filing.code === "DISPUTE_WINDOW_CLOSED") return "Dispute window closed";
+  return "Can't be disputed";
+}
+
+/** "You can file a dispute until Dec 17, 2026." for an ended contract still in its window. */
+export function contractDisputeWindowText(filing?: ContractDisputeFiling | null): string | null {
+  if (!filing?.canFile || !filing.windowEndsAt) return null;
+  const date = new Date(filing.windowEndsAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return `You can file a dispute until ${date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}.`;
+}
+
 /** Where "View dispute" should go, or null when this viewer cannot open the case yet. */
 export function contractDisputePath(dispute?: ContractActiveDispute | null): string | null {
   if (!dispute) return null;

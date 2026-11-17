@@ -1339,8 +1339,8 @@ export default function TicketDetailModalShell({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
-      <div className="relative flex h-[min(92vh,920px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
+      <div className="relative flex h-[min(92dvh,920px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:gap-4 sm:px-6">
           <div className="min-w-0">
             <p className={`text-[10px] font-semibold uppercase tracking-wide ${tone.text}`}>
               Ticket · {t?.number || `TKT-${ticketId}`}
@@ -1378,9 +1378,14 @@ export default function TicketDetailModalShell({
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {t && (
-              <button type="button" onClick={() => setShowTranscript(true)} className={BTN.neutral}>
+              <button
+                type="button"
+                onClick={() => setShowTranscript(true)}
+                className={BTN.neutral}
+                aria-label="Transcript"
+              >
                 <FileText className="h-3.5 w-3.5" />
-                Transcript
+                <span className="hidden sm:inline">Transcript</span>
               </button>
             )}
             <button

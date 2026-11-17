@@ -29,6 +29,7 @@ const {
   DISPUTE_PAYOUT_DEFAULT_DAYS,
   DISPUTE_PAYOUT_MAX_DAYS,
 } = require('../lib/DisputeResolutions');
+const { CONDUCT_ONLY_DISPUTE_MESSAGE } = require('../lib/DisputeEscrow');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -323,8 +324,9 @@ async function logActivity(row, staffId, eventCode, action, metadata) {
 }
 
 /**
- * Staff money actions on a dispute.
- *   settle_escrow        { clientCredits, freelancerCredits, resolutionNotes, splitMethod?, milestoneIds?,
+ * Staff money actions on a dispute. A case filed after its contract ended
+ * (`contract_ended_at_filing`) refuses settle_escrow and reverse_transaction.
+ *   settle_escrow       { clientCredits, freelancerCredits, resolutionNotes, splitMethod?, milestoneIds?,
  *                          releaseMode?, releaseAt? }  splitMethod: amount | milestones | both
  *   reverse_transaction  { creditTransactionId, amount?, resolutionNotes, releaseMode?, releaseAt? }
  *   release_payouts      pay every waiting payout now
@@ -336,6 +338,12 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
   const { staff, row } = await assertCanAct(disputeId, staffSession);
   const staffId = staff.staff_id;
   const notesInput = body?.resolutionNotes ?? body?.resolution_notes;
+
+  // Filed after the contract ended: milestone payments are final, so no credits move.
+  // The flag is set once at filing and never changes, so the unlocked row is enough.
+  if ((action === 'settle_escrow' || action === 'reverse_transaction') && row.contract_ended_at_filing) {
+    throw domainError(CONDUCT_ONLY_DISPUTE_MESSAGE, 409, 'CONTRACT_ENDED_NO_REFUND');
+  }
 
   let result;
   let reason = action;
