@@ -6,7 +6,6 @@ import {
   Hand,
   Inbox,
   LayoutGrid,
-  Loader2,
   Plus,
   RefreshCw,
   Search,
@@ -41,6 +40,7 @@ import {
 import CreateTicketForUserModal from "@/pages/admin/ticketManagement/CreateTicketForUserModal";
 import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { Alert, SupportOverview } from "../shared/moderatorTypes";
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 type TabId = "overview" | "tickets" | "mine" | "assignments";
 
@@ -293,9 +293,7 @@ export default function SupportTicketManagement() {
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-sky-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

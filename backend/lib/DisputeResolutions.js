@@ -283,15 +283,31 @@ function buildDisputeSettlementMessage({
   releaseAt,
   notes,
   disputeNumber,
+  milestones = [],
 } = {}) {
   const shares = [];
   if (clientCredits > 0) shares.push(`${client} (client) receives ${credits(clientCredits)} back`);
   if (freelancerCredits > 0) shares.push(`${freelancer} (freelancer) receives ${credits(freelancerCredits)}`);
+  // Which milestones the freelancer was paid for, so both sides see how the split was reached.
+  let milestoneLine = '';
+  if (Array.isArray(milestones) && milestones.length) {
+    const picked = milestones.map(
+      (m) =>
+        `${m.index ? `${m.index}. ` : ''}${m.name || 'Milestone'} (${credits(m.credits)}${
+          m.approved ? ', approved by the client' : ''
+        })`
+    );
+    const milestoneTotal = milestones.reduce((sum, m) => sum + Number(m.credits || 0), 0);
+    const extra = Number(freelancerCredits || 0) - milestoneTotal;
+    milestoneLine = ` Milestones paid to the freelancer: ${picked.join(', ')}${
+      extra > 0 ? `, plus ${credits(extra)} from the rest of the escrow` : ''
+    }.`;
+  }
   return buildDisputeRulingMessage(
     {
       label: 'Escrow settled',
       finding: () =>
-        `The escrow on this contract has been settled: ${shares.join(', and ')}. ${payoutTimingLine({
+        `The escrow on this contract has been settled: ${shares.join(', and ')}.${milestoneLine} ${payoutTimingLine({
           immediate,
           releaseAt,
         })} The contract has ended and its unfinished milestones are cancelled.`,

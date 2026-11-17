@@ -57,6 +57,7 @@ const {
   DISPUTE_PAYOUT_MAX_DAYS,
 } = require('../lib/DisputeResolutions');
 const { listDisputePayouts, planReversalRoute } = require('./DisputeFinancialRepositories');
+const { milestonePaidOutSql, milestoneEscrowState } = require('../lib/DisputeEscrow');
 const {
   ROLE_TO_TICKET_TYPES,
   TICKET_TYPES,
@@ -4176,19 +4177,20 @@ async function loadDisputeCaseFile(row) {
     ? await pool.query(
       `
       SELECT
-        contract_milestone_id,
-        contract_id,
-        index,
-        name,
-        description,
-        status,
-        credits,
-        no_of_revisions_max,
-        deadline_at,
-        started_at
-      FROM contract_milestones
-      WHERE contract_id = ANY($1::uuid[])
-      ORDER BY contract_id, index ASC
+        cm.contract_milestone_id,
+        cm.contract_id,
+        cm.index,
+        cm.name,
+        cm.description,
+        cm.status,
+        cm.credits,
+        cm.no_of_revisions_max,
+        cm.deadline_at,
+        cm.started_at,
+        ${milestonePaidOutSql('cm')} AS paid_out
+      FROM contract_milestones cm
+      WHERE cm.contract_id = ANY($1::uuid[])
+      ORDER BY cm.contract_id, cm.index ASC
       `,
       [contractIds]
     )
@@ -4306,6 +4308,8 @@ async function loadDisputeCaseFile(row) {
       description: milestone.description || null,
       status: milestone.status,
       credits: Number(milestone.credits || 0),
+      // open | approved (credits still in escrow, freelancer's) | paid | closed — drives the settle picker.
+      escrowState: milestoneEscrowState({ status: milestone.status, paidOut: milestone.paid_out }),
       revisions: Number(milestone.no_of_revisions_max || 0),
       deadlineAt: milestone.deadline_at || null,
       startedAt: milestone.started_at || null,

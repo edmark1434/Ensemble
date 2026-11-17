@@ -19,6 +19,12 @@ export type DisputeCaseMilestone = {
   description: string | null;
   status: string;
   credits: number;
+  /**
+   * Where the milestone's credits stand: `open` (still in escrow, staff decide), `approved`
+   * (approved, still in escrow, always goes to the freelancer), `paid` (already paid out of
+   * escrow), `closed` (cancelled or abandoned).
+   */
+  escrowState?: "open" | "approved" | "paid" | "closed";
   revisions: number;
   deadlineAt: string | null;
   startedAt: string | null;

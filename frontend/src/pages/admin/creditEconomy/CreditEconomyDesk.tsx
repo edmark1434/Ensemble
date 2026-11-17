@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Info,
   LayoutGrid,
-  Loader2,
   Lock,
   RefreshCw,
   ScrollText,
@@ -22,6 +21,7 @@ import WalletDetailModal from './WalletDetailModal';
 import WalletsTab from './WalletsTab';
 import { ECONOMY_ACCENT, ECONOMY_API, formatRelative } from './economyUi';
 import type { EconomyAlert, EconomyOverview, EconomyTab, EconomyVariant } from './creditEconomyTypes';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const TABS: { id: EconomyTab; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
@@ -133,9 +133,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
 
   if (loading && !data) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className={`h-10 w-10 animate-spin ${accent.spinner}`} />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

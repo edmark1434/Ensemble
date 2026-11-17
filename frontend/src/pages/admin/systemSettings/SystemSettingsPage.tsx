@@ -29,6 +29,7 @@ import type {
   SecuritySettings,
   SettingsOverview,
 } from './settingsTypes';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 type SettingsTabId = 'platform' | 'economy' | 'security';
 type TabId = SettingsTabId | 'badges';
@@ -384,9 +385,7 @@ export default function SystemSettingsPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-rose-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

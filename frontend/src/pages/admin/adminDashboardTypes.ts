@@ -7,6 +7,7 @@ export type PlatformKpis = {
   openTickets: number;
   pendingApproval: number;
   totalStaff: number;
+  totalTeams?: number;
   forumGroups: number | null;
   forumDiscussions: number | null;
 };
@@ -68,6 +69,10 @@ export type EconomyEvent = {
   label: string;
   timeAgo: string;
   status: string;
+  walletId: string | null;
+  /** Spendable + held credits. */
+  credits: number;
+  heldCredits: number;
 };
 
 export type AdminDashboardData = {

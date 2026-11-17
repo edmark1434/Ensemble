@@ -9,6 +9,7 @@ import {
   Globe,
   Hand,
   Loader2,
+  Lock,
   MessageSquare,
   Send,
   X,
@@ -16,7 +17,7 @@ import {
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import type { DisputeCaseTransaction, DisputeDetail } from "./moderatorTypes";
+import type { DisputeCaseMilestone, DisputeCaseTransaction, DisputeDetail } from "./moderatorTypes";
 import type {
   DisputeResolutionOption,
   TicketMessage,
@@ -394,6 +395,33 @@ const STATUS_OPTIONS = [
 
 const CLOSED_STATUS = "closed";
 
+/** How a settlement splits the escrow. Mirrors the `splitMethod` the server accepts. */
+type SettleMethod = "milestones" | "amount" | "both";
+
+const SETTLE_METHODS: { value: SettleMethod; label: string; hint: string }[] = [
+  { value: "milestones", label: "By milestone", hint: "Pay the freelancer for the milestones you pick. The rest is refunded to the client." },
+  { value: "amount", label: "By amount", hint: "Type how many credits each side gets." },
+  { value: "both", label: "Both", hint: "Pay picked milestones, plus an extra amount from the rest of the escrow." },
+];
+
+type MilestoneEscrowState = NonNullable<DisputeCaseMilestone["escrowState"]>;
+
+/**
+ * Where a milestone's credits stand for a settlement (the server sends it). Without it, an
+ * approved (completed) milestone is treated as already paid, so it is never offered as a refund.
+ */
+function milestoneEscrowState(milestone: DisputeCaseMilestone): MilestoneEscrowState {
+  if (milestone.escrowState) return milestone.escrowState;
+  const status = String(milestone.status || "").toLowerCase();
+  if (status === "cancelled" || status === "abandoned") return "closed";
+  if (status === "completed") return "paid";
+  return "open";
+}
+
+function milestoneName(milestone: { index: number; name: string }) {
+  return `${milestone.index ? `${milestone.index}. ` : ""}${milestone.name}`;
+}
+
 function isDisputeClosed(status: string) {
   return String(status || "").toLowerCase() === CLOSED_STATUS;
 }
@@ -470,6 +498,11 @@ export default function ModeratorDisputeDetailModal({
   const [settleClientCredits, setSettleClientCredits] = useState("0");
   const [settleFreelancerCredits, setSettleFreelancerCredits] = useState("0");
   const [settleNotes, setSettleNotes] = useState("");
+  // How the escrow is split: pick milestones, enter amounts, or milestones plus an extra amount.
+  const [settleMethod, setSettleMethod] = useState<SettleMethod>("amount");
+  /** Milestones paid to the freelancer; every other milestone is refunded to the client. */
+  const [settleMilestoneIds, setSettleMilestoneIds] = useState<string[]>([]);
+  const [settleExtraCredits, setSettleExtraCredits] = useState("0");
   const [swapPromptOpen, setSwapPromptOpen] = useState(false);
   const [swapNotes, setSwapNotes] = useState("");
   const [reverseOpen, setReverseOpen] = useState(false);
@@ -644,13 +677,27 @@ export default function ModeratorDisputeDetailModal({
     return Boolean(detail?.dispute?.visibility);
   });
 
-  const runAction = async (body: Record<string, unknown>, successMsg: string) => {
+  /**
+   * PATCH the case. The response carries the refreshed case, so the form (resolution notes
+   * included) shows exactly what was saved. `closeOnSuccess` is for decisions that close the
+   * dispute: the modal goes away and the desk list refreshes.
+   */
+  const runAction = async (
+    body: Record<string, unknown>,
+    successMsg: string,
+    { closeOnSuccess = false }: { closeOnSuccess?: boolean } = {}
+  ) => {
     setSaving(true);
     try {
-      await api.patch(`${endpointBase}/${disputeId}`, body);
+      const res = await api.patch(`${endpointBase}/${disputeId}`, body);
       showSuccessToast(successMsg);
-      await load();
       onUpdated();
+      if (closeOnSuccess) {
+        onClose();
+        return true;
+      }
+      if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
+      else await load();
       return true;
     } catch (err: unknown) {
       const msg =
@@ -674,14 +721,23 @@ export default function ModeratorDisputeDetailModal({
   };
 
   /** POST a money action; on success the response already carries the refreshed case. */
-  const postFinancial = async (body: Record<string, unknown>, successMsg: string, fallback: string) => {
+  const postFinancial = async (
+    body: Record<string, unknown>,
+    successMsg: string,
+    fallback: string,
+    { closeOnSuccess = false }: { closeOnSuccess?: boolean } = {}
+  ) => {
     setSaving(true);
     try {
       const res = await api.post(`${endpointBase}/${disputeId}/financial-resolution`, body);
-      if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
-      else await load();
       showSuccessToast(successMsg);
       onUpdated();
+      if (closeOnSuccess) {
+        onClose();
+        return true;
+      }
+      if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
+      else await load();
       return true;
     } catch (err: unknown) {
       const msg =
@@ -694,16 +750,11 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const confirmSettleEscrow = async () => {
-    const clientCredits = Number(settleClientCredits);
-    const freelancerCredits = Number(settleFreelancerCredits);
-    if (!Number.isInteger(clientCredits) || clientCredits < 0 || !Number.isInteger(freelancerCredits) || freelancerCredits < 0) {
-      showErrorToast("Settlement amounts must be non-negative integers.");
+    if (settleSplit.error) {
+      showErrorToast(settleSplit.error);
       return;
     }
-    if (clientCredits + freelancerCredits !== Number(detail?.dispute?.creditAmount || 0)) {
-      showErrorToast("Split every remaining escrow credit between the client and the freelancer.");
-      return;
-    }
+    const { client: clientCredits, freelancer: freelancerCredits } = settleSplit;
     if (settleNotes.trim().length < 8) {
       showErrorToast("Resolution notes must be at least 8 characters.");
       return;
@@ -718,11 +769,16 @@ export default function ModeratorDisputeDetailModal({
         action: "settle_escrow",
         clientCredits,
         freelancerCredits,
+        splitMethod: settleMethod,
+        milestoneIds: settleMethod === "amount" ? [] : pickedMilestones.map((milestone) => milestone.id),
         resolutionNotes: settleNotes.trim(),
         ...payoutTimingBody(settleTiming, payoutPolicy),
       },
-      settleTiming.mode === "now" ? "Escrow settled and paid out" : "Escrow settled — payout scheduled",
-      "Failed to settle escrow"
+      settleTiming.mode === "now"
+        ? "Escrow settled and paid out — dispute closed"
+        : "Escrow settled, payout scheduled — dispute closed",
+      "Failed to settle escrow",
+      { closeOnSuccess: true }
     );
     if (!ok) return;
     setResolvePromptOpen(false);
@@ -753,8 +809,11 @@ export default function ModeratorDisputeDetailModal({
         resolutionNotes: reverseNotes.trim(),
         ...payoutTimingBody(reverseTiming, payoutPolicy),
       },
-      reverseTiming.mode === "now" ? "Transaction reversed and paid out" : "Transaction reversed — payout scheduled",
-      "Failed to reverse transaction"
+      reverseTiming.mode === "now"
+        ? "Transaction reversed and paid out — dispute closed"
+        : "Transaction reversed, payout scheduled — dispute closed",
+      "Failed to reverse transaction",
+      { closeOnSuccess: true }
     );
     if (!ok) return;
     setReverseOpen(false);
@@ -834,16 +893,22 @@ export default function ModeratorDisputeDetailModal({
   };
 
   // Handler changes save immediately from the handler picker; this only saves case fields.
-  const saveChanges = async (overrideStatus?: string) => {
-    const nextStatus = overrideStatus || status;
-    await runAction(
-      {
-        status: nextStatus,
-        priority,
-        resolution_notes: resolutionNotes || null,
-      },
-      isDisputeClosed(nextStatus) ? "Dispute closed" : "Dispute updated"
-    );
+  // Only changed fields are sent, so an unchanged status (e.g. on a closed case) never blocks
+  // a notes edit, and the saved notes come back in the response.
+  const saveChanges = async () => {
+    const current = detail?.dispute;
+    if (!current) return;
+    const body: Record<string, unknown> = {};
+    if (status && status !== toApiToken(current.status)) body.status = status;
+    if (priority && priority !== toApiToken(current.priority)) body.priority = priority;
+    const notes = resolutionNotes.trim();
+    if (notes !== (current.resolutionNotes || "").trim()) body.resolution_notes = notes || null;
+    if (!Object.keys(body).length) {
+      showSuccessToast("Nothing to save. No changes.");
+      return;
+    }
+    const notesOnly = Object.keys(body).length === 1 && "resolution_notes" in body;
+    await runAction(body, notesOnly ? "Resolution notes saved" : "Dispute updated");
   };
 
   const sendMessage = async () => {
@@ -970,7 +1035,9 @@ export default function ModeratorDisputeDetailModal({
       showErrorToast("A reason is required");
       return;
     }
-    const ok = await runAction({ action: "convict", reason }, "Permanent ban applied");
+    const ok = await runAction({ action: "convict", reason }, "Permanent ban applied — dispute closed", {
+      closeOnSuccess: true,
+    });
     if (!ok) return;
     setResolvePromptOpen(false);
     setResolveMode("choose");
@@ -978,7 +1045,12 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const confirmDismiss = async () => {
-    const ok = await runAction({ action: "dismiss" }, "Dispute dismissed");
+    const notes = resolveNotes.trim();
+    const ok = await runAction(
+      { action: "dismiss", resolution_notes: notes || null },
+      "Dispute dismissed and closed",
+      { closeOnSuccess: true }
+    );
     if (!ok) return;
     setResolvePromptOpen(false);
     setResolveMode("choose");
@@ -1025,8 +1097,13 @@ export default function ModeratorDisputeDetailModal({
     setResolveMode("choose");
     setResolveOutcome("");
     setResolveNotes(resolutionNotes || "");
-    setSettleClientCredits(String(remaining));
-    setSettleFreelancerCredits("0");
+    // Approved milestones start (and stay) with the freelancer; the rest starts as a refund.
+    setSettleClientCredits(String(Math.max(0, remaining - approvedFloor)));
+    setSettleFreelancerCredits(String(approvedFloor));
+    // Start from milestones when the contract has unpaid ones; every open milestone starts as a refund.
+    setSettleMethod(canSplitByMilestone ? "milestones" : "amount");
+    setSettleMilestoneIds([]);
+    setSettleExtraCredits("0");
     setSettleNotes(resolutionNotes || "");
     setSettleTiming(initialPayoutTiming(payoutPolicy));
     setBanReason("");
@@ -1054,7 +1131,8 @@ export default function ModeratorDisputeDetailModal({
     }
     const ok = await runAction(
       { action: "resolve", outcome: choice.key, resolution_notes: notes || null },
-      `Dispute closed — ${choice.label.toLowerCase()}`
+      `Dispute closed — ${choice.label.toLowerCase()}`,
+      { closeOnSuccess: true }
     );
     if (!ok) return;
     setResolvePromptOpen(false);
@@ -1100,22 +1178,98 @@ export default function ModeratorDisputeDetailModal({
 
   // Settlement must hand out every remaining escrow credit, so nothing is stranded.
   const escrowRemaining = Number(dispute?.creditAmount || 0);
-  const settleClientNum = Number(settleClientCredits);
-  const settleFreelancerNum = Number(settleFreelancerCredits);
-  const settleNumbersValid =
-    Number.isInteger(settleClientNum) &&
-    Number.isInteger(settleFreelancerNum) &&
-    settleClientNum >= 0 &&
-    settleFreelancerNum >= 0;
-  const settleAssigned = settleNumbersValid ? settleClientNum + settleFreelancerNum : 0;
-  const settleUnassigned = escrowRemaining - settleAssigned;
+  // The linked contract's milestones, by where their credits stand.
+  const settleMilestones = (linkedContract?.milestones || [])
+    .filter((milestone) => milestone.credits > 0)
+    .map((milestone) => ({ ...milestone, state: milestoneEscrowState(milestone) }))
+    .filter((milestone) => milestone.state !== "closed");
+  /** Unapproved and still in escrow: staff pick refund or release. */
+  const escrowMilestones = settleMilestones.filter((milestone) => milestone.state === "open");
+  /** Approved but not paid yet: always released to the freelancer, never refunded. */
+  const approvedMilestones = settleMilestones.filter((milestone) => milestone.state === "approved");
+  const sumCredits = (list: { credits: number }[]) => list.reduce((sum, item) => sum + item.credits, 0);
+  const approvedCredits = sumCredits(approvedMilestones);
+  // The least the freelancer can get in any split: the approved milestones still in escrow.
+  const approvedFloor = Math.min(escrowRemaining, approvedCredits);
+  const pickedMilestones = escrowMilestones.filter((milestone) => settleMilestoneIds.includes(milestone.id));
+  /** Milestones the freelancer is paid for in a milestone split: approved plus picked. */
+  const freelancerMilestones = [...approvedMilestones, ...pickedMilestones].sort((a, b) => a.index - b.index);
+  const milestonePickedCredits = approvedCredits + sumCredits(pickedMilestones);
+  const milestoneOpenCredits = approvedCredits + sumCredits(escrowMilestones);
+  const canSplitByMilestone = escrowMilestones.length + approvedMilestones.length > 0;
+  // Escrow not tied to any unpaid milestone (fees, revisions); refunded to the client unless added.
+  const escrowOutsideMilestones = Math.max(0, escrowRemaining - milestoneOpenCredits);
+  const settleExtraMax = Math.max(0, escrowRemaining - milestonePickedCredits);
+  const settleSplit = ((): { client: number; freelancer: number; error: string | null } => {
+    if (settleMethod === "amount") {
+      const clientShare = Number(settleClientCredits);
+      const freelancerShare = Number(settleFreelancerCredits);
+      if (
+        !Number.isInteger(clientShare) ||
+        !Number.isInteger(freelancerShare) ||
+        clientShare < 0 ||
+        freelancerShare < 0
+      ) {
+        return { client: 0, freelancer: 0, error: "Use whole, non-negative numbers." };
+      }
+      const unassigned = escrowRemaining - (clientShare + freelancerShare);
+      if (unassigned > 0) {
+        return {
+          client: clientShare,
+          freelancer: freelancerShare,
+          error: `${unassigned.toLocaleString()} credits still unassigned. Every frozen credit has to go to one side.`,
+        };
+      }
+      if (unassigned < 0) {
+        return {
+          client: clientShare,
+          freelancer: freelancerShare,
+          error: `${Math.abs(unassigned).toLocaleString()} credits over the ${escrowRemaining.toLocaleString()} in escrow.`,
+        };
+      }
+      if (freelancerShare < approvedFloor) {
+        return {
+          client: clientShare,
+          freelancer: freelancerShare,
+          error: `${approvedFloor.toLocaleString()} credits are for approved milestones. They belong to the freelancer and can't be refunded.`,
+        };
+      }
+      return { client: clientShare, freelancer: freelancerShare, error: null };
+    }
+    const extra = settleMethod === "both" ? Number(settleExtraCredits || 0) : 0;
+    if (!Number.isInteger(extra) || extra < 0) {
+      return { client: 0, freelancer: 0, error: "Extra credits must be a whole, non-negative number." };
+    }
+    if (milestonePickedCredits > escrowRemaining) {
+      return {
+        client: 0,
+        freelancer: milestonePickedCredits,
+        error: `The picked milestones add up to ${milestonePickedCredits.toLocaleString()} credits, but escrow only holds ${escrowRemaining.toLocaleString()}. Pick fewer, or split by amount.`,
+      };
+    }
+    const freelancerShare = milestonePickedCredits + extra;
+    if (freelancerShare > escrowRemaining) {
+      return {
+        client: 0,
+        freelancer: freelancerShare,
+        error: `That is ${(freelancerShare - escrowRemaining).toLocaleString()} credits more than escrow holds. You can add up to ${settleExtraMax.toLocaleString()}.`,
+      };
+    }
+    return { client: escrowRemaining - freelancerShare, freelancer: freelancerShare, error: null };
+  })();
   const settleReady =
-    settleNumbersValid &&
-    settleUnassigned === 0 &&
+    !settleSplit.error &&
     settleNotes.trim().length >= 8 &&
     !payoutTimingError(settleTiming, payoutPolicy);
+  const toggleSettleMilestone = (milestoneId: string, toFreelancer: boolean) => {
+    setSettleMilestoneIds((current) => {
+      const rest = current.filter((id) => id !== milestoneId);
+      return toFreelancer ? [...rest, milestoneId] : rest;
+    });
+  };
   const setSplit = (clientShare: number) => {
-    const safe = Math.max(0, Math.min(escrowRemaining, Math.round(clientShare)));
+    // Approved milestones never go back to the client, so the client's share stops short of them.
+    const safe = Math.max(0, Math.min(escrowRemaining - approvedFloor, Math.round(clientShare)));
     setSettleClientCredits(String(safe));
     setSettleFreelancerCredits(String(escrowRemaining - safe));
   };
@@ -1906,8 +2060,9 @@ export default function ModeratorDisputeDetailModal({
               resolveMode === "settle" ? (
                 <>
                   Split all {escrowRemaining.toLocaleString()} frozen escrow credits between{" "}
-                  {clientLabel} (client refund) and {freelancerLabel} (freelancer release). This closes
-                  the dispute and posts the ruling in the discussion.
+                  {clientLabel} (client refund) and {freelancerLabel} (freelancer release), by
+                  milestone, by amount, or both. This closes the dispute and posts the ruling in the
+                  discussion.
                 </>
               ) : resolveMode === "ban" ? (
                 <>
@@ -2001,8 +2156,8 @@ export default function ModeratorDisputeDetailModal({
                   >
                     <p className="text-sm font-medium text-amber-100">Settle escrow</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
-                      {dispute.creditAmount.toLocaleString()} credits are still frozen. Split them
-                      between client refund and freelancer release. Paid out in{" "}
+                      {dispute.creditAmount.toLocaleString()} credits are still frozen. Pick which
+                      milestones the freelancer is paid for, split by amount, or both. Paid out in{" "}
                       {payoutPolicy.defaultDays} days by default, or now, or on a date you pick.
                     </p>
                   </button>
@@ -2105,6 +2260,200 @@ export default function ModeratorDisputeDetailModal({
 
             {resolveMode === "settle" ? (
               <>
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-zinc-500">Split the escrow</p>
+                  <div
+                    className="grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1"
+                    role="radiogroup"
+                    aria-label="How to split the escrow"
+                  >
+                    {SETTLE_METHODS.map((option) => {
+                      const active = settleMethod === option.value;
+                      const unavailable = option.value !== "amount" && !canSplitByMilestone;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          disabled={saving || unavailable}
+                          title={unavailable ? "This contract has no unpaid milestones." : option.hint}
+                          onClick={() => setSettleMethod(option.value)}
+                          className={`rounded-md px-2 py-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                            active ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    {!canSplitByMilestone
+                      ? "This contract has no unpaid milestones, so split the escrow by amount."
+                      : SETTLE_METHODS.find((option) => option.value === settleMethod)?.hint}
+                  </p>
+                </div>
+
+                {settleMethod === "amount" && approvedFloor > 0 ? (
+                  <p className="flex items-start gap-2 rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-2 text-[11px] leading-relaxed text-sky-100">
+                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      {approvedFloor.toLocaleString()} credits are for approved milestones (
+                      {approvedMilestones.map(milestoneName).join(", ")}). They belong to {freelancerLabel}{" "}
+                      and can't be refunded, so the client refund is at most{" "}
+                      {(escrowRemaining - approvedFloor).toLocaleString()}.
+                    </span>
+                  </p>
+                ) : null}
+
+                {settleMethod !== "amount" ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-zinc-500">
+                        Milestones ({settleMilestones.length})
+                      </p>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => setSettleMilestoneIds([])}
+                          className="rounded-md border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300 transition hover:border-white/25 hover:bg-white/[0.04] disabled:opacity-50"
+                        >
+                          Refund all open
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => setSettleMilestoneIds(escrowMilestones.map((milestone) => milestone.id))}
+                          className="rounded-md border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300 transition hover:border-white/25 hover:bg-white/[0.04] disabled:opacity-50"
+                        >
+                          Release all open
+                        </button>
+                      </div>
+                    </div>
+                    <ul className="max-h-56 space-y-1.5 overflow-y-auto pr-0.5">
+                      {settleMilestones.map((milestone) => {
+                        if (milestone.state !== "open") {
+                          // Approved milestones are the freelancer's: no refund option, ever.
+                          const paid = milestone.state === "paid";
+                          return (
+                            <li
+                              key={milestone.id}
+                              className={`rounded-lg border px-3 py-2 ${
+                                paid
+                                  ? "border-white/[0.06] bg-white/[0.01] opacity-60"
+                                  : "border-sky-500/20 bg-sky-500/[0.04]"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="min-w-0 truncate text-xs text-white">{milestoneName(milestone)}</p>
+                                <p
+                                  className={`shrink-0 text-xs tabular-nums ${
+                                    paid ? "text-zinc-500 line-through" : "text-sky-100"
+                                  }`}
+                                >
+                                  {milestone.credits.toLocaleString()}
+                                </p>
+                              </div>
+                              <p className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400">
+                                <Lock className="h-3 w-3 shrink-0" />
+                                {paid
+                                  ? `Approved and already paid to ${freelancerLabel}. Not in escrow, can't be refunded.`
+                                  : `Approved. Released to ${freelancerLabel}, can't be refunded.`}
+                              </p>
+                            </li>
+                          );
+                        }
+                        const toFreelancer = settleMilestoneIds.includes(milestone.id);
+                        return (
+                          <li
+                            key={milestone.id}
+                            className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="min-w-0 truncate text-xs text-white">{milestoneName(milestone)}</p>
+                              <p className="shrink-0 text-xs tabular-nums text-zinc-200">
+                                {milestone.credits.toLocaleString()}
+                              </p>
+                            </div>
+                            <p className="text-[10px] text-zinc-500">{titleCaseLabel(milestone.status)}</p>
+                            <div
+                              className="mt-1.5 grid grid-cols-2 gap-1"
+                              role="radiogroup"
+                              aria-label={`Who gets milestone ${milestone.name}`}
+                            >
+                              <button
+                                type="button"
+                                role="radio"
+                                aria-checked={!toFreelancer}
+                                disabled={saving}
+                                onClick={() => toggleSettleMilestone(milestone.id, false)}
+                                className={`rounded-md border px-2 py-1 text-[10px] transition disabled:opacity-50 ${
+                                  !toFreelancer
+                                    ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                                    : "border-white/10 text-zinc-400 hover:border-white/25"
+                                }`}
+                              >
+                                Refund {clientLabel}
+                              </button>
+                              <button
+                                type="button"
+                                role="radio"
+                                aria-checked={toFreelancer}
+                                disabled={saving}
+                                onClick={() => toggleSettleMilestone(milestone.id, true)}
+                                className={`rounded-md border px-2 py-1 text-[10px] transition disabled:opacity-50 ${
+                                  toFreelancer
+                                    ? "border-sky-500/40 bg-sky-500/10 text-sky-100"
+                                    : "border-white/10 text-zinc-400 hover:border-white/25"
+                                }`}
+                              >
+                                Release to {freelancerLabel}
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {milestoneOpenCredits > escrowRemaining ? (
+                      <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
+                        Unpaid and approved milestones add up to {milestoneOpenCredits.toLocaleString()} credits, but escrow
+                        only holds {escrowRemaining.toLocaleString()}. Part may already have been paid or
+                        refunded, so the picks can't add up to more than {escrowRemaining.toLocaleString()}.
+                      </p>
+                    ) : escrowOutsideMilestones > 0 ? (
+                      <p className="text-[11px] text-zinc-500">
+                        {escrowOutsideMilestones.toLocaleString()} escrow credits aren't tied to a milestone.
+                        They are refunded to {clientLabel}
+                        {settleMethod === "both" ? " unless you add them below." : ". Use Both to give them to the freelancer."}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {settleMethod === "both" ? (
+                  <label className="block space-y-1 text-[11px] text-zinc-500">
+                    <span>
+                      Extra credits to {freelancerLabel} (up to {settleExtraMax.toLocaleString()})
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={settleExtraMax}
+                      step={1}
+                      value={settleExtraCredits}
+                      onChange={(event) => setSettleExtraCredits(event.target.value)}
+                      className={FIELD}
+                    />
+                    <span className="block text-zinc-600">
+                      Taken from the escrow that isn't released by a picked milestone.
+                    </span>
+                  </label>
+                ) : null}
+
+                {settleMethod === "amount" ? (
+                <>
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick split">
                   {[
                     { label: "All to client", share: escrowRemaining },
@@ -2128,7 +2477,7 @@ export default function ModeratorDisputeDetailModal({
                     <input
                       type="number"
                       min={0}
-                      max={escrowRemaining}
+                      max={escrowRemaining - approvedFloor}
                       step={1}
                       value={settleClientCredits}
                       onChange={(event) => {
@@ -2145,7 +2494,7 @@ export default function ModeratorDisputeDetailModal({
                     <span>Freelancer release · {freelancerLabel}</span>
                     <input
                       type="number"
-                      min={0}
+                      min={approvedFloor}
                       max={escrowRemaining}
                       step={1}
                       value={settleFreelancerCredits}
@@ -2160,19 +2509,25 @@ export default function ModeratorDisputeDetailModal({
                     />
                   </label>
                 </div>
-                <p
-                  className={`text-[11px] ${
-                    !settleNumbersValid || settleUnassigned !== 0 ? "text-red-300" : "text-zinc-500"
-                  }`}
-                  role="status"
-                >
-                  {!settleNumbersValid
-                    ? "Use whole, non-negative numbers."
-                    : settleUnassigned > 0
-                      ? `${settleUnassigned.toLocaleString()} credits still unassigned. Every frozen credit has to go to one side.`
-                      : settleUnassigned < 0
-                        ? `${Math.abs(settleUnassigned).toLocaleString()} credits over the ${escrowRemaining.toLocaleString()} in escrow.`
-                        : `All ${escrowRemaining.toLocaleString()} escrow credits assigned.`}
+                </>
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px]">
+                  <p className="text-zinc-500">
+                    Client refund
+                    <span className="block text-sm tabular-nums text-amber-100">
+                      {settleSplit.client.toLocaleString()}
+                    </span>
+                  </p>
+                  <p className="text-zinc-500">
+                    Freelancer release
+                    <span className="block text-sm tabular-nums text-sky-100">
+                      {settleSplit.freelancer.toLocaleString()}
+                    </span>
+                  </p>
+                </div>
+                <p className={`text-[11px] ${settleSplit.error ? "text-red-300" : "text-zinc-500"}`} role="status">
+                  {settleSplit.error || `All ${escrowRemaining.toLocaleString()} escrow credits assigned.`}
                 </p>
 
                 <PayoutTimingPicker
@@ -2195,14 +2550,25 @@ export default function ModeratorDisputeDetailModal({
                 </label>
 
                 <ul className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                  {settleNumbersValid && settleClientNum > 0 ? (
+                  {!settleSplit.error && settleSplit.client > 0 ? (
                     <li>
-                      {clientLabel} gets {settleClientNum.toLocaleString()} credits back.
+                      {clientLabel} gets {settleSplit.client.toLocaleString()} credits back.
                     </li>
                   ) : null}
-                  {settleNumbersValid && settleFreelancerNum > 0 ? (
+                  {!settleSplit.error && settleSplit.freelancer > 0 ? (
                     <li>
-                      {freelancerLabel} receives {settleFreelancerNum.toLocaleString()} credits.
+                      {freelancerLabel} receives {settleSplit.freelancer.toLocaleString()} credits
+                      {(() => {
+                        // Milestone splits name every paid milestone; an amount split names the approved ones.
+                        const named = settleMethod === "amount" ? approvedMilestones : freelancerMilestones;
+                        const tied = settleMethod === "amount" ? approvedCredits : milestonePickedCredits;
+                        if (!named.length) return "";
+                        const extra = settleSplit.freelancer - tied;
+                        return ` for ${named.map(milestoneName).join(", ")}${
+                          extra > 0 ? `, plus ${extra.toLocaleString()} extra` : ""
+                        }`;
+                      })()}
+                      .
                     </li>
                   ) : null}
                   <li>{payoutTimingSummary(settleTiming, payoutPolicy)}</li>
@@ -2241,9 +2607,22 @@ export default function ModeratorDisputeDetailModal({
             ) : null}
 
             {resolveMode === "dismiss" ? (
-              <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                Confirm dismiss only if the claim should end with no escrow move and no sanction.
-              </p>
+              <>
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Resolution notes (optional)</span>
+                  <textarea
+                    value={resolveNotes}
+                    onChange={(event) => setResolveNotes(event.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="Why the claim isn't going ahead. Posted in the discussion."
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+                <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                  Confirm dismiss only if the claim should end with no escrow move and no sanction.
+                </p>
+              </>
             ) : null}
           </ConfirmDialog>
         )}

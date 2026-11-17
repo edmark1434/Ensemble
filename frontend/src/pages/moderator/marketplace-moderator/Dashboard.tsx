@@ -9,7 +9,6 @@ import {
   Gauge,
   Hand,
   Info,
-  Loader2,
   Package,
   RefreshCw,
   ShieldAlert,
@@ -30,6 +29,7 @@ import type {
   MarketplaceAlert,
   MarketplaceOverview,
 } from './marketplaceTypes';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const API_BASE = '/api/moderator/marketplace';
 const OVERVIEW_URL = `${API_BASE}/overview`;
@@ -418,9 +418,7 @@ export default function MarketplaceModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 
