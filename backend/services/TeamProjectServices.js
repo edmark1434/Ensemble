@@ -1,12 +1,31 @@
 const TeamProjectRepositories = require('../repositories/TeamProjectRepositories');
 const TeamsServices = require('./TeamsServices');
 const { createNotificationServices } = require('./NotificationServices');
+const { getIo } = require('../lib/WebSocket');
+
+function emitSubcontractUpdate(teamId, payload = {}) {
+  try {
+    const io = getIo();
+    if (!io) return;
+    const data = {
+      team_id: String(teamId),
+      teamId: String(teamId),
+      ...payload,
+    };
+    io.emit('subcontractProposalsUpdated', data);
+    io.emit('teamTaskWorkspaceUpdated', data);
+  } catch (err) {
+    console.warn('Failed to emit subcontract realtime update:', err);
+  }
+}
 
 const withAvatar = (row) => {
   if (!row) return row;
   const base = String(process.env.CLOUDFRONT_URL || process.env.AWS_CLOUDFRONT_URL || '').replace(/\/$/, '');
   const formatPath = (path) => {
     if (!path || /^https?:\/\//i.test(path)) return path;
+    const presetMatch = String(path).match(/p\d+\.png$/i);
+    if (presetMatch) return `/profile_presets/${presetMatch[0]}`;
     return base ? `${base}/${String(path).replace(/^\/+/, '')}` : path;
   };
 
@@ -47,8 +66,9 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
 }
 
 async function updateProjectTask(teamId, taskId, viewerAccountId, data) {
-  const { starts_at: _startsAt, ...taskChanges } = data || {};
-  return await TeamProjectRepositories.updateProjectTask(teamId, taskId, viewerAccountId, taskChanges);
+  const result = await TeamProjectRepositories.updateProjectTask(teamId, taskId, viewerAccountId, data);
+  emitSubcontractUpdate(teamId, { action: 'task_updated', task_id: taskId });
+  return result;
 }
 
 async function createProjectTask(teamId, viewerAccountId, data) {
@@ -57,7 +77,9 @@ async function createProjectTask(teamId, viewerAccountId, data) {
     error.statusCode = 422;
     throw error;
   }
-  return await TeamProjectRepositories.createProjectTask(teamId, viewerAccountId, data);
+  const result = await TeamProjectRepositories.createProjectTask(teamId, viewerAccountId, data);
+  emitSubcontractUpdate(teamId, { action: 'task_created', task_id: result.task_id });
+  return result;
 }
 
 async function deleteProjectTask(teamId, taskId, viewerAccountId) {
@@ -147,9 +169,24 @@ async function createSubcontractProposal(teamId, viewerAccountId, data) {
         reference_path: `/team-project/${teamId}?tab=contract`,
       });
     }
+    if (Array.isArray(result.members)) {
+      for (const m of result.members) {
+        if (m.candidate_account_id) {
+          await createNotificationServices({
+            account_id: m.candidate_account_id,
+            message: `@${result.lead_handle || 'Freelancer'} invited you to a contract as ${m.role_title || 'a specialist'}. Waiting for the project owner's approval.`,
+            is_read: false,
+            reference_table: 'teams',
+            reference_prefix: 'SUBCONTRACT_MEMBER_NOMINATED',
+            reference_path: '/notifications',
+          });
+        }
+      }
+    }
   } catch (e) {
     console.warn('Failed to send subcontract proposal notification:', e);
   }
+  emitSubcontractUpdate(teamId, { action: 'created', proposal_id: result.proposal_id });
   return result;
 }
 
@@ -182,12 +219,22 @@ async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, da
             reference_prefix: 'SUBCONTRACT_MEMBER_APPROVED',
             reference_path: `/team-project/${teamId}?tab=taskboard`,
           });
+        } else if (m.status === 'rejected' && m.candidate_account_id) {
+          await createNotificationServices({
+            account_id: m.candidate_account_id,
+            message: `Your subcontract invitation under @${result.lead_handle || 'Freelancer'}'s contract as ${m.role_title || 'a specialist'} was declined by the project owner.`,
+            is_read: false,
+            reference_table: 'teams',
+            reference_prefix: 'SUBCONTRACT_MEMBER_DECLINED',
+            reference_path: '/notifications',
+          });
         }
       }
     }
   } catch (e) {
     console.warn('Failed to send subcontract decision notification:', e);
   }
+  emitSubcontractUpdate(teamId, { action: 'decided', proposal_id: proposalId, status: result.status });
   return result;
 }
 
@@ -197,7 +244,9 @@ async function withdrawSubcontractProposal(teamId, proposalId, viewerAccountId) 
     error.statusCode = 400;
     throw error;
   }
-  return await TeamProjectRepositories.withdrawSubcontractProposal(teamId, proposalId, viewerAccountId);
+  const result = await TeamProjectRepositories.withdrawSubcontractProposal(teamId, proposalId, viewerAccountId);
+  emitSubcontractUpdate(teamId, { action: 'withdrawn', proposal_id: proposalId });
+  return result;
 }
 
 async function getVideoProjects(teamId, viewerAccountId) {
@@ -227,43 +276,7 @@ async function unlinkVideoProject(teamId, projectId, viewerAccountId) {
   return await TeamProjectRepositories.unlinkWorkspaceProject(project.team_id, viewerAccountId, projectId);
 }
 
-async function updateEditorTask(teamId, taskId, accountId, changes) {
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const fail = (message, statusCode) => { throw Object.assign(new Error(message), { statusCode }); };
-  if (![teamId, taskId, accountId].every(value => typeof value === 'string' && uuid.test(value))) fail('Invalid task request', 400);
-  if (!changes || !Object.keys(changes).length || Object.keys(changes).some(key => !['status', 'priority', 'starts_at', 'due_at'].includes(key))) fail('Invalid task changes', 400);
-  if (changes.status !== undefined && !['todo', 'in_progress', 'in_review', 'completed'].includes(changes.status)) fail('Invalid task status', 400);
-  if (changes.priority !== undefined && !['low', 'normal', 'high', 'urgent'].includes(changes.priority)) fail('Invalid task priority', 400);
-  if (changes.starts_at !== undefined
-    && (changes.due_at === undefined || (changes.starts_at === null) !== (changes.due_at === null))) {
-    fail('Provide both dates to set or clear a task range', 400);
-  }
-  const normalized = { ...changes };
-  for (const field of ['starts_at', 'due_at']) {
-    const value = changes[field];
-    if (value === undefined || value === null) continue;
-    if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
-      fail('Task dates must be valid dates', 400);
-    }
-    normalized[field] = new Date(value).toISOString();
-  }
-  if (normalized.starts_at && normalized.due_at && normalized.starts_at > normalized.due_at) {
-    fail('Due date cannot be before the start date', 422);
-  }
-  changes = normalized;
-  const context = await TeamProjectRepositories.getEditorTaskContext(teamId, taskId);
-  if (!context) fail('Task not found', 404);
-  if (context.team_type === 'contractual') {
-    await getProjectDetails(teamId, accountId);
-    return TeamProjectRepositories.updateProjectTask(teamId, taskId, accountId, changes.due_at === null
-      ? { ...changes, due_at: 'CLEAR' }
-      : changes);
-  }
-  return require('./TeamTaskServices').updateTaskServices(teamId, context.contract_id, taskId, accountId, changes);
-}
-
 module.exports = {
-  updateEditorTask,
   getProjectDetails,
   getProjectTaskboard,
   updateProjectTask,

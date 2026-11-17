@@ -69,6 +69,8 @@
 - `wallets.frozen_at`, `frozen_until`, `frozen_reason`, `frozen_by_staff_id` (FK `staff`, `ON DELETE SET NULL`) describe a staff credit hold on `frozen_balance_credits`. `frozen_until` NULL means until staff review. A partial index on `frozen_until` serves the release job. A second hold adds to the held amount and its reason/date replace the old ones. Releasing clears all four columns.
 - `accounts.deactivation_available_at` is set on reactivation (now + 7 days); deactivating is refused until it passes. `deactivated_at` stays set while a staff penalty covers the status, so the account returns to Deactivated afterwards and stays hidden from members.
 - Migration `1828400000000_credit-holds-and-deactivation-cooldown` adds these columns and stamps `frozen_at` on existing holds.
+- Staff credit adjustments are `Fund Transfer` self-transfers (source = destination, unsigned amount). Their sign, reason and actor live on the `CREDITS_ADJUSTED` `account_activity` row whose `reference_id` is the ledger row id. Rows from before that audit have no direction. Supply counts `balance_credits + frozen_balance_credits` (holds stay the member's).
+- Migration `1828600000000_credit-economy-desk-indexes` indexes `credit_transactions` by `(created_at, id)`, `(source_wallet_id, created_at)` and `(destination_wallet_id, created_at)`, plus the adjustment audit lookup.
 
 ## Badge catalog
 

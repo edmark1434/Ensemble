@@ -835,12 +835,13 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
 /**
  * Update a task on the taskboard with ownership enforcement.
  */
-async function updateProjectTask(teamId, taskId, viewerAccountId, { title, description, status, checklist, priority, starts_at, due_at }) {
+async function updateProjectTask(teamId, taskId, viewerAccountId, { title, description, status, checklist, priority, starts_at, due_at, assignee_account_ids }) {
   // Verify permissions: Viewer must be assigned to task OR be the client owner
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id,
            COALESCE(j.client_account_id, gr.client_account_id) as client_account_id,
            twt.is_locked, twt.created_by_account_id,
+           twt.starts_at as existing_starts_at, twt.due_at as existing_due_at,
            twt.job_milestone_id, twt.contract_milestone_id,
            COALESCE(cm.status, 'pending') as milestone_status,
            COALESCE(cm.index, jm.order_index) as milestone_order,
@@ -868,6 +869,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     assignee_account_id,
     is_locked,
     created_by_account_id,
+    existing_starts_at,
+    existing_due_at,
     job_milestone_id,
     contract_milestone_id,
     milestone_status,
@@ -923,10 +926,13 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
      LIMIT 1
   `, [teamId, viewerAccountId]);
   const isTeamMember = memberRes.rows.length > 0;
+  const memberRole = String(memberRes.rows[0]?.role || '').toLowerCase();
+  const isTeamLeader = ['owner', 'admin', 'leader', 'team leader', 'manager', 'representative'].includes(memberRole);
+  const canManageAssignees = isContractor || isTeamLeader;
 
   // Check if viewer is a subcontractor in this workspace
   const subRes = await pool.query(`
-    SELECT cs.assigned_milestone_id, cs.permissions, cs.parent_contractor_account_id
+    SELECT cs.assigned_milestone_id, cs.assigned_milestone_ids, cs.permissions, cs.parent_contractor_account_id
       FROM contract_subcontractors cs
       JOIN team_contract_workspaces tcw ON tcw.contract_id = cs.contract_id
      WHERE tcw.team_id = $1 AND cs.account_id = $2
@@ -937,8 +943,11 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   if (isSubcontractor) {
     const sub = subRes.rows[0];
     const subPerms = sub.permissions || {};
-    // Strict milestone check: must belong to subcontractor's assigned milestone
-    if (sub.assigned_milestone_id && effectiveMilestoneId && String(sub.assigned_milestone_id) !== String(effectiveMilestoneId)) {
+    const allowedMilestoneIds = Array.isArray(sub.assigned_milestone_ids) && sub.assigned_milestone_ids.length > 0
+      ? sub.assigned_milestone_ids.map(String)
+      : (sub.assigned_milestone_id ? [String(sub.assigned_milestone_id)] : []);
+    // Strict milestone check: must belong to subcontractor's assigned milestone(s)
+    if (allowedMilestoneIds.length > 0 && effectiveMilestoneId && !allowedMilestoneIds.includes(String(effectiveMilestoneId))) {
       const err = new Error('Subcontractors can only view and modify tasks under their assigned contract milestone.');
       err.statusCode = 403;
       throw err;
@@ -975,26 +984,88 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     }
   }
 
-  if (effectiveIsLocked && !isClient) {
+  const isOnlyScheduleUpdate =
+    (status === undefined || status === null) &&
+    (title === undefined || title === null) &&
+    (description === undefined || description === null) &&
+    (checklist === undefined || checklist === null);
+
+  if (effectiveIsLocked && !isClient && !isOnlyScheduleUpdate) {
     const err = new Error('This task is locked waiting for previous milestones to be completed.');
     err.statusCode = 400;
     throw err;
   }
 
+  const nowMs = Date.now();
+  if (starts_at !== undefined && starts_at !== null && starts_at !== 'CLEAR') {
+    const startMs = new Date(starts_at).getTime();
+    if (Number.isNaN(startMs) || startMs <= nowMs) {
+      const err = new Error('Task start date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+  if (due_at !== undefined && due_at !== null && due_at !== 'CLEAR') {
+    const dueMs = new Date(due_at).getTime();
+    if (Number.isNaN(dueMs) || dueMs <= nowMs) {
+      const err = new Error('Task due date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+
+  const effectiveStartMs =
+    starts_at === 'CLEAR'
+      ? null
+      : starts_at !== undefined && starts_at !== null
+      ? new Date(starts_at).getTime()
+      : existing_starts_at
+      ? new Date(existing_starts_at).getTime()
+      : null;
+  const effectiveDueMs =
+    due_at === 'CLEAR'
+      ? null
+      : due_at !== undefined && due_at !== null
+      ? new Date(due_at).getTime()
+      : existing_due_at
+      ? new Date(existing_due_at).getTime()
+      : null;
+  if (effectiveStartMs !== null && effectiveDueMs !== null && effectiveDueMs < effectiveStartMs) {
+    const err = new Error('Task due date & time cannot be earlier than the start date & time.');
+    err.statusCode = 422;
+    throw err;
+  }
+
   const normalizedStatus = status === 'review' ? 'in_review' : status;
+  if (normalizedStatus === 'completed' && !isClient) {
+    const err = new Error('Tasks are marked Done automatically when the client approves the milestone submission.');
+    err.statusCode = 403;
+    throw err;
+  }
+  const resetOverdueOnFutureDue =
+    !normalizedStatus &&
+    due_at !== undefined &&
+    due_at !== null &&
+    due_at !== 'CLEAR' &&
+    new Date(due_at).getTime() > nowMs;
 
   const updateRes = await pool.query(`
     UPDATE team_workspace_tasks
        SET title = COALESCE($1, title),
            description = COALESCE($2, description),
-           status = COALESCE($3, status),
+           status = CASE
+             WHEN $3::text IS NOT NULL THEN $3::text
+             WHEN $9::boolean = TRUE AND status = 'overdue' THEN 'todo'
+             ELSE status
+           END,
            checklist = COALESCE($4, checklist),
            priority = COALESCE($5, priority),
-           due_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE due_at END,
-           starts_at = CASE WHEN $8 THEN $9::timestamptz ELSE starts_at END,
+           starts_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE starts_at END,
+           due_at = CASE WHEN $7 = 'CLEAR' THEN NULL WHEN $7 IS NOT NULL THEN $7::timestamptz ELSE due_at END,
+           overdue_notified_at = CASE WHEN $9::boolean = TRUE THEN NULL ELSE overdue_notified_at END,
            completed_at = CASE WHEN $3 = 'completed' THEN NOW() WHEN $3 IS NOT NULL AND $3 != 'completed' THEN NULL ELSE completed_at END,
            updated_at = NOW()
-     WHERE task_id = $7
+     WHERE task_id = $8
     RETURNING *
   `, [
     title || null,
@@ -1002,11 +1073,34 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     normalizedStatus || null,
     checklist ? JSON.stringify(checklist) : null,
     priority || null,
+    starts_at !== undefined ? starts_at : null,
     due_at !== undefined ? due_at : null,
     taskId,
-    starts_at !== undefined,
-    starts_at ?? null,
+    resetOverdueOnFutureDue
   ]);
+
+  // Update task assignees if requested by contract owner or team leader
+  if (assignee_account_ids !== undefined) {
+    if (!canManageAssignees) {
+      const err = new Error('Only the contract owner or team leader can reassign task assignees.');
+      err.statusCode = 403;
+      throw err;
+    }
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const rawIds = Array.isArray(assignee_account_ids) ? assignee_account_ids : [];
+    const nextAssigneeIds = Array.from(
+      new Set(rawIds.map((id) => (id ? String(id).trim() : '')).filter((id) => uuidRe.test(id)))
+    );
+
+    await pool.query('DELETE FROM team_workspace_task_assignees WHERE task_id = $1', [taskId]);
+    for (const accId of nextAssigneeIds) {
+      await pool.query(`
+        INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (task_id, account_id) DO NOTHING
+      `, [taskId, accId, viewerAccountId]);
+    }
+  }
 
   // Log activity
   const wsRes = await pool.query(`SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1`, [teamId]);
@@ -1018,7 +1112,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
       wsRes.rows[0].workspace_id,
       taskId,
       viewerAccountId,
-      JSON.stringify({ status, priority, title, starts_at, due_at })
+      JSON.stringify({ status, priority, title, assignee_account_ids })
     ]);
   }
 
@@ -1029,7 +1123,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
  * Create a new task on the taskboard.
  * Auto-assigns to the creator (the contributor). Clients cannot create tasks.
  */
-async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, contract_milestone_id, checklist }) {
+async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, contract_milestone_id, checklist, assignee_account_ids, starts_at, due_at }) {
   const wsRes = await pool.query(`
     SELECT tcw.workspace_id, j.client_account_id
       FROM team_contract_workspaces tcw
@@ -1065,10 +1159,33 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
     }
   }
 
+  const nowMs = Date.now();
+  if (starts_at) {
+    const startMs = new Date(starts_at).getTime();
+    if (Number.isNaN(startMs) || startMs <= nowMs) {
+      const err = new Error('Task start date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+  if (due_at) {
+    const dueMs = new Date(due_at).getTime();
+    if (Number.isNaN(dueMs) || dueMs <= nowMs) {
+      const err = new Error('Task due date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+    if (starts_at && dueMs < new Date(starts_at).getTime()) {
+      const err = new Error('Task due date & time cannot be earlier than the start date & time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+
   const taskRes = await pool.query(`
     INSERT INTO team_workspace_tasks (
-      workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, checklist, created_by_account_id
-    ) VALUES ($1, $2, $3, $4, $5, 'todo', COALESCE($6, 'normal'), FALSE, $7, $8)
+      workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, checklist, starts_at, due_at, created_by_account_id
+    ) VALUES ($1, $2, $3, $4, $5, 'todo', COALESCE($6, 'normal'), FALSE, $7, $8, $9, $10)
     RETURNING *
   `, [
     workspace_id,
@@ -1078,17 +1195,60 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
     description || '',
     priority || 'normal',
     JSON.stringify(checklist || []),
+    starts_at ? new Date(starts_at) : null,
+    due_at ? new Date(due_at) : null,
     viewerAccountId
   ]);
 
   const task = taskRes.rows[0];
 
-  // The creator is automatically the assigned contributor (members cannot assign tasks to someone else)
-  await pool.query(`
-    INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (task_id, account_id) DO NOTHING
-  `, [task.task_id, viewerAccountId, viewerAccountId]);
+  // Assign selected assignees if caller is contract owner / team leader, otherwise auto-assign creator
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let initialAssigneeIds = [viewerAccountId];
+  if (Array.isArray(assignee_account_ids) && assignee_account_ids.length > 0) {
+    const canAssignOthersRes = await pool.query(`
+      SELECT 1
+        FROM team_contract_workspaces tcw
+        JOIN contracts c ON c.contract_id = tcw.contract_id
+        LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+        LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+        LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+        LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+        LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+        LEFT JOIN gigs g ON g.gig_id = gt.gig_id
+       WHERE tcw.team_id = $1
+         AND (
+           p.freelancer_account_id = $2
+           OR g.freelancer_account_id = $2
+           OR EXISTS (
+             SELECT 1 FROM team_members tm
+               JOIN users u ON u.user_id = tm.user_id
+              WHERE tm.team_id = $1
+                AND u.account_id = $2
+                AND tm.status = 'Active'
+                AND LOWER(COALESCE(tm.role, '')) IN ('owner', 'admin', 'leader', 'team leader', 'manager', 'representative')
+           )
+         )
+       LIMIT 1
+    `, [teamId, viewerAccountId]);
+
+    if (canAssignOthersRes.rows.length > 0) {
+      const cleaned = Array.from(
+        new Set(assignee_account_ids.map((id) => (id ? String(id).trim() : '')).filter((id) => uuidRe.test(id)))
+      );
+      if (cleaned.length > 0) {
+        initialAssigneeIds = cleaned;
+      }
+    }
+  }
+
+  for (const accId of initialAssigneeIds) {
+    await pool.query(`
+      INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (task_id, account_id) DO NOTHING
+    `, [task.task_id, accId, viewerAccountId]);
+  }
 
   await pool.query(`
     INSERT INTO team_workspace_activity (workspace_id, task_id, actor_account_id, action, metadata)
@@ -1997,7 +2157,7 @@ async function getSubcontractProposals(teamId, viewerAccountId) {
 
   const membersRes = await pool.query(`
     SELECT pm.proposal_member_id, pm.proposal_id, pm.contract_id,
-           pm.candidate_account_id, pm.role_title, pm.assigned_milestone_id,
+           pm.candidate_account_id, pm.role_title, pm.assigned_milestone_id, pm.assigned_milestone_ids,
            pm.agreed_credits, pm.permissions, pm.status, pm.client_notes,
            pm.decided_at, pm.created_at,
            cand_acc.display_name as candidate_name,
@@ -2098,6 +2258,28 @@ async function createSubcontractProposal(teamId, viewerAccountId, { contract_id,
       err.statusCode = 409;
       throw err;
     }
+
+    // Require platform verification for subcontractor candidates
+    const candVerificationRes = await pool.query(`
+      SELECT a.handle, a.display_name, COALESCE(v.is_verified, FALSE) AS is_verified
+      FROM accounts a
+      LEFT JOIN verifications v ON v.account_id = a.account_id
+      WHERE a.account_id = $1
+      LIMIT 1
+    `, [candId]);
+
+    if (candVerificationRes.rows.length === 0) {
+      const err = new Error('Selected specialist account was not found.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (!candVerificationRes.rows[0].is_verified) {
+      const handle = candVerificationRes.rows[0].handle || candVerificationRes.rows[0].display_name || 'User';
+      const err = new Error(`@${handle} must be verified on the platform to be nominated as a subcontractor.`);
+      err.statusCode = 422;
+      throw err;
+    }
   }
 
   // 3. Insert proposal and members in transaction
@@ -2123,15 +2305,24 @@ async function createSubcontractProposal(teamId, viewerAccountId, { contract_id,
 
     for (const m of members) {
       const candId = m.candidate_account_id || m.account_id;
-      const rawMilestoneId = m.assigned_milestone_id ? String(m.assigned_milestone_id).trim() : null;
-      const isUuid = rawMilestoneId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawMilestoneId);
-      const assignedMilestoneId = isUuid ? rawMilestoneId : null;
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const rawIds = Array.isArray(m.assigned_milestone_ids)
+        ? m.assigned_milestone_ids
+        : (m.assigned_milestone_id ? [m.assigned_milestone_id] : []);
+      const assignedMilestoneIds = Array.from(
+        new Set(
+          rawIds
+            .map((id) => (id ? String(id).trim() : ''))
+            .filter((id) => uuidRe.test(id))
+        )
+      );
+      const assignedMilestoneId = assignedMilestoneIds[0] || null;
 
       const memRes = await client.query(`
         INSERT INTO team_subcontract_proposal_members (
           proposal_id, contract_id, candidate_account_id, role_title,
-          assigned_milestone_id, agreed_credits, permissions, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+          assigned_milestone_id, assigned_milestone_ids, agreed_credits, permissions, status
+        ) VALUES ($1, $2, $3, $4, $5, $6::uuid[], $7, $8, 'pending')
         RETURNING *
       `, [
         proposal.proposal_id,
@@ -2139,6 +2330,7 @@ async function createSubcontractProposal(teamId, viewerAccountId, { contract_id,
         candId,
         m.role_title?.trim() || 'Video Editor',
         assignedMilestoneId,
+        assignedMilestoneIds,
         m.agreed_credits ? Number(m.agreed_credits) : null,
         JSON.stringify(m.permissions || {
           can_view_tasks: true,
@@ -2270,18 +2462,23 @@ async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, { 
             DO UPDATE SET role = 'Subcontractor', status = 'Active', deleted_at = NULL, updated_at = NOW()
           `, [teamId, candUserId, proposal.lead_account_id]);
 
+          const memberMilestoneIds = Array.isArray(member.assigned_milestone_ids) && member.assigned_milestone_ids.length > 0
+            ? member.assigned_milestone_ids
+            : (member.assigned_milestone_id ? [member.assigned_milestone_id] : []);
+
           // 2. Upsert into contract_subcontractors
           await client.query(`
             INSERT INTO contract_subcontractors (
               contract_id, account_id, role_title, agreed_credits,
-              assigned_milestone_id, parent_contractor_account_id,
+              assigned_milestone_id, assigned_milestone_ids, parent_contractor_account_id,
               permissions, proposal_member_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ) VALUES ($1, $2, $3, $4, $5, $6::uuid[], $7, $8, $9)
             ON CONFLICT (contract_id, account_id)
             DO UPDATE SET
               role_title = EXCLUDED.role_title,
               agreed_credits = EXCLUDED.agreed_credits,
               assigned_milestone_id = EXCLUDED.assigned_milestone_id,
+              assigned_milestone_ids = EXCLUDED.assigned_milestone_ids,
               parent_contractor_account_id = EXCLUDED.parent_contractor_account_id,
               permissions = EXCLUDED.permissions,
               proposal_member_id = EXCLUDED.proposal_member_id
@@ -2291,26 +2488,27 @@ async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, { 
             member.role_title,
             member.agreed_credits,
             member.assigned_milestone_id,
+            memberMilestoneIds,
             proposal.lead_account_id,
             member.permissions,
             member.proposal_member_id,
           ]);
 
-          // 3. Auto-assign to tasks under the milestone if assigned_milestone_id exists
-          if (member.assigned_milestone_id && proposal.workspace_id) {
+          // 3. Auto-assign to tasks under the assigned milestone(s) if any exist
+          if (memberMilestoneIds.length > 0 && proposal.workspace_id) {
             await client.query(`
               INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
               SELECT twt.task_id, $1, $2
                 FROM team_workspace_tasks twt
                WHERE twt.workspace_id = $3
-                 AND (twt.job_milestone_id = $4 OR twt.contract_milestone_id = $4)
+                 AND (twt.job_milestone_id = ANY($4::uuid[]) OR twt.contract_milestone_id = ANY($4::uuid[]))
                  AND twt.deleted_at IS NULL
               ON CONFLICT (task_id, account_id) DO NOTHING
             `, [
               member.candidate_account_id,
               viewerAccountId,
               proposal.workspace_id,
-              member.assigned_milestone_id,
+              memberMilestoneIds,
             ]);
           }
         }
@@ -2749,20 +2947,7 @@ async function getAvailableProjectsForLinking(teamId, viewerAccountId) {
   return res.rows || [];
 }
 
-async function getEditorTaskContext(teamId, taskId) {
-  const result = await pool.query(`
-    SELECT w.contract_id, t.team_type
-    FROM team_workspace_tasks task
-    JOIN team_contract_workspaces w ON w.workspace_id = task.workspace_id
-    JOIN teams t ON t.team_id = w.team_id
-    WHERE w.team_id = $1 AND task.task_id = $2
-      AND task.deleted_at IS NULL AND t.deleted_at IS NULL
-  `, [teamId, taskId]);
-  return result.rows[0];
-}
-
 module.exports = {
-  getEditorTaskContext,
   ensureContractualTeamProject,
   ensureContractualGigWorkspace,
   getTeamProjectDetails,
@@ -2792,3 +2977,5 @@ module.exports = {
   unlinkWorkspaceProject,
   getAvailableProjectsForLinking,
 };
+
+

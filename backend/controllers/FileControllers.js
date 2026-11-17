@@ -5,6 +5,7 @@ const {
     finalizeUploadService
 } = require('../services/FileServices');
 const { getVideoUploadPolicy } = require('../services/UploadPolicyServices');
+const { appealTicketsOnly } = require('../lib/AccountRestriction');
 
 async function getVideoUploadPolicyController(req, res) {
     if (!req.user?.account_id) return res.status(401).json({ message: 'Sign in to continue.' });
@@ -45,6 +46,15 @@ async function generateUploadUrlController(req, res) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields: folder, filename, contentType'
+            });
+        }
+
+        // Banned, locked and suspended members may upload only appeal-ticket evidence.
+        if (appealTicketsOnly(req.accountAccess) && folder !== 'ticket-attachments') {
+            return res.status(403).json({
+                success: false,
+                code: req.accountAccess.code || 'ACCOUNT_BANNED',
+                message: 'While this penalty is active you can only attach files to your appeal ticket.'
             });
         }
 

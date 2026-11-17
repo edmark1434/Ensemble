@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import api from '@/lib/axios';
+import socket from '@/lib/socket';
 import useGlobalState from '@/lib/global_state';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import useChatState from '@/components/ui/chat_bubble/chat_state';
@@ -147,6 +148,33 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   useEffect(() => {
     fetchProposals();
   }, [fetchProposals]);
+
+  // Real-time synchronization for subcontract nominations, approvals, declines, and withdrawals
+  useEffect(() => {
+    if (!teamId) return;
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleSubcontractUpdate = (eventData?: any) => {
+      const eventTeamId = eventData?.team_id || eventData?.teamId;
+      if (eventTeamId && String(eventTeamId) !== String(teamId)) return;
+      void fetchProposals();
+      onContractsUpdated?.();
+    };
+
+    const handleReconnect = () => {
+      void fetchProposals();
+    };
+
+    socket.on('subcontractProposalsUpdated', handleSubcontractUpdate);
+    socket.on('connect', handleReconnect);
+
+    return () => {
+      socket.off('subcontractProposalsUpdated', handleSubcontractUpdate);
+      socket.off('connect', handleReconnect);
+    };
+  }, [teamId, fetchProposals, onContractsUpdated]);
 
   const handleOpenContract = (contractId?: string) => {
     const targetUrl = contractId ? `/contracts/${contractId}` : '/contracts';

@@ -8,7 +8,6 @@ import {
   Coins,
   LayoutGrid,
   Lightbulb,
-  Loader2,
   MessageSquare,
   RefreshCw,
   Search,
@@ -41,6 +40,7 @@ import AnalyticsFilters, {
 } from './components/AnalyticsFilters';
 import PlatformEconomyAnalytics from './components/PlatformEconomyAnalytics';
 import RateLimitMonitorPanel from './components/RateLimitMonitorPanel';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health' | 'traffic' | 'feedback';
 
@@ -240,9 +240,7 @@ export default function AnalyticsPage() {
 
   if (loading && !standalone) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-rose-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

@@ -581,10 +581,12 @@ async function getFollowers(accountId, includeDeactivated = false) {
                 a.account_id,
                 a.display_name,
                 a.handle,
-                f.path AS avatar_preset_url
+                f.path AS avatar_preset_url,
+                COALESCE(v.is_verified, FALSE) AS verification_status
             FROM account_followers af
             INNER JOIN accounts a ON a.account_id = af.follower_id
             LEFT JOIN files f ON f.file_id = a.avatar_file_id
+            LEFT JOIN verifications v ON v.account_id = a.account_id
             WHERE af.followed_id = $1
               AND ($2::boolean = TRUE OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL))
             ORDER BY af.created_at DESC;
@@ -604,10 +606,12 @@ async function getFollowing(accountId, includeDeactivated = false) {
                 a.account_id,
                 a.display_name,
                 a.handle,
-                f.path AS avatar_preset_url
+                f.path AS avatar_preset_url,
+                COALESCE(v.is_verified, FALSE) AS verification_status
             FROM account_followers af
             INNER JOIN accounts a ON a.account_id = af.followed_id
             LEFT JOIN files f ON f.file_id = a.avatar_file_id
+            LEFT JOIN verifications v ON v.account_id = a.account_id
             WHERE af.follower_id = $1
               AND ($2::boolean = TRUE OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL))
             ORDER BY af.created_at DESC;

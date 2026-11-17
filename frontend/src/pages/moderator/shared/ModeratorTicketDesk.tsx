@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Hand, Inbox, Loader2, Plus, RefreshCw, Search, Ticket, UserCog } from "lucide-react";
+import { Hand, Inbox, Plus, RefreshCw, Search, Ticket, UserCog } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
 import { peekStaffGet, staffGet } from "@/lib/staffCache";
@@ -22,6 +22,7 @@ import CreateTicketForUserModal from "@/pages/admin/ticketManagement/CreateTicke
 import ModeratorTicketDetailModal from "./ModeratorTicketDetailModal";
 import { PriorityBadge, StatusBadge, type Accent } from "./ui";
 import type { SupportTicket } from "./moderatorTypes";
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
@@ -51,14 +52,6 @@ const QUEUE_TYPES: Record<string, readonly string[]> = {
 };
 
 const ACCENT_LABEL: Record<Accent, string> = {
-  sky: "text-sky-400",
-  violet: "text-violet-400",
-  emerald: "text-emerald-400",
-  rose: "text-rose-400",
-  amber: "text-amber-400",
-};
-
-const ACCENT_SPIN: Record<Accent, string> = {
   sky: "text-sky-400",
   violet: "text-violet-400",
   emerald: "text-emerald-400",
@@ -280,9 +273,7 @@ export default function ModeratorTicketDesk({
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className={`h-8 w-8 animate-spin ${ACCENT_SPIN[accent]}`} />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

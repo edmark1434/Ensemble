@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   AlignLeft,
@@ -43,6 +44,7 @@ import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { motion, AnimatePresence } from 'framer-motion';
 import useGlobalState from '@/lib/global_state';
 import GlideSelect, { type GlideSelectOption } from '@/components/ui/GlideSelect';
+import { DateTimePickerPopover } from '@/components/ui/DateTimePickerPopover';
 
 interface TaskChecklistItem {
   id?: string;
@@ -111,7 +113,7 @@ const COLUMNS = [
   },
   {
     id: 'review',
-    label: 'ON REVIEW',
+    label: 'IN REVIEW',
     badgeClass: 'bg-amber-600 text-white border border-amber-500',
     iconColor: 'text-amber-500',
     dotType: 'solid-amber',
@@ -143,7 +145,7 @@ export const getStatusBadgeConfig = (status?: string) => {
       };
     case 'review':
       return {
-        label: 'ON REVIEW',
+        label: 'IN REVIEW',
         btnClass: 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/60',
         icon: <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 shrink-0" />,
       };
@@ -178,7 +180,7 @@ export const STATUS_OPTIONS = [
   },
   {
     id: 'review' as const,
-    label: 'ON REVIEW',
+    label: 'IN REVIEW',
     icon: <Clock className="w-3 h-3 text-amber-500 shrink-0" />,
     textColor: 'text-amber-600 dark:text-amber-400',
   },
@@ -267,6 +269,30 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const isSubcontractor = Boolean(
     currentMember?.is_subcontractor || currentMember?.team_role === 'Subcontractor'
   );
+  const isContractOwner = useMemo(
+    () =>
+      (contracts || []).some(
+        (c: any) => String(c.freelancer_account_id).trim() === String(currentUserAccountId).trim()
+      ),
+    [contracts, currentUserAccountId]
+  );
+  const currentTeamRole = String(currentMember?.team_role || currentMember?.role || '').toLowerCase();
+  const isTeamLeader = [
+    'owner',
+    'admin',
+    'leader',
+    'team leader',
+    'manager',
+    'representative',
+  ].includes(currentTeamRole);
+  const canManageAssignees = !isReadOnly && !isClient && (isContractOwner || isTeamLeader);
+  const assignableMembers = useMemo(
+    () =>
+      (members || []).filter(
+        (m: any) => !m.is_client && String(m.team_role || '').toLowerCase() !== 'client'
+      ),
+    [members]
+  );
   const subcontractorMilestoneId = currentMember?.assigned_milestone_id;
   const subcontractorMilestoneTitle =
     currentMember?.assigned_milestone_title || currentMember?.milestone_role;
@@ -291,19 +317,35 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const [newTaskPriority, setNewTaskPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
   const [newTaskMilestone, setNewTaskMilestone] = useState('');
+  const [newTaskStartDate, setNewTaskStartDate] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
   // Selected Milestone for Progress Bar View (defaults to current active milestone)
   const [selectedProgressMilestoneId, setSelectedProgressMilestoneId] = useState<string | null>(null);
   const [isMilestoneProgressCollapsed, setIsMilestoneProgressCollapsed] = useState(false);
+  const [isAutoScheduling, setIsAutoScheduling] = useState(false);
 
   // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
   const [activePriorityMenuTaskId, setActivePriorityMenuTaskId] = useState<string | null>(null);
+  const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
 
 
   // Kanban 4 Selection & Drag-and-Drop state
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const targetTaskId = searchParams.get('taskId');
+    if (!targetTaskId || localTasks.length === 0) return;
+    const matched = localTasks.find((t) => String(t.task_id) === String(targetTaskId));
+    if (matched) {
+      setSelectedTaskId(matched.task_id);
+      const next = new URLSearchParams(searchParams);
+      next.delete('taskId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, localTasks, setSearchParams]);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
 
@@ -743,16 +785,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       : (currentMilestone.contract_milestone_id ? String(currentMilestone.contract_milestone_id) : null);
     const mTitle = currentMilestone.milestone_title ? currentMilestone.milestone_title.trim().toLowerCase() : null;
 
-    // Filter tasks belonging to this milestone
-    const mTasks = localTasks.filter((t) => {
-      if (mId && (String(t.job_milestone_id) === mId || String(t.contract_milestone_id) === mId)) {
-        return true;
-      }
-      if (mTitle && t.milestone_title && t.milestone_title.trim().toLowerCase() === mTitle) {
-        return true;
-      }
-      return false;
-    });
+    // Filter tasks belonging to this milestone (or all tasks if 'all' is selected)
+    const mTasks =
+      selectedProgressMilestoneId === 'all'
+        ? localTasks
+        : localTasks.filter((t) => {
+            if (mId && (String(t.job_milestone_id) === mId || String(t.contract_milestone_id) === mId)) {
+              return true;
+            }
+            if (mTitle && t.milestone_title && t.milestone_title.trim().toLowerCase() === mTitle) {
+              return true;
+            }
+            return false;
+          });
 
     const total = mTasks.length;
     const done = mTasks.filter((t) => normalizeStatus(t.status) === 'completed').length;
@@ -844,6 +889,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       showErrorToast('Workspace is currently in read-only mode.');
       return;
     }
+    if (normalizeStatus(newStatus) === 'completed' && !isClient) {
+      showErrorToast('Tasks are marked Done automatically when the client approves the milestone submission.');
+      return;
+    }
     if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones to finish.');
       return;
@@ -883,7 +932,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
         status: newStatus,
       });
-      showSuccessToast(`Task moved to ${newStatus === 'review' ? 'On Review' : newStatus.replace('_', ' ')}`);
+      showSuccessToast(`Task moved to ${newStatus === 'review' ? 'In Review' : newStatus.replace('_', ' ')}`);
       onTasksUpdated?.(true);
     } catch (err: any) {
       // Revert optimistic update
@@ -893,6 +942,128 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       );
       showErrorToast(err?.response?.data?.message || 'Failed to update task');
     }
+  };
+
+  const handleToggleTaskAssignee = async (task: TaskItem, targetAccountId: string) => {
+    if (!canManageAssignees) return;
+    const currentIds =
+      Array.isArray(task.assignees) && task.assignees.length > 0
+        ? task.assignees.map((a) => String(a.account_id))
+        : task.assignee_account_id
+        ? [String(task.assignee_account_id)]
+        : [];
+    const targetIdStr = String(targetAccountId);
+    const exists = currentIds.includes(targetIdStr);
+    const nextIds = exists
+      ? currentIds.filter((id) => id !== targetIdStr)
+      : [...currentIds, targetIdStr];
+
+    const nextAssignees = assignableMembers
+      .filter((m: any) => nextIds.includes(String(m.account_id)))
+      .map((m: any) => ({
+        account_id: String(m.account_id),
+        display_name: m.display_name || m.name || 'Member',
+        handle: m.handle || '',
+        avatar_path: m.avatar_path,
+      }));
+
+    const primary = nextAssignees[0];
+    setLocalTasks((prev) =>
+      prev.map((t) =>
+        t.task_id === task.task_id
+          ? {
+              ...t,
+              assignees: nextAssignees,
+              assignee_account_id: primary?.account_id,
+              assignee_name: primary?.display_name,
+              assignee_handle: primary?.handle,
+              assignee_avatar_path: primary?.avatar_path,
+            }
+          : t
+      )
+    );
+
+    try {
+      await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
+        assignee_account_ids: nextIds,
+      });
+      onTasksUpdated?.(true);
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Failed to update task assignees');
+      onTasksUpdated?.(true);
+    }
+  };
+
+  const renderAssigneeListCell = (
+    list: Array<{ account_id?: string; display_name?: string; handle?: string; avatar_path?: string }>,
+    fallbackName?: string,
+    fallbackAvatar?: string,
+    options?: { firstNameOnly?: boolean; showSingleHandle?: string }
+  ) => {
+    const items =
+      Array.isArray(list) && list.length > 0
+        ? list
+        : fallbackName
+        ? [{ display_name: fallbackName, avatar_path: fallbackAvatar, handle: options?.showSingleHandle }]
+        : [];
+
+    if (items.length === 0) {
+      return (
+        <div className="flex items-center gap-1.5 truncate">
+          <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <User className="w-3 h-3 text-zinc-400 shrink-0" />
+          </div>
+          <span className="text-zinc-500 dark:text-zinc-400 truncate">Unassigned</span>
+        </div>
+      );
+    }
+
+    const formatName = (name?: string) => {
+      const n = name || 'User';
+      return options?.firstNameOnly ? n.split(' ')[0] : n;
+    };
+
+    const fullTitle = items.map((a) => a.display_name || 'Member').join(', ');
+    const labelText =
+      items.length <= 2
+        ? items.map((a) => formatName(a.display_name)).join(', ')
+        : `${items.slice(0, 2).map((a) => formatName(a.display_name)).join(', ')} +${items.length - 2}`;
+
+    return (
+      <div className="flex items-center gap-1.5 min-w-0" title={fullTitle}>
+        <div className="flex items-center -space-x-1.5 shrink-0">
+          {items.slice(0, 3).map((a, idx) => (
+            <div
+              key={a.account_id || idx}
+              className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-300 ring-1 ring-white dark:ring-zinc-900"
+            >
+              {a.avatar_path ? (
+                <img
+                  src={constructAvatarUrl(a.avatar_path, a.display_name || 'User')}
+                  alt={a.display_name || 'User'}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(a.display_name);
+                  }}
+                  className="w-full h-full object-cover block shrink-0"
+                />
+              ) : (
+                <span>{getInitials(a.display_name)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="min-w-0">
+          <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate block">
+            {labelText}
+          </span>
+          {items.length === 1 && options?.showSingleHandle && (
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate block">
+              @{options.showSingleHandle}
+            </span>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Assignees can set priority for their tasks themselves
@@ -928,6 +1099,87 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     }
   };
 
+  const getMinAheadDateTimeLocal = (milestoneMinDate?: string) => {
+    const nextMin = new Date(Date.now() + 60 * 1000);
+    nextMin.setSeconds(0, 0);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const nowPlusOneStr = `${nextMin.getFullYear()}-${pad(nextMin.getMonth() + 1)}-${pad(nextMin.getDate())}T${pad(nextMin.getHours())}:${pad(nextMin.getMinutes())}`;
+    if (milestoneMinDate) {
+      const msMinStr = `${milestoneMinDate}T00:00`;
+      return msMinStr > nowPlusOneStr ? msMinStr : nowPlusOneStr;
+    }
+    return nowPlusOneStr;
+  };
+
+  const formatTimeBeforeDue = (task: TaskItem) => {
+    const norm = normalizeStatus(task.status);
+    if (norm === 'completed' || isTaskMilestoneCompleted(task)) return null;
+    if (!task.due_at) return null;
+    const diffMs = new Date(task.due_at).getTime() - Date.now();
+    if (Number.isNaN(diffMs)) return null;
+
+    if (diffMs <= 0) {
+      const absMin = Math.max(1, Math.floor(Math.abs(diffMs) / 60000));
+      if (absMin < 60) return { label: `Overdue ${absMin}m`, isOverdue: true, isUrgent: true };
+      const absHrs = Math.floor(absMin / 60);
+      if (absHrs < 24) return { label: `Overdue ${absHrs}h`, isOverdue: true, isUrgent: true };
+      const absDays = Math.floor(absHrs / 24);
+      return { label: `Overdue ${absDays}d`, isOverdue: true, isUrgent: true };
+    }
+
+    const totalMin = Math.max(1, Math.ceil(diffMs / 60000));
+    if (totalMin < 60) {
+      return { label: `${totalMin}m from now`, isOverdue: false, isUrgent: true };
+    }
+    const totalHrs = Math.floor(totalMin / 60);
+    if (totalHrs < 24) {
+      return {
+        label: `${totalHrs} ${totalHrs === 1 ? 'hr' : 'hrs'} from now`,
+        isOverdue: false,
+        isUrgent: totalHrs <= 2,
+      };
+    }
+    const days = Math.floor(totalHrs / 24);
+    const remHrs = totalHrs % 24;
+    return {
+      label: remHrs > 0 ? `${days}d ${remHrs}h from now` : `${days} ${days === 1 ? 'day' : 'days'} from now`,
+      isOverdue: false,
+      isUrgent: false,
+    };
+  };
+
+  const isTaskOverdue = (t: TaskItem) => {
+    const norm = normalizeStatus(t.status);
+    if (norm === 'completed' || isTaskMilestoneCompleted(t)) return false;
+    if (t.due_at) return new Date(t.due_at).getTime() < Date.now();
+    return t.status === 'overdue';
+  };
+
+  const toLocalDateTimeInputValue = (val?: string | null) => {
+    if (!val) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return `${val}T23:59`;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(val) && !val.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(val)) {
+      return val.slice(0, 16);
+    }
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const formatDueDateTime = (val?: string | null, compact = false) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      ...(compact ? {} : { year: 'numeric' }),
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
   // Assignees can set due date for their tasks themselves, constrained by milestone timeline
   const handleUpdateDueDate = async (task: TaskItem, newDueDate: string) => {
     if (isReadOnly) {
@@ -940,13 +1192,22 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     }
 
     if (newDueDate) {
+      if (new Date(newDueDate).getTime() <= Date.now()) {
+        showErrorToast('Due date & time must be ahead of the current time.');
+        return;
+      }
+      const datePart = newDueDate.slice(0, 10);
       const { minDate, maxDate } = getMilestoneTimelineBounds(task);
-      if (maxDate && newDueDate > maxDate) {
+      if (maxDate && datePart > maxDate) {
         showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
-      if (minDate && newDueDate < minDate) {
+      if (minDate && datePart < minDate) {
         showErrorToast(`Task due date cannot precede the milestone start date (${new Date(minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (task.starts_at && new Date(newDueDate).getTime() < new Date(task.starts_at).getTime()) {
+        showErrorToast('Task end (due) date & time cannot be earlier than the start date & time.');
         return;
       }
     }
@@ -954,7 +1215,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     const prevDueDate = task.due_at;
     // Optimistic seamless update
     setLocalTasks((prev) =>
-      prev.map((t) => (t.task_id === task.task_id ? { ...t, due_at: newDueDate ? new Date(newDueDate).toISOString() : undefined } : t))
+      prev.map((t) =>
+        t.task_id === task.task_id
+          ? {
+              ...t,
+              due_at: newDueDate ? new Date(newDueDate).toISOString() : undefined,
+              ...(newDueDate && t.status === 'overdue' ? { status: 'todo' as const } : {}),
+            }
+          : t
+      )
     );
 
     try {
@@ -969,6 +1238,151 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         prev.map((t) => (t.task_id === task.task_id ? { ...t, due_at: prevDueDate } : t))
       );
       showErrorToast(err?.response?.data?.message || 'Failed to update due date');
+    }
+  };
+
+  const handleUpdateStartDate = async (task: TaskItem, newStartDate: string) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
+    if (!isTaskAssignee(task) && !isClient) {
+      showErrorToast('Only the assigned team member can set the start date.');
+      return;
+    }
+
+    if (newStartDate) {
+      if (new Date(newStartDate).getTime() <= Date.now()) {
+        showErrorToast('Start date & time must be ahead of the current time.');
+        return;
+      }
+      const datePart = newStartDate.slice(0, 10);
+      const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+      if (maxDate && datePart > maxDate) {
+        showErrorToast(`Task start date cannot exceed the milestone deadline (${new Date(maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (minDate && datePart < minDate) {
+        showErrorToast(`Task start date cannot precede the milestone start date (${new Date(minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (task.due_at && new Date(newStartDate).getTime() > new Date(task.due_at).getTime()) {
+        showErrorToast('Task start date & time cannot be later than the due date & time.');
+        return;
+      }
+    }
+
+    const prevStartDate = task.starts_at;
+    setLocalTasks((prev) =>
+      prev.map((t) =>
+        t.task_id === task.task_id
+          ? { ...t, starts_at: newStartDate ? new Date(newStartDate).toISOString() : undefined }
+          : t
+      )
+    );
+
+    try {
+      await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
+        starts_at: newStartDate ? new Date(newStartDate).toISOString() : 'CLEAR',
+      });
+      showSuccessToast(newStartDate ? 'Start date updated' : 'Start date cleared');
+      onTasksUpdated?.(true);
+    } catch (err: any) {
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.task_id === task.task_id ? { ...t, starts_at: prevStartDate } : t))
+      );
+      showErrorToast(err?.response?.data?.message || 'Failed to update start date');
+    }
+  };
+
+  const handleAutoSetGanttDates = async () => {
+    if (isReadOnly || isClient) return;
+
+    const candidates = filteredTasks.filter(
+      (t) => (!t.starts_at || !t.due_at) && (canManageAssignees || isTaskAssignee(t))
+    );
+    if (candidates.length === 0) {
+      showErrorToast('No unscheduled tasks available to auto-schedule.');
+      return;
+    }
+
+    // Group unscheduled tasks by milestone key so each milestone's tasks distribute evenly
+    const byMilestone = new Map<string, TaskItem[]>();
+    candidates.forEach((t) => {
+      const key = String(t.contract_milestone_id || t.job_milestone_id || t.milestone_title || 'unlinked');
+      const arr = byMilestone.get(key) || [];
+      arr.push(t);
+      byMilestone.set(key, arr);
+    });
+
+    const updates: Array<{ taskId: string; startsAt: string; dueAt: string }> = [];
+    const roundToHalfHour = (ms: number) => Math.round(ms / (30 * 60 * 1000)) * (30 * 60 * 1000);
+
+    byMilestone.forEach((group) => {
+      const bounds = getMilestoneTimelineBounds(group[0]);
+      const fallbackStart = new Date();
+      fallbackStart.setHours(9, 0, 0, 0);
+      const fallbackEnd = new Date(fallbackStart.getTime() + 24 * 60 * 60 * 1000);
+      fallbackEnd.setHours(18, 0, 0, 0);
+
+      const rawMinMs = bounds.minDate
+        ? new Date(`${bounds.minDate}T09:00:00`).getTime()
+        : fallbackStart.getTime();
+      const minMs = Math.max(rawMinMs, Date.now() + 5 * 60 * 1000);
+      let maxMs = bounds.maxDate
+        ? new Date(`${bounds.maxDate}T18:00:00`).getTime()
+        : fallbackEnd.getTime();
+      if (maxMs <= minMs) {
+        maxMs = minMs + 9 * 60 * 60 * 1000;
+      }
+
+      const span = maxMs - minMs;
+      const count = group.length;
+
+      group.forEach((t, idx) => {
+        const slotStart = roundToHalfHour(minMs + (idx / count) * span);
+        const slotEnd = Math.max(
+          slotStart + 60 * 60 * 1000,
+          roundToHalfHour(minMs + ((idx + 1) / count) * span)
+        );
+        const finalStart = t.starts_at ? new Date(t.starts_at).toISOString() : new Date(slotStart).toISOString();
+        const finalEnd = t.due_at
+          ? new Date(t.due_at).toISOString()
+          : new Date(Math.min(maxMs, slotEnd)).toISOString();
+
+        updates.push({
+          taskId: t.task_id,
+          startsAt: finalStart,
+          dueAt: new Date(finalEnd).getTime() >= new Date(finalStart).getTime() ? finalEnd : finalStart,
+        });
+      });
+    });
+
+    setIsAutoScheduling(true);
+    const updateMap = new Map(updates.map((u) => [u.taskId, u]));
+    setLocalTasks((prev) =>
+      prev.map((t) => {
+        const u = updateMap.get(t.task_id);
+        return u ? { ...t, starts_at: u.startsAt, due_at: u.dueAt } : t;
+      })
+    );
+
+    try {
+      await Promise.all(
+        updates.map((u) =>
+          api.patch(`/api/team-projects/${teamId}/tasks/${u.taskId}`, {
+            starts_at: u.startsAt,
+            due_at: u.dueAt,
+          })
+        )
+      );
+      showSuccessToast(`Auto-scheduled ${updates.length} task(s) within milestone timelines.`);
+      onTasksUpdated?.(true);
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Failed to auto-schedule some tasks');
+      onTasksUpdated?.(true);
+    } finally {
+      setIsAutoScheduling(false);
     }
   };
 
@@ -1028,13 +1442,26 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       return;
     }
 
+    if (newTaskStartDate && new Date(newTaskStartDate).getTime() <= Date.now()) {
+      showErrorToast('Start date & time must be ahead of the current time.');
+      return;
+    }
     if (newTaskDueDate) {
+      if (new Date(newTaskDueDate).getTime() <= Date.now()) {
+        showErrorToast('Due date & time must be ahead of the current time.');
+        return;
+      }
+      if (newTaskStartDate && new Date(newTaskDueDate).getTime() < new Date(newTaskStartDate).getTime()) {
+        showErrorToast('Due date & time cannot be earlier than the start date & time.');
+        return;
+      }
+      const datePart = newTaskDueDate.slice(0, 10);
       const bounds = getMilestoneTimelineBounds({ job_milestone_id: newTaskMilestone } as any);
-      if (bounds.minDate && newTaskDueDate < bounds.minDate) {
+      if (bounds.minDate && datePart < bounds.minDate) {
         showErrorToast(`Task due date cannot precede the milestone start date (${new Date(bounds.minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
-      if (bounds.maxDate && newTaskDueDate > bounds.maxDate) {
+      if (bounds.maxDate && datePart > bounds.maxDate) {
         showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(bounds.maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
@@ -1049,7 +1476,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         assignee_account_id: currentUserAccountId,
         job_milestone_id: newTaskMilestone || null,
         status: defaultColForAdd,
+        starts_at: newTaskStartDate ? new Date(newTaskStartDate).toISOString() : null,
         due_at: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
+        ...(canManageAssignees && newTaskAssignee ? { assignee_account_ids: [newTaskAssignee] } : {}),
       });
 
       showSuccessToast('Task created successfully');
@@ -1058,6 +1487,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       setNewTaskPriority('normal');
       setNewTaskAssignee(currentUserAccountId || '');
       setNewTaskMilestone('');
+      setNewTaskStartDate('');
       setNewTaskDueDate('');
       setIsAddModalOpen(false);
       onTasksUpdated?.(false);
@@ -1095,8 +1525,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
     setNewTaskMilestone(defaultMId);
     const bounds = getMilestoneTimelineBounds({ job_milestone_id: defaultMId } as any);
+    const minAhead = getMinAheadDateTimeLocal(bounds.minDate);
+    const candidateStart = bounds.minDate ? `${bounds.minDate}T09:00` : minAhead;
+    setNewTaskStartDate(candidateStart > minAhead ? candidateStart : minAhead);
     if (bounds.maxDate) {
-      setNewTaskDueDate(bounds.maxDate);
+      setNewTaskDueDate(`${bounds.maxDate}T23:59`);
     } else {
       setNewTaskDueDate('');
     }
@@ -1105,9 +1538,30 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setIsAddModalOpen(true);
   };
 
-  // Filter tasks based on search & assignee filter
+  // Filter tasks based on milestone selection, search, & assignee filter
   const filteredTasks = useMemo(() => {
+    const activeMsId =
+      selectedProgressMilestoneId !== 'all' && currentMilestone
+        ? String(currentMilestone.job_milestone_id || currentMilestone.contract_milestone_id || '')
+        : '';
+    const activeMsTitle =
+      selectedProgressMilestoneId !== 'all' && currentMilestone?.milestone_title
+        ? currentMilestone.milestone_title.trim().toLowerCase()
+        : '';
+
     return localTasks.filter((t) => {
+      if (displayMode !== 'gantt' && selectedProgressMilestoneId !== 'all' && (activeMsId || activeMsTitle)) {
+        const matchesMsId =
+          activeMsId &&
+          (String(t.job_milestone_id || '') === activeMsId ||
+            String(t.contract_milestone_id || '') === activeMsId);
+        const matchesMsTitle =
+          activeMsTitle &&
+          t.milestone_title &&
+          t.milestone_title.trim().toLowerCase() === activeMsTitle;
+        if (!matchesMsId && !matchesMsTitle) return false;
+      }
+
       if (filterAssignee === 'me') {
         const match =
           String(t.assignee_account_id) === String(currentUserAccountId) ||
@@ -1131,7 +1585,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
       return true;
     });
-  }, [localTasks, filterAssignee, currentUserAccountId, searchQuery]);
+  }, [localTasks, filterAssignee, currentUserAccountId, searchQuery, selectedProgressMilestoneId, currentMilestone, displayMode]);
 
   const renderSidePanelContent = (task: TaskItem) => {
     const taskCode = taskCodeMap[task.task_id] || '#TSK';
@@ -1157,11 +1611,37 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               <span>{statusCfg.label}</span>
             </span>
             {isLocked && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
                 <Lock className="w-3 h-3" />
                 <span>Locked</span>
               </span>
             )}
+            {(() => {
+              const dueBadge = formatTimeBeforeDue(task);
+              if (isTaskOverdue(task)) {
+                return (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{dueBadge?.isOverdue ? dueBadge.label : 'Overdue'}</span>
+                  </span>
+                );
+              }
+              if (dueBadge) {
+                return (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      dueBadge.isUrgent
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                        : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                    }`}
+                  >
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span>{dueBadge.label}</span>
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
           <button
             type="button"
@@ -1181,27 +1661,129 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         {/* Attributes Box (Screenshot 2: rounded grouped box with rows) */}
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-dark-base p-3.5 space-y-2.5 text-xs">
           {/* Assignee Row */}
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Assignee</span>
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
-                {task.assignee_avatar_path ? (
-                  <img
-                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                    alt={task.assignee_name || 'Assignee'}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                    }}
-                    className="w-full h-full object-cover"
-                  />
+          <div className="relative space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-zinc-500 dark:text-zinc-400 font-medium pt-0.5 shrink-0">
+                {Array.isArray(task.assignees) && task.assignees.length > 1 ? 'Assignees' : 'Assignee'}
+              </span>
+              <div className="flex items-center justify-end gap-2 flex-wrap">
+                {Array.isArray(task.assignees) && task.assignees.length > 0 ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {task.assignees.map((a, aIdx) => (
+                      <div
+                        key={a.account_id || aIdx}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                          {a.avatar_path ? (
+                            <img
+                              src={constructAvatarUrl(a.avatar_path, a.display_name || 'User')}
+                              alt={a.display_name || 'Assignee'}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = getFallbackAvatarUrl(a.display_name);
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{getInitials(a.display_name)}</span>
+                          )}
+                        </div>
+                        <span className="font-semibold text-zinc-900 dark:text-white">
+                          {a.display_name || 'Assignee'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <span>{getInitials(task.assignee_name)}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                      {task.assignee_avatar_path ? (
+                        <img
+                          src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                          alt={task.assignee_name || 'Assignee'}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{getInitials(task.assignee_name)}</span>
+                      )}
+                    </div>
+                    <span className="font-semibold text-zinc-900 dark:text-white">
+                      {task.assignee_name || 'Unassigned'}
+                    </span>
+                  </div>
+                )}
+                {canManageAssignees && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAssigneePickerOpen((prev) => !prev);
+                    }}
+                    className="px-2 py-0.5 rounded-md text-[10px] font-semibold border border-zinc-200 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer shrink-0"
+                  >
+                    {isAssigneePickerOpen ? 'Done' : 'Reassign'}
+                  </button>
                 )}
               </div>
-              <span className="font-semibold text-zinc-900 dark:text-white">
-                {task.assignee_name || 'Unassigned'}
-              </span>
             </div>
+
+            {canManageAssignees && isAssigneePickerOpen && (
+              <div
+                role="listbox"
+                aria-label="Reassign task"
+                className="gs-listbox-scroll max-h-44 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1 space-y-0.5 shadow-lg"
+              >
+                {assignableMembers.map((m: any) => {
+                  const mId = String(m.account_id);
+                  const currentIds =
+                    Array.isArray(task.assignees) && task.assignees.length > 0
+                      ? task.assignees.map((a) => String(a.account_id))
+                      : task.assignee_account_id
+                      ? [String(task.assignee_account_id)]
+                      : [];
+                  const isAssigned = currentIds.includes(mId);
+                  const displayName = m.display_name || m.name || 'Member';
+                  const isSub = Boolean(m.is_subcontractor || m.team_role === 'Subcontractor');
+                  return (
+                    <button
+                      key={mId}
+                      type="button"
+                      onClick={() => void handleToggleTaskAssignee(task, mId)}
+                      className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[9px] font-bold shrink-0">
+                          {m.avatar_path ? (
+                            <img
+                              src={constructAvatarUrl(m.avatar_path, displayName)}
+                              alt={displayName}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = getFallbackAvatarUrl(displayName);
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{getInitials(displayName)}</span>
+                          )}
+                        </div>
+                        <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                          {displayName}
+                        </span>
+                        {isSub && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-blue-500/15 text-blue-500 shrink-0">
+                            Sub
+                          </span>
+                        )}
+                      </div>
+                      {isAssigned && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Priority Row */}
@@ -1217,7 +1799,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   }}
                   className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white hover:text-blue-600 transition cursor-pointer"
                 >
-                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                  <Flag fill="currentColor" className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
                   <span className="capitalize">{priorityConfig.label}</span>
                   <ChevronDown className="w-3 h-3 text-zinc-400" />
                 </button>
@@ -1244,7 +1826,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
-                            <Flag className={`w-3.5 h-3.5 ${p.color}`} />
+                            <Flag fill="currentColor" className={`w-3.5 h-3.5 ${p.color}`} />
                             <span>{p.label}</span>
                           </div>
                           {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
@@ -1256,7 +1838,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white">
-                <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                <Flag fill="currentColor" className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
                 <span className="capitalize">{priorityConfig.label}</span>
               </div>
             )}
@@ -1275,40 +1857,75 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             </div>
           </div>
 
-          {/* Due Date Row */}
+          {/* Start Date & Time Row */}
           <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
-            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Due Date</span>
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Start Date &amp; Time</span>
             {isOwner ? (
               (() => {
                 const { minDate, maxDate } = getMilestoneTimelineBounds(task);
                 return (
-                  <div className="relative flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500">
-                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                    <span>
-                      {task.due_at
-                        ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-                        : 'Set date'}
-                    </span>
-                    <input
-                      type="date"
-                      min={minDate}
-                      max={maxDate}
-                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                      onClick={(e) => {
-                        try {
-                          (e.target as any).showPicker?.();
-                        } catch {}
-                      }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                  </div>
+                  <DateTimePickerPopover
+                    value={task.starts_at}
+                    minDateTime={getMinAheadDateTimeLocal(minDate)}
+                    maxDateTime={task.due_at ? toLocalDateTimeInputValue(task.due_at) : (maxDate ? `${maxDate}T23:59` : undefined)}
+                    onChange={(val) => void handleUpdateStartDate(task, val)}
+                  >
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500 transition"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>
+                        {task.starts_at
+                          ? formatDueDateTime(task.starts_at)
+                          : 'Set start'}
+                      </span>
+                    </button>
+                  </DateTimePickerPopover>
+                );
+              })()
+            ) : (
+              <span className="font-semibold text-zinc-900 dark:text-white">
+                {task.starts_at
+                  ? formatDueDateTime(task.starts_at)
+                  : 'Not set'}
+              </span>
+            )}
+          </div>
+
+          {/* Due Date (End) Row */}
+          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Due Date (End)</span>
+            {isOwner ? (
+              (() => {
+                const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+                const minBound = getMinAheadDateTimeLocal(minDate);
+                const startBound = task.starts_at ? toLocalDateTimeInputValue(task.starts_at) : '';
+                return (
+                  <DateTimePickerPopover
+                    value={task.due_at}
+                    minDateTime={startBound && startBound > minBound ? startBound : minBound}
+                    maxDateTime={maxDate ? `${maxDate}T23:59` : undefined}
+                    onChange={(val) => void handleUpdateDueDate(task, val)}
+                  >
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500 transition"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                      <span>
+                        {task.due_at
+                          ? formatDueDateTime(task.due_at)
+                          : 'Set date & time'}
+                      </span>
+                    </button>
+                  </DateTimePickerPopover>
                 );
               })()
             ) : (
               <span className="font-semibold text-zinc-900 dark:text-white">
                 {task.due_at
-                  ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                  ? formatDueDateTime(task.due_at)
                   : 'No deadline'}
               </span>
             )}
@@ -1336,13 +1953,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               { id: 'completed', label: 'Done' },
             ].map((s) => {
               const isActive = normStatus === s.id;
-              const canMove = !isLocked && (isOwner || isClient);
+              const isManualDoneBlocked = s.id === 'completed' && !isClient;
+              const canMove = !isLocked && (isOwner || isClient) && !isManualDoneBlocked;
 
               return (
                 <button
                   key={s.id}
                   type="button"
                   disabled={!canMove}
+                  title={isManualDoneBlocked ? 'Done is set automatically when the client approves the submission' : undefined}
                   onClick={() => handleUpdateStatus(task, s.id as any)}
                   className={`py-1.5 px-1 rounded-lg text-xs font-semibold transition-all text-center truncate ${
                     isActive
@@ -1416,8 +2035,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           </h4>
           <div className="p-3 rounded-xl bg-zinc-50/50 dark:bg-dark-base border border-zinc-200/80 dark:border-zinc-800 text-xs space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">
-                {getInitials(task.assignee_name || 'Team')}
+              <div className="w-5 h-5 rounded-full overflow-hidden bg-blue-600/20 text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0 border border-zinc-200 dark:border-zinc-700">
+                {task.assignee_avatar_path ? (
+                  <img
+                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'Contributor')}
+                    alt={task.assignee_name || 'Contributor'}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{getInitials(task.assignee_name || 'Team')}</span>
+                )}
               </div>
               <span className="font-semibold text-zinc-900 dark:text-white">
                 {task.assignee_name || 'Contributor'}
@@ -1605,7 +2235,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     return (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
                         <Clock className="w-2.5 h-2.5" />
-                        <span>ON REVIEW</span>
+                        <span>IN REVIEW</span>
                       </span>
                     );
                   }
@@ -1649,9 +2279,25 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200/80 dark:border-zinc-700"
                 >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProgressMilestoneId('all');
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      selectedProgressMilestoneId === 'all'
+                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-2xs'
+                        : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    All
+                  </button>
                   {milestones.map((m: any, mIdx: number) => {
                     const mId = String(m.job_milestone_id || m.contract_milestone_id || mIdx);
-                    const isSelected = String(currentMilestoneStats.milestone.job_milestone_id || currentMilestoneStats.milestone.contract_milestone_id || '') === mId;
+                    const isSelected =
+                      selectedProgressMilestoneId !== 'all' &&
+                      String(currentMilestoneStats.milestone.job_milestone_id || currentMilestoneStats.milestone.contract_milestone_id || '') === mId;
                     const order = getMilestoneOrder(m, mIdx);
                     return (
                       <button
@@ -1766,7 +2412,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       </span>
                       <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
                         <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        <span>{currentMilestoneStats.review} On Review</span>
+                        <span>{currentMilestoneStats.review} In Review</span>
                       </span>
                       <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
                         <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -2033,7 +2679,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 : isSelected
                                 ? 'ring-2 ring-zinc-900 dark:ring-white border-zinc-900 dark:border-white shadow-md'
                                 : 'border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/25 hover:shadow-xs hover:bg-zinc-50/70 dark:hover:bg-[#161822]'
-                            } ${isLocked ? 'opacity-85' : ''}`}
+                            } ${isLocked ? 'opacity-60' : ''}`}
                           >
                             {/* Top Row: Dot + Task Code + Locked Badge + Drag Grip */}
                             <div className="flex items-center justify-between gap-2 mb-2">
@@ -2044,13 +2690,43 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 </span>
                                 {isLocked && (
                                   <span
-                                    className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 font-bold ml-1 px-1 py-0.5 rounded-[2px] bg-amber-500/10 border border-amber-500/20"
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 font-bold ml-1 px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700"
                                     title="Locked waiting for earlier milestone"
                                   >
                                     <Lock className="w-2.5 h-2.5 shrink-0" />
                                     <span>Locked</span>
                                   </span>
                                 )}
+                                {(() => {
+                                  const dueBadge = formatTimeBeforeDue(task);
+                                  if (isTaskOverdue(task)) {
+                                    return (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[10px] text-rose-600 dark:text-rose-400 font-bold ml-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 shrink-0"
+                                        title="Task is past its due date & time"
+                                      >
+                                        <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                        <span>{dueBadge?.isOverdue ? dueBadge.label : 'Overdue'}</span>
+                                      </span>
+                                    );
+                                  }
+                                  if (dueBadge) {
+                                    return (
+                                      <span
+                                        className={`inline-flex items-center gap-1 text-[10px] font-semibold ml-1 px-1.5 py-0.5 rounded-full border shrink-0 ${
+                                          dueBadge.isUrgent
+                                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                                            : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                                        }`}
+                                        title={`Due: ${formatDueDateTime(task.due_at)}`}
+                                      >
+                                        <Clock className="w-2.5 h-2.5 shrink-0" />
+                                        <span>{dueBadge.label}</span>
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
 
                               <div
@@ -2096,10 +2772,21 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   </span>
                                 )}
 
-                                {/* Due Date Preview */}
-                                {task.due_at && (
-                                  <span className="text-[10px] text-zinc-400 shrink-0">
-                                    {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                {/* Start & End Date/Time Preview */}
+                                {(task.starts_at || task.due_at) && (
+                                  <span
+                                    className={`text-[10px] truncate ${
+                                      isTaskOverdue(task)
+                                        ? 'text-rose-500 font-semibold'
+                                        : 'text-zinc-400'
+                                    }`}
+                                    title={`${task.starts_at ? `Start: ${formatDueDateTime(task.starts_at)}` : ''}${task.starts_at && task.due_at ? ' → ' : ''}${task.due_at ? `End: ${formatDueDateTime(task.due_at)}` : ''}`}
+                                  >
+                                    {task.starts_at && task.due_at
+                                      ? `${formatDueDateTime(task.starts_at, true)} → ${formatDueDateTime(task.due_at, true)}`
+                                      : task.due_at
+                                      ? `Due ${formatDueDateTime(task.due_at, true)}`
+                                      : `Start ${formatDueDateTime(task.starts_at, true)}`}
                                   </span>
                                 )}
                               </div>
@@ -2271,11 +2958,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       ) : (
                         groupTasks.map((task) => {
                           const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
+                          const isLocked = isTaskActuallyLocked(task);
 
                           return (
                             <div
                               key={task.task_id}
-                              className="grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 text-xs transition"
+                              onClick={() => setSelectedTaskId(task.task_id)}
+                              className={`grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 text-xs transition cursor-pointer ${
+                                isLocked ? 'opacity-60' : ''
+                              }`}
                             >
                               {/* Name with Bullet */}
                               <div className="col-span-5 flex items-center gap-2.5 min-w-0">
@@ -2298,27 +2989,34 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 <span className="font-semibold text-zinc-900 dark:text-white truncate">
                                   {task.title}
                                 </span>
+                                {isLocked && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                    title="Locked waiting for earlier milestone"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Locked</span>
+                                  </span>
+                                )}
+                                {isTaskOverdue(task) && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-rose-500 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 shrink-0"
+                                    title="Task is past its due date & time"
+                                  >
+                                    <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Overdue</span>
+                                  </span>
+                                )}
                               </div>
 
                               {/* Assignee */}
-                              <div className="col-span-2 flex items-center gap-1.5 truncate">
-                                <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                                  {task.assignee_avatar_path ? (
-                                    <img
-                                      src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                      alt={task.assignee_name || 'User'}
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                      }}
-                                      className="w-full h-full object-cover block shrink-0"
-                                    />
-                                  ) : (
-                                    <User className="w-3 h-3 text-zinc-400 shrink-0" />
-                                  )}
-                                </div>
-                                <span className="text-zinc-600 dark:text-zinc-300 truncate">
-                                  {task.assignee_name ? task.assignee_name.split(' ')[0] : 'Unassigned'}
-                                </span>
+                              <div className="col-span-2 min-w-0">
+                                {renderAssigneeListCell(
+                                  task.assignees || [],
+                                  task.assignee_name,
+                                  task.assignee_avatar_path,
+                                  { firstNameOnly: true }
+                                )}
                               </div>
 
                               {/* Due Date: Editable by assignee, bounded by milestone timeline. No "Set date" text */}
@@ -2338,34 +3036,28 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     }
                                   >
                                     <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-zinc-400 group-hover/date:text-blue-500'}`} />
-                                    {task.due_at ? (
-                                      <span className="text-[11px] font-semibold whitespace-nowrap">
-                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                      </span>
-                                    ) : (
-                                      <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
-                                        --
-                                      </span>
-                                    )}
-                                    <input
-                                      type="date"
-                                      min={minDate}
-                                      max={maxDate}
-                                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                      onClick={(e) => {
-                                        try {
-                                          (e.target as any).showPicker?.();
-                                        } catch {}
-                                      }}
-                                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                    />
+                                    <DateTimePickerPopover
+                                      value={task.due_at}
+                                      minDateTime={task.starts_at && toLocalDateTimeInputValue(task.starts_at) > getMinAheadDateTimeLocal(minDate) ? toLocalDateTimeInputValue(task.starts_at) : getMinAheadDateTimeLocal(minDate)}
+                                      maxDateTime={maxDate ? `${maxDate}T23:59` : undefined}
+                                      onChange={(val) => void handleUpdateDueDate(task, val)}
+                                    >
+                                      {task.due_at ? (
+                                        <span className="text-[11px] font-semibold whitespace-nowrap">
+                                          {formatDueDateTime(task.due_at, true)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                          --
+                                        </span>
+                                      )}
+                                    </DateTimePickerPopover>
                                   </div>
                                 ) : (
                                   <div className="col-span-2 flex items-center gap-1 text-zinc-500 dark:text-zinc-400 p-1">
                                     <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
                                     <span className="text-[11px] whitespace-nowrap">
-                                      {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
+                                      {task.due_at ? formatDueDateTime(task.due_at, true) : '-'}
                                     </span>
                                   </div>
                                 );
@@ -2384,7 +3076,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
                                     title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                                   >
-                                    <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                    <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                   </button>
 
                                   {activePriorityMenuTaskId === task.task_id && (
@@ -2419,7 +3111,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                             className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                           >
                                             <div className="flex items-center gap-2">
-                                              <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                              <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
                                               <span>{p.label}</span>
                                             </div>
                                             {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
@@ -2431,7 +3123,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 </div>
                               ) : (
                                 <div className="col-span-1 flex items-center gap-1" title={`Priority: ${priorityConfig.label} (View only)`}>
-                                  <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                  <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                 </div>
                               )}
 
@@ -2449,11 +3141,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                           setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
                                           setActivePriorityMenuTaskId(null);
                                         }}
-                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer ${statusCfg.btnClass}`}
-                                        title="Click to change status"
+                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
+                                        title={`${statusCfg.label} — Click to change status`}
                                       >
                                         {statusCfg.icon}
-                                        <span>{statusCfg.label}</span>
+                                        <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                                         <ChevronDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
                                       </button>
 
@@ -2473,15 +3165,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                             <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                               Status
                                             </div>
-                                            {STATUS_OPTIONS.map((s) => (
+                                            {STATUS_OPTIONS.map((s) => {
+                                              const isDoneBlocked = s.id === 'completed' && !isClient;
+                                              return (
                                               <button
                                                 key={s.id}
                                                 type="button"
+                                                disabled={isDoneBlocked}
+                                                title={isDoneBlocked ? 'Done is set automatically when the client approves the submission' : undefined}
                                                 onClick={() => {
                                                   handleUpdateStatus(task, s.id as any);
                                                   setActiveStatusMenuTaskId(null);
                                                 }}
-                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                               >
                                                 <div className="flex items-center gap-2">
                                                   {s.icon}
@@ -2489,18 +3185,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                                 </div>
                                                 {normalizeStatus(task.status) === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
                                               </button>
-                                            ))}
+                                              );
+                                            })}
                                           </div>
                                         </>
                                       )}
                                     </div>
                                   ) : (
                                     <span
-                                      title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
-                                      className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border ${statusCfg.btnClass}`}
+                                      title={`${statusCfg.label} — Assigned to ${task.assignee_name || 'member'} (View only)`}
+                                      className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
                                     >
-                                      <Lock className="w-2.5 h-2.5 opacity-60" />
-                                      <span>{statusCfg.label}</span>
+                                      <Lock className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                      <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                                     </span>
                                   );
                                 })()}
@@ -2568,10 +3265,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 ) : (
                   filteredTasks.map((task, rIdx) => {
                     const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
+                    const isLocked = isTaskActuallyLocked(task);
 
                     return (
-                      <tr key={task.task_id} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 transition">
-                        <td className="py-2.5 px-3 text-center border-r border-zinc-100 dark:border-zinc-800/80">
+                      <tr
+                        key={task.task_id}
+                        onClick={() => setSelectedTaskId(task.task_id)}
+                        className={`hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 transition cursor-pointer ${
+                          isLocked ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <td
+                          onClick={(e) => e.stopPropagation()}
+                          className="py-2.5 px-3 text-center border-r border-zinc-100 dark:border-zinc-800/80"
+                        >
                           <input type="checkbox" className="rounded border-zinc-300 text-blue-600" />
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono text-zinc-400 dark:text-zinc-500 border-r border-zinc-100 dark:border-zinc-800/80">
@@ -2591,28 +3298,32 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             <span className="font-semibold text-zinc-900 dark:text-white">
                               {task.title}
                             </span>
+                            {isLocked && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                title="Locked waiting for earlier milestone"
+                              >
+                                <Lock className="w-2.5 h-2.5 shrink-0" />
+                                <span>Locked</span>
+                              </span>
+                            )}
+                            {isTaskOverdue(task) && (
+                              <span
+                                className="inline-flex items-center gap-0.5 text-[10px] text-rose-500 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 shrink-0"
+                                title="Task is past its due date & time"
+                              >
+                                <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                <span>Overdue</span>
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                              {task.assignee_avatar_path ? (
-                                <img
-                                  src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                  alt={task.assignee_name || 'User'}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                  }}
-                                  className="w-full h-full object-cover block shrink-0"
-                                />
-                              ) : (
-                                <User className="w-3 h-3 text-zinc-400 shrink-0" />
-                              )}
-                            </div>
-                            <span className="text-zinc-700 dark:text-zinc-300">
-                              {task.assignee_name || 'Unassigned'}
-                            </span>
-                          </div>
+                          {renderAssigneeListCell(
+                            task.assignees || [],
+                            task.assignee_name,
+                            task.assignee_avatar_path
+                          )}
                         </td>
                         {/* Status Column */}
                         <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
@@ -2628,11 +3339,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
                                     setActivePriorityMenuTaskId(null);
                                   }}
-                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer ${statusCfg.btnClass}`}
-                                  title="Click to change status"
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
+                                  title={`${statusCfg.label} — Click to change status`}
                                 >
                                   {statusCfg.icon}
-                                  <span>{statusCfg.label}</span>
+                                  <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                                   <ChevronDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
                                 </button>
 
@@ -2652,15 +3363,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                       <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                         Status
                                       </div>
-                                      {STATUS_OPTIONS.map((s) => (
+                                      {STATUS_OPTIONS.map((s) => {
+                                        const isDoneBlocked = s.id === 'completed' && !isClient;
+                                        return (
                                         <button
                                           key={s.id}
                                           type="button"
+                                          disabled={isDoneBlocked}
+                                          title={isDoneBlocked ? 'Done is set automatically when the client approves the submission' : undefined}
                                           onClick={() => {
                                             handleUpdateStatus(task, s.id as any);
                                             setActiveStatusMenuTaskId(null);
                                           }}
-                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
                                           <div className="flex items-center gap-2">
                                             {s.icon}
@@ -2668,18 +3383,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                           </div>
                                           {normalizeStatus(task.status) === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
                                         </button>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   </>
                                 )}
                               </div>
                             ) : (
                               <span
-                                title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusCfg.btnClass}`}
+                                title={`${statusCfg.label} — Assigned to ${task.assignee_name || 'member'} (View only)`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
                               >
-                                <Lock className="w-2.5 h-2.5 opacity-60" />
-                                <span>{statusCfg.label}</span>
+                                <Lock className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                               </span>
                             );
                           })()}
@@ -2703,32 +3419,26 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 }
                               >
                                 <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-zinc-400 group-hover/date:text-blue-500'}`} />
-                                {task.due_at ? (
-                                  <span className="text-[11px] font-semibold whitespace-nowrap">
-                                    {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                  </span>
-                                ) : (
-                                  <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
-                                    --
-                                  </span>
-                                )}
-                                <input
-                                  type="date"
-                                  min={minDate}
-                                  max={maxDate}
-                                  value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                  onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                  onClick={(e) => {
-                                    try {
-                                      (e.target as any).showPicker?.();
-                                    } catch {}
-                                  }}
-                                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                />
+                                <DateTimePickerPopover
+                                  value={task.due_at}
+                                  minDateTime={task.starts_at && toLocalDateTimeInputValue(task.starts_at) > getMinAheadDateTimeLocal(minDate) ? toLocalDateTimeInputValue(task.starts_at) : getMinAheadDateTimeLocal(minDate)}
+                                  maxDateTime={maxDate ? `${maxDate}T23:59` : undefined}
+                                  onChange={(val) => void handleUpdateDueDate(task, val)}
+                                >
+                                  {task.due_at ? (
+                                    <span className="text-[11px] font-semibold whitespace-nowrap">
+                                      {formatDueDateTime(task.due_at, true)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                      --
+                                    </span>
+                                  )}
+                                </DateTimePickerPopover>
                               </div>
                             ) : (
                               <span className="text-[11px] whitespace-nowrap">
-                                {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
+                                {task.due_at ? formatDueDateTime(task.due_at, true) : '-'}
                               </span>
                             );
                           })()}
@@ -2748,7 +3458,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
                                 title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                               >
-                                <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                 <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{priorityConfig.label}</span>
                               </button>
 
@@ -2784,7 +3494,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                         className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                       >
                                         <div className="flex items-center gap-2">
-                                          <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                          <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
                                           <span>{p.label}</span>
                                         </div>
                                         {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
@@ -2796,7 +3506,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             </div>
                           ) : (
                             <span className="inline-flex items-center gap-1 font-medium" title={`Priority: ${priorityConfig.label} (View only)`}>
-                              <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                              <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                               <span className="text-[10px] text-zinc-600 dark:text-zinc-400">{priorityConfig.label}</span>
                             </span>
                           )}
@@ -2848,8 +3558,37 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               </div>
             </div>
 
-            {/* Filter Pills for Gantt */}
-            <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-800 self-start sm:self-auto">
+            {/* Filter Pills & Auto-Schedule for Gantt */}
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              {!isReadOnly && !isClient && (() => {
+                const unscheduledCount = filteredTasks.filter(
+                  (t) => (!t.starts_at || !t.due_at) && (canManageAssignees || isTaskAssignee(t))
+                ).length;
+                return (
+                  <button
+                    type="button"
+                    disabled={unscheduledCount === 0 || isAutoScheduling}
+                    onClick={() => void handleAutoSetGanttDates()}
+                    title={
+                      unscheduledCount > 0
+                        ? `Auto-set start & end date/time for ${unscheduledCount} unscheduled task(s)`
+                        : 'All tasks already have start & end dates'
+                    }
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/70 transition disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <Zap className={`w-3.5 h-3.5 ${isAutoScheduling ? 'animate-pulse' : ''}`} />
+                    <span>
+                      {isAutoScheduling
+                        ? 'Scheduling...'
+                        : unscheduledCount > 0
+                        ? `Auto-Set Dates (${unscheduledCount})`
+                        : 'All Scheduled'}
+                    </span>
+                  </button>
+                );
+              })()}
+
+              <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => setGanttSection('all')}
@@ -2883,6 +3622,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               >
                 Tasks ({filteredTasks.length})
               </button>
+              </div>
             </div>
           </div>
 
@@ -2969,32 +3709,36 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             </span>
                           </div>
 
-                          {/* Assigned Contributor */}
-                          <div className="col-span-6 flex items-center gap-1.5 truncate">
-                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                              {m.assignee_avatar_path ? (
-                                <img
-                                  src={constructAvatarUrl(m.assignee_avatar_path, m.assignee_name || 'Contributor')}
-                                  alt={m.assignee_name || 'Contributor'}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.assignee_name);
-                                  }}
-                                  className="w-full h-full object-cover block shrink-0"
-                                />
-                              ) : (
-                                <User className="w-3 h-3 text-zinc-400 shrink-0" />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate block">
-                                {m.assignee_name || 'Unassigned'}
-                              </span>
-                              {m.assignee_handle && (
-                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 block truncate">
-                                  @{m.assignee_handle}
-                                </span>
-                              )}
-                            </div>
+                          {/* Assigned Contributor(s) */}
+                          <div className="col-span-6 min-w-0">
+                            {(() => {
+                              const mId = String(m.job_milestone_id || m.contract_milestone_id || m.id || '');
+                              const contributorMap = new Map<string, any>();
+                              if (m.assignee_account_id || m.assignee_name) {
+                                const key = String(m.assignee_account_id || m.assignee_name);
+                                contributorMap.set(key, {
+                                  account_id: m.assignee_account_id,
+                                  display_name: m.assignee_name,
+                                  handle: m.assignee_handle,
+                                  avatar_path: m.assignee_avatar_path,
+                                });
+                              }
+                              filteredTasks.forEach((t) => {
+                                const tMsId = String(t.contract_milestone_id || t.job_milestone_id || '');
+                                if (mId && tMsId !== mId) return;
+                                (t.assignees || []).forEach((a) => {
+                                  if (!a?.account_id) return;
+                                  const key = String(a.account_id);
+                                  if (!contributorMap.has(key)) contributorMap.set(key, a);
+                                });
+                              });
+                              return renderAssigneeListCell(
+                                Array.from(contributorMap.values()),
+                                m.assignee_name,
+                                m.assignee_avatar_path,
+                                { showSingleHandle: m.assignee_handle }
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -3071,7 +3815,37 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     No tasks to display in Gantt view.
                   </div>
                 ) : (
-                  filteredTasks.map((task, idx) => {
+                  [...filteredTasks]
+                    .sort((a, b) => {
+                      const aBounds = getMilestoneTimelineBounds(a);
+                      const bBounds = getMilestoneTimelineBounds(b);
+                      const aStart = a.starts_at
+                        ? new Date(a.starts_at).getTime()
+                        : a.due_at
+                        ? new Date(a.due_at).getTime()
+                        : aBounds.minDate
+                        ? new Date(`${aBounds.minDate}T00:00:00`).getTime()
+                        : Number.MAX_SAFE_INTEGER;
+                      const bStart = b.starts_at
+                        ? new Date(b.starts_at).getTime()
+                        : b.due_at
+                        ? new Date(b.due_at).getTime()
+                        : bBounds.minDate
+                        ? new Date(`${bBounds.minDate}T00:00:00`).getTime()
+                        : Number.MAX_SAFE_INTEGER;
+                      if (aStart !== bStart) return aStart - bStart;
+
+                      const aEnd = a.due_at ? new Date(a.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+                      const bEnd = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+                      if (aEnd !== bEnd) return aEnd - bEnd;
+
+                      const aOrder = getMilestoneOrder(a);
+                      const bOrder = getMilestoneOrder(b);
+                      if (aOrder !== bOrder) return aOrder - bOrder;
+
+                      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                    })
+                    .map((task, idx) => {
                     const normStatus = normalizeStatus(task.status);
                     const isDone = normStatus === 'completed' || isTaskMilestoneCompleted(task);
                     const isReview = !isDone && normStatus === 'review';
@@ -3107,50 +3881,54 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     let taskColSpan = 1;
 
                     const bounds = getMilestoneTimelineBounds(task);
-                    if (bounds.minDate && bounds.maxDate && task.due_at) {
-                      const minTime = new Date(bounds.minDate).getTime();
-                      const maxTime = new Date(bounds.maxDate).getTime();
-                      const dueTime = new Date(task.due_at).getTime();
+                    if (!task.starts_at && !task.due_at) {
+                      // Stretch unscheduled task across its entire milestone window
+                      taskStartCol = mRange.startCol;
+                      taskColSpan = mRange.colSpan;
+                    } else if (bounds.minDate && bounds.maxDate && (task.starts_at || task.due_at)) {
+                      const minTime = new Date(bounds.minDate + 'T00:00:00').getTime();
+                      const maxTime = new Date(bounds.maxDate + 'T23:59:59').getTime();
 
                       if (maxTime > minTime) {
-                        const fraction = Math.max(0, Math.min(1, (dueTime - minTime) / (maxTime - minTime)));
-                        const colSlot = Math.min(
-                          mRange.endCol,
-                          mRange.startCol + Math.floor(fraction * mRange.colSpan)
-                        );
-                        const desiredSpan = isDone ? 1 : mRange.colSpan >= 3 ? 2 : 1;
-                        taskColSpan = Math.min(desiredSpan, colSlot - mRange.startCol + 1);
-                        taskStartCol = Math.max(mRange.startCol, colSlot - taskColSpan + 1);
+                        const startTime = task.starts_at ? new Date(task.starts_at).getTime() : minTime;
+                        const endTime = task.due_at ? new Date(task.due_at).getTime() : maxTime;
+                        const startFrac = Math.max(0, Math.min(1, (startTime - minTime) / (maxTime - minTime)));
+                        const endFrac = Math.max(startFrac, Math.min(1, (endTime - minTime) / (maxTime - minTime)));
+                        const rawStartCol = Math.min(mRange.endCol, mRange.startCol + Math.floor(startFrac * mRange.colSpan));
+                        const rawEndCol = Math.min(mRange.endCol, mRange.startCol + Math.floor(endFrac * mRange.colSpan));
+                        if (task.starts_at && task.due_at) {
+                          taskStartCol = rawStartCol;
+                          taskColSpan = Math.max(1, rawEndCol - rawStartCol + 1);
+                        } else if (task.due_at) {
+                          const desiredSpan = isDone ? 1 : mRange.colSpan >= 3 ? 2 : 1;
+                          taskColSpan = Math.min(desiredSpan, rawEndCol - mRange.startCol + 1);
+                          taskStartCol = Math.max(mRange.startCol, rawEndCol - taskColSpan + 1);
+                        } else {
+                          taskStartCol = rawStartCol;
+                          taskColSpan = Math.max(1, mRange.endCol - rawStartCol + 1);
+                        }
                       } else {
                         taskStartCol = mRange.startCol;
-                        taskColSpan = Math.max(1, Math.min(2, mRange.colSpan));
+                        taskColSpan = mRange.colSpan;
                       }
                     } else {
-                      if (mRange.colSpan === 1) {
-                        taskStartCol = mRange.startCol;
-                        taskColSpan = 1;
-                      } else if (mRange.colSpan === 2) {
-                        const offset = taskIndexInMilestone % 2;
-                        taskStartCol = mRange.startCol + offset;
-                        taskColSpan = 1;
-                      } else {
-                        const slotCount = Math.max(1, mRange.colSpan - 1);
-                        const offset = taskIndexInMilestone % slotCount;
-                        taskStartCol = mRange.startCol + offset;
-                        const maxAllowed = mRange.endCol - taskStartCol + 1;
-                        const desiredSpan = isDone ? 1 : isReview ? Math.min(2, maxAllowed) : Math.min(2, maxAllowed);
-                        taskColSpan = Math.max(1, Math.min(desiredSpan, maxAllowed));
-                      }
+                      taskStartCol = mRange.startCol;
+                      taskColSpan = mRange.colSpan;
                     }
 
                     // Enforce clamp: task can NEVER spill out of this milestone's timeline
                     taskStartCol = Math.max(mRange.startCol, Math.min(taskStartCol, mRange.endCol));
                     taskColSpan = Math.max(1, Math.min(taskColSpan, mRange.endCol - taskStartCol + 1));
 
+                    const isLocked = isTaskActuallyLocked(task);
+
                     return (
                       <div
                         key={task.task_id}
-                        className="grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-zinc-100 dark:border-zinc-800/40"
+                        onClick={() => setSelectedTaskId(task.task_id)}
+                        className={`grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-zinc-100 dark:border-zinc-800/40 cursor-pointer ${
+                          isLocked ? 'opacity-60' : ''
+                        }`}
                       >
                         {/* Task & Assignee Info */}
                         <div className="col-span-5 grid grid-cols-12 gap-2 items-center pr-2">
@@ -3166,63 +3944,102 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               <div className="w-3 h-3 rounded-full border border-dashed border-zinc-400 shrink-0" />
                             )}
                             <div className="min-w-0">
-                              <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate block">
-                                {task.title}
-                              </span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate">
+                                  {task.title}
+                                </span>
+                                {isLocked && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[9px] text-zinc-600 dark:text-zinc-400 font-bold px-1 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                    title="Locked waiting for earlier milestone"
+                                  >
+                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Locked</span>
+                                  </span>
+                                )}
+                                {isTaskOverdue(task) && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[9px] text-rose-500 font-bold px-1 py-0.2 rounded bg-rose-500/10 border border-rose-500/25 shrink-0"
+                                    title="Task is past its due date & time"
+                                  >
+                                    <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Overdue</span>
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] text-blue-500 truncate block">
                                 M{displayMOrder}: {task.milestone_title || taskMilestone?.milestone_title || `Milestone ${displayMOrder}`}
+                              </span>
+                              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 truncate block">
+                                {task.due_at || task.starts_at
+                                  ? `${task.starts_at ? formatDueDateTime(task.starts_at, true) : (bounds.minDate ? formatDueDateTime(`${bounds.minDate}T00:00`, true) : formatDueDateTime(task.created_at, true))} → ${task.due_at ? formatDueDateTime(task.due_at, true) : (bounds.maxDate ? formatDueDateTime(`${bounds.maxDate}T23:59`, true) : 'Unset')}`
+                                  : `No date & time · Window: ${bounds.minDate ? formatDueDateTime(`${bounds.minDate}T00:00`, true) : formatDueDateTime(task.created_at, true)} → ${bounds.maxDate ? formatDueDateTime(`${bounds.maxDate}T23:59`, true) : 'Unset'}`}
                               </span>
                             </div>
                           </div>
 
-                          {/* Assigned Member */}
-                          <div className="col-span-6 flex items-center justify-between gap-1.5 truncate">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                                {task.assignee_avatar_path ? (
-                                  <img
-                                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                    alt={task.assignee_name || 'User'}
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                    }}
-                                    className="w-full h-full object-cover block shrink-0"
-                                  />
-                                ) : (
-                                  <User className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                                )}
-                              </div>
-                              <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                                {task.assignee_name || 'Unassigned'}
-                              </span>
+                          {/* Assigned Member(s) */}
+                          <div className="col-span-6 flex items-center justify-between gap-1.5 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              {renderAssigneeListCell(
+                                task.assignees || [],
+                                task.assignee_name,
+                                task.assignee_avatar_path
+                              )}
                             </div>
 
-                            <Flag className={`w-3 h-3 shrink-0 ${priorityConfig.color}`} title={`Priority: ${priorityConfig.label}`} />
+                            <Flag fill="currentColor" className={`w-3 h-3 shrink-0 ${priorityConfig.color}`} title={`Priority: ${priorityConfig.label}`} />
                           </div>
                         </div>
 
                         {/* Task Timeline Bar */}
                         <div className="col-span-7 grid grid-cols-8 gap-1 h-7 bg-zinc-100/60 dark:bg-zinc-900/50 rounded-lg p-1 relative items-center">
-                          <div
-                            style={{
-                              gridColumnStart: taskStartCol,
-                              gridColumnEnd: `span ${taskColSpan}`,
-                            }}
-                            className={`h-full rounded-md text-[10px] font-bold text-white px-2 flex items-center justify-between shadow-2xs ${
-                              isDone
-                                ? 'bg-emerald-600'
-                                : isReview
-                                ? 'bg-amber-600'
-                                : isInProg
-                                ? 'bg-blue-600'
-                                : 'bg-zinc-700'
-                            }`}
-                          >
-                            <span className="truncate">{task.title}</span>
-                            <span className="text-[9px] opacity-80 shrink-0 ml-1 font-mono">
-                              {isDone ? '100%' : isReview ? '80%' : isInProg ? '50%' : '0%'}
-                            </span>
-                          </div>
+                          {(() => {
+                            const hasDue = Boolean(task.due_at || task.starts_at);
+                            const startLabel = task.starts_at
+                              ? formatDueDateTime(task.starts_at, true)
+                              : bounds.minDate
+                              ? formatDueDateTime(`${bounds.minDate}T00:00`, true)
+                              : formatDueDateTime(task.created_at, true);
+                            const endLabel = task.due_at
+                              ? formatDueDateTime(task.due_at, true)
+                              : bounds.maxDate
+                              ? formatDueDateTime(`${bounds.maxDate}T23:59`, true)
+                              : 'Unset';
+                            return (
+                              <div
+                                style={{
+                                  gridColumnStart: taskStartCol,
+                                  gridColumnEnd: `span ${taskColSpan}`,
+                                }}
+                                title={`${task.title} — Start: ${startLabel} → ${hasDue ? `End: ${endLabel}` : `No date & time assigned (Window end: ${endLabel})`}`}
+                                className={`h-full rounded-md text-[10px] font-bold px-2 flex items-center justify-between shadow-2xs ${
+                                  !hasDue
+                                    ? 'border border-dashed border-zinc-400 dark:border-zinc-500 bg-zinc-200/70 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300'
+                                    : isDone
+                                    ? 'bg-emerald-600 text-white'
+                                    : isReview
+                                    ? 'bg-amber-600 text-white'
+                                    : isInProg
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-zinc-700 text-white'
+                                }`}
+                              >
+                                <span className="truncate">{task.title}</span>
+                                <span className="text-[9px] opacity-85 shrink-0 ml-1 font-mono">
+                                  {!hasDue
+                                    ? 'No date & time'
+                                    : isDone
+                                    ? '100%'
+                                    : isReview
+                                    ? '80%'
+                                    : isInProg
+                                    ? '50%'
+                                    : '0%'}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -3341,10 +4158,29 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Assignee
                   </label>
-                  <div className="w-full text-xs px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700 h-[32px]">
-                    <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span>You (Auto-assigned)</span>
-                  </div>
+                  {canManageAssignees ? (
+                    <GlideSelect
+                      options={assignableMembers.map((m: any) => ({
+                        value: String(m.account_id),
+                        label: m.display_name || m.name || 'Member',
+                      }))}
+                      value={newTaskAssignee}
+                      onChange={(val) => setNewTaskAssignee(val)}
+                      size="sm"
+                      fullWidth={true}
+                      radius={12}
+                      surfaceColor={isDark ? '#18181b' : '#ffffff'}
+                      highlightColor={isDark ? '#27272a' : '#f4f4f5'}
+                      textColor={isDark ? '#f4f4f5' : '#09090b'}
+                      borderColor={isDark ? '#27272a' : '#e4e4e7'}
+                      accentColor={isDark ? '#ffffff' : '#09090b'}
+                    />
+                  ) : (
+                    <div className="w-full text-xs px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700 h-[32px]">
+                      <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span>You (Auto-assigned)</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3358,13 +4194,14 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   onChange={(val) => {
                     setNewTaskMilestone(val);
                     const bounds = getMilestoneTimelineBounds({ job_milestone_id: val } as any);
+                    const curDatePart = newTaskDueDate ? newTaskDueDate.slice(0, 10) : '';
                     if (bounds.minDate && bounds.maxDate) {
-                      if (!newTaskDueDate || newTaskDueDate < bounds.minDate || newTaskDueDate > bounds.maxDate) {
-                        setNewTaskDueDate(bounds.maxDate);
+                      if (!curDatePart || curDatePart < bounds.minDate || curDatePart > bounds.maxDate) {
+                        setNewTaskDueDate(`${bounds.maxDate}T23:59`);
                       }
                     } else if (bounds.maxDate) {
-                      if (!newTaskDueDate || newTaskDueDate > bounds.maxDate) {
-                        setNewTaskDueDate(bounds.maxDate);
+                      if (!curDatePart || curDatePart > bounds.maxDate) {
+                        setNewTaskDueDate(`${bounds.maxDate}T23:59`);
                       }
                     }
                   }}
@@ -3391,7 +4228,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase">
-                          Due Date *
+                          Start &amp; Due (End) Date &amp; Time *
                         </label>
                         {mOrder && (
                           <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md">
@@ -3399,15 +4236,48 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           </span>
                         )}
                       </div>
-                      <input
-                        type="date"
-                        required
-                        min={minD}
-                        max={maxD}
-                        value={newTaskDueDate}
-                        onChange={(e) => setNewTaskDueDate(e.target.value)}
-                        className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
-                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <span className="block text-[10px] font-semibold text-zinc-500 mb-1">Start Date &amp; Time</span>
+                          <DateTimePickerPopover
+                            align="left"
+                            value={newTaskStartDate}
+                            minDateTime={getMinAheadDateTimeLocal(minD)}
+                            maxDateTime={newTaskDueDate ? toLocalDateTimeInputValue(newTaskDueDate) : (maxD ? `${maxD}T23:59` : undefined)}
+                            onChange={(val) => setNewTaskStartDate(val)}
+                          >
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer text-left"
+                            >
+                              <span className="truncate">
+                                {newTaskStartDate ? formatDueDateTime(newTaskStartDate) : 'Set start date & time'}
+                              </span>
+                              <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                            </button>
+                          </DateTimePickerPopover>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-semibold text-zinc-500 mb-1">Due Date (End) *</span>
+                          <DateTimePickerPopover
+                            align="right"
+                            value={newTaskDueDate}
+                            minDateTime={newTaskStartDate && toLocalDateTimeInputValue(newTaskStartDate) > getMinAheadDateTimeLocal(minD) ? toLocalDateTimeInputValue(newTaskStartDate) : getMinAheadDateTimeLocal(minD)}
+                            maxDateTime={maxD ? `${maxD}T23:59` : undefined}
+                            onChange={(val) => setNewTaskDueDate(val)}
+                          >
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer text-left"
+                            >
+                              <span className="truncate">
+                                {newTaskDueDate ? formatDueDateTime(newTaskDueDate) : 'Set due date & time'}
+                              </span>
+                              <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            </button>
+                          </DateTimePickerPopover>
+                        </div>
+                      </div>
                       <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 pt-0.5">
                         <span>
                           Start: {minD ? new Date(minD + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Project Start'}

@@ -1,13 +1,11 @@
 import { Suspense, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
 import { preloadStaffConsole, type StaffConsole } from './staffPages';
+import ConsolePageSkeleton from './ConsolePageSkeleton';
 
 function StaffPageLoader() {
   return (
-    <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
-      <Loader2 className="h-10 w-10 animate-spin text-zinc-500" />
-    </main>
+    <ConsolePageSkeleton />
   );
 }
 

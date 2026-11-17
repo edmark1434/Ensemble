@@ -297,6 +297,105 @@ export type UserManagementData = {
   lastUpdated: string;
 };
 
+export type StatusBreakdown = {
+  total: number;
+  byStatus: Record<string, number>;
+};
+
+export type AccountStanding = {
+  status: string;
+  message: string | null;
+  suspensionEndsAt: string | null;
+  banEndsAt: string | null;
+  lockEndsAt: string | null;
+  forumTimeout: boolean;
+  forumTimeoutEndsAt: string | null;
+  warningPoints: number;
+  warningBand: string;
+  warningBandLabel: string | null;
+  warningBandEndsAt: string | null;
+  merit: number;
+  creditsFrozen: boolean;
+  frozenCredits: number;
+  creditsFrozenAt: string | null;
+  creditsFrozenUntil: string | null;
+  creditsFrozenReason: string | null;
+  deactivatedAt: string | null;
+  returnsToDeactivated: boolean;
+};
+
+export type TeamRosterMember = {
+  userId: string;
+  accountId: string;
+  name: string;
+  username: string | null;
+  email: string | null;
+  avatarPath: string | null;
+  role: string;
+  status: string;
+  accountStatus: string | null;
+  joinedAt: string | null;
+  invitedAt: string | null;
+  invitationExpiresAt: string | null;
+  invitedByName: string | null;
+};
+
+/** Loaded on demand by GET /api/admin/accounts/:accountId/profile. */
+export type AdminAccountProfile = {
+  accountId: string;
+  accountType: 'user' | 'team';
+  handle: string | null;
+  introduction: string | null;
+  budgetCredits: number | null;
+  createdAt: string | null;
+  lastActivityAt: string | null;
+  standing: AccountStanding | null;
+  work: {
+    jobs: StatusBreakdown;
+    gigs: StatusBreakdown;
+    proposals: StatusBreakdown;
+    contractsAsClient: StatusBreakdown;
+    contractsAsFreelancer: StatusBreakdown;
+    listings: StatusBreakdown;
+    followers: number;
+    following: number;
+    rating: { average: number; count: number };
+  } | null;
+  credits: {
+    totalReceived: number;
+    totalSent: number;
+    contractEarnings: number;
+    assetSales: number;
+    assetSpending: number;
+    cashedOut: number;
+    lastTransactionAt: string | null;
+  } | null;
+  forum: {
+    available: boolean;
+    discussions: number;
+    comments: number;
+    likesReceived: number;
+    savesReceived: number;
+    lastPostAt: string | null;
+  } | null;
+  projects: { owned: number; member: number } | null;
+  team: {
+    settings: {
+      visibility: string | null;
+      joinPolicy: string | null;
+      category: string | null;
+      website: string | null;
+      location: string | null;
+      teamType: string | null;
+      updatedAt: string | null;
+    } | null;
+    owner: TeamRosterMember | null;
+    activeMemberCount: number;
+    pendingInviteCount: number;
+    members: TeamRosterMember[];
+  } | null;
+};
+
 export type AccountTarget = {
   accountId: string;
   name: string;

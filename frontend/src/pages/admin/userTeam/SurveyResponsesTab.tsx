@@ -114,7 +114,8 @@ export default function SurveyResponsesTab({ refreshToken }: { refreshToken: num
         // Fetch users to populate modal if we haven't already
         const res = await api.get('/api/admin/users-management');
         if (res.data.success) {
-          currentUsers = res.data.data;
+          // The endpoint returns { stats, users, lastUpdated }.
+          currentUsers = Array.isArray(res.data.data?.users) ? res.data.data.users : [];
           setUsersCache(currentUsers);
         }
       }

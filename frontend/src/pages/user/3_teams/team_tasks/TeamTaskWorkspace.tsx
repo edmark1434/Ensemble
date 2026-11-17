@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRightLeft, CalendarDays, ClipboardList, Edit3, Filter, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
@@ -41,6 +41,7 @@ function activityText(action: string) {
 
 export default function TeamTaskWorkspace() {
   const { id = "", contractId = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const { isGuestMode, isVerified } = useGlobalState();
   const navigate = useNavigate();
   const [data, setData] = useState<TeamWorkspaceSnapshot | null>(null);
@@ -61,6 +62,17 @@ export default function TeamTaskWorkspace() {
       const response = await api.get(`/api/teams/${id}/task-workspaces/${contractId}`);
       setData(response.data.data);
     } catch (error: any) {
+      if (error.response?.status === 404) {
+        try {
+          await api.get(`/api/team-projects/${id}`);
+          const taskIdParam = searchParams.get("taskId");
+          const taskQuery = taskIdParam ? `&taskId=${encodeURIComponent(taskIdParam)}` : "";
+          navigate(`/team-project/${id}?tab=taskboard${taskQuery}`, { replace: true });
+          return;
+        } catch {
+          // Not a team project; fall through to standard error handling
+        }
+      }
       showErrorToast(error.response?.data?.message || "Unable to load Team workspace");
       if ([403, 404].includes(error.response?.status)) navigate(`/teams/${id}`, { replace: true });
     } finally {

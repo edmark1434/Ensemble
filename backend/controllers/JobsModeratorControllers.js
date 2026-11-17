@@ -28,8 +28,8 @@ function isJobsTicket(ticket) {
   return Boolean(type && JOBS_TYPES.includes(type));
 }
 
-async function loadScopedTicket(req, res) {
-  const detail = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'jobs' });
+async function loadScopedTicket(req, res, { includeCase = false } = {}) {
+  const detail = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'jobs', includeCase });
   if (!detail) {
     res.status(404).json({ success: false, message: 'Ticket not found' });
     return null;
@@ -86,7 +86,7 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await loadScopedTicket(req, res);
+    const data = await loadScopedTicket(req, res, { includeCase: req.query?.include === 'case' });
     if (!data) return;
     res.status(200).json({ success: true, data });
   } catch (err) {

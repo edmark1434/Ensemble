@@ -22,6 +22,16 @@ import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } fro
 import { WarningPresetFields } from './WarningPresetFields';
 import { PunishmentPresetFields } from './PunishmentPresetFields';
 import { punishmentDurationLabel, type PunishmentKind, type PunishmentPreset } from '@/lib/punishmentCatalog';
+import {
+  CommunitySection,
+  CreditTotalsSection,
+  ProfileDetailsState,
+  PublicProfileLink,
+  StandingSection,
+  TeamRosterSection,
+  useAccountProfile,
+  WorkSection,
+} from './AccountProfileSections';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -423,13 +433,18 @@ export function TeamOverviewModal({
   onOpenVerification?: () => void;
   onOpenHistory?: () => void;
 }) {
+  const { profile, loading, error, reload } = useAccountProfile(team.accountId);
+  const owner = profile?.team?.owner;
+  const merit = profile?.standing?.merit ?? team.history?.merit ?? DEFAULT_MERIT;
+
   return (
     <ModalShell
       title={team.name}
-      subtitle={`ID: ${team.id}`}
+      subtitle={`Team ID: ${team.id} · Account ID: ${team.accountId}`}
       onClose={onClose}
       footer={
         <div className="flex flex-wrap gap-2">
+          <PublicProfileLink memberPath={`/teams/${team.id}`} />
           {onOpenCredit && (
             <button
               type="button"
@@ -445,7 +460,7 @@ export function TeamOverviewModal({
               onClick={onOpenVerification}
               className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
             >
-              Verification
+              Verification & documents
             </button>
           )}
           {onOpenHistory && (
@@ -461,13 +476,16 @@ export function TeamOverviewModal({
       }
     >
       {/* Identity header with team avatar */}
-      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center">
         <ProfileAvatar path={team.avatarPath} name={team.name} size="xl" />
         <div className="min-w-0">
           <p className="text-lg font-bold text-white">{team.name}</p>
           {team.handle && <p className="text-sm text-zinc-400">@{team.handle}</p>}
           {team.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{team.tagline}”</p>}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
+              Merit {merit}
+            </span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{team.status}</span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
               {team.verificationStatus}
@@ -475,98 +493,95 @@ export function TeamOverviewModal({
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
               {team.memberCount} member{team.memberCount === 1 ? '' : 's'}
             </span>
+            {team.forumTimeout && (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
+                Forum timeout
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {team.description && (
-        <div className="mb-6">
+        <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
-          <p className="mt-1 text-sm text-zinc-300">{team.description}</p>
+          <p className="mt-1 whitespace-pre-line text-sm text-zinc-300">{team.description}</p>
+        </div>
+      )}
+      {profile?.introduction && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Introduction</p>
+          <p className="mt-1 whitespace-pre-line text-sm text-zinc-300">{profile.introduction}</p>
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm text-zinc-500">Team leader</p>
-            <p className="font-semibold text-white">{team.leaderName}</p>
-            {team.leaderEmail && <p className="text-xs text-zinc-500">{team.leaderEmail}</p>}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Members</p>
-            <ul className="mt-2 space-y-1 text-sm text-zinc-300">
-              {team.members.map((m) => (
-                <li key={String(m.id)}>
-                  {m.name} <span className="text-zinc-600">· {m.role}</span>
-                  {m.email && <span className="ml-1 text-xs text-zinc-600">({m.email})</span>}
-                </li>
-              ))}
-              {team.members.length === 0 && <li className="text-zinc-500">No members linked yet.</li>}
-            </ul>
-          </div>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Contact</dt>
-              <dd className="text-right text-zinc-300">{team.email}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Date created</dt>
-              <dd className="text-zinc-300">{formatDateTime(team.createdAt)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Last activity</dt>
-              <dd className="text-zinc-300">{formatDateTime(team.lastSeenAt)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Status</dt>
-              <dd className="text-white">{team.status}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Verification</dt>
-              <dd className="text-white">{team.verificationStatus}</dd>
-            </div>
-          </dl>
+      {profile && <StandingSection profile={profile} />}
+
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Account</p>
+      <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-zinc-500">Owner</dt>
+          <dd className="text-white">
+            {owner?.name || team.leaderName}
+            {owner?.username && <span className="ml-2 text-xs text-zinc-500">@{owner.username}</span>}
+          </dd>
         </div>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {[
-              ['Wallet balance', (team.walletBalance ?? team.stats.totalCredits).toLocaleString()],
-              ['Frozen credits', (team.frozenBalance ?? 0).toLocaleString()],
-              ['Total assets', team.stats.totalAssets],
-              ['Total jobs', team.stats.totalJobs],
-              ['Job earnings', team.stats.totalJobEarnings.toLocaleString()],
-              ['Total revenue', `${team.stats.totalRevenue.toLocaleString()}`],
-              ['Total posts', team.stats.totalPosts.toLocaleString()],
-              ['Reactions', team.stats.totalReactions.toLocaleString()],
-            ].map(([label, val]) => (
-              <div key={String(label)} className="rounded-lg bg-white/[0.03] px-3 py-2">
-                <p className="text-[10px] uppercase text-zinc-600">{label}</p>
-                <p className="font-semibold text-white">{val}</p>
-              </div>
-            ))}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Documents</p>
-            <ul className="mt-2 space-y-2">
-              {team.documents.length === 0 && (
-                <li className="text-sm text-zinc-500">No verification documents on file.</li>
-              )}
-              {team.documents.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-sm"
-                >
-                  <span className="text-zinc-300">{d.name}</span>
-                  <button type="button" className="text-zinc-500 hover:text-white">
-                    <Download className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div>
+          <dt className="text-zinc-500">Owner contact</dt>
+          <dd className="text-zinc-300">{owner?.email || team.leaderEmail || '—'}</dd>
         </div>
-      </div>
+        <div>
+          <dt className="text-zinc-500">Date created</dt>
+          <dd className="text-zinc-300">{formatDateTime(team.createdAt)}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Last activity</dt>
+          <dd className="text-zinc-300">
+            {formatDateTime(profile?.lastActivityAt ?? team.lastSeenAt)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Platform Merit</dt>
+          <dd className="text-white">
+            {merit}
+            <span className="ml-2 text-xs text-zinc-500">{meritBandLabel(merit)} · 100 minus active warnings</span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Verification</dt>
+          <dd className="text-white">
+            {team.verificationStatus}
+            {team.verification?.expiresAt && (
+              <span className="ml-2 text-xs text-zinc-500">
+                {team.verification.isExpired ? 'expired' : 'expires'} {formatDate(team.verification.expiresAt)}
+              </span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Violations / disputes</dt>
+          <dd className="text-zinc-300">
+            {team.history?.totalViolations ?? 0} violation(s) · {team.history?.openDisputes ?? 0} open of{' '}
+            {team.history?.totalDisputes ?? 0} dispute(s)
+          </dd>
+        </div>
+      </dl>
+
+      <ProfileDetailsState loading={loading} error={error} onRetry={() => void reload()} />
+      {profile && (
+        <>
+          <TeamRosterSection
+            profile={profile}
+            renderAvatar={(m) => <ProfileAvatar path={m.avatarPath} name={m.name} />}
+          />
+          <WorkSection profile={profile} />
+        </>
+      )}
+      <CreditTotalsSection
+        profile={profile}
+        walletBalance={team.walletBalance ?? team.stats.totalCredits}
+        frozenBalance={team.frozenBalance ?? 0}
+      />
     </ModalShell>
   );
 }
@@ -1697,13 +1712,17 @@ export function UserOverviewModal({
   onOpenVerification?: () => void;
   onOpenHistory?: () => void;
 }) {
+  const { profile, loading, error, reload } = useAccountProfile(user.accountId);
+  const merit = profile?.standing?.merit ?? user.merit ?? user.history?.merit ?? DEFAULT_MERIT;
+
   return (
     <ModalShell
       title={user.name}
-      subtitle={`ID: ${user.profileId}`}
+      subtitle={`ID: ${user.profileId} · Account ID: ${user.accountId}`}
       onClose={onClose}
       footer={
         <div className="flex flex-wrap gap-2">
+          <PublicProfileLink memberPath={`/profile/${user.accountId}`} />
           {onOpenCredit && (
             <button
               type="button"
@@ -1747,12 +1766,22 @@ export function UserOverviewModal({
           {user.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{user.tagline}”</p>}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
-              Merit {user.merit ?? user.history?.merit ?? DEFAULT_MERIT}
+              Merit {merit}
             </span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{user.status}</span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
               {user.verificationStatus}
             </span>
+            {user.forumTimeout && (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
+                Forum timeout
+              </span>
+            )}
+            {user.staffRole && (
+              <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-violet-200">
+                Staff · {user.staffRole}
+              </span>
+            )}
             {user.profile?.subscriptionPlan && (
               <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">
                 {user.profile.subscriptionPlan}
@@ -1765,9 +1794,17 @@ export function UserOverviewModal({
       {user.description && (
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
-          <p className="mt-1 text-sm text-zinc-300">{user.description}</p>
+          <p className="mt-1 whitespace-pre-line text-sm text-zinc-300">{user.description}</p>
         </div>
       )}
+      {profile?.introduction && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Introduction</p>
+          <p className="mt-1 whitespace-pre-line text-sm text-zinc-300">{profile.introduction}</p>
+        </div>
+      )}
+
+      {profile && <StandingSection profile={profile} />}
 
       {/* Account */}
       <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Account</p>
@@ -1775,10 +1812,8 @@ export function UserOverviewModal({
         <div>
           <dt className="text-zinc-500">Platform Merit</dt>
           <dd className="text-white">
-            {user.merit ?? user.history?.merit ?? DEFAULT_MERIT}
-            <span className="ml-2 text-xs text-zinc-500">
-              {meritBandLabel(user.merit ?? user.history?.merit ?? DEFAULT_MERIT)} · 100 minus active warnings
-            </span>
+            {merit}
+            <span className="ml-2 text-xs text-zinc-500">{meritBandLabel(merit)} · 100 minus active warnings</span>
           </dd>
         </div>
         <div>
@@ -1799,6 +1834,32 @@ export function UserOverviewModal({
         <div>
           <dt className="text-zinc-500">Joined</dt>
           <dd className="text-zinc-300">{formatDateTime(user.joinedAt)}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Last activity</dt>
+          <dd className="text-zinc-300">{formatDateTime(profile?.lastActivityAt ?? user.lastSeenAt)}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Verification</dt>
+          <dd className="text-white">
+            {user.verificationStatus}
+            {user.verification?.expiresAt && (
+              <span className="ml-2 text-xs text-zinc-500">
+                {user.verification.isExpired ? 'expired' : 'expires'} {formatDate(user.verification.expiresAt)}
+              </span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Subscription</dt>
+          <dd className="text-zinc-300">{user.profile?.subscriptionPlan || 'No subscription'}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Violations / disputes</dt>
+          <dd className="text-zinc-300">
+            {user.history?.totalViolations ?? 0} violation(s) · {user.history?.openDisputes ?? 0} open of{' '}
+            {user.history?.totalDisputes ?? 0} dispute(s)
+          </dd>
         </div>
         <div>
           <dt className="text-zinc-500">Onboarding</dt>
@@ -1879,23 +1940,18 @@ export function UserOverviewModal({
         )}
       </div>
 
-      {/* Credits & activity */}
-      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Credits & activity</p>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {[
-          ['Merit', user.merit ?? user.history?.merit ?? DEFAULT_MERIT],
-          ['Wallet', user.stats.totalCredits.toLocaleString()],
-          ['Frozen', (user.frozenBalance ?? 0).toLocaleString()],
-          ['Assets', user.stats.totalAssets],
-          ['Jobs', user.stats.totalJobs],
-          ['Posts', user.stats.totalPosts],
-        ].map(([l, v]) => (
-          <div key={String(l)} className="rounded-lg bg-white/[0.03] p-3 text-center">
-            <p className="text-[10px] uppercase text-zinc-600">{l}</p>
-            <p className="font-bold text-white">{v}</p>
-          </div>
-        ))}
-      </div>
+      <ProfileDetailsState loading={loading} error={error} onRetry={() => void reload()} />
+      {profile && (
+        <>
+          <WorkSection profile={profile} />
+          <CommunitySection profile={profile} />
+        </>
+      )}
+      <CreditTotalsSection
+        profile={profile}
+        walletBalance={user.walletBalance ?? user.stats.totalCredits}
+        frozenBalance={user.frozenBalance ?? 0}
+      />
     </ModalShell>
   );
 }

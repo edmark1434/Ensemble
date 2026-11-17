@@ -56,6 +56,7 @@ import {
   AdminWarningsPanel,
   type WarningsSection,
 } from '../warnings/AdminWarningsPage';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
 const MODERATION_OVERVIEW_URL = '/api/admin/moderation-overview';
@@ -285,9 +286,7 @@ export default function ModerationPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-rose-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

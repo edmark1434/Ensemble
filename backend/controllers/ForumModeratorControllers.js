@@ -50,7 +50,10 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'forum' });
+    const data = await getTicketDetail(req.params.id, req.session, {
+      assignableQueue: 'forum',
+      includeCase: req.query?.include === 'case',
+    });
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     if (!isForumTicket(data.ticket)) {
       return res.status(403).json({ success: false, message: 'Ticket is outside the forum queue' });
