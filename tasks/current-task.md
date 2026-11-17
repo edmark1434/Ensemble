@@ -1,4 +1,28 @@
-# Active Task: Dispute resolve flow (staff dispute modal)
+# Active Task: Staff console UI polish and motion
+
+## Implementation Objective
+
+Make the Admin console (and the moderator consoles that share its shell) feel dynamic and professional with
+light, non-janky motion, and fix layout/data lapses found in the scan.
+
+## Acceptance criteria
+
+- Phones get navigation: top bar + slide-in drawer (`ConsoleSidebar`); desktop sidebar has an animated active
+  indicator, solid active state (no gradient), and a signed-in footer.
+- First page loads show a layout-matching skeleton instead of a full-screen spinner (14 pages + `StaffOutlet`).
+- Motion: page fade, staggered content rise, modal fade/pop, press/hover feedback, bar grow, count-up KPIs.
+  Only opacity/transform; ends on `transform: none`; disabled under `prefers-reduced-motion`.
+- Dashboard: clickable KPI cards that deep-link to the right tab, alert cards, live auto-refresh every 60 s
+  while visible, activity timeline, proportional breakdown bars.
+- Dashboard data fixes: the "Credits leaderboard" listed the newest signups and printed the join time twice;
+  it now lists the members holding the most credits (linking to their wallet). "Credits in circulation"
+  now includes held credits. The verification queue's always-empty Credits column is replaced by account type.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
+
+---
+
+# Previous task (another session): Dispute resolve flow (staff dispute modal)
 
 ## Implementation Objective
 

@@ -398,8 +398,14 @@ body {
     transition-duration: 0.15s;
     transition-timing-function: ease-out;
   }
-  .staff-console button:not(:disabled):active {
-    transform: scale(0.98);
+  /* Press feedback on compact buttons only: backdrops and full-width rows would visibly jump. */
+  .staff-console button:not(:disabled):not(.inset-0):not(.w-full):active {
+    transform: scale(0.97);
+  }
+  .staff-console input,
+  .staff-console select,
+  .staff-console textarea {
+    transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out;
   }
   .staff-console tbody tr {
     transition: background-color 0.15s ease-out;
