@@ -114,7 +114,7 @@ const JobCreatePostPage: React.FC = () => {
   // --- SLIDE 2 STATES ---
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
-  const [minBudget, setMinBudget] = useState("");
+  const [minBudget, setMinBudget] = useState("100");
   const [maxBudget, setMaxBudget] = useState("");
   const [budgetType, setBudgetType] = useState<"range" | "open">("range");
   const [minTimeline, setMinTimeline] = useState("3");
@@ -208,7 +208,7 @@ const JobCreatePostPage: React.FC = () => {
           portfolioDuration,
           requireNDA,
         };
-        const hasContent = Boolean(title.trim() || description.trim() || skills.length > 0 || minBudget.trim());
+        const hasContent = Boolean(title.trim() || description.trim() || skills.length > 0 || maxBudget.trim());
         if (hasContent) {
           localStorage.setItem("ensemble_job_create_draft", JSON.stringify(draftData));
         }

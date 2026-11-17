@@ -1037,6 +1037,11 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   }
 
   const normalizedStatus = status === 'review' ? 'in_review' : status;
+  if (normalizedStatus === 'completed' && !isClient) {
+    const err = new Error('Tasks are marked Done automatically when the client approves the milestone submission.');
+    err.statusCode = 403;
+    throw err;
+  }
   const resetOverdueOnFutureDue =
     !normalizedStatus &&
     due_at !== undefined &&

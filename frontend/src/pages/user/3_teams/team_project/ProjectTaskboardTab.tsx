@@ -889,6 +889,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       showErrorToast('Workspace is currently in read-only mode.');
       return;
     }
+    if (normalizeStatus(newStatus) === 'completed' && !isClient) {
+      showErrorToast('Tasks are marked Done automatically when the client approves the milestone submission.');
+      return;
+    }
     if (isTaskActuallyLocked(task) && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones to finish.');
       return;
@@ -1949,13 +1953,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               { id: 'completed', label: 'Done' },
             ].map((s) => {
               const isActive = normStatus === s.id;
-              const canMove = !isLocked && (isOwner || isClient);
+              const isManualDoneBlocked = s.id === 'completed' && !isClient;
+              const canMove = !isLocked && (isOwner || isClient) && !isManualDoneBlocked;
 
               return (
                 <button
                   key={s.id}
                   type="button"
                   disabled={!canMove}
+                  title={isManualDoneBlocked ? 'Done is set automatically when the client approves the submission' : undefined}
                   onClick={() => handleUpdateStatus(task, s.id as any)}
                   className={`py-1.5 px-1 rounded-lg text-xs font-semibold transition-all text-center truncate ${
                     isActive
@@ -3159,15 +3165,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                             <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                               Status
                                             </div>
-                                            {STATUS_OPTIONS.map((s) => (
+                                            {STATUS_OPTIONS.map((s) => {
+                                              const isDoneBlocked = s.id === 'completed' && !isClient;
+                                              return (
                                               <button
                                                 key={s.id}
                                                 type="button"
+                                                disabled={isDoneBlocked}
+                                                title={isDoneBlocked ? 'Done is set automatically when the client approves the submission' : undefined}
                                                 onClick={() => {
                                                   handleUpdateStatus(task, s.id as any);
                                                   setActiveStatusMenuTaskId(null);
                                                 }}
-                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                               >
                                                 <div className="flex items-center gap-2">
                                                   {s.icon}
@@ -3175,7 +3185,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                                 </div>
                                                 {normalizeStatus(task.status) === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
                                               </button>
-                                            ))}
+                                              );
+                                            })}
                                           </div>
                                         </>
                                       )}
@@ -3352,15 +3363,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                       <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                         Status
                                       </div>
-                                      {STATUS_OPTIONS.map((s) => (
+                                      {STATUS_OPTIONS.map((s) => {
+                                        const isDoneBlocked = s.id === 'completed' && !isClient;
+                                        return (
                                         <button
                                           key={s.id}
                                           type="button"
+                                          disabled={isDoneBlocked}
+                                          title={isDoneBlocked ? 'Done is set automatically when the client approves the submission' : undefined}
                                           onClick={() => {
                                             handleUpdateStatus(task, s.id as any);
                                             setActiveStatusMenuTaskId(null);
                                           }}
-                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
                                           <div className="flex items-center gap-2">
                                             {s.icon}
@@ -3368,7 +3383,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                           </div>
                                           {normalizeStatus(task.status) === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
                                         </button>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   </>
                                 )}

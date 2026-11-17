@@ -33,6 +33,7 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
   const [skillInput, setSkillInput] = useState("");
   const [availableSkillsList, setAvailableSkillsList] = useState<{ tag_id: number | string; name: string }[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [hoveredSkillIdx, setHoveredSkillIdx] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Joed AI Modal State
@@ -89,11 +90,17 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
 
   const getFilteredSkills = () => {
     const safeSkills = Array.isArray(skills) ? skills : [];
-    const existingSkillNames = safeSkills.map((s) => s.toLowerCase());
-    return availableSkillsList.filter((skill) =>
-      skill.name.toLowerCase().includes(skillInput.toLowerCase()) &&
-      !existingSkillNames.includes(skill.name.toLowerCase())
+    const existingSkillNames = new Set(
+      safeSkills.map((s) => String(s).trim().toLowerCase()).filter(Boolean)
     );
+    const query = skillInput.trim().toLowerCase();
+    return availableSkillsList.filter((skill) => {
+      const normalizedName = String(skill.name || "").trim().toLowerCase();
+      return (
+        normalizedName.includes(query) &&
+        !existingSkillNames.has(normalizedName)
+      );
+    });
   };
 
   const filteredSkills = getFilteredSkills();
@@ -327,6 +334,7 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
               />
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 disabled={isLoading || skills.length >= maxSkills}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
@@ -346,16 +354,36 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
         </div>
 
         {isDropdownOpen && filteredSkills.length > 0 && skills.length < maxSkills && (
-          <div className="absolute top-12 left-0 z-[100] w-[calc(100%-60px)] bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-white/10 rounded-xl max-h-48 overflow-y-auto shadow-2xl custom-scrollbar p-1">
-            {filteredSkills.map((skill) => (
+          <div
+            role="listbox"
+            aria-label="Required skills suggestions"
+            onMouseLeave={() => setHoveredSkillIdx(null)}
+            className="gs-listbox-scroll absolute top-12 left-0 z-[100] w-[calc(100%-60px)] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl max-h-48 overflow-y-auto overflow-x-hidden shadow-2xl p-1.5 grid gap-0.5"
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                transform: `translateY(${(hoveredSkillIdx ?? 0) * 38}px)`,
+                opacity: hoveredSkillIdx !== null ? 1 : 0,
+              }}
+              className="pointer-events-none absolute top-1.5 right-1.5 left-1.5 h-9 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
+            />
+            {filteredSkills.map((skill, idx) => (
               <button
                 key={skill.tag_id}
                 type="button"
-                onClick={() => handleAddSkill(skill.name)}
-                className="w-full text-left px-3.5 py-2 text-xs font-medium text-gray-800 dark:text-zinc-200 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors flex items-center justify-between cursor-pointer"
+                role="option"
+                aria-selected={false}
+                onMouseEnter={() => setHoveredSkillIdx(idx)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setHoveredSkillIdx(null);
+                  handleAddSkill(skill.name);
+                }}
+                className="relative z-[1] h-9 w-full text-left px-3 text-xs font-medium text-zinc-900 dark:text-zinc-100 rounded-lg transition-colors flex items-center justify-between cursor-pointer"
               >
-                <span>{skill.name}</span>
-                <Plus className="h-3 w-3 opacity-50" />
+                <span className="truncate">{skill.name}</span>
+                <Plus className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
               </button>
             ))}
           </div>
@@ -390,14 +418,14 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
             {skills.map((s) => (
               <span
                 key={s}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white dark:bg-blue-500 shadow-xs select-none"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 border border-zinc-900 dark:border-white shadow-xs select-none"
               >
-                <Check className="h-3 w-3 text-blue-200" />
+                <Check className="h-3 w-3 opacity-75" />
                 <span>{s}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveSkill(s)}
-                  className="text-blue-200 hover:text-white transition-colors ml-0.5 p-0.5 rounded cursor-pointer"
+                  className="opacity-70 hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded cursor-pointer"
                   title={`Remove ${s}`}
                 >
                   <X className="h-3 w-3" />

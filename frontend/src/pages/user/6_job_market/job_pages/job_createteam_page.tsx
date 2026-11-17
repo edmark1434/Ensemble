@@ -113,7 +113,7 @@ const JobCreateTeamPostPage: React.FC = () => {
   // --- STEP 2: BUDGET & SKILLS ---
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
-  const [minBudget, setMinBudget] = useState("");
+  const [minBudget, setMinBudget] = useState("100");
   const [maxBudget, setMaxBudget] = useState("");
   const [minTimeline, setMinTimeline] = useState("3");
   const [maxTimeline, setMaxTimeline] = useState("5");
@@ -221,7 +221,7 @@ const JobCreateTeamPostPage: React.FC = () => {
           portfolioDuration,
           requireNDA,
         };
-        const hasContent = Boolean(title || description || category || minBudget || skills.length > 0);
+        const hasContent = Boolean(title || description || category || maxBudget || skills.length > 0);
         if (hasContent) {
           localStorage.setItem("ensemble_team_job_create_draft", JSON.stringify(draftData));
         }

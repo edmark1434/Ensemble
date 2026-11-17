@@ -152,6 +152,12 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   }, [budgetType, isFixedBudget, rawMinBudget, rawMaxBudget]);
 
   React.useEffect(() => {
+    if (budgetType === "range" && !isFixedBudget && minBudget !== "100") {
+      setMinBudget("100");
+    }
+  }, [budgetType, isFixedBudget, minBudget, setMinBudget]);
+
+  React.useEffect(() => {
     if (budgetType === "range" && !isFixedBudget) {
       if (rawMinBudget > 0 && rawMaxBudget > 0 && rawMaxBudget < rawMinBudget) {
         setErrors((prev) => ({
@@ -469,41 +475,22 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
                   <div>
                     <div className="relative h-12 flex items-center">
-                      <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
+                      <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500/80 pointer-events-none">
                         <CreditIcon className="h-4 w-4" />
                       </div>
                       <input
                         type="text"
-                        placeholder="Minimum Credits (e.g. 500)"
-                        value={formatCommaString(minBudget)}
-                        onChange={(e) => {
-                          const cleaned = e.target.value.replace(/\D/g, "");
-                          setMinBudget(cleaned);
-                          const minVal = parseInt(cleaned, 10) || 0;
-                          if (rawMaxBudget > 0 && minVal > 0 && rawMaxBudget < minVal) {
-                            setErrors((prev) => ({
-                              ...prev,
-                              minBudget: undefined as any,
-                              maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(cleaned)} Credits).`,
-                            }));
-                          } else {
-                            setErrors((prev) => {
-                              const { minBudget: _, maxBudget: mErr, ...r } = prev;
-                              if (mErr && mErr.includes("cannot be lower than minimum budget")) {
-                                return r;
-                              }
-                              return { ...r, ...(mErr ? { maxBudget: mErr } : {}) };
-                            });
-                          }
-                        }}
-                        className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                          errors.minBudget
-                            ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
-                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                        }`}
+                        readOnly
+                        disabled
+                        value="100"
+                        aria-label="Minimum Credits (fixed at 100)"
+                        title="Minimum budget is fixed at 100 Credits"
+                        className="w-full h-12 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100/80 dark:bg-white/[0.04] shadow-sm pl-11 pr-24 text-sm font-semibold text-gray-500 dark:text-zinc-400 outline-none cursor-not-allowed select-none"
                       />
+                      <span className="absolute right-3 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-200/80 dark:bg-white/10 text-gray-500 dark:text-zinc-400 pointer-events-none">
+                        Min Fixed
+                      </span>
                     </div>
-                    {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget}</p>}
                   </div>
 
                   <div>
