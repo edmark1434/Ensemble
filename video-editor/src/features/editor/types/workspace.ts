@@ -16,6 +16,7 @@ export interface WorkspaceTask {
   description: string | null;
   status: WorkspaceTaskStatus;
   priority: string;
+  startsAt: string | null;
   dueAt: string | null;
   milestoneId: string | null;
   jobMilestoneId: string | null;
@@ -26,6 +27,7 @@ export interface WorkspaceTask {
 
 export interface WorkspaceMilestone {
   id: string;
+  jobMilestoneId: string | null;
   contractId: string;
   title: string;
   description: string | null;
@@ -37,6 +39,7 @@ export interface WorkspaceMilestone {
 export interface EditorWorkspace {
   id: string;
   name: string;
+  overallPercent: number | null;
   milestones: WorkspaceMilestone[];
   tasks: WorkspaceTask[];
   progress: WorkspaceProgress;
