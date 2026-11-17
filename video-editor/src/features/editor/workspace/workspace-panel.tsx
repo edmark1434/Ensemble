@@ -1,22 +1,28 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BriefcaseBusiness, CalendarDays, Check, ChevronDown, Circle, Flag, Loader2, LockKeyhole, RefreshCw, X } from "lucide-react";
+import { Briefcase, CalendarDays, Check, ChevronDown, Clock, Flag, Info, Loader2, LockKeyhole, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { DraggablePanel } from "@/components/draggable-panel";
+import type { DateRange } from "react-day-picker";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import useStore from "../store/use-store";
+import { useWorkspaceAvailability } from "./workspace-button";
 import useLayoutStore from "../store/use-layout-store";
-import type { EditorWorkspaceSnapshot, WorkspaceProgress, WorkspaceTask, WorkspaceTaskStatus } from "../types/workspace";
+import type { EditorWorkspaceSnapshot, WorkspaceTask, WorkspaceTaskStatus } from "../types/workspace";
 
 const statuses: { key: WorkspaceTaskStatus; label: string; color: string }[] = [
-  { key: "pending", label: "Pending", color: "text-muted-foreground" },
-  { key: "in_progress", label: "In progress", color: "text-primary" },
+  { key: "pending", label: "To do", color: "text-muted-foreground" },
+  { key: "in_progress", label: "In progress", color: "text-blue-500" },
   { key: "review", label: "In review", color: "text-amber-500" },
-  { key: "completed", label: "Finished", color: "text-green-500" },
+  { key: "completed", label: "Complete", color: "text-emerald-500" },
   { key: "overdue", label: "Overdue", color: "text-red-500" },
 ];
+const editableStatuses = statuses.filter(status => status.key !== "completed" && status.key !== "overdue");
 const dateFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
 function dueDate(value: string | null) {
   if (!value) return null;
@@ -27,17 +33,29 @@ function statusLabel(value: string) {
   return value.replace(/_/g, " ").replace(/^./, letter => letter.toUpperCase());
 }
 
-function ProgressSummary({ value, label }: { value: WorkspaceProgress; label: string }) {
+function statusMarker(status: (typeof statuses)[number]) {
+  if (status.key === "completed") return <Check aria-hidden size={12} className={cn("shrink-0", status.color)} />;
+  if (status.key === "review") return <Clock aria-hidden size={12} className={cn("shrink-0", status.color)} />;
+  return (
+    <span aria-hidden className={cn(
+      "size-2.5 shrink-0 rounded-full",
+      status.color,
+      status.key === "pending" ? "border border-dashed border-current" : "bg-current",
+    )} />
+  );
+}
+
+function ProgressSummary({ percent, label, caption }: { percent: number; label: string; caption: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">{value.completed} of {value.total} tasks finished</span>
-        <span className="font-medium tabular-nums">{value.percent}%</span>
+        <span className="text-muted-foreground">{caption}</span>
+        <span className="font-medium tabular-nums">{percent}%</span>
       </div>
-      <div role="progressbar" aria-label={label} aria-valuenow={value.percent} aria-valuemin={0} aria-valuemax={100}
-        aria-valuetext={`${value.completed} of ${value.total} tasks finished`}
+      <div role="progressbar" aria-label={label} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}
+        aria-valuetext={`${percent}% complete`}
         className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${value.percent}%` }} />
+        <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${percent}%` }} />
       </div>
     </div>
   );
@@ -58,32 +76,169 @@ function PanelAction({ label, onClick, disabled, children }: {
   );
 }
 
-function TaskItem({ task }: { task: WorkspaceTask }) {
+const priorities = [
+  { key: "low", label: "Low", color: "text-zinc-400" },
+  { key: "normal", label: "Normal", color: "text-blue-500" },
+  { key: "high", label: "High", color: "text-amber-500" },
+  { key: "urgent", label: "Urgent", color: "text-rose-500" },
+];
+const priorityOrder = ["urgent", "high", "normal", "low"];
+function compareWorkspaceTasks(a: WorkspaceTask, b: WorkspaceTask) {
+  const priorityRank = (priority: string) => {
+    const rank = priorityOrder.indexOf(priority);
+    return rank < 0 ? priorityOrder.indexOf("normal") : rank;
+  };
+  const priorityDifference = priorityRank(a.priority) - priorityRank(b.priority);
+  if (priorityDifference !== 0) return priorityDifference;
+
+  const dueA = a.dueAt ? Date.parse(a.dueAt) : Number.POSITIVE_INFINITY;
+  const dueB = b.dueAt ? Date.parse(b.dueAt) : Number.POSITIVE_INFINITY;
+  const validDueA = Number.isNaN(dueA) ? Number.POSITIVE_INFINITY : dueA;
+  const validDueB = Number.isNaN(dueB) ? Number.POSITIVE_INFINITY : dueB;
+  if (validDueA !== validDueB) return validDueA - validDueB;
+
+  return statuses.findIndex(status => status.key === a.status)
+    - statuses.findIndex(status => status.key === b.status);
+}
+function milestoneColor(status: string) {
+  const value = status.toLowerCase();
+  if (["overdue", "stalled", "abandoned", "cancelled"].includes(value)) return "text-red-500";
+  if (["completed", "approved", "claimed"].includes(value)) return "text-emerald-500";
+  if (["review", "submitted_for_review", "revision_requested"].includes(value)) return "text-amber-500";
+  if (["active", "in_progress"].includes(value)) return "text-blue-500";
+  return "text-muted-foreground";
+}
+function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId: string; onSaved: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [dateDraft, setDateDraft] = useState<DateRange>();
+  const inFlight = useRef(false);
   const status = statuses.find(item => item.key === task.status)!;
-  const date = dueDate(task.dueAt);
+  const priority = priorities.find(item => item.key === task.priority) ?? priorities[1];
+  const startLabel = dueDate(task.startsAt);
+  const endLabel = dueDate(task.dueAt);
+  const start = startLabel && task.startsAt ? new Date(task.startsAt) : undefined;
+  const end = endLabel && task.dueAt ? new Date(task.dueAt) : undefined;
+  const rangeLabel = startLabel && endLabel ? `${startLabel} - ${endLabel}`
+    : endLabel ? `Due ${endLabel}` : startLabel ? `Starts ${startLabel}` : "Pick a date";
+  const disabled = saving || task.locked;
+  const update = async (changes: { status?: string; priority?: string; starts_at?: string | null; due_at?: string | null }) => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/workspace`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: task.id, changes }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to update task.");
+      onSaved();
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to update task.");
+      return false;
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
+  };
+  const saveRange = async (range: DateRange | null) => {
+    if (range && (!range.from || !range.to)) return;
+    const from = range?.from ? new Date(range.from) : null;
+    const to = range?.to ? new Date(range.to) : null;
+    from?.setHours(0, 0, 0, 0);
+    to?.setHours(23, 59, 59, 999);
+    if (await update({ starts_at: from?.toISOString() ?? null, due_at: to?.toISOString() ?? null })) {
+      setDateOpen(false);
+    }
+  };
   return (
-    <details className="group rounded-md border border-border/80">
-      <summary className="flex cursor-pointer list-none items-start gap-2.5 rounded-md p-3 hover:bg-accent/20 [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        {task.status === "completed" ? <Check size={15} className="mt-0.5 shrink-0 text-green-500" /> : <Circle size={15} className={cn("mt-0.5 shrink-0", status.color)} />}
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <p className="break-words text-sm font-medium">{task.title}</p>
-          {task.milestoneTitle && <p className="break-words text-xs text-muted-foreground">{task.milestoneTitle}</p>}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span className={status.color}>{status.label}</span>
-            {date && <span className={cn("flex items-center gap-1 text-muted-foreground", task.status === "overdue" && "text-red-500")}><CalendarDays size={12} />{date}</span>}
-            {task.locked && <span className="flex items-center gap-1 text-muted-foreground"><LockKeyhole size={12} />Locked</span>}
-          </div>
-        </div>
-        <ChevronDown size={14} className="mt-0.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-      </summary>
-      <div className="space-y-2 border-t border-border/80 px-3 py-3 text-xs text-muted-foreground">
-        <p className="whitespace-pre-wrap break-words leading-relaxed">{task.description || "No description added."}</p>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span>Priority: {statusLabel(task.priority)}</span>
-          {task.assignedBy && <span className="break-words">Assigned by {task.assignedBy}</span>}
-        </div>
+    <div className="space-y-3 rounded-md border border-border/80 p-3">
+      <div className="space-y-1">
+        <p className="break-words text-sm font-medium">{task.title}</p>
+        {task.description && <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">{task.description}</p>}
       </div>
-    </details>
+      <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <Popover open={statusOpen} onOpenChange={setStatusOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="w-full min-w-0 justify-between gap-2 px-2 text-xs" aria-label={`Status for ${task.title}`} disabled={disabled}>
+              <span className="flex min-w-0 items-center gap-2"><span className="flex size-4 shrink-0 items-center justify-center">{statusMarker(status)}</span><span className="truncate">{status.label}</span></span>
+              <ChevronDown aria-hidden size={14} className="shrink-0 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="z-[300] p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
+            {editableStatuses.map(item => <button key={item.key} type="button" onClick={() => { setStatusOpen(false); void update({ status: item.key === "pending" ? "todo" : item.key === "review" ? "in_review" : item.key }); }} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800/50">
+              <span className={cn("flex min-w-0 items-center gap-2", item.color)}><span className="flex size-4 shrink-0 items-center justify-center">{statusMarker(item)}</span>{item.label}</span>
+              {status.key === item.key && <Check aria-hidden size={14} className="shrink-0 text-muted-foreground" />}
+            </button>)}
+          </PopoverContent>
+        </Popover>
+        <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="w-full min-w-0 justify-between gap-2 px-2 text-xs" aria-label={`Priority for ${task.title}`} disabled={disabled}>
+              <span className="flex min-w-0 items-center gap-2"><Flag aria-hidden size={14} className={cn("shrink-0", priority.color)} /><span className="truncate">{priority.label}</span></span>
+              <ChevronDown aria-hidden size={14} className="shrink-0 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="z-[300] p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
+            {priorities.map(item => <button key={item.key} type="button" onClick={() => { setPriorityOpen(false); void update({ priority: item.key }); }} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800/50">
+              <span className="flex min-w-0 items-center gap-2"><Flag aria-hidden size={14} className={cn("shrink-0", item.color)} />{item.label}</span>
+              {priority.key === item.key && <Check aria-hidden size={14} className="shrink-0 text-muted-foreground" />}
+            </button>)}
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div className="flex flex-col items-stretch gap-2 text-xs">
+        {/* shadcn New York date-picker-with-range example, with task save and clear actions. */}
+        <Popover open={dateOpen} onOpenChange={open => {
+          if (open) {
+            setDateDraft(start ? { from: start, to: end } : undefined);
+            setError(null);
+          }
+          setDateOpen(open);
+        }}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" disabled={disabled}
+              aria-label={`Task date range for ${task.title}: ${rangeLabel}`}
+              className={cn("w-full min-w-0 justify-start text-left font-normal",
+                !start && !end && "text-muted-foreground", task.status === "overdue" && "text-red-500")}>
+              <CalendarDays aria-hidden size={14} /><span className="truncate">{rangeLabel}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            collisionPadding={12}
+            className="pointer-events-none z-[250] w-max max-w-[calc(100dvw-1.5rem)] border-0 bg-transparent p-0 shadow-none"
+            aria-label={`Task date range for ${task.title}`}
+            onKeyDown={event => { if (event.key !== "Escape") event.stopPropagation(); }}>
+            <DraggablePanel title="Date range" onClose={() => setDateOpen(false)}
+              className="max-h-(--radix-popover-content-available-height) text-card-foreground">
+              <div className="min-h-0 space-y-4 overflow-auto">
+                <Calendar mode="range" selected={dateDraft} onSelect={setDateDraft}
+                  defaultMonth={start ?? end} numberOfMonths={2} disabled={disabled} autoFocus
+                  className="p-0" />
+                {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+                <div className="flex justify-end gap-2">
+                  {(start || end) && <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => void saveRange(null)}>Clear</Button>}
+                  <Button type="button" size="sm" disabled={disabled || !dateDraft?.from || !dateDraft.to}
+                    onClick={() => { if (dateDraft) void saveRange(dateDraft); }}>Save</Button>
+                </div>
+              </div>
+            </DraggablePanel>
+          </PopoverContent>
+        </Popover>
+        {saving && <Loader2 size={13} className="animate-spin" />}
+        {task.locked && <span className="flex items-center gap-1 text-muted-foreground"><LockKeyhole size={12} />Locked</span>}
+      </div>
+      </div>
+      {error && !dateOpen && <p role="alert" className="text-xs text-red-500">{error}</p>}
+    </div>
   );
 }
 
@@ -108,37 +263,43 @@ function WorkspacePanelContent({ projectId }: { projectId?: string }) {
   const [workspaceId, setWorkspaceId] = useState("");
   const [filter, setFilter] = useState<WorkspaceTaskStatus | "all">("all");
   const refreshRef = useRef<() => void>(() => {});
-  const setActiveRightItem = useLayoutStore(s => s.setActiveRightItem);
 
   useEffect(() => {
     if (!projectId) return;
     let disposed = false;
     let active: AbortController | null = null;
-    const refresh = async () => {
-      if (active || disposed) return;
+    const refresh = async (force = false) => {
+      if (disposed || (active && !force)) return;
+      if (force) active?.abort();
       const controller = new AbortController();
       active = controller;
       setRefreshing(true);
       try {
         const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/workspace`, { cache: "no-store", signal: controller.signal });
-        if (disposed) return;
+        if (disposed || controller.signal.aborted) return;
         if (!response.ok) {
-          if (response.status === 401 || response.status === 403) setData(null);
+          if (response.status === 401 || response.status === 403) {
+            setData(null);
+            useWorkspaceAvailability.setState({ key: "", available: false });
+          }
           throw new Error(response.status === 401 ? "Sign in again to view your workspace." : response.status === 403
             ? "You no longer have access to this project." : "Unable to refresh your workspace. Please try again.");
         }
         const snapshot: EditorWorkspaceSnapshot = await response.json();
-        if (disposed) return;
+        if (disposed || controller.signal.aborted) return;
+        if (snapshot.workspaces.length === 0) useWorkspaceAvailability.setState({ key: "", available: false });
         setData(snapshot);
         setError(null);
       } catch (cause) {
         if (!disposed && !controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to load your workspace.");
       } finally {
-        active = null;
-        if (!disposed) setRefreshing(false);
+        if (active === controller) {
+          active = null;
+          if (!disposed) setRefreshing(false);
+        }
       }
     };
-    refreshRef.current = () => { void refresh(); };
+    refreshRef.current = () => { void refresh(true); };
     const refreshVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     void refresh();
     const interval = window.setInterval(refreshVisible, 30_000);
@@ -157,7 +318,9 @@ function WorkspacePanelContent({ projectId }: { projectId?: string }) {
   }, [projectId]);
 
   const workspace = data?.workspaces.find(item => item.id === workspaceId) ?? data?.workspaces[0];
-  const tasks = workspace?.tasks.filter(task => filter === "all" || task.status === filter) ?? [];
+  const tasks = workspace?.tasks
+    .filter(task => filter === "all" || task.status === filter)
+    .sort(compareWorkspaceTasks) ?? [];
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -170,15 +333,17 @@ function WorkspacePanelContent({ projectId }: { projectId?: string }) {
                 <PanelAction label="Refresh workspace" onClick={() => refreshRef.current()} disabled={refreshing || !projectId}>
                   <RefreshCw size={18} className={cn(refreshing && "animate-spin")} />
                 </PanelAction>
-                <PanelAction label="Close workspace" onClick={() => setActiveRightItem("controls")}><X size={18} /></PanelAction>
               </div>
             </div>
             {data && data.workspaces.length > 1 ? (
               <Select value={workspace?.id} onValueChange={value => { setWorkspaceId(value); setFilter("all"); }}>
-                <SelectTrigger className="w-full min-w-0" aria-label="Linked workspace"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full min-w-0 font-semibold" aria-label="Linked workspace"><SelectValue /></SelectTrigger>
                 <SelectContent>{data.workspaces.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
               </Select>
-            ) : workspace && <p className="break-words text-sm text-muted-foreground">{workspace.name}</p>}
+            ) : workspace && <p className="break-words text-sm font-semibold text-foreground">{workspace.name}</p>}
+            {typeof workspace?.overallPercent === "number" && (
+              <ProgressSummary percent={workspace.overallPercent} label="Overall workspace progress" caption="Overall progress" />
+            )}
           </div>
 
           {error && <div role="alert" className="space-y-2 text-xs text-red-500">
@@ -187,45 +352,51 @@ function WorkspacePanelContent({ projectId }: { projectId?: string }) {
           </div>}
           {!data && !error && projectId && <div role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" />Loading workspace...</div>}
           {(!projectId || (data && !workspace)) && <div className="flex min-h-[30vh] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-            <BriefcaseBusiness size={24} />
+            <Briefcase size={24} />
             <p className="text-sm">No linked workspace available.</p>
             <p className="max-w-64 text-xs leading-relaxed">Link this project from a workspace you belong to to see your milestone and assigned tasks here.</p>
           </div>}
 
           {workspace && <>
-            <section className="space-y-3" aria-label="My milestone">
-              <div className="flex items-center gap-2"><Flag size={15} className="text-muted-foreground" /><Label className="text-sm font-semibold">My milestone{workspace.milestones.length > 1 ? "s" : ""}</Label></div>
-              {workspace.milestones.length === 0 && <p className="text-xs leading-relaxed text-muted-foreground">No current milestone on your contracts in this workspace. Tasks assigned to you still appear below.</p>}
+            <section className="space-y-3" aria-label="Current milestone">
+              <p className="text-xs text-muted-foreground">{workspace.milestones.length > 1 ? "Current milestones" : "Current milestone"}</p>
+              {workspace.milestones.length === 0 && <p className="text-xs leading-relaxed text-muted-foreground">No current milestone on your contracts in this workspace.</p>}
               {workspace.milestones.map(milestone => <div key={milestone.id} className="space-y-3 rounded-md border border-border/80 p-3">
                 <div className="space-y-1.5">
                   <p className="break-words text-sm font-medium">{milestone.title}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="text-primary">{statusLabel(milestone.status)}</span>
+                    <span className={milestoneColor(milestone.status)}>{statusLabel(milestone.status)}</span>
                     {dueDate(milestone.dueAt) && <span className="flex items-center gap-1"><CalendarDays size={12} />Due {dueDate(milestone.dueAt)}</span>}
                   </div>
                 </div>
                 {milestone.description && <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">{milestone.description}</p>}
-                <ProgressSummary value={milestone.progress} label={`${milestone.title} task progress`} />
+                <ProgressSummary percent={milestone.progress.percent} label={`${milestone.title} task progress`}
+                  caption={`${milestone.progress.completed} of ${milestone.progress.total} tasks finished`} />
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   {statuses.filter(status => milestone.progress[status.key] > 0).map(status => <span key={status.key} className={status.color}>{milestone.progress[status.key]} {status.label.toLowerCase()}</span>)}
                 </div>
               </div>)}
             </section>
 
-            <section className="space-y-3 border-t border-border/80 pt-4" aria-label="My tasks">
-              <div className="flex items-center justify-between"><Label className="text-sm font-semibold">My tasks</Label><span className="text-xs tabular-nums text-muted-foreground">{workspace.progress.total} total</span></div>
-              <ProgressSummary value={workspace.progress} label="My assigned tasks progress" />
+            <section className="space-y-3" aria-label="My tasks">
               <div className="grid grid-cols-3 gap-1.5" aria-label="Filter tasks by status">
                 {[{ key: "all" as const, label: "All tasks", color: "text-foreground" }, ...statuses].map(status => <button key={status.key} type="button" aria-pressed={filter === status.key}
-                  onClick={() => setFilter(status.key)} className={cn("rounded-md border border-border/80 px-2 py-2 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", filter === status.key && "border-primary/50 bg-primary/10")}>
+                  onClick={() => setFilter(status.key)} className={cn("rounded-md border border-border/80 px-2 py-2 text-left font-sans hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", filter === status.key && "border-primary/50 bg-primary/10")}>
                   <span className="block text-sm font-semibold tabular-nums">{status.key === "all" ? workspace.progress.total : workspace.progress[status.key]}</span>
                   <span className={cn("text-[11px]", status.color)}>{status.label}</span>
                 </button>)}
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">All tasks assigned to you, including tasks from other members' milestones.</p>
-              {workspace.tasks.length === 0 ? <p className="py-3 text-xs text-muted-foreground">You have no assigned tasks in this workspace yet.</p>
+              <div className="flex items-start gap-2 text-pretty text-xs text-muted-foreground">
+                <Info size={16} className="shrink-0" aria-hidden="true" />
+                <span>
+                  You can only set tasks to To do, In progress, or In review.<br />
+                  Tasks become Complete when the client accepts the milestone submission.
+                  Unfinished tasks become Overdue when either the task or its milestone is due.
+                </span>
+              </div>
+              {workspace.tasks.length === 0 ? <p className="py-3 text-xs text-muted-foreground">No assigned tasks in the current milestone.</p>
                 : tasks.length === 0 ? <p className="py-3 text-xs text-muted-foreground">No tasks match this status.</p>
-                : <div className="space-y-2">{tasks.map(task => <TaskItem key={task.id} task={task} />)}</div>}
+                : <div className="space-y-2">{tasks.map(task => <TaskItem key={task.id} task={task} projectId={projectId!} onSaved={() => refreshRef.current()} />)}</div>}
             </section>
           </>}
         </div>

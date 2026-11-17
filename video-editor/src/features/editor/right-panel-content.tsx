@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useWorkspaceVisible } from "./workspace/workspace-button";
 import { ControlItem } from "./control-item";
 import useLayoutStore from "./store/use-layout-store";
 import { CommentsPanel } from "./comments/comments-panel";
@@ -17,14 +18,18 @@ export const RightPanelContent = ({
 }: {
   panelRef: React.RefObject<HTMLDivElement | null>;
 }) => {
-  const { activeRightItem } = useLayoutStore();
+  const { activeRightItem, setActiveRightItem } = useLayoutStore();
+  const workspaceVisible = useWorkspaceVisible();
+  useEffect(() => {
+    if (activeRightItem === "workspace" && !workspaceVisible) setActiveRightItem("controls");
+  }, [activeRightItem, workspaceVisible, setActiveRightItem]);
 
   return (
     <div ref={panelRef} className="bg-card w-full flex flex-none h-full relative">
       <div className="flex w-full h-full">
         {activeRightItem === "controls" && <ControlItem />}
         {activeRightItem === "comments" && <CommentsPanel />}
-        {activeRightItem === "workspace" && <WorkspacePanel />}
+        {activeRightItem === "workspace" && workspaceVisible && <WorkspacePanel />}
         {activeRightItem === "saves" && <SavesPanel />}
       </div>
     </div>

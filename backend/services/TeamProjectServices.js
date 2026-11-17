@@ -47,7 +47,8 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
 }
 
 async function updateProjectTask(teamId, taskId, viewerAccountId, data) {
-  return await TeamProjectRepositories.updateProjectTask(teamId, taskId, viewerAccountId, data);
+  const { starts_at: _startsAt, ...taskChanges } = data || {};
+  return await TeamProjectRepositories.updateProjectTask(teamId, taskId, viewerAccountId, taskChanges);
 }
 
 async function createProjectTask(teamId, viewerAccountId, data) {
@@ -226,7 +227,43 @@ async function unlinkVideoProject(teamId, projectId, viewerAccountId) {
   return await TeamProjectRepositories.unlinkWorkspaceProject(project.team_id, viewerAccountId, projectId);
 }
 
+async function updateEditorTask(teamId, taskId, accountId, changes) {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const fail = (message, statusCode) => { throw Object.assign(new Error(message), { statusCode }); };
+  if (![teamId, taskId, accountId].every(value => typeof value === 'string' && uuid.test(value))) fail('Invalid task request', 400);
+  if (!changes || !Object.keys(changes).length || Object.keys(changes).some(key => !['status', 'priority', 'starts_at', 'due_at'].includes(key))) fail('Invalid task changes', 400);
+  if (changes.status !== undefined && !['todo', 'in_progress', 'in_review', 'completed'].includes(changes.status)) fail('Invalid task status', 400);
+  if (changes.priority !== undefined && !['low', 'normal', 'high', 'urgent'].includes(changes.priority)) fail('Invalid task priority', 400);
+  if (changes.starts_at !== undefined
+    && (changes.due_at === undefined || (changes.starts_at === null) !== (changes.due_at === null))) {
+    fail('Provide both dates to set or clear a task range', 400);
+  }
+  const normalized = { ...changes };
+  for (const field of ['starts_at', 'due_at']) {
+    const value = changes[field];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
+      fail('Task dates must be valid dates', 400);
+    }
+    normalized[field] = new Date(value).toISOString();
+  }
+  if (normalized.starts_at && normalized.due_at && normalized.starts_at > normalized.due_at) {
+    fail('Due date cannot be before the start date', 422);
+  }
+  changes = normalized;
+  const context = await TeamProjectRepositories.getEditorTaskContext(teamId, taskId);
+  if (!context) fail('Task not found', 404);
+  if (context.team_type === 'contractual') {
+    await getProjectDetails(teamId, accountId);
+    return TeamProjectRepositories.updateProjectTask(teamId, taskId, accountId, changes.due_at === null
+      ? { ...changes, due_at: 'CLEAR' }
+      : changes);
+  }
+  return require('./TeamTaskServices').updateTaskServices(teamId, context.contract_id, taskId, accountId, changes);
+}
+
 module.exports = {
+  updateEditorTask,
   getProjectDetails,
   getProjectTaskboard,
   updateProjectTask,

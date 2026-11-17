@@ -53,8 +53,8 @@
 ## Editor workspace panel
 
 - Editor `GET /api/projects/:id/workspace` verifies the signed editor session, active project membership, and linked workspace access. It resolves project links across the workspace junction, primary project, job and gig references, and returns only the viewer's current contract milestones and explicitly assigned tasks. Contractual workspaces group their member contracts under the same team; regular team workspaces keep their member/manager boundary.
-- Milestones are selected per contract, respecting direct freelancer, assigned subcontractor milestone, or contributing team membership. Assigned tasks include other members' milestones. Milestone progress counts the linked milestone tasks; personal progress counts all assigned tasks, deduplicated by task ID. Finished tasks determine the percentage; empty totals display 0%. Past-due unfinished tasks outside review count as overdue.
-- This read-only endpoint uses existing tables and private/no-store responses. The Workspace right panel refreshes on open, focus, reconnect and every 30 seconds while visible. No new migration or dependency is required.
+- Milestones are selected per contract, respecting direct freelancer, assigned subcontractor milestone, or contributing team membership. The editor task list includes the viewer's assigned tasks in their current milestones. Milestone progress counts the linked milestone tasks; personal progress counts all assigned tasks, deduplicated by task ID. Finished tasks determine the percentage; empty totals display 0%. Past-due unfinished tasks outside review count as overdue.
+- Workspace reads require Owner, Manager or Editor project access and use existing tables with private/no-store responses. `PATCH` on the same endpoint accepts a task ID and status/priority changes, rechecks assignment and access, then delegates through the internal-secret-protected main API to the existing workspace mutation services. The Workspace right panel refreshes on open, focus, reconnect and every 30 seconds while visible. No new migration or dependency is required.
 
 ## External providers
 

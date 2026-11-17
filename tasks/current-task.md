@@ -1,15 +1,14 @@
-# Active Task: Disable Save Payment Method on Top-Up Checkout
+# Active Task: Make Workspace Task Statuses Automatic Where Required
 
 ## Implementation Objective
 
-Set `allow_save_payment_method: "DISABLED"` in `processTopUpPayment` so that the Xendit checkout portal strictly processes top-ups as one-time payments and removes the "Save this payment method for future payments" checkbox.
+Remove Complete and Overdue from the editable task status menu. Completed remains sourced from the task’s server-managed status. Overdue is derived in the editor API from the task deadline or its current milestone deadline.
 
 ## Acceptance Criteria
 
-- `allow_save_payment_method` in `backend/services/PaymentServices.js` (`processTopUpPayment`) is set to `"DISABLED"`.
-- Top-up continues to function normally as a one-time transaction.
-- No verification commands run (`pnpm typecheck` reserved for user).
+- Complete and Overdue are not accepted as manual status updates by the editor API.
+- Tasks are automatically Overdue at or after their task due date or current milestone due date, unless their task status is completed.
 
 ## Implementation Status
 
-- Done: Updated `allow_save_payment_method: "DISABLED"` in `backend/services/PaymentServices.js`. Top-up checkout sessions will now strictly be one-time payments with the save checkbox hidden.
+- Complete and Overdue were removed from editable status options. Overdue now includes the current milestone deadline. The editor update route rejects manual attempts to set automatic statuses.

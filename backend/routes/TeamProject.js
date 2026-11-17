@@ -3,6 +3,8 @@ const controller = require('../controllers/TeamProjectControllers');
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 
+router.patch('/internal/editor/:id/tasks/:taskId', require('../middleware/RequireInternalSecret'), controller.updateEditorTask);
+
 router.use(checkSession, requireAuth);
 
 router.get('/:id', controller.getDetails);

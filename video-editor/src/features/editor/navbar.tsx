@@ -51,7 +51,7 @@ import ShareModal from "@/features/editor/modals/share-modal";
 import PresenceAvatars from "@/components/presence-avatars";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useProjectRole } from "@/features/editor/hooks/use-project-role";
-import { canManageSharing } from "@/features/editor/types/editor-role";
+import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
 import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
 import { CommentsButton } from "@/features/editor/comments/comments-button";
@@ -340,7 +340,7 @@ export default function Navbar({
               </TooltipContent>
             </Tooltip>
           {isLargeScreen && canComment && <CommentsButton />}
-          {isLargeScreen && !preview && projectId && <WorkspaceButton />}
+          {isLargeScreen && !preview && !isViewOnly && canEditWithRole(projectRole) && projectId && <WorkspaceButton />}
           {!preview && <DownloadPopover stateManager={stateManager} />}
 
           {canShare && (

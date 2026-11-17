@@ -19,7 +19,18 @@ const wrap = (fn, successCode = 200) => async (req, res) => {
   }
 };
 
+async function updateEditorTask(req, res) {
+  try {
+    await TeamProjectServices.updateEditorTask(req.params.id, req.params.taskId, req.body.accountId, req.body.changes);
+    res.json({ success: true });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    res.status(status).json({ error: status < 500 ? error.message : 'Unable to update task.' });
+  }
+}
+
 module.exports = {
+  updateEditorTask,
   getDetails: wrap((req, accountId) => TeamProjectServices.getProjectDetails(req.params.id, accountId)),
   getTaskboard: wrap((req, accountId) => TeamProjectServices.getProjectTaskboard(req.params.id, accountId)),
   updateTask: wrap((req, accountId) => TeamProjectServices.updateProjectTask(req.params.id, req.params.taskId, accountId, req.body)),

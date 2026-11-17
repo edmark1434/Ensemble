@@ -835,7 +835,7 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
 /**
  * Update a task on the taskboard with ownership enforcement.
  */
-async function updateProjectTask(teamId, taskId, viewerAccountId, { title, description, status, checklist, priority, due_at }) {
+async function updateProjectTask(teamId, taskId, viewerAccountId, { title, description, status, checklist, priority, starts_at, due_at }) {
   // Verify permissions: Viewer must be assigned to task OR be the client owner
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id,
@@ -991,6 +991,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
            checklist = COALESCE($4, checklist),
            priority = COALESCE($5, priority),
            due_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE due_at END,
+           starts_at = CASE WHEN $8 THEN $9::timestamptz ELSE starts_at END,
            completed_at = CASE WHEN $3 = 'completed' THEN NOW() WHEN $3 IS NOT NULL AND $3 != 'completed' THEN NULL ELSE completed_at END,
            updated_at = NOW()
      WHERE task_id = $7
@@ -1002,7 +1003,9 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     checklist ? JSON.stringify(checklist) : null,
     priority || null,
     due_at !== undefined ? due_at : null,
-    taskId
+    taskId,
+    starts_at !== undefined,
+    starts_at ?? null,
   ]);
 
   // Log activity
@@ -1015,7 +1018,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
       wsRes.rows[0].workspace_id,
       taskId,
       viewerAccountId,
-      JSON.stringify({ status, priority, title })
+      JSON.stringify({ status, priority, title, starts_at, due_at })
     ]);
   }
 
@@ -2746,7 +2749,20 @@ async function getAvailableProjectsForLinking(teamId, viewerAccountId) {
   return res.rows || [];
 }
 
+async function getEditorTaskContext(teamId, taskId) {
+  const result = await pool.query(`
+    SELECT w.contract_id, t.team_type
+    FROM team_workspace_tasks task
+    JOIN team_contract_workspaces w ON w.workspace_id = task.workspace_id
+    JOIN teams t ON t.team_id = w.team_id
+    WHERE w.team_id = $1 AND task.task_id = $2
+      AND task.deleted_at IS NULL AND t.deleted_at IS NULL
+  `, [teamId, taskId]);
+  return result.rows[0];
+}
+
 module.exports = {
+  getEditorTaskContext,
   ensureContractualTeamProject,
   ensureContractualGigWorkspace,
   getTeamProjectDetails,
@@ -2776,5 +2792,3 @@ module.exports = {
   unlinkWorkspaceProject,
   getAvailableProjectsForLinking,
 };
-
-
