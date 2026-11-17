@@ -835,12 +835,13 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
 /**
  * Update a task on the taskboard with ownership enforcement.
  */
-async function updateProjectTask(teamId, taskId, viewerAccountId, { title, description, status, checklist, priority, due_at, assignee_account_ids }) {
+async function updateProjectTask(teamId, taskId, viewerAccountId, { title, description, status, checklist, priority, starts_at, due_at, assignee_account_ids }) {
   // Verify permissions: Viewer must be assigned to task OR be the client owner
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id,
            COALESCE(j.client_account_id, gr.client_account_id) as client_account_id,
            twt.is_locked, twt.created_by_account_id,
+           twt.starts_at as existing_starts_at, twt.due_at as existing_due_at,
            twt.job_milestone_id, twt.contract_milestone_id,
            COALESCE(cm.status, 'pending') as milestone_status,
            COALESCE(cm.index, jm.order_index) as milestone_order,
@@ -868,6 +869,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     assignee_account_id,
     is_locked,
     created_by_account_id,
+    existing_starts_at,
+    existing_due_at,
     job_milestone_id,
     contract_milestone_id,
     milestone_status,
@@ -981,9 +984,55 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     }
   }
 
-  if (effectiveIsLocked && !isClient) {
+  const isOnlyScheduleUpdate =
+    (status === undefined || status === null) &&
+    (title === undefined || title === null) &&
+    (description === undefined || description === null) &&
+    (checklist === undefined || checklist === null);
+
+  if (effectiveIsLocked && !isClient && !isOnlyScheduleUpdate) {
     const err = new Error('This task is locked waiting for previous milestones to be completed.');
     err.statusCode = 400;
+    throw err;
+  }
+
+  const nowMs = Date.now();
+  if (starts_at !== undefined && starts_at !== null && starts_at !== 'CLEAR') {
+    const startMs = new Date(starts_at).getTime();
+    if (Number.isNaN(startMs) || startMs <= nowMs) {
+      const err = new Error('Task start date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+  if (due_at !== undefined && due_at !== null && due_at !== 'CLEAR') {
+    const dueMs = new Date(due_at).getTime();
+    if (Number.isNaN(dueMs) || dueMs <= nowMs) {
+      const err = new Error('Task due date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+
+  const effectiveStartMs =
+    starts_at === 'CLEAR'
+      ? null
+      : starts_at !== undefined && starts_at !== null
+      ? new Date(starts_at).getTime()
+      : existing_starts_at
+      ? new Date(existing_starts_at).getTime()
+      : null;
+  const effectiveDueMs =
+    due_at === 'CLEAR'
+      ? null
+      : due_at !== undefined && due_at !== null
+      ? new Date(due_at).getTime()
+      : existing_due_at
+      ? new Date(existing_due_at).getTime()
+      : null;
+  if (effectiveStartMs !== null && effectiveDueMs !== null && effectiveDueMs < effectiveStartMs) {
+    const err = new Error('Task due date & time cannot be earlier than the start date & time.');
+    err.statusCode = 422;
     throw err;
   }
 
@@ -996,10 +1045,11 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
            status = COALESCE($3, status),
            checklist = COALESCE($4, checklist),
            priority = COALESCE($5, priority),
-           due_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE due_at END,
+           starts_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE starts_at END,
+           due_at = CASE WHEN $7 = 'CLEAR' THEN NULL WHEN $7 IS NOT NULL THEN $7::timestamptz ELSE due_at END,
            completed_at = CASE WHEN $3 = 'completed' THEN NOW() WHEN $3 IS NOT NULL AND $3 != 'completed' THEN NULL ELSE completed_at END,
            updated_at = NOW()
-     WHERE task_id = $7
+     WHERE task_id = $8
     RETURNING *
   `, [
     title || null,
@@ -1007,6 +1057,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     normalizedStatus || null,
     checklist ? JSON.stringify(checklist) : null,
     priority || null,
+    starts_at !== undefined ? starts_at : null,
     due_at !== undefined ? due_at : null,
     taskId
   ]);
@@ -1055,7 +1106,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
  * Create a new task on the taskboard.
  * Auto-assigns to the creator (the contributor). Clients cannot create tasks.
  */
-async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, contract_milestone_id, checklist, assignee_account_ids }) {
+async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, contract_milestone_id, checklist, assignee_account_ids, starts_at, due_at }) {
   const wsRes = await pool.query(`
     SELECT tcw.workspace_id, j.client_account_id
       FROM team_contract_workspaces tcw
@@ -1091,10 +1142,33 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
     }
   }
 
+  const nowMs = Date.now();
+  if (starts_at) {
+    const startMs = new Date(starts_at).getTime();
+    if (Number.isNaN(startMs) || startMs <= nowMs) {
+      const err = new Error('Task start date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+  if (due_at) {
+    const dueMs = new Date(due_at).getTime();
+    if (Number.isNaN(dueMs) || dueMs <= nowMs) {
+      const err = new Error('Task due date & time must be ahead of the current time.');
+      err.statusCode = 422;
+      throw err;
+    }
+    if (starts_at && dueMs < new Date(starts_at).getTime()) {
+      const err = new Error('Task due date & time cannot be earlier than the start date & time.');
+      err.statusCode = 422;
+      throw err;
+    }
+  }
+
   const taskRes = await pool.query(`
     INSERT INTO team_workspace_tasks (
-      workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, checklist, created_by_account_id
-    ) VALUES ($1, $2, $3, $4, $5, 'todo', COALESCE($6, 'normal'), FALSE, $7, $8)
+      workspace_id, job_milestone_id, contract_milestone_id, title, description, status, priority, is_locked, checklist, starts_at, due_at, created_by_account_id
+    ) VALUES ($1, $2, $3, $4, $5, 'todo', COALESCE($6, 'normal'), FALSE, $7, $8, $9, $10)
     RETURNING *
   `, [
     workspace_id,
@@ -1104,6 +1178,8 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
     description || '',
     priority || 'normal',
     JSON.stringify(checklist || []),
+    starts_at ? new Date(starts_at) : null,
+    due_at ? new Date(due_at) : null,
     viewerAccountId
   ]);
 

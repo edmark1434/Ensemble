@@ -43,6 +43,7 @@ import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { motion, AnimatePresence } from 'framer-motion';
 import useGlobalState from '@/lib/global_state';
 import GlideSelect, { type GlideSelectOption } from '@/components/ui/GlideSelect';
+import { DateTimePickerPopover } from '@/components/ui/DateTimePickerPopover';
 
 interface TaskChecklistItem {
   id?: string;
@@ -315,11 +316,13 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const [newTaskPriority, setNewTaskPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
   const [newTaskMilestone, setNewTaskMilestone] = useState('');
+  const [newTaskStartDate, setNewTaskStartDate] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
   // Selected Milestone for Progress Bar View (defaults to current active milestone)
   const [selectedProgressMilestoneId, setSelectedProgressMilestoneId] = useState<string | null>(null);
   const [isMilestoneProgressCollapsed, setIsMilestoneProgressCollapsed] = useState(false);
+  const [isAutoScheduling, setIsAutoScheduling] = useState(false);
 
   // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
@@ -1078,6 +1081,43 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     }
   };
 
+  const getMinAheadDateTimeLocal = (milestoneMinDate?: string) => {
+    const nextMin = new Date(Date.now() + 60 * 1000);
+    nextMin.setSeconds(0, 0);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const nowPlusOneStr = `${nextMin.getFullYear()}-${pad(nextMin.getMonth() + 1)}-${pad(nextMin.getDate())}T${pad(nextMin.getHours())}:${pad(nextMin.getMinutes())}`;
+    if (milestoneMinDate) {
+      const msMinStr = `${milestoneMinDate}T00:00`;
+      return msMinStr > nowPlusOneStr ? msMinStr : nowPlusOneStr;
+    }
+    return nowPlusOneStr;
+  };
+
+  const toLocalDateTimeInputValue = (val?: string | null) => {
+    if (!val) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return `${val}T23:59`;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(val) && !val.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(val)) {
+      return val.slice(0, 16);
+    }
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const formatDueDateTime = (val?: string | null, compact = false) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      ...(compact ? {} : { year: 'numeric' }),
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
   // Assignees can set due date for their tasks themselves, constrained by milestone timeline
   const handleUpdateDueDate = async (task: TaskItem, newDueDate: string) => {
     if (isReadOnly) {
@@ -1090,13 +1130,22 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     }
 
     if (newDueDate) {
+      if (new Date(newDueDate).getTime() <= Date.now()) {
+        showErrorToast('Due date & time must be ahead of the current time.');
+        return;
+      }
+      const datePart = newDueDate.slice(0, 10);
       const { minDate, maxDate } = getMilestoneTimelineBounds(task);
-      if (maxDate && newDueDate > maxDate) {
+      if (maxDate && datePart > maxDate) {
         showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
-      if (minDate && newDueDate < minDate) {
+      if (minDate && datePart < minDate) {
         showErrorToast(`Task due date cannot precede the milestone start date (${new Date(minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (task.starts_at && new Date(newDueDate).getTime() < new Date(task.starts_at).getTime()) {
+        showErrorToast('Task end (due) date & time cannot be earlier than the start date & time.');
         return;
       }
     }
@@ -1119,6 +1168,151 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         prev.map((t) => (t.task_id === task.task_id ? { ...t, due_at: prevDueDate } : t))
       );
       showErrorToast(err?.response?.data?.message || 'Failed to update due date');
+    }
+  };
+
+  const handleUpdateStartDate = async (task: TaskItem, newStartDate: string) => {
+    if (isReadOnly) {
+      showErrorToast('Workspace is currently in read-only mode.');
+      return;
+    }
+    if (!isTaskAssignee(task) && !isClient) {
+      showErrorToast('Only the assigned team member can set the start date.');
+      return;
+    }
+
+    if (newStartDate) {
+      if (new Date(newStartDate).getTime() <= Date.now()) {
+        showErrorToast('Start date & time must be ahead of the current time.');
+        return;
+      }
+      const datePart = newStartDate.slice(0, 10);
+      const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+      if (maxDate && datePart > maxDate) {
+        showErrorToast(`Task start date cannot exceed the milestone deadline (${new Date(maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (minDate && datePart < minDate) {
+        showErrorToast(`Task start date cannot precede the milestone start date (${new Date(minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
+        return;
+      }
+      if (task.due_at && new Date(newStartDate).getTime() > new Date(task.due_at).getTime()) {
+        showErrorToast('Task start date & time cannot be later than the due date & time.');
+        return;
+      }
+    }
+
+    const prevStartDate = task.starts_at;
+    setLocalTasks((prev) =>
+      prev.map((t) =>
+        t.task_id === task.task_id
+          ? { ...t, starts_at: newStartDate ? new Date(newStartDate).toISOString() : undefined }
+          : t
+      )
+    );
+
+    try {
+      await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
+        starts_at: newStartDate ? new Date(newStartDate).toISOString() : 'CLEAR',
+      });
+      showSuccessToast(newStartDate ? 'Start date updated' : 'Start date cleared');
+      onTasksUpdated?.(true);
+    } catch (err: any) {
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.task_id === task.task_id ? { ...t, starts_at: prevStartDate } : t))
+      );
+      showErrorToast(err?.response?.data?.message || 'Failed to update start date');
+    }
+  };
+
+  const handleAutoSetGanttDates = async () => {
+    if (isReadOnly || isClient) return;
+
+    const candidates = filteredTasks.filter(
+      (t) => (!t.starts_at || !t.due_at) && (canManageAssignees || isTaskAssignee(t))
+    );
+    if (candidates.length === 0) {
+      showErrorToast('No unscheduled tasks available to auto-schedule.');
+      return;
+    }
+
+    // Group unscheduled tasks by milestone key so each milestone's tasks distribute evenly
+    const byMilestone = new Map<string, TaskItem[]>();
+    candidates.forEach((t) => {
+      const key = String(t.contract_milestone_id || t.job_milestone_id || t.milestone_title || 'unlinked');
+      const arr = byMilestone.get(key) || [];
+      arr.push(t);
+      byMilestone.set(key, arr);
+    });
+
+    const updates: Array<{ taskId: string; startsAt: string; dueAt: string }> = [];
+    const roundToHalfHour = (ms: number) => Math.round(ms / (30 * 60 * 1000)) * (30 * 60 * 1000);
+
+    byMilestone.forEach((group) => {
+      const bounds = getMilestoneTimelineBounds(group[0]);
+      const fallbackStart = new Date();
+      fallbackStart.setHours(9, 0, 0, 0);
+      const fallbackEnd = new Date(fallbackStart.getTime() + 24 * 60 * 60 * 1000);
+      fallbackEnd.setHours(18, 0, 0, 0);
+
+      const rawMinMs = bounds.minDate
+        ? new Date(`${bounds.minDate}T09:00:00`).getTime()
+        : fallbackStart.getTime();
+      const minMs = Math.max(rawMinMs, Date.now() + 5 * 60 * 1000);
+      let maxMs = bounds.maxDate
+        ? new Date(`${bounds.maxDate}T18:00:00`).getTime()
+        : fallbackEnd.getTime();
+      if (maxMs <= minMs) {
+        maxMs = minMs + 9 * 60 * 60 * 1000;
+      }
+
+      const span = maxMs - minMs;
+      const count = group.length;
+
+      group.forEach((t, idx) => {
+        const slotStart = roundToHalfHour(minMs + (idx / count) * span);
+        const slotEnd = Math.max(
+          slotStart + 60 * 60 * 1000,
+          roundToHalfHour(minMs + ((idx + 1) / count) * span)
+        );
+        const finalStart = t.starts_at ? new Date(t.starts_at).toISOString() : new Date(slotStart).toISOString();
+        const finalEnd = t.due_at
+          ? new Date(t.due_at).toISOString()
+          : new Date(Math.min(maxMs, slotEnd)).toISOString();
+
+        updates.push({
+          taskId: t.task_id,
+          startsAt: finalStart,
+          dueAt: new Date(finalEnd).getTime() >= new Date(finalStart).getTime() ? finalEnd : finalStart,
+        });
+      });
+    });
+
+    setIsAutoScheduling(true);
+    const updateMap = new Map(updates.map((u) => [u.taskId, u]));
+    setLocalTasks((prev) =>
+      prev.map((t) => {
+        const u = updateMap.get(t.task_id);
+        return u ? { ...t, starts_at: u.startsAt, due_at: u.dueAt } : t;
+      })
+    );
+
+    try {
+      await Promise.all(
+        updates.map((u) =>
+          api.patch(`/api/team-projects/${teamId}/tasks/${u.taskId}`, {
+            starts_at: u.startsAt,
+            due_at: u.dueAt,
+          })
+        )
+      );
+      showSuccessToast(`Auto-scheduled ${updates.length} task(s) within milestone timelines.`);
+      onTasksUpdated?.(true);
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Failed to auto-schedule some tasks');
+      onTasksUpdated?.(true);
+    } finally {
+      setIsAutoScheduling(false);
     }
   };
 
@@ -1178,13 +1372,26 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       return;
     }
 
+    if (newTaskStartDate && new Date(newTaskStartDate).getTime() <= Date.now()) {
+      showErrorToast('Start date & time must be ahead of the current time.');
+      return;
+    }
     if (newTaskDueDate) {
+      if (new Date(newTaskDueDate).getTime() <= Date.now()) {
+        showErrorToast('Due date & time must be ahead of the current time.');
+        return;
+      }
+      if (newTaskStartDate && new Date(newTaskDueDate).getTime() < new Date(newTaskStartDate).getTime()) {
+        showErrorToast('Due date & time cannot be earlier than the start date & time.');
+        return;
+      }
+      const datePart = newTaskDueDate.slice(0, 10);
       const bounds = getMilestoneTimelineBounds({ job_milestone_id: newTaskMilestone } as any);
-      if (bounds.minDate && newTaskDueDate < bounds.minDate) {
+      if (bounds.minDate && datePart < bounds.minDate) {
         showErrorToast(`Task due date cannot precede the milestone start date (${new Date(bounds.minDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
-      if (bounds.maxDate && newTaskDueDate > bounds.maxDate) {
+      if (bounds.maxDate && datePart > bounds.maxDate) {
         showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(bounds.maxDate + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`);
         return;
       }
@@ -1199,6 +1406,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         assignee_account_id: currentUserAccountId,
         job_milestone_id: newTaskMilestone || null,
         status: defaultColForAdd,
+        starts_at: newTaskStartDate ? new Date(newTaskStartDate).toISOString() : null,
         due_at: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
         ...(canManageAssignees && newTaskAssignee ? { assignee_account_ids: [newTaskAssignee] } : {}),
       });
@@ -1209,6 +1417,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       setNewTaskPriority('normal');
       setNewTaskAssignee(currentUserAccountId || '');
       setNewTaskMilestone('');
+      setNewTaskStartDate('');
       setNewTaskDueDate('');
       setIsAddModalOpen(false);
       onTasksUpdated?.(false);
@@ -1246,8 +1455,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
     setNewTaskMilestone(defaultMId);
     const bounds = getMilestoneTimelineBounds({ job_milestone_id: defaultMId } as any);
+    const minAhead = getMinAheadDateTimeLocal(bounds.minDate);
+    const candidateStart = bounds.minDate ? `${bounds.minDate}T09:00` : minAhead;
+    setNewTaskStartDate(candidateStart > minAhead ? candidateStart : minAhead);
     if (bounds.maxDate) {
-      setNewTaskDueDate(bounds.maxDate);
+      setNewTaskDueDate(`${bounds.maxDate}T23:59`);
     } else {
       setNewTaskDueDate('');
     }
@@ -1491,7 +1703,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   }}
                   className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white hover:text-blue-600 transition cursor-pointer"
                 >
-                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                  <Flag fill="currentColor" className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
                   <span className="capitalize">{priorityConfig.label}</span>
                   <ChevronDown className="w-3 h-3 text-zinc-400" />
                 </button>
@@ -1518,7 +1730,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
-                            <Flag className={`w-3.5 h-3.5 ${p.color}`} />
+                            <Flag fill="currentColor" className={`w-3.5 h-3.5 ${p.color}`} />
                             <span>{p.label}</span>
                           </div>
                           {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
@@ -1530,7 +1742,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white">
-                <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                <Flag fill="currentColor" className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
                 <span className="capitalize">{priorityConfig.label}</span>
               </div>
             )}
@@ -1549,40 +1761,75 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             </div>
           </div>
 
-          {/* Due Date Row */}
+          {/* Start Date & Time Row */}
           <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
-            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Due Date</span>
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Start Date &amp; Time</span>
             {isOwner ? (
               (() => {
                 const { minDate, maxDate } = getMilestoneTimelineBounds(task);
                 return (
-                  <div className="relative flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500">
-                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                    <span>
-                      {task.due_at
-                        ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-                        : 'Set date'}
-                    </span>
-                    <input
-                      type="date"
-                      min={minDate}
-                      max={maxDate}
-                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                      onClick={(e) => {
-                        try {
-                          (e.target as any).showPicker?.();
-                        } catch {}
-                      }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                  </div>
+                  <DateTimePickerPopover
+                    value={task.starts_at}
+                    minDateTime={getMinAheadDateTimeLocal(minDate)}
+                    maxDateTime={task.due_at ? toLocalDateTimeInputValue(task.due_at) : (maxDate ? `${maxDate}T23:59` : undefined)}
+                    onChange={(val) => void handleUpdateStartDate(task, val)}
+                  >
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500 transition"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>
+                        {task.starts_at
+                          ? formatDueDateTime(task.starts_at)
+                          : 'Set start'}
+                      </span>
+                    </button>
+                  </DateTimePickerPopover>
+                );
+              })()
+            ) : (
+              <span className="font-semibold text-zinc-900 dark:text-white">
+                {task.starts_at
+                  ? formatDueDateTime(task.starts_at)
+                  : 'Not set'}
+              </span>
+            )}
+          </div>
+
+          {/* Due Date (End) Row */}
+          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Due Date (End)</span>
+            {isOwner ? (
+              (() => {
+                const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+                const minBound = getMinAheadDateTimeLocal(minDate);
+                const startBound = task.starts_at ? toLocalDateTimeInputValue(task.starts_at) : '';
+                return (
+                  <DateTimePickerPopover
+                    value={task.due_at}
+                    minDateTime={startBound && startBound > minBound ? startBound : minBound}
+                    maxDateTime={maxDate ? `${maxDate}T23:59` : undefined}
+                    onChange={(val) => void handleUpdateDueDate(task, val)}
+                  >
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500 transition"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                      <span>
+                        {task.due_at
+                          ? formatDueDateTime(task.due_at)
+                          : 'Set date & time'}
+                      </span>
+                    </button>
+                  </DateTimePickerPopover>
                 );
               })()
             ) : (
               <span className="font-semibold text-zinc-900 dark:text-white">
                 {task.due_at
-                  ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                  ? formatDueDateTime(task.due_at)
                   : 'No deadline'}
               </span>
             )}
@@ -2641,34 +2888,28 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     }
                                   >
                                     <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-zinc-400 group-hover/date:text-blue-500'}`} />
-                                    {task.due_at ? (
-                                      <span className="text-[11px] font-semibold whitespace-nowrap">
-                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                      </span>
-                                    ) : (
-                                      <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
-                                        --
-                                      </span>
-                                    )}
-                                    <input
-                                      type="date"
-                                      min={minDate}
-                                      max={maxDate}
-                                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                      onClick={(e) => {
-                                        try {
-                                          (e.target as any).showPicker?.();
-                                        } catch {}
-                                      }}
-                                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                    />
+                                    <DateTimePickerPopover
+                                      value={task.due_at}
+                                      minDateTime={task.starts_at && toLocalDateTimeInputValue(task.starts_at) > getMinAheadDateTimeLocal(minDate) ? toLocalDateTimeInputValue(task.starts_at) : getMinAheadDateTimeLocal(minDate)}
+                                      maxDateTime={maxDate ? `${maxDate}T23:59` : undefined}
+                                      onChange={(val) => void handleUpdateDueDate(task, val)}
+                                    >
+                                      {task.due_at ? (
+                                        <span className="text-[11px] font-semibold whitespace-nowrap">
+                                          {formatDueDateTime(task.due_at, true)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                          --
+                                        </span>
+                                      )}
+                                    </DateTimePickerPopover>
                                   </div>
                                 ) : (
                                   <div className="col-span-2 flex items-center gap-1 text-zinc-500 dark:text-zinc-400 p-1">
                                     <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
                                     <span className="text-[11px] whitespace-nowrap">
-                                      {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
+                                      {task.due_at ? formatDueDateTime(task.due_at, true) : '-'}
                                     </span>
                                   </div>
                                 );
@@ -2687,7 +2928,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
                                     title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                                   >
-                                    <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                    <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                   </button>
 
                                   {activePriorityMenuTaskId === task.task_id && (
@@ -2722,7 +2963,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                             className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                           >
                                             <div className="flex items-center gap-2">
-                                              <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                              <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
                                               <span>{p.label}</span>
                                             </div>
                                             {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
@@ -2734,7 +2975,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 </div>
                               ) : (
                                 <div className="col-span-1 flex items-center gap-1" title={`Priority: ${priorityConfig.label} (View only)`}>
-                                  <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                  <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                 </div>
                               )}
 
@@ -2752,11 +2993,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                           setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
                                           setActivePriorityMenuTaskId(null);
                                         }}
-                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer ${statusCfg.btnClass}`}
-                                        title="Click to change status"
+                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
+                                        title={`${statusCfg.label} — Click to change status`}
                                       >
                                         {statusCfg.icon}
-                                        <span>{statusCfg.label}</span>
+                                        <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                                         <ChevronDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
                                       </button>
 
@@ -2799,11 +3040,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     </div>
                                   ) : (
                                     <span
-                                      title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
-                                      className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border ${statusCfg.btnClass}`}
+                                      title={`${statusCfg.label} — Assigned to ${task.assignee_name || 'member'} (View only)`}
+                                      className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
                                     >
-                                      <Lock className="w-2.5 h-2.5 opacity-60" />
-                                      <span>{statusCfg.label}</span>
+                                      <Lock className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                      <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                                     </span>
                                   );
                                 })()}
@@ -2936,11 +3177,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
                                     setActivePriorityMenuTaskId(null);
                                   }}
-                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer ${statusCfg.btnClass}`}
-                                  title="Click to change status"
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
+                                  title={`${statusCfg.label} — Click to change status`}
                                 >
                                   {statusCfg.icon}
-                                  <span>{statusCfg.label}</span>
+                                  <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                                   <ChevronDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
                                 </button>
 
@@ -2983,11 +3224,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               </div>
                             ) : (
                               <span
-                                title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusCfg.btnClass}`}
+                                title={`${statusCfg.label} — Assigned to ${task.assignee_name || 'member'} (View only)`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap max-w-full ${statusCfg.btnClass}`}
                               >
-                                <Lock className="w-2.5 h-2.5 opacity-60" />
-                                <span>{statusCfg.label}</span>
+                                <Lock className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                <span className="truncate max-w-[82px]">{statusCfg.label}</span>
                               </span>
                             );
                           })()}
@@ -3011,32 +3252,26 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 }
                               >
                                 <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-zinc-400 group-hover/date:text-blue-500'}`} />
-                                {task.due_at ? (
-                                  <span className="text-[11px] font-semibold whitespace-nowrap">
-                                    {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                  </span>
-                                ) : (
-                                  <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
-                                    --
-                                  </span>
-                                )}
-                                <input
-                                  type="date"
-                                  min={minDate}
-                                  max={maxDate}
-                                  value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                  onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                  onClick={(e) => {
-                                    try {
-                                      (e.target as any).showPicker?.();
-                                    } catch {}
-                                  }}
-                                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                />
+                                <DateTimePickerPopover
+                                  value={task.due_at}
+                                  minDateTime={task.starts_at && toLocalDateTimeInputValue(task.starts_at) > getMinAheadDateTimeLocal(minDate) ? toLocalDateTimeInputValue(task.starts_at) : getMinAheadDateTimeLocal(minDate)}
+                                  maxDateTime={maxDate ? `${maxDate}T23:59` : undefined}
+                                  onChange={(val) => void handleUpdateDueDate(task, val)}
+                                >
+                                  {task.due_at ? (
+                                    <span className="text-[11px] font-semibold whitespace-nowrap">
+                                      {formatDueDateTime(task.due_at, true)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                      --
+                                    </span>
+                                  )}
+                                </DateTimePickerPopover>
                               </div>
                             ) : (
                               <span className="text-[11px] whitespace-nowrap">
-                                {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
+                                {task.due_at ? formatDueDateTime(task.due_at, true) : '-'}
                               </span>
                             );
                           })()}
@@ -3056,7 +3291,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
                                 title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                               >
-                                <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                 <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{priorityConfig.label}</span>
                               </button>
 
@@ -3092,7 +3327,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                         className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                       >
                                         <div className="flex items-center gap-2">
-                                          <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                          <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
                                           <span>{p.label}</span>
                                         </div>
                                         {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
@@ -3104,7 +3339,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             </div>
                           ) : (
                             <span className="inline-flex items-center gap-1 font-medium" title={`Priority: ${priorityConfig.label} (View only)`}>
-                              <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                              <Flag fill="currentColor" className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                               <span className="text-[10px] text-zinc-600 dark:text-zinc-400">{priorityConfig.label}</span>
                             </span>
                           )}
@@ -3156,8 +3391,37 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               </div>
             </div>
 
-            {/* Filter Pills for Gantt */}
-            <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-800 self-start sm:self-auto">
+            {/* Filter Pills & Auto-Schedule for Gantt */}
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              {!isReadOnly && !isClient && (() => {
+                const unscheduledCount = filteredTasks.filter(
+                  (t) => (!t.starts_at || !t.due_at) && (canManageAssignees || isTaskAssignee(t))
+                ).length;
+                return (
+                  <button
+                    type="button"
+                    disabled={unscheduledCount === 0 || isAutoScheduling}
+                    onClick={() => void handleAutoSetGanttDates()}
+                    title={
+                      unscheduledCount > 0
+                        ? `Auto-set start & end date/time for ${unscheduledCount} unscheduled task(s)`
+                        : 'All tasks already have start & end dates'
+                    }
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/70 transition disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <Zap className={`w-3.5 h-3.5 ${isAutoScheduling ? 'animate-pulse' : ''}`} />
+                    <span>
+                      {isAutoScheduling
+                        ? 'Scheduling...'
+                        : unscheduledCount > 0
+                        ? `Auto-Set Dates (${unscheduledCount})`
+                        : 'All Scheduled'}
+                    </span>
+                  </button>
+                );
+              })()}
+
+              <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => setGanttSection('all')}
@@ -3191,6 +3455,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               >
                 Tasks ({filteredTasks.length})
               </button>
+              </div>
             </div>
           </div>
 
@@ -3383,7 +3648,37 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     No tasks to display in Gantt view.
                   </div>
                 ) : (
-                  filteredTasks.map((task, idx) => {
+                  [...filteredTasks]
+                    .sort((a, b) => {
+                      const aBounds = getMilestoneTimelineBounds(a);
+                      const bBounds = getMilestoneTimelineBounds(b);
+                      const aStart = a.starts_at
+                        ? new Date(a.starts_at).getTime()
+                        : a.due_at
+                        ? new Date(a.due_at).getTime()
+                        : aBounds.minDate
+                        ? new Date(`${aBounds.minDate}T00:00:00`).getTime()
+                        : Number.MAX_SAFE_INTEGER;
+                      const bStart = b.starts_at
+                        ? new Date(b.starts_at).getTime()
+                        : b.due_at
+                        ? new Date(b.due_at).getTime()
+                        : bBounds.minDate
+                        ? new Date(`${bBounds.minDate}T00:00:00`).getTime()
+                        : Number.MAX_SAFE_INTEGER;
+                      if (aStart !== bStart) return aStart - bStart;
+
+                      const aEnd = a.due_at ? new Date(a.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+                      const bEnd = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+                      if (aEnd !== bEnd) return aEnd - bEnd;
+
+                      const aOrder = getMilestoneOrder(a);
+                      const bOrder = getMilestoneOrder(b);
+                      if (aOrder !== bOrder) return aOrder - bOrder;
+
+                      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                    })
+                    .map((task, idx) => {
                     const normStatus = normalizeStatus(task.status);
                     const isDone = normStatus === 'completed' || isTaskMilestoneCompleted(task);
                     const isReview = !isDone && normStatus === 'review';
@@ -3419,40 +3714,39 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     let taskColSpan = 1;
 
                     const bounds = getMilestoneTimelineBounds(task);
-                    if (bounds.minDate && bounds.maxDate && task.due_at) {
-                      const minTime = new Date(bounds.minDate).getTime();
-                      const maxTime = new Date(bounds.maxDate).getTime();
-                      const dueTime = new Date(task.due_at).getTime();
+                    if (!task.starts_at && !task.due_at) {
+                      // Stretch unscheduled task across its entire milestone window
+                      taskStartCol = mRange.startCol;
+                      taskColSpan = mRange.colSpan;
+                    } else if (bounds.minDate && bounds.maxDate && (task.starts_at || task.due_at)) {
+                      const minTime = new Date(bounds.minDate + 'T00:00:00').getTime();
+                      const maxTime = new Date(bounds.maxDate + 'T23:59:59').getTime();
 
                       if (maxTime > minTime) {
-                        const fraction = Math.max(0, Math.min(1, (dueTime - minTime) / (maxTime - minTime)));
-                        const colSlot = Math.min(
-                          mRange.endCol,
-                          mRange.startCol + Math.floor(fraction * mRange.colSpan)
-                        );
-                        const desiredSpan = isDone ? 1 : mRange.colSpan >= 3 ? 2 : 1;
-                        taskColSpan = Math.min(desiredSpan, colSlot - mRange.startCol + 1);
-                        taskStartCol = Math.max(mRange.startCol, colSlot - taskColSpan + 1);
+                        const startTime = task.starts_at ? new Date(task.starts_at).getTime() : minTime;
+                        const endTime = task.due_at ? new Date(task.due_at).getTime() : maxTime;
+                        const startFrac = Math.max(0, Math.min(1, (startTime - minTime) / (maxTime - minTime)));
+                        const endFrac = Math.max(startFrac, Math.min(1, (endTime - minTime) / (maxTime - minTime)));
+                        const rawStartCol = Math.min(mRange.endCol, mRange.startCol + Math.floor(startFrac * mRange.colSpan));
+                        const rawEndCol = Math.min(mRange.endCol, mRange.startCol + Math.floor(endFrac * mRange.colSpan));
+                        if (task.starts_at && task.due_at) {
+                          taskStartCol = rawStartCol;
+                          taskColSpan = Math.max(1, rawEndCol - rawStartCol + 1);
+                        } else if (task.due_at) {
+                          const desiredSpan = isDone ? 1 : mRange.colSpan >= 3 ? 2 : 1;
+                          taskColSpan = Math.min(desiredSpan, rawEndCol - mRange.startCol + 1);
+                          taskStartCol = Math.max(mRange.startCol, rawEndCol - taskColSpan + 1);
+                        } else {
+                          taskStartCol = rawStartCol;
+                          taskColSpan = Math.max(1, mRange.endCol - rawStartCol + 1);
+                        }
                       } else {
                         taskStartCol = mRange.startCol;
-                        taskColSpan = Math.max(1, Math.min(2, mRange.colSpan));
+                        taskColSpan = mRange.colSpan;
                       }
                     } else {
-                      if (mRange.colSpan === 1) {
-                        taskStartCol = mRange.startCol;
-                        taskColSpan = 1;
-                      } else if (mRange.colSpan === 2) {
-                        const offset = taskIndexInMilestone % 2;
-                        taskStartCol = mRange.startCol + offset;
-                        taskColSpan = 1;
-                      } else {
-                        const slotCount = Math.max(1, mRange.colSpan - 1);
-                        const offset = taskIndexInMilestone % slotCount;
-                        taskStartCol = mRange.startCol + offset;
-                        const maxAllowed = mRange.endCol - taskStartCol + 1;
-                        const desiredSpan = isDone ? 1 : isReview ? Math.min(2, maxAllowed) : Math.min(2, maxAllowed);
-                        taskColSpan = Math.max(1, Math.min(desiredSpan, maxAllowed));
-                      }
+                      taskStartCol = mRange.startCol;
+                      taskColSpan = mRange.colSpan;
                     }
 
                     // Enforce clamp: task can NEVER spill out of this milestone's timeline
@@ -3500,6 +3794,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               <span className="text-[10px] text-blue-500 truncate block">
                                 M{displayMOrder}: {task.milestone_title || taskMilestone?.milestone_title || `Milestone ${displayMOrder}`}
                               </span>
+                              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 truncate block">
+                                {task.due_at || task.starts_at
+                                  ? `${task.starts_at ? formatDueDateTime(task.starts_at, true) : (bounds.minDate ? formatDueDateTime(`${bounds.minDate}T00:00`, true) : formatDueDateTime(task.created_at, true))} → ${task.due_at ? formatDueDateTime(task.due_at, true) : (bounds.maxDate ? formatDueDateTime(`${bounds.maxDate}T23:59`, true) : 'Unset')}`
+                                  : `No date & time · Window: ${bounds.minDate ? formatDueDateTime(`${bounds.minDate}T00:00`, true) : formatDueDateTime(task.created_at, true)} → ${bounds.maxDate ? formatDueDateTime(`${bounds.maxDate}T23:59`, true) : 'Unset'}`}
+                              </span>
                             </div>
                           </div>
 
@@ -3513,32 +3812,58 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               )}
                             </div>
 
-                            <Flag className={`w-3 h-3 shrink-0 ${priorityConfig.color}`} title={`Priority: ${priorityConfig.label}`} />
+                            <Flag fill="currentColor" className={`w-3 h-3 shrink-0 ${priorityConfig.color}`} title={`Priority: ${priorityConfig.label}`} />
                           </div>
                         </div>
 
                         {/* Task Timeline Bar */}
                         <div className="col-span-7 grid grid-cols-8 gap-1 h-7 bg-zinc-100/60 dark:bg-zinc-900/50 rounded-lg p-1 relative items-center">
-                          <div
-                            style={{
-                              gridColumnStart: taskStartCol,
-                              gridColumnEnd: `span ${taskColSpan}`,
-                            }}
-                            className={`h-full rounded-md text-[10px] font-bold text-white px-2 flex items-center justify-between shadow-2xs ${
-                              isDone
-                                ? 'bg-emerald-600'
-                                : isReview
-                                ? 'bg-amber-600'
-                                : isInProg
-                                ? 'bg-blue-600'
-                                : 'bg-zinc-700'
-                            }`}
-                          >
-                            <span className="truncate">{task.title}</span>
-                            <span className="text-[9px] opacity-80 shrink-0 ml-1 font-mono">
-                              {isDone ? '100%' : isReview ? '80%' : isInProg ? '50%' : '0%'}
-                            </span>
-                          </div>
+                          {(() => {
+                            const hasDue = Boolean(task.due_at || task.starts_at);
+                            const startLabel = task.starts_at
+                              ? formatDueDateTime(task.starts_at, true)
+                              : bounds.minDate
+                              ? formatDueDateTime(`${bounds.minDate}T00:00`, true)
+                              : formatDueDateTime(task.created_at, true);
+                            const endLabel = task.due_at
+                              ? formatDueDateTime(task.due_at, true)
+                              : bounds.maxDate
+                              ? formatDueDateTime(`${bounds.maxDate}T23:59`, true)
+                              : 'Unset';
+                            return (
+                              <div
+                                style={{
+                                  gridColumnStart: taskStartCol,
+                                  gridColumnEnd: `span ${taskColSpan}`,
+                                }}
+                                title={`${task.title} — Start: ${startLabel} → ${hasDue ? `End: ${endLabel}` : `No date & time assigned (Window end: ${endLabel})`}`}
+                                className={`h-full rounded-md text-[10px] font-bold px-2 flex items-center justify-between shadow-2xs ${
+                                  !hasDue
+                                    ? 'border border-dashed border-zinc-400 dark:border-zinc-500 bg-zinc-200/70 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300'
+                                    : isDone
+                                    ? 'bg-emerald-600 text-white'
+                                    : isReview
+                                    ? 'bg-amber-600 text-white'
+                                    : isInProg
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-zinc-700 text-white'
+                                }`}
+                              >
+                                <span className="truncate">{task.title}</span>
+                                <span className="text-[9px] opacity-85 shrink-0 ml-1 font-mono">
+                                  {!hasDue
+                                    ? 'No date & time'
+                                    : isDone
+                                    ? '100%'
+                                    : isReview
+                                    ? '80%'
+                                    : isInProg
+                                    ? '50%'
+                                    : '0%'}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -3693,13 +4018,14 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   onChange={(val) => {
                     setNewTaskMilestone(val);
                     const bounds = getMilestoneTimelineBounds({ job_milestone_id: val } as any);
+                    const curDatePart = newTaskDueDate ? newTaskDueDate.slice(0, 10) : '';
                     if (bounds.minDate && bounds.maxDate) {
-                      if (!newTaskDueDate || newTaskDueDate < bounds.minDate || newTaskDueDate > bounds.maxDate) {
-                        setNewTaskDueDate(bounds.maxDate);
+                      if (!curDatePart || curDatePart < bounds.minDate || curDatePart > bounds.maxDate) {
+                        setNewTaskDueDate(`${bounds.maxDate}T23:59`);
                       }
                     } else if (bounds.maxDate) {
-                      if (!newTaskDueDate || newTaskDueDate > bounds.maxDate) {
-                        setNewTaskDueDate(bounds.maxDate);
+                      if (!curDatePart || curDatePart > bounds.maxDate) {
+                        setNewTaskDueDate(`${bounds.maxDate}T23:59`);
                       }
                     }
                   }}
@@ -3726,7 +4052,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase">
-                          Due Date *
+                          Start &amp; Due (End) Date &amp; Time *
                         </label>
                         {mOrder && (
                           <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md">
@@ -3734,15 +4060,48 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           </span>
                         )}
                       </div>
-                      <input
-                        type="date"
-                        required
-                        min={minD}
-                        max={maxD}
-                        value={newTaskDueDate}
-                        onChange={(e) => setNewTaskDueDate(e.target.value)}
-                        className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
-                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <span className="block text-[10px] font-semibold text-zinc-500 mb-1">Start Date &amp; Time</span>
+                          <DateTimePickerPopover
+                            align="left"
+                            value={newTaskStartDate}
+                            minDateTime={getMinAheadDateTimeLocal(minD)}
+                            maxDateTime={newTaskDueDate ? toLocalDateTimeInputValue(newTaskDueDate) : (maxD ? `${maxD}T23:59` : undefined)}
+                            onChange={(val) => setNewTaskStartDate(val)}
+                          >
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer text-left"
+                            >
+                              <span className="truncate">
+                                {newTaskStartDate ? formatDueDateTime(newTaskStartDate) : 'Set start date & time'}
+                              </span>
+                              <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                            </button>
+                          </DateTimePickerPopover>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-semibold text-zinc-500 mb-1">Due Date (End) *</span>
+                          <DateTimePickerPopover
+                            align="right"
+                            value={newTaskDueDate}
+                            minDateTime={newTaskStartDate && toLocalDateTimeInputValue(newTaskStartDate) > getMinAheadDateTimeLocal(minD) ? toLocalDateTimeInputValue(newTaskStartDate) : getMinAheadDateTimeLocal(minD)}
+                            maxDateTime={maxD ? `${maxD}T23:59` : undefined}
+                            onChange={(val) => setNewTaskDueDate(val)}
+                          >
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer text-left"
+                            >
+                              <span className="truncate">
+                                {newTaskDueDate ? formatDueDateTime(newTaskDueDate) : 'Set due date & time'}
+                              </span>
+                              <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            </button>
+                          </DateTimePickerPopover>
+                        </div>
+                      </div>
                       <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 pt-0.5">
                         <span>
                           Start: {minD ? new Date(minD + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Project Start'}
