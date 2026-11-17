@@ -82,7 +82,7 @@ function isTicketClientError(message) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session);
+    const data = await getTicketDetail(req.params.id, req.session, { includeCase: req.query?.include === 'case' });
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     if (ticketScopeDenial(data.ticket || data)) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });

@@ -3,7 +3,12 @@ const {
   CREDIT_TRANSACTION_TYPE,
   CREDIT_TRANSACTION_STATUS,
 } = require('../lib/CreditTransactionEnums');
-const { remainingContractEscrowCredits, contractEscrowHoldings } = require('../lib/DisputeEscrow');
+const {
+  remainingContractEscrowCredits,
+  contractEscrowHoldings,
+  milestonePaidOutSql,
+  milestoneEscrowState,
+} = require('../lib/DisputeEscrow');
 
 /**
  * Money rulings on disputes.
@@ -23,6 +28,7 @@ const ESCROW_WALLET = 'escrow wallets';
 const ACCOUNT_WALLET = 'account wallets';
 const WAITING_PAYOUT_STATUSES = ['scheduled', 'failed'];
 const SETTLEMENT_PAYOUT_KINDS = ['escrow_refund', 'escrow_release'];
+const SETTLEMENT_SPLIT_METHODS = ['amount', 'milestones', 'both'];
 
 function domainError(message, statusCode = 400, code = null) {
   const error = new Error(message);
@@ -421,9 +427,116 @@ async function assertNoWaitingPayouts(client, disputeId) {
   }
 }
 
+function milestoneLabel(milestone) {
+  return `${milestone.index ? `${milestone.index}. ` : ''}${milestone.name || 'Milestone'}`;
+}
+
+/**
+ * The milestones the freelancer is paid for, checked against the contract while it is locked.
+ *
+ * Approved milestones belong to the freelancer: their credits are never refunded to the client.
+ * Those still in escrow are always part of the freelancer's share, whatever the split method,
+ * and those already paid out can't be picked (their credits have left escrow).
+ * `milestones` pays exactly approved + picked milestones; `both` pays them plus an extra amount;
+ * `amount` only has to cover the approved ones.
+ */
+async function loadSettlementMilestones(client, {
+  contractId,
+  milestoneIds,
+  splitMethod,
+  freelancerCredits,
+  remaining,
+}) {
+  if (!SETTLEMENT_SPLIT_METHODS.includes(splitMethod)) {
+    throw domainError('splitMethod must be amount, milestones or both.', 400);
+  }
+
+  const result = await client.query(
+    `
+    SELECT cm.contract_milestone_id, cm.index, cm.name, cm.status, cm.credits,
+           ${milestonePaidOutSql('cm')} AS paid_out
+    FROM contract_milestones cm
+    WHERE cm.contract_id = $1
+    ORDER BY cm.index ASC
+    FOR UPDATE OF cm
+    `,
+    [contractId]
+  );
+  const all = result.rows.map((m) => ({
+    id: String(m.contract_milestone_id),
+    index: Number(m.index || 0),
+    name: m.name,
+    status: String(m.status || '').toLowerCase(),
+    credits: Number(m.credits || 0),
+    state: milestoneEscrowState({ status: m.status, paidOut: m.paid_out }),
+  }));
+  const byId = new Map(all.map((m) => [m.id, m]));
+
+  const approved = all.filter((m) => m.state === 'approved' && m.credits > 0);
+  const approvedTotal = approved.reduce((sum, m) => sum + m.credits, 0);
+  const approvedFloor = Math.min(remaining, approvedTotal);
+  if (freelancerCredits < approvedFloor) {
+    throw domainError(
+      `${approved.map(milestoneLabel).join(', ')} ${approved.length === 1 ? 'was' : 'were'} approved, so ${approvedFloor.toLocaleString()} credits belong to the freelancer and can't be refunded to the client.`,
+      400,
+      'APPROVED_MILESTONE_NOT_REFUNDABLE'
+    );
+  }
+
+  const picked = new Map(approved.map((m) => [m.id, m]));
+  if (splitMethod !== 'amount') {
+    for (const id of milestoneIds) {
+      const milestone = byId.get(id);
+      if (!milestone) {
+        throw domainError('A picked milestone is not on this contract.', 400, 'MILESTONE_NOT_ON_CONTRACT');
+      }
+      if (milestone.state === 'paid' || milestone.state === 'closed') {
+        throw domainError(
+          milestone.state === 'paid'
+            ? `Milestone "${milestone.name}" is already paid out, so its credits are no longer in escrow.`
+            : `Milestone "${milestone.name}" is already ${milestone.status}, so its credits are no longer in escrow.`,
+          409,
+          'MILESTONE_ALREADY_SETTLED'
+        );
+      }
+      picked.set(id, milestone);
+    }
+  }
+
+  const milestones = [...picked.values()]
+    .sort((a, b) => a.index - b.index)
+    .map(({ id, index, name, credits, state }) => ({ id, index, name, credits, approved: state === 'approved' }));
+  if (splitMethod === 'amount') return milestones;
+
+  const milestoneTotal = milestones.reduce((sum, m) => sum + m.credits, 0);
+  if (milestoneTotal > remaining) {
+    throw domainError(
+      `The picked milestones add up to ${milestoneTotal.toLocaleString()} credits, but escrow only holds ${remaining.toLocaleString()}. Pick fewer, or split by amount.`,
+      400,
+      'MILESTONES_EXCEED_ESCROW'
+    );
+  }
+  if (splitMethod === 'milestones' && freelancerCredits !== milestoneTotal) {
+    throw domainError(
+      `The freelancer's share must equal the picked milestones (${milestoneTotal.toLocaleString()} credits).`,
+      400,
+      'SETTLEMENT_MILESTONE_MISMATCH'
+    );
+  }
+  if (splitMethod === 'both' && freelancerCredits < milestoneTotal) {
+    throw domainError(
+      `The freelancer's share can't be less than the picked milestones (${milestoneTotal.toLocaleString()} credits).`,
+      400,
+      'SETTLEMENT_MILESTONE_MISMATCH'
+    );
+  }
+  return milestones;
+}
+
 /**
  * Settle a contract dispute's frozen escrow between the client and the freelancer.
  * Every remaining credit must be allocated, so nothing is left stranded in escrow.
+ * Staff split it by amount, by picking the milestones the freelancer is paid for, or both.
  */
 async function settleEscrow({
   disputeId,
@@ -433,6 +546,8 @@ async function settleEscrow({
   resolutionNotes,
   releaseAt,
   immediate = false,
+  splitMethod = 'amount',
+  milestoneIds = [],
 }) {
   const client = await pool.connect();
   try {
@@ -472,6 +587,14 @@ async function settleEscrow({
         'SETTLEMENT_MUST_BE_COMPLETE'
       );
     }
+
+    const milestones = await loadSettlementMilestones(client, {
+      contractId: dispute.contract_id,
+      milestoneIds,
+      splitMethod,
+      freelancerCredits,
+      remaining,
+    });
 
     const holdings = await contractEscrowHoldings(client, {
       disputeId,
@@ -580,6 +703,8 @@ async function settleEscrow({
       kind: 'escrow_settle',
       clientCredits,
       freelancerCredits,
+      splitMethod,
+      milestones,
       immediate,
       releaseAt: immediate ? null : releaseAt,
       contractId: dispute.contract_id,

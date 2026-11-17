@@ -1,5 +1,5 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../middleware/RateLimiter');
 const {
   createDocumentationChatResponse,
   generateGigDraftResponse,
@@ -15,15 +15,12 @@ const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 
 const router = express.Router();
-const chatLimiter = rateLimit({
+const chatLimiter = createRateLimiter('chat', {
   windowMs: 60 * 1000,
-  limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (_req, res) => res.status(429).json({
-    success: false,
-    message: 'Too many chatbot requests. Please wait a minute and try again.',
-  }),
+  accountLimit: 10,
+  anonymousLimit: 10,
+  networkLimit: 200,
+  message: 'Too many chatbot requests. Please wait a minute and try again.',
 });
 
 router.post('/', chatLimiter, createDocumentationChatResponse);

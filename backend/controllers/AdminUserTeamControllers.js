@@ -16,6 +16,7 @@ const {
   getAdminVerificationDetails,
   applyAdminDiditVerificationAction,
 } = require('../services/AdminVerificationServices');
+const { getAdminAccountProfile } = require('../services/AdminAccountProfileServices');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -161,11 +162,21 @@ async function postAdminAccountCreditAdjust(req, res) {
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
-    const data = await adjustAccountCredits(accountId, amount, note, staffIdFromSession(req.session));
-    res.status(200).json({ success: true, data, message: 'Credits adjusted' });
+    const data = await adjustAccountCredits(accountId, amount, note ?? req.body?.reason, staffIdFromSession(req.session));
+    const verb = data.adjustedBy > 0 ? 'Granted' : 'Deducted';
+    res.status(200).json({
+      success: true,
+      data,
+      message: `${verb} ${Math.abs(data.adjustedBy).toLocaleString()} credits. The member has been notified.`,
+    });
   } catch (err) {
-    console.error('Error adjusting credits:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to adjust credits' });
+    // Every expected refusal carries a statusCode; anything else is internal and stays generic.
+    const status = Number(err.statusCode) || 500;
+    if (status >= 500) console.error('Error adjusting credits:', err);
+    res.status(status >= 500 ? 500 : status).json({
+      success: false,
+      message: status >= 500 ? 'Failed to adjust credits' : err.message || 'Failed to adjust credits',
+    });
   }
 }
 
@@ -274,7 +285,27 @@ async function getAdminAccountActivity(req, res) {
   }
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function getAdminAccountProfileDetails(req, res) {
+  if (!UUID_PATTERN.test(String(req.params.accountId || ''))) {
+    return res.status(400).json({ success: false, message: 'A valid accountId is required' });
+  }
+  try {
+    const data = await getAdminAccountProfile(req.params.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err.statusCode === 404 ? 404 : 500;
+    if (status === 500) console.error('Error fetching account profile:', err);
+    res.status(status).json({
+      success: false,
+      message: status === 404 ? 'Account not found' : 'Failed to load account profile',
+    });
+  }
+}
+
 module.exports = {
+  getAdminAccountProfileDetails,
   getAdminTeamsManagement,
   getAdminUsersManagement,
   getAdminUserVerificationDetails,

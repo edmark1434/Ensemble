@@ -37,6 +37,11 @@
 - Dispute auto-assign reconciliation on staff dispute lists runs at most once every 30 seconds per process, and concurrent callers share the in-flight run. The five-minute cron job is unchanged.
 - The verification-expiry sweep behind admin user/team lists follows the same 30-second, shared-run rule.
 
+## Rate limiting
+
+- Enforced counters live in Redis under `rate-limit:v2:*` with the policy window as TTL (see `docs/security.md`). With the in-memory Redis fallback they are per process.
+- `lib/RateLimitMonitor.js` keeps observation-only monitor state in process memory: 60 one-minute buckets, up to 5,000 live windows (expired ones pruned) and the latest 200 blocked events. It covers one process and resets on restart. Nothing reads it for enforcement.
+
 ## Presence and realtime state
 
 - Presence requires heartbeat timestamps and expiration; disconnect events alone are unreliable.

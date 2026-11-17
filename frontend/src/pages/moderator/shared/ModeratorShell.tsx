@@ -16,7 +16,10 @@ export const MODERATOR_THEME: Record<
     brandGradient: string;
     brandShadow: string;
     activeNav: string;
+    /** Solid active-link surface used by the console sidebar. */
+    activeSolid: string;
     activeIconWrap: string;
+    indicator: string;
     activeIcon: string;
     blobA: string;
     blobB: string;
@@ -28,7 +31,9 @@ export const MODERATOR_THEME: Record<
     brandGradient: 'bg-gradient-to-br from-sky-500 to-cyan-500',
     brandShadow: 'shadow-lg shadow-sky-500/25',
     activeNav: 'bg-gradient-to-r from-sky-500/20 to-cyan-500/10 text-white shadow-inner shadow-sky-500/5',
+    activeSolid: 'bg-sky-500/[0.12] text-white',
     activeIconWrap: 'bg-sky-500/20 text-sky-300',
+    indicator: 'bg-sky-400',
     activeIcon: 'text-sky-300',
     blobA: 'bg-sky-600/10',
     blobB: 'bg-cyan-600/8',
@@ -39,7 +44,9 @@ export const MODERATOR_THEME: Record<
     brandGradient: 'bg-gradient-to-br from-violet-500 to-fuchsia-500',
     brandShadow: 'shadow-lg shadow-violet-500/25',
     activeNav: 'bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-white shadow-inner shadow-violet-500/5',
+    activeSolid: 'bg-violet-500/[0.12] text-white',
     activeIconWrap: 'bg-violet-500/20 text-violet-300',
+    indicator: 'bg-violet-400',
     activeIcon: 'text-violet-300',
     blobA: 'bg-violet-600/10',
     blobB: 'bg-fuchsia-600/8',
@@ -50,7 +57,9 @@ export const MODERATOR_THEME: Record<
     brandGradient: 'bg-gradient-to-br from-amber-500 to-orange-500',
     brandShadow: 'shadow-lg shadow-amber-500/25',
     activeNav: 'bg-gradient-to-r from-amber-500/20 to-orange-500/10 text-white shadow-inner shadow-amber-500/5',
+    activeSolid: 'bg-amber-500/[0.12] text-white',
     activeIconWrap: 'bg-amber-500/20 text-amber-300',
+    indicator: 'bg-amber-400',
     activeIcon: 'text-amber-300',
     blobA: 'bg-amber-600/10',
     blobB: 'bg-orange-600/8',
@@ -61,7 +70,9 @@ export const MODERATOR_THEME: Record<
     brandGradient: 'bg-gradient-to-br from-emerald-500 to-teal-500',
     brandShadow: 'shadow-lg shadow-emerald-500/25',
     activeNav: 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-white shadow-inner shadow-emerald-500/5',
+    activeSolid: 'bg-emerald-500/[0.12] text-white',
     activeIconWrap: 'bg-emerald-500/20 text-emerald-300',
+    indicator: 'bg-emerald-400',
     activeIcon: 'text-emerald-300',
     blobA: 'bg-emerald-600/10',
     blobB: 'bg-teal-600/8',
@@ -80,7 +91,7 @@ export function ModeratorShell({
   const theme = MODERATOR_THEME[accent];
 
   return (
-    <div className="min-h-screen bg-[#06070c] text-zinc-100 antialiased">
+    <div className="staff-console min-h-screen bg-[#06070c] text-zinc-100 antialiased">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className={`absolute -left-32 top-0 h-[480px] w-[480px] rounded-full ${theme.blobA} blur-[120px]`} />
         <div className={`absolute right-0 top-1/4 h-[400px] w-[400px] rounded-full ${theme.blobB} blur-[100px]`} />

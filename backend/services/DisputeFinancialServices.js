@@ -49,6 +49,24 @@ function parseNonNegInt(value, field) {
   return num;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** How staff split the escrow: `amount` (default), `milestones`, or `both`, plus the picked milestones. */
+function parseSettlementSplit(body) {
+  const splitMethod = String(body?.splitMethod ?? body?.split_method ?? 'amount').toLowerCase().trim() || 'amount';
+  if (!['amount', 'milestones', 'both'].includes(splitMethod)) {
+    throw domainError('splitMethod must be amount, milestones or both.', 400);
+  }
+  const raw = body?.milestoneIds ?? body?.milestone_ids ?? [];
+  if (!Array.isArray(raw)) throw domainError('milestoneIds must be a list.', 400);
+  if (raw.length > 200) throw domainError('Too many milestones picked.', 400);
+  const milestoneIds = [...new Set(raw.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (milestoneIds.some((id) => !UUID_PATTERN.test(id))) {
+    throw domainError('A picked milestone id is not valid.', 400);
+  }
+  return { splitMethod, milestoneIds: splitMethod === 'amount' ? [] : milestoneIds };
+}
+
 /**
  * When a ruling's credits are paid. Default: 7 days from now. `releaseMode: "now"` pays at
  * once; otherwise `releaseAt` (ISO date) picks a date between now and 90 days ahead.
@@ -154,6 +172,7 @@ async function announceSettlement(row, result, notes) {
       releaseAt,
       notes,
       disputeNumber: row.dispute_number || null,
+      milestones: result.milestones || [],
     })
   );
 
@@ -305,7 +324,8 @@ async function logActivity(row, staffId, eventCode, action, metadata) {
 
 /**
  * Staff money actions on a dispute.
- *   settle_escrow        { clientCredits, freelancerCredits, resolutionNotes, releaseMode?, releaseAt? }
+ *   settle_escrow        { clientCredits, freelancerCredits, resolutionNotes, splitMethod?, milestoneIds?,
+ *                          releaseMode?, releaseAt? }  splitMethod: amount | milestones | both
  *   reverse_transaction  { creditTransactionId, amount?, resolutionNotes, releaseMode?, releaseAt? }
  *   release_payouts      pay every waiting payout now
  *   reschedule_payouts   { releaseAt, resolutionNotes? }
@@ -327,17 +347,26 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
       body?.freelancerCredits ?? body?.freelancer_credits ?? 0,
       'freelancerCredits'
     );
+    const split = parseSettlementSplit(body);
     result = await settleEscrow({
       disputeId,
       staffId,
       clientCredits,
       freelancerCredits,
       resolutionNotes: notes,
+      ...split,
       ...timing,
     });
     await logActivity(row, staffId, 'DISPUTE_ESCROW_SETTLED', 'escrow settled', {
       clientCredits,
       freelancerCredits,
+      splitMethod: split.splitMethod,
+      milestones: (result.milestones || []).map((m) => ({
+        id: m.id,
+        name: m.name,
+        credits: m.credits,
+        approved: Boolean(m.approved),
+      })),
       immediate: timing.immediate,
       releaseAt: timing.releaseAt,
     });

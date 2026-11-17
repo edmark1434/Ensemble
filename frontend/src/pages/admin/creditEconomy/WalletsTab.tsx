@@ -1,382 +1,448 @@
-import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
-import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Loader2, Lock, Search, Unlock } from 'lucide-react';
 import BulkActionsMenu from '../userTeam/components/BulkActionsMenu';
-import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
+import { HoldCreditsDialog, ReleaseHoldDialog } from './CreditActionDialogs';
 import {
-  freezeAccountCredits,
-  handleAccountActionError,
-} from '../userTeam/accountActions';
-import type { EconomyWallet } from './creditEconomyTypes';
+  downloadCsv,
+  ECONOMY_ACCENT,
+  ECONOMY_API,
+  EmptyRow,
+  formatCredits,
+  formatDate,
+  formatDateTime,
+  formatRelative,
+  HoldPill,
+  INPUT,
+  Pager,
+  SELECT,
+  StatusPill,
+  useDebounced,
+  usePagedList,
+} from './economyUi';
+import type { EconomyVariant, EconomyViewer, EconomyWallet } from './creditEconomyTypes';
 
-const WALLET_BULK_ITEMS = [
+const PAGE_SIZE = 50;
+
+type Mode = 'wallets' | 'holds';
+
+type Filters = {
+  search: string;
+  accountType: string;
+  hold: string;
+  balance: string;
+  accountStatus: string;
+  sort: string;
+};
+
+const WALLET_DEFAULTS: Filters = {
+  search: '',
+  accountType: 'all',
+  hold: 'all',
+  balance: 'all',
+  accountStatus: 'all',
+  sort: 'balance_desc',
+};
+
+const HOLD_DEFAULTS: Filters = { ...WALLET_DEFAULTS, hold: 'held', sort: 'hold_ending' };
+
+const HOLD_VIEWS = [
+  { value: 'held', label: 'All holds' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'expiring', label: 'Releasing ≤ 7 days' },
+  { value: 'indefinite', label: 'Until review' },
+];
+
+const BULK_ITEMS = [
   { id: 'freeze', label: 'Freeze credits', danger: true, section: 'Credits' },
-  { id: 'unfreeze', label: 'Unfreeze credits', section: 'Credits' },
-  { id: 'export', label: 'Export selected JSON', section: 'Tools' },
+  { id: 'release', label: 'Release holds', section: 'Credits' },
+  { id: 'export', label: 'Export selected (CSV)', section: 'Tools' },
   { id: 'clear', label: 'Clear selection', section: 'Other' },
 ];
 
 type WalletsTabProps = {
-  wallets: EconomyWallet[];
+  variant: EconomyVariant;
+  viewer: EconomyViewer;
+  mode: Mode;
+  preset?: Partial<Filters>;
+  statuses: string[];
+  refreshToken: number;
   onView: (wallet: EconomyWallet) => void;
-  onChanged?: () => void;
+  onChanged: () => void;
 };
 
-function exportJson(filename: string, payload: unknown) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+function exportWallets(wallets: EconomyWallet[]) {
+  downloadCsv(
+    `wallets-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Wallet ID', 'Account ID', 'Name', 'Username', 'Account type', 'Account status', 'Spendable', 'Held', 'Total', 'Hold reason', 'Hold until', 'Last activity'],
+    wallets.map((w) => [
+      w.walletId,
+      w.accountId,
+      w.name,
+      w.username,
+      w.accountType,
+      w.accountStatus,
+      w.spendableCredits,
+      w.heldCredits,
+      w.totalCredits,
+      w.hold?.reason || '',
+      w.hold?.frozenUntil || (w.hold ? 'Until review' : ''),
+      w.lastActivityAt || '',
+    ])
+  );
 }
 
-export default function WalletsTab({ wallets, onView, onChanged }: WalletsTabProps) {
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [frozenFilter, setFrozenFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('credits');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  // Freezing needs a reason the members will see, so a bulk freeze asks for one first.
-  const [bulkHoldOpen, setBulkHoldOpen] = useState(false);
-  const [bulkHoldReason, setBulkHoldReason] = useState('');
-  const [bulkHoldDays, setBulkHoldDays] = useState('');
+export default function WalletsTab({
+  variant,
+  viewer,
+  mode,
+  preset,
+  statuses,
+  refreshToken,
+  onView,
+  onChanged,
+}: WalletsTabProps) {
+  const accent = ECONOMY_ACCENT[variant];
+  const defaults = mode === 'holds' ? HOLD_DEFAULTS : WALLET_DEFAULTS;
+  const [filters, setFilters] = useState<Filters>({ ...defaults, ...preset });
+  const [offset, setOffset] = useState(0);
+  const [selected, setSelected] = useState<Map<string, EconomyWallet>>(new Map());
+  const [dialog, setDialog] = useState<{ kind: 'hold' | 'release'; wallets: EconomyWallet[] } | null>(null);
+  const search = useDebounced(filters.search);
 
-  const typeOptions = useMemo(
-    () => uniqueOptions(wallets.map((w) => w.accountType)),
-    [wallets]
+  // An alert link re-applies its filters even when this tab is already open.
+  const presetKey = JSON.stringify(preset || {});
+  useEffect(() => {
+    setFilters({ ...defaults, ...preset });
+    setOffset(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetKey, mode]);
+
+  const params = useMemo(
+    () => ({
+      search,
+      accountType: filters.accountType,
+      hold: filters.hold,
+      balance: filters.balance,
+      accountStatus: filters.accountStatus,
+      sort: filters.sort,
+      limit: PAGE_SIZE,
+      offset,
+    }),
+    [search, filters.accountType, filters.hold, filters.balance, filters.accountStatus, filters.sort, offset]
   );
-  const statusOptions = useMemo(
-    () => uniqueOptions(wallets.map((w) => w.status)),
-    [wallets]
-  );
+  const { page, loading, error, reload } = usePagedList<EconomyWallet>(ECONOMY_API.wallets, params, refreshToken);
+  const items = page?.items || [];
+  const total = page?.total || 0;
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = wallets.filter((w) => {
-      if (typeFilter !== 'all' && w.accountType.toLowerCase() !== typeFilter) return false;
-      if (statusFilter !== 'all' && w.status.toLowerCase() !== statusFilter) return false;
-      if (frozenFilter === 'frozen' && !w.frozen) return false;
-      if (frozenFilter === 'active' && w.frozen) return false;
-      if (!q) return true;
-      return (
-        w.name.toLowerCase().includes(q) ||
-        w.email.toLowerCase().includes(q) ||
-        w.username.toLowerCase().includes(q) ||
-        w.walletId.toLowerCase().includes(q) ||
-        String(w.accountId).includes(q)
-      );
-    });
+  const update = (patch: Partial<Filters>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+    setOffset(0);
+  };
 
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'assets':
-          return b.totalAssets - a.totalAssets;
-        case 'revenue':
-          return b.totalRevenue - a.totalRevenue;
-        case 'credits':
-        default:
-          return b.totalCredits - a.totalCredits;
-      }
-    });
+  const pageIds = items.map((w) => w.walletId);
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const someSelected = pageIds.some((id) => selected.has(id));
 
-    return list;
-  }, [wallets, search, typeFilter, statusFilter, frozenFilter, sortBy]);
-
-  const visibleIds = filtered.map((w) => w.walletId);
-  const allVisibleSelected =
-    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
-  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
-
-  const toggleAllVisible = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        for (const id of visibleIds) next.delete(id);
-      } else {
-        for (const id of visibleIds) next.add(id);
-      }
+  const toggleAll = () =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (allSelected) for (const id of pageIds) next.delete(id);
+      else for (const w of items) next.set(w.walletId, w);
       return next;
     });
-  };
 
-  const toggleOne = (walletId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(walletId)) next.delete(walletId);
-      else next.add(walletId);
+  const toggleOne = (wallet: EconomyWallet) =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(wallet.walletId)) next.delete(wallet.walletId);
+      else next.set(wallet.walletId, wallet);
       return next;
     });
+
+  const selectedWallets = [...selected.values()];
+
+  const onBulk = (id: string) => {
+    if (id === 'clear') return setSelected(new Map());
+    if (!selectedWallets.length) return;
+    if (id === 'export') return exportWallets(selectedWallets);
+    if (id === 'freeze') return setDialog({ kind: 'hold', wallets: selectedWallets });
+    if (id === 'release') return setDialog({ kind: 'release', wallets: selectedWallets });
   };
 
-  const selectedWallets = wallets.filter((w) => selectedIds.has(w.walletId));
-
-  const handleBulkAction = async (actionId: string) => {
-    if (actionId === 'clear') {
-      setSelectedIds(new Set());
-      return;
-    }
-    if (selectedWallets.length === 0) return;
-
-    if (actionId === 'export') {
-      exportJson(`wallets-export-${Date.now()}.json`, selectedWallets);
-      showSuccessToast(`Exported ${selectedWallets.length} wallet(s)`);
-      return;
-    }
-
-    if (actionId !== 'freeze' && actionId !== 'unfreeze') return;
-
-    const freeze = actionId === 'freeze';
-    if (freeze && !bulkHoldOpen) {
-      setBulkHoldOpen(true);
-      return;
-    }
-    const holdDays = bulkHoldDays === '' ? null : Number(bulkHoldDays);
-    if (freeze) {
-      if (bulkHoldReason.trim().length < 5) {
-        showErrorToast('Write the reason members will see (at least 5 characters)');
-        return;
-      }
-      if (holdDays !== null && (!Number.isInteger(holdDays) || holdDays < 1 || holdDays > 365)) {
-        showErrorToast('Hold length must be whole days from 1 to 365');
-        return;
-      }
-    }
-    setBulkBusy(true);
-    let ok = 0;
-    let failed = 0;
-    try {
-      for (const wallet of selectedWallets) {
-        try {
-          await freezeAccountCredits(
-            String(wallet.accountId),
-            freeze,
-            { silent: true },
-            freeze ? { reason: bulkHoldReason.trim(), days: holdDays } : undefined
-          );
-          ok += 1;
-        } catch {
-          failed += 1;
-        }
-      }
-      if (ok > 0) {
-        showSuccessToast(
-          `${freeze ? 'Froze' : 'Unfroze'} credits on ${ok} wallet${ok === 1 ? '' : 's'}${
-            failed ? ` (${failed} failed)` : ''
-          }`
-        );
-        setSelectedIds(new Set());
-        if (freeze) {
-          setBulkHoldOpen(false);
-          setBulkHoldReason('');
-          setBulkHoldDays('');
-        }
-        onChanged?.();
-      } else {
-        showErrorToast('Bulk credit action failed for all selected wallets');
-      }
-    } catch (err) {
-      handleAccountActionError(err);
-    } finally {
-      setBulkBusy(false);
-    }
+  const afterAction = () => {
+    setDialog(null);
+    setSelected(new Map());
+    void reload();
+    onChanged();
   };
 
-  const q = search.trim();
   const hasFilters =
-    q || typeFilter !== 'all' || statusFilter !== 'all' || frozenFilter !== 'all';
+    filters.search.trim() ||
+    (['accountType', 'balance', 'accountStatus'] as const).some((k) => filters[k] !== 'all') ||
+    filters.hold !== defaults.hold;
+
+  const typeOptions = viewer.canSeeStaffWallets ? ['user', 'team', 'staff'] : ['user', 'team'];
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-      <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name / email / username / wallet…"
-            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-          />
-        </div>
-        <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
-          {filtered.length} wallet{filtered.length === 1 ? '' : 's'}
-          {hasFilters ? ` matching filters (of ${wallets.length})` : ''}
-          {selectedIds.size > 0 ? ` · ${selectedIds.size} selected` : ''}
-        </p>
-        <div className="hidden flex-1 lg:block" />
-        <TableFilterBar
-          filters={[
-            { id: 'type', label: 'Account type', value: typeFilter, options: typeOptions },
-            { id: 'status', label: 'Status', value: statusFilter, options: statusOptions },
-            {
-              id: 'frozen',
-              label: 'Credits',
-              value: frozenFilter,
-              options: [
-                { value: 'active', label: 'Not frozen' },
-                { value: 'frozen', label: 'Frozen' },
-              ],
-            },
-          ]}
-          sort={{
-            value: sortBy,
-            options: [
-              { value: 'credits', label: 'Highest credits' },
-              { value: 'name', label: 'Name A–Z' },
-              { value: 'assets', label: 'Most assets' },
-              { value: 'revenue', label: 'Highest revenue' },
-            ],
-          }}
-          onFilterChange={(id, value) => {
-            if (id === 'type') setTypeFilter(value);
-            if (id === 'status') setStatusFilter(value);
-            if (id === 'frozen') setFrozenFilter(value);
-          }}
-          onSortChange={setSortBy}
-          onClear={() => {
-            setTypeFilter('all');
-            setStatusFilter('all');
-            setFrozenFilter('all');
-            setSortBy('credits');
-          }}
-        />
-        <BulkActionsMenu
-          selectedCount={selectedIds.size}
-          busy={bulkBusy}
-          items={WALLET_BULK_ITEMS}
-          onAction={(id) => void handleBulkAction(id)}
-        />
-      </div>
-      {bulkHoldOpen && (
-        <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-amber-500/[0.04] px-4 py-3 sm:flex-row sm:items-end">
-          <label className="flex-1 text-xs font-medium text-zinc-300">
-            Reason members will see ({selectedWallets.length} selected)
-            <input
-              value={bulkHoldReason}
-              onChange={(e) => setBulkHoldReason(e.target.value)}
-              maxLength={500}
-              placeholder="e.g. Payment provider investigation"
-              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-          </label>
-          <label className="text-xs font-medium text-zinc-300 sm:w-44">
-            Release after (days)
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={bulkHoldDays}
-              onChange={(e) => setBulkHoldDays(e.target.value)}
-              placeholder="Until review"
-              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={bulkBusy || selectedWallets.length === 0}
-              onClick={() => void handleBulkAction('freeze')}
-              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
-            >
-              Freeze selected
-            </button>
-            <button
-              type="button"
-              onClick={() => setBulkHoldOpen(false)}
-              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-zinc-300"
-            >
-              Cancel
-            </button>
+      <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3">
+        {mode === 'holds' && (
+          <div className="flex flex-wrap gap-1.5">
+            {HOLD_VIEWS.map((v) => (
+              <button
+                key={v.value}
+                type="button"
+                onClick={() => update({ hold: v.value })}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  filters.hold === v.value ? accent.chip : 'bg-white/[0.03] text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
           </div>
+        )}
+        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="relative min-w-[220px] flex-1 lg:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+            <input
+              value={filters.search}
+              onChange={(e) => update({ search: e.target.value })}
+              placeholder={mode === 'holds' ? 'Search name, username, hold reason…' : 'Search name, username, email, wallet or account ID…'}
+              className={`${INPUT} pl-9 ${accent.ring}`}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select value={filters.accountType} onChange={(e) => update({ accountType: e.target.value })} className={SELECT} aria-label="Account type">
+              <option value="all">All account types</option>
+              {typeOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t[0].toUpperCase() + t.slice(1)}
+                </option>
+              ))}
+            </select>
+            {mode === 'wallets' && (
+              <>
+                <select value={filters.hold} onChange={(e) => update({ hold: e.target.value })} className={SELECT} aria-label="Hold">
+                  <option value="all">Any hold state</option>
+                  <option value="held">On hold</option>
+                  <option value="not_held">No hold</option>
+                  <option value="overdue">Hold overdue</option>
+                </select>
+                <select value={filters.balance} onChange={(e) => update({ balance: e.target.value })} className={SELECT} aria-label="Balance">
+                  <option value="all">Any balance</option>
+                  <option value="positive">Has credits</option>
+                  <option value="empty">Empty</option>
+                  <option value="negative">Negative</option>
+                </select>
+              </>
+            )}
+            <select value={filters.accountStatus} onChange={(e) => update({ accountStatus: e.target.value })} className={SELECT} aria-label="Account status">
+              <option value="all">Any account status</option>
+              {statuses.map((s) => (
+                <option key={s} value={s.toLowerCase()}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select value={filters.sort} onChange={(e) => update({ sort: e.target.value })} className={SELECT} aria-label="Sort">
+              {mode === 'holds' && <option value="hold_ending">Releasing soonest</option>}
+              <option value="balance_desc">Highest balance</option>
+              <option value="balance_asc">Lowest balance</option>
+              <option value="held_desc">Most held</option>
+              <option value="name">Name A–Z</option>
+              <option value="newest">Newest accounts</option>
+            </select>
+            {hasFilters && (
+              <button type="button" onClick={() => update({ ...defaults })} className="px-2 text-xs text-zinc-400 hover:text-white">
+                Reset
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 lg:ml-auto">
+            <p className="text-xs text-zinc-500">
+              {loading && <Loader2 className={`mr-1 inline h-3 w-3 animate-spin ${accent.spinner}`} />}
+              {total.toLocaleString()} {mode === 'holds' ? 'hold' : 'wallet'}
+              {total === 1 ? '' : 's'}
+              {selected.size > 0 ? ` · ${selected.size} selected` : ''}
+            </p>
+            {mode === 'wallets' && viewer.canHold && (
+              <BulkActionsMenu selectedCount={selected.size} items={BULK_ITEMS} onAction={onBulk} />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-200">
+          <AlertTriangle className="h-3.5 w-3.5" /> {error}
+          <button type="button" onClick={() => void reload()} className="ml-auto underline">
+            Retry
+          </button>
         </div>
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-              <th className="w-12 px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
-                  }}
-                  onChange={toggleAllVisible}
-                  aria-label="Select all visible wallets"
-                  className="h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
-                />
-              </th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Account type</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Total credits</th>
-              <th className="px-4 py-3 text-right">Total assets</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((w) => {
-              const isChecked = selectedIds.has(w.walletId);
-              return (
-                <tr
-                  key={w.walletId}
-                  onClick={() => onView(w)}
-                  className={`cursor-pointer border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
-                    isChecked ? 'bg-rose-500/[0.07]' : ''
-                  }`}
-                >
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => toggleOne(w.walletId)}
-                      aria-label={`Select ${w.name}`}
-                      className="h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
-                    />
-                  </td>
+        {mode === 'wallets' ? (
+          <table className="w-full min-w-[980px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected && !allSelected;
+                    }}
+                    onChange={toggleAll}
+                    aria-label="Select all wallets on this page"
+                    className={`h-4 w-4 ${accent.check}`}
+                  />
+                </th>
+                <th className="px-4 py-3">Account</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Spendable</th>
+                <th className="px-4 py-3 text-right">On hold</th>
+                <th className="px-4 py-3 text-right">Total</th>
+                <th className="px-4 py-3">Last activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((w) => {
+                const checked = selected.has(w.walletId);
+                return (
+                  <tr
+                    key={w.walletId}
+                    onClick={() => onView(w)}
+                    className={`cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02] ${checked ? accent.row : ''}`}
+                  >
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleOne(w)}
+                        aria-label={`Select ${w.name}`}
+                        className={`h-4 w-4 ${accent.check}`}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-white">{w.name}</p>
+                      <p className="text-[10px] text-zinc-600">@{w.username || '—'}</p>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-400">
+                      {w.accountType}
+                      {w.staffRole && <span className="block text-[10px] text-zinc-600">{w.staffRole}</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        <StatusPill status={w.accountStatus} />
+                        {w.hold && <HoldPill overdue={w.hold.overdue} />}
+                      </div>
+                    </td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${w.spendableCredits < 0 ? 'text-red-400' : 'text-zinc-200'}`}>
+                      {formatCredits(w.spendableCredits)}
+                    </td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${w.heldCredits ? 'text-amber-300' : 'text-zinc-600'}`}>
+                      {formatCredits(w.heldCredits)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-white">{formatCredits(w.totalCredits)}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500" title={formatDateTime(w.lastActivityAt)}>
+                      {w.lastActivityAt ? formatRelative(w.lastActivityAt) : 'No activity'}
+                      {w.transactionCount != null && (
+                        <span className="block text-[10px] text-zinc-600">{w.transactionCount.toLocaleString()} entries</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && items.length === 0 && <EmptyRow colSpan={8}>No wallets match these filters.</EmptyRow>}
+              {loading && items.length === 0 && <EmptyRow colSpan={8}>Loading wallets…</EmptyRow>}
+            </tbody>
+          </table>
+        ) : (
+          <table className="w-full min-w-[980px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                <th className="px-4 py-3">Account</th>
+                <th className="px-4 py-3 text-right">Held</th>
+                <th className="px-4 py-3">Reason</th>
+                <th className="px-4 py-3">Placed</th>
+                <th className="px-4 py-3">Releases</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((w) => (
+                <tr key={w.walletId} onClick={() => onView(w)} className="cursor-pointer border-b border-white/[0.04] align-top hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">{w.name}</p>
                     <p className="text-[10px] text-zinc-600">
-                      @{w.username || '—'}
-                      {w.frozen ? ' · Frozen' : ''}
+                      @{w.username || '—'} · {w.accountType} · {w.accountStatus}
                     </p>
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">{w.accountType}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        w.frozen
-                          ? 'bg-amber-500/15 text-amber-200'
-                          : w.status.toLowerCase() === 'active'
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'bg-zinc-500/15 text-zinc-300'
-                      }`}
-                    >
-                      {w.frozen ? 'Frozen' : w.status}
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-amber-300">{formatCredits(w.heldCredits)}</td>
+                  <td className="max-w-[280px] px-4 py-3 text-xs text-zinc-300">
+                    <p className="line-clamp-2">{w.hold?.reason || <span className="text-zinc-600">No reason recorded</span>}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-400">
+                    {formatDate(w.hold?.frozenAt)}
+                    <span className="block text-[10px] text-zinc-600">
+                      {w.hold?.byStaffName || 'Unknown'}
+                      {w.hold?.byStaffRole ? ` · ${w.hold.byStaffRole}` : ''}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-emerald-300/90">
-                    {w.totalCredits.toLocaleString()}
+                  <td className="px-4 py-3 text-xs">
+                    {w.hold?.frozenUntil ? (
+                      <span className={w.hold.overdue ? 'text-red-300' : 'text-zinc-300'}>
+                        {formatDate(w.hold.frozenUntil)}
+                        <span className="block text-[10px] text-zinc-600">
+                          {w.hold.overdue ? `Overdue ${formatRelative(w.hold.frozenUntil)}` : formatRelative(w.hold.frozenUntil)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400">Until staff review</span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{w.totalAssets}</td>
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    {viewer.canHold && (
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'hold', wallets: [w] })}
+                          disabled={w.spendableCredits <= 0}
+                          title={w.spendableCredits > 0 ? 'Hold newly arrived credits too' : 'No spendable credits to add'}
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200 disabled:opacity-40"
+                        >
+                          <Lock className="h-3 w-3" /> Hold more
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'release', wallets: [w] })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-200"
+                        >
+                          <Unlock className="h-3 w-3" /> Release
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">
-                  No wallets match your search or filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              ))}
+              {!loading && items.length === 0 && <EmptyRow colSpan={6}>No holds in this view.</EmptyRow>}
+              {loading && items.length === 0 && <EmptyRow colSpan={6}>Loading holds…</EmptyRow>}
+            </tbody>
+          </table>
+        )}
       </div>
+
+      <Pager total={total} limit={PAGE_SIZE} offset={offset} onChange={setOffset} loading={loading} />
+
+      {dialog?.kind === 'hold' && (
+        <HoldCreditsDialog wallets={dialog.wallets} onClose={() => setDialog(null)} onDone={afterAction} />
+      )}
+      {dialog?.kind === 'release' && (
+        <ReleaseHoldDialog wallets={dialog.wallets} onClose={() => setDialog(null)} onDone={afterAction} />
+      )}
     </section>
   );
 }

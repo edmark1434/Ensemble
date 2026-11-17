@@ -105,6 +105,12 @@ const EVENT_CATALOG = {
     severity: 'critical',
     impact: 'Moved the wallet balance into a frozen balance the member cannot spend.',
   },
+  CREDITS_ADJUSTED: {
+    label: 'Credits adjusted by staff',
+    targetType: 'Wallet',
+    severity: 'high',
+    impact: 'Granted or deducted spendable credits; metadata.delta holds the signed amount.',
+  },
   CREDITS_UNFROZEN: {
     label: 'Credits released',
     targetType: 'Wallet',

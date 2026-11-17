@@ -11,7 +11,6 @@ import {
   History,
   Inbox,
   Layers,
-  Loader2,
   MessageSquare,
   RefreshCw,
   Scale,
@@ -34,6 +33,7 @@ import ModeratorDisputeDetailModal from "../shared/ModeratorDisputeDetailModal";
 import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { Alert, SupportOverview } from "../shared/moderatorTypes";
 import { PriorityBadge, StatusBadge, titleCaseWords } from "../shared/ui";
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const OVERVIEW_URL = "/api/moderator/support/overview";
 
@@ -231,9 +231,7 @@ export default function SupportModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

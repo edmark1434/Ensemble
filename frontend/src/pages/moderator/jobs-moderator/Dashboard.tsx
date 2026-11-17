@@ -12,7 +12,6 @@ import {
   Gem,
   Hand,
   Inbox,
-  Loader2,
   Lock,
   MessageSquareReply,
   RefreshCw,
@@ -37,6 +36,7 @@ import type { Alert, JobsOverview, JobsQueueHealth } from '../shared/moderatorTy
 import { PriorityBadge, StatusBadge, titleCaseWords } from '../shared/ui';
 import PostingDetailModal from './PostingDetailModal';
 import { formatCredits, relativeTime, statusPill, typeBadge } from './postingUi';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const API_BASE = '/api/moderator/jobs';
 const OVERVIEW_URL = `${API_BASE}/overview`;
@@ -248,9 +248,7 @@ export default function JobsModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-emerald-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

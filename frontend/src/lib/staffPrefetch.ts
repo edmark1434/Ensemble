@@ -68,7 +68,14 @@ addModeratorDesk(
   // Marketplace enforcement runs through report cases; this console has no Restrictions tab.
   false,
 );
-addModeratorDesk('support', { 'ticket-management': ['/api/moderator/support/overview'] }, false);
+addModeratorDesk(
+  'support',
+  {
+    'ticket-management': ['/api/moderator/support/overview'],
+    credits: ['/api/admin/economy-overview'],
+  },
+  false,
+);
 addModeratorDesk(
   'jobs',
   {

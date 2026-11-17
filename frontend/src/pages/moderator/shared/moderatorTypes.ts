@@ -6,6 +6,8 @@ import type {
   TicketDetail,
   TicketMessage,
   TicketActivity,
+  CaseAccountSummary,
+  CaseTicketRef,
 } from "@/pages/admin/ticketManagement/ticketTypes";
 
 export type { SupportTicket, Dispute, UserReport, ChartSegment, TicketDetail, TicketMessage, TicketActivity };
@@ -17,6 +19,12 @@ export type DisputeCaseMilestone = {
   description: string | null;
   status: string;
   credits: number;
+  /**
+   * Where the milestone's credits stand: `open` (still in escrow, staff decide), `approved`
+   * (approved, still in escrow, always goes to the freelancer), `paid` (already paid out of
+   * escrow), `closed` (cancelled or abandoned).
+   */
+  escrowState?: "open" | "approved" | "paid" | "closed";
   revisions: number;
   deadlineAt: string | null;
   startedAt: string | null;
@@ -135,6 +143,10 @@ export type DisputeCaseFile = {
   contracts: DisputeCaseContract[];
   transactions: DisputeCaseTransaction[];
   relatedDisputes: DisputeCaseRelated[];
+  /** Staff views only: each side's standing on the platform. */
+  parties?: { initiator: CaseAccountSummary | null; respondent: CaseAccountSummary | null };
+  /** Support tickets that name this dispute's contract. */
+  relatedTickets?: CaseTicketRef[];
 };
 
 export type DisputeDetail = {

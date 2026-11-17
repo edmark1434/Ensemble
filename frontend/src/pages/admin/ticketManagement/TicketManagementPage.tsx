@@ -5,7 +5,6 @@ import {
   Hand,
   Inbox,
   LayoutGrid,
-  Loader2,
   Plus,
   RefreshCw,
   Search,
@@ -34,6 +33,7 @@ import {
 } from './ticketFilterUtils';
 import type { SupportTicket, TicketsOverview } from './ticketTypes';
 import { TICKET_TYPE_OPTIONS } from './ticketTypes';
+import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 type TabId = 'overview' | 'tickets' | 'mine' | 'assignments';
 
@@ -243,9 +243,7 @@ export default function TicketManagementPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
-        <Loader2 className="h-10 w-10 animate-spin text-rose-400" />
-      </main>
+      <ConsolePageSkeleton />
     );
   }
 

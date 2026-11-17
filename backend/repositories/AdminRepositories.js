@@ -41,7 +41,7 @@ async function getDashboardOverview() {
           (SELECT COUNT(*)::int FROM disputes WHERE status <> 'closed') AS open_disputes,
           (SELECT COUNT(*)::int FROM teams) AS total_teams,
           (SELECT COUNT(*)::int FROM marketplace_listings WHERE LOWER(status) = 'pending') AS pending_listings,
-          (SELECT COALESCE(SUM(w.balance_credits), 0)::int
+          (SELECT COALESCE(SUM(w.balance_credits + w.frozen_balance_credits), 0)::bigint
              FROM wallets w
              INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
              WHERE w.type = 'account wallets') AS total_wallet_credits
@@ -143,17 +143,23 @@ async function getDashboardOverview() {
       ORDER BY a.created_at DESC NULLS LAST
       LIMIT 15
     `),
+    // Credits leaderboard: members with the most credits (spendable + held), not newest signups.
     pool.query(`
       SELECT
         u.user_id,
         COALESCE(a.display_name, TRIM(u.first_name || ' ' || u.last_name)) AS full_name,
         a.handle,
         a.status,
-        a.created_at
+        a.created_at,
+        w.wallet_id,
+        (w.balance_credits + w.frozen_balance_credits)::bigint AS total_credits,
+        w.frozen_balance_credits::bigint AS held_credits
       FROM users u
-      INNER JOIN accounts a ON a.account_id = u.account_id
-      ORDER BY a.created_at DESC NULLS LAST
-      LIMIT 12
+      INNER JOIN accounts a ON a.account_id = u.account_id AND a.deleted_at IS NULL
+      INNER JOIN account_wallets aw ON aw.account_id = a.account_id
+      INNER JOIN wallets w ON w.wallet_id = aw.wallet_id AND w.type = 'account wallets'
+      ORDER BY total_credits DESC, u.user_id
+      LIMIT 8
     `),
     pool.query(`
       SELECT role, COUNT(*)::int AS count
@@ -304,6 +310,9 @@ function mapEconomyItem(row, index) {
     label: 'Member',
     timeAgo: formatRelativeTime(row.created_at),
     status: normalizeStatus(row.status),
+    walletId: row.wallet_id || null,
+    credits: Number(row.total_credits || 0),
+    heldCredits: Number(row.held_credits || 0),
   };
 }
 

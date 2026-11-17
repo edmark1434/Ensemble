@@ -129,6 +129,39 @@ async function contractEscrowHoldings(db, { disputeId, contractId }) {
   }));
 }
 
+/**
+ * SQL expression: true once any ledger row has moved a milestone's credits out of an escrow
+ * wallet (its approval payout, or the refund when it was cancelled). `alias` is the
+ * contract_milestones alias in the outer query.
+ */
+function milestonePaidOutSql(alias = 'cm') {
+  return `EXISTS (
+    SELECT 1
+    FROM credit_transactions mct
+    JOIN wallets msw ON msw.wallet_id = mct.source_wallet_id
+    WHERE mct.reference_table = 'contract_milestones'
+      AND mct.reference_id = ${alias}.contract_milestone_id
+      AND mct.status IN ('Completed', 'Reversed')
+      AND msw.type = 'escrow wallets'
+  )`;
+}
+
+/**
+ * Where a milestone's credits stand when a dispute settles the escrow:
+ *   open      unapproved, credits still in escrow — staff decide who gets them
+ *   approved  the client approved it (status completed) but it is not paid yet — the credits
+ *             belong to the freelancer and can never be refunded to the client
+ *   paid      already paid out of escrow — nothing left to settle
+ *   closed    cancelled or abandoned
+ */
+function milestoneEscrowState({ status, paidOut }) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'cancelled' || normalized === 'abandoned') return 'closed';
+  if (paidOut) return 'paid';
+  if (normalized === 'completed') return 'approved';
+  return 'open';
+}
+
 async function getOpenContractDispute(db, contractId) {
   if (!contractId) return null;
   const result = await (db || pool).query(OPEN_DISPUTE_SQL, [contractId]);
@@ -222,4 +255,6 @@ module.exports = {
   freezeContractEscrowForDispute,
   remainingContractEscrowCredits,
   contractEscrowHoldings,
+  milestonePaidOutSql,
+  milestoneEscrowState,
 };
