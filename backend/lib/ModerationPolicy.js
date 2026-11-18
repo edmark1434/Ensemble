@@ -231,16 +231,18 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     return { suspended: false, stricterStanding: current, activeCount, max: AUTO_SUSPEND_POINTS };
   }
 
-  // Guarded again in SQL, in case a ban landed between the read and this write.
+  // Guarded again in SQL, in case a ban landed between the read and this write. The engine
+  // marker is only written once the warning-lift migration has added its columns.
+  const { autoSuspendColumnsReady } = require('./SchemaFeatures');
+  const markAuto = await autoSuspendColumnsReady();
   const applied = await pool.query(
     `UPDATE accounts
      SET status = 'Suspended',
-         suspension_ends_at = NOW() + ($2 * INTERVAL '1 day'),
-         suspension_source = 'auto',
-         auto_suspend_lift_merit = $3
+         suspension_ends_at = NOW() + ($2 * INTERVAL '1 day')
+         ${markAuto ? ", suspension_source = 'auto', auto_suspend_lift_merit = $3" : ''}
      WHERE account_id = $1
        AND LOWER(COALESCE(status, 'active')) NOT IN ('banned', 'locked', 'suspended')`,
-    [accountId, days, liftAtMerit]
+    markAuto ? [accountId, days, liftAtMerit] : [accountId, days]
   );
   if (!applied.rowCount) {
     return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
@@ -302,6 +304,8 @@ const ACTIVE_POINTS_SQL = `
  * @returns {Promise<{ accountId: string, merit: number, nextStatus: string }[]>}
  */
 async function liftRecoveredAutoSuspensions({ accountId = null, limit = 100 } = {}) {
+  const { autoSuspendColumnsReady } = require('./SchemaFeatures');
+  if (!(await autoSuspendColumnsReady())) return [];
   const result = await pool.query(
     `
     WITH recovered AS (

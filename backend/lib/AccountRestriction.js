@@ -221,6 +221,8 @@ const EXPIRED_STANDING_SQL = `
  * @returns {Promise<{ accountId: string, previousStatus: string }[]>}
  */
 async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
+  const { clearAutoSuspendSql } = require('./SchemaFeatures');
+  const clearAutoSuspend = await clearAutoSuspendSql();
   const result = await pool.query(
     `
     WITH expired AS (
@@ -235,10 +237,9 @@ async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
     UPDATE accounts a
     SET status = ${RESTING_STATUS_SQL},
         suspension_ends_at = NULL,
-        suspension_source = NULL,
-        auto_suspend_lift_merit = NULL,
         ban_ends_at = NULL,
         lock_ends_at = NULL
+        ${clearAutoSuspend}
     FROM expired e
     WHERE a.account_id = e.account_id
     RETURNING a.account_id, e.status AS previous_status, a.status AS next_status
@@ -746,7 +747,10 @@ async function getOwnAccountRecord(accountId) {
   const [warnings, restrictions, activity] = await Promise.all([
     pool.query(
       `
-      SELECT violation_id, violation_number, type, reason, points, points_original, status, created_at, expires_at
+      SELECT violation_id, violation_number, type, reason, points,
+             -- Read through jsonb so this works before the warning-lift migration too.
+             (to_jsonb(violations) ->> 'points_original')::int AS points_original,
+             status, created_at, expires_at
       FROM violations
       WHERE account_id = $1 AND deleted_at IS NULL
       ORDER BY created_at DESC
@@ -963,6 +967,17 @@ const SUSPENDED_WRITE_ALLOWLIST = [
   /\/api\/users\/refresh-token(?:\?|$)/,
   /\/api\/notifications\/read-all(?:\?|$)/,
   /\/api\/notifications\/[^/]+\/read(?:\?|$)/,
+  // Reads that use POST: author names on forum and job pages, and chat read receipts.
+  // Refusing them broke browsing for suspended members (missing names, error toasts).
+  /\/api\/users\/list-of-details(?:\?|$)/,
+  /\/api\/inbox\/conversation\/[^/]+\/read(?:\?|$)/,
+  // Background housekeeping the inbox runs on open (group size sync); not a member action.
+  /\/api\/inbox\/[^/]+\/limit(?:\?|$)/,
+  // Leaving, ending or syncing a call that was already running when the suspension started.
+  /\/api\/google-meet\/meetings\/[^/]+\/(?:leave|end|sync)(?:\?|$)/,
+  // Securing the account and stopping charges are never blocked by a suspension.
+  /\/api\/users\/2fa\/(?:setup|enable|disable|regenerate-recovery-codes)(?:\?|$)/,
+  /\/api\/payment\/cancel-subscription(?:\?|$)/,
   // A suspended member may appeal. The ticket controller limits these two to the appeal
   // ticket type, exactly as it does for banned and locked members.
   /^\/api\/users\/tickets(?:\?|$)/,

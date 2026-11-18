@@ -258,7 +258,8 @@ export const TwoFactorSettingsSection: React.FC = () => {
   };
 
   return (
-    <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.02]">
+    // Securing the account is never blocked by a suspension (backend allows these too).
+    <div data-suspension-keep className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.02]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-200 dark:border-white/10">
         <div className="flex items-start sm:items-center gap-3.5">

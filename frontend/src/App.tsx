@@ -247,7 +247,10 @@ function App() {
         </Route>
 
         {/* Handoff page: no sidebar, but still behind RouteMiddleware */}
-        <Route path="/projects/open/:projectId" element={<OpenInEditor />} />
+        {/* The editor saves as it goes; a suspended member would lose that work, so stop here. */}
+        <Route element={<SuspendedRouteGate />}>
+          <Route path="/projects/open/:projectId" element={<OpenInEditor />} />
+        </Route>
 
         {/* Banned and locked members. No sidebar, chat, or platform tabs. */}
         <Route path="/account/appeal" element={<AccountAccessPage />} />

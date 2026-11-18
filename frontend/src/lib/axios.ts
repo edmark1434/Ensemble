@@ -15,6 +15,21 @@ const ACCOUNT_RESTRICTION_CODES = new Set([
   "ACCOUNT_DELETED",
 ]);
 
+// When the member last pressed or typed something. A request refused for a suspension right
+// after that was their own action and gets an explanation; background requests fail quietly.
+let lastMemberInteractionAt = 0;
+if (typeof document !== "undefined") {
+  const mark = () => {
+    lastMemberInteractionAt = Date.now();
+  };
+  document.addEventListener("pointerdown", mark, true);
+  document.addEventListener("keydown", mark, true);
+}
+
+function memberInteractedRecently(windowMs = 2500) {
+  return Date.now() - lastMemberInteractionAt < windowMs;
+}
+
 let csrfToken: string | null = null;
 let csrfRequest: Promise<string> | null = null;
 
@@ -107,11 +122,21 @@ api.interceptors.response.use(
 
         const restrictionCode = err?.response?.data?.code;
         if (restrictionCode === "ACCOUNT_SUSPENDED") {
-            // Fixed id: repeated blocked actions replace this toast instead of stacking new ones.
-            showErrorToast(
-                err.response?.data?.message || "Your account is suspended. You can look around Ensemble. Actions stay off until this ends.",
-                { id: "account-suspended" },
-            );
+            // Keep the standing current so the banner and locked buttons appear even if the
+            // suspension started after this page loaded.
+            const restriction = err.response?.data?.restriction;
+            const current = useGlobalState.getState().user;
+            if (current && restriction && !current.restriction?.suspended) {
+                useGlobalState.getState().setUser({ ...current, status: "Suspended", restriction });
+            }
+            // Only the member's own clicks get a toast (one at a time); background requests
+            // such as read receipts fail quietly instead of flashing errors on every page.
+            if (memberInteractedRecently()) {
+                showErrorToast(
+                    err.response?.data?.message || "Your account is suspended. You can look around Ensemble. Actions stay off until this ends.",
+                    { id: "account-suspended" },
+                );
+            }
             return Promise.reject(err);
         }
 

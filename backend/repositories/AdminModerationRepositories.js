@@ -514,10 +514,12 @@ async function reverseModerationActivity(activityId, staffSession = null) {
         ends[restoreTo] = endsAt;
       }
     }
+    const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+    const clearAutoSuspend = await clearAutoSuspendSql();
     await pool.query(
       `UPDATE accounts
-       SET status = $1, suspension_ends_at = $2, ban_ends_at = $3, lock_ends_at = $4,
-           suspension_source = NULL, auto_suspend_lift_merit = NULL
+       SET status = $1, suspension_ends_at = $2, ban_ends_at = $3, lock_ends_at = $4
+           ${clearAutoSuspend}
        WHERE account_id = $5`,
       [restoreTo, ends.Suspended || null, ends.Banned || null, ends.Locked || null, accountId]
     );

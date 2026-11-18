@@ -13,4 +13,12 @@
 - Lift panel in Admin User & Team → History modal and in the moderator Restrictions desk (Support/Admin), with quick lifts ("End Frozen access · lift 3 → merit 85"), a live result preview, and a staff-only reason. Lifted points show on staff lists and the member's Record.
 - Suspension UI: `SuspensionGuard` (site-wide) locks write controls (faded, not-allowed cursor, amber dashed ring on hover, tooltip, one heads-up toast on click, typing/upload/submit blocked); appeal and support pages stay open. `SuspendedRouteGate` covers job/gig create and edit, proposals, gig orders, checkout, new project, dispute form, team invite/join, business verification. Forum locks treat a suspension like a timeout. The banner says "read-only, actions are off".
 - Fixed: Platform Merit band-change socket events no longer show the blocked-account screen; the admin dashboard's active-violation count no longer counts rescinded or lifted warnings.
+
+### Follow-up fixes (suspended-account errors)
+- `GET /assets` 500: Vite build output moved from `dist/assets/` to `dist/static/` (`build.assetsDir`), so the marketplace page no longer collides with the build folder on the host.
+- Suspended members can still do the reads that use POST and housekeeping (`list-of-details`, chat read receipts, inbox group-size sync, leaving/ending/syncing a running call), secure the account (2FA) and cancel a subscription.
+- Suspended sockets are read-only instead of dead: joining conversation/forum/dispute rooms, presence and read receipts work. Socket standing refreshes on status change and every 30 s on write events. Forum-timeout sockets can join forum rooms again.
+- Background requests refused for a suspension fail quietly; only the member's own clicks get the (single) toast. A suspension that starts mid-session updates the standing so the UI locks.
+- Floating chat and inbox composers are replaced by a "Messaging is paused" notice while suspended. The editor hand-off route is gated. Guard: keyboard Tab is no longer trapped, menu items and press-activated menus are covered, filter forms are no longer blocked, more write labels (approve, confirm, verify, deactivate, …).
+- The new code runs before and after the `1829200000000` migration (`lib/SchemaFeatures.js`): no 500s if the migration has not been applied yet; lifting points explains that it needs the migration.
 - User preference: do not run automated build or verification commands.

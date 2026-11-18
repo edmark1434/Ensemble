@@ -160,7 +160,8 @@ async function fetchHistoryForAccounts(accountIds) {
         v.type,
         v.reason,
         v.points,
-        v.points_original,
+        -- Read through jsonb so this works before the warning-lift migration too.
+        (to_jsonb(v) ->> 'points_original')::int AS points_original,
         v.status,
         v.created_at,
         v.expires_at,
@@ -1349,6 +1350,9 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const banEndsAt = status === 'Banned' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const lockEndsAt = status === 'Locked' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const { restingStatusSql } = require('../lib/AccountRestriction');
+  // A staff decision replaces any automatic suspension, so merit recovery no longer ends it.
+  const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+  const clearAutoSuspend = await clearAutoSuspendSql();
   // Lifting a penalty returns a member who had deactivated the account to Deactivated.
   const saved = await pool.query(
     `
@@ -1356,10 +1360,8 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     SET status = CASE WHEN $1::text = 'Active' THEN ${restingStatusSql()} ELSE $1::text END,
         suspension_ends_at = $2,
         ban_ends_at = $3,
-        lock_ends_at = $4,
-        -- A staff decision replaces any automatic suspension, so merit recovery no longer ends it.
-        suspension_source = NULL,
-        auto_suspend_lift_merit = NULL
+        lock_ends_at = $4
+        ${clearAutoSuspend}
     WHERE account_id = $5
     RETURNING status
     `,
@@ -1876,16 +1878,17 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
 
     const previousStatus = account.status;
     const { restingStatusSql } = require('../lib/AccountRestriction');
+    const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+    const clearAutoSuspend = await clearAutoSuspendSql();
     // A member who had deactivated the account goes back to Deactivated, not Active.
     const restored = await client.query(
       `
       UPDATE accounts
       SET status = ${restingStatusSql()},
           suspension_ends_at = NULL,
-          suspension_source = NULL,
-          auto_suspend_lift_merit = NULL,
           ban_ends_at = NULL,
           lock_ends_at = NULL
+          ${clearAutoSuspend}
       WHERE account_id = $1
       RETURNING status
       `,

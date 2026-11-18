@@ -32,11 +32,14 @@ export const SUSPENDED_ACTION_PATHS: RegExp[] = [
 ];
 
 const WRITE_LABEL =
-  /\b(like|unlike|save|unsave|follow|unfollow|message|buy|purchase|checkout|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|invite|join|leave|pay|publish|unpublish|archive|unarchive|bookmark|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|downgrade|react|claim|redeem|endorse|upvote|downvote|vote|favorite|favourite|cash out|cashout|transfer|distribute|add funds|top up|file a dispute|open a dispute|raise a dispute|add to cart|request revision|buy revision|deliver|mark as complete|mark complete|release|refund|extend|rate|order now|place order|place an order|order service|post a job|post a gig|post a service|post job|new discussion|new project|start project|use template|use in project|duplicate|restore|rename|verify now|start verification|add image|add review|write a review|leave a review)\b|\bpost\b/i;
+  /\b(like|unlike|save|unsave|follow|unfollow|message|buy|purchase|checkout|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|invite|join|leave|pay|publish|unpublish|archive|unarchive|bookmark|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|downgrade|react|claim|redeem|endorse|upvote|downvote|vote|favorite|favourite|cash out|cashout|transfer|distribute|add funds|top up|file a dispute|open a dispute|raise a dispute|add to cart|request revision|buy revision|deliver|mark as complete|mark complete|release|refund|extend|rate|order now|place order|place an order|order service|post a job|post a gig|post a service|post job|new discussion|new project|start project|use template|use in project|duplicate|restore|rename|verify|verify now|start verification|add image|add review|write a review|leave a review|approve|confirm|deactivate|shortlist|fund|sign contract|claim badge)\b|\bpost\b/i;
 
 /** Labels that only look, move around, or close something. These always stay usable. */
 const PASSIVE_LABEL =
   /\b(back|previous|next|close|cancel|dismiss|menu|expand|collapse|theme|grid|list|filters?|sort|search|clear|view|show|hide|see|more|less|details|how to fix|appeal|sign out|log out|logout|download|copy|open chat|help)\b/i;
+
+/** Things a member presses: buttons, links, and menu items built from other elements. */
+const CONTROL_SELECTOR = "button, a, [role='button'], [role='menuitem']";
 
 function controlLabel(element: Element): string {
   const labelled = element.getAttribute("aria-label") || element.getAttribute("title") || "";
@@ -90,9 +93,9 @@ export function suspensionLockTarget(element: Element): Element | null {
     return null;
   }
 
-  const control = element.matches("button, a, [role='button']")
+  const control = element.matches(CONTROL_SELECTOR)
     ? element
-    : element.closest("button, a, [role='button']");
+    : element.closest(CONTROL_SELECTOR);
   if (!control || isKept(control)) return null;
   if (control instanceof HTMLButtonElement && control.disabled) return null;
   if (control.getAttribute("aria-disabled") === "true" && !control.hasAttribute(SUSPENSION_LOCK_ATTR)) return null;
@@ -112,7 +115,7 @@ export function suspensionLockTarget(element: Element): Element | null {
   return WRITE_LABEL.test(label) ? control : null;
 }
 
-const SCAN_QUERY = "button, a, [role='button'], textarea, input[type='file'], input[type='submit'], [contenteditable='true']";
+const SCAN_QUERY = `${CONTROL_SELECTOR}, textarea, input[type='file'], input[type='submit'], [contenteditable='true']`;
 
 function lock(target: Element, message: string) {
   if (target.hasAttribute(SUSPENSION_LOCK_ATTR)) return;

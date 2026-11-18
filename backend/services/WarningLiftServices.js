@@ -35,8 +35,22 @@ function wholeNumber(value) {
   return Number.isInteger(n) ? n : NaN;
 }
 
+/** Lifting needs `violations.points_original`; say so plainly until the migration has run. */
+async function assertLiftAvailable() {
+  const { warningLiftColumnsReady } = require('../lib/SchemaFeatures');
+  if (!(await warningLiftColumnsReady())) {
+    throw liftError(
+      'Lifting warning points needs the latest database migration. Run `pnpm migrate` on the backend, then try again.',
+      503,
+      'WARNING_LIFT_UNAVAILABLE'
+    );
+  }
+}
+
 /** The engine-suspension the member is serving, if any, with the merit that ends it. */
 async function loadAutoSuspension(accountId) {
+  const { autoSuspendColumnsReady } = require('../lib/SchemaFeatures');
+  if (!(await autoSuspendColumnsReady())) return null;
   const { rows } = await pool.query(
     `
     SELECT suspension_ends_at, auto_suspend_lift_merit
@@ -61,6 +75,7 @@ async function loadAutoSuspension(accountId) {
  * lift and the merit it lands on.
  */
 async function getWarningLiftPreview(accountId) {
+  await assertLiftAvailable();
   const { assertWarnableAccount } = require('./WarningBandServices');
   await assertWarnableAccount(accountId);
   await refreshLiveThresholds();
@@ -218,6 +233,7 @@ async function liftWarningPoints(accountId, staffId, input = {}) {
     throw liftError(`Write why the points are lifted (at least ${REASON_MIN} characters). The member does not see it.`);
   }
 
+  await assertLiftAvailable();
   const { assertWarnableAccount } = require('./WarningBandServices');
   await assertWarnableAccount(accountId);
   const { assertCanSanctionTarget } = require('../lib/SuspendGuards');

@@ -124,6 +124,8 @@ Staff pick a **named timeout** from `punishment_defs` (`kind = timeout`). Durati
 
 Read the whole platform. Writes blocked except logout, token refresh, mark notifications read. Cannot complete contract actions, chat-send, list, cash out, or ticket-create. Public Suspended chip. Auto-suspend is always 7 days. Manual 1–30 typical.
 
+Still allowed while suspended (`SUSPENDED_WRITE_ALLOWLIST` in `AccountRestriction.js`): reads that use POST (`/api/users/list-of-details`), chat read receipts and the inbox group-size sync, leaving/ending/syncing a call already running, the appeal ticket and its evidence uploads, two-factor setup/changes, and cancelling a subscription (stopping charges is never blocked). Over Socket.IO a suspended member may join and leave rooms (conversations, forums, disputes), read presence and active calls, and send read receipts (`SUSPENDED_SOCKET_EVENTS` in `WebSocket.js`); everything else is refused. Socket standing refreshes on every status change and at most every 30 seconds on a write event, so a suspension that starts or ends applies without a reconnect.
+
 Staff pick a **named suspension** from `punishment_defs` (`kind = suspend`). Duration is the catalog default unless they set a custom clock. Auto-suspend from warning points does not use this catalog.
 
 Warning points: leftover active points still apply the auto band.

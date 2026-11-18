@@ -20,10 +20,18 @@ function mapRow(row) {
   };
 }
 
+// lift_at_merit is read through jsonb so thresholds still load before the warning-lift
+// migration has run (it then reads as NULL: no early lift).
 const COLUMNS = `
-  warning_threshold_id, min_points, effect, label, suspend_days, lift_at_merit, note,
-  is_system, sort_order, created_at, updated_at
+  warning_threshold_id, min_points, effect, label, suspend_days,
+  (to_jsonb(warning_thresholds) ->> 'lift_at_merit')::int AS lift_at_merit,
+  note, is_system, sort_order, created_at, updated_at
 `;
+
+function liftColumnReady() {
+  const { hasColumn } = require('../lib/SchemaFeatures');
+  return hasColumn('warning_thresholds', 'lift_at_merit');
+}
 
 async function listWarningThresholds({ includeDeleted = false } = {}) {
   const { rows } = await pool.query(
@@ -74,13 +82,20 @@ async function createWarningThreshold({
   isSystem = false,
   sortOrder = 0,
 }) {
+  const withLift = await liftColumnReady();
   const { rows } = await pool.query(
-    `
-    INSERT INTO warning_thresholds (min_points, effect, label, suspend_days, lift_at_merit, note, is_system, sort_order)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING ${COLUMNS}
-    `,
-    [minPoints, effect, label, suspendDays, liftAtMerit, note || null, isSystem, sortOrder]
+    withLift
+      ? `
+        INSERT INTO warning_thresholds (min_points, effect, label, suspend_days, note, is_system, sort_order, lift_at_merit)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING ${COLUMNS}
+        `
+      : `
+        INSERT INTO warning_thresholds (min_points, effect, label, suspend_days, note, is_system, sort_order)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING ${COLUMNS}
+        `,
+    [minPoints, effect, label, suspendDays, note || null, isSystem, sortOrder, ...(withLift ? [liftAtMerit] : [])]
   );
   return mapRow(rows[0]);
 }
@@ -94,6 +109,7 @@ async function updateWarningThreshold(thresholdId, {
   note,
   sortOrder,
 }) {
+  const withLift = await liftColumnReady();
   const { rows } = await pool.query(
     `
     UPDATE warning_thresholds
@@ -106,10 +122,7 @@ async function updateWarningThreshold(thresholdId, {
         END,
         note = COALESCE($7, note),
         sort_order = COALESCE($8, sort_order),
-        lift_at_merit = CASE
-          WHEN $9::boolean THEN $10::smallint
-          ELSE lift_at_merit
-        END,
+        ${withLift ? `lift_at_merit = CASE WHEN $9::boolean THEN $10::smallint ELSE lift_at_merit END,` : ''}
         updated_at = NOW()
     WHERE warning_threshold_id = $1 AND deleted_at IS NULL
     RETURNING ${COLUMNS}
@@ -123,8 +136,7 @@ async function updateWarningThreshold(thresholdId, {
       suspendDays === undefined ? null : suspendDays,
       note == null ? null : note,
       sortOrder == null ? null : sortOrder,
-      liftAtMerit !== undefined,
-      liftAtMerit === undefined ? null : liftAtMerit,
+      ...(withLift ? [liftAtMerit !== undefined, liftAtMerit === undefined ? null : liftAtMerit] : []),
     ]
   );
   return mapRow(rows[0]);

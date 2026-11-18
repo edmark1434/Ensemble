@@ -68,14 +68,34 @@ export function SuspensionGuard() {
       if (event.type === "click") showSuspendedNotice(until);
     };
 
+    // Keys that would type or submit; Tab, Escape, arrows and modifiers keep working so
+    // keyboard users can move past a locked composer.
+    const WRITING_KEYS = new Set(["Enter", "Backspace", "Delete", " "]);
     const blockTyping = (event: Event) => {
+      if (!lockedAncestor(event.target)) return;
+      if (event instanceof KeyboardEvent) {
+        const writes = event.key.length === 1 || WRITING_KEYS.has(event.key);
+        if (!writes) return; // Tab, Escape, arrows, function keys
+        // Copy, select-all and other shortcuts stay; paste is caught by the paste listener.
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() !== "v") return;
+      }
+      stop(event);
+    };
+
+    // Some menus act on press, not click.
+    const blockPress = (event: Event) => {
       if (lockedAncestor(event.target)) stop(event);
     };
 
+    // A form is a write when it holds a locked control (its Save/Send button, a composer, an
+    // upload) or was sent by one. Filter and search forms keep working.
     const blockSubmit = (event: Event) => {
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;
       if (form.closest("[data-suspension-keep]") || isStaffPreviewSearchForm(form)) return;
+      const submitter = (event as SubmitEvent).submitter || null;
+      const writes = Boolean(lockedAncestor(submitter)) || Boolean(form.querySelector(`[${SUSPENSION_LOCK_ATTR}]`));
+      if (!writes) return;
       stop(event);
       showSuspendedNotice(until);
     };
@@ -97,6 +117,8 @@ export function SuspensionGuard() {
     });
     document.addEventListener("click", blockClick, true);
     document.addEventListener("auxclick", blockClick, true);
+    document.addEventListener("mousedown", blockPress, true);
+    document.addEventListener("pointerdown", blockPress, true);
     document.addEventListener("keydown", blockTyping, true);
     document.addEventListener("beforeinput", blockTyping, true);
     document.addEventListener("paste", blockTyping, true);
@@ -109,6 +131,8 @@ export function SuspensionGuard() {
       observer.disconnect();
       document.removeEventListener("click", blockClick, true);
       document.removeEventListener("auxclick", blockClick, true);
+      document.removeEventListener("mousedown", blockPress, true);
+      document.removeEventListener("pointerdown", blockPress, true);
       document.removeEventListener("keydown", blockTyping, true);
       document.removeEventListener("beforeinput", blockTyping, true);
       document.removeEventListener("paste", blockTyping, true);
@@ -120,34 +144,6 @@ export function SuspensionGuard() {
   }, [active, message, until]);
 
   return active ? <style>{LOCK_CSS}</style> : null;
-}
-
-/** Inline heads-up for a page section that is paused by the suspension. */
-export function SuspendedNotice({ className = "" }: { className?: string }) {
-  const { suspended, message } = useSuspension();
-  const navigate = useNavigate();
-  if (!suspended) return null;
-  return (
-    <div
-      data-suspension-keep
-      className={`flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 ${className}`}
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-300">
-        <ShieldAlert className="h-4 w-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Paused while your account is suspended</p>
-        <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">{message}</p>
-      </div>
-      <button
-        type="button"
-        onClick={() => navigate(APPEAL_PATH)}
-        className="shrink-0 rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
-      >
-        Appeal
-      </button>
-    </div>
-  );
 }
 
 /**
