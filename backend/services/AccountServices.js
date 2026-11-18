@@ -209,11 +209,10 @@ async function settingAccountInfoUpdate(accountId, payload) {
             const hashedPassword = await bcrypt.hash(payload.password, saltRounds);
             payload.password = hashedPassword;
         }
-        if (!payload.email && !payload.address && !payload.password && !payload.username) { 
+        if (!payload.address && !payload.password && !payload.username) { 
             return; // No fields to update, exit early
         }
         const userUpdates = {
-            email_address: payload.email,
             address: payload.address,
             password_hash: payload.password,
         };
