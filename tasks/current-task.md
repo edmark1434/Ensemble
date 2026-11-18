@@ -1,4 +1,18 @@
+## Media resize handles
+
+Keep the active image or video frame stable while dragging a handle. Use the item's selected resize controls throughout the gesture, preview the dimensions immediately, and commit the resulting geometry on release.
+
+## Repeated video clips in the editor
+
+Keep playback elements near the playhead, share timeline thumbnail work across copies, and paste against the latest timeline state during rapid edits.
+
+Render-server follow-up: index video, audio, and nested scene groups by frame range so exports skip distant clips while preserving transition groups and layer order. Patch: `tasks/render-server-active-media-frames.patch`.
+
 # Active Task (video editor): Free-plan export finishes but shows "Download expired"
+
+Free video scheduling follow-up: reserve Free Lambda capacity first, use either available local slot second, and keep the job queued while both are full. Render-server change is in `tasks/render-server-free-lambda-first.patch`.
+
+Production follow-up: handle transient Google Fonts gateway failures and remove the editor's legacy request URL parser. The render patch keeps local outputs available for retry, identifies timed-out exports, and provides a 600-second Lambda deployment command. Production must select the newly deployed function via REMOTION_LAMBDA_FUNCTION_NAME.
 
 ## Implementation Objective
 
@@ -266,6 +280,10 @@ reliably, and let staff settle frozen escrow by milestone, by amount, or both.
 ---
 
 # Active Task (upstream, another contributor): Subcontractor Verification Badge & Unverified Dimming
+
+## Editor media frames
+
+Fit new images and videos to the canvas and resize their frames from the canvas handles or Layout fields. Media fills the resized frame proportionally.
 
 ## Editor workspace integration follow-up
 

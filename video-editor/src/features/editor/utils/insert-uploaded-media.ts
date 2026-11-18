@@ -47,7 +47,7 @@ export function insertPendingUpload(id: string, file: File, placement: AddPlacem
     onUploaded: (upload: UploadedMedia) => settle(item => {
       const width = upload.details.width;
       const height = upload.details.height;
-      const dimensions = type === "image" && width && height
+      const dimensions = (type === "image" || type === "video") && width && height
         ? normalizeDimensionsToCanvas(width, height, target.size.width, target.size.height)
         : { width, height };
       const details = { ...item.details, src: upload.metadata.uploadedUrl } as Record<string, any>;
@@ -56,9 +56,6 @@ export function insertPendingUpload(id: string, file: File, placement: AddPlacem
       }
       if (initial && details.left === initial.details.left) details.left = `${(target.size.width - details.width) / 2}px`;
       if (initial && details.top === initial.details.top) details.top = `${(target.size.height - details.height) / 2}px`;
-      if (initial && details.transform === initial.details.transform && details.width && details.height) {
-        details.transform = `scale(${Math.min(target.size.width / (width || details.width), target.size.height / (height || details.height))})`;
-      }
       const duration = type === "image" ? 5000 : (upload.details.duration || 5) * 1000;
       const untouchedTiming = item.display.to - item.display.from === 5000 &&
         item.trim?.from === 0 && item.trim?.to === 5000;

@@ -17,7 +17,7 @@ export interface SequenceItemOptions {
   isTransition?: boolean;
   // A video-containing scene can stay mounted while its visual content is inactive.
   visualsActive?: boolean;
-  // Keep video elements alive across the entire editor timeline, including replay.
+  // Keep nearby videos ready across cuts and short seeks.
   keepMountedFor?: number;
   // true only for items rendered inside a Scene's nested content layer —
   // a read-only snapshot that must never be individually selectable/

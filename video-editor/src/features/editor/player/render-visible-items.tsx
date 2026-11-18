@@ -51,10 +51,7 @@ export function RenderVisibleItems({
 }: RenderVisibleItemsOptions) {
   const plan = useMemo(() => {
     const groupedItems = groupTrackItems({ trackItemIds, transitionsMap, trackItemsMap });
-    const timelineFrames = trackItemIds.reduce((max, id) => {
-      const end = trackItemsMap[id]?.display.to;
-      return Number.isFinite(end) ? Math.max(max, Math.ceil(end * fps / 1000)) : max;
-    }, 1);
+    const warmupFrames = Math.max(1, Math.ceil(fps / 2));
     const containsVideo = (id: string) => {
       const item = trackItemsMap[id];
       if (!item || item.details?.hidden) return false;
@@ -106,14 +103,17 @@ export function RenderVisibleItems({
         ? from + items.reduce((sum, item) => sum + (item.display.to - item.display.from) * fps / 1000, 0) + transitionPadding
         : Math.max(...items.map(item => item.display.to * fps / 1000));
       bounds[index] = { from, to };
+      if (items.some(item => containsVideo(item.id))) {
+        ranges.push({ index, from: from - warmupFrames, to: to + warmupFrames });
+        return;
+      }
       if (items.some(item => !["image", "text", "caption"].includes(item.type))) {
-        // In particular, never unmount eager editor video elements during seeking.
         eager.push(index);
         return;
       }
       ranges.push({ index, from, to });
     });
-    return { groups: visibleGroupedItems, eager, bounds, index: createFrameIndex(ranges), timelineFrames, videoIds: new Set(trackItemIds.filter(containsVideo)) };
+    return { groups: visibleGroupedItems, eager, bounds, index: createFrameIndex(ranges), warmupFrames, videoIds: new Set(trackItemIds.filter(containsVideo)) };
   }, [trackItemIds, trackItemsMap, transitionsMap, fps, nested]);
 
   const activeGroups = [...plan.eager, ...(visualsActive ? groupsAtFrame(plan.index, frame ?? 0) : [])].sort((a, b) => a - b);
@@ -122,7 +122,7 @@ export function RenderVisibleItems({
     const item = trackItemsMap[id];
     return SequenceItem[item.type](item, {
       fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition, nested, visualsActive: active,
-      keepMountedFor: plan.videoIds.has(id) ? plan.timelineFrames : undefined,
+      keepMountedFor: plan.videoIds.has(id) ? plan.warmupFrames : undefined,
     });
   };
 
@@ -162,8 +162,8 @@ export function RenderVisibleItems({
 
     return (
       <TransitionSeries from={from} key={group[0].id}
-        premountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.timelineFrames : undefined}
-        postmountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.timelineFrames : undefined}>
+        premountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.warmupFrames : undefined}
+        postmountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.warmupFrames : undefined}>
         {children.filter(Boolean)}
       </TransitionSeries>
     );

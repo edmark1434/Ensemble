@@ -4,14 +4,13 @@ export interface NormalizedDimensions {
 }
 
 // Fits an asset's native dimensions into the canvas, preserving aspect ratio.
-// maxCoverage caps how much of the canvas a freshly-added item claims by default
-// (0.8 = up to 80% of the shorter relevant axis), so it doesn't fill the frame edge-to-edge.
+
 export function normalizeDimensionsToCanvas(
   assetWidth: number,
   assetHeight: number,
   canvasWidth: number,
   canvasHeight: number,
-  maxCoverage = 0.8
+  maxCoverage = 1
 ): NormalizedDimensions {
   if (!assetWidth || !assetHeight) {
     return { width: canvasWidth * maxCoverage, height: canvasHeight * maxCoverage };
@@ -36,5 +35,21 @@ export function normalizeDimensionsToCanvas(
   return {
     width: Math.round(targetWidth),
     height: Math.round(targetHeight)
+  };
+}
+/** Resize the visible frame, keeping an existing manual crop in the same relative position. */
+export function resizeMediaFrame(
+  details: { width: number; height: number; crop?: { x: number; y: number; width: number; height: number } },
+  width: number,
+  height: number
+) {
+  const crop = details.crop;
+  if (!crop?.width || !crop.height) return { width, height };
+  const xRatio = width / crop.width;
+  const yRatio = height / crop.height;
+  return {
+    width: details.width * xRatio,
+    height: details.height * yRatio,
+    crop: { ...crop, x: crop.x * xRatio, y: crop.y * yRatio, width, height },
   };
 }

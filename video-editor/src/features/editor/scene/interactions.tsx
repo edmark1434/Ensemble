@@ -1,3 +1,4 @@
+import { resizeMediaFrame } from "../utils/dimensions";
 import { MarketWatermarkBadge } from "./market-watermark-badge";
 import { EnsembleWatermarkControl } from "./ensemble-watermark-control";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -108,6 +109,7 @@ export function SceneInteractions({
   zoom,
   viewOnly
 }: SceneInteractionsProps) {
+  const [mediaCornerResize, setMediaCornerResize] = useState(false);
   const [transforming, setTransforming] = useState(false);
   const [targets, setTargets] = useState<HTMLDivElement[]>([]);
   const [selection, setSelection] = useState<Selection>();
@@ -121,8 +123,12 @@ export function SceneInteractions({
     collabSchema,
   } = useStore();
   const moveableRef = useRef<Moveable>(null);
+  const activeGestureRef = useRef(false);
   useEffect(() => {
-    const finish = () => setTransforming(false);
+    const finish = () => {
+      activeGestureRef.current = false;
+      setTransforming(false);
+    };
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
     window.addEventListener("blur", finish);
@@ -318,6 +324,7 @@ export function SceneInteractions({
 
   useEffect(() => {
     const updateTargets = (time?: number) => {
+      if (activeGestureRef.current) return;
       const { trackItemsMap, playerRef, fps, activeIds } = useStore.getState();
       const currentTime = time ?? (playerRef?.current
         ? (playerRef.current.getCurrentFrame() / fps) * 1000
@@ -549,27 +556,9 @@ export function SceneInteractions({
     };
   }, []);
 
-  const activeGestureRef = useRef(false);
   useEffect(() => {
     if (activeGestureRef.current) return;
     moveableRef.current?.moveable.updateRect();
-  }, [trackItemsMap]);
-
-  useEffect(() => {
-    const { activeIds, trackItemsMap } = useStore.getState();
-    if (activeIds.length !== 1) return;
-
-    const isLocked = trackItemsMap[activeIds[0]]?.details?.locked;
-    setSelectionInfo(prev => ({
-      ...prev,
-      ables: {
-        ...prev.ables,
-        draggable: !isLocked,
-        resizable: !isLocked,
-        scalable: !isLocked,
-        rotatable: !isLocked
-      }
-    }));
   }, [trackItemsMap]);
 
   useEffect(() => {
@@ -814,6 +803,7 @@ export function SceneInteractions({
           rotationPosition={"bottom"}
           renderDirections={selectionInfo.controls}
           {...selectionInfo.ables}
+          keepRatio={mediaCornerResize || selectionInfo.ables.keepRatio}
           origin={false}
           target={targets}
           zoom={1 / zoom}
@@ -987,16 +977,47 @@ export function SceneInteractions({
               if (collabSchema) clearLiveTransform(collabSchema.awareness);
             }
           }}
-          onResizeStart={() => setTransforming(true)}
+          onResizeStart={({ target, direction, datas, setMin }) => {
+            setTransforming(true);
+            const item = useStore.getState().trackItemsMap[getIdFromClassName(target.className)];
+            if (item?.type === "image" || item?.type === "video") {
+              activeGestureRef.current = true;
+              datas.mediaDetails = item.details;
+              setMin([1, 1]);
+              setMediaCornerResize(Boolean(direction[0] && direction[1]));
+            }
+          }}
           onResize={({
             target,
             width: rawWidth,
             height: rawHeight,
-            direction
+            drag, datas, direction
           }) => {
             const id = getIdFromClassName(target.className);
             const currentItem = useStore.getState().trackItemsMap[id];
             if (!currentItem) return;
+
+            if (datas.mediaDetails) {
+              const original = datas.mediaDetails;
+              const left = (parseFloat(original.left) || 0) + drag.beforeTranslate[0];
+              const top = (parseFloat(original.top) || 0) + drag.beforeTranslate[1];
+              const patch = { ...resizeMediaFrame(original, rawWidth, rawHeight), left, top };
+              datas.mediaPatch = patch;
+              // Moveable measures this box again before React paints the media
+              // preview. Give it the new geometry during the same pointer event.
+              Object.assign(target.style, {
+                width: `${rawWidth}px`, height: `${rawHeight}px`,
+                left: `${left}px`, top: `${top}px`,
+              });
+              const items = useStore.getState().trackItemsMap;
+              setState({ trackItemsMap: { ...items, [id]: {
+                ...currentItem, details: { ...currentItem.details, ...patch },
+              } } });
+              if (collabSchema) broadcastLiveTransform(collabSchema.awareness, {
+                [id]: { left, top, width: rawWidth, height: rawHeight },
+              });
+              return;
+            }
 
             const nextWidth = Math.max(rawWidth, MIN_ITEM_DIMENSION);
             const nextHeight = Math.max(rawHeight, MIN_ITEM_DIMENSION);
@@ -1232,12 +1253,18 @@ export function SceneInteractions({
               }
             }
           }}
-          onResizeEnd={({ target }) => {
+          onResizeEnd={({ target, datas }) => {
+            activeGestureRef.current = false;
+            setMediaCornerResize(false);
             setTransforming(false);
             try {
               const targetId = getIdFromClassName(target.className) as string;
               if (trackItemsMap[targetId]?.details?.locked) return;
 
+              if (datas.mediaDetails) {
+                if (datas.mediaPatch) dispatch(EDIT_OBJECT, { payload: { [targetId]: { details: datas.mediaPatch } } });
+                return;
+              }
               const type = trackItemsMap[targetId].type;
               if (type === "text" || type === "caption") {
                 const selector = type === "text"
