@@ -147,9 +147,9 @@ export const VerificationStatus: React.FC = () => {
     },
     {
       id: 4,
-      title: "Admin Approval Queue",
+      title: "KYC Verification & Review",
       description:
-        "Submitted credentials are locked for manual administrator review (Takes 1–3 business days).",
+        "KYC is automatically approved if no issues are detected; if anything requires further review, an administrator will manually review and approve it (3–5 business days).",
       icon: <Clock className="h-5 w-5" />,
     },
   ];

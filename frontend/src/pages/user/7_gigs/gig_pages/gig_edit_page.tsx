@@ -123,6 +123,9 @@ export const GigEditPage: React.FC = () => {
           if (data.isTeam || data.teamId) {
             setPostingAs("team");
             if (data.teamId) setActingTeamId(String(data.teamId));
+            if (Array.isArray(data.includedMemberAccountIds) && data.includedMemberAccountIds.length > 0) {
+              setIncludedMemberIds(data.includedMemberAccountIds.map(String));
+            }
           } else {
             setPostingAs("self");
           }
@@ -385,6 +388,7 @@ export const GigEditPage: React.FC = () => {
         thumbnailFileId: uploadedThumbnailId,
         keptGalleryUrls: galleryUrls,
         galleryFileIds: uploadedGalleryIds.length > 0 ? uploadedGalleryIds : undefined,
+        included_member_account_ids: postingAs === "team" && actingTeamId ? includedMemberIds : [],
       };
 
       const res = await api.put(`/api/gigs/${id}`, gigPayload);

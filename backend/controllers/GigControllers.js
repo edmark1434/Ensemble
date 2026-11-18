@@ -56,7 +56,7 @@ async function createGigController(req, res) {
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
             additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
-            thumbnailFileId, galleryFileIds
+            thumbnailFileId, galleryFileIds, included_member_account_ids
         } = req.body;
 
         if (!title || !description || !tiers) {
@@ -72,7 +72,7 @@ async function createGigController(req, res) {
             acting_team_id: actor.teamId || null,
             freelancer_account_id, title, description, category, slots, termsOfService,
             firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
-            skills, thumbnailFileId, galleryFileIds
+            skills, thumbnailFileId, galleryFileIds, included_member_account_ids
         };
 
         await require('../services/WarningBandServices').assertWarningAllows(personalAccountId, 'create_gig');
@@ -321,7 +321,7 @@ async function updateGigController(req, res) {
         const {
             title, description, category, slots, termsOfService, firstDraftDelivery,
             additionalWorkRate, tiers, addOns, milestones, questionnaires, skills,
-            thumbnailFileId, galleryFileIds, keptGalleryUrls
+            thumbnailFileId, galleryFileIds, keptGalleryUrls, included_member_account_ids
         } = req.body;
 
         if (!title || !description || !tiers) {
@@ -335,7 +335,7 @@ async function updateGigController(req, res) {
         const gigData = {
             freelancer_account_id, title, description, category, slots, termsOfService,
             firstDraftDelivery, additionalWorkRate, tiers, addOns, milestones, questionnaires,
-            skills, thumbnailFileId, galleryFileIds, keptGalleryUrls
+            skills, thumbnailFileId, galleryFileIds, keptGalleryUrls, included_member_account_ids
         };
 
         await updateGigRepository(gigId, actorIds, gigData);

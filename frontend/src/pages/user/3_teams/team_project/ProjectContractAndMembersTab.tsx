@@ -9,6 +9,10 @@ import {
   Flag,
   MessageCircle,
   UserPlus,
+  UserMinus,
+  Loader2,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import socket from '@/lib/socket';
@@ -34,6 +38,8 @@ export interface MilestoneItem {
 export interface ContractItem {
   contract_id: string;
   is_team_gig_member?: boolean;
+  is_team_contract?: boolean;
+  can_manage_team_contributors?: boolean;
   contract_type: string;
   contract_status: string;
   rate_credits: number;
@@ -46,6 +52,17 @@ export interface ContractItem {
   freelancer_handle?: string;
   freelancer_avatar_path?: string;
   milestones?: MilestoneItem[];
+}
+
+interface AvailableTeamMember {
+  account_id: string;
+  display_name: string;
+  handle?: string;
+  avatar_path?: string;
+  team_role?: string;
+  team_name?: string;
+  team_handle?: string;
+  already_in_workspace?: boolean;
 }
 
 export interface MemberItem {
@@ -72,6 +89,11 @@ export interface MemberItem {
     can_upload_drafts?: boolean;
     can_create_subtasks?: boolean;
   };
+  is_team_leader?: boolean;
+  hired_team_role?: string | null;
+  hired_team_name?: string | null;
+  hired_team_handle?: string | null;
+  can_remove?: boolean;
 }
 
 interface ProjectContractAndMembersTabProps {
@@ -118,6 +140,68 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   const [proposals, setProposals] = useState<SubcontractProposal[]>([]);
   const [isNominateModalOpen, setIsNominateModalOpen] = useState(false);
   const [selectedContractForNomination, setSelectedContractForNomination] = useState<ContractItem | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<MemberItem | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
+  const [isAddTeamMemberOpen, setIsAddTeamMemberOpen] = useState(false);
+  const [availableTeamMembers, setAvailableTeamMembers] = useState<AvailableTeamMember[]>([]);
+  const [loadingAvailableTeamMembers, setLoadingAvailableTeamMembers] = useState(false);
+  const [selectedTeamMemberIds, setSelectedTeamMemberIds] = useState<string[]>([]);
+  const [isAddingTeamMembers, setIsAddingTeamMembers] = useState(false);
+
+  const openAddTeamMemberModal = async () => {
+    setIsAddTeamMemberOpen(true);
+    setSelectedTeamMemberIds([]);
+    setLoadingAvailableTeamMembers(true);
+    try {
+      const res = await api.get(`/api/team-projects/${teamId}/available-team-members`);
+      setAvailableTeamMembers(Array.isArray(res.data?.data) ? res.data.data : []);
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Unable to load team members.');
+    } finally {
+      setLoadingAvailableTeamMembers(false);
+    }
+  };
+
+  const toggleSelectTeamMember = (accountId: string) => {
+    setSelectedTeamMemberIds((prev) =>
+      prev.includes(accountId) ? prev.filter((id) => id !== accountId) : [...prev, accountId]
+    );
+  };
+
+  const handleConfirmAddTeamMembers = async () => {
+    if (selectedTeamMemberIds.length === 0 || isAddingTeamMembers) return;
+    setIsAddingTeamMembers(true);
+    try {
+      await api.post(`/api/team-projects/${teamId}/members`, {
+        account_ids: selectedTeamMemberIds,
+      });
+      showSuccessToast(
+        `Added ${selectedTeamMemberIds.length} team member${selectedTeamMemberIds.length === 1 ? '' : 's'} as contributor${selectedTeamMemberIds.length === 1 ? '' : 's'}.`
+      );
+      setIsAddTeamMemberOpen(false);
+      setSelectedTeamMemberIds([]);
+      onContractsUpdated?.();
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Unable to add team member(s) to workspace.');
+    } finally {
+      setIsAddingTeamMembers(false);
+    }
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove || isRemovingMember) return;
+    setIsRemovingMember(true);
+    try {
+      await api.delete(`/api/team-projects/${teamId}/members/${memberToRemove.account_id}`);
+      showSuccessToast(`Removed ${memberToRemove.display_name} from the workspace.`);
+      setMemberToRemove(null);
+      onContractsUpdated?.();
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Unable to remove contributor from workspace.');
+    } finally {
+      setIsRemovingMember(false);
+    }
+  };
 
   const resolvedAccountId = String(
     currentUserAccountId || user?.account_id || user?.id || ''
@@ -254,16 +338,29 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Subcontractor nomination trigger in header if freelancer has contract */}
+          {/* Team contract -> Add Team Member as Contributor (Team Leader/Managers only); Solo contract -> Add Subcontractor */}
           {!isClient && myContract && (
-            <button
-              type="button"
-              onClick={() => openNominationForContract(myContract)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Add Subcontractor under My Contract</span>
-            </button>
+            myContract.is_team_contract || Boolean(myContract.is_team_gig_member) ? (
+              myContract.can_manage_team_contributors && (
+                <button
+                  type="button"
+                  onClick={() => void openAddTeamMemberModal()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Add Team Member as Contributor</span>
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => openNominationForContract(myContract)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Add Subcontractor under My Contract</span>
+              </button>
+            )
           )}
 
           {subTab === 'contracts' ? (
@@ -499,17 +596,33 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
 
                       <div className="flex items-center gap-3">
                         {!isClient && isMyContractCard && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openNominationForContract(contract);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            <span>Add Subcontractor</span>
-                          </button>
+                          contract.is_team_contract || Boolean(contract.is_team_gig_member) ? (
+                            contract.can_manage_team_contributors && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void openAddTeamMemberModal();
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                              >
+                                <UserPlus className="w-3.5 h-3.5" />
+                                <span>Add Team Member as Contributor</span>
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openNominationForContract(contract);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>Add Subcontractor</span>
+                            </button>
+                          )
                         )}
 
                         <span className="inline-flex items-center gap-1 font-semibold text-xs text-blue-600 dark:text-blue-400 group-hover:underline">
@@ -556,6 +669,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                 const isOwner = member.team_role === 'Owner';
                 const isSubcontractor =
                   member.is_subcontractor || member.team_role === 'Subcontractor';
+                const isTeamLeader = Boolean(member.is_team_leader);
 
                 const isMe = Boolean(
                   (resolvedAccountId && String(member.account_id) === String(resolvedAccountId)) ||
@@ -599,20 +713,38 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                           )}
 
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
                               isOwner
                                 ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800'
+                                : isTeamLeader
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-800'
                                 : isSubcontractor
                                 ? 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950/50 dark:text-indigo-200 dark:border-indigo-800'
                                 : 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/50 dark:text-blue-200 dark:border-blue-800'
                             }`}
                           >
-                            {isOwner
-                              ? 'Client Owner'
-                              : isSubcontractor
-                              ? 'Subcontractor'
-                              : 'Contributor'}
+                            {isTeamLeader && <ShieldCheck className="w-3 h-3" />}
+                            <span>
+                              {isOwner
+                                ? 'Client Owner'
+                                : isTeamLeader
+                                ? 'Team Leader'
+                                : isSubcontractor
+                                ? 'Subcontractor'
+                                : member.hired_team_role && member.hired_team_role !== 'Member'
+                                ? `Team ${member.hired_team_role}`
+                                : 'Contributor'}
+                            </span>
                           </span>
+
+                          {/* Team affiliation badge when hired as a Team */}
+                          {!isOwner && !isSubcontractor && (member.hired_team_handle || member.hired_team_name) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+                              <span>
+                                Team {member.hired_team_handle ? `@${member.hired_team_handle}` : member.hired_team_name}
+                              </span>
+                            </span>
+                          )}
 
                           {/* Distinct Badge showing who they are under */}
                           {isSubcontractor && member.parent_contractor_handle && (
@@ -641,7 +773,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       {!isMe && (
                         <button
                           onClick={() => handleStartDirectChat(member)}
@@ -651,10 +783,230 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                           <span>Direct Message</span>
                         </button>
                       )}
+
+                      {!isMe && member.can_remove && (
+                        <button
+                          type="button"
+                          onClick={() => setMemberToRemove(member)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/70 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition cursor-pointer"
+                          title="Remove contributor from this project workspace"
+                        >
+                          <UserMinus className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Contributor Confirmation Modal */}
+      {memberToRemove && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+          onClick={() => !isRemovingMember && setMemberToRemove(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 flex items-center justify-center shrink-0">
+                <UserMinus className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-zinc-900 dark:text-white">
+                  Remove Contributor from Workspace?
+                </h4>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  Are you sure you want to remove{' '}
+                  <span className="font-bold text-zinc-900 dark:text-white">
+                    {memberToRemove.display_name}
+                  </span>
+                  {memberToRemove.handle ? ` (@${memberToRemove.handle})` : ''} from this project
+                  workspace? They will lose access to the workspace taskboard and unassigned from its
+                  tasks.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isRemovingMember}
+                onClick={() => setMemberToRemove(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isRemovingMember}
+                onClick={handleConfirmRemoveMember}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition cursor-pointer disabled:opacity-50"
+              >
+                {isRemovingMember ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserMinus className="w-3.5 h-3.5" />
+                    <span>Remove Contributor</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Team Member as Contributor Modal */}
+      {isAddTeamMemberOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+          onClick={() => !isAddingTeamMembers && setIsAddTeamMemberOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0">
+                  <UserPlus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-white">
+                    Add Team Member as Contributor
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Select active members from your team to add to this project workspace.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isAddingTeamMembers}
+                onClick={() => setIsAddTeamMemberOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800">
+              {loadingAvailableTeamMembers ? (
+                <div className="p-8 flex items-center justify-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading your team members...</span>
+                </div>
+              ) : availableTeamMembers.length === 0 ? (
+                <div className="p-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                  No active team members found.
+                </div>
+              ) : (
+                availableTeamMembers.map((tm) => {
+                  const inWorkspace = Boolean(tm.already_in_workspace);
+                  const isSelected = selectedTeamMemberIds.includes(tm.account_id);
+                  return (
+                    <label
+                      key={tm.account_id}
+                      onClick={() => {
+                        if (!inWorkspace) toggleSelectTeamMember(tm.account_id);
+                      }}
+                      className={`p-3.5 flex items-center justify-between gap-3 transition ${
+                        inWorkspace
+                          ? 'opacity-60 bg-zinc-50/60 dark:bg-zinc-900/40 cursor-not-allowed'
+                          : isSelected
+                          ? 'bg-blue-50/60 dark:bg-blue-950/30 cursor-pointer'
+                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={constructAvatarUrl(tm.avatar_path, tm.display_name)}
+                          alt={tm.display_name}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = getFallbackAvatarUrl(tm.display_name);
+                          }}
+                          className="w-9 h-9 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                              {tm.display_name}
+                            </span>
+                            {tm.team_role && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                                {tm.team_role === 'Owner' ? 'Team Leader' : tm.team_role}
+                              </span>
+                            )}
+                          </div>
+                          {tm.handle && (
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                              @{tm.handle}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {inWorkspace ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>In Workspace</span>
+                          </span>
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        )}
+                      </div>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isAddingTeamMembers}
+                onClick={() => setIsAddTeamMemberOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isAddingTeamMembers || selectedTeamMemberIds.length === 0}
+                onClick={handleConfirmAddTeamMembers}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition cursor-pointer disabled:opacity-50"
+              >
+                {isAddingTeamMembers ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Adding...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>
+                      Add as Contributor
+                      {selectedTeamMemberIds.length > 0 ? ` (${selectedTeamMemberIds.length})` : ''}
+                    </span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

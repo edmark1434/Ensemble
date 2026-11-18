@@ -20,6 +20,9 @@ router.get('/:id/contracts', controller.getContracts);
 router.get('/:id/milestones', controller.getMilestones);
 router.get('/:id/history', controller.getHistory);
 router.get('/:id/members', controller.getMembers);
+router.get('/:id/available-team-members', controller.getAvailableTeamMembers);
+router.post('/:id/members', controller.addMembers);
+router.delete('/:id/members/:memberAccountId', controller.removeMember);
 
 router.get('/:id/subcontracts/proposals', controller.getSubcontractProposals);
 router.post('/:id/subcontracts/proposals', controller.createSubcontractProposal);

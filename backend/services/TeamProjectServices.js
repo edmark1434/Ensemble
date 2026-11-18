@@ -139,8 +139,72 @@ async function getProjectHistory(teamId, viewerAccountId) {
 
 async function getProjectMembers(teamId, viewerAccountId) {
   await getProjectDetails(teamId, viewerAccountId);
-  const members = await TeamProjectRepositories.getProjectMembers(teamId);
+  const members = await TeamProjectRepositories.getProjectMembers(teamId, viewerAccountId);
   return members.map(withAvatar);
+}
+
+async function getAvailableTeamMembers(teamId, viewerAccountId) {
+  await getProjectDetails(teamId, viewerAccountId);
+  const members = await TeamProjectRepositories.getAvailableTeamMembersForProject(teamId, viewerAccountId);
+  return members.map(withAvatar);
+}
+
+async function addProjectTeamMembers(teamId, accountIds, viewerAccountId) {
+  await getProjectDetails(teamId, viewerAccountId);
+  const result = await TeamProjectRepositories.addProjectTeamMembers(teamId, accountIds, viewerAccountId);
+  try {
+    if (typeof TeamsServices.syncChat === 'function') {
+      await TeamsServices.syncChat(teamId);
+    }
+  } catch (err) {
+    console.warn('Failed to sync project chat after adding members:', err.message);
+  }
+  try {
+    if (Array.isArray(result.added_account_ids)) {
+      for (const accId of result.added_account_ids) {
+        await createNotificationServices({
+          account_id: accId,
+          message: `You were added as a contributor to the project workspace "${result.project_title || 'Team Project'}".`,
+          is_read: false,
+          reference_table: 'teams',
+          reference_prefix: 'WORKSPACE_MEMBER_ADDED',
+          reference_path: `/team-project/${teamId}`,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to send member added notification:', err.message);
+  }
+  emitSubcontractUpdate(teamId, { action: 'members_added', account_ids: result.added_account_ids });
+  return result;
+}
+
+async function removeProjectMember(teamId, memberAccountId, viewerAccountId) {
+  await getProjectDetails(teamId, viewerAccountId);
+  const result = await TeamProjectRepositories.removeProjectMember(teamId, memberAccountId, viewerAccountId);
+  try {
+    if (typeof TeamsServices.syncChat === 'function') {
+      await TeamsServices.syncChat(teamId);
+    }
+  } catch (err) {
+    console.warn('Failed to sync project chat after member removal:', err.message);
+  }
+  try {
+    if (memberAccountId) {
+      await createNotificationServices({
+        account_id: memberAccountId,
+        message: `You were removed from the project workspace "${result.project_title || 'Team Project'}".`,
+        is_read: false,
+        reference_table: 'teams',
+        reference_prefix: 'WORKSPACE_MEMBER_REMOVED',
+        reference_path: '/workspaces',
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to send member removal notification:', err.message);
+  }
+  emitSubcontractUpdate(teamId, { action: 'member_removed', account_id: memberAccountId });
+  return result;
 }
 
 async function updateProjectDetails(teamId, viewerAccountId, data) {
@@ -325,6 +389,9 @@ module.exports = {
   getProjectContracts,
   getProjectHistory,
   getProjectMembers,
+  getAvailableTeamMembers,
+  addProjectTeamMembers,
+  removeProjectMember,
   getProjectMilestones,
   getSubcontractProposals,
   createSubcontractProposal,

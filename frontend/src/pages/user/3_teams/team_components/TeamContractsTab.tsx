@@ -28,6 +28,7 @@ interface WorkspaceCard {
   client_name: string | null;
   freelancer_name: string | null;
   workspace_id?: string | null;
+  workspace_team_id?: string | null;
   total_tasks: number | null;
   completed_tasks: number | null;
   next_due_at?: string | null;
@@ -65,7 +66,9 @@ export const TeamContractsTab: React.FC<TeamContractsTabProps> = ({
       ]);
 
       if (wsRes.status === "fulfilled") {
-        setWorkspaces(wsRes.value.data.data?.workspaces || []);
+        setWorkspaces(wsRes.value.data.data?.items || []);
+      } else {
+        showErrorToast("Unable to load team contracts");
       }
 
       const teamProposals: any[] = [];
@@ -292,8 +295,14 @@ export const TeamContractsTab: React.FC<TeamContractsTabProps> = ({
 
                     {card.can_open && (
                       <button
-                        onClick={() => navigate(`/teams/${teamId}/tasks/${card.contract_id}`)}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                        onClick={() =>
+                          navigate(
+                            card.workspace_team_id && card.workspace_team_id !== teamId
+                              ? `/team-project/${card.workspace_team_id}`
+                              : `/teams/${teamId}/tasks/${card.contract_id}`
+                          )
+                        }
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                       >
                         <span>Workspace</span>
                         <ArrowUpRight className="w-3.5 h-3.5" />

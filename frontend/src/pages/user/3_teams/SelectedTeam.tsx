@@ -1766,7 +1766,7 @@ function TeamTabContent({
   if (active === "contracts") {
     return (
       <TeamContractsTab
-        team={team}
+        teamId={team.team_id}
         teamAccountId={team.account_id}
         canViewProposals={canViewMarketplaceProposals}
       />
