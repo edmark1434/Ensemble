@@ -139,11 +139,13 @@ router.delete('/moderation/forum/discussions/:discussionId/comments/:commentId',
 
 /** Marketplace / Jobs control + Restrictions — same controllers as moderator desks. */
 const MarketplaceModerator = require('../controllers/MarketplaceModeratorControllers');
+const { createAdminAssetController } = require('../controllers/AssetControllers');
 const JobsModerator = require('../controllers/JobsModeratorControllers');
 const RestrictionDesk = require('../controllers/RestrictionDeskControllers');
 
 router.get('/moderation/marketplace/overview', [checkSession, requireAdmin], MarketplaceModerator.getOverview);
 router.get('/moderation/marketplace/listings', [checkSession, requireAdmin], MarketplaceModerator.getListings);
+router.post('/moderation/marketplace/assets', [checkSession, requireAdmin], createAdminAssetController);
 router.get('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.getListingDetail);
 router.patch('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.patchListing);
 router.get(

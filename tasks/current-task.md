@@ -1,17 +1,13 @@
-# Active Task: Disable Email Field in Account Settings
+# Task: Admin Dashboard "Team on duty" Online/Offline Presence
 
 ## Implementation Objective
+The "Team on duty" panel on the admin dashboard lists every staff account but never says who is working right now. Show who is active (has a staff console open) and who is offline, with a last-seen time.
 
-In System Settings under the Account tab (`/settings?tab=account`):
-1. In `frontend/src/components/nav/Settings/user_settings_accountdetails.tsx`:
-   - Disable and make the Email Address input field read-only (`disabled`, `readOnly`, `aria-disabled="true"`, with non-interactive styling `cursor-not-allowed select-none bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-500 dark:text-zinc-400`).
-   - Add a subtitle helper note: "Email address cannot be changed."
-   - Remove the Send Verification Code button and verification code input container since the email cannot be modified.
-2. In `backend/services/AccountServices.js`:
-   - Enforce server-side security in `settingAccountInfoUpdate` by disallowing updates to `email_address`.
-
-## Status: Completed
-
-All acceptance criteria satisfied:
-- Email address input is disabled and cannot be changed.
-- User verification preference preserved (no verification commands run).
+## Acceptance Criteria
+- `backend/services/StaffPresenceServices.js`: Redis heartbeat presence under `presence:staff:v1:<accountId>` (150 s TTL) plus `presence:staff:v1:last:<accountId>` (30-day last seen). Writes are throttled to once per 30 s per account per process. Logout deletes the online key.
+- `backend/middleware/CheckSession.js`: every authenticated staff request refreshes presence (fire-and-forget).
+- `backend/routes/Staff.js`: `GET /api/staff/presence/heartbeat` keeps idle open console tabs online.
+- `frontend/src/pages/staff/StaffOutlet.tsx`: every staff console (admin, moderator desks, staff portal) pings the heartbeat every 60 s while the tab is visible, and again when it becomes visible.
+- `backend/controllers/AdminControllers.js` + `AdminRepositories.js`: `staffRoster` entries carry `isOnline` and `lastSeenAt`; online staff are listed first, in the existing role order.
+- `frontend/src/pages/admin/AdminDashboard.tsx`: green/grey status dot, "Active now" or "Offline · seen X ago", dimmed offline rows, and an "N of M online now" subtitle.
+- User preference: do not run automated build or verification commands.

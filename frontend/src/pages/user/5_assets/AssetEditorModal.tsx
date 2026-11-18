@@ -61,6 +61,8 @@ export interface AssetEditorModalProps {
   onSaved: (asset: AssetRecord) => void;
   onQueued?: () => void;
   checkingEligibility?: boolean;
+  isAdminUpload?: boolean;
+  createEndpoint?: string;
 }
 export interface TemplateDraft { snapshotId: string; name: string; previewToken?: string }
 
@@ -70,7 +72,7 @@ export default function AssetEditorModal(props: AssetEditorModalProps) {
 
 // The two modal entry points share listing fields and upload handling, while
 // the template entry point has no media selector or manual snapshot-ID input.
-export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, template, checkingEligibility = false }: AssetEditorModalProps & { template?: TemplateDraft }) {
+export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, template, checkingEligibility = false, isAdminUpload = false, createEndpoint }: AssetEditorModalProps & { template?: TemplateDraft }) {
   const originalInputRef = useRef<HTMLInputElement>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const [listingType, setListingType] = useState<AssetType>(asset?.type || (template ? "template" : "image"));
@@ -401,7 +403,26 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     const accountId = useGlobalState.getState().user?.account_id;
     if (!accountId) return setError("Please sign in before uploading an asset.");
     setSaving(true);
-    enqueueAssetUpload({
+    if (isAdminUpload) {
+      try {
+        const createdAsset = await enqueueAssetUpload({
+          accountId, name: cleanName, description: cleanDescription, priceCredits: price,
+          type: listingType, tags: submittedTags, files: [...files], thumbnailFiles: [...thumbnailFiles],
+          showcaseOrder: [...showcaseOrder], showcaseFileKeys: selectedShowcaseFileKeys, snapshotId,
+          isAdminUpload: true,
+          createEndpoint,
+        });
+        showSuccessToast("Asset uploaded directly to the live catalog.");
+        if (createdAsset) onSaved(createdAsset);
+        else onClose();
+      } catch (requestError) {
+        setError(errorMessage(requestError));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    void enqueueAssetUpload({
       accountId, name: cleanName, description: cleanDescription, priceCredits: price,
       type: listingType, tags: submittedTags, files: [...files], thumbnailFiles: [...thumbnailFiles],
       showcaseOrder: [...showcaseOrder], showcaseFileKeys: selectedShowcaseFileKeys, snapshotId,
@@ -412,10 +433,10 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
 
   const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600";
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="asset-editor-title">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 ${isAdminUpload ? "dark" : ""}`} role="dialog" aria-modal="true" aria-labelledby="asset-editor-title">
       <div className="flex max-h-[90vh] w-full max-w-4xl lg:max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-[#121214]">
         <div className="flex shrink-0 items-start justify-between border-b border-gray-200 bg-white px-6 py-5 dark:border-zinc-800 dark:bg-[#121214]">
-          <div><h2 id="asset-editor-title" className="text-lg font-bold text-gray-900 dark:text-zinc-100">{isTemplate ? (asset ? "Edit template" : "Add template") : asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{isTemplate ? "Add listing details and showcase images for your project template." : asset ? "Update listing details and showcase images." : "Create a protected asset package."}</p></div>
+          <div><h2 id="asset-editor-title" className="text-lg font-bold text-gray-900 dark:text-zinc-100">{isTemplate ? (asset ? "Edit template" : "Add template") : asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{isTemplate ? "Add listing details and showcase images for your project template." : asset ? "Update listing details and showcase images." : isAdminUpload ? "Create a protected asset package · 0% deduction · 100% of sales go straight to platform credits." : "Create a protected asset package."}</p></div>
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-busy={checkingEligibility}>
@@ -704,7 +725,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
                       Price in credits <span className="text-red-500">*</span>
                     </label>
                     <span className="text-xs text-gray-400 dark:text-zinc-500">
-                      0 for free download
+                      {isAdminUpload ? "0 for free · 0% deduction (100% to platform credits)" : "0 for free download"}
                     </span>
                   </div>
                   <input

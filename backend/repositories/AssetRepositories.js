@@ -444,8 +444,25 @@ async function getAssetPostingEligibilityRepository(accountId) {
   return readAssetPostingEligibility(pool, accountId);
 }
 
+let adminMarketAssetSchemaPromise = null;
+async function ensureAdminMarketAssetSchema() {
+  if (!adminMarketAssetSchemaPromise) {
+    adminMarketAssetSchemaPromise = (async () => {
+      await pool.query(`ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS is_admin_asset BOOLEAN NOT NULL DEFAULT FALSE`);
+      await pool.query(`ALTER TABLE media_assets ALTER COLUMN owner_user_id DROP NOT NULL`);
+      await pool.query(`ALTER TABLE media_assets ALTER COLUMN proxy_file_id DROP NOT NULL`);
+      await pool.query(`ALTER TABLE media_assets ALTER COLUMN thumbnail_file_id DROP NOT NULL`);
+    })().catch((err) => {
+      adminMarketAssetSchemaPromise = null;
+      throw err;
+    });
+  }
+  return adminMarketAssetSchemaPromise;
+}
+
 const ASSET_SELECT = `
   SELECT ma.market_asset_id, ma.name, ma.description, ma.price_credits, ma.status,
+         (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AS is_admin_asset,
          ma.created_at, ma.updated_at,
          latest_listing.status AS review_status,
          latest_listing.rejection_reason,
@@ -455,7 +472,18 @@ const ASSET_SELECT = `
          media.thumbnails, media.thumbnail_count,
          media.media_assets, media.media_asset_count,
          media.has_ydoc, media.processing_status,
-         owner.display_name AS creator_name, owner.handle AS creator_handle, owner_avatar.path AS creator_avatar_path,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN 'By Ensemble'
+           ELSE owner.display_name
+         END AS creator_name,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN 'ensemble'
+           ELSE owner.handle
+         END AS creator_handle,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN '/ensemble_lg.svg'
+           ELSE owner_avatar.path
+         END AS creator_avatar_path,
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
@@ -653,8 +681,8 @@ const ASSET_SELECT = `
   JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
          ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
-  JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
-  JOIN accounts owner ON owner.account_id = owner_user.account_id
+  LEFT JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
+  JOIN accounts owner ON owner.account_id = listing_owner.account_id
     LEFT JOIN files owner_avatar ON owner_avatar.file_id = owner.avatar_file_id
   LEFT JOIN LATERAL (
     SELECT EXISTS (
@@ -738,6 +766,7 @@ async function syncAssetTags(client, marketAssetId, tagNames) {
 }
 
 async function listAssetsRepository({ accountId, search, type, status, view, creatorAccountId, limit, offset }) {
+  await ensureAdminMarketAssetSchema(pool);
   const visibility = view === 'mine'
     ? 'owner.account_id = $1'
     : view === 'creator'
@@ -768,6 +797,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
          OR ma.description ILIKE '%' || $2 || '%'
          OR owner.display_name ILIKE '%' || $2 || '%'
          OR owner.handle ILIKE '%' || $2 || '%'
+         OR ((COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AND ('Ensemble' ILIKE '%' || $2 || '%' OR 'By Ensemble' ILIKE '%' || $2 || '%'))
          OR EXISTS (
            SELECT 1
            FROM market_asset_tags search_mat
@@ -795,6 +825,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
 }
 
 async function getAssetRepository(assetId, accountId) {
+  await ensureAdminMarketAssetSchema(pool);
   const { rows } = await pool.query(
     `${ASSET_SELECT}
      WHERE ma.market_asset_id = $2
@@ -806,42 +837,62 @@ async function getAssetRepository(assetId, accountId) {
   return rows[0] || null;
 }
 
-async function createAssetRepository(accountId, data, derivatives = new Map()) {
+async function createAssetRepository(accountId, data, derivatives = new Map(), { isAdminAsset = false, staffId = null } = {}) {
+  await ensureAdminMarketAssetSchema();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const eligibility = await readAssetPostingEligibility(client, accountId, { lock: true });
-    if (!eligibility.allowed) {
-      throw repoError(eligibility.code, { eligibility });
+    if (!isAdminAsset) {
+      const eligibility = await readAssetPostingEligibility(client, accountId, { lock: true });
+      if (!eligibility.allowed) {
+        throw repoError(eligibility.code, { eligibility });
+      }
     }
     const { rows: [ownerUser] } = await client.query(
       'SELECT user_id FROM users WHERE account_id = $1 LIMIT 1',
       [accountId]
     );
-    if (!ownerUser) throw repoError('ASSET_POSTING_UNAVAILABLE');
+    if (!isAdminAsset && !ownerUser) throw repoError('ASSET_POSTING_UNAVAILABLE');
+    const ownerUserId = ownerUser?.user_id || null;
+
+    let validStaffId = null;
+    if (isAdminAsset) {
+      const { rows: [staffRow] } = await client.query(
+        'SELECT staff_id FROM staff WHERE account_id = $1 LIMIT 1',
+        [accountId]
+      );
+      validStaffId = staffRow?.staff_id
+        || (staffId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(staffId)) ? staffId : null);
+    }
 
     const { originals, thumbnails } = await loadValidatedUploads(client, accountId, data);
 
     const needsProcessing = data.type !== 'template'
       && originals.some((original) => !derivatives.has(String(original.file_id)));
     // Publish intent stays draft + pending until a moderator approves the listing.
+    // Admin uploads go straight into the live catalog (`published` + `approved`).
     const wantsPublish = data.status === 'published';
-    const assetStatus = needsProcessing || wantsPublish ? 'draft' : data.status;
-    const listingStatus = wantsPublish ? 'pending' : 'draft';
+    const assetStatus = isAdminAsset
+      ? (wantsPublish ? 'published' : data.status)
+      : (needsProcessing || wantsPublish ? 'draft' : data.status);
+    const listingStatus = isAdminAsset
+      ? (wantsPublish ? 'approved' : 'draft')
+      : (wantsPublish ? 'pending' : 'draft');
+    const reviewedAt = listingStatus === 'approved' ? new Date() : null;
     const market = await client.query(
       `INSERT INTO market_assets
-         (name, description, price_credits, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         (name, description, price_credits, status, is_admin_asset, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING market_asset_id`,
-      [data.name, data.description, data.priceCredits, assetStatus]
+      [data.name, data.description, data.priceCredits, assetStatus, Boolean(isAdminAsset)]
     );
     const marketAssetId = market.rows[0].market_asset_id;
     await client.query(
       `INSERT INTO marketplace_listings
-        (listing_number, market_asset_id, submitted_by_account_id, title, description, category, price_credits, status)
-       VALUES ('LST-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16), $1, $2, $3, $4, $5, $6, $7)`,
+        (listing_number, market_asset_id, submitted_by_account_id, title, description, category, price_credits, status, reviewed_by_staff_id, reviewed_at)
+       VALUES ('LST-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [marketAssetId, accountId, data.name, data.description, data.type, data.priceCredits,
-        listingStatus]);
+        listingStatus, isAdminAsset ? validStaffId : null, reviewedAt]);
 
 
     if (data.type === 'template') {
@@ -849,12 +900,12 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
         throw repoError('ASSET_THUMBNAIL_INVALID');
       }
       await createThumbnailMediaAssets(client, {
-        marketAssetId, name: data.name, ownerUserId: ownerUser.user_id,
+        marketAssetId, name: data.name, ownerUserId,
         startPosition: 0, thumbnails,
       });
       const orderedShowcaseIds = await resolveShowcaseOrder(client, marketAssetId, data.showcaseOrder);
       await repositionLinks(client, 'market_asset_thumbnails', marketAssetId, orderedShowcaseIds);
-      await setMarketYdoc(client, marketAssetId, data.ydocSnapshotId, ownerUser.user_id);
+      await setMarketYdoc(client, marketAssetId, data.ydocSnapshotId, ownerUserId);
     } else {
       if (originals.length < 1 || originals.length > MAX_CONTENT_FILES) {
         throw repoError('ASSET_CONTENT_REQUIRED');
@@ -867,13 +918,13 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
         throw repoError('ASSET_THUMBNAIL_INVALID');
       }
       await createThumbnailMediaAssets(client, {
-        marketAssetId, name: data.name, ownerUserId: ownerUser.user_id,
+        marketAssetId, name: data.name, ownerUserId,
         startPosition: 0, thumbnails,
       });
       await createContentMediaAssets(client, {
         marketAssetId,
         name: data.name,
-        ownerUserId: ownerUser.user_id,
+        ownerUserId,
         type: data.type,
         startPosition: 0,
         originals,
@@ -901,49 +952,51 @@ async function createAssetRepository(accountId, data, derivatives = new Map()) {
     }
     await syncAssetTags(client, marketAssetId, data.tags);
 
-    const { getMarketplaceListingFeeCredits } = require('../lib/PlatformFeeSettings');
-    const listingFeeCredits = await getMarketplaceListingFeeCredits();
-    if (listingFeeCredits > 0) {
-      const walletsResult = await client.query(
-        `SELECT aw.account_id, w.wallet_id, w.type, w.status, w.balance_credits
-         FROM wallets w
-         LEFT JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
-         WHERE (w.type = 'account wallets' AND aw.account_id = $1)
-            OR w.type = 'platform wallets'
-         ORDER BY w.wallet_id
-         FOR UPDATE OF w`,
-        [accountId]
-      );
-      const creatorWallet = walletsResult.rows.find((w) => String(w.account_id) === String(accountId));
-      const platformWallet = walletsResult.rows.find((w) => w.type === 'platform wallets');
-      if (!creatorWallet) {
-        const error = new Error('ASSET_WALLET_NOT_FOUND');
-        error.code = 'ASSET_WALLET_NOT_FOUND';
-        throw error;
-      }
-      if (Number(creatorWallet.balance_credits) < listingFeeCredits) {
-        const error = new Error('Insufficient credits for marketplace listing fee.');
-        error.code = 'INSUFFICIENT_CREDITS';
-        error.required = listingFeeCredits;
-        error.available = Number(creatorWallet.balance_credits);
-        throw error;
-      }
-      if (platformWallet) {
-        await client.query(
-          `UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2`,
-          [listingFeeCredits, creatorWallet.wallet_id]
+    if (!isAdminAsset) {
+      const { getMarketplaceListingFeeCredits } = require('../lib/PlatformFeeSettings');
+      const listingFeeCredits = await getMarketplaceListingFeeCredits();
+      if (listingFeeCredits > 0) {
+        const walletsResult = await client.query(
+          `SELECT aw.account_id, w.wallet_id, w.type, w.status, w.balance_credits
+           FROM wallets w
+           LEFT JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+           WHERE (w.type = 'account wallets' AND aw.account_id = $1)
+              OR w.type = 'platform wallets'
+           ORDER BY w.wallet_id
+           FOR UPDATE OF w`,
+          [accountId]
         );
-        await client.query(
-          `UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2`,
-          [listingFeeCredits, platformWallet.wallet_id]
-        );
-        await client.query(
-          `INSERT INTO credit_transactions (
-             type, amount_credits, status, source_wallet_id, destination_wallet_id,
-             reference_table, reference_id
-           ) VALUES ('Fee', $1, 'Completed', $2, $3, 'market_assets', $4)`,
-          [listingFeeCredits, creatorWallet.wallet_id, platformWallet.wallet_id, market.rows[0].market_asset_id]
-        );
+        const creatorWallet = walletsResult.rows.find((w) => String(w.account_id) === String(accountId));
+        const platformWallet = walletsResult.rows.find((w) => w.type === 'platform wallets');
+        if (!creatorWallet) {
+          const error = new Error('ASSET_WALLET_NOT_FOUND');
+          error.code = 'ASSET_WALLET_NOT_FOUND';
+          throw error;
+        }
+        if (Number(creatorWallet.balance_credits) < listingFeeCredits) {
+          const error = new Error('Insufficient credits for marketplace listing fee.');
+          error.code = 'INSUFFICIENT_CREDITS';
+          error.required = listingFeeCredits;
+          error.available = Number(creatorWallet.balance_credits);
+          throw error;
+        }
+        if (platformWallet) {
+          await client.query(
+            `UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2`,
+            [listingFeeCredits, creatorWallet.wallet_id]
+          );
+          await client.query(
+            `UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2`,
+            [listingFeeCredits, platformWallet.wallet_id]
+          );
+          await client.query(
+            `INSERT INTO credit_transactions (
+               type, amount_credits, status, source_wallet_id, destination_wallet_id,
+               reference_table, reference_id
+             ) VALUES ('Fee', $1, 'Completed', $2, $3, 'market_assets', $4)`,
+            [listingFeeCredits, creatorWallet.wallet_id, platformWallet.wallet_id, market.rows[0].market_asset_id]
+          );
+        }
       }
     }
 
@@ -995,8 +1048,8 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
      JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
          ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
-  JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
-     JOIN accounts owner ON owner.account_id = owner_user.account_id
+     LEFT JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
+     JOIN accounts owner ON owner.account_id = listing_owner.account_id
      WHERE ma.market_asset_id = $1
        AND original.deleted_at IS NULL
        AND ($3::uuid IS NULL OR media.media_asset_id = $3)
@@ -1038,6 +1091,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
   if (freeOnly && !projectId) throw repoError('ASSET_LICENSE_PROJECT_FORBIDDEN');
   const client = await pool.connect();
   try {
+    await ensureAdminMarketAssetSchema(client);
     await client.query('BEGIN');
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
@@ -1062,16 +1116,20 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
 
     const assetResult = await client.query(
       `SELECT ma.market_asset_id, ma.name, ma.price_credits, ma.status,
+              (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AS is_admin_asset,
               owner.account_id AS owner_account_id,
-              owner.display_name AS creator_name,
+              CASE
+                WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN 'By Ensemble'
+                ELSE owner.display_name
+              END AS creator_name,
               buyer.display_name AS buyer_name,
               buyer_user.user_id AS buyer_user_id
        FROM market_assets ma
        JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
          ORDER BY market_asset_id, created_at DESC, listing_id DESC) asset_owner ON asset_owner.market_asset_id = ma.market_asset_id
-       JOIN users owner_user ON owner_user.account_id = asset_owner.account_id
-       JOIN accounts owner ON owner.account_id = owner_user.account_id
+       LEFT JOIN users owner_user ON owner_user.account_id = asset_owner.account_id
+       JOIN accounts owner ON owner.account_id = asset_owner.account_id
        JOIN accounts buyer ON buyer.account_id = $2
        JOIN users buyer_user ON buyer_user.account_id = buyer.account_id
        WHERE ma.market_asset_id = $1
@@ -1117,7 +1175,9 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     }
     if (projectId && !projectContext.available_license_id && expectedPrice !== priceCredits) throw repoError('ASSET_PRICE_CHANGED');
     if (projectId && expectedCharge !== (projectContext.available_license_id ? 0 : priceCredits)) throw repoError('ASSET_LICENSE_COST_CHANGED');
-    const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
+    const isAdminAsset = Boolean(asset.is_admin_asset);
+    const effectiveFeePercent = isAdminAsset ? 0 : feePercent;
+    const transactionFeeCredits = isAdminAsset ? 0 : calculateAssetTransactionFee(priceCredits, effectiveFeePercent);
     const creatorNetCredits = priceCredits - transactionFeeCredits;
 
     const existingPurchase = await client.query(
@@ -1146,14 +1206,15 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       .filter((wallet) => wallet.account_id)
       .map((wallet) => [String(wallet.account_id), wallet]));
     const buyerWallet = wallets.get(String(buyerAccountId));
-    const creatorWallet = wallets.get(String(asset.owner_account_id));
     const platformWallet = walletsResult.rows.find((wallet) => wallet.type === 'platform wallets');
-    if (!buyerWallet || !creatorWallet) {
+    // Admin assets route 100% of the purchase credits straight into the platform wallet with 0% deduction.
+    const creatorWallet = isAdminAsset ? platformWallet : wallets.get(String(asset.owner_account_id));
+    if (!buyerWallet || (!isAdminAsset && !creatorWallet)) {
       const error = new Error('ASSET_WALLET_NOT_FOUND');
       error.code = 'ASSET_WALLET_NOT_FOUND';
       throw error;
     }
-    if (transactionFeeCredits > 0 && !platformWallet) {
+    if ((isAdminAsset || transactionFeeCredits > 0) && !platformWallet) {
       const error = new Error('ASSET_PLATFORM_WALLET_NOT_FOUND');
       error.code = 'ASSET_PLATFORM_WALLET_NOT_FOUND';
       throw error;
@@ -1258,7 +1319,9 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       : `You purchased \"${asset.name}\" for ${priceCredits.toLocaleString()} credits.`;
     const creatorMessage = priceCredits === 0
       ? `${asset.buyer_name} claimed \"${asset.name}\".`
-      : `${asset.buyer_name} purchased \"${asset.name}\". You received ${creatorNetCredits.toLocaleString()} credits after the ${feePercent}% marketplace fee (${transactionFeeCredits.toLocaleString()} credits).`;
+      : isAdminAsset
+        ? `${asset.buyer_name} purchased \"${asset.name}\". ${creatorNetCredits.toLocaleString()} credits were added directly to the platform wallet (0% deduction).`
+        : `${asset.buyer_name} purchased \"${asset.name}\". You received ${creatorNetCredits.toLocaleString()} credits after the ${effectiveFeePercent}% marketplace fee (${transactionFeeCredits.toLocaleString()} credits).`;
     const notificationsResult = await client.query(
       `INSERT INTO notifications
          (message, is_read, reference_table, reference_prefix, reference_path,

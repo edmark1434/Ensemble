@@ -31,6 +31,8 @@ import {
 } from "@/pages/user/4_forums/forumCommentUtils";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
+import { useForumTimeout } from "@/pages/user/4_forums/useForumTimeout";
+import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
 
 type UserId = string | number;
 
@@ -86,6 +88,7 @@ const ReplyComposer = ({
   const [attachments, setAttachments] = useState<{ key: string; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { timedOut: forumTimedOut } = useForumTimeout();
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -125,6 +128,8 @@ const ReplyComposer = ({
       setSubmitting(false);
     }
   };
+
+  if (forumTimedOut) return <ForumTimeoutComposerLock />;
 
   return (
     <div data-staff-composer className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
@@ -208,6 +213,9 @@ const CommentNode = ({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
   const [showChildren, setShowChildren] = useState(false);
+  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const lockedTitle = forumTimedOut ? forumTimeoutMessage : undefined;
+  const lockedClass = forumTimedOut ? FORUM_LOCKED_CLASS : "";
   const isAuthor = sameUser(comment.user_id, currentUserId);
   const isLiked = comment.likes?.some((like) => sameUser(like.user_id, currentUserId));
 
@@ -275,12 +283,14 @@ const CommentNode = ({
           </div>
           {isAuthor && !comment.deleted_at && (
             <div className="flex gap-1">
-              <button onClick={() => setEditing(true)} className="p-1 text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white">
+              <button onClick={() => setEditing(true)} disabled={forumTimedOut} title={lockedTitle} className={`p-1 text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white ${lockedClass}`}>
                 <Edit2 className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => void onDelete(comment.comment_id)}
-                className="p-1 text-gray-500 dark:text-zinc-500 hover:text-red-400"
+                disabled={forumTimedOut}
+                title={lockedTitle}
+                className={`p-1 text-gray-500 dark:text-zinc-500 hover:text-red-400 ${lockedClass}`}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -323,14 +333,18 @@ const CommentNode = ({
           <div className="mt-3 flex gap-4">
             <button
               onClick={() => void onLike(comment.comment_id)}
-              className={isLiked ? "flex items-center gap-1 text-xs text-red-400" : "flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500"}
+              disabled={forumTimedOut}
+              title={lockedTitle}
+              className={`${isLiked ? "flex items-center gap-1 text-xs text-red-400" : "flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500"} ${lockedClass}`}
             >
               <Heart className={isLiked ? "h-3.5 w-3.5 fill-current" : "h-3.5 w-3.5"} />
               {comment.likes?.length || 0}
             </button>
             <button
               onClick={() => setReplying((value) => !value)}
-              className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+              disabled={forumTimedOut}
+              title={lockedTitle}
+              className={`flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white ${lockedClass}`}
             >
               <Reply className="h-3.5 w-3.5" />
               Reply
@@ -376,6 +390,7 @@ const ExpandDiscussion = () => {
   const { postId } = useParams();
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
+  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const currentUserId = user?.user_id || user?.userId || "";
   const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
@@ -704,10 +719,15 @@ const ExpandDiscussion = () => {
             </div>
             {isAuthor ? (
               <div className="relative">
-                <button onClick={() => setMenuOpen((value) => !value)} className="p-2 text-gray-500 dark:text-zinc-400">
+                <button
+                  onClick={() => setMenuOpen((value) => !value)}
+                  disabled={forumTimedOut}
+                  title={forumTimedOut ? forumTimeoutMessage : undefined}
+                  className={`p-2 text-gray-500 dark:text-zinc-400 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                >
                   <MoreVertical className="h-5 w-5" />
                 </button>
-                {menuOpen && (
+                {menuOpen && !forumTimedOut && (
                   <div className="absolute right-0 z-10 w-32 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface py-1">
                     <button onClick={() => setEditingPost(true)} className="flex w-full gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300">
                       <Edit2 className="h-4 w-4" /> Edit
@@ -719,7 +739,12 @@ const ExpandDiscussion = () => {
                 )}
               </div>
             ) : (
-              <button onClick={() => setReportingPost(true)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400">
+              <button
+                onClick={() => setReportingPost(true)}
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
+                className={`text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+              >
                 Report discussion
               </button>
             )}
@@ -738,7 +763,9 @@ const ExpandDiscussion = () => {
           <div className="mt-5 flex gap-5 border-t border-gray-200 dark:border-white/10 pt-4">
             <button
               onClick={() => void toggleDiscussionCollection("likes", isLiked)}
-              className={isLiked ? "flex items-center gap-2 text-red-400" : "flex items-center gap-2 text-gray-500 dark:text-zinc-500"}
+              disabled={forumTimedOut}
+              title={forumTimedOut ? forumTimeoutMessage : undefined}
+              className={`${isLiked ? "flex items-center gap-2 text-red-400" : "flex items-center gap-2 text-gray-500 dark:text-zinc-500"} ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
             >
               <Heart className={isLiked ? "h-5 w-5 fill-current" : "h-5 w-5"} />
               {discussion.likes.length}
@@ -748,10 +775,13 @@ const ExpandDiscussion = () => {
             </span>
             <button
               onClick={() => void toggleDiscussionCollection("saves", isSaved)}
-              className={isSaved ? "flex items-center gap-2 text-yellow-400" : "flex items-center gap-2 text-gray-500 dark:text-zinc-500"}
+              disabled={forumTimedOut}
+              title={forumTimedOut ? forumTimeoutMessage : undefined}
+              className={`${isSaved ? "flex items-center gap-2 text-yellow-400" : "flex items-center gap-2 text-gray-500 dark:text-zinc-500"} ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
             >
               <Bookmark className={isSaved ? "h-5 w-5 fill-current" : "h-5 w-5"} /> Save
             </button>
+            <ForumTimeoutPill className="self-center" />
           </div>
         </article>
 

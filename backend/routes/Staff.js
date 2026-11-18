@@ -25,6 +25,8 @@ function requireAnyStaff(req, res, next) {
 }
 
 router.get('/check-staff-role', [checkSession, requireAuth], checkStaffRole);
+// Console heartbeat: `checkSession` records staff presence; this only keeps idle open tabs online.
+router.get('/presence/heartbeat', [checkSession, requireAnyStaff], (_req, res) => res.status(200).json({ success: true }));
 router.get('/tickets/people', [checkSession, requireAnyStaff], getTicketParticipantSearch);
 router.post('/tickets', [checkSession, requireAnyStaff], createStaffTicket);
 // Specialist moderators may only act on tickets in their own desk's queue.

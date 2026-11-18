@@ -8,6 +8,6 @@ import MarketplaceControl from '@/pages/moderator/marketplace-moderator/Marketpl
  */
 export default function MarketplaceManagementSection() {
   return (
-    <MarketplaceControl apiBase="/api/admin/moderation/marketplace" embedded />
+    <MarketplaceControl apiBase="/api/admin/moderation/marketplace" embedded allowUpload />
   );
 }

@@ -44,28 +44,41 @@ export async function uploadFileToIntent(file: File, folder: string, onProgress?
     throw new Error(`File exceeds the ${Math.round(maxFileSize / 1024 / 1024)}MB limit`);
   }
 
-  if (onProgress) {
-    // XHR exposes real transferred bytes without adding API/CSRF headers to the storage URL.
-    await new Promise<void>((resolve, reject) => {
-      const request = new XMLHttpRequest();
-      request.open("PUT", uploadUrl);
-      request.setRequestHeader("Content-Type", contentType);
-      request.upload.onprogress = (event) => onProgress(Math.min(file.size, event.loaded));
-      request.onload = () => {
-        if (request.status >= 200 && request.status < 300) { onProgress(file.size); resolve(); }
-        else reject(new Error(`Upload failed with status ${request.status}`));
-      };
-      request.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
-      request.onabort = () => reject(new Error("Upload cancelled."));
-      request.send(file);
-    });
-  } else {
-    const uploaded = await fetch(uploadUrl, {
-      method: "PUT",
+  try {
+    if (onProgress) {
+      // XHR exposes real transferred bytes without adding API/CSRF headers to the storage URL.
+      await new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("PUT", uploadUrl);
+        request.setRequestHeader("Content-Type", contentType);
+        request.upload.onprogress = (event) => onProgress(Math.min(file.size, event.loaded));
+        request.onload = () => {
+          if (request.status >= 200 && request.status < 300) { onProgress(file.size); resolve(); }
+          else reject(new Error(`Upload failed with status ${request.status}`));
+        };
+        request.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+        request.onabort = () => reject(new Error("Upload cancelled."));
+        request.send(file);
+      });
+    } else {
+      const uploaded = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": contentType },
+        body: file,
+      });
+      if (!uploaded.ok) throw new Error(`Upload failed with status ${uploaded.status}`);
+    }
+  } catch (directUploadError) {
+    if (directUploadError instanceof Error && directUploadError.message === "Upload cancelled.") {
+      throw directUploadError;
+    }
+    await api.put(`/api/files/upload/${uploadIntentId}`, file, {
       headers: { "Content-Type": contentType },
-      body: file,
+      onUploadProgress: onProgress
+        ? (event) => onProgress(Math.min(file.size, event.loaded))
+        : undefined,
     });
-    if (!uploaded.ok) throw new Error(`Upload failed with status ${uploaded.status}`);
+    if (onProgress) onProgress(file.size);
   }
   return { uploadIntentId };
 }

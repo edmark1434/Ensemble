@@ -14,6 +14,7 @@ const s3 = require('../lib/AmazonS3');
 const {
   findOwnedUploadedFilesRepository,
   listAssetDerivativeBackfillCandidatesRepository,
+  listStaticGifDerivativeCandidatesRepository,
   replaceMediaAssetDerivativesRepository,
 } = require('../repositories/AssetPreviewRepositories');
 
@@ -24,6 +25,7 @@ const PROXY_SHORT_SIDE = 1080;
 const PROXY_LONG_SIDE = 1920;
 const DERIVATIVE_CONCURRENCY = 3;
 const INPUT_OPTIONS = { limitInputPixels: 50_000_000, failOn: 'error' };
+const ANIMATED_INPUT_OPTIONS = { limitInputPixels: false, failOn: 'error', animated: true };
 
 function derivativeError(code, message) {
   const error = new Error(message);
@@ -87,6 +89,23 @@ function createWatermarkSvg(width, height) {
 }
 
 async function createImageThumbnail(sourceBuffer) {
+  const metadata = await sharp(sourceBuffer, INPUT_OPTIONS).metadata();
+  const isAnimated = Number(metadata.pages) > 1;
+  if (isAnimated) {
+    const frameWidth = metadata.width || THUMBNAIL_SIZE;
+    const frameHeight = metadata.pageHeight || metadata.height || THUMBNAIL_SIZE;
+    const scale = Math.min(1, THUMBNAIL_SIZE / frameWidth, THUMBNAIL_SIZE / frameHeight);
+    const targetWidth = Math.max(1, Math.round(frameWidth * scale));
+    const targetHeight = Math.max(1, Math.round(frameHeight * scale));
+    return sharp(sourceBuffer, ANIMATED_INPUT_OPTIONS)
+      .resize({
+        width: targetWidth,
+        height: targetHeight,
+        fit: 'fill',
+      })
+      .webp({ quality: THUMBNAIL_QUALITY, effort: 3 })
+      .toBuffer();
+  }
   return sharp(sourceBuffer, INPUT_OPTIONS)
     .rotate()
     .resize({
@@ -101,16 +120,40 @@ async function createImageThumbnail(sourceBuffer) {
 
 async function createWatermarkedProxy(sourceBuffer) {
   const metadata = await sharp(sourceBuffer, INPUT_OPTIONS).metadata();
-  const swapsAxes = Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
-  const width = swapsAxes ? metadata.height : metadata.width;
-  const height = swapsAxes ? metadata.width : metadata.height;
+  const isAnimated = Number(metadata.pages) > 1;
+  const swapsAxes = !isAnimated && Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
+  const rawWidth = metadata.width || PROXY_SHORT_SIDE;
+  const rawHeight = (isAnimated ? metadata.pageHeight : metadata.height) || metadata.height || PROXY_SHORT_SIDE;
+  const width = swapsAxes ? rawHeight : rawWidth;
+  const height = swapsAxes ? rawWidth : rawHeight;
   const portrait = height > width;
+  const maxW = portrait ? PROXY_SHORT_SIDE : PROXY_LONG_SIDE;
+  const maxH = portrait ? PROXY_LONG_SIDE : PROXY_SHORT_SIDE;
+
+  if (isAnimated) {
+    const scale = Math.min(1, maxW / width, maxH / height);
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+    return sharp(sourceBuffer, ANIMATED_INPUT_OPTIONS)
+      .resize({
+        width: targetWidth,
+        height: targetHeight,
+        fit: 'fill',
+      })
+      .composite([{
+        input: createWatermarkSvg(targetWidth, targetHeight),
+        tile: true,
+      }])
+      .webp({ quality: 82, effort: 3 })
+      .toBuffer();
+  }
+
   // Composite on raw resized pixels to avoid compressing the image twice.
   const { data: resized, info } = await sharp(sourceBuffer, INPUT_OPTIONS)
     .rotate()
     .resize({
-      width: portrait ? PROXY_SHORT_SIDE : PROXY_LONG_SIDE,
-      height: portrait ? PROXY_LONG_SIDE : PROXY_SHORT_SIDE,
+      width: maxW,
+      height: maxH,
       fit: 'inside',
       withoutEnlargement: true,
     })
@@ -166,11 +209,13 @@ async function readImageOriginal(file) {
 async function prepareShowcaseImage(file) {
   const metadata = await sharp(await readImageOriginal(file), INPUT_OPTIONS).metadata();
   if (!metadata.width || !metadata.height) throw derivativeError('ASSET_IMAGE_UNPROCESSABLE', 'Invalid showcase image dimensions');
-  const swapsAxes = Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
+  const isAnimated = Number(metadata.pages) > 1;
+  const frameHeight = (isAnimated ? metadata.pageHeight : metadata.height) || metadata.height;
+  const swapsAxes = !isAnimated && Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
   return {
     useOriginalThumbnail: true,
-    width: swapsAxes ? metadata.height : metadata.width,
-    height: swapsAxes ? metadata.width : metadata.height,
+    width: swapsAxes ? frameHeight : metadata.width,
+    height: swapsAxes ? metadata.width : frameHeight,
   };
 }
 
@@ -182,12 +227,15 @@ async function generateImageDerivatives(file) {
   let proxyBytes;
   let width;
   let height;
+  let isAnimated = false;
   try {
     const metadata = await sharp(buffer, INPUT_OPTIONS).metadata();
     if (!metadata.width || !metadata.height) throw new Error('invalid dimensions');
-    const swapsAxes = Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
-    width = swapsAxes ? metadata.height : metadata.width;
-    height = swapsAxes ? metadata.width : metadata.height;
+    isAnimated = Number(metadata.pages) > 1;
+    const frameHeight = (isAnimated ? metadata.pageHeight : metadata.height) || metadata.height;
+    const swapsAxes = !isAnimated && Number(metadata.orientation) >= 5 && Number(metadata.orientation) <= 8;
+    width = swapsAxes ? frameHeight : metadata.width;
+    height = swapsAxes ? metadata.width : frameHeight;
     [thumbnailBytes, proxyBytes] = await Promise.all([
       createImageThumbnail(buffer),
       createWatermarkedProxy(buffer),
@@ -198,10 +246,12 @@ async function generateImageDerivatives(file) {
 
   const baseName = safeBaseName(file.name);
   const uploaded = [];
+  const thumbPrefix = isAnimated ? 'assets/thumbnails/640-anim' : 'assets/thumbnails/640';
+  const proxyPrefix = isAnimated ? 'assets/proxies/v2-anim' : 'assets/proxies/v2';
   try {
     const results = await Promise.allSettled([
-      putDerivative('assets/thumbnails/640', baseName, 'thumbnail-640px', thumbnailBytes),
-      putDerivative('assets/proxies/v2', baseName, 'proxy-ensemble-1080p', proxyBytes),
+      putDerivative(thumbPrefix, baseName, 'thumbnail-640px', thumbnailBytes),
+      putDerivative(proxyPrefix, baseName, 'proxy-ensemble-1080p', proxyBytes),
     ]);
     for (const result of results) {
       if (result.status === 'fulfilled') uploaded.push(result.value.path);
@@ -289,6 +339,43 @@ async function backfillAssetDerivativesServices({ limit = 1000, dryRun = false }
   return result;
 }
 
+let animatedGifBackfillPromise = null;
+async function ensureAnimatedGifDerivativesBackfilled() {
+  if (!process.env.AWS_BUCKET_NAME) return;
+  if (animatedGifBackfillPromise) return animatedGifBackfillPromise;
+  animatedGifBackfillPromise = (async () => {
+    const candidates = await listStaticGifDerivativeCandidatesRepository(50);
+    for (const candidate of candidates) {
+      let derivative;
+      try {
+        derivative = await generateImageDerivatives({
+          file_id: candidate.original_file_id,
+          name: candidate.original_name,
+          path: candidate.original_path,
+          size_bytes: candidate.original_size_bytes,
+        });
+        const replaced = await replaceMediaAssetDerivativesRepository({
+          mediaAssetId: candidate.media_asset_id,
+          expectedProxyFileId: candidate.proxy_file_id,
+          expectedThumbnailFileId: candidate.thumbnail_file_id,
+          width: derivative.width,
+          height: derivative.height,
+          thumbnail: derivative.thumbnail,
+          proxy: derivative.proxy,
+        });
+        if (!replaced) {
+          await deleteKeys([derivative.thumbnail.path, derivative.proxy.path]);
+        }
+      } catch {
+        if (derivative) await deleteKeys([derivative.thumbnail.path, derivative.proxy.path]);
+      }
+    }
+  })().catch(() => {
+    animatedGifBackfillPromise = null;
+  });
+  return animatedGifBackfillPromise;
+}
+
 module.exports = {
   createWatermarkSvg,
   createImageThumbnail,
@@ -298,4 +385,5 @@ module.exports = {
   prepareImageDerivatives,
   discardImageDerivatives,
   backfillAssetDerivativesServices,
+  ensureAnimatedGifDerivativesBackfilled,
 };

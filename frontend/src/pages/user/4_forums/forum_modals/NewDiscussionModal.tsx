@@ -27,6 +27,7 @@ import {
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
+import { useForumTimeout } from "@/pages/user/4_forums/useForumTimeout";
 
 interface Group {
   id: string;
@@ -308,6 +309,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   const [content, setContent] = useState("");
   const [selectedTags, setSelectedTags] = useState<{ tag_id: number; tag_name: string }[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; content?: string; tags?: string }>({});
   const [images, setImages] = useState<ImageAttachment[]>([]);
@@ -650,7 +652,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!validate() || !selectedGroupId) return;
+    if (forumTimedOut || !validate() || !selectedGroupId) return;
 
     setIsCreating(true);
 
@@ -738,7 +740,11 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
       onClose();
     } catch (error: any) {
       console.error("Error creating post:", error);
-      showErrorToast(error.message || "Failed to create post. Please try again.");
+      // HTTP errors are already toasted by onCreatePost (or the axios interceptor);
+      // only surface non-request failures here so the user never sees duplicates.
+      if (!error?.response) {
+        showErrorToast(error?.message || "Failed to create post. Please try again.");
+      }
     } finally {
       setIsCreating(false);
     }
@@ -963,11 +969,19 @@ Formatting examples:
           {errors.content && <p className="mt-1 text-xs text-red-400">{errors.content}</p>}
           <p className="mt-1 text-right text-[10px] text-gray-400 dark:text-zinc-500">{content.length} characters (minimum 20)</p>
 
+          {forumTimedOut && (
+            <div className="mt-6 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{forumTimeoutMessage}</span>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-3 mt-6">
             <button
               onClick={handleSubmit}
-              disabled={isCreating || loadingGroups || loadingTags || !selectedGroupId || Boolean(tagsError)}
+              disabled={forumTimedOut || isCreating || loadingGroups || loadingTags || !selectedGroupId || Boolean(tagsError)}
+              title={forumTimedOut ? forumTimeoutMessage : undefined}
               className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             >
               {isCreating ? (
@@ -978,7 +992,7 @@ Formatting examples:
               ) : (
                 <div className="flex items-center justify-center gap-2">
                   <MessageSquare className="h-4 w-4" />
-                  Create Discussion
+                  {forumTimedOut ? "Posting paused" : "Create Discussion"}
                 </div>
               )}
             </button>
