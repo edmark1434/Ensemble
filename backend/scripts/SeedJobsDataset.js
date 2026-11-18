@@ -751,6 +751,18 @@ async function replaceAndSeed25Jobs() {
       const deadline = new Date();
       deadline.setDate(deadline.getDate() + (item.timelineMax || 14));
 
+      const rawDaysArg = process.argv.find((a) => a.startsWith('--days='));
+      const deadlineDays = Math.max(
+        1,
+        parseInt(rawDaysArg ? rawDaysArg.split('=')[1] : process.env.SEED_DEADLINE_DAYS || '14', 10) || 14
+      );
+      const rateMin =
+        item.jobType === 'individual_ranged' ? 100 : Math.max(100, Number(item.minBudget) || 100);
+      const rateMax =
+        item.jobType === 'individual_ranged'
+          ? Math.max(100, Number(item.maxBudget || item.minBudget) || 100)
+          : item.maxBudget;
+
       const jobRes = await client.query(
         `INSERT INTO jobs (
           client_account_id, title, description, category, payment_type,
@@ -766,7 +778,7 @@ async function replaceAndSeed25Jobs() {
           $9, $10, $11, 'Open', $12,
           2, $13, $14,
           false, 'Client', $15, $16,
-          $17, NOW() + interval '3 days', false, 50,
+          $17, NOW() + ($19 || ' days')::interval, false, 50,
           0, NOW() - ($18 || ' days')::interval, NOW() - ($18 || ' days')::interval
         ) RETURNING job_id`,
         [
@@ -776,8 +788,8 @@ async function replaceAndSeed25Jobs() {
           item.category,
           item.difficulty,
           item.positionsNeeded,
-          item.minBudget,
-          item.maxBudget,
+          rateMin,
+          rateMax,
           item.timelineMin,
           item.timelineMax,
           postedAs,
@@ -788,6 +800,7 @@ async function replaceAndSeed25Jobs() {
           hiringType,
           JSON.stringify(item.screeningQuestions || []),
           String(item.ageDays),
+          String(deadlineDays),
         ]
       );
       const jobId = jobRes.rows[0].job_id;
