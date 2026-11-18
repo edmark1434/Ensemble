@@ -1,11 +1,16 @@
 const {
-  getSettingsOverview,
-  updateSettingsSection,
-} = require('../repositories/AdminSettingsRepositories');
+  SettingsServiceError,
+  getAdminSettingsOverview: getAdminSettingsOverviewService,
+  updateAdminSettingsSection,
+} = require('../services/AdminSettingsServices');
+
+function requesterIp(req) {
+  return req.ip || req.socket?.remoteAddress || null;
+}
 
 async function getAdminSettingsOverview(req, res) {
   try {
-    const data = await getSettingsOverview();
+    const data = await getAdminSettingsOverviewService({ requesterIp: requesterIp(req) });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching settings overview:', err);
@@ -15,19 +20,31 @@ async function getAdminSettingsOverview(req, res) {
 
 async function patchAdminSettings(req, res) {
   try {
-    const { section, values } = req.body;
-    if (!section || !values || typeof values !== 'object') {
-      return res.status(400).json({
+    const { section, values, baseVersion } = req.body || {};
+    const result = await updateAdminSettingsSection({
+      section,
+      values,
+      baseVersion: baseVersion ?? null,
+      session: req.session,
+      requesterIp: requesterIp(req),
+    });
+    res.status(200).json({
+      success: true,
+      data: result.overview,
+      changed: result.changed,
+      changeCount: result.changes.length,
+    });
+  } catch (err) {
+    if (err instanceof SettingsServiceError) {
+      return res.status(err.statusCode).json({
         success: false,
-        message: 'Request must include section and values object',
+        code: err.code,
+        message: err.message,
+        errors: err.errors || undefined,
       });
     }
-    const data = await updateSettingsSection(section, values);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
     console.error('Error updating settings:', err);
-    const message = err.message?.includes('Unknown') ? err.message : 'Failed to save settings';
-    res.status(500).json({ success: false, message });
+    res.status(500).json({ success: false, message: 'Failed to save settings' });
   }
 }
 

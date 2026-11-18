@@ -581,9 +581,10 @@ export default function ModeratorRestrictionsDesk({
     return (data?.violations || []).filter((row) => row.account.accountId === selected.accountId);
   }, [data?.violations, selected]);
 
+  // Each warning weighs 1–10 (missing counts as 1), the same as the backend sum.
   const activePoints = selectedWarnings
     .filter((row) => warningBucket(row) === 'active')
-    .reduce((sum, row) => sum + (Number(row.points) || 0), 0);
+    .reduce((sum, row) => sum + Math.min(10, Math.max(1, Math.round(Number(row.points) || 1))), 0);
   const selectedMerit = meritFromWarningPoints(activePoints);
 
   async function runAction(action: string) {

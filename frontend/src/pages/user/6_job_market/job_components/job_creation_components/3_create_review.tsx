@@ -394,7 +394,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       attachments: briefFiles,
       clientSubscriptionPlan: rawSubscriptionPlan,
       clientProfileVisibility,
-      clientMerit: user?.merit_score ?? user?.merit ?? 100,
+      // Live merit from /api/users/me (`restriction.merit`, active unexpired warnings only).
+      clientMerit: user?.restriction?.merit ?? 100,
       clientHireRate: user?.hire_rate ?? user?.clientHireRate ?? 100,
     };
   }, [

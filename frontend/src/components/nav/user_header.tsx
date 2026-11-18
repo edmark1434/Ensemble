@@ -222,12 +222,18 @@ export function useRealtimeNotifications(onWalletUpdated?: (nextBalance: number)
   const onWalletUpdatedRef = useRef(onWalletUpdated);
   onWalletUpdatedRef.current = onWalletUpdated;
 
+  const isStaffPreview = isStaffPlatformViewer(userInfo);
+
   useEffect(() => {
     if (!userInfo?.account_id) return;
 
     if (!socket.connected) {
       socket.connect();
     }
+
+    // Platform view: live pages (forums, disputes) still need the socket, but the staff
+    // account's own notifications belong to the console, not member toasts in the frame.
+    if (isStaffPreview) return;
 
     socket.emit("joinRoom", userInfo.account_id);
 
@@ -628,7 +634,7 @@ export function useRealtimeNotifications(onWalletUpdated?: (nextBalance: number)
       socket.off("notification", handleNewNotification);
       socket.off("walletBalanceUpdated", handleWalletBalanceUpdated);
     };
-  }, [userInfo?.account_id, navigate, setNotifications]);
+  }, [userInfo?.account_id, isStaffPreview, navigate, setNotifications]);
 }
 
 const UserHeader: React.FC<UserHeaderProps> = ({

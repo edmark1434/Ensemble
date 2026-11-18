@@ -41,8 +41,11 @@ const feedbackRoutes = require('./Feedback');
 const configurationRoutes = require('./Configuration');
 const invitationRoutes = require('./Invitation');
 const { maintenanceMode } = require('../middleware/MaintenanceMode');
+const { rejectStaffMemberWrite, STAFF_BLOCKED_MEMBER_PREFIXES } = require('../middleware/RejectStaffMemberWrite');
 
 router.use(maintenanceMode);
+// Staff browse member pages read-only (platform view); member writes are refused for them.
+router.use(STAFF_BLOCKED_MEMBER_PREFIXES, rejectStaffMemberWrite);
 router.get('/csrf-token', checkSession, issueCsrfToken);
 router.use('/configuration', configurationRoutes);
 router.use('/chat', chatRoutes);

@@ -1,0 +1,97 @@
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import useGlobalState from "@/lib/global_state";
+import {
+  isStaffConsolePath,
+  isStaffPreviewFrame,
+  memberPreviewPath,
+  postToStaffPreviewParent,
+  sameOriginPath,
+  staffPreviewViewFallback,
+  STAFF_PREVIEW_LOCATION_MESSAGE,
+  STAFF_PREVIEW_NAV_MESSAGE,
+} from "@/lib/staffPlatformView";
+
+/** Position of this frame in its own history (React Router keeps it in `history.state.idx`). */
+function frameHistoryIndex(): number {
+  const index = (window.history.state as { idx?: unknown } | null)?.idx;
+  return typeof index === "number" ? index : 0;
+}
+
+/**
+ * Frame side of platform view (and the reported-item preview). Rendered once in `App` so it
+ * covers every route, not only pages inside the member `Layout`:
+ * - follows navigation sent by the console, including Back;
+ * - reports the page it shows so the console can show it and keep its own URL in sync;
+ * - keeps staff on member pages: console pages, sign-in pages, and member-only tools are
+ *   swapped for their section's public page;
+ * - opens this site's links in place, since a new tab would leave the console.
+ */
+export default function StaffPreviewFrameBridge() {
+  const inFrame = isStaffPreviewFrame();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isStaff = useGlobalState((state) => state.user?.type === "Staff");
+  const current = `${location.pathname}${location.search}${location.hash}`;
+
+  useEffect(() => {
+    if (!inFrame) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== window.parent) return;
+      const data = event.data as { type?: unknown; path?: unknown; action?: unknown } | null;
+      if (!data || data.type !== STAFF_PREVIEW_NAV_MESSAGE) return;
+      if (data.action === "back") {
+        // Index 0 is the frame's first page; going back from there would move the console instead.
+        if (frameHistoryIndex() > 0) navigate(-1);
+        return;
+      }
+      const path = memberPreviewPath(typeof data.path === "string" ? data.path : null);
+      if (!path) return;
+      navigate(staffPreviewViewFallback(path) || path);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [inFrame, navigate]);
+
+  useEffect(() => {
+    if (!inFrame) return;
+    const fallback = staffPreviewViewFallback(location.pathname);
+    if (!fallback || fallback === location.pathname) return;
+    // Console pages never render in a frame. Other pages wait until the session says this is staff.
+    if (!isStaff && !isStaffConsolePath(location.pathname)) return;
+    navigate(fallback, { replace: true });
+  }, [inFrame, isStaff, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!inFrame) return;
+    postToStaffPreviewParent({
+      type: STAFF_PREVIEW_LOCATION_MESSAGE,
+      path: current,
+      canGoBack: frameHistoryIndex() > 0,
+    });
+  }, [inFrame, current]);
+
+  useEffect(() => {
+    if (!inFrame || !isStaff) return;
+    const original = window.open;
+    const openInFrame = (url?: string | URL, target?: string, features?: string) => {
+      const href = url ? String(url) : "";
+      const path = sameOriginPath(href);
+      if (path) {
+        navigate(staffPreviewViewFallback(path) || path);
+        return null;
+      }
+      // A blank tab is opened first and filled in by the caller, which needs the handle.
+      if (!href || href === "about:blank") return original.call(window, url, target, features);
+      // Other sites open in a normal tab that cannot reach back into the console.
+      const extra = features ? `${features},` : "";
+      return original.call(window, url, target || "_blank", `${extra}noopener,noreferrer`);
+    };
+    window.open = openInFrame as typeof window.open;
+    return () => {
+      window.open = original;
+    };
+  }, [inFrame, isStaff, navigate]);
+
+  return null;
+}

@@ -249,7 +249,9 @@ const CreditShop: React.FC = () => {
           api.get("api/payment/credit-packages").catch(() => null),
         ]);
 
-        if (packsResponse?.data?.success && Array.isArray(packsResponse.data?.creditPackages) && packsResponse.data.creditPackages.length > 0) {
+        // Admin-configured packages are authoritative, including an empty list (all
+        // packages deactivated). The defaults only cover a failed request.
+        if (packsResponse?.data?.success && Array.isArray(packsResponse.data?.creditPackages)) {
           setCreditPacks(packsResponse.data.creditPackages);
         }
         const liveCreditValue = Number(packsResponse?.data?.creditValuePhp);

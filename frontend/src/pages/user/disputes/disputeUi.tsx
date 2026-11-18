@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Download, FileText, Gavel } from "lucide-react";
 import { chatAttachmentUrl } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
-import { mainSiteOrigin } from "@/lib/consoleHosts";
+import { staffPlatformViewHref } from "@/lib/staffRoutes";
 import { isDisputeDecision, parseDisputeRuling } from "./disputeRuling";
 export { isDisputeDecision, parseDisputeRuling } from "./disputeRuling";
 export type { ParsedRuling } from "./disputeRuling";
@@ -260,6 +260,25 @@ export type MentionMap = Record<string, string>;
 // Same rule as the server: "@handle" not glued to a word, an email or another mention.
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_.@])@([A-Za-z0-9_](?:[A-Za-z0-9_.]*[A-Za-z0-9_])?)/g;
 
+/**
+ * Staff consoles: open the profile in this console's platform view, in a new tab so the case
+ * stays open. The main site has no staff session on the admin host, so it cannot be used.
+ */
+function StaffMentionLink({ handle, accountId, className }: { handle: string; accountId: string; className: string }) {
+  const { pathname } = useLocation();
+  return (
+    <Link
+      to={staffPlatformViewHref(pathname, `/profile/${accountId}`)}
+      target="_blank"
+      rel="noreferrer"
+      title={`Open @${handle}’s profile in platform view (new tab)`}
+      className={className}
+    >
+      @{handle}
+    </Link>
+  );
+}
+
 function MentionLink({
   handle,
   accountId,
@@ -277,18 +296,7 @@ function MentionLink({
       : "text-sky-700 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
   }`;
   if (external) {
-    // Staff consoles live on their own host: open the member profile on the main site.
-    return (
-      <a
-        href={`${mainSiteOrigin()}/profile/${accountId}`}
-        target="_blank"
-        rel="noreferrer"
-        title={`Open @${handle}’s profile in a new tab`}
-        className={className}
-      >
-        @{handle}
-      </a>
-    );
+    return <StaffMentionLink handle={handle} accountId={accountId} className={className} />;
   }
   return (
     <Link to={`/profile/${accountId}`} title={`View @${handle}’s profile`} className={className}>
@@ -309,7 +317,7 @@ export function MentionText({
 }: {
   text?: string | null;
   mentions?: MentionMap | null;
-  /** Open profiles on the main site in a new tab (staff consoles). */
+  /** Staff consoles: open profiles in the console's platform view, in a new tab. */
   external?: boolean;
   /** Force the dark link colour (staff console). */
   dark?: boolean;

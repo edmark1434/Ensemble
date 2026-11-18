@@ -270,8 +270,8 @@ const { getAdminSurveyResponsesController } = require('../controllers/AdminSurve
 
 router.get('/survey-responses', [checkSession, requireAdmin], getAdminSurveyResponsesController);
 
-router.get('/subscriptions/plans', [], getAdminPlans);
-router.put('/subscriptions/plans/:id', [], updateAdminPlan);
-router.put('/subscriptions/plans/:id/features', [], updateAdminPlanFeatures);
+router.get('/subscriptions/plans', [checkSession, requireAdmin], getAdminPlans);
+router.put('/subscriptions/plans/:id', [checkSession, requireAdmin], updateAdminPlan);
+router.put('/subscriptions/plans/:id/features', [checkSession, requireAdmin], updateAdminPlanFeatures);
 
 module.exports = router;

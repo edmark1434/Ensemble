@@ -33,9 +33,12 @@ export const PlatformTour: React.FC = () => {
 
   const [isLeftPopupOpen, setIsLeftPopupOpen] = React.useState(false);
 
+  // The tour teaches members the site. Staff only see it through platform view, never as members.
+  const isStaffAccount = user?.type === 'Staff';
+
   // Check if user just completed onboarding or logged in
   useEffect(() => {
-    if (isAuthenticated && user && !isGuestMode) {
+    if (isAuthenticated && user && !isGuestMode && !isStaffAccount) {
       const justCompleted = sessionStorage.getItem('justCompletedOnboarding') === 'true';
       if (justCompleted) {
         sessionStorage.removeItem('justCompletedOnboarding');
@@ -59,7 +62,7 @@ export const PlatformTour: React.FC = () => {
     } else {
       setIsLeftPopupOpen(false);
     }
-  }, [isAuthenticated, user, isGuestMode, location.pathname, initFromUser, isWelcomeOpen, isWalkthroughActive]);
+  }, [isAuthenticated, user, isGuestMode, isStaffAccount, location.pathname, initFromUser, isWelcomeOpen, isWalkthroughActive]);
 
   // Synchronize route navigation when currentStepIndex changes
   useEffect(() => {
@@ -294,6 +297,7 @@ export const PlatformTour: React.FC = () => {
   }, [closeWelcome, startWalkthrough, location.pathname, navigate]);
 
   // Don't render if user is not authenticated or in guest mode
+  if (isStaffAccount) return null;
   if (!isAuthenticated && !isWalkthroughActive && !isWelcomeOpen && !isLeftPopupOpen) return null;
 
   return (

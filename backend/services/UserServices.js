@@ -45,6 +45,17 @@ const DEFAULT_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
 const ALLOWED_SUFFIXES = new Set(['Jr.', 'Sr.', 'II', 'III', 'IV', 'V']);
 
+/** System settings → Security → minimum password length (never below 8). */
+async function getMinPasswordLength() {
+    try {
+        const { getSecuritySettings } = require('../lib/ModerationPolicy');
+        const security = await getSecuritySettings();
+        return Math.max(8, Number(security.minPasswordLength) || 8);
+    } catch {
+        return 8;
+    }
+}
+
 async function getLoginLockoutPolicy() {
     try {
         const { getSecuritySettings } = require('../lib/ModerationPolicy');
@@ -214,9 +225,7 @@ async function registerUser(signupPayload = {}, options = {}) {
             throw new ServiceError('Email and password are required', 400);
         }
         if (!options.passwordHash) {
-            const { getSecuritySettings } = require('../lib/ModerationPolicy');
-            const security = await getSecuritySettings();
-            const minLen = Math.max(6, Number(security.minPasswordLength) || 8);
+            const minLen = await getMinPasswordLength();
             if (!password || String(password).length < minLen) {
                 throw new ServiceError(`Password must be at least ${minLen} characters.`, 400);
             }
@@ -625,8 +634,11 @@ async function signUpSaveSession(credentials) {
         if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
             errorList.username = "Username must be 3-20 characters and contain only letters, numbers, or underscores";
         }
-        if (credentials.password && !STRONG_PASSWORD_PATTERN.test(credentials.password)) {
-            errorList.password = 'Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.';
+        if (credentials.password) {
+            const minLen = await getMinPasswordLength();
+            if (String(credentials.password).length < minLen || !STRONG_PASSWORD_PATTERN.test(credentials.password)) {
+                errorList.password = `Password must be at least ${minLen} characters and include one uppercase letter, one lowercase letter, and one special character.`;
+            }
         }
         
         if(Object.keys(errorList).length > 0){
@@ -1094,10 +1106,11 @@ async function resetPasswordWithToken(token, newPassword) {
         throw new ServiceError('Password is required.', 400);
     }
 
-    // Authoritative 4-rule signup password validation
-    if (!STRONG_PASSWORD_PATTERN.test(newPassword)) {
+    // Authoritative 4-rule signup password validation, with the configured minimum length
+    const minLen = await getMinPasswordLength();
+    if (newPassword.length < minLen || !STRONG_PASSWORD_PATTERN.test(newPassword)) {
         throw new ServiceError(
-            'Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.',
+            `Password must be at least ${minLen} characters and include one uppercase letter, one lowercase letter, and one special character.`,
             400
         );
     }

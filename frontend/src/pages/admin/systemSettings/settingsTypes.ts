@@ -1,8 +1,12 @@
+export type SettingsTabId = 'platform' | 'economy' | 'security';
+
 export type SettingsSection<T> = {
   key: string;
   value: T;
   updatedAt: string | null;
   isDefault: boolean;
+  /** Fingerprint of the stored values; sent back on save to detect conflicting edits. */
+  version?: string;
 };
 
 export type PlatformSettings = {
@@ -20,7 +24,8 @@ export type CreditPackage = {
   credits: number;
   pricePhp: number;
   active: boolean;
-  salesCount: number;
+  /** Paid top-ups at this package's credits and price (computed by the server, read-only). */
+  salesCount?: number;
 };
 
 export type FeeSetting = {
@@ -33,17 +38,26 @@ export type FeeSetting = {
   reason?: string;
 };
 
+export type FeeUsage = {
+  mode: 'commission' | 'flat' | 'linked' | 'unused';
+  percent: boolean;
+  flat: boolean;
+  note: string;
+};
+
+export type MarketplaceSettings = {
+  listingFeeCredits: number;
+  transactionFeePercent: number;
+  minPayoutCredits: number;
+  refundWindowDays: number;
+};
+
 export type EconomySettings = {
   /** Philippine pesos per 1 platform credit. Default 1. */
   creditValuePhp: number;
   creditPackages: CreditPackage[];
   feeSettings: FeeSetting[];
-  marketplaceSettings: {
-    listingFeeCredits: number;
-    transactionFeePercent: number;
-    minPayoutCredits: number;
-    refundWindowDays: number;
-  };
+  marketplaceSettings: MarketplaceSettings;
 };
 
 export type SecuritySettings = {
@@ -56,6 +70,70 @@ export type SecuritySettings = {
   allowedAdminIps: string[];
 };
 
+export type NumberRule = { min: number; max: number; integer?: boolean; decimals?: number };
+export type TextRule = { min?: number; max: number };
+
+export type SettingsRules = {
+  platform: {
+    siteName: TextRule;
+    supportEmail: TextRule;
+    sessionTimeoutDays: NumberRule;
+  };
+  economy: {
+    creditValuePhp: NumberRule;
+    maxPackages: number;
+    packageName: TextRule;
+    packageCredits: NumberRule;
+    packagePricePhp: NumberRule;
+    feePercent: NumberRule;
+    feeFlat: NumberRule;
+    listingFeeCredits: NumberRule;
+    transactionFeePercent: NumberRule;
+    minPayoutCredits: NumberRule;
+    refundWindowDays: NumberRule;
+  };
+  security: {
+    minPasswordLength: NumberRule;
+    lockoutAfterFailedAttempts: NumberRule;
+    lockoutDurationMinutes: NumberRule;
+    auditLogRetentionDays: NumberRule;
+    maxAllowedAdminIps: number;
+  };
+};
+
+export type SettingsChange = { field?: string; label: string; from: string; to: string };
+
+export type SettingsHistoryEntry = {
+  id: string;
+  section: string;
+  updatedAt: string;
+  updatedBy: string;
+  actorRole?: string | null;
+  changes?: SettingsChange[];
+  changeCount?: number;
+};
+
+export type SettingsStaffMember = {
+  staffId: string | number;
+  name: string;
+  handle?: string | null;
+  role: string;
+  hasAuthenticator?: boolean;
+};
+
+export type SettingsAlert = {
+  id: string;
+  message: string;
+  severity: 'warning' | 'info' | string;
+  tab?: SettingsTabId;
+};
+
+export type SettingsDrafts = {
+  platform: PlatformSettings;
+  economy: EconomySettings;
+  security: SecuritySettings;
+};
+
 export type SettingsOverview = {
   lastUpdated: string;
   sections: {
@@ -63,8 +141,16 @@ export type SettingsOverview = {
     economy: SettingsSection<EconomySettings>;
     security: SettingsSection<SecuritySettings>;
   };
-  staffEditors: { staffId: string | number; name: string; role: string }[];
-  changeHistory: { id: string; section: string; updatedAt: string; updatedBy: string }[];
-  alerts: { id: string; message: string; severity: string }[];
-  dataSources: { persisted: string[]; tables: string[] };
+  defaults?: SettingsDrafts;
+  rules?: SettingsRules;
+  feeUsage?: Record<string, FeeUsage>;
+  staff?: SettingsStaffMember[];
+  changeHistory: SettingsHistoryEntry[];
+  alerts: SettingsAlert[];
+  viewer?: { ip: string | null };
+  delivery?: { email: boolean };
+  propagationSeconds?: number;
 };
+
+/** Field-level messages keyed by path, e.g. `sessionTimeoutDays` or `creditPackages.pkg-pro.pricePhp`. */
+export type FieldErrors = Record<string, string>;

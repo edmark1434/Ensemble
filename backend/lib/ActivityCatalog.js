@@ -25,6 +25,7 @@ const CATEGORY_RULES = [
   { id: 'jobs', label: 'Jobs & gigs', patterns: ['JOBS', 'GIG', 'POSTING', 'PROPOSAL'] },
   { id: 'economy', label: 'Economy', patterns: ['CREDIT', 'WALLET', 'PAYOUT'] },
   { id: 'account', label: 'Account', patterns: ['ACCOUNT', 'STATUS', 'VERIFI'] },
+  { id: 'settings', label: 'Platform settings', patterns: ['SETTINGS', 'SUBSCRIPTION_PLAN'] },
   { id: 'moderation', label: 'Moderation', patterns: null },
 ];
 
@@ -321,6 +322,18 @@ const EVENT_CATALOG = {
     targetType: 'Forum comment',
     severity: 'medium',
     impact: 'Replaced the comment body with a moderator placeholder.',
+  },
+  SETTINGS_UPDATED: {
+    label: 'System settings changed',
+    targetType: 'Platform settings',
+    severity: 'high',
+    impact: 'Changed platform-wide configuration; metadata.changes lists each field before and after.',
+  },
+  SUBSCRIPTION_PLAN_UPDATED: {
+    label: 'Subscription plan changed',
+    targetType: 'Subscription plan',
+    severity: 'high',
+    impact: 'Changed a plan price, trial or features; metadata.changes lists each field before and after.',
   },
 };
 

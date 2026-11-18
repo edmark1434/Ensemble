@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { memberPreviewPath, STAFF_PREVIEW_NAV_MESSAGE } from '@/lib/staffPlatformView';
+import { staffPreviewStartPath, STAFF_PREVIEW_NAV_MESSAGE } from '@/lib/staffPlatformView';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -16,7 +16,7 @@ export default function ReportedItemPreviewOverlay({
   title?: string;
   onClose: () => void;
 }) {
-  const safePath = memberPreviewPath(path) || '/home';
+  const safePath = staffPreviewStartPath(path) || '/home';
   const frameRef = useRef<HTMLIFrameElement>(null);
   const loadedPath = useRef<string | null>(null);
   const openPath = useRef(safePath);
@@ -110,7 +110,7 @@ export default function ReportedItemPreviewOverlay({
                   ref={frameRef}
                   title={title || 'Reported item'}
                   src={iframeSrc}
-                  sandbox="allow-scripts allow-same-origin"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                   onLoad={() => {
                     loadedPath.current = iframeSrc;
                     setReady(true);

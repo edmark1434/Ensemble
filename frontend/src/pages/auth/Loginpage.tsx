@@ -379,6 +379,8 @@ export default function LoginPage({
   const [twoFactorPendingToken, setTwoFactorPendingToken] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  // Staff without an authenticator app get an emailed code when staff 2FA is required.
+  const [emailCodeHint, setEmailCodeHint] = useState<string | null>(null);
   const { setUser, setIsAuthenticated, setSignUpData, theme } = useGlobalState();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -512,6 +514,9 @@ export default function LoginPage({
         if (result.data.require2fa) {
           setRequire2fa(true);
           setTwoFactorPendingToken(result.data.twoFactorPendingToken || null);
+          const viaEmail = result.data.twoFactorMethod === "email";
+          setEmailCodeHint(viaEmail ? result.data.emailHint || "your email" : null);
+          if (viaEmail) setUseRecoveryCode(false);
           setTwoFactorCode("");
           setErrors({});
           setLoading(false);
@@ -771,7 +776,9 @@ export default function LoginPage({
           </h1>
           <p className="fade-in-up delay-400" style={{ color: T.muted, fontSize: 14, marginBottom: 32, fontFamily: T.fontBody }}>
             {require2fa
-              ? (useRecoveryCode
+              ? (emailCodeHint
+                  ? `We emailed a 6-digit sign-in code to ${emailCodeHint}. It expires in 10 minutes.`
+                  : useRecoveryCode
                   ? "Enter one of your emergency recovery codes to complete sign in."
                   : "Enter the 6-digit verification code from your authenticator app.")
               : "Sign in to continue to Ensemble."}
@@ -800,6 +807,7 @@ export default function LoginPage({
               />
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, marginBottom: 24 }}>
+                {emailCodeHint ? <span /> : (
                 <button
                   type="button"
                   onClick={() => {
@@ -822,12 +830,14 @@ export default function LoginPage({
                 >
                   {useRecoveryCode ? "Use authenticator app instead" : "Use backup recovery code"}
                 </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setRequire2fa(false);
                     setTwoFactorCode("");
                     setTwoFactorPendingToken(null);
+                    setEmailCodeHint(null);
                     setErrors({});
                   }}
                   style={{

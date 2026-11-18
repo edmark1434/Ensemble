@@ -4,6 +4,11 @@ const { pool } = require('../lib/Database');
 
 const { createNotification } = require('./NotificationRepositories');
 
+const { platformMeritSql } = require('./WarningBandRepositories');
+
+/** Seller's Platform Merit (100 minus active, unexpired warning points) for gig ranking. */
+const FREELANCER_MERIT_SQL = `${platformMeritSql('g.freelancer_account_id')} as "freelancerMerit"`;
+
 
 
 async function createGigRepository(gigData) {
@@ -567,6 +572,8 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             g.freelancer_account_id,
 
+            ${FREELANCER_MERIT_SQL},
+
             (
 
                 SELECT COALESCE(ROUND(AVG(r.stars_out_of_five), 1), 0.0)
@@ -824,6 +831,8 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             ratingCount: parseInt(row.ratingCount || 0, 10),
 
+            freelancerMerit: row.freelancerMerit == null ? 100 : Number(row.freelancerMerit),
+
             savesCount: parseInt(row.savesCount || 0, 10),
 
             ordersCount: parseInt(row.ordersCount || 0, 10),
@@ -946,6 +955,8 @@ async function getSavedGigsRepository(accountId) {
                   s.updated_at DESC, s.created_at DESC
                 LIMIT 1
             ), 'Free') as "freelancerSubscriptionPlan",
+
+            ${FREELANCER_MERIT_SQL},
 
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
 
@@ -1156,6 +1167,8 @@ async function getSavedGigsRepository(accountId) {
             clientRating: parseFloat(row.clientRating || 0),
 
             ratingCount: parseInt(row.ratingCount || 0, 10),
+
+            freelancerMerit: row.freelancerMerit == null ? 100 : Number(row.freelancerMerit),
 
             teamId: row.teamId || null,
 
@@ -1896,6 +1909,8 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             g.freelancer_account_id,
 
+            ${FREELANCER_MERIT_SQL},
+
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
 
             (
@@ -2183,6 +2198,8 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
         clientRating: parseFloat(row.clientRating || 0),
 
         ratingCount: parseInt(row.ratingCount || 0, 10),
+
+        freelancerMerit: row.freelancerMerit == null ? 100 : Number(row.freelancerMerit),
 
         isOwnGig: row.isOwnGig,
 

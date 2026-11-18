@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -20,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import api from "@/lib/axios";
+import { staffPlatformViewHref } from "@/lib/staffRoutes";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { JobsGigsPostingDetail, UserJobsHistory } from "../shared/moderatorTypes";
 import {
@@ -163,6 +165,7 @@ export default function PostingDetailModal({
   onClose: () => void;
   onUpdated?: () => void;
 }) {
+  const { pathname: consolePath } = useLocation();
   const [target, setTarget] = useState({ type: initialType, id: initialId });
   const [detail, setDetail] = useState<JobsGigsPostingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -255,15 +258,17 @@ export default function PostingDetailModal({
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {detail && detail.status !== "archived" && (
-                <a
-                  href={publicPostingPath(target.type, String(detail.id))}
+                // Opens this console's platform view in a new tab, so the review stays open here and
+                // the posting is seen with the staff session (the admin host has no main-site session).
+                <Link
+                  to={staffPlatformViewHref(consolePath, publicPostingPath(target.type, String(detail.id)))}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-white/20 hover:text-white"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                   View on platform
-                </a>
+                </Link>
               )}
               <button
                 type="button"
