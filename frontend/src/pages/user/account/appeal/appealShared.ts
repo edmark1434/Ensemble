@@ -40,6 +40,8 @@ export type ThreadMessage = {
   /** Dispute messages. */
   senderAccountId?: string | null;
   authorType?: string;
+  /** Dispute messages: `resolution` marks a platform ruling or notice. */
+  authorRole?: string | null;
   authorName?: string;
   body?: string;
   messageType?: string;

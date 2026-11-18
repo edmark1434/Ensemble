@@ -417,6 +417,74 @@ function buildDisputeDismissMessage({ notes, disputeNumber } = {}) {
   );
 }
 
+function clipText(value, limit) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
+}
+
+/**
+ * The first message in a new dispute's discussion: a summary of the complaint and the order
+ * it is about, so the filer can check what staff will read. Private to the filer and staff.
+ * @param {{ disputeNumber?: string, disputer?: string, disputee?: string, reason?: string,
+ *   details?: string, contractTitle?: string, contractType?: string, creditsAtStake?: number,
+ *   creditsFrozen?: number, contractEnded?: boolean }} context
+ */
+function buildDisputeFiledMessage({
+  disputeNumber,
+  disputer,
+  disputee,
+  reason,
+  details,
+  contractTitle,
+  contractType,
+  creditsAtStake,
+  creditsFrozen,
+  contractEnded,
+} = {}) {
+  const orderKind = String(contractType || '').toLowerCase().includes('gig') ? 'Gig order' : 'Job contract';
+  const issue = clipText(reason, 200);
+  const story = clipText(details, 600);
+  const lines = [
+    `Case summary${disputeNumber ? ` — ${disputeNumber}` : ''}`,
+    '',
+    'Status: Submitted for staff review',
+    '',
+    `${disputer || 'You'} filed this dispute against ${disputee || 'the other party'}.`,
+    '',
+    `Order: ${orderKind}${contractTitle ? ` "${clipText(contractTitle, 120)}"` : ''}`,
+  ];
+  if (Number(creditsAtStake) > 0) lines.push(`Contract value: ${credits(creditsAtStake)}`);
+  if (Number(creditsFrozen) > 0) {
+    lines.push(`Escrow on hold: ${credits(creditsFrozen)}. Neither side can move these credits until the case is decided.`);
+  } else if (contractEnded) {
+    lines.push('The contract had already ended, so its payments are final. Staff can still record an outcome or act on conduct.');
+  }
+  if (issue) lines.push('', `Issue: ${issue}`);
+  if (story && story !== issue) lines.push('', `What you told us: ${story}`);
+  lines.push(
+    '',
+    'What happens next: a staff member will review your case and may ask you questions here. Only you and staff can read this discussion while the case is private. If staff make it public, the other party will be invited to give their side.',
+    '',
+    'You can add evidence or clarify anything above by replying below.'
+  );
+  return lines.join('\n');
+}
+
+/**
+ * Posted on the public discussion when staff make a dispute public, inviting the disputee
+ * (mentioned by handle so the name links to their profile) to give their side.
+ */
+function buildDisputePublicInviteMessage({ disputeNumber, disputee } = {}) {
+  const name = disputee || 'The disputee';
+  return [
+    `Dispute made public${disputeNumber ? ` — ${disputeNumber}` : ''}`,
+    '',
+    `${name}, this transaction dispute concerns you. What would you like to say about it?`,
+    '',
+    'Please share your side of what happened, along with any messages, files, or delivery records that support it. Staff will consider both accounts before making a decision.',
+  ].join('\n');
+}
+
 function buildDisputeRulingMessage(
   entry,
   { disputer, disputee, notes, disputeNumber, heading, outcomeLabel, closing } = {}
@@ -458,6 +526,8 @@ module.exports = {
   buildDisputeReversalMessage,
   buildDisputePayoutUpdateMessage,
   buildDisputeDismissMessage,
+  buildDisputeFiledMessage,
+  buildDisputePublicInviteMessage,
   formatPayoutDate,
   DISPUTE_PAYOUT_DEFAULT_DAYS,
   DISPUTE_PAYOUT_MAX_DAYS,

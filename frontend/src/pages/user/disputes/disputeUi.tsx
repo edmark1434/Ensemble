@@ -454,6 +454,13 @@ const RULING_TONES = {
     barDark: "bg-amber-500/20 text-amber-100",
     icon: "text-amber-500",
   },
+  notice: {
+    shell: "border-violet-300 bg-violet-50/80 dark:border-violet-400/40 dark:bg-violet-500/[0.07]",
+    shellDark: "border-violet-400/40 bg-violet-500/[0.07]",
+    bar: "bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-100",
+    barDark: "bg-violet-500/20 text-violet-100",
+    icon: "text-violet-500",
+  },
   payout: {
     shell: "border-emerald-300 bg-emerald-50/80 dark:border-emerald-400/40 dark:bg-emerald-500/[0.07]",
     shellDark: "border-emerald-400/40 bg-emerald-500/[0.07]",
@@ -548,7 +555,7 @@ export function DisputeDecisionCard({
           <ShieldCheckIcon className={tone.icon} />
           <span className={`text-[11px] font-bold ${strong}`}>Dispute Resolution</span>
           <span className={`text-[11px] ${muted}`}>
-            · {ruling.kind === "parties" || ruling.kind === "payout" ? "Ensemble platform notice" : "Ensemble platform decision"}
+            · {ruling.kind === "parties" || ruling.kind === "payout" || ruling.kind === "notice" ? "Ensemble platform notice" : "Ensemble platform decision"}
           </span>
         </div>
 

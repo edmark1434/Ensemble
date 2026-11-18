@@ -531,6 +531,57 @@ async function postDisputeSystemMessage(row, body, { audience = 'parties' } = {}
   });
 }
 
+/** `@handle` for an account, else its display name, else null. */
+async function accountMentionLabel(accountId) {
+  if (!accountId) return null;
+  const result = await pool.query(
+    `SELECT handle, display_name FROM accounts WHERE account_id = $1`,
+    [accountId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return row.handle ? `@${row.handle}` : row.display_name || null;
+}
+
+/**
+ * Open a new dispute's discussion with a platform summary of the complaint and the order.
+ * The case starts private, so only the filer and staff can read it.
+ * @param {object} row the inserted dispute row
+ * @param {object} context see `buildDisputeFiledMessage`
+ */
+async function postDisputeFiledSummary(row, context = {}) {
+  if (!row?.dispute_id) return null;
+  const { buildDisputeFiledMessage } = require('../lib/DisputeResolutions');
+  const [disputer, disputee] = await Promise.all([
+    accountMentionLabel(row.by_account_id),
+    accountMentionLabel(row.for_account_id),
+  ]);
+  const body = buildDisputeFiledMessage({
+    ...context,
+    disputeNumber: row.dispute_number || null,
+    disputer,
+    disputee,
+  });
+  return postDisputeSystemMessage(row, body, { audience: 'disputer' });
+}
+
+/**
+ * When staff make a dispute public, invite the disputee (by @handle) to give their side.
+ * Posted publicly so the open discussion starts with the question.
+ */
+async function postDisputePublicInvite(row) {
+  if (!row?.dispute_id) return null;
+  const { buildDisputePublicInviteMessage } = require('../lib/DisputeResolutions');
+  const disputee = row.respondent_handle
+    ? `@${row.respondent_handle}`
+    : (await accountMentionLabel(row.for_account_id)) || row.respondent_name || null;
+  const body = buildDisputePublicInviteMessage({
+    disputeNumber: row.dispute_number || null,
+    disputee,
+  });
+  return postDisputeSystemMessage(row, body, { audience: 'public' });
+}
+
 /** One notification to one account about a dispute, with a live push. */
 async function notifyDisputeAccount(accountId, disputeId, { message, path } = {}) {
   if (!accountId || !disputeId || !message) return;
@@ -1470,6 +1521,8 @@ module.exports = {
   notifyDisputeHandler,
   notifyDisputeAccount,
   postDisputeSystemMessage,
+  postDisputeFiledSummary,
+  postDisputePublicInvite,
   getDisputeSettlementForParty,
   emitDisputeState,
   createDisputeMessage,

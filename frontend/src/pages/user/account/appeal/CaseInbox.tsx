@@ -17,6 +17,7 @@ import {
   statusPillClass,
 } from './appealShared';
 import { AttachButton, MessageAttachments, PendingFileList, uploadPendingFiles, usePendingFiles } from './appealAttachments';
+import { DisputeDecisionCard, isDisputeDecision, type MentionMap } from '@/pages/user/disputes/disputeUi';
 
 const POLL_MS = 20_000;
 
@@ -29,6 +30,8 @@ type ThreadState = {
   appealDecision?: AppealDecision;
   /** Dispute only: mirrors the checks in `postPublicDisputeComment`. */
   dispute?: { visible: boolean; filedByMe: boolean; limited: boolean };
+  /** Dispute only: "@handle" → account id for links in rulings. */
+  mentions?: MentionMap;
 };
 
 const EMPTY_THREAD: ThreadState = { loading: false, error: null, messages: [] };
@@ -173,6 +176,7 @@ export default function CaseInbox({
           target.kind === 'dispute'
             ? { visible: Boolean(data.visibility), filedByMe: Boolean(data.filedByMe), limited: Boolean(data.limited) }
             : undefined,
+        mentions: target.kind === 'dispute' ? data.mentions || {} : undefined,
       });
     } catch (err) {
       if (requestId !== requestRef.current || silent) return;
@@ -384,7 +388,7 @@ export default function CaseInbox({
                   <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{threadTitle}</p>
                   <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-zinc-500">{threadMeta}</p>
                 </div>
-                <StatusPill status={selectedTicket ? ticketStatus : selectedDispute?.status} />
+                <StatusPill status={selectedTicket ? ticketStatus : disputeStatus} />
               </div>
 
               {selectedTicket ? <DecisionNotice decision={thread.appealDecision ?? null} /> : null}
@@ -407,6 +411,20 @@ export default function CaseInbox({
                       <p className="py-8 text-center text-sm text-gray-500 dark:text-zinc-500">No messages yet.</p>
                     ) : null}
                     {thread.messages.map((message) => {
+                      // Rulings, the filing summary and the "now public" invite: the same card as every other view.
+                      if (selection.kind === 'dispute' && isDisputeDecision(message)) {
+                        return (
+                          <div key={message.id} className="my-3">
+                            <DisputeDecisionCard
+                              body={message.body}
+                              when={formatStandingWhen(message.createdAt)}
+                              mentions={thread.mentions}
+                            >
+                              <MessageAttachments attachments={message.attachments} own={false} />
+                            </DisputeDecisionCard>
+                          </div>
+                        );
+                      }
                       if (String(message.messageType || message.authorType || '').toLowerCase() === 'system') {
                         return (
                           <div key={message.id} className="my-3 flex justify-center">

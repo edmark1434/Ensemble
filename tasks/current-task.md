@@ -1,22 +1,98 @@
-# Active Task: Team contract tab visibility, workspace member selection, and contributor removal
+# Active Task: Admin dashboard links; dispute filing summary, public invite, private-case audiences; closed state in every member view
 
 ## Implementation Objective
 
-1. The Team Leader (and assigned team members) must be able to view their team's active contracts on `/teams/:id` (Contracts tab) and open the contract workspace.
-2. When a team submits a job proposal or posts a gig with a selected subset of team members (`included_member_account_ids`), initiating the contract workspace must only add the selected members (plus the Team Owner/Leader and proposer), rather than adding all active members of the team.
-3. Allow authorized leads (Team Owner/Admin/Leader, parent contractor, or Project Client) to remove a contributor or subcontractor from an active project workspace (`/team-project/:id`).
+Admin dashboard statistics open the tab they describe. A new dispute opens with a platform summary the
+filer can read; making it public invites the disputee to give their side. While a case is private, staff
+can only address staff or the disputer. Members see a ticket or dispute close (or go public) live in every
+view, including the restricted (banned / locked / suspended) case inbox.
+
+## Changes
+
+- Dashboard: "Open disputes" → `/admin/moderation?tab=cases&queue=disputes` (was ticket overview);
+  "Pending verifications" and "Review all" → `queue=identity` (was "My cases"); team links → `section=moderators`.
+- Filing (`createContractDispute`): after commit, `postDisputeFiledSummary` posts a "Case summary" notice
+  (audience `disputer`): parties, order (job/gig, title, value, escrow held), issue, details, what happens next.
+- Make public (`approve`, private → public only): `postDisputePublicInvite` posts a public "Dispute made
+  public" notice: "@disputee, this transaction dispute concerns you. What would you like to say about it?"
+- Private cases: staff reply picker and message-visibility menu offer only Staff and Disputer;
+  `assertAudienceAllowedOnDispute` refuses other audiences (400) in `addDisputeMessage` and
+  `setDisputeMessageAudience`. Moderator controllers now honor a 400 `statusCode`.
+- Cards: `parseDisputeRuling` has a `notice` kind (violet, "platform notice"); notices are never the
+  "latest ruling" on the public page or the member disputes page.
+- Chat inbox listens to `disputeUpdated`: patches status/visibility, re-reads the list and open thread.
+- Restricted `CaseInbox`: header shows the thread's live dispute status; rulings/notices render as cards.
 
 ## Acceptance criteria
 
-- Opening the Contracts tab on `/teams/:id` loads the team's contracts (`data.data.items`) using `team.team_id` and navigates to the contract workspace when clicking **Workspace**.
-- Team job proposals and team gig posts with selected `included_member_account_ids` only add the selected members (and Team Owner/Leader) to `team_members` and `team_workspace_members` when the contract workspace is initialized.
-- Unselected team members are not added to the contract workspace and see the contract as hidden/restricted on the team's Contracts tab.
-- In `/team-project/:id` (**Contract & Members**), solo contracts show **Add Subcontractor**, whereas team contracts replace it with **Add Team Member as Contributor** (allowing the Team Leader/manager to select active team members and add/re-add them directly to the workspace).
-- In `/team-project/:id` (**Contract & Members → Members**), the hired Team Leader is clearly labeled (`Team Leader` badge and `Contributor (Team Leader)` header pill), and authorized leads see a **Remove** button for removable contributors/subcontractors.
+- Each dashboard KPI and panel link lands on the named tab/queue.
+- Filing a dispute shows the summary card first in the filer's private notes (and in their inbox thread).
+- Making a private dispute public posts the invite once, visible on the public page and to both parties.
+- On a private dispute, only Staff/Disputer are selectable; a direct API call with `parties`, `disputee`
+  or `public` returns 400.
+- Closing or publishing a dispute while the member has it open in the chat inbox locks/unlocks the
+  composer and shows the ruling without a reload; the restricted case inbox shows the closed status.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
 
 ---
 
-# Active Task: Platform view audit (Admin and every moderator console)
+# Previous task: Platform view, second pass (UI redesign, server-side gaps)
+
+## Implementation Objective
+
+Platform view in every console (Admin, Forum, Marketplace, Support, Jobs & Gigs, staff portal) looks like
+the rest of its console, is faster to use for moderation (people search, device widths, focus mode), and
+the view-only rule holds on the server for every member write path, including the socket.
+
+## Defects found and fixed
+
+- Server block missed member write groups: payment (top-ups, plans), subscription, projects,
+  terms-of-service, feedbacks, surveys, onboarding, verification, tags, chat (AI drafting), and
+  `/users/tickets`, `/users/reports`, `/users/update-personal-details`. Added to
+  `STAFF_BLOCKED_MEMBER_PREFIXES` (webhooks carry no session cookie and still pass).
+- Socket had no staff rule, so a staff session could send, edit, react, pin, type, mark chats read,
+  change groups and signal calls as a member. Staff sockets now only get `STAFF_SOCKET_EVENTS`.
+- Member search boxes (header "Search creators", people search, Discovery) were dead in the frame: the
+  sandbox had no `allow-forms` (the browser never fires `submit`) and the guard cancelled every submit.
+  `allow-forms` added; `isStaffPreviewSearchForm` lets search forms through, every other form stays blocked.
+- The guard ran only inside `Layout`; landing and not-found pages rendered in the frame unguarded. It runs
+  from `StaffPreviewFrameBridge` (every route) now.
+- A link inside the frame to a member tool was swapped for Home with no explanation. The console shows why.
+- Platform view ignored its console's accent (always sky) and used its own header style.
+- `POST /api/notifications/send-email` (not Platform view) let any signed-in member send email from the
+  support address to anyone with their own content. Now Admin only; nothing in the app called it.
+
+## Added (console page)
+
+- Console header (kicker, title, subtitle, View-only chip) and accent per console; section chips with the
+  member sidebar's icons.
+- Address bar: people search (`@handle`, a name, or a word that is not a member route →
+  `/search/user/:query`), member host shown, `/` focuses it, dismissible notes.
+- Desktop / tablet (820 px) / phone (390 px) preview width, focus mode (hides the page header), open in a
+  new console tab, retry after 12 s without an answer. Width and focus mode are remembered per browser.
+
+## Acceptance criteria
+
+- Each console's Platform view uses that console's accent and opens on its start page.
+- Typing `@handle` or a name in the address bar opens the member people search; `/forums` and pasted member
+  links still open; other sites show an error.
+- Header creator search, the people search page and Discovery search work in the frame; any other form
+  (reply, report, review) is blocked with the view-only notice.
+- Clicking a link to `/inbox` inside the frame lands on Home with a note saying why.
+- Tablet/phone widths resize the member page; focus mode hides the header; both survive a reload.
+- A staff session gets 403 `STAFF_VIEW_ONLY` from e.g. `POST /api/payment/topup`, `POST /api/feedbacks`,
+  `PUT /api/projects/:id`, `POST /api/users/tickets`; staff sign-in, 2FA, logout, refresh and every
+  `/api/admin`, `/api/moderator`, `/api/staff` route still work.
+- A staff socket's `sendMessage` / `reactMessage` / `typing` are acknowledged with `STAFF_VIEW_ONLY`;
+  ticket and dispute rooms still join and update live in the consoles.
+- A member calling `POST /api/notifications/send-email` gets 403.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
+
+---
+
+# Previous task: Platform view audit (Admin and every moderator console)
 
 Editor objective: match cursor and playhead name labels to the existing square-cornered presence labels.
 
@@ -397,7 +473,7 @@ Update the subcontractor search and nomination flow in `frontend/src/pages/user/
 
 ---
 
-# Active Task: Admin System Settings audit and redesign
+# Previous task (this session): Admin System Settings audit and redesign
 
 ## Implementation Objective
 
@@ -421,3 +497,44 @@ setting actually does.
 - Subscription plan edits are validated, saved atomically, keep the free plan at ₱0, and cannot rename tiers.
 - Settings UI: one save bar per section, field errors, defaults and reset, confirmations for risky changes,
   fee rows labelled by what is actually charged, unsaved-changes guard.
+
+## Status: Implemented and committed (`ecf9cddf`).
+
+---
+
+# Active Task: Admin Analytics audit and redesign
+
+## Implementation Objective
+
+Make Admin → Analytics report real, correctly defined numbers for a chosen date range, compared with the
+previous period, without shipping the whole member table to the browser.
+
+## Defects found and fixed
+
+- DAU / WAU / MAU, "retention" and the engagement / health scores were fixed percentages of the member count.
+  Replaced by real activity (`account_active_days`, recorded from `checkSession`) and cohort retention.
+- Paid subscription invoices have Xendit status `SUCCEEDED`; analytics only counted `paid`, so renewal revenue
+  was zero. The webhook also stored peso amounts in `amount_php_cents` (100× too small); it now stores cents and
+  analytics corrects old rows. Upgrade payments and invoices were combined with `MAX` instead of added.
+- Fee revenue ignored refunds and the Service Posting Fee; cashouts ignored ACCEPTED/REQUESTED (in flight) and
+  REVERSED/CANCELLED/EXPIRED (failed) statuses. Labels hardcoded fee amounts ("50 cr/job", "10%").
+- Forum totals summed only the 30 newest groups; "Author ID" showed raw ids.
+- Date filters only re-sliced 12 weeks of data in the browser (and fell back to unrelated weeks when empty);
+  week-over-week compared a partial week with a full one.
+- The overview sent every member, every user's subscription row with email, and the latest 100 ledger rows.
+  Finance tables "paged" those 100 rows client-side; the paged endpoints existed but nothing called them.
+  Full cashout account numbers were exposed.
+- Query failures were swallowed and shown as real zeros.
+
+## Acceptance criteria
+
+- `GET /api/admin/analytics-overview` accepts `range` / `from` / `to` / `bucket`, rejects malformed values
+  with 400, and returns period KPIs with previous-period deltas, a bucketed series, members, engagement,
+  community, money, operations, linked alerts and `problems`. Cached 60 s in Redis; `refresh=1` recomputes.
+- Finance records (top-ups, invoices, subscriptions, cashouts) page, filter, search and export CSV (≤ 5,000
+  rows, formula-safe) on the server; account numbers masked.
+- UI: range picker in the URL, seven tabs (legacy tab ids still work), KPI tiles with deltas and sparklines,
+  "Needs attention" with links to each desk, cohort table, data kept on screen while a new range loads.
+- Migration `1828900000000_analytics-active-days` (table + date-range indexes) with `down`.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`, `npm run migrate`).

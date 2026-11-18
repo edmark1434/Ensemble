@@ -37,6 +37,7 @@ const {
   notifyDisputeHandler,
   resolveDisputeReplyTarget,
   emitDisputeState,
+  postDisputePublicInvite,
 } = require('./DisputeChatRepositories');
 const {
   DISPUTE_RESOLUTION_KEYS,
@@ -3795,6 +3796,14 @@ async function updateDispute(disputeId, patch, staffSession) {
       actorStaffId: staff.staff_id,
       metadata: { status: 'open', visibility: true },
     });
+    if (!refreshed.visibility) {
+      try {
+        // Visibility is committed, so the invite lands on a discussion the disputee can now read.
+        await postDisputePublicInvite({ ...refreshed, visibility: true });
+      } catch (err) {
+        console.warn('Dispute public invite skipped:', err.message);
+      }
+    }
     try {
       const number = refreshed.dispute_number || 'Dispute';
       await notifyDisputeParties(refreshed, {
@@ -4646,6 +4655,23 @@ function mapDisputePayout(row) {
   };
 }
 
+/** Audiences staff may pick while a dispute is still private (no disputee access, no public page). */
+const PRIVATE_DISPUTE_AUDIENCES = new Set(['staff', 'disputer']);
+
+/**
+ * A private case is between the filer and staff. Refuse disputee, both-parties and public
+ * audiences until staff make the dispute public, whatever the client sends.
+ */
+function assertAudienceAllowedOnDispute(row, audience) {
+  if (row?.visibility) return;
+  if (PRIVATE_DISPUTE_AUDIENCES.has(String(audience || '').toLowerCase())) return;
+  const error = new Error(
+    'This dispute is still private. Replies can only go to staff or the disputer until it is made public.'
+  );
+  error.statusCode = 400;
+  throw error;
+}
+
 async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   if (typeof options === 'boolean') {
     options = { isInternal: options };
@@ -4682,6 +4708,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   }
 
   const normalizedAudience = String(audience || 'staff').toLowerCase();
+  assertAudienceAllowedOnDispute(row, normalizedAudience);
   const chatId = await ensureDisputeChat(disputeId, row);
   // Staff see every message on the case, so any message on this chat is a valid reply target.
   const replyTarget = await resolveDisputeReplyTarget(chatId, options.replyToId ?? null, {
@@ -4802,6 +4829,7 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   if (!chatId) throw new Error('Dispute chat not found.');
 
   const nextAudience = String(audience || '').toLowerCase();
+  assertAudienceAllowedOnDispute(row, nextAudience);
   const partyNotifyIds =
     nextAudience === 'public' || (nextAudience === 'parties' && row.visibility)
       ? [row.by_account_id, row.for_account_id]

@@ -889,6 +889,50 @@ function bindSocketListeners() {
     }
   );
 
+  // Staff moved a dispute (made public or private, resolved, dismissed, reopened, parties
+  // swapped). Patch status and visibility right away so the composer locks or unlocks, then
+  // read the thread back: rulings and the "now public" invite are posted as dispute messages,
+  // and who may read what (or who filed the case) can change with them.
+  socket.on(
+    "disputeUpdated",
+    ({
+      disputeId,
+      status,
+      visibility,
+    }: {
+      disputeId?: string;
+      status?: string | null;
+      visibility?: boolean;
+      closed?: boolean;
+      reason?: string | null;
+    }) => {
+      if (!disputeId) return;
+      const match = useChatState
+        .getState()
+        .conversations.find((conversation) => String(conversation.dispute_id || "") === String(disputeId));
+      if (!match) return;
+      useChatState.setState((state) => ({
+        conversations: state.conversations.map((conversation) =>
+          String(conversation._id) === String(match._id)
+            ? {
+                ...conversation,
+                dispute_details: {
+                  ...(conversation.dispute_details || {}),
+                  ...(status != null ? { status } : {}),
+                  ...(visibility != null ? { visibility } : {}),
+                },
+              }
+            : conversation
+        ),
+      }));
+      const chat = useChatState.getState();
+      void chat.fetchConversations().catch(() => undefined);
+      if (chat.messagesByConversation[String(match._id)]) {
+        void chat.loadConversation(String(match._id), true).catch(() => undefined);
+      }
+    }
+  );
+
   socket.on(
     "messageDeleted",
     ({

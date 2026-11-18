@@ -20,6 +20,7 @@ import {
   formatWhen,
   isClosedStatus,
   isDisputeDecision,
+  parseDisputeRuling,
 } from "@/pages/user/disputes/disputeUi";
 import type {
   DisputeAttachment,
@@ -171,7 +172,12 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
         if (dispute.canAddInformation) setNotes(messages);
         setMentions(res.data?.data?.mentions || {});
         setSettlement(res.data?.data?.settlement || null);
-        setLatestRuling([...messages].reverse().find((message) => isDisputeDecision(message)) || null);
+        // The filing summary is a platform notice, not a ruling.
+        setLatestRuling(
+          [...messages]
+            .reverse()
+            .find((message) => isDisputeDecision(message) && parseDisputeRuling(message.body).kind !== "notice") || null
+        );
         if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
       })
       .catch(() => {

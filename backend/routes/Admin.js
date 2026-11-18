@@ -66,9 +66,8 @@ const {
 } = require('../controllers/AdminModerationControllers');
 const {
   getAdminAnalyticsOverview,
-  getAdminPlatformTransactions,
-  getAdminUserTransactions,
-  getAdminTopupTransactions,
+  getAdminFinanceRecords,
+  getAdminFinanceFilterOptions,
 } = require('../controllers/AdminAnalyticsControllers');
 const {
   getAdminTicketsOverview,
@@ -175,9 +174,9 @@ router.get('/moderation/activity', [checkSession, requireAdmin], getAdminModerat
 router.get('/moderation/activity/:id', [checkSession, requireAdmin], getAdminModerationActivityDetail);
 router.post('/moderation/activity/:id/reverse', [checkSession, requireAdmin], postAdminModerationActivityReverse);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
-router.get('/analytics/platform-transactions', [checkSession, requireAdmin], getAdminPlatformTransactions);
-router.get('/analytics/user-transactions', [checkSession, requireAdmin], getAdminUserTransactions);
-router.get('/analytics/topup-transactions', [checkSession, requireAdmin], getAdminTopupTransactions);
+router.get('/analytics/finance/options', [checkSession, requireAdmin], getAdminFinanceFilterOptions);
+// :kind = topups | invoices | subscriptions | cashouts; `?format=csv` downloads up to 5,000 rows.
+router.get('/analytics/finance/:kind', [checkSession, requireAdmin], getAdminFinanceRecords);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);
 router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);
