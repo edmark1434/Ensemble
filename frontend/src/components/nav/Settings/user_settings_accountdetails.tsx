@@ -391,105 +391,18 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1">Email Address</label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-zinc-500" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={`w-full rounded-xl border ${
-                    isEmailChanged && isEmailVerified
-                      ? "border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/5"
-                      : "border-gray-300 dark:border-white/10 bg-white dark:bg-white/5"
-                  } pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors`}
-                  required
-                />
-                {isEmailChanged && isEmailVerified && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <CheckCircle className="h-5 w-5 text-emerald-400" />
-                  </div>
-                )}
-              </div>
-              {isEmailChanged && (
-                <button
-                  type="button"
-                  onClick={handleSendVerificationCode}
-                  disabled={!email || isSendingCode || isEmailVerified || resendCooldown > 0}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl transition-all text-sm font-medium whitespace-nowrap ${
-                    isEmailVerified
-                      ? "bg-emerald-600/20 text-emerald-400 cursor-default"
-                      : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <Send className={`h-4 w-4 ${isSendingCode ? "animate-pulse" : ""}`} />
-                  {isSendingCode
-                    ? "Sending..."
-                    : isEmailVerified
-                    ? "Verified"
-                    : resendCooldown > 0
-                    ? `Resend in ${resendCooldown}s`
-                    : showVerificationInput
-                    ? "Resend Code"
-                    : "Send Code"}
-                </button>
-              )}
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-zinc-500" />
+              <input
+                type="email"
+                value={email}
+                disabled
+                readOnly
+                aria-disabled="true"
+                className="w-full rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/5 pl-10 pr-4 py-2.5 text-sm text-gray-500 dark:text-zinc-400 cursor-not-allowed select-none focus:outline-none"
+              />
             </div>
-            {successMessage && (
-              <p className="text-xs text-emerald-400 mt-1">{successMessage}</p>
-            )}
-
-            {/* Verification Code Input */}
-            {isEmailChanged && (
-              <div className="mt-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1">
-                  Verification Code
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      placeholder="Enter 6-digit code"
-                      value={verificationCode}
-                      onChange={handleVerificationCodeChange}
-                      maxLength={6}
-                      className={`w-full rounded-xl border ${
-                        verificationError
-                          ? "border-red-500/50 bg-red-50 dark:bg-red-500/5"
-                          : "border-gray-300 dark:border-white/10 bg-white dark:bg-white/5"
-                      } px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors`}
-                      autoFocus
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleVerifyCode}
-                    disabled={!verificationCode || isVerifyingCode || isEmailVerified}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium whitespace-nowrap"
-                  >
-                    {isVerifyingCode ? "Verifying..." : "Verify"}
-                  </button>
-                </div>
-
-                {verificationError && (
-                  <div className="flex items-center gap-2 mt-2 text-red-400 text-xs">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    <span>{verificationError}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Verified Badge */}
-            {isEmailChanged && isEmailVerified && (
-              <div className="flex items-center gap-2 p-3 mt-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <CheckCircle className="h-5 w-5 text-emerald-400" />
-                <div>
-                  <p className="text-sm font-medium text-emerald-400">✅ Email Verified</p>
-                  <p className="text-xs text-emerald-400/70">Your email has been successfully verified</p>
-                </div>
-              </div>
-            )}
+            <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-1">Email address cannot be changed.</p>
           </div>
         </div>
 
