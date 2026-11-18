@@ -380,8 +380,10 @@ export default function RouteMiddleware() {
     useEffect(() => {
         if (isCheckingSession || !isBannedMember(resolvedUser)) return;
         if (isBannedAllowedPath(location.pathname)) return;
-        navigate(APPEAL_PATH, { replace: true });
-    }, [isCheckingSession, resolvedUser, location.pathname, navigate]);
+        // A Cases link (`?ticket=` / `?dispute=`) opens the same case on the appeal page.
+        const keepCase = location.pathname.startsWith('/support/cases') ? location.search : '';
+        navigate(`${APPEAL_PATH}${keepCase}`, { replace: true });
+    }, [isCheckingSession, resolvedUser, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         if (isCheckingSession || resolvedUser?.type !== 'Staff') return;

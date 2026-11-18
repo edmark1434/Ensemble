@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useMemo } from "react";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
+import { isCaseNotification } from "@/lib/cases";
 
 export interface SharedNotification {
   notification_id: string;
@@ -25,7 +26,8 @@ export type NavBadgeRoute =
   | "/dashboard"
   | "/workspaces"
   | "/inbox"
-  | "/contracts";
+  | "/contracts"
+  | "/support/cases";
 
 interface NotificationStoreState {
   notifications: SharedNotification[];
@@ -135,7 +137,8 @@ export function getNavSectionForNotification(
   const path = String(n.reference_path || "").trim();
   const table = String(n.reference_table || "").trim().toLowerCase();
 
-  // 1. Check explicit prefix mappings first
+  // 1. Check explicit prefix mappings first. Tickets and disputes live in Cases.
+  if (isCaseNotification(n)) return "/support/cases";
   if (PROJECT_PREFIXES.has(prefix)) return "/projects";
   if (FORUM_PREFIXES.has(prefix)) return "/forums";
   if (ASSET_PREFIXES.has(prefix)) return "/assets";
@@ -191,6 +194,9 @@ export function getActiveNavBadgeRoute(
   pathname: string,
   search = ""
 ): NavBadgeRoute | null {
+  if (pathname.startsWith("/support/cases")) {
+    return "/support/cases";
+  }
   if (
     pathname.startsWith("/workspaces") ||
     pathname.startsWith("/team-project") ||
@@ -272,6 +278,7 @@ export function useNavNotificationCounts(): Record<NavBadgeRoute, number> {
       "/workspaces": 0,
       "/inbox": 0,
       "/contracts": 0,
+      "/support/cases": 0,
     };
 
     for (const n of notifications) {

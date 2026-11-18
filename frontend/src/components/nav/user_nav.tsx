@@ -23,8 +23,10 @@ import {
     ListVideo,
     Projector,
     Library,
-    Compass
+    Compass,
+    LifeBuoy
 } from "lucide-react";
+import { CASES_PATH, useCaseStore } from "@/lib/cases";
 import type { ComponentType } from "react";
 import { NavLink, useNavigate, useLocation, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -72,6 +74,8 @@ let workflowInitial: NavItem[] = [
     { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
     { label: "Workspace", icon: Briefcase, to: "/workspaces" },
     { label: "Chat Inbox", icon: MessageSquare, to: "/inbox" },
+    // Support tickets and disputes, for everyone (the appeal page shows the same cases).
+    { label: "Cases", icon: LifeBuoy, to: CASES_PATH },
 ];
 
 let recordsInitial: NavItem[] = [
@@ -156,6 +160,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     }, [isTourActive, currentTourStep]);
     const inboxUnread = useInboxUnreadTotals().total;
     const navCounts = useNavNotificationCounts();
+    const casesWaitingOnYou = useCaseStore((state) => state.summary?.needsYou || 0);
 
     useEffect(() => {
         if (hidePersonalNav) return;
@@ -169,6 +174,10 @@ const UserNav: React.FC<UserNavProps> = () => {
         if (hidePersonalNav) return 0;
         if (to === "/inbox") {
             return Math.max(inboxUnread, navCounts["/inbox"]);
+        }
+        if (to === CASES_PATH) {
+            // Unread case notices, or cases waiting on the member, whichever is higher.
+            return Math.max(casesWaitingOnYou, navCounts[CASES_PATH]);
         }
         if (to in navCounts) {
             return navCounts[to as NavBadgeRoute] || 0;
@@ -236,6 +245,9 @@ const UserNav: React.FC<UserNavProps> = () => {
         }
         if (to === "/inbox") {
             return location.pathname.startsWith("/inbox");
+        }
+        if (to === CASES_PATH) {
+            return location.pathname.startsWith(CASES_PATH);
         }
         return location.pathname === to;
     };

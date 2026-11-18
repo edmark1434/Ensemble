@@ -21,6 +21,7 @@ import { SwipeToast } from "@/components/ui/SwipeToast";
 import AccountAvatar from "@/components/ui/AccountAvatar";
 import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import TicketInviteActions from "@/components/nav/TicketInviteActions";
+import { casePath } from "@/lib/cases";
 import { showAccountWarningToast } from "@/components/ui/AccountStanding";
 import { isAppealLimitedMember } from "@/lib/appealAccess";
 import { DeactivatedBadge } from "@/components/account/DeactivatedBadge";
@@ -540,7 +541,7 @@ export function useRealtimeNotifications(onWalletUpdated?: (nextBalance: number)
                 compact
                 onDone={(result, chatId) => {
                   toast.dismiss(t.id);
-                  if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
+                  if (result === 'accepted' && chatId) navigate(casePath('ticket', String(notification.reference_id)));
                 }}
               />
             </SwipeToast>

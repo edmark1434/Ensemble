@@ -80,6 +80,7 @@ import ContractDetailsPage from '@/pages/user/contracts/ContractDetailsPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
+import { CaseConversationRedirect } from '@/components/cases/CaseConversationRedirect'
 import AccountAccessPage from '@/pages/user/account/AccountAccessPage'
 import PublicDisputePage from '@/pages/user/disputes/PublicDisputePage'
 
@@ -158,6 +159,7 @@ const PagePrivacyPolicy = lazyPage(() => import('@/pages/landing/pages/page_Priv
 const PageTermsOfService = lazyPage(() => import('@/pages/landing/pages/page_TermsOfService.tsx'));
 const PageSendAFeedback = lazyPage(() => import('./pages/landing/pages/page_SendAFeedback'));
 const PageSubmitATicket = lazyPage(() => import('./pages/landing/pages/page_SubmitATicket'));
+const CasesPage = lazyPage(() => import('./pages/user/support/CasesPage'));
 const PageSupportUs = lazyPage(() => import('./pages/landing/pages/page_SupportUs'));
 const PageUsecase = lazyPage(() => import('./pages/landing/pages/page_Usecase'));
 
@@ -196,6 +198,7 @@ function App() {
       <ToastTestingWidget />
       <DevModeWidget />
       <AccountRestrictionHost />
+      <CaseConversationRedirect />
       <StaffPreviewFrameBridge />
       <PlatformTour />
       <ClickSpark sparkColor={sparkColor} disabled={isClickSparkDisabled} className="min-h-screen">
@@ -252,6 +255,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
           <Route path='/support/ticket' element={<PageSubmitATicket />} />
+          <Route path='/support/cases' element={<CasesPage />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />
             <Route path='/credits/checkout' element={<Checkout />} />

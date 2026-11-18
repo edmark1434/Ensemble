@@ -14,7 +14,10 @@ import {
   Video,
   FolderGit2,
   ExternalLink,
+  LifeBuoy,
+  ChevronRight,
 } from "lucide-react";
+import { CASES_PATH, useCaseStore } from "@/lib/cases";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -70,6 +73,10 @@ const InboxMain = () => {
   const { user, subscriptionPlan } = useGlobalState();
   const currentUserId = String(user?.account_id || "");
   const inboxList = useChatState((state) => state.conversations);
+  const openCases = useCaseStore((state) =>
+    state.summary ? state.summary.openTickets + state.summary.openDisputes : 0
+  );
+  const casesWaiting = useCaseStore((state) => state.summary?.needsYou || 0);
   const activeConversationId = useChatState(
     (state) => state.activeConversationId
   );
@@ -1383,6 +1390,21 @@ const InboxMain = () => {
             isCollapsed={isSidebarCollapsed}
             onCreateGroup={() => setShowCreateGroupModal(true)}
           />
+          {/* Tickets and disputes are not chats: point members to Cases when they have any open. */}
+          {openCases > 0 && !isSidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={() => navigate(CASES_PATH)}
+              className="mx-3 mb-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-left text-xs text-gray-600 transition hover:bg-gray-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-zinc-300 dark:hover:bg-white/[0.06]"
+            >
+              <LifeBuoy className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
+              <span className="min-w-0 flex-1 truncate">
+                {openCases} open {openCases === 1 ? "case" : "cases"} (tickets and disputes) are in Cases
+                {casesWaiting ? ` · ${casesWaiting} waiting for you` : ""}
+              </span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            </button>
+          ) : null}
           <div className="inbox-scroll-thin flex-1 overflow-y-auto">
             <Routes>
               <Route path="/" element={<Navigate to="direct" replace />} />

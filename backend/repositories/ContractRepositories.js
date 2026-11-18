@@ -1080,6 +1080,12 @@ async function createContractDispute(accountIds, contractId, { reason, details }
     } catch (err) {
         console.warn('Dispute filing summary skipped:', err.message);
     }
+    await require('../services/CaseServices').notifyCaseOpened({
+        accountId: userAccId,
+        kind: 'dispute',
+        id: createdDispute.dispute_id,
+        number: createdDispute.dispute_number,
+    });
 
     const { applyDisputeAutomations } = require('../lib/ModerationPolicy');
     const enrichedDispute = await applyDisputeAutomations(createdDispute);

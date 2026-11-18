@@ -20,7 +20,7 @@ const ACTION_PATHS: RegExp[] = [
   /^\/(?:workspaces|team-project|team-projects)(?:\/|$)/i,
   /^\/(?:credits|credits-subscriptions|settings|notifications|account-verification-status|transactions|terms-of-services|contracts|contract|dashboard|inbox|review|update|orders|my-orders)(?:\/|$)/i,
   /^\/profile$/i,
-  /^\/support\/ticket$/i,
+  /^\/support\/(?:ticket|cases)$/i,
 ];
 
 /** Not member pages at all: sign-in, setup, the appeal page. Platform view never shows them. */

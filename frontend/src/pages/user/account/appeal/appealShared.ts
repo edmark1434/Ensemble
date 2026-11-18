@@ -1,4 +1,5 @@
 import type { StandingConditionId } from '@/lib/standing';
+import type { CaseAccess } from '@/lib/cases';
 import type { ThreadAttachment } from './appealAttachments';
 
 /** Must match `APPEAL_TICKET_TYPE` in `backend/lib/AccountRestriction.js`. */
@@ -19,9 +20,14 @@ export type TicketRow = {
   number?: string;
   subject?: string;
   type?: string;
+  priority?: string;
   status?: string;
   updatedAt?: string;
   lastMessageAt?: string | null;
+  /** The ticket's chat, so old `?conversation=` links find their case. */
+  chatId?: string | null;
+  /** What the member may do on it, from the server. */
+  access?: CaseAccess;
 };
 
 export type DisputeRow = {
@@ -31,6 +37,10 @@ export type DisputeRow = {
   status?: string;
   reason?: string;
   updatedAt?: string;
+  visibility?: boolean;
+  viewerRole?: 'disputer' | 'disputee' | null;
+  limited?: boolean;
+  access?: CaseAccess;
 };
 
 export type ThreadMessage = {
@@ -47,6 +57,10 @@ export type ThreadMessage = {
   messageType?: string;
   attachments?: ThreadAttachment[];
   createdAt?: string;
+  replyToId?: string | null;
+  /** Dispute messages: who can read it. */
+  audience?: string | null;
+  isUnsent?: boolean;
 };
 
 export type AppealDecision = 'accepted' | 'denied' | 'denied_permanent' | null;

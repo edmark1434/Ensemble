@@ -630,6 +630,26 @@ function emitWithAck<T>(event: string, payload: unknown): Promise<T> {
   });
 }
 
+/** Fired when a ticket or dispute conversation is opened in chat; `CaseConversationRedirect` sends it to Cases. */
+export const CASE_CONVERSATION_EVENT = "chat:case-conversation";
+
+/**
+ * Ticket or dispute behind a conversation, for a member. Staff (who never use the member
+ * chat) keep the old behaviour.
+ */
+function memberCaseTarget(
+  inbox?: Pick<Inbox, "conversation_type" | "ticket_id" | "support_ticket_id" | "dispute_id"> | null
+): { kind: "ticket" | "dispute"; id: string | null } | null {
+  if (!inbox || useGlobalState.getState().user?.type === "Staff") return null;
+  const type = String(inbox.conversation_type || "").toLowerCase();
+  const ticketId = inbox.ticket_id || inbox.support_ticket_id;
+  if (type === "ticket" || ticketId) return { kind: "ticket", id: ticketId ? String(ticketId) : null };
+  if (type === "dispute" || inbox.dispute_id) {
+    return { kind: "dispute", id: inbox.dispute_id ? String(inbox.dispute_id) : null };
+  }
+  return null;
+}
+
 // Layout does not render floating chat windows on inbox pages.
 function floatingWindowsVisible() {
   return typeof window === "undefined" || !window.location.pathname.startsWith("/inbox");
@@ -637,6 +657,9 @@ function floatingWindowsVisible() {
 
 function reconcileMessage(message: Message, isNewMessage = false) {
   if (!message?._id || !message.conversation_id) return;
+  // Dispute and ticket messages belong to Cases, never to the chat list or a floating window.
+  const linked = message as Message & { dispute_id?: string; ticket_id?: string };
+  if ((linked.dispute_id || linked.ticket_id) && useGlobalState.getState().user?.type !== "Staff") return;
   const conversationId = String(message.conversation_id);
   const currentState = useChatState.getState();
   const currentMessages = currentState.messagesByConversation[conversationId] || EMPTY_MESSAGES;
@@ -886,50 +909,6 @@ function bindSocketListeners() {
             : conversation
         ),
       }));
-    }
-  );
-
-  // Staff moved a dispute (made public or private, resolved, dismissed, reopened, parties
-  // swapped). Patch status and visibility right away so the composer locks or unlocks, then
-  // read the thread back: rulings and the "now public" invite are posted as dispute messages,
-  // and who may read what (or who filed the case) can change with them.
-  socket.on(
-    "disputeUpdated",
-    ({
-      disputeId,
-      status,
-      visibility,
-    }: {
-      disputeId?: string;
-      status?: string | null;
-      visibility?: boolean;
-      closed?: boolean;
-      reason?: string | null;
-    }) => {
-      if (!disputeId) return;
-      const match = useChatState
-        .getState()
-        .conversations.find((conversation) => String(conversation.dispute_id || "") === String(disputeId));
-      if (!match) return;
-      useChatState.setState((state) => ({
-        conversations: state.conversations.map((conversation) =>
-          String(conversation._id) === String(match._id)
-            ? {
-                ...conversation,
-                dispute_details: {
-                  ...(conversation.dispute_details || {}),
-                  ...(status != null ? { status } : {}),
-                  ...(visibility != null ? { visibility } : {}),
-                },
-              }
-            : conversation
-        ),
-      }));
-      const chat = useChatState.getState();
-      void chat.fetchConversations().catch(() => undefined);
-      if (chat.messagesByConversation[String(match._id)]) {
-        void chat.loadConversation(String(match._id), true).catch(() => undefined);
-      }
     }
   );
 
@@ -1855,6 +1834,21 @@ const useChatState = create<ChatState>((set, get) => ({
           Messages: Message[];
         }>(`/api/inbox/conversation/${id}`);
         const fetchedInbox = response.data?.Inbox || response.data?.inbox;
+        // Tickets and disputes live in Cases. An old link or a stray window must not bring one
+        // back into the chat list (or join its room, which would pop it open as a chat).
+        const caseTarget = memberCaseTarget(fetchedInbox);
+        if (caseTarget) {
+          set((state) => ({
+            conversations: state.conversations.filter((conversation) => String(conversation._id) !== id),
+            floatingWindows: state.floatingWindows.filter((fw) => String(fw.inbox_id || fw.id) !== id),
+            activeConversationId: state.activeConversationId === id ? null : state.activeConversationId,
+            loadingMessages: { ...state.loadingMessages, [id]: false },
+          }));
+          window.dispatchEvent(
+            new CustomEvent(CASE_CONVERSATION_EVENT, { detail: { ...caseTarget, conversationId: id } })
+          );
+          return;
+        }
         set((state) => {
           let updatedFloatingWindows = state.floatingWindows;
           if (fetchedInbox) {

@@ -682,7 +682,7 @@ async function initSocket(httpServer) {
     socket.on('getPresenceSnapshot', async (_payload, callback) => {
       if (typeof _payload === 'function') callback = _payload;
       try {
-        const inboxes = await getAllInboxesByAccountIdServices(accountId);
+        const inboxes = await getAllInboxesByAccountIdServices(accountId, { includeCases: isStaffSocket });
         const memberIds = Array.from(new Set(inboxes.flatMap((inbox) =>
           (inbox.members || [])
             .filter((member) => !['left', 'removed'].includes(member.status))
@@ -756,7 +756,9 @@ async function initSocket(httpServer) {
 
     // Join all authorized conversation rooms so background chat events and
     // presence remain available without opening each conversation first.
-    getAllInboxesByAccountIdServices(accountId)
+    // Members skip ticket and dispute rooms: Cases hears about those on the account room
+    // (`caseUpdated`), and a ticket message must never pop open as a floating chat.
+    getAllInboxesByAccountIdServices(accountId, { includeCases: isStaffSocket })
       .then((inboxes) => {
         if (!socket.connected) return;
         const roomIds = inboxes.map((inbox) => String(inbox._id));

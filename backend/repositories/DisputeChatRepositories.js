@@ -492,6 +492,10 @@ async function emitDisputeState(disputeId, { reason = null } = {}) {
     ),
     includePublicRoom: true,
   });
+  // Each party's Cases view gets what they may now do (reply, read only, removed after a swap).
+  void require('../services/CaseServices').announceDisputeCase(String(row.dispute_id), {
+    reason: reason || 'status',
+  });
   return payload;
 }
 
@@ -582,8 +586,8 @@ async function postDisputePublicInvite(row) {
   return postDisputeSystemMessage(row, body, { audience: 'public' });
 }
 
-/** One notification to one account about a dispute, with a live push. */
-async function notifyDisputeAccount(accountId, disputeId, { message, path } = {}) {
+/** One notification to one party about a dispute, with a live push. It opens the case in Cases. */
+async function notifyDisputeAccount(accountId, disputeId, { message } = {}) {
   if (!accountId || !disputeId || !message) return;
   try {
     const NotificationRepositories = require('./NotificationRepositories');
@@ -592,7 +596,7 @@ async function notifyDisputeAccount(accountId, disputeId, { message, path } = {}
       message,
       reference_table: 'disputes',
       reference_prefix: 'DIS',
-      reference_path: path || `/disputes/${disputeId}`,
+      reference_path: require('../services/CaseServices').casePath('dispute', disputeId),
       reference_id: disputeId,
     });
     let io = null;
@@ -830,6 +834,13 @@ async function createDisputeMessage({
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(normalizedAudience) && Boolean(disputeId),
   });
+  if (disputeId) {
+    void require('../services/CaseServices').announceDisputeCase(String(disputeId), {
+      reason: 'message',
+      audience: normalizedAudience,
+      senderId: accountId,
+    });
+  }
   return mapped;
 }
 
@@ -923,6 +934,10 @@ async function updateDisputeMessageAudience(
       payload: { id: String(messageId), disputeId: String(disputeId), audience: nextAudience },
       includePublicRoom: true,
     });
+  }
+  if (disputeId) {
+    // Both parties re-read the thread: the message may have appeared for one and gone for the other.
+    void require('../services/CaseServices').announceDisputeCase(String(disputeId), { reason: 'message' });
   }
   return mapped;
 }
@@ -1474,7 +1489,10 @@ async function notifyDisputeParties(row, { message, path, excludeAccountId = nul
   const recipients = onlyFiler
     ? [row.by_account_id]
     : [row.by_account_id, row.for_account_id];
-  const referencePath = path || (row.visibility ? `/disputes/${disputeId}` : '/contracts/disputes');
+  // A party's notice opens the case in Cases, which links on to the public page when there is
+  // one. `path` from older callers (the public page or the contract disputes list) is ignored.
+  void path;
+  const referencePath = require('../services/CaseServices').casePath('dispute', disputeId);
   const seen = new Set();
 
   for (const accountId of recipients) {
