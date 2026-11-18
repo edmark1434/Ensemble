@@ -301,7 +301,8 @@ async function getInboxByAccountIdController(req, res) {
     try {
         const result = await getInboxByAccountIdServices(
             accountId(req),
-            req.params.conversation_type
+            req.params.conversation_type,
+            { includeCases: req.session?.type === 'Staff' }
         );
         return res.status(200).json(result);
     } catch (error) {
@@ -311,7 +312,10 @@ async function getInboxByAccountIdController(req, res) {
 
 async function getAllInboxesByAccountIdController(req, res) {
     try {
-        const result = await getAllInboxesByAccountIdServices(accountId(req));
+        // Members follow tickets and disputes in Cases (`/support/cases`), not the chat inbox.
+        const result = await getAllInboxesByAccountIdServices(accountId(req), {
+            includeCases: req.session?.type === 'Staff',
+        });
         return res.status(200).json(result);
     } catch (error) {
         return sendError(res, error);

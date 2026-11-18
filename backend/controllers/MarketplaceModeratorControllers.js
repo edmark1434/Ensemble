@@ -343,7 +343,7 @@ async function postDisputeMessage(req, res) {
     if (msg.includes('MongoDB')) {
       return res.status(503).json({ success: false, message: msg });
     }
-    const isClient = /permission|assign yourself|view only|could not match/i.test(msg);
+    const isClient = Number(err?.statusCode) === 400 || /permission|assign yourself|view only|could not match/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
@@ -372,7 +372,7 @@ async function patchDisputeMessage(req, res) {
     if (msg.includes('MongoDB')) {
       return res.status(503).json({ success: false, message: msg });
     }
-    const isClient = /assign yourself|invalid|not found|permission/i.test(msg);
+    const isClient = Number(err?.statusCode) === 400 || /assign yourself|invalid|not found|permission/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }

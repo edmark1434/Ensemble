@@ -26,9 +26,15 @@ function decode(document: Uint8Array): DocSnapshot {
   } finally { schema.awareness.destroy(); doc.destroy(); }
 }
 
-async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date },
-  currentBlock?: (blockId: string) => Promise<DocSnapshot | null>) {
+type SceneDocumentReader = (blockId: string) => Promise<Uint8Array | null>;
+
+// Scenes resolve against the capture time by default; a save passes the exact
+// scene documents it was taken with.
+async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date }, readScene?: SceneDocumentReader) {
   const { project_id: sourceProjectId, created_at: capturedAt } = saved;
+  const readSceneDocument: SceneDocumentReader = readScene ?? (blockId => sourceProjectId
+    ? readSceneAtSnapshot(blockId, sourceProjectId, capturedAt).then(row => row?.document ?? null)
+    : Promise.resolve(null));
   const snapshot = decode(saved.document);
   const scenes: Record<string, DocSnapshot> = {};
   const media: ITrackItem[] = [];
@@ -41,9 +47,7 @@ async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string
       const details = item.details as unknown as ISceneDetails;
       const blockId = details.blockId;
       if (!/^[0-9a-f-]{36}$/i.test(blockId || "") || seen.has(blockId) || seen.size > 10) continue;
-      if (!sceneCache.has(blockId)) sceneCache.set(blockId, currentBlock ? currentBlock(blockId) : sourceProjectId
-        ? readSceneAtSnapshot(blockId, sourceProjectId, capturedAt).then(row => row ? decode(row.document) : null)
-        : Promise.resolve(null));
+      if (!sceneCache.has(blockId)) sceneCache.set(blockId, readSceneDocument(blockId).then(document => document ? decode(document) : null));
       const scene = await sceneCache.get(blockId);
       if (scene) {
         // Copy each instance so nested media resolution cannot mutate a sibling scene.
@@ -63,6 +67,14 @@ export async function loadSnapshotPreview(snapshotId: number, userId: string) {
   if (!saved) return null;
   const { snapshot, scenes, media } = await hydrateSnapshot(saved);
   return preparePrivatePreview(snapshot, scenes, media, saved.project_id, userId, saved.name);
+}
+
+// Read-only playback of a save. Access is checked by the caller.
+export async function loadProjectSavePreview(save: { document: Uint8Array; project_id: string; created_at: Date; name: string },
+  sceneDocuments: Map<string, Uint8Array>, userId: string) {
+  const { snapshot, scenes, media } = await hydrateSnapshot(save, async blockId => sceneDocuments.get(blockId)
+    ?? (await readSceneAtSnapshot(blockId, save.project_id, save.created_at))?.document ?? null);
+  return preparePrivatePreview(snapshot, scenes, media, save.project_id, userId, save.name);
 }
 
 async function preparePrivatePreview(snapshot: DocSnapshot, scenes: Record<string, DocSnapshot>, media: ITrackItem[],
@@ -107,8 +119,7 @@ export async function loadPortfolioComposition(projectId: string) {
   const allowed = new Set(blocks.map(block => block.block_id));
   const content = await hydrateSnapshot({ document, project_id: projectId, created_at: new Date() }, async blockId => {
     if (!allowed.has(blockId)) return null;
-    const bytes = await currentDocument("block", blockId);
-    return bytes ? decode(bytes) : null;
+    return currentDocument("block", blockId);
   });
   const version = createHash("sha256").update(JSON.stringify(content.snapshot)).digest("hex");
   const duration = content.snapshot.trackItemIds.reduce((end, id) =>

@@ -171,7 +171,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
             {data.viewer.canOpenSettings && (
               <>
                 <Link
-                  to="/admin/analytics?tab=finance"
+                  to="/admin/analytics?tab=money"
                   className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2 text-xs text-zinc-300 hover:text-white"
                 >
                   <BarChart3 className="h-4 w-4" /> Revenue & payouts

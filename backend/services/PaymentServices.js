@@ -40,6 +40,29 @@ const {
 const { getSectionValue } = require("../repositories/AdminSettingsRepositories");
 
 const redisClient = require('../lib/Redis');
+
+/**
+ * Xendit recurring cycles report `amount` in pesos (plans are created with
+ * `amount_php_cents / 100`), but `subscription_invoices.amount_php_cents` stores cents.
+ * Older rows were written in pesos; analytics corrects those at read time.
+ */
+function xenditAmountToCents(amount) {
+    const value = Number(amount);
+    return Number.isFinite(value) ? Math.round(value * 100) : null;
+}
+
+/**
+ * Member-facing amount for payment notifications. Xendit payment sessions report
+ * `request_amount` in pesos (the same value saved to `payments.amount`), not centavos.
+ */
+function formatPaymentAmount(amount, currency = 'PHP') {
+    const value = Number(amount);
+    if (!Number.isFinite(value)) return 'your payment';
+    const digits = value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const code = String(currency || 'PHP').toUpperCase();
+    return code === 'PHP' ? `₱${digits}` : `${digits} ${code}`;
+}
+
 const TOPUP_PACKS = new Map([
     [80, { amount: 99, name: 'Pocket (80 Credits)' }],
     [250, { amount: 299, name: 'Bundle (250 Credits)' }],
@@ -238,7 +261,7 @@ async function xenditWebhookHandler(req, res) {
                 processed_at: new Date()
             });
             const notification = await createNotification({
-                message: `Your subscription payment of ${data.request_amount / 100} ${data.currency} has been successfully processed.`,
+                message: `Your subscription payment of ${formatPaymentAmount(data.request_amount, data.currency)} has been successfully processed.`,
                 is_read: false,
                 reference_table: "payments",
                 reference_prefix: "SUBSCRIPTION",
@@ -312,7 +335,7 @@ async function xenditWebhookHandler(req, res) {
                 data.channel_code
             );
             const notification = await createNotification({
-                message: `Your payment of ${data.request_amount / 100} ${data.currency} has failed or expired. Please try again.`,
+                message: `Your payment of ${formatPaymentAmount(data.request_amount, data.currency)} has failed or expired. Please try again.`,
                 is_read: false,
                 reference_table: "payments",
                 reference_prefix: "TOPUP",
@@ -1179,7 +1202,7 @@ async function subscriptionWebhookHandler(req,res){
                 const subscriptionInvoicePayload = {
                     xendit_plan_id: data.plan_id,
                     xendit_cycle_id: data.id,
-                    amount_php_cents: data.amount,
+                    amount_php_cents: xenditAmountToCents(data.amount),
                     status: data.status,
                     attempt_count: data.attempt_count,
                     billing_period_start: data.scheduled_timestamp,
@@ -1208,7 +1231,7 @@ async function subscriptionWebhookHandler(req,res){
                 const subscriptionInvoicePayload = {
                     xendit_plan_id: data.plan_id,
                     xendit_cycle_id: data.id,
-                    amount_php_cents: data.amount,
+                    amount_php_cents: xenditAmountToCents(data.amount),
                     status: data.status,
                     attempt_count: data.attempt_count,
                     billing_period_start: data.scheduled_timestamp,
@@ -1225,7 +1248,7 @@ async function subscriptionWebhookHandler(req,res){
                 const subscriptionInvoicePayload = {
                     xendit_plan_id: data.plan_id,
                     xendit_cycle_id: data.id,
-                    amount_php_cents: data.amount,
+                    amount_php_cents: xenditAmountToCents(data.amount),
                     status: data.status,
                     attempt_count: data.attempt_count,
                     billing_period_start: data.scheduled_timestamp,
@@ -1240,7 +1263,7 @@ async function subscriptionWebhookHandler(req,res){
                 await updateSubscriptionInvoiceByCycleIdRepositories(data.id, {
                     status: data.status,
                     attempt_count: data.attempt_count,
-                    amount_php_cents: data.amount,
+                    amount_php_cents: xenditAmountToCents(data.amount),
                     paid_at: data.created,
                 });
             }

@@ -905,8 +905,9 @@ async function getContractsByUserId(accountIds) {
 
 async function createContractDispute(accountIds, contractId, { reason, details }) {
     const contractQ = await pool.query(`
-        SELECT 
+        SELECT
             c.contract_id,
+            c.contract_type,
             c.rate_credits,
             COALESCE(jc_info.client_account_id, gc_info.client_account_id) AS client_account_id,
             COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
@@ -1063,6 +1064,28 @@ async function createContractDispute(accountIds, contractId, { reason, details }
     } finally {
         client.release();
     }
+
+    // The case is committed; the opening summary is a courtesy and must not fail the filing.
+    try {
+        const { postDisputeFiledSummary } = require('./DisputeChatRepositories');
+        await postDisputeFiledSummary(createdDispute, {
+            reason,
+            details,
+            contractTitle: contract.contract_title,
+            contractType: contract.contract_type,
+            creditsAtStake: creditAmount,
+            creditsFrozen: Number(createdDispute.credit_amount_involved || 0),
+            contractEnded: Boolean(createdDispute.contract_ended_at_filing),
+        });
+    } catch (err) {
+        console.warn('Dispute filing summary skipped:', err.message);
+    }
+    await require('../services/CaseServices').notifyCaseOpened({
+        accountId: userAccId,
+        kind: 'dispute',
+        id: createdDispute.dispute_id,
+        number: createdDispute.dispute_number,
+    });
 
     const { applyDisputeAutomations } = require('../lib/ModerationPolicy');
     const enrichedDispute = await applyDisputeAutomations(createdDispute);

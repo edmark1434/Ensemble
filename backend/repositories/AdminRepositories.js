@@ -83,6 +83,7 @@ async function getDashboardOverview() {
     pool.query(`
       SELECT
         s.staff_id,
+        s.account_id,
         s.first_name,
         s.last_name,
         s.role,
@@ -266,6 +267,7 @@ function mapStaffMember(row) {
     'Staff member';
   return {
     id: row.staff_id,
+    accountId: row.account_id,
     name,
     email: row.email_address,
     username: row.handle,

@@ -49,6 +49,37 @@ async function listAssetDerivativeBackfillCandidatesRepository(limit = 1000) {
   return rows;
 }
 
+async function listStaticGifDerivativeCandidatesRepository(limit = 50) {
+  const { rows } = await pool.query(
+    `SELECT m.media_asset_id, m.proxy_file_id, m.thumbnail_file_id,
+            original.file_id AS original_file_id,
+            original.name AS original_name,
+            original.path AS original_path,
+            original.size_bytes AS original_size_bytes
+     FROM media_assets m
+     JOIN files original ON original.file_id = m.original_file_id
+     LEFT JOIN files proxy ON proxy.file_id = m.proxy_file_id AND proxy.deleted_at IS NULL
+     LEFT JOIN files thumbnail ON thumbnail.file_id = m.thumbnail_file_id AND thumbnail.deleted_at IS NULL
+     WHERE m.deleted_at IS NULL
+       AND m.type = 'image'
+       AND EXISTS (
+         SELECT 1 FROM market_media_assets link
+         WHERE link.media_asset_id = m.media_asset_id
+       )
+       AND original.deleted_at IS NULL
+       AND (original.mime_type = 'image/gif' OR original.name ILIKE '%.gif')
+       AND (original.path LIKE 'asset-originals/%' OR original.path LIKE 'assets/%')
+       AND NOT COALESCE((
+         proxy.path LIKE 'assets/proxies/v2-anim/%'
+         AND thumbnail.path LIKE 'assets/thumbnails/640-anim/%'
+       ), FALSE)
+     ORDER BY m.created_at DESC, m.media_asset_id
+     LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
 async function replaceMediaAssetDerivativesRepository({
   mediaAssetId,
   expectedProxyFileId,
@@ -102,5 +133,6 @@ async function replaceMediaAssetDerivativesRepository({
 module.exports = {
   findOwnedUploadedFilesRepository,
   listAssetDerivativeBackfillCandidatesRepository,
+  listStaticGifDerivativeCandidatesRepository,
   replaceMediaAssetDerivativesRepository,
 };

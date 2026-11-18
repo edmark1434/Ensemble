@@ -65,6 +65,7 @@ const REFERENCE_TABLE_LABELS: Record<string, string> = {
   disputes: "Dispute Case",
   jobs: "Job Posting / Proposal",
   gigs: "Gig Service Listing",
+  dev_credit_injection: "Dev Mode (Inserted)",
 };
 
 type Direction = "incoming" | "outgoing" | "internal";

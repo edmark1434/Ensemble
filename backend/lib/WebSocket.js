@@ -48,6 +48,25 @@ async function emitConversationMessage(ioServer, event, message) {
   ioServer.to(String(message.conversation_id)).emit(event, message);
 }
 
+/**
+ * Events a staff socket may send. Staff consoles only join rooms to receive live updates, and
+ * platform view (view-only) keeps the socket for live member pages. Sending, editing, reacting,
+ * pinning, typing, read receipts in member chats, group changes and calls are member actions,
+ * refused like their HTTP routes (`RejectStaffMemberWrite`).
+ */
+const STAFF_SOCKET_EVENTS = new Set([
+  'joinRoom',
+  'leaveRoom',
+  'joinForumRooms',
+  'leaveForumRooms',
+  'joinDisputeDiscussion',
+  'leaveDisputeDiscussion',
+  'getActiveGroupCall',
+  'getPresenceSnapshot',
+  'markMessageAsRead',
+  'markAllNotificationsAsRead',
+]);
+
 function rejectEvent(socket, eventName, callback, error, context = {}) {
   const payload = { ...context, message: error.message };
   socket.emit(`${eventName}Failed`, payload);
@@ -86,6 +105,7 @@ async function initSocket(httpServer) {
     getNotificationsByAccountIdServices,
   } = require('../services/NotificationServices');
   const { getAuthorizedActorAccountIds } = require('../services/MarketplaceActorServices');
+  const { STAFF_VIEW_ONLY_CODE, STAFF_VIEW_ONLY_MESSAGE } = require('../middleware/RejectStaffMemberWrite');
 
   console.log('Socket.IO WebSocket server initialized');
   if (io) return io;
@@ -139,11 +159,20 @@ async function initSocket(httpServer) {
 
   io.on('connection', async (socket) => {
     const accountId = String(socket.user.account_id);
+    const isStaffSocket = socket.user.type === 'Staff';
 
     // Suspended accounts stay connected for notices, but client actions are dropped.
     // Later, allow specific events here instead of blocking every action.
     socket.use((packet, next) => {
       const eventName = String(packet[0] || '');
+      if (isStaffSocket) {
+        if (STAFF_SOCKET_EVENTS.has(eventName)) return next();
+        const ack = packet[packet.length - 1];
+        if (typeof ack === 'function') {
+          ack({ success: false, code: STAFF_VIEW_ONLY_CODE, message: STAFF_VIEW_ONLY_MESSAGE });
+        }
+        return;
+      }
       if (socket.data.banned || socket.data.locked) {
         if (eventName === 'disconnect') return next();
         const ack = packet[packet.length - 1];
@@ -653,7 +682,7 @@ async function initSocket(httpServer) {
     socket.on('getPresenceSnapshot', async (_payload, callback) => {
       if (typeof _payload === 'function') callback = _payload;
       try {
-        const inboxes = await getAllInboxesByAccountIdServices(accountId);
+        const inboxes = await getAllInboxesByAccountIdServices(accountId, { includeCases: isStaffSocket });
         const memberIds = Array.from(new Set(inboxes.flatMap((inbox) =>
           (inbox.members || [])
             .filter((member) => !['left', 'removed'].includes(member.status))
@@ -727,7 +756,9 @@ async function initSocket(httpServer) {
 
     // Join all authorized conversation rooms so background chat events and
     // presence remain available without opening each conversation first.
-    getAllInboxesByAccountIdServices(accountId)
+    // Members skip ticket and dispute rooms: Cases hears about those on the account room
+    // (`caseUpdated`), and a ticket message must never pop open as a floating chat.
+    getAllInboxesByAccountIdServices(accountId, { includeCases: isStaffSocket })
       .then((inboxes) => {
         if (!socket.connected) return;
         const roomIds = inboxes.map((inbox) => String(inbox._id));

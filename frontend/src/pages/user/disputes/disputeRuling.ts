@@ -36,7 +36,8 @@ export function isDisputeDecision(message?: {
 }
 
 export type ParsedRuling = {
-  kind: "decision" | "reopen" | "parties" | "payout";
+  /** `notice`: platform messages that decide nothing (the filing summary, the "now public" invite). */
+  kind: "decision" | "reopen" | "parties" | "payout" | "notice";
   title: string;
   reference: string | null;
   outcomeLabel: string;
@@ -58,7 +59,7 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
     .filter(Boolean);
   const head = blocks[0] || "";
   const headMatch = head.match(
-    /^(Final decision|Case reopened|Parties swapped|Payout released|Payout date changed|Payout delayed|Ruling withdrawn)(?:\s+[—-]\s+(.+))?$/i
+    /^(Final decision|Case reopened|Parties swapped|Payout released|Payout date changed|Payout delayed|Ruling withdrawn|Case summary|Dispute made public)(?:\s+[—-]\s+(.+))?$/i
   );
   const kind: ParsedRuling["kind"] = headMatch
     ? /parties swapped/i.test(headMatch[1])
@@ -67,7 +68,9 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
         ? "reopen"
         : /payout|ruling withdrawn/i.test(headMatch[1])
           ? "payout"
-          : "decision"
+          : /case summary|dispute made public/i.test(headMatch[1])
+            ? "notice"
+            : "decision"
     : /reopen/i.test(text)
       ? "reopen"
       : "decision";
@@ -79,12 +82,18 @@ export function parseDisputeRuling(body?: string | null): ParsedRuling {
         ? "Parties swapped"
         : kind === "reopen"
           ? "Case reopened"
-          : kind === "payout"
+          : kind === "payout" || kind === "notice"
             ? headMatch?.[1] || "Payout update"
             : "Final decision",
     reference: headMatch?.[2]?.trim() || null,
     outcomeLabel:
-      kind === "parties" ? "Change" : kind === "reopen" ? "Reason" : kind === "payout" ? "Status" : "Outcome",
+      kind === "parties"
+        ? "Change"
+        : kind === "reopen"
+          ? "Reason"
+          : kind === "payout" || kind === "notice"
+            ? "Status"
+            : "Outcome",
     outcome: null,
     paragraphs: [],
     note: null,

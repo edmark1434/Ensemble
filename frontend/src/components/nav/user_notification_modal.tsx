@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import socket from "@/lib/socket";
 import api from "@/lib/axios";
 import TicketInviteActions from "@/components/nav/TicketInviteActions";
+import { casePath } from "@/lib/cases";
 import { getFollower, getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import { useAccountAvatars } from "@/lib/accountAvatars";
 import AccountAvatar from "@/components/ui/AccountAvatar";
@@ -348,7 +349,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
                             void api.patch(`/api/notifications/${notification.notification_id}/read`).catch(() => undefined);
                             if (result === 'accepted' && chatId) {
                               onClose();
-                              navigate('/inbox/direct', { state: { conversationId: chatId } });
+                              navigate(casePath('ticket', String(notification.reference_id)));
                             }
                           }}
                         />

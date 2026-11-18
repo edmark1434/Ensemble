@@ -653,55 +653,59 @@ async function replaceAndSeed25Jobs() {
     const freshClients = otherUsers.slice(Math.min(3, otherUsers.length - 1));
     const applicantPool = otherUsers;
 
-    // 2. Safely remove old non-contracted jobs so we have a clean 25-job marketplace
-    await client.query(`
-      DELETE FROM proposal_milestones
-      WHERE proposal_id IN (
-        SELECT p.proposal_id FROM proposals p
-        WHERE p.proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
-      )
-    `);
-    await client.query(`
-      DELETE FROM proposals
-      WHERE proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
-    `);
-    await client.query(`
-      DELETE FROM job_saves
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM job_tags
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM job_attachments
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM job_milestones
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM jobs
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
+    const appendMode = process.argv.includes('--append');
 
-    // Ensure Randal Schuppe has 0 ratings so his Rising Job Posts qualify for the green Rising badge
-    if (randalUser) {
-      await client.query(`DELETE FROM ratings WHERE account_id = $1`, [randalUser.account_id]);
-    }
-    for (const fc of freshClients) {
-      await client.query(`DELETE FROM ratings WHERE account_id = $1`, [fc.account_id]);
+    // 2. Safely remove old non-contracted jobs so we have a clean 25-job marketplace (skipped in --append mode)
+    if (!appendMode) {
+      await client.query(`
+        DELETE FROM proposal_milestones
+        WHERE proposal_id IN (
+          SELECT p.proposal_id FROM proposals p
+          WHERE p.proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
+        )
+      `);
+      await client.query(`
+        DELETE FROM proposals
+        WHERE proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
+      `);
+      await client.query(`
+        DELETE FROM job_saves
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM job_tags
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM job_attachments
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM job_milestones
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM jobs
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+
+      // Ensure Randal Schuppe has 0 ratings so his Rising Job Posts qualify for the green Rising badge
+      if (randalUser) {
+        await client.query(`DELETE FROM ratings WHERE account_id = $1`, [randalUser.account_id]);
+      }
+      for (const fc of freshClients) {
+        await client.query(`DELETE FROM ratings WHERE account_id = $1`, [fc.account_id]);
+      }
     }
 
     // Ensure Trusted Clients have 4.8 - 5.0 ratings
@@ -731,6 +735,13 @@ async function replaceAndSeed25Jobs() {
 
     for (let i = 0; i < JOBS_25.length; i++) {
       const item = JOBS_25[i];
+      if (appendMode) {
+        const dup = await client.query(
+          `SELECT 1 FROM jobs WHERE LOWER(title) = LOWER($1) AND deleted_at IS NULL LIMIT 1`,
+          [item.title]
+        );
+        if (dup.rows.length > 0) continue;
+      }
       typeStats[item.jobType] = (typeStats[item.jobType] || 0) + 1;
       archetypeStats[item.archetype] = (archetypeStats[item.archetype] || 0) + 1;
       totalProposalsCount += (item.proposalsToSeed || 0);
@@ -751,6 +762,18 @@ async function replaceAndSeed25Jobs() {
       const deadline = new Date();
       deadline.setDate(deadline.getDate() + (item.timelineMax || 14));
 
+      const rawDaysArg = process.argv.find((a) => a.startsWith('--days='));
+      const deadlineDays = Math.max(
+        1,
+        parseInt(rawDaysArg ? rawDaysArg.split('=')[1] : process.env.SEED_DEADLINE_DAYS || '14', 10) || 14
+      );
+      const rateMin =
+        item.jobType === 'individual_ranged' ? 100 : Math.max(100, Number(item.minBudget) || 100);
+      const rateMax =
+        item.jobType === 'individual_ranged'
+          ? Math.max(100, Number(item.maxBudget || item.minBudget) || 100)
+          : item.maxBudget;
+
       const jobRes = await client.query(
         `INSERT INTO jobs (
           client_account_id, title, description, category, payment_type,
@@ -766,7 +789,7 @@ async function replaceAndSeed25Jobs() {
           $9, $10, $11, 'Open', $12,
           2, $13, $14,
           false, 'Client', $15, $16,
-          $17, NOW() + interval '3 days', false, 50,
+          $17, NOW() + ($19 || ' days')::interval, false, 50,
           0, NOW() - ($18 || ' days')::interval, NOW() - ($18 || ' days')::interval
         ) RETURNING job_id`,
         [
@@ -776,8 +799,8 @@ async function replaceAndSeed25Jobs() {
           item.category,
           item.difficulty,
           item.positionsNeeded,
-          item.minBudget,
-          item.maxBudget,
+          rateMin,
+          rateMax,
           item.timelineMin,
           item.timelineMax,
           postedAs,
@@ -788,6 +811,7 @@ async function replaceAndSeed25Jobs() {
           hiringType,
           JSON.stringify(item.screeningQuestions || []),
           String(item.ageDays),
+          String(deadlineDays),
         ]
       );
       const jobId = jobRes.rows[0].job_id;

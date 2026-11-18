@@ -483,6 +483,7 @@ async function LogoutUsers(req, res) {
         if (sessionId) {
             await logout(sessionId);
         }
+        await require('../services/StaffPresenceServices').clearStaffPresence(req.session);
         clearAuthCookies(res);
 
         return res.status(200).json({

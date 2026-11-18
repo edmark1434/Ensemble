@@ -4,7 +4,7 @@ import { buildSelectionSnapshot, cloneIntoNewTracks } from "./item-actions";
 import { timeMsToUnits } from "@designcombo/timeline";
 import type { TemplateOpenMode } from "../modals/template-open-modal";
 
-async function openProjectTimeline(projectId: string) {
+export async function openProjectTimeline(projectId: string) {
   const initial = useStore.getState();
   if (initial.projectId !== projectId) throw new Error("The current project changed. Open the template again.");
   if (!initial.activeSceneBlockId) return;

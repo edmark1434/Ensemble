@@ -28,6 +28,10 @@ export type StaffMember = {
   status: string;
   joinedAt: string | null;
   isAdmin: boolean;
+  /** Has a staff console open right now (recent request or heartbeat). */
+  isOnline: boolean;
+  /** Last console activity; null when never seen. */
+  lastSeenAt: string | null;
 };
 
 export type PlatformUser = {

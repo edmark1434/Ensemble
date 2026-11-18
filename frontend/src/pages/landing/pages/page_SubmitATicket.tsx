@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, HelpCircle, Lock, LogIn, MessageCircleQuestion, MessageSquare, UserPlus, X } from "lucide-react";
+import { Heart, HelpCircle, LifeBuoy, Lock, LogIn, MessageCircleQuestion, MessageSquare, UserPlus, X } from "lucide-react";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import useGlobalState from "@/lib/global_state";
+import { CASES_PATH, casePath } from "@/lib/cases";
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
@@ -264,6 +265,12 @@ interface TicketTypeDetail {
 
 const SUPPORT_LINKS = [
   {
+    title: "Your cases",
+    description: "Follow and reply to your open tickets and disputes.",
+    to: CASES_PATH,
+    icon: LifeBuoy,
+  },
+  {
     title: "FAQ",
     description: "Answers about jobs, escrow, fees, and the editor.",
     to: "/landing/FAQ",
@@ -297,6 +304,7 @@ const PageSubmitATicket: React.FC = () => {
   const accountId = user?.account_id || user?.accountId || null;
   const [submitted, setSubmitted] = useState(false);
   const [ticketNumber, setTicketNumber] = useState<string | null>(null);
+  const [ticketId, setTicketId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
@@ -392,6 +400,7 @@ const PageSubmitATicket: React.FC = () => {
         return;
       }
       setTicketNumber(response.data.data?.ticketNumber || null);
+      setTicketId(response.data.data?.ticketId ? String(response.data.data.ticketId) : null);
       setSubmitted(true);
     } catch (err: unknown) {
       const message =
@@ -548,6 +557,16 @@ const PageSubmitATicket: React.FC = () => {
                 "Our customer success team will follow up via email within 24 hours."
               )}
             </p>
+            <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 13, marginTop: 8 }}>
+              Replies from support arrive in Cases, and we notify you when they do.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate(ticketId ? casePath("ticket", ticketId) : CASES_PATH)}
+              className="mt-4 inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
+            >
+              Open the conversation
+            </button>
           </div>
         ) : (
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>

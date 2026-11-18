@@ -37,6 +37,8 @@ const {
   notifyDisputeHandler,
   resolveDisputeReplyTarget,
   emitDisputeState,
+  postDisputePublicInvite,
+  notifyDisputeAccount,
 } = require('./DisputeChatRepositories');
 const {
   DISPUTE_RESOLUTION_KEYS,
@@ -1044,6 +1046,7 @@ async function announceTicketState(ticketId) {
   } catch (error) {
     console.warn('Ticket state emit skipped:', error.message);
   }
+  announceTicketCase(ticketId, 'status');
   return payload;
 }
 
@@ -1146,6 +1149,17 @@ const TICKET_ACCOUNT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-
 
 function ticketMemberIsActive(member) {
   return Boolean(member) && !['left', 'removed'].includes(String(member.status || 'active').toLowerCase());
+}
+
+/** Where a member's notice about a ticket or dispute opens: the case in Cases. */
+function casePath(kind, id) {
+  return require('../services/CaseServices').casePath(kind, id);
+}
+
+/** Tell the members on a ticket what changed and what they may now do. Never throws. */
+function announceTicketCase(ticketId, reason) {
+  if (!ticketId) return;
+  void require('../services/CaseServices').announceTicketCase(String(ticketId), { reason });
 }
 
 function ticketError(message, statusCode) {
@@ -1913,7 +1927,8 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
       : reason === 'scheduled'
         ? `Your ticket #${ticketNumber} is now closed. Open it to read the transcript.`
         : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`);
-  const referencePath = chatId ? `/inbox/direct?conversation=${chatId}` : '/notifications';
+  // Only members get this notice (staff are skipped above), so it opens the case in Cases.
+  const referencePath = casePath('ticket', ticketId);
   await Promise.all([...recipients].map(async (accountId) => {
     try {
       const notification = await createNotificationServices({
@@ -1932,6 +1947,8 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
       console.error('Ticket close notification failed:', error.message);
     }
   }));
+  // Auto and scheduled closes do not go through the staff update path, so say so here too.
+  announceTicketCase(ticketId, 'status');
 }
 
 async function generateTicketTranscript(ticketId, staffSession) {
@@ -2217,7 +2234,8 @@ async function notifyTicketParticipant(accountId, message, prefix, ticketId, cha
       is_read: false,
       reference_table: 'inbox',
       reference_prefix: prefix,
-      reference_path: chatId ? `/inbox/direct?conversation=${chatId}` : `/tickets/${ticketId}`,
+      // Members (requester, people added to the ticket) open the case in Cases.
+      reference_path: casePath('ticket', ticketId),
       reference_id: randomUUID(),
     });
     const { getIo } = require('../lib/WebSocket');
@@ -2313,6 +2331,7 @@ async function announceInTicketChat({
   await Promise.all(
     [...recipients].map((accountId) => notifyTicketParticipant(accountId, body, prefix, ticketId, chatId))
   );
+  announceTicketCase(ticketId, 'message');
 }
 
 async function announceTicketAssignment(ticketId, staffId, staffSession) {
@@ -2545,6 +2564,7 @@ async function respondTicketInvite(ticketId, rawAccountId, action) {
     account_id: accountId,
     status: 'active',
   });
+  announceTicketCase(ticketId, 'message');
   return { chatId, joined: true };
 }
 
@@ -3279,16 +3299,24 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
         io.to(String(chatId)).emit('newMessage', createdMessage);
       }
 
+      if (!isInternal) announceTicketCase(ticketId, 'message');
+
       void Promise.all(
         recipients.map(async (member) => {
           try {
+            // Members open the case in Cases; staff keep the conversation link their desks read.
+            const memberRecipient = !['admin', 'staff', 'moderator'].includes(
+              String(member.role || '').toLowerCase()
+            );
             const notification = await createNotificationServices({
               account_id: String(member.account_id),
               message: `${sessionDisplayName(staffSession) || (staff ? 'Staff' : 'A user')} replied to ticket ${ticketResult.rows[0].ticket_number}.`,
               is_read: false,
               reference_table: 'inbox',
               reference_prefix: isInternal ? 'TICKET_INTERNAL_REPLY' : 'TICKET_REPLY',
-              reference_path: `/inbox/direct?conversation=${chatId}`,
+              reference_path: memberRecipient
+                ? casePath('ticket', ticketId)
+                : `/inbox/direct?conversation=${chatId}`,
               reference_id: randomUUID(),
             });
             if (io) {
@@ -3421,6 +3449,8 @@ async function updateTicketMessage(ticketId, messageId, patch, staffSession) {
   if (isInternal || wasInternal) {
     emitTicketChat('ticketInternalMessage', chatId, updated);
   }
+  // A reply moved between internal and member-visible: members re-read the thread.
+  if (isInternal !== wasInternal) announceTicketCase(ticketId, 'message');
 
   const staff = await resolveDisputeStaffId(staffSession);
   await recordTicketEvent({
@@ -3459,6 +3489,7 @@ async function deleteTicketMessage(ticketId, messageId, staffSession) {
     message_id: String(deleted?._id || messageId),
     deleted_at: deleted?.deleted_at || new Date(),
   });
+  if (!message.is_internal) announceTicketCase(ticketId, 'message');
 
   const staff = await resolveDisputeStaffId(staffSession);
   await recordTicketEvent({
@@ -3795,11 +3826,22 @@ async function updateDispute(disputeId, patch, staffSession) {
       actorStaffId: staff.staff_id,
       metadata: { status: 'open', visibility: true },
     });
+    if (!refreshed.visibility) {
+      try {
+        // Visibility is committed, so the invite lands on a discussion the disputee can now read.
+        await postDisputePublicInvite({ ...refreshed, visibility: true });
+      } catch (err) {
+        console.warn('Dispute public invite skipped:', err.message);
+      }
+    }
     try {
       const number = refreshed.dispute_number || 'Dispute';
-      await notifyDisputeParties(refreshed, {
-        message: `Dispute ${number} is now open.`,
-        path: `/disputes/${disputeId}`,
+      // The disputee may be hearing about this case for the first time, and it now needs them.
+      await notifyDisputeAccount(refreshed.by_account_id, disputeId, {
+        message: `Dispute ${number} is now public. The other party has been asked to give their side.`,
+      });
+      await notifyDisputeAccount(refreshed.for_account_id, disputeId, {
+        message: `You are named in dispute ${number}. Staff made it public, so please give your side in Cases.`,
       });
     } catch (err) {
       console.warn('Dispute public notice skipped:', err.message);
@@ -4646,6 +4688,23 @@ function mapDisputePayout(row) {
   };
 }
 
+/** Audiences staff may pick while a dispute is still private (no disputee access, no public page). */
+const PRIVATE_DISPUTE_AUDIENCES = new Set(['staff', 'disputer']);
+
+/**
+ * A private case is between the filer and staff. Refuse disputee, both-parties and public
+ * audiences until staff make the dispute public, whatever the client sends.
+ */
+function assertAudienceAllowedOnDispute(row, audience) {
+  if (row?.visibility) return;
+  if (PRIVATE_DISPUTE_AUDIENCES.has(String(audience || '').toLowerCase())) return;
+  const error = new Error(
+    'This dispute is still private. Replies can only go to staff or the disputer until it is made public.'
+  );
+  error.statusCode = 400;
+  throw error;
+}
+
 async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   if (typeof options === 'boolean') {
     options = { isInternal: options };
@@ -4682,6 +4741,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   }
 
   const normalizedAudience = String(audience || 'staff').toLowerCase();
+  assertAudienceAllowedOnDispute(row, normalizedAudience);
   const chatId = await ensureDisputeChat(disputeId, row);
   // Staff see every message on the case, so any message on this chat is a valid reply target.
   const replyTarget = await resolveDisputeReplyTarget(chatId, options.replyToId ?? null, {
@@ -4716,6 +4776,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     disputeId,
     replyToId: replyTarget ? replyTarget.id : null,
     attachments: options.attachments || [],
+    mentionAccountIds: [row.by_account_id, row.for_account_id],
   });
 
   const number = row.dispute_number || 'Dispute';
@@ -4765,7 +4826,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
             message,
             reference_table: 'disputes',
             reference_prefix: 'DIS',
-            reference_path: path,
+            reference_path: casePath('dispute', disputeId),
             reference_id: disputeId,
           });
           if (io && notification) {
@@ -4802,6 +4863,7 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   if (!chatId) throw new Error('Dispute chat not found.');
 
   const nextAudience = String(audience || '').toLowerCase();
+  assertAudienceAllowedOnDispute(row, nextAudience);
   const partyNotifyIds =
     nextAudience === 'public' || (nextAudience === 'parties' && row.visibility)
       ? [row.by_account_id, row.for_account_id]
@@ -4848,7 +4910,7 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
           message,
           reference_table: 'disputes',
           reference_prefix: 'DIS',
-          reference_path: path,
+          reference_path: casePath('dispute', disputeId),
           reference_id: disputeId,
         });
         if (io && notification) io.to(String(row.for_account_id)).emit('notification', notification);

@@ -1,1640 +1,1326 @@
 const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
+const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 
-function normalizeStatus(status) {
-  if (!status) return 'Pending';
-  const s = String(status).toLowerCase();
-  if (s === 'active') return 'Active';
-  if (s.includes('suspend')) return 'Suspended';
-  if (s.includes('ban')) return 'Banned';
-  return status;
+/**
+ * Admin → Analytics reads. Every period query takes inclusive `YYYY-MM-DD` bounds and turns
+ * them into `[from, to + 1 day)` in the database time zone. Members are `accounts.type =
+ * 'User'` rows that are not deleted.
+ *
+ * Money definitions (keep the totals, the series and the list endpoints on the same rules):
+ * - Top-ups: `payments.payment_type = 'TOPUP'` in a paid status, dated by `processed_at`.
+ * - Subscription revenue: paid recurring invoices (`subscription_invoices`, Xendit status
+ *   SUCCEEDED, or PAID from seed data) dated by `paid_at`, plus one-time upgrade payments
+ *   (`payments.payment_type = 'SUBSCRIPTION'`). Invoice amounts written by the webhook before
+ *   it stored cents were saved in pesos; `INVOICE_CENTS_SQL` scales those back up when the
+ *   stored value is exactly the plan price / 100.
+ * - Fee revenue: Completed fee rows minus Completed fee refunds, in credits.
+ * - Cashouts: net PHP of SUCCEEDED rows, dated by request (`created_at`).
+ */
+
+const MEMBER = `a.type = 'User' AND a.deleted_at IS NULL`;
+const FEE_TYPES = ['Fee', 'Job Posting Fee', 'Proposal Fee', 'Service Posting Fee'];
+const FEE_REFUND_TYPES = ['Job Posting Fee Refund', 'Proposal Fee Refund'];
+
+const TOPUP_STATUSES = {
+  paid: ['PAID', 'COMPLETED', 'SUCCEEDED'],
+  pending: ['PENDING'],
+  failed: ['FAILED', 'EXPIRED', 'CANCELLED', 'CANCELED', 'VOIDED'],
+};
+const INVOICE_STATUSES = {
+  paid: ['SUCCEEDED', 'PAID'],
+  failed: ['FAILED'],
+  scheduled: ['SCHEDULED', 'PENDING'],
+  cancelled: ['CANCELLED', 'CANCELED'],
+};
+const CASHOUT_STATUSES = {
+  paid: ['SUCCEEDED', 'COMPLETED'],
+  in_flight: ['PENDING', 'PROCESSING', 'ACCEPTED', 'REQUESTED'],
+  failed: ['FAILED', 'REJECTED', 'REVERSED', 'CANCELLED', 'CANCELED', 'EXPIRED'],
+};
+
+const INVOICE_CENTS_SQL = `CASE
+  WHEN si.amount_php_cents > 0 AND p.amount_php_cents > 0 AND si.amount_php_cents * 100 = p.amount_php_cents
+    THEN si.amount_php_cents * 100
+  ELSE COALESCE(si.amount_php_cents, 0)
+END`;
+
+/** Months per billing interval, for monthly recurring revenue. */
+const MONTHLY_FACTOR_SQL = `CASE UPPER(COALESCE(p.billing_period, 'MONTH'))
+  WHEN 'DAY' THEN 30.0
+  WHEN 'WEEK' THEN 52.0 / 12
+  WHEN 'YEAR' THEN 1.0 / 12
+  ELSE 1.0
+END`;
+
+const CLOSED_REPORTS = CLOSED_REPORT_STATUSES.map((s) => `'${s}'`).join(', ');
+
+function inPeriod(column, fromIdx, toIdx) {
+  return `${column} >= $${fromIdx}::date AND ${column} < ($${toIdx}::date + 1)`;
 }
 
-function deriveVerification(row) {
-  const v = String(row.verification_status || '').toLowerCase();
-  if (v === 'verified' || v === 'approved' || v === 'business verified') return 'Fully verified';
-  if (v.includes('reverification') || v === 'expired') return 'Pending review';
-  if (v.includes('pending') || v.includes('review')) return 'Pending review';
-  if (v.includes('partial')) return 'Partially verified';
-  if (row.firebase_user_uuid && row.customer_id) return 'Partially verified';
-  return 'Unverified';
+function num(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
-async function fetchPlatformMembers() {
+function phpFromCents(value) {
+  return Math.round(num(value)) / 100;
+}
+
+function isoDay(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+/** Escapes LIKE wildcards so a search for "50%" matches the text, not everything. */
+function likePattern(search) {
+  return `%${String(search).replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+}
+
+// ── Calendar ────────────────────────────────────────────────────────────────
+
+async function fetchCalendar() {
   const result = await pool.query(`
     SELECT
-      u.user_id,
-      u.first_name,
-      u.last_name,
-      u.email_address,
-      u.firebase_user_uuid,
-      u.customer_id,
+      CURRENT_DATE::text AS today,
+      (SELECT MIN(a.created_at)::date::text FROM accounts a WHERE ${MEMBER}) AS first_signup
+  `);
+  const row = result.rows[0] || {};
+  return { today: row.today, firstSignup: row.first_signup || null };
+}
+
+// ── Members ─────────────────────────────────────────────────────────────────
+
+async function fetchMemberSummary() {
+  const result = await pool.query(`
+    WITH m AS (
+      SELECT
+        LOWER(COALESCE(a.status, 'active')) AS status,
+        a.avatar_file_id IS NOT NULL AS has_avatar,
+        NULLIF(BTRIM(COALESCE(a.tagline, '')), '') IS NOT NULL AS has_tagline,
+        COALESCE(ver.verified, FALSE) AS verified,
+        COALESCE(ver.pending, FALSE) AS pending
+      FROM accounts a
+      LEFT JOIN LATERAL (
+        SELECT
+          BOOL_OR(COALESCE(v.is_verified, FALSE)) AS verified,
+          BOOL_OR(LOWER(COALESCE(vs.verification_status, '')) IN ('pending', 'in review', 'reverification_required')) AS pending
+        FROM verifications v
+        LEFT JOIN verification_sessions vs ON vs.verification_session_id = v.verification_session_id
+        WHERE v.account_id = a.account_id
+      ) ver ON TRUE
+      WHERE ${MEMBER}
+    )
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+      COUNT(*) FILTER (WHERE status LIKE '%suspend%')::int AS suspended,
+      COUNT(*) FILTER (WHERE status LIKE '%ban%')::int AS banned,
+      COUNT(*) FILTER (WHERE status LIKE '%lock%')::int AS locked,
+      COUNT(*) FILTER (WHERE status LIKE '%deactiv%')::int AS deactivated,
+      COUNT(*) FILTER (WHERE verified)::int AS verified,
+      COUNT(*) FILTER (WHERE NOT verified AND pending)::int AS pending_verification,
+      COUNT(*) FILTER (WHERE has_avatar)::int AS with_avatar,
+      COUNT(*) FILTER (WHERE has_tagline)::int AS with_tagline,
+      COUNT(*) FILTER (WHERE has_avatar AND has_tagline)::int AS complete_profiles
+    FROM m
+  `);
+  const r = result.rows[0] || {};
+  const total = num(r.total);
+  const active = num(r.active);
+  const suspended = num(r.suspended);
+  const banned = num(r.banned);
+  const locked = num(r.locked);
+  const deactivated = num(r.deactivated);
+  return {
+    total,
+    status: {
+      active,
+      suspended,
+      banned,
+      locked,
+      deactivated,
+      other: Math.max(0, total - active - suspended - banned - locked - deactivated),
+    },
+    verification: {
+      verified: num(r.verified),
+      pending: num(r.pending_verification),
+      unverified: Math.max(0, total - num(r.verified) - num(r.pending_verification)),
+    },
+    profile: {
+      withAvatar: num(r.with_avatar),
+      withTagline: num(r.with_tagline),
+      complete: num(r.complete_profiles),
+    },
+  };
+}
+
+async function fetchNewestMembers(limit = 8) {
+  const result = await pool.query(
+    `
+    SELECT
+      a.account_id,
       a.handle,
       a.display_name,
       a.status,
-      a.avatar_file_id,
-      a.tagline,
       a.created_at,
-      CASE
-        WHEN COALESCE(v.is_verified, FALSE) THEN 'verified'
-        WHEN avs.verification_status IS NOT NULL THEN avs.verification_status
-        ELSE 'unverified'
-      END AS verification_status,
-      COALESCE(w.balance_credits, 0)::int AS balance_credits
-    FROM users u
-    INNER JOIN accounts a ON a.account_id = u.account_id
-    LEFT JOIN verifications v ON v.account_id = a.account_id
-    LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
-    LEFT JOIN LATERAL (
-      SELECT w.balance_credits
-      FROM account_wallets aw
-      INNER JOIN wallets w ON w.wallet_id = aw.wallet_id
-      WHERE aw.account_id = a.account_id
-        AND w.type = 'account wallets'
-      ORDER BY w.created_at DESC
-      LIMIT 1
-    ) w ON TRUE
-    WHERE a.deleted_at IS NULL
-    ORDER BY a.created_at DESC
-  `);
-  return result.rows.map((r) => {
-    const name =
-      [r.first_name, r.last_name].filter(Boolean).join(' ').trim() ||
-      r.display_name ||
-      r.handle;
-    return {
-      id: r.user_id,
-      name,
-      username: r.handle,
-      email: r.email_address,
-      status: normalizeStatus(r.status),
-      verification: deriveVerification(r),
-      credits: Number(r.balance_credits || 0),
-      hasAvatar: Boolean(r.avatar_file_id),
-      hasTagline: Boolean(r.tagline),
-      joinedAt: r.created_at,
-    };
-  });
+      NULLIF(BTRIM(CONCAT_WS(' ', u.first_name, u.last_name)), '') AS full_name
+    FROM accounts a
+    LEFT JOIN users u ON u.account_id = a.account_id
+    WHERE ${MEMBER}
+    ORDER BY a.created_at DESC, a.account_id DESC
+    LIMIT $1
+    `,
+    [limit]
+  );
+  return result.rows.map((r) => ({
+    accountId: r.account_id,
+    name: r.display_name || r.full_name || r.handle || 'Member',
+    handle: r.handle || null,
+    status: r.status || 'Active',
+    joinedAt: r.created_at,
+  }));
 }
 
-async function fetchStaffSummary() {
+async function fetchEmailDomains(limit = 6) {
+  const result = await pool.query(
+    `
+    SELECT LOWER(SPLIT_PART(u.email_address, '@', 2)) AS domain, COUNT(*)::int AS count
+    FROM users u
+    INNER JOIN accounts a ON a.account_id = u.account_id
+    WHERE ${MEMBER} AND u.email_address LIKE '%@%'
+    GROUP BY 1
+    ORDER BY count DESC, domain ASC
+    LIMIT $1
+    `,
+    [limit]
+  );
+  return result.rows.map((r) => ({ domain: r.domain, count: num(r.count) }));
+}
+
+async function fetchStaffRoles() {
   const result = await pool.query(`
-    SELECT s.role, COUNT(*)::int AS count,
+    SELECT s.role::text AS role,
+      COUNT(*)::int AS count,
       COUNT(*) FILTER (WHERE LOWER(COALESCE(a.status, '')) = 'active')::int AS active
     FROM staff s
     INNER JOIN accounts a ON a.account_id = s.account_id
+    WHERE a.deleted_at IS NULL
     GROUP BY s.role
-    ORDER BY count DESC
+    ORDER BY count DESC, role ASC
   `);
-  return result.rows.map((r) => ({
-    role: r.role,
-    count: r.count,
-    active: r.active,
-  }));
+  return result.rows.map((r) => ({ role: r.role, count: num(r.count), active: num(r.active) }));
 }
 
-async function fetchSignupTrend() {
-  const result = await pool.query(`
-    WITH bounds AS (
-      SELECT DATE_TRUNC('week', CURRENT_TIMESTAMP) AS current_week
+// ── Period totals and series ────────────────────────────────────────────────
+
+/**
+ * Headline counts for one period: `$1`/`$2` are its bounds. Money uses the module rules.
+ */
+async function fetchPeriodTotals({ from, to }) {
+  const result = await pool.query(
+    `
+    SELECT
+      (SELECT COUNT(*) FROM accounts a WHERE ${MEMBER} AND ${inPeriod('a.created_at', 1, 2)})::int AS signups,
+      (SELECT COUNT(*) FROM tickets t WHERE t.deleted_at IS NULL AND ${inPeriod('t.created_at', 1, 2)})::int AS tickets,
+      (SELECT COUNT(*) FROM reports r WHERE r.deleted_at IS NULL AND ${inPeriod('r.created_at', 1, 2)})::int AS reports,
+      (SELECT COUNT(*) FROM disputes d WHERE ${inPeriod('d.created_at', 1, 2)})::int AS disputes,
+      (SELECT COUNT(*) FROM marketplace_listings ml WHERE ${inPeriod('ml.created_at', 1, 2)})::int AS listings,
+      (SELECT COUNT(*) FROM payments p
+        WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
+          AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::int AS topup_count,
+      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p
+        WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
+          AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::numeric(14,2) AS topup_php,
+      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p
+        WHERE p.payment_type = 'SUBSCRIPTION' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
+          AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::numeric(14,2) AS upgrade_php,
+      (SELECT COALESCE(SUM(${INVOICE_CENTS_SQL}), 0)
+        FROM subscription_invoices si
+        LEFT JOIN subscriptions s ON s.subscription_id = si.subscription_id
+        LEFT JOIN plans p ON p.plan_id = s.plan_id
+        WHERE UPPER(COALESCE(si.status, '')) = ANY($4::text[]) AND ${inPeriod('si.paid_at', 1, 2)})::bigint AS invoice_cents,
+      (SELECT COALESCE(SUM(CASE WHEN ct.type::text = ANY($5::text[]) THEN ct.amount_credits ELSE -ct.amount_credits END), 0)
+        FROM credit_transactions ct
+        WHERE ct.status = 'Completed'
+          AND (ct.type::text = ANY($5::text[]) OR ct.type::text = ANY($6::text[]))
+          AND ${inPeriod('ct.created_at', 1, 2)})::bigint AS fee_credits,
+      (SELECT COALESCE(SUM(c.net_amount_php_cents), 0) FROM cashouts c
+        WHERE UPPER(COALESCE(c.status, '')) = ANY($7::text[]) AND ${inPeriod('c.created_at', 1, 2)})::bigint AS cashout_cents
+    `,
+    [from, to, TOPUP_STATUSES.paid, INVOICE_STATUSES.paid, FEE_TYPES, FEE_REFUND_TYPES, CASHOUT_STATUSES.paid]
+  );
+  const r = result.rows[0] || {};
+  return {
+    signups: num(r.signups),
+    tickets: num(r.tickets),
+    reports: num(r.reports),
+    disputes: num(r.disputes),
+    listings: num(r.listings),
+    topupCount: num(r.topup_count),
+    topupPhp: num(r.topup_php),
+    subscriptionPhp: Math.round((num(r.upgrade_php) + phpFromCents(r.invoice_cents)) * 100) / 100,
+    feeCredits: num(r.fee_credits),
+    cashoutPhp: phpFromCents(r.cashout_cents),
+  };
+}
+
+/** Per-bucket series across the period (`bucket` is day, week or month). */
+async function fetchSeries({ from, to, bucket }) {
+  const result = await pool.query(
+    `
+    WITH spine AS (
+      SELECT gs::timestamp AS b
+      FROM generate_series(
+        date_trunc($3::text, $1::date::timestamp),
+        date_trunc($3::text, $2::date::timestamp),
+        ('1 ' || $3::text)::interval
+      ) AS gs
     ),
-    week_spine AS (
-      SELECT gs AS week_start
-      FROM bounds,
-        generate_series(
-          bounds.current_week - INTERVAL '11 weeks',
-          bounds.current_week,
-          INTERVAL '1 week'
-        ) AS gs
+    signups AS (
+      SELECT date_trunc($3::text, a.created_at::timestamp) AS b, COUNT(*)::int AS n
+      FROM accounts a WHERE ${MEMBER} AND ${inPeriod('a.created_at', 1, 2)} GROUP BY 1
     ),
-    counted AS (
-      SELECT
-        DATE_TRUNC('week', created_at) AS week_start,
-        COUNT(*)::int AS signups
-      FROM accounts
-      WHERE deleted_at IS NULL AND type = 'User'
-      GROUP BY DATE_TRUNC('week', created_at)
+    tickets AS (
+      SELECT date_trunc($3::text, t.created_at::timestamp) AS b, COUNT(*)::int AS n
+      FROM tickets t WHERE t.deleted_at IS NULL AND ${inPeriod('t.created_at', 1, 2)} GROUP BY 1
     ),
-    filled AS (
-      SELECT
-        w.week_start,
-        COALESCE(c.signups, 0)::int AS signups
-      FROM week_spine w
-      LEFT JOIN counted c ON c.week_start = w.week_start
+    reports AS (
+      SELECT date_trunc($3::text, r.created_at::timestamp) AS b, COUNT(*)::int AS n
+      FROM reports r WHERE r.deleted_at IS NULL AND ${inPeriod('r.created_at', 1, 2)} GROUP BY 1
+    ),
+    listings AS (
+      SELECT date_trunc($3::text, ml.created_at::timestamp) AS b, COUNT(*)::int AS n
+      FROM marketplace_listings ml WHERE ${inPeriod('ml.created_at', 1, 2)} GROUP BY 1
+    ),
+    topups AS (
+      SELECT date_trunc($3::text, COALESCE(p.processed_at, p.created_at)::timestamp) AS b,
+        COUNT(*)::int AS n, COALESCE(SUM(p.amount), 0)::numeric(14,2) AS php
+      FROM payments p
+      WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($4::text[])
+        AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)}
+      GROUP BY 1
+    ),
+    upgrades AS (
+      SELECT date_trunc($3::text, COALESCE(p.processed_at, p.created_at)::timestamp) AS b,
+        COALESCE(SUM(p.amount), 0)::numeric(14,2) AS php
+      FROM payments p
+      WHERE p.payment_type = 'SUBSCRIPTION' AND UPPER(COALESCE(p.status, '')) = ANY($4::text[])
+        AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)}
+      GROUP BY 1
+    ),
+    invoices AS (
+      SELECT date_trunc($3::text, si.paid_at::timestamp) AS b, COALESCE(SUM(${INVOICE_CENTS_SQL}), 0)::bigint AS cents
+      FROM subscription_invoices si
+      LEFT JOIN subscriptions s ON s.subscription_id = si.subscription_id
+      LEFT JOIN plans p ON p.plan_id = s.plan_id
+      WHERE UPPER(COALESCE(si.status, '')) = ANY($5::text[]) AND ${inPeriod('si.paid_at', 1, 2)}
+      GROUP BY 1
+    ),
+    fees AS (
+      SELECT date_trunc($3::text, ct.created_at::timestamp) AS b,
+        COALESCE(SUM(CASE WHEN ct.type::text = ANY($6::text[]) THEN ct.amount_credits ELSE -ct.amount_credits END), 0)::bigint AS credits
+      FROM credit_transactions ct
+      WHERE ct.status = 'Completed'
+        AND (ct.type::text = ANY($6::text[]) OR ct.type::text = ANY($7::text[]))
+        AND ${inPeriod('ct.created_at', 1, 2)}
+      GROUP BY 1
+    ),
+    cashouts AS (
+      SELECT date_trunc($3::text, c.created_at::timestamp) AS b, COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS cents
+      FROM cashouts c
+      WHERE UPPER(COALESCE(c.status, '')) = ANY($8::text[]) AND ${inPeriod('c.created_at', 1, 2)}
+      GROUP BY 1
     )
     SELECT
-      TO_CHAR(f.week_start, 'Mon DD') AS week_label,
-      f.week_start,
-      f.signups,
-      (
-        SELECT COALESCE(SUM(x.signups), 0)::int
-        FROM counted x
-        WHERE x.week_start <= f.week_start
-      ) AS cumulative
-    FROM filled f
-    ORDER BY f.week_start ASC
-  `);
+      s.b,
+      COALESCE(su.n, 0) AS signups,
+      COALESCE(ti.n, 0) AS tickets,
+      COALESCE(re.n, 0) AS reports,
+      COALESCE(li.n, 0) AS listings,
+      COALESCE(tu.n, 0) AS topup_count,
+      COALESCE(tu.php, 0) AS topup_php,
+      COALESCE(up.php, 0) AS upgrade_php,
+      COALESCE(inv.cents, 0) AS invoice_cents,
+      COALESCE(fe.credits, 0) AS fee_credits,
+      COALESCE(co.cents, 0) AS cashout_cents
+    FROM spine s
+    LEFT JOIN signups su ON su.b = s.b
+    LEFT JOIN tickets ti ON ti.b = s.b
+    LEFT JOIN reports re ON re.b = s.b
+    LEFT JOIN listings li ON li.b = s.b
+    LEFT JOIN topups tu ON tu.b = s.b
+    LEFT JOIN upgrades up ON up.b = s.b
+    LEFT JOIN invoices inv ON inv.b = s.b
+    LEFT JOIN fees fe ON fe.b = s.b
+    LEFT JOIN cashouts co ON co.b = s.b
+    ORDER BY s.b ASC
+    `,
+    [
+      from,
+      to,
+      bucket,
+      TOPUP_STATUSES.paid,
+      INVOICE_STATUSES.paid,
+      FEE_TYPES,
+      FEE_REFUND_TYPES,
+      CASHOUT_STATUSES.paid,
+    ]
+  );
   return result.rows.map((r) => ({
-    week: r.week_label,
-    weekStart: r.week_start,
-    newMembers: Number(r.signups || 0),
-    cumulativeMembers: Number(r.cumulative || 0),
+    start: isoDay(r.b),
+    signups: num(r.signups),
+    tickets: num(r.tickets),
+    reports: num(r.reports),
+    listings: num(r.listings),
+    topupCount: num(r.topup_count),
+    topupPhp: num(r.topup_php),
+    subscriptionPhp: Math.round((num(r.upgrade_php) + phpFromCents(r.invoice_cents)) * 100) / 100,
+    feeCredits: num(r.fee_credits),
+    cashoutPhp: phpFromCents(r.cashout_cents),
   }));
 }
 
-async function fetchSignupByMonth() {
-  const result = await pool.query(`
-    WITH bounds AS (
-      SELECT DATE_TRUNC('month', CURRENT_TIMESTAMP) AS current_month
-    ),
-    month_spine AS (
-      SELECT gs AS month_start
-      FROM bounds,
-        generate_series(
-          bounds.current_month - INTERVAL '11 months',
-          bounds.current_month,
-          INTERVAL '1 month'
-        ) AS gs
-    ),
-    counted AS (
-      SELECT
-        DATE_TRUNC('month', created_at) AS month_start,
-        COUNT(*)::int AS signups
-      FROM accounts
-      WHERE deleted_at IS NULL AND type = 'User'
-      GROUP BY DATE_TRUNC('month', created_at)
-    )
+// ── Engagement (account_active_days) ────────────────────────────────────────
+
+async function fetchTrackingSince() {
+  const result = await pool.query(`SELECT MIN(active_on)::text AS since FROM account_active_days`);
+  return result.rows[0]?.since || null;
+}
+
+async function fetchActiveSeries({ from, to, bucket }) {
+  const result = await pool.query(
+    `
+    SELECT date_trunc($3::text, d.active_on::timestamp) AS b, COUNT(DISTINCT d.account_id)::int AS n
+    FROM account_active_days d
+    INNER JOIN accounts a ON a.account_id = d.account_id
+    WHERE ${MEMBER} AND d.active_on BETWEEN $1::date AND $2::date
+    GROUP BY 1
+    `,
+    [from, to, bucket]
+  );
+  return new Map(result.rows.map((r) => [isoDay(r.b), num(r.n)]));
+}
+
+/**
+ * Daily / weekly / monthly actives as of today, plus distinct actives in the period and the
+ * previous period (`prevFrom`/`prevTo` may be null).
+ */
+async function fetchEngagementTotals({ from, to, prevFrom, prevTo }) {
+  const result = await pool.query(
+    `
     SELECT
-      TO_CHAR(m.month_start, 'Mon YYYY') AS month_label,
-      m.month_start,
-      COALESCE(c.signups, 0)::int AS signups
-    FROM month_spine m
-    LEFT JOIN counted c ON c.month_start = m.month_start
-    ORDER BY m.month_start ASC
-  `);
+      COUNT(DISTINCT d.account_id) FILTER (WHERE d.active_on = CURRENT_DATE)::int AS dau,
+      COUNT(DISTINCT d.account_id) FILTER (WHERE d.active_on > CURRENT_DATE - 7)::int AS wau,
+      COUNT(DISTINCT d.account_id) FILTER (WHERE d.active_on > CURRENT_DATE - 30)::int AS mau,
+      COUNT(*) FILTER (WHERE d.active_on > CURRENT_DATE - 30)::int AS member_days_30,
+      COUNT(DISTINCT d.account_id) FILTER (WHERE d.active_on BETWEEN $1::date AND $2::date)::int AS in_period,
+      COUNT(*) FILTER (WHERE d.active_on BETWEEN $1::date AND $2::date)::int AS member_days_period,
+      COUNT(DISTINCT d.account_id) FILTER (
+        WHERE d.active_on BETWEEN $1::date AND $2::date AND a.created_at < $1::date
+      )::int AS returning_in_period,
+      COUNT(DISTINCT d.account_id) FILTER (WHERE d.active_on BETWEEN $3::date AND $4::date)::int AS in_previous
+    FROM account_active_days d
+    INNER JOIN accounts a ON a.account_id = d.account_id
+    WHERE ${MEMBER}
+      AND d.active_on >= LEAST($1::date, $3::date, CURRENT_DATE - 30)
+    `,
+    [from, to, prevFrom, prevTo]
+  );
+  const r = result.rows[0] || {};
+  return {
+    dau: num(r.dau),
+    wau: num(r.wau),
+    mau: num(r.mau),
+    memberDays30: num(r.member_days_30),
+    inPeriod: num(r.in_period),
+    memberDaysInPeriod: num(r.member_days_period),
+    returningInPeriod: num(r.returning_in_period),
+    inPrevious: prevFrom ? num(r.in_previous) : null,
+  };
+}
+
+/** Weekly signup cohorts (last `weeks` weeks) and how many were active in each later week. */
+async function fetchWeeklyCohorts(weeks = 8) {
+  const result = await pool.query(
+    `
+    WITH cohort AS (
+      SELECT a.account_id, date_trunc('week', a.created_at::timestamp)::date AS cw
+      FROM accounts a
+      WHERE ${MEMBER}
+        AND a.created_at >= date_trunc('week', CURRENT_DATE::timestamp) - make_interval(weeks => $1::int - 1)
+    ),
+    activity AS (
+      SELECT DISTINCT c.account_id, c.cw,
+        ((date_trunc('week', d.active_on::timestamp)::date - c.cw) / 7)::int AS wk
+      FROM cohort c
+      INNER JOIN account_active_days d ON d.account_id = c.account_id
+      WHERE d.active_on >= c.cw
+    )
+    SELECT c.cw::text AS cohort_start,
+      COUNT(DISTINCT c.account_id)::int AS size,
+      COALESCE((
+        SELECT json_object_agg(x.wk, x.n)
+        FROM (SELECT wk, COUNT(*)::int AS n FROM activity WHERE activity.cw = c.cw GROUP BY wk) x
+      ), '{}'::json) AS weeks
+    FROM cohort c
+    GROUP BY c.cw
+    ORDER BY c.cw ASC
+    `,
+    [weeks]
+  );
   return result.rows.map((r) => ({
-    label: r.month_label,
-    monthStart: r.month_start,
-    value: Number(r.signups || 0),
+    cohortStart: r.cohort_start,
+    size: num(r.size),
+    activeByWeek: Object.fromEntries(Object.entries(r.weeks || {}).map(([k, v]) => [Number(k), num(v)])),
   }));
 }
 
-async function fetchActivityTrend() {
-  const result = await pool
-    .query(
+// ── Money ───────────────────────────────────────────────────────────────────
+
+async function fetchTopupBreakdown({ from, to }) {
+  const [statusRes, channelRes] = await Promise.all([
+    pool.query(
       `
-    WITH bounds AS (
-      SELECT DATE_TRUNC('week', CURRENT_TIMESTAMP) AS current_week
+      SELECT
+        COUNT(*) FILTER (WHERE UPPER(COALESCE(p.status, '')) = ANY($3::text[]))::int AS paid_count,
+        COALESCE(SUM(p.amount) FILTER (WHERE UPPER(COALESCE(p.status, '')) = ANY($3::text[])), 0)::numeric(14,2) AS paid_php,
+        COALESCE(SUM(p.credits) FILTER (WHERE UPPER(COALESCE(p.status, '')) = ANY($3::text[])), 0)::bigint AS credits,
+        COUNT(*) FILTER (WHERE UPPER(COALESCE(p.status, '')) = ANY($4::text[]))::int AS pending_count,
+        COUNT(*) FILTER (WHERE UPPER(COALESCE(p.status, '')) = ANY($5::text[]))::int AS failed_count,
+        COUNT(DISTINCT p.user_id) FILTER (WHERE UPPER(COALESCE(p.status, '')) = ANY($3::text[]))::int AS buyers
+      FROM payments p
+      WHERE p.payment_type = 'TOPUP' AND ${inPeriod('p.created_at', 1, 2)}
+      `,
+      [from, to, TOPUP_STATUSES.paid, TOPUP_STATUSES.pending, TOPUP_STATUSES.failed]
     ),
-    week_spine AS (
-      SELECT gs AS week_start
-      FROM bounds,
-        generate_series(
-          bounds.current_week - INTERVAL '11 weeks',
-          bounds.current_week,
-          INTERVAL '1 week'
-        ) AS gs
-    )
+    pool.query(
+      `
+      SELECT COALESCE(NULLIF(UPPER(p.channel_code), ''), 'UNKNOWN') AS channel,
+        COUNT(*)::int AS count, COALESCE(SUM(p.amount), 0)::numeric(14,2) AS php
+      FROM payments p
+      WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
+        AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)}
+      GROUP BY 1
+      ORDER BY php DESC, channel ASC
+      LIMIT 8
+      `,
+      [from, to, TOPUP_STATUSES.paid]
+    ),
+  ]);
+  const r = statusRes.rows[0] || {};
+  return {
+    // Counts here are by order date; the headline revenue uses the paid date.
+    paidCount: num(r.paid_count),
+    paidPhp: num(r.paid_php),
+    creditsIssued: num(r.credits),
+    buyers: num(r.buyers),
+    pendingCount: num(r.pending_count),
+    failedCount: num(r.failed_count),
+    byChannel: channelRes.rows.map((c) => ({ channel: c.channel, count: num(c.count), php: num(c.php) })),
+  };
+}
+
+async function fetchSubscriptionBreakdown({ from, to }) {
+  const [planRes, periodRes] = await Promise.all([
+    pool.query(`
+      WITH live AS (
+        SELECT DISTINCT ON (s.user_id)
+          s.user_id, s.plan_id, s.cancel_at_period_end, s.trial_ends_at
+        FROM subscriptions s
+        WHERE UPPER(COALESCE(s.status, '')) = 'ACTIVE'
+        ORDER BY s.user_id, s.created_at DESC
+      )
+      SELECT
+        p.plan_id,
+        p.name,
+        p.billing_period,
+        p.amount_php_cents,
+        COUNT(l.user_id)::int AS members,
+        COUNT(l.user_id) FILTER (WHERE l.cancel_at_period_end)::int AS canceling,
+        COUNT(l.user_id) FILTER (WHERE l.trial_ends_at > NOW())::int AS trialing,
+        COALESCE(SUM(p.amount_php_cents * ${MONTHLY_FACTOR_SQL}) FILTER (WHERE l.user_id IS NOT NULL), 0)::numeric(16,2) AS mrr_cents
+      FROM plans p
+      LEFT JOIN live l ON l.plan_id = p.plan_id
+      WHERE p.deleted_at IS NULL
+      GROUP BY p.plan_id, p.name, p.billing_period, p.amount_php_cents
+      ORDER BY p.amount_php_cents ASC, p.name ASC
+    `),
+    pool.query(
+      `
+      SELECT
+        (SELECT COUNT(*) FROM subscriptions s INNER JOIN plans p ON p.plan_id = s.plan_id
+          WHERE p.amount_php_cents > 0 AND ${inPeriod('s.created_at', 1, 2)})::int AS started,
+        (SELECT COUNT(*) FROM subscriptions s INNER JOIN plans p ON p.plan_id = s.plan_id
+          WHERE p.amount_php_cents > 0 AND ${inPeriod('s.canceled_at', 1, 2)})::int AS canceled,
+        (SELECT COUNT(*) FROM subscription_invoices si
+          WHERE UPPER(COALESCE(si.status, '')) = ANY($3::text[]) AND ${inPeriod('si.paid_at', 1, 2)})::int AS paid_invoices,
+        (SELECT COUNT(*) FROM subscription_invoices si
+          WHERE UPPER(COALESCE(si.status, '')) = ANY($4::text[])
+            AND ${inPeriod('COALESCE(si.failed_at, si.updated_at)', 1, 2)})::int AS failed_invoices,
+        (SELECT COUNT(*) FROM payments p
+          WHERE p.payment_type = 'SUBSCRIPTION' AND UPPER(COALESCE(p.status, '')) = ANY($5::text[])
+            AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::int AS upgrade_payments
+      `,
+      [from, to, INVOICE_STATUSES.paid, INVOICE_STATUSES.failed, TOPUP_STATUSES.paid]
+    ),
+  ]);
+
+  const plans = planRes.rows.map((p) => ({
+    planId: p.plan_id,
+    name: p.name,
+    billingPeriod: p.billing_period || 'MONTH',
+    pricePhp: phpFromCents(p.amount_php_cents),
+    paid: num(p.amount_php_cents) > 0,
+    members: num(p.members),
+    canceling: num(p.canceling),
+    trialing: num(p.trialing),
+    mrrPhp: phpFromCents(p.mrr_cents),
+  }));
+  const paidPlans = plans.filter((p) => p.paid);
+  const r = periodRes.rows[0] || {};
+  return {
+    activePaid: paidPlans.reduce((s, p) => s + p.members, 0),
+    canceling: paidPlans.reduce((s, p) => s + p.canceling, 0),
+    trialing: paidPlans.reduce((s, p) => s + p.trialing, 0),
+    freeMembers: plans.filter((p) => !p.paid).reduce((s, p) => s + p.members, 0),
+    mrrPhp: Math.round(paidPlans.reduce((s, p) => s + p.mrrPhp, 0) * 100) / 100,
+    plans,
+    period: {
+      started: num(r.started),
+      canceled: num(r.canceled),
+      paidInvoices: num(r.paid_invoices),
+      failedInvoices: num(r.failed_invoices),
+      upgradePayments: num(r.upgrade_payments),
+    },
+  };
+}
+
+async function fetchFeeBreakdown({ from, to }) {
+  const result = await pool.query(
+    `
+    SELECT ct.type::text AS type, COUNT(*)::int AS count, COALESCE(SUM(ct.amount_credits), 0)::bigint AS credits
+    FROM credit_transactions ct
+    WHERE ct.status = 'Completed'
+      AND (ct.type::text = ANY($3::text[]) OR ct.type::text = ANY($4::text[]))
+      AND ${inPeriod('ct.created_at', 1, 2)}
+    GROUP BY ct.type
+    `,
+    [from, to, FEE_TYPES, FEE_REFUND_TYPES]
+  );
+  const byType = new Map(result.rows.map((r) => [r.type, { count: num(r.count), credits: num(r.credits) }]));
+  const rows = FEE_TYPES.map((type) => {
+    const gross = byType.get(type) || { count: 0, credits: 0 };
+    const refund = byType.get(`${type} Refund`) || { count: 0, credits: 0 };
+    return {
+      type,
+      count: gross.count,
+      grossCredits: gross.credits,
+      refundedCredits: refund.credits,
+      refundCount: refund.count,
+      netCredits: gross.credits - refund.credits,
+    };
+  });
+  return {
+    netCredits: rows.reduce((s, r) => s + r.netCredits, 0),
+    grossCredits: rows.reduce((s, r) => s + r.grossCredits, 0),
+    refundedCredits: rows.reduce((s, r) => s + r.refundedCredits, 0),
+    byType: rows,
+  };
+}
+
+async function fetchCashoutBreakdown({ from, to }) {
+  const [periodRes, flightRes] = await Promise.all([
+    pool.query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE UPPER(c.status) = ANY($3::text[]))::int AS paid_count,
+        COALESCE(SUM(c.amount_credits) FILTER (WHERE UPPER(c.status) = ANY($3::text[])), 0)::bigint AS paid_credits,
+        COALESCE(SUM(c.net_amount_php_cents) FILTER (WHERE UPPER(c.status) = ANY($3::text[])), 0)::bigint AS paid_net_cents,
+        COALESCE(SUM(c.fee_php_cents) FILTER (WHERE UPPER(c.status) = ANY($3::text[])), 0)::bigint AS fee_cents,
+        COUNT(*) FILTER (WHERE UPPER(c.status) = ANY($4::text[]))::int AS failed_count,
+        COALESCE(SUM(c.amount_credits) FILTER (WHERE UPPER(c.status) = ANY($4::text[])), 0)::bigint AS failed_credits,
+        COUNT(DISTINCT c.user_id) FILTER (WHERE UPPER(c.status) = ANY($3::text[]))::int AS earners
+      FROM cashouts c
+      WHERE ${inPeriod('c.created_at', 1, 2)}
+      `,
+      [from, to, CASHOUT_STATUSES.paid, CASHOUT_STATUSES.failed]
+    ),
+    pool.query(
+      `
+      SELECT COUNT(*)::int AS count,
+        COALESCE(SUM(c.amount_credits), 0)::bigint AS credits,
+        COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS net_cents,
+        COUNT(*) FILTER (WHERE c.created_at < NOW() - INTERVAL '24 hours')::int AS stale,
+        MIN(c.created_at) AS oldest_at
+      FROM cashouts c
+      WHERE UPPER(c.status) = ANY($1::text[])
+      `,
+      [CASHOUT_STATUSES.in_flight]
+    ),
+  ]);
+  const p = periodRes.rows[0] || {};
+  const f = flightRes.rows[0] || {};
+  const paidCount = num(p.paid_count);
+  const paidPhp = phpFromCents(p.paid_net_cents);
+  return {
+    paidCount,
+    paidCredits: num(p.paid_credits),
+    paidPhp,
+    feesPhp: phpFromCents(p.fee_cents),
+    averagePhp: paidCount ? Math.round((paidPhp / paidCount) * 100) / 100 : 0,
+    earners: num(p.earners),
+    failedCount: num(p.failed_count),
+    failedCredits: num(p.failed_credits),
+    inFlight: {
+      count: num(f.count),
+      credits: num(f.credits),
+      php: phpFromCents(f.net_cents),
+      stale: num(f.stale),
+      oldestAt: f.oldest_at || null,
+    },
+  };
+}
+
+// ── Operations ──────────────────────────────────────────────────────────────
+
+async function fetchTicketStats({ from, to }) {
+  const result = await pool.query(
+    `
     SELECT
-      TO_CHAR(w.week_start, 'Mon DD') AS week_label,
-      w.week_start,
-      (
-        SELECT COUNT(*)::int FROM accounts a
-        WHERE a.deleted_at IS NULL AND a.type = 'User'
-          AND DATE_TRUNC('week', a.created_at) = w.week_start
-      ) AS signups,
-      (
-        SELECT COUNT(*)::int FROM tickets t
-        WHERE DATE_TRUNC('week', t.created_at) = w.week_start
-      ) AS tickets,
-      (
-        SELECT COUNT(*)::int FROM reports r
-        WHERE r.deleted_at IS NULL
-          AND DATE_TRUNC('week', r.created_at) = w.week_start
-      ) AS reports,
-      (
-        SELECT COUNT(*)::int FROM credit_transactions ct
-        WHERE DATE_TRUNC('week', ct.created_at) = w.week_start
-      ) AS credit_tx,
-      (
-        SELECT COUNT(*)::int FROM marketplace_listings ml
-        WHERE DATE_TRUNC('week', ml.created_at) = w.week_start
-      ) AS listings
-    FROM week_spine w
-    ORDER BY w.week_start ASC
-  `
-    )
-    .catch((err) => {
-      console.error('fetchActivityTrend error:', err.message);
-      return { rows: [] };
-    });
-
-  return result.rows.map((r) => ({
-    label: r.week_label,
-    weekStart: r.week_start,
-    signups: Number(r.signups || 0),
-    tickets: Number(r.tickets || 0),
-    reports: Number(r.reports || 0),
-    creditTransactions: Number(r.credit_tx || 0),
-    listings: Number(r.listings || 0),
-  }));
+      COUNT(*) FILTER (WHERE LOWER(COALESCE(t.status, 'open')) NOT IN ('closed', 'resolved'))::int AS open_count,
+      COUNT(*) FILTER (
+        WHERE LOWER(COALESCE(t.status, 'open')) NOT IN ('closed', 'resolved') AND t.handled_by_staff_id IS NULL
+      )::int AS unassigned,
+      COUNT(*) FILTER (
+        WHERE LOWER(COALESCE(t.status, 'open')) NOT IN ('closed', 'resolved') AND t.priority = 'High'
+      )::int AS high_priority,
+      MIN(t.created_at) FILTER (WHERE LOWER(COALESCE(t.status, 'open')) NOT IN ('closed', 'resolved')) AS oldest_open_at,
+      COUNT(*) FILTER (WHERE ${inPeriod('t.created_at', 1, 2)})::int AS opened,
+      COUNT(*) FILTER (WHERE ${inPeriod('t.resolved_at', 1, 2)})::int AS resolved,
+      percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (t.first_staff_reply_at - t.created_at::timestamptz)) / 3600.0
+      ) FILTER (WHERE t.first_staff_reply_at IS NOT NULL AND ${inPeriod('t.created_at', 1, 2)}) AS median_first_reply_hours,
+      percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600.0
+      ) FILTER (WHERE t.resolved_at IS NOT NULL AND ${inPeriod('t.resolved_at', 1, 2)}) AS median_resolution_hours,
+      ROUND(AVG(t.satisfaction_score) FILTER (
+        WHERE t.satisfaction_score IS NOT NULL AND ${inPeriod('t.satisfaction_at', 1, 2)}
+      )::numeric, 2) AS satisfaction,
+      COUNT(*) FILTER (WHERE t.satisfaction_score IS NOT NULL AND ${inPeriod('t.satisfaction_at', 1, 2)})::int AS ratings
+    FROM tickets t
+    WHERE t.deleted_at IS NULL
+    `,
+    [from, to]
+  );
+  const r = result.rows[0] || {};
+  const hours = (v) => (v == null ? null : Math.round(Number(v) * 10) / 10);
+  return {
+    open: num(r.open_count),
+    unassigned: num(r.unassigned),
+    highPriority: num(r.high_priority),
+    oldestOpenAt: r.oldest_open_at || null,
+    opened: num(r.opened),
+    resolved: num(r.resolved),
+    medianFirstReplyHours: hours(r.median_first_reply_hours),
+    medianResolutionHours: hours(r.median_resolution_hours),
+    satisfaction: r.satisfaction == null ? null : Number(r.satisfaction),
+    ratings: num(r.ratings),
+  };
 }
 
-function buildCreditBuckets(members) {
-  const buckets = [
-    { label: '0–10k', min: 0, max: 10000 },
-    { label: '10k–50k', min: 10001, max: 50000 },
-    { label: '50k–100k', min: 50001, max: 100000 },
-    { label: '100k+', min: 100001, max: Infinity },
-  ];
-  return buckets.map((b) => ({
-    label: b.label,
-    count: members.filter((m) => m.credits >= b.min && m.credits <= b.max).length,
-  }));
+async function fetchQueueCounts() {
+  const result = await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM reports r
+        WHERE r.deleted_at IS NULL AND LOWER(COALESCE(r.status, 'open')) NOT IN (${CLOSED_REPORTS}))::int AS open_reports,
+      (SELECT COUNT(*) FROM disputes d WHERE d.status <> 'closed')::int AS open_disputes,
+      (SELECT COUNT(*) FROM marketplace_listings ml WHERE LOWER(COALESCE(ml.status, '')) = 'pending')::int AS pending_listings,
+      (SELECT COUNT(*) FROM violations v
+        WHERE v.deleted_at IS NULL
+          AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open')
+          AND (v.expires_at IS NULL OR v.expires_at > NOW()))::int AS active_violations,
+      (SELECT COUNT(*) FROM teams)::int AS teams
+  `);
+  const r = result.rows[0] || {};
+  return {
+    openReports: num(r.open_reports),
+    openDisputes: num(r.open_disputes),
+    pendingListings: num(r.pending_listings),
+    activeViolations: num(r.active_violations),
+    teams: num(r.teams),
+  };
 }
 
-function buildEngagementTrend(signupTrend, totalMembers) {
-  return signupTrend.map((w) => ({
-    label: w.week,
-    weekStart: w.weekStart,
-    signups: w.newMembers,
-    estimatedDau: Math.max(0, Math.round((w.cumulativeMembers || totalMembers) * 0.11)),
-    estimatedWau: Math.max(0, Math.round((w.cumulativeMembers || totalMembers) * 0.27)),
-    estimatedMau: Math.max(0, Math.round((w.cumulativeMembers || totalMembers) * 0.62)),
-  }));
-}
+// ── Community (MongoDB) ─────────────────────────────────────────────────────
 
-function buildGroupSizeDistribution(groups) {
-  const buckets = [
-    { label: '1–2', min: 1, max: 2 },
-    { label: '3–5', min: 3, max: 5 },
-    { label: '6–10', min: 6, max: 10 },
-    { label: '11+', min: 11, max: Infinity },
-  ];
-  return buckets.map((b) => ({
-    label: b.label,
-    count: groups.filter((g) => g.members >= b.min && g.members <= b.max).length,
-  }));
-}
+const toDate = (field) => ({ $convert: { input: field, to: 'date', onError: null, onNull: null } });
 
-async function fetchForumPlatformStats() {
+async function forumDb() {
   let client = getMongoClient();
   if (!client) client = await connectMongoDB();
-  if (!client) {
-    return { available: false };
-  }
-
-  try {
-    const db = client.db('ensemble');
-    const groupsCol = db.collection('forum_groups');
-    const discussionsCol = db.collection('forum_discussions');
-
-    const [groups, discussions, totalGroups, activeCount, inactiveCount, totalDiscussions] =
-      await Promise.all([
-        groupsCol.find({}).sort({ created_at: -1 }).limit(30).toArray(),
-        discussionsCol.find({}).sort({ created_at: -1 }).limit(20).toArray(),
-        groupsCol.countDocuments({}),
-        groupsCol.countDocuments({ status: 'active' }),
-        groupsCol.countDocuments({ status: { $ne: 'active' } }),
-        discussionsCol.countDocuments({}),
-      ]);
-
-    const memberTotal = groups.reduce((s, g) => s + (g.members?.length || 0), 0);
-    const tagMap = new Map();
-    for (const g of groups) {
-      for (const tag of g.tags || []) tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
-    }
-
-    const commentTotal = discussions.reduce((s, d) => s + (d.comments?.length || 0), 0);
-
-    return {
-      available: true,
-      groups: {
-        total: totalGroups,
-        active: activeCount,
-        inactive: inactiveCount,
-        totalMembers: memberTotal,
-        avgMembersPerGroup: groups.length
-          ? Math.round((memberTotal / groups.length) * 10) / 10
-          : 0,
-      },
-      discussions: {
-        total: totalDiscussions,
-        sampledComments: commentTotal,
-        avgComments: discussions.length
-          ? Math.round((commentTotal / discussions.length) * 10) / 10
-          : 0,
-      },
-      allGroupsMemberCounts: groups.map((g) => ({
-        members: g.members?.length || 0,
-      })),
-      topGroups: groups
-        .map((g) => ({
-          id: String(g._id),
-          name: g.group_name || 'Unnamed group',
-          members: g.members?.length || 0,
-          status: g.status || 'unknown',
-        }))
-        .sort((a, b) => b.members - a.members)
-        .slice(0, 8),
-      popularTags: Array.from(tagMap.entries())
-        .map(([tag, count]) => ({ tag, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8),
-      recentDiscussions: discussions.slice(0, 8).map((d) => ({
-        id: String(d._id),
-        title: d.title || d.discussion_title || 'Discussion',
-        comments: d.comments?.length || 0,
-        authorId: d.user_id,
-      })),
-    };
-  } catch {
-    return { available: false };
-  }
+  return client ? client.db('ensemble') : null;
 }
 
-function buildPlatformAlerts(members, forum, pendingCount, suspendedCount, liveModules = {}) {
-  const alerts = [];
-  const unverified = members.filter((m) => m.verification === 'Unverified').length;
+/**
+ * Whole-collection aggregates (the old version summed the 30 newest groups and called it a
+ * total). Banned group members and deleted comments are not counted.
+ */
+async function fetchCommunityStats({ from, to, prevFrom, prevTo }) {
+  const db = await forumDb();
+  if (!db) return null;
 
-  if (pendingCount > 0) {
-    alerts.push({
-      id: 'pending',
-      message: `${pendingCount} member(s) awaiting verification or approval.`,
-      severity: 'warning',
-    });
-  }
-  if (suspendedCount > 0) {
-    alerts.push({
-      id: 'suspended',
-      message: `${suspendedCount} suspended member account(s) on the platform.`,
-      severity: 'warning',
-    });
-  }
-  if ((liveModules.openTickets || 0) > 0) {
-    alerts.push({
-      id: 'tickets',
-      message: `${liveModules.openTickets} open support ticket(s) need attention.`,
-      severity: 'warning',
-    });
-  }
-  if ((liveModules.openReports || 0) + (liveModules.openDisputes || 0) > 0) {
-    alerts.push({
-      id: 'moderation',
-      message: `${liveModules.openReports || 0} open report(s) and ${liveModules.openDisputes || 0} open dispute(s).`,
-      severity: 'warning',
-    });
-  }
-  if (unverified > members.length * 0.3 && members.length > 0) {
-    alerts.push({
-      id: 'identity',
-      message: `${unverified} members have incomplete identity verification.`,
-      severity: 'info',
-    });
-  }
-  if (!forum.available) {
-    alerts.push({
-      id: 'forum-off',
-      message: 'Community forum data is offline — community metrics may be incomplete.',
-      severity: 'info',
-    });
-  }
-  if (alerts.length === 0) {
-    alerts.push({
-      id: 'healthy',
-      message: 'Platform metrics look stable from the latest scan.',
-      severity: 'success',
-    });
-  }
-  return alerts.slice(0, 5);
-}
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  end.setDate(end.getDate() + 1);
+  const prevStart = prevFrom ? new Date(`${prevFrom}T00:00:00`) : null;
+  const prevEnd = prevTo ? new Date(`${prevTo}T00:00:00`) : null;
+  if (prevEnd) prevEnd.setDate(prevEnd.getDate() + 1);
+  const inRange = (field) => ({ [field]: { $gte: start, $lt: end } });
 
-function computeEngagementScore(members, forum, profileRate) {
-  let score = 0;
-  if (members.length > 0) score += 25;
-  score += Math.min(25, Math.round(profileRate * 0.25));
-  if (forum.available) {
-    if (forum.groups.total > 0) score += 20;
-    if (forum.discussions.total > 0) score += 20;
-    score += Math.min(10, forum.discussions.avgComments * 2);
-  }
-  const activeRate = members.length
-    ? members.filter((m) => m.status === 'Active').length / members.length
-    : 0;
-  score += Math.round(activeRate * 20);
-  return Math.min(100, score);
-}
-
-async function getAnalyticsOverview() {
-  const [
-    members,
-    staffRoles,
-    signupTrend,
-    accountCounts,
-    forum,
-    liveModules,
-    creditTotals,
-    pendingVerify,
-    activityTrend,
-    platformEconomy,
-    signupsByMonth,
-    emailDomains,
-  ] = await Promise.all([
-      fetchPlatformMembers(),
-      fetchStaffSummary(),
-      fetchSignupTrend(),
-      pool.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE type = 'User' AND deleted_at IS NULL)::int AS users,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'active' AND type = 'User' AND deleted_at IS NULL)::int AS active_users,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) != 'active' AND type = 'User' AND deleted_at IS NULL)::int AS non_active_users,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) LIKE '%suspend%' AND type = 'User' AND deleted_at IS NULL)::int AS suspended_users,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) LIKE '%ban%' AND type = 'User' AND deleted_at IS NULL)::int AS banned_users
-      FROM accounts
-    `),
-      fetchForumPlatformStats(),
-      fetchLiveModuleCounts(),
-      pool
-        .query(
-          `
-        SELECT COALESCE(SUM(w.balance_credits), 0)::bigint AS credits
-        FROM wallets w
-        WHERE w.type = 'account wallets'
-      `
-        )
-        .catch(() => ({ rows: [{ credits: 0 }] })),
-      pool
-        .query(
-          `
-        SELECT COUNT(*)::int AS c
-        FROM verifications v
-        LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
-        WHERE COALESCE(v.is_verified, FALSE) = FALSE
-          AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN (
-            'pending', 'pending review', 'reverification_required'
-          )
-      `
-        )
-        .catch(() => ({ rows: [{ c: 0 }] })),
-      fetchActivityTrend(),
-      fetchPlatformEconomyDetails(),
-      fetchSignupByMonth(),
-      pool
-        .query(`
-          SELECT LOWER(SPLIT_PART(email_address, '@', 2)) AS domain, COUNT(*)::int AS count
-          FROM users GROUP BY domain ORDER BY count DESC LIMIT 6
-        `)
-        .then((r) => r.rows.map((d) => ({ domain: d.domain, count: d.count }))),
-    ]);
-
-  const counts = accountCounts.rows[0];
-  const totalMembers = members.length;
-  const activeMembers = members.filter((m) => m.status === 'Active').length;
-  const verifiedMembers = members.filter((m) => m.verification === 'Fully verified').length;
-  const pendingMembers = Number(pendingVerify.rows[0]?.c || 0);
-  const pendingFromDirectory = members.filter((m) => m.verification === 'Pending review').length;
-  const pendingVerifications = Math.max(pendingMembers, pendingFromDirectory);
-  const suspendedMembers = Number(counts.suspended_users);
-  const bannedMembers = Number(counts.banned_users || 0);
-
-  const withAvatar = members.filter((m) => m.hasAvatar).length;
-  const withTagline = members.filter((m) => m.hasTagline).length;
-  const profileCompleteRate = totalMembers
-    ? Math.round(((withAvatar + withTagline) / (totalMembers * 2)) * 100)
-    : 0;
-
-  const memberCredits = members.reduce((s, m) => s + m.credits, 0);
-  const totalCredits = Math.max(Number(creditTotals.rows[0]?.credits || 0), memberCredits);
-
-  const lastWeek = signupTrend.length ? signupTrend[signupTrend.length - 1].newMembers : 0;
-  const prevWeek = signupTrend.length > 1 ? signupTrend[signupTrend.length - 2].newMembers : lastWeek;
-  const growthPercent =
-    prevWeek > 0 ? Math.round(((lastWeek - prevWeek) / prevWeek) * 100) : lastWeek > 0 ? 100 : 0;
-
-  const engagementScore = computeEngagementScore(members, forum, profileCompleteRate);
-
-  const estimatedMau = Math.max(0, Math.round(totalMembers * 0.62));
-  const estimatedWau = Math.max(0, Math.round(totalMembers * 0.27));
-  const estimatedDau = Math.max(0, Math.round(totalMembers * 0.11));
-
-  const participationRate =
-    forum.available && totalMembers > 0
-      ? Math.min(100, Math.round((forum.groups.totalMembers / totalMembers) * 100))
-      : null;
-
-  const engagementTrend = buildEngagementTrend(signupTrend, totalMembers);
-  const creditBuckets = buildCreditBuckets(members);
-  const groupSizeDistribution = forum.available
-    ? buildGroupSizeDistribution(forum.allGroupsMemberCounts || [])
-    : [];
-
-  const platformActivity = [
-    { label: 'Tickets', value: liveModules.tickets, color: '#60a5fa' },
-    { label: 'Open tickets', value: liveModules.openTickets, color: '#fb7185' },
-    { label: 'Reports', value: liveModules.reports, color: '#fbbf24' },
-    { label: 'Disputes', value: liveModules.disputes, color: '#a78bfa' },
-    { label: 'Listings', value: liveModules.marketplaceListings, color: '#34d399' },
-    { label: 'Credit tx', value: liveModules.creditTransactions, color: '#f472b6' },
-    { label: 'Teams', value: liveModules.teams, color: '#38bdf8' },
-    { label: 'Violations', value: liveModules.violations, color: '#f87171' },
-  ].filter((x) => x.value > 0);
-
-  const listingStatusMix = [
-    { label: 'Pending', value: liveModules.pendingListings, color: '#fbbf24' },
-    { label: 'Approved', value: liveModules.approvedListings, color: '#34d399' },
-    {
-      label: 'Other',
-      value: Math.max(
-        0,
-        liveModules.marketplaceListings - liveModules.pendingListings - liveModules.approvedListings
-      ),
-      color: '#71717a',
-    },
-  ].filter((x) => x.value > 0);
-
-  const verificationChart = [
-    { label: 'Fully verified', value: members.filter((m) => m.verification === 'Fully verified').length, color: '#34d399' },
-    { label: 'Partial', value: members.filter((m) => m.verification === 'Partially verified').length, color: '#fbbf24' },
-    { label: 'Unverified', value: members.filter((m) => m.verification === 'Unverified').length, color: '#71717a' },
-    { label: 'Pending', value: members.filter((m) => m.verification === 'Pending review').length, color: '#f87171' },
-  ].filter((x) => x.value > 0);
-
-  const statusChart = [
-    { label: 'Active', value: activeMembers, color: '#34d399' },
-    { label: 'Suspended', value: suspendedMembers, color: '#fbbf24' },
-    { label: 'Banned', value: bannedMembers, color: '#f87171' },
-    { label: 'Other', value: Math.max(0, totalMembers - activeMembers - suspendedMembers - bannedMembers), color: '#a1a1aa' },
-  ].filter((x) => x.value > 0);
-
-  return {
-    lastUpdated: new Date().toISOString(),
-    kpis: {
-      totalMembers,
-      activeMembers,
-      newMembersThisWeek: lastWeek,
-      memberGrowthPercent: growthPercent,
-      verifiedMembersPercent: totalMembers ? Math.round((verifiedMembers / totalMembers) * 100) : 0,
-      profileCompletePercent: profileCompleteRate,
-      engagementScore,
-      estimatedDau,
-      estimatedWau,
-      estimatedMau,
-      forumGroups: forum.available ? forum.groups.total : null,
-      forumDiscussions: forum.available ? forum.discussions.total : null,
-      totalCreditsInCirculation: totalCredits,
-      moderationTeamSize: staffRoles.reduce((s, r) => s + r.count, 0),
-      pendingVerifications,
-      openTickets: liveModules.openTickets,
-      ticketRatings: liveModules.ticketRatings || 0,
-      ticketSatisfaction: liveModules.ticketSatisfaction ?? null,
-      openReports: liveModules.openReports,
-      openDisputes: liveModules.openDisputes,
-      teams: liveModules.teams,
-      marketplaceListings: liveModules.marketplaceListings,
-    },
-    alerts: buildPlatformAlerts(members, forum, pendingVerifications, suspendedMembers, liveModules),
-    growth: {
-      signupsByWeek: signupTrend,
-      signupsByMonth,
-      engagementTrend,
-      activityTrend,
-      weekOverWeekChange: growthPercent,
-      trendLabel:
-        growthPercent > 10 ? 'Growing' : growthPercent < -5 ? 'Declining' : 'Stable',
-      newestMembers: members.slice(0, 8).map((m) => ({
-        id: m.id,
-        name: m.name,
-        username: m.username,
-        joinedAt: m.joinedAt,
-        status: m.status,
-        verification: m.verification,
-      })),
-      retentionEstimate: Math.min(95, 60 + Math.round(activeMembers / Math.max(totalMembers, 1) * 35)),
-      avgSignupsPerWeek:
-        signupTrend.length > 0
-          ? Math.round(signupTrend.reduce((s, w) => s + w.newMembers, 0) / signupTrend.length)
-          : 0,
-    },
-    charts: {
-      verificationMix: verificationChart,
-      statusMix: statusChart,
-      creditBuckets,
-      groupSizeDistribution,
-      platformActivity,
-      listingStatusMix,
-    },
-    memberDirectory: members.map((m) => ({
-      id: m.id,
-      name: m.name,
-      username: m.username,
-      status: m.status,
-      verification: m.verification,
-      credits: m.credits,
-      joinedAt: m.joinedAt,
-      hasAvatar: m.hasAvatar,
-      hasTagline: m.hasTagline,
-    })),
-    audience: {
-      totalMembers,
-      activeMembers,
-      byStatus: ['Active', 'Suspended', 'Banned', 'Pending'].map((label) => ({
-        label,
-        count: members.filter((m) => m.status === label || (label === 'Pending' && m.status === 'Pending')).length,
-      })).filter((x) => x.count > 0 || x.label === 'Active'),
-      byVerification: {
-        fullyVerified: members.filter((m) => m.verification === 'Fully verified').length,
-        partiallyVerified: members.filter((m) => m.verification === 'Partially verified').length,
-        unverified: members.filter((m) => m.verification === 'Unverified').length,
-        pendingReview: members.filter((m) => m.verification === 'Pending review').length,
-      },
-      topMembers: [...members]
-        .sort((a, b) => b.credits - a.credits)
-        .slice(0, 10)
-        .map((m, i) => ({
-          rank: i + 1,
-          name: m.name,
-          username: m.username,
-          credits: m.credits,
-          status: m.status,
-        })),
-      profileHealth: {
-        withAvatar: withAvatar,
-        withTagline: withTagline,
-        avatarRate: totalMembers ? Math.round((withAvatar / totalMembers) * 100) : 0,
-        taglineRate: totalMembers ? Math.round((withTagline / totalMembers) * 100) : 0,
-        completeProfiles: members.filter((m) => m.hasAvatar && m.hasTagline).length,
-      },
-      emailDomains,
-    },
-    community: forum.available
-      ? {
-          available: true,
-          summary: forum.groups,
-          discussions: forum.discussions,
-          participationRate,
-          topGroups: forum.topGroups,
-          popularTags: forum.popularTags,
-          recentDiscussions: forum.recentDiscussions,
-        }
-      : {
-          available: false,
-          summary: null,
-          message: 'Forum community metrics unavailable right now.',
+  const [groupFacet] = await db
+    .collection('forum_groups')
+    .aggregate([
+      { $match: { deleted_at: null } },
+      {
+        $project: {
+          group_name: 1,
+          status: 1,
+          tags: { $ifNull: ['$tags', []] },
+          created: toDate('$created_at'),
+          memberCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ['$members', []] },
+                as: 'm',
+                cond: { $ne: ['$$m.is_banned', true] },
+              },
+            },
+          },
         },
-    economy: {
-      totalCreditsInCirculation: totalCredits,
-      avgCreditsPerMember: totalMembers ? Math.round(totalCredits / totalMembers) : 0,
-      creditLeaders: [...members]
-        .sort((a, b) => b.credits - a.credits)
-        .slice(0, 6)
-        .map((m) => ({ name: m.name, username: m.username, credits: m.credits })),
-      creditBuckets,
-      creditTransactions: liveModules.creditTransactions,
-      platformRevenue: platformEconomy.platformRevenue,
-      platformPayout: platformEconomy.platformPayout,
-      platformTransactions: platformEconomy.platformTransactions,
-      userTransactions: platformEconomy.userTransactions,
-      subscriptionAnalytics: platformEconomy.subscriptionAnalytics,
-      topupAnalytics: platformEconomy.topupAnalytics,
-    },
-    operations: {
-      moderationTeam: staffRoles,
-      activeModerators: staffRoles.reduce((s, r) => s + r.active, 0),
-      pendingVerifications,
-      suspendedAccounts: suspendedMembers,
-      bannedAccounts: bannedMembers,
-      nonActiveAccounts: Number(counts.non_active_users),
-      platformHealthScore: engagementScore,
-      openTickets: liveModules.openTickets,
-      ticketRatings: liveModules.ticketRatings || 0,
-      ticketSatisfaction: liveModules.ticketSatisfaction ?? null,
-      openReports: liveModules.openReports,
-      openDisputes: liveModules.openDisputes,
-      activeViolations: liveModules.activeViolations,
-      pendingListings: liveModules.pendingListings,
-    },
-    insights: buildInsights(members, forum, growthPercent, engagementScore, liveModules),
-    liveModules,
-    comingSoon: {
-      title: 'Metrics still estimated or awaiting session instrumentation',
-      modules: [
-        { name: 'Session analytics', metrics: 'DAU/WAU currently estimated from member base' },
-      ],
-    },
-  };
-}
+      },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+                memberships: { $sum: '$memberCount' },
+              },
+            },
+          ],
+          sizes: [
+            {
+              $bucket: {
+                groupBy: '$memberCount',
+                boundaries: [0, 1, 3, 6, 11, 51],
+                default: 'large',
+                output: { count: { $sum: 1 } },
+              },
+            },
+          ],
+          top: [
+            { $match: { status: 'active' } },
+            { $sort: { memberCount: -1, created: -1 } },
+            { $limit: 8 },
+            { $project: { group_name: 1, memberCount: 1, status: 1 } },
+          ],
+          tags: [
+            { $unwind: '$tags' },
+            {
+              $group: {
+                _id: {
+                  $toLower: {
+                    $ifNull: [{ $convert: { input: '$tags', to: 'string', onError: null, onNull: null } }, ''],
+                  },
+                },
+                count: { $sum: 1 },
+              },
+            },
+            { $match: { _id: { $ne: '' } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $limit: 10 },
+          ],
+          created: [{ $match: inRange('created') }, { $count: 'n' }],
+        },
+      },
+    ])
+    .toArray();
 
-async function fetchLiveModuleCounts() {
-  const [teams, listings, jobs, projects, tx, reports, disputes, tickets, violations] =
-    await Promise.all([
-      pool.query(`SELECT COUNT(*)::int AS c FROM teams`).catch(() => ({ rows: [{ c: 0 }] })),
-      pool
-        .query(
-          `
-      SELECT COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'pending')::int AS pending,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'approved')::int AS approved
-      FROM marketplace_listings
-    `
-        )
-        .catch(() => ({ rows: [{ total: 0, pending: 0, approved: 0 }] })),
-      pool.query(`SELECT COUNT(*)::int AS c FROM jobs`).catch(() => ({ rows: [{ c: 0 }] })),
-      pool.query(`SELECT COUNT(*)::int AS c FROM projects`).catch(() => ({ rows: [{ c: 0 }] })),
-      pool
-        .query(`SELECT COUNT(*)::int AS c FROM credit_transactions`)
-        .catch(() => ({ rows: [{ c: 0 }] })),
-      pool
-        .query(
-          `
-        SELECT COUNT(*)::int AS total,
-          COUNT(*) FILTER (
-            WHERE deleted_at IS NULL
-              AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
-          )::int AS open_count
-        FROM reports
-      `
-        )
-        .catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
-      pool
-        .query(
-          `
-        SELECT COUNT(*)::int AS total,
-          COUNT(*) FILTER (
-            WHERE status <> 'closed'
-          )::int AS open_count
-        FROM disputes
-      `
-        )
-        .catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
-      pool
-        .query(
-          `
-        SELECT COUNT(*)::int AS total,
-          COUNT(*) FILTER (
-            WHERE deleted_at IS NULL
-              AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')
-          )::int AS open_count,
-          COUNT(*) FILTER (WHERE satisfaction_score IS NOT NULL)::int AS rated_count,
-          ROUND(AVG(satisfaction_score)::numeric, 2) AS avg_satisfaction
-        FROM tickets
-      `
-        )
-        .catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
-      pool
-        .query(
-          `
-        SELECT COUNT(*)::int AS total,
-          COUNT(*) FILTER (
-            WHERE deleted_at IS NULL
-              AND LOWER(COALESCE(status, 'active')) IN ('active', 'open')
-              AND (expires_at IS NULL OR expires_at > NOW())
-          )::int AS active_count
-        FROM violations
-      `
-        )
-        .catch(() => ({ rows: [{ total: 0, active_count: 0 }] })),
-    ]);
+  const [discussionFacet] = await db
+    .collection('forum_discussions')
+    .aggregate([
+      { $match: { deleted_at: null } },
+      {
+        $project: {
+          title: 1,
+          user_id: 1,
+          created: toDate('$created_at'),
+          likes: { $size: { $ifNull: ['$likes', []] } },
+          comments: {
+            $filter: {
+              input: { $ifNull: ['$comments', []] },
+              as: 'c',
+              cond: { $eq: [{ $ifNull: ['$$c.deleted_at', null] }, null] },
+            },
+          },
+        },
+      },
+      {
+        $facet: {
+          total: [{ $count: 'n' }],
+          inRange: [{ $match: inRange('created') }, { $count: 'n' }],
+          previous: prevStart
+            ? [{ $match: { created: { $gte: prevStart, $lt: prevEnd } } }, { $count: 'n' }]
+            : [{ $match: { _id: { $exists: false } } }],
+          comments: [
+            { $unwind: '$comments' },
+            { $project: { c: toDate('$comments.created_at'), u: '$comments.user_id' } },
+            { $match: { c: { $gte: start, $lt: end } } },
+            { $group: { _id: '$u', n: { $sum: 1 } } },
+            { $group: { _id: null, n: { $sum: '$n' }, people: { $sum: 1 } } },
+          ],
+          posters: [
+            { $match: inRange('created') },
+            { $group: { _id: '$user_id' } },
+            { $count: 'n' },
+          ],
+          top: [
+            { $match: inRange('created') },
+            { $project: { title: 1, user_id: 1, created: 1, likes: 1, commentCount: { $size: '$comments' } } },
+            { $sort: { commentCount: -1, likes: -1, created: -1 } },
+            { $limit: 8 },
+          ],
+        },
+      },
+    ])
+    .toArray();
+
+  const first = (rows, key = 'n') => num(rows?.[0]?.[key]);
+  const totals = groupFacet?.totals?.[0] || {};
+  const groupTotal = num(totals.total);
+  const sizeCounts = new Map((groupFacet?.sizes || []).map((b) => [String(b._id), num(b.count)]));
+  const SIZE_BUCKETS = [
+    ['0', 'No members'],
+    ['1', '1–2'],
+    ['3', '3–5'],
+    ['6', '6–10'],
+    ['11', '11–50'],
+    ['large', '51+'],
+  ];
 
   return {
-    teams: Number(teams.rows[0].c),
-    marketplaceListings: Number(listings.rows[0].total),
-    pendingListings: Number(listings.rows[0].pending),
-    approvedListings: Number(listings.rows[0].approved),
-    jobs: Number(jobs.rows[0].c),
-    projects: Number(projects.rows[0].c),
-    creditTransactions: Number(tx.rows[0].c),
-    reports: Number(reports.rows[0].total),
-    openReports: Number(reports.rows[0].open_count),
-    disputes: Number(disputes.rows[0].total),
-    openDisputes: Number(disputes.rows[0].open_count),
-    tickets: Number(tickets.rows[0].total),
-    openTickets: Number(tickets.rows[0].open_count),
-    ticketRatings: Number(tickets.rows[0].rated_count || 0),
-    ticketSatisfaction: tickets.rows[0].avg_satisfaction == null ? null : Number(tickets.rows[0].avg_satisfaction),
-    violations: Number(violations.rows[0].total),
-    activeViolations: Number(violations.rows[0].active_count),
-  };
-}
-
-function buildInsights(members, forum, growth, engagement, liveModules = {}) {
-  const insights = [];
-
-  if (growth > 15) {
-    insights.push({
-      id: 'growth',
-      title: 'Strong signup momentum',
-      detail: `Member growth is up ${growth}% week over week. Consider onboarding campaigns.`,
-      type: 'positive',
-    });
-  } else if (growth < 0) {
-    insights.push({
-      id: 'growth-down',
-      title: 'Signup slowdown',
-      detail: 'New member signups declined versus last week. Review acquisition channels.',
-      type: 'warning',
-    });
-  }
-
-  const unverified = members.filter((m) => m.verification === 'Unverified').length;
-  if (unverified > 0) {
-    insights.push({
-      id: 'verify',
-      title: 'Verification opportunity',
-      detail: `${unverified} members could be nudged to complete identity and payment setup.`,
-      type: 'info',
-    });
-  }
-
-  if (forum.available && forum.discussions.total > 0) {
-    insights.push({
-      id: 'forum',
-      title: 'Community activity',
-      detail: `${forum.discussions.total} discussions across ${forum.groups.total} groups — monitor engagement quality.`,
-      type: 'info',
-    });
-  }
-
-  if ((liveModules.openTickets || 0) > 5) {
-    insights.push({
-      id: 'tickets',
-      title: 'Support backlog',
-      detail: `${liveModules.openTickets} open tickets and ${liveModules.openDisputes || 0} open disputes are in the queue.`,
-      type: 'warning',
-    });
-  }
-
-  if ((liveModules.pendingListings || 0) > 0) {
-    insights.push({
-      id: 'listings',
-      title: 'Marketplace review queue',
-      detail: `${liveModules.pendingListings} marketplace listing(s) awaiting approval.`,
-      type: 'info',
-    });
-  }
-
-  if (engagement >= 70) {
-    insights.push({
-      id: 'engage',
-      title: 'Healthy engagement',
-      detail: `Platform engagement score is ${engagement}/100 based on members, profiles, and community data.`,
-      type: 'positive',
-    });
-  }
-
-  return insights.slice(0, 6);
-}
-
-async function fetchPlatformEconomyDetails() {
-  const pwRes = await pool.query(`
-    SELECT wallet_id, balance_credits, frozen_balance_credits, status
-    FROM wallets
-    WHERE type = 'platform wallets'
-    LIMIT 1
-  `);
-  const platformWallet = pwRes.rows[0] || null;
-  const platformWalletId = platformWallet?.wallet_id || null;
-
-  const [
-    feesRes,
-    cashoutStatsRes,
-    paymentsStatsRes,
-    platformTxRes,
-    userTxRes,
-    recentCashoutsRes,
-    plansRes,
-    subsStatsRes,
-    invoicesRes,
-    userSubsRes,
-    topupStatsRes,
-    topupTxRes,
-  ] = await Promise.all([
-    pool.query(`
-      SELECT
-        type,
-        status,
-        COUNT(*)::int AS count,
-        COALESCE(SUM(amount_credits), 0)::bigint AS total_credits
-      FROM credit_transactions
-      WHERE destination_wallet_id = $1
-         OR type IN ('Fee', 'Job Posting Fee', 'Proposal Fee')
-      GROUP BY type, status
-    `, [platformWalletId]).catch(() => ({ rows: [] })),
-
-    pool.query(`
-      SELECT
-        status,
-        COUNT(*)::int AS count,
-        COALESCE(SUM(amount_credits), 0)::bigint AS total_credits,
-        COALESCE(SUM(fee_php_cents), 0)::bigint AS total_fee_cents,
-        COALESCE(SUM(net_amount_php_cents), 0)::bigint AS total_net_cents
-      FROM cashouts
-      GROUP BY status
-    `).catch(() => ({ rows: [] })),
-
-    pool.query(`
-      SELECT
-        payment_type,
-        status,
-        COUNT(*)::int AS count,
-        COALESCE(SUM(amount), 0)::numeric(12,2) AS total_amount,
-        COALESCE(SUM(credits), 0)::bigint AS total_credits
-      FROM payments
-      GROUP BY payment_type, status
-    `).catch(() => ({ rows: [] })),
-
-    pool.query(`
-      SELECT
-        ct.credit_transaction_id AS id,
-        CASE
-          WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN ct.type
-          WHEN ct.reference_table = 'payments' OR p.payment_type = 'TOPUP' THEN 'Top-up Grant'
-          ELSE ct.type
-        END AS type,
-        ct.amount_credits AS "amountCredits",
-        ct.status,
-        ct.created_at AS "createdAt",
-        ct.reference_table AS "referenceTable",
-        ct.reference_id AS "referenceId",
-        p.amount::numeric(10,2) AS "fiatAmountPhp",
-        p.channel_code AS "fiatChannelCode",
-        CASE
-          WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN 'inflow'
-          WHEN ct.reference_table = 'payments' OR p.payment_type = 'TOPUP' THEN 'inflow'
-          WHEN ct.destination_wallet_id = $1 THEN 'inflow'
-          WHEN ct.source_wallet_id = $1 THEN 'outflow'
-          ELSE 'inflow'
-        END AS direction,
-        CASE
-          WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN ct.amount_credits
-          WHEN ct.destination_wallet_id = $1 THEN ct.amount_credits
-          ELSE 0
-        END AS "revenueCredits",
-        CASE
-          WHEN ct.destination_wallet_id = $1 THEN
-            COALESCE(sa.display_name, sa.handle, 'System')
-          ELSE
-            COALESCE(da.display_name, da.handle, 'System')
-        END AS "counterpartyName",
-        CASE
-          WHEN ct.destination_wallet_id = $1 THEN sa.handle
-          ELSE da.handle
-        END AS "counterpartyHandle",
-        CASE
-          WHEN ct.destination_wallet_id = $1 THEN COALESCE(sa.type, 'User')
-          ELSE COALESCE(da.type, 'User')
-        END AS "counterpartyType"
-      FROM credit_transactions ct
-      LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-      LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-      LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-      LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-      LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-      LEFT JOIN accounts da ON da.account_id = daw.account_id
-      LEFT JOIN payments p ON (ct.reference_table = 'payments' AND ct.reference_id = p.id)
-      WHERE ct.source_wallet_id = $1
-         OR ct.destination_wallet_id = $1
-         OR ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee')
-      ORDER BY ct.created_at DESC
-      LIMIT 100
-    `, [platformWalletId]).catch(() => ({ rows: [] })),
-
-    pool.query(`
-      SELECT
-        ct.credit_transaction_id AS id,
-        ct.type,
-        ct.amount_credits AS "amountCredits",
-        ct.status,
-        ct.created_at AS "createdAt",
-        ct.reference_table AS "referenceTable",
-        ct.reference_id AS "referenceId",
-        ct.fee_transaction_id AS "feeTransactionId",
-        sw.type AS "sourceWalletType",
-        dw.type AS "destWalletType",
-        COALESCE(sa.display_name, sa.handle, CASE WHEN sw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "sourceName",
-        sa.handle AS "sourceHandle",
-        COALESCE(sa.type, 'User') AS "sourceType",
-        COALESCE(da.display_name, da.handle, CASE WHEN dw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "destinationName",
-        da.handle AS "destinationHandle",
-        COALESCE(da.type, 'User') AS "destinationType"
-      FROM credit_transactions ct
-      LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-      LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-      LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-      LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-      LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-      LEFT JOIN accounts da ON da.account_id = daw.account_id
-      WHERE sw.type = 'account wallets'
-         OR dw.type = 'account wallets'
-      ORDER BY ct.created_at DESC
-      LIMIT 100
-    `).catch(() => ({ rows: [] })),
-
-    pool.query(`
-      SELECT
-        c.cashout_id AS id,
-        c.reference_id AS "referenceId",
-        c.xendit_channel_code AS "channelCode",
-        c.account_no AS "accountNo",
-        c.account_name AS "accountName",
-        c.amount_credits AS "amountCredits",
-        (c.fee_php_cents / 100.0)::numeric(10,2) AS "feePhp",
-        (c.net_amount_php_cents / 100.0)::numeric(10,2) AS "netAmountPhp",
-        c.status,
-        c.created_at AS "createdAt",
-        COALESCE(a.display_name, a.handle, 'User') AS "userName",
-        a.handle AS "userHandle"
-      FROM cashouts c
-      LEFT JOIN users u ON u.user_id = c.user_id
-      LEFT JOIN accounts a ON a.account_id = u.account_id
-      ORDER BY c.created_at DESC
-      LIMIT 50
-    `).catch(() => ({ rows: [] })),
-
-    // Subscription Plans
-    pool.query(`
-      SELECT plan_id, name, description, billing_period, (amount_php_cents / 100.0)::numeric(10,2) AS amount_php, days_of_trials
-      FROM plans
-      WHERE deleted_at IS NULL
-      ORDER BY amount_php_cents ASC
-    `).catch(() => ({ rows: [] })),
-
-    // Subscription Stats
-    pool.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active' AND LOWER(p.name) != 'free')::int AS active_paid_subscribers,
-        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active')::int AS total_active_subscriptions,
-        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active' AND LOWER(p.name) != 'free' AND s.cancel_at_period_end = FALSE)::int AS recurring_members,
-        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active' AND LOWER(p.name) != 'free' AND s.cancel_at_period_end = TRUE)::int AS canceling_members,
-        COUNT(*) FILTER (WHERE LOWER(p.name) = 'free' OR s.subscription_id IS NULL)::int AS free_members
-      FROM subscriptions s
-      JOIN plans p ON p.plan_id = s.plan_id
-    `).catch(() => ({ rows: [{ active_paid_subscribers: 0, total_active_subscriptions: 0, recurring_members: 0, canceling_members: 0, free_members: 0 }] })),
-
-    // Subscription Invoices (Platform Subscription Transactions)
-    pool.query(`
-      SELECT
-        si.subscription_invoice_id AS id,
-        si.subscription_id AS "subscriptionId",
-        p.name AS "planName",
-        (si.amount_php_cents / 100.0)::numeric(10,2) AS "amountPhp",
-        si.status,
-        si.paid_at AS "paidAt",
-        si.billing_period_start AS "periodStart",
-        si.billing_period_end AS "periodEnd",
-        si.created_at AS "createdAt",
-        COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'Unknown') AS "subscriberName",
-        a.handle AS "subscriberHandle",
-        u.email_address AS "subscriberEmail"
-      FROM subscription_invoices si
-      JOIN subscriptions s ON s.subscription_id = si.subscription_id
-      JOIN plans p ON p.plan_id = s.plan_id
-      JOIN users u ON u.user_id = s.user_id
-      JOIN accounts a ON a.account_id = u.account_id
-      ORDER BY si.created_at DESC
-      LIMIT 100
-    `).catch(() => ({ rows: [] })),
-
-    // All Users with Subscription Status (Subscribed vs Not Subscribed)
-    pool.query(`
-      SELECT
-        u.user_id AS "userId",
-        COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'Unknown') AS name,
-        a.handle AS username,
-        u.email_address AS email,
-        a.created_at AS "joinedAt",
-        s.subscription_id AS "subscriptionId",
-        COALESCE(s.status, 'INACTIVE') AS "subscriptionStatus",
-        COALESCE(p.name, 'Free') AS "planName",
-        p.plan_id AS "planId",
-        COALESCE((p.amount_php_cents / 100.0)::numeric(10,2), 0) AS "planAmountPhp",
-        COALESCE(p.billing_period, 'MONTH') AS "billingPeriod",
-        CASE
-          WHEN s.subscription_id IS NOT NULL AND LOWER(s.status) = 'active' AND LOWER(COALESCE(p.name, '')) != 'free' THEN TRUE
-          ELSE FALSE
-        END AS "isSubscribed",
-        CASE
-          WHEN s.subscription_id IS NOT NULL AND LOWER(s.status) = 'active' AND LOWER(COALESCE(p.name, '')) != 'free' AND s.cancel_at_period_end = FALSE THEN TRUE
-          ELSE FALSE
-        END AS recurring,
-        s.current_period_start AS "currentPeriodStart",
-        s.current_period_end AS "currentPeriodEnd",
-        s.next_billing_at AS "nextBillingAt",
-        COALESCE((
-          SELECT (SUM(amount_php_cents) / 100.0)::numeric(10,2)
-          FROM subscription_invoices inv
-          WHERE inv.subscription_id = s.subscription_id AND LOWER(inv.status) = 'paid'
-        ), 0) AS "totalSpentPhp"
-      FROM users u
-      JOIN accounts a ON a.account_id = u.account_id
-      LEFT JOIN LATERAL (
-        SELECT *
-        FROM subscriptions sub
-        WHERE sub.user_id = u.user_id
-        ORDER BY
-          CASE WHEN LOWER(sub.status) = 'active' THEN 0 ELSE 1 END,
-          sub.created_at DESC
-        LIMIT 1
-      ) s ON TRUE
-      LEFT JOIN plans p ON p.plan_id = s.plan_id
-      WHERE a.deleted_at IS NULL
-      ORDER BY "isSubscribed" DESC, a.created_at DESC
-    `).catch(() => ({ rows: [] })),
-
-    // Top-up Stats
-    pool.query(`
-      SELECT
-        COUNT(*)::int AS "totalCount",
-        COUNT(*) FILTER (WHERE LOWER(status) = 'paid')::int AS "paidCount",
-        COALESCE(SUM(amount) FILTER (WHERE LOWER(status) = 'paid'), 0)::numeric(12,2) AS "totalPaidPhp",
-        COALESCE(SUM(credits) FILTER (WHERE LOWER(status) = 'paid'), 0)::bigint AS "totalCreditsIssued"
-      FROM payments
-      WHERE payment_type = 'TOPUP'
-    `).catch(() => ({ rows: [{ totalCount: 0, paidCount: 0, totalPaidPhp: 0, totalCreditsIssued: 0 }] })),
-
-    // Top-up Transactions
-    pool.query(`
-      SELECT
-        p.id,
-        p.reference_id AS "referenceId",
-        p.payment_id AS "paymentId",
-        p.channel_code AS "channelCode",
-        p.amount::numeric(10,2) AS "amountPhp",
-        p.credits AS "creditsGranted",
-        p.currency,
-        p.status,
-        p.description,
-        p.created_at AS "createdAt",
-        p.processed_at AS "processedAt",
-        COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'User') AS "userName",
-        a.handle AS "userHandle",
-        u.email_address AS "userEmail",
-        ct.credit_transaction_id AS "creditTransactionId"
-      FROM payments p
-      LEFT JOIN users u ON u.user_id = p.user_id
-      LEFT JOIN accounts a ON a.account_id = u.account_id
-      LEFT JOIN credit_transactions ct ON ct.reference_table = 'payments' AND ct.reference_id = p.id
-      WHERE p.payment_type = 'TOPUP'
-      ORDER BY p.created_at DESC
-      LIMIT 100
-    `).catch(() => ({ rows: [] }))
-  ]);
-
-  let milestoneFeesCredits = 0;
-  let jobPostingFeesCredits = 0;
-  let proposalFeesCredits = 0;
-  let escrowHeldCredits = 0;
-  let otherFeesCredits = 0;
-
-  for (const r of feesRes.rows) {
-    const credits = Number(r.total_credits || 0);
-    const type = String(r.type || '').toLowerCase();
-    const status = String(r.status || '').toLowerCase();
-
-    if (type === 'fee') {
-      if (status === 'completed') milestoneFeesCredits += credits;
-    } else if (type === 'job posting fee') {
-      if (status === 'completed') jobPostingFeesCredits += credits;
-    } else if (type === 'proposal fee') {
-      if (status === 'completed') proposalFeesCredits += credits;
-    } else if (type === 'escrow hold') {
-      if (status === 'held') escrowHeldCredits += credits;
-    } else if (status === 'completed') {
-      otherFeesCredits += credits;
-    }
-  }
-
-  const totalFeeCredits = milestoneFeesCredits + jobPostingFeesCredits + proposalFeesCredits + otherFeesCredits;
-
-  let totalPayoutCredits = 0;
-  let totalPayoutPhp = 0;
-  let cashoutFeesPhp = 0;
-  let pendingPayoutCredits = 0;
-  let pendingPayoutPhp = 0;
-  let failedPayoutCredits = 0;
-  let failedPayoutPhp = 0;
-
-  let succeededCount = 0;
-  let pendingCount = 0;
-  let failedCount = 0;
-
-  for (const r of cashoutStatsRes.rows) {
-    const status = String(r.status || '').toUpperCase();
-    const count = Number(r.count || 0);
-    const credits = Number(r.total_credits || 0);
-    const netPhp = Number(r.total_net_cents || 0) / 100.0;
-    const feePhp = Number(r.total_fee_cents || 0) / 100.0;
-
-    if (status === 'SUCCEEDED' || status === 'COMPLETED') {
-      succeededCount += count;
-      totalPayoutCredits += credits;
-      totalPayoutPhp += netPhp;
-      cashoutFeesPhp += feePhp;
-    } else if (status === 'PENDING' || status === 'PROCESSING') {
-      pendingCount += count;
-      pendingPayoutCredits += credits;
-      pendingPayoutPhp += netPhp;
-    } else if (status === 'FAILED' || status === 'REJECTED') {
-      failedCount += count;
-      failedPayoutCredits += credits;
-      failedPayoutPhp += netPhp;
-    }
-  }
-
-  const totalPayoutCount = succeededCount + pendingCount + failedCount;
-  const avgPayoutPhp = succeededCount > 0 ? Math.round((totalPayoutPhp / succeededCount) * 100) / 100 : 0;
-
-  let topupRevenuePhp = 0;
-  let subscriptionRevenuePhp = 0;
-  let pendingPaymentsPhp = 0;
-
-  for (const r of paymentsStatsRes.rows) {
-    const type = String(r.payment_type || '').toUpperCase();
-    const status = String(r.status || '').toUpperCase();
-    const amount = Number(r.total_amount || 0);
-
-    if (status === 'PAID' || status === 'COMPLETED') {
-      if (type === 'TOPUP') topupRevenuePhp += amount;
-      else if (type === 'SUBSCRIPTION') subscriptionRevenuePhp += amount;
-    } else if (status === 'PENDING') {
-      pendingPaymentsPhp += amount;
-    }
-  }
-
-  // Add paid invoices to subscription revenue if payments table didn't record them
-  const invoicePaidPhp = invoicesRes.rows
-    .filter((inv) => String(inv.status).toLowerCase() === 'paid')
-    .reduce((sum, inv) => sum + Number(inv.amountPhp || 0), 0);
-
-  const effectiveSubscriptionRevenuePhp = Math.max(subscriptionRevenuePhp, invoicePaidPhp);
-  const totalRevenuePhp = topupRevenuePhp + effectiveSubscriptionRevenuePhp + cashoutFeesPhp;
-
-  const subsStats = subsStatsRes.rows[0] || {
-    active_paid_subscribers: 0,
-    total_active_subscriptions: 0,
-    recurring_members: 0,
-    canceling_members: 0,
-    free_members: 0,
-  };
-
-  const subscriptionAnalytics = {
-    summary: {
-      activePaidSubscribers: Number(subsStats.active_paid_subscribers || 0),
-      totalActiveSubscriptions: Number(subsStats.total_active_subscriptions || 0),
-      recurringMembers: Number(subsStats.recurring_members || 0),
-      cancelingMembers: Number(subsStats.canceling_members || 0),
-      freeMembers: Number(subsStats.free_members || 0),
-      subscriptionPlatformEarnPhp: Math.round(effectiveSubscriptionRevenuePhp * 100) / 100,
-      availablePlans: plansRes.rows.map((p) => ({
-        planId: p.plan_id,
-        name: p.name,
-        amountPhp: Number(p.amount_php || 0),
-        billingPeriod: p.billing_period,
+    groups: {
+      total: groupTotal,
+      active: num(totals.active),
+      inactive: Math.max(0, groupTotal - num(totals.active)),
+      memberships: num(totals.memberships),
+      averageSize: groupTotal ? Math.round((num(totals.memberships) / groupTotal) * 10) / 10 : 0,
+      createdInPeriod: first(groupFacet?.created),
+      sizeDistribution: SIZE_BUCKETS.map(([key, label]) => ({ label, count: sizeCounts.get(key) || 0 })),
+      top: (groupFacet?.top || []).map((g) => ({
+        id: String(g._id),
+        name: g.group_name || 'Unnamed group',
+        members: num(g.memberCount),
+        status: g.status || 'unknown',
+      })),
+      tags: (groupFacet?.tags || []).map((t) => ({ tag: t._id, count: num(t.count) })),
+    },
+    discussions: {
+      total: first(discussionFacet?.total),
+      inPeriod: first(discussionFacet?.inRange),
+      previous: prevStart ? first(discussionFacet?.previous) : null,
+      commentsInPeriod: first(discussionFacet?.comments),
+      commentersInPeriod: first(discussionFacet?.comments, 'people'),
+      postersInPeriod: first(discussionFacet?.posters),
+      top: (discussionFacet?.top || []).map((d) => ({
+        id: String(d._id),
+        title: d.title || 'Untitled discussion',
+        authorId: d.user_id ? String(d.user_id) : null,
+        comments: num(d.commentCount),
+        likes: num(d.likes),
+        createdAt: d.created || null,
       })),
     },
-    transactions: invoicesRes.rows,
-    userSubscriptions: userSubsRes.rows,
-  };
-
-  return {
-    platformRevenue: {
-      platformWalletBalance: Number(platformWallet?.balance_credits || 0),
-      platformWalletStatus: platformWallet?.status || 'active',
-      totalRevenueCredits: totalFeeCredits,
-      totalRevenuePhp: Math.round(totalRevenuePhp * 100) / 100,
-      milestoneFeesCredits,
-      jobPostingFeesCredits,
-      proposalFeesCredits,
-      otherFeesCredits,
-      cashoutFeesPhp: Math.round(cashoutFeesPhp * 100) / 100,
-      subscriptionRevenuePhp: Math.round(effectiveSubscriptionRevenuePhp * 100) / 100,
-      topupRevenuePhp: Math.round(topupRevenuePhp * 100) / 100,
-      escrowHeldCredits,
-      pendingPaymentsPhp: Math.round(pendingPaymentsPhp * 100) / 100,
-    },
-    platformPayout: {
-      totalPayoutCredits,
-      totalPayoutPhp: Math.round(totalPayoutPhp * 100) / 100,
-      pendingPayoutCredits,
-      pendingPayoutPhp: Math.round(pendingPayoutPhp * 100) / 100,
-      failedPayoutCredits,
-      failedPayoutPhp: Math.round(failedPayoutPhp * 100) / 100,
-      payoutCounts: {
-        total: totalPayoutCount,
-        succeeded: succeededCount,
-        pending: pendingCount,
-        failed: failedCount,
-      },
-      averagePayoutPhp: avgPayoutPhp,
-      recentCashouts: recentCashoutsRes.rows,
-    },
-    platformTransactions: platformTxRes.rows,
-    userTransactions: userTxRes.rows,
-    subscriptionAnalytics,
-    topupAnalytics: {
-      summary: {
-        totalCount: Number(topupStatsRes.rows[0]?.totalCount || 0),
-        paidCount: Number(topupStatsRes.rows[0]?.paidCount || 0),
-        totalPaidPhp: Number(topupStatsRes.rows[0]?.totalPaidPhp || 0),
-        totalCreditsIssued: Number(topupStatsRes.rows[0]?.totalCreditsIssued || 0),
-      },
-      transactions: topupTxRes.rows,
-    },
   };
 }
 
-async function fetchPlatformTransactionsList({ page = 1, limit = 50, type, status, search, direction } = {}) {
-  const pwRes = await pool.query("SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1");
-  const platformWalletId = pwRes.rows[0]?.wallet_id;
-  if (!platformWalletId) return { items: [], total: 0, page, limit };
-
-  const conditions = [
-    `(ct.source_wallet_id = $1 OR ct.destination_wallet_id = $1 OR ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee'))`
-  ];
-  const params = [platformWalletId];
-  let pIdx = 2;
-
-  if (type && type !== 'all') {
-    conditions.push(`LOWER(ct.type) = LOWER($${pIdx})`);
-    params.push(type);
-    pIdx++;
+/** Forum author ids are member user ids or account ids; resolves either to a display name. */
+async function fetchAuthorNames(ids) {
+  const unique = [...new Set(ids.filter(Boolean).map(String))].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  if (!unique.length) return new Map();
+  const result = await pool.query(
+    `
+    SELECT u.user_id::text AS user_id, a.account_id::text AS account_id, a.handle, a.display_name
+    FROM accounts a
+    LEFT JOIN users u ON u.account_id = a.account_id
+    WHERE a.account_id::text = ANY($1::text[]) OR u.user_id::text = ANY($1::text[])
+    `,
+    [unique]
+  );
+  const names = new Map();
+  for (const r of result.rows) {
+    const value = { name: r.display_name || r.handle || 'Member', handle: r.handle || null };
+    if (r.user_id) names.set(r.user_id, value);
+    names.set(r.account_id, value);
   }
+  return names;
+}
 
-  if (status && status !== 'all') {
-    conditions.push(`LOWER(ct.status::text) = LOWER($${pIdx})`);
-    params.push(status);
-    pIdx++;
-  }
+// ── Finance lists (server-paged, also used for CSV export) ──────────────────
 
-  if (direction && direction !== 'all') {
-    if (direction === 'inflow') {
-      conditions.push(`(ct.destination_wallet_id = $1 OR ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee'))`);
-    } else if (direction === 'outflow') {
-      conditions.push(`ct.source_wallet_id = $1`);
-    }
-  }
-
-  if (search && search.trim()) {
-    conditions.push(`(
-      ct.credit_transaction_id::text ILIKE $${pIdx} OR
-      COALESCE(sa.handle, '') ILIKE $${pIdx} OR
-      COALESCE(sa.display_name, '') ILIKE $${pIdx} OR
-      COALESCE(da.handle, '') ILIKE $${pIdx} OR
-      COALESCE(da.display_name, '') ILIKE $${pIdx}
-    )`);
-    params.push(`%${search.trim()}%`);
-    pIdx++;
-  }
-
-  const whereClause = `WHERE ${conditions.join(' AND ')}`;
-  const countQuery = `
-    SELECT COUNT(*)::int AS total
-    FROM credit_transactions ct
-    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-    LEFT JOIN accounts da ON da.account_id = daw.account_id
-    ${whereClause}
-  `;
-
-  const offset = (Math.max(1, page) - 1) * limit;
-  const listQuery = `
-    SELECT
-      ct.credit_transaction_id AS id,
-      ct.type,
-      ct.amount_credits AS "amountCredits",
-      ct.status,
-      ct.created_at AS "createdAt",
-      ct.reference_table AS "referenceTable",
-      CASE
-        WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN 'inflow'
-        WHEN ct.destination_wallet_id = $1 THEN 'inflow'
-        WHEN ct.source_wallet_id = $1 THEN 'outflow'
-        ELSE 'inflow'
-      END AS direction,
-      CASE
-        WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN ct.amount_credits
-        WHEN ct.destination_wallet_id = $1 THEN ct.amount_credits
-        ELSE 0
-      END AS "revenueCredits",
-      CASE
-        WHEN ct.destination_wallet_id = $1 THEN
-          COALESCE(sa.display_name, sa.handle, 'System')
-        ELSE
-          COALESCE(da.display_name, da.handle, 'System')
-      END AS "counterpartyName",
-      CASE
-        WHEN ct.destination_wallet_id = $1 THEN sa.handle
-        ELSE da.handle
-      END AS "counterpartyHandle",
-      CASE
-        WHEN ct.destination_wallet_id = $1 THEN COALESCE(sa.type, 'User')
-        ELSE COALESCE(da.type, 'User')
-      END AS "counterpartyType"
-    FROM credit_transactions ct
-    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-    LEFT JOIN accounts da ON da.account_id = daw.account_id
-    ${whereClause}
-    ORDER BY ct.created_at DESC
-    LIMIT $${pIdx} OFFSET $${pIdx + 1}
-  `;
-
+function pageClause(params, limit, offset) {
   params.push(limit, offset);
-
-  const [totalRes, listRes] = await Promise.all([
-    pool.query(countQuery, params.slice(0, pIdx - 1)),
-    pool.query(listQuery, params)
-  ]);
-
-  return {
-    items: listRes.rows,
-    total: totalRes.rows[0]?.total || 0,
-    page: Number(page),
-    limit: Number(limit)
-  };
+  return `LIMIT $${params.length - 1} OFFSET $${params.length}`;
 }
 
-async function fetchUserTransactionsList({ page = 1, limit = 50, type, status, search } = {}) {
-  const conditions = [
-    `(sw.type = 'account wallets' OR dw.type = 'account wallets')`
-  ];
+async function listTopups({ status, channel, search, from, to, limit, offset }) {
+  const where = [`p.payment_type = 'TOPUP'`];
   const params = [];
-  let pIdx = 1;
-
-  if (type && type !== 'all') {
-    conditions.push(`LOWER(ct.type) = LOWER($${pIdx})`);
-    params.push(type);
-    pIdx++;
+  if (status && TOPUP_STATUSES[status]) {
+    params.push(TOPUP_STATUSES[status]);
+    where.push(`UPPER(COALESCE(p.status, '')) = ANY($${params.length}::text[])`);
   }
-
-  if (status && status !== 'all') {
-    conditions.push(`LOWER(ct.status::text) = LOWER($${pIdx})`);
-    params.push(status);
-    pIdx++;
+  if (channel) {
+    params.push(channel.toUpperCase());
+    where.push(`UPPER(COALESCE(p.channel_code, '')) = $${params.length}`);
   }
-
-  if (search && search.trim()) {
-    conditions.push(`(
-      ct.credit_transaction_id::text ILIKE $${pIdx} OR
-      COALESCE(sa.handle, '') ILIKE $${pIdx} OR
-      COALESCE(sa.display_name, '') ILIKE $${pIdx} OR
-      COALESCE(da.handle, '') ILIKE $${pIdx} OR
-      COALESCE(da.display_name, '') ILIKE $${pIdx}
+  if (from) {
+    params.push(from);
+    where.push(`p.created_at >= $${params.length}::date`);
+  }
+  if (to) {
+    params.push(to);
+    where.push(`p.created_at < ($${params.length}::date + 1)`);
+  }
+  if (search) {
+    params.push(likePattern(search));
+    const i = params.length;
+    where.push(`(
+      p.reference_id ILIKE $${i} OR COALESCE(p.payment_id, '') ILIKE $${i} OR p.id::text ILIKE $${i}
+      OR COALESCE(a.handle, '') ILIKE $${i} OR COALESCE(a.display_name, '') ILIKE $${i}
+      OR COALESCE(u.email_address, '') ILIKE $${i}
     )`);
-    params.push(`%${search.trim()}%`);
-    pIdx++;
   }
-
-  const whereClause = `WHERE ${conditions.join(' AND ')}`;
-  const countQuery = `
-    SELECT COUNT(*)::int AS total
-    FROM credit_transactions ct
-    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-    LEFT JOIN accounts da ON da.account_id = daw.account_id
-    ${whereClause}
-  `;
-
-  const offset = (Math.max(1, page) - 1) * limit;
-  const listQuery = `
-    SELECT
-      ct.credit_transaction_id AS id,
-      ct.type,
-      ct.amount_credits AS "amountCredits",
-      ct.status,
-      ct.created_at AS "createdAt",
-      ct.reference_table AS "referenceTable",
-      ct.reference_id AS "referenceId",
-      ct.fee_transaction_id AS "feeTransactionId",
-      sw.type AS "sourceWalletType",
-      dw.type AS "destWalletType",
-      COALESCE(sa.display_name, sa.handle, CASE WHEN sw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "sourceName",
-      sa.handle AS "sourceHandle",
-      COALESCE(sa.type, 'User') AS "sourceType",
-      COALESCE(da.display_name, da.handle, CASE WHEN dw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "destinationName",
-      da.handle AS "destinationHandle",
-      COALESCE(da.type, 'User') AS "destinationType"
-    FROM credit_transactions ct
-    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
-    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
-    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
-    LEFT JOIN accounts da ON da.account_id = daw.account_id
-    ${whereClause}
-    ORDER BY ct.created_at DESC
-    LIMIT $${pIdx} OFFSET $${pIdx + 1}
-  `;
-
-  params.push(limit, offset);
-
-  const [totalRes, listRes] = await Promise.all([
-    pool.query(countQuery, params.slice(0, pIdx - 1)),
-    pool.query(listQuery, params)
-  ]);
-
-  return {
-    items: listRes.rows,
-    total: totalRes.rows[0]?.total || 0,
-    page: Number(page),
-    limit: Number(limit)
-  };
-}
-
-async function fetchTopupTransactionsList({ page = 1, limit = 50, status, channel, search } = {}) {
-  const conditions = [`p.payment_type = 'TOPUP'`];
-  const params = [];
-  let pIdx = 1;
-
-  if (status && status !== 'all') {
-    conditions.push(`LOWER(p.status) = LOWER($${pIdx})`);
-    params.push(status);
-    pIdx++;
-  }
-
-  if (channel && channel !== 'all') {
-    conditions.push(`LOWER(p.channel_code) = LOWER($${pIdx})`);
-    params.push(channel);
-    pIdx++;
-  }
-
-  if (search && search.trim()) {
-    const q = `%${search.trim().toLowerCase()}%`;
-    conditions.push(`(
-      LOWER(p.id::text) LIKE $${pIdx}
-      OR LOWER(p.reference_id) LIKE $${pIdx}
-      OR LOWER(COALESCE(p.payment_id, '')) LIKE $${pIdx}
-      OR LOWER(COALESCE(a.display_name, '')) LIKE $${pIdx}
-      OR LOWER(COALESCE(a.handle, '')) LIKE $${pIdx}
-      OR LOWER(COALESCE(u.email_address, '')) LIKE $${pIdx}
-      OR LOWER(COALESCE(p.channel_code, '')) LIKE $${pIdx}
-    )`);
-    params.push(q);
-    pIdx++;
-  }
-
-  const whereClause = `WHERE ${conditions.join(' AND ')}`;
-
-  const countQuery = `
-    SELECT COUNT(*)::int AS total
+  const from_ = `
     FROM payments p
     LEFT JOIN users u ON u.user_id = p.user_id
     LEFT JOIN accounts a ON a.account_id = u.account_id
-    ${whereClause}
-  `;
-  const countRes = await pool.query(countQuery, params);
-  const total = countRes.rows[0]?.total || 0;
-
-  const offset = (Math.max(1, page) - 1) * limit;
-  params.push(limit, offset);
-
-  const query = `
-    SELECT
-      p.id,
-      p.reference_id AS "referenceId",
-      p.payment_id AS "paymentId",
-      p.channel_code AS "channelCode",
-      p.amount::numeric(10,2) AS "amountPhp",
-      p.credits AS "creditsGranted",
-      p.currency,
-      p.status,
-      p.description,
-      p.created_at AS "createdAt",
-      p.processed_at AS "processedAt",
-      COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'User') AS "userName",
-      a.handle AS "userHandle",
-      u.email_address AS "userEmail",
-      ct.credit_transaction_id AS "creditTransactionId"
-    FROM payments p
-    LEFT JOIN users u ON u.user_id = p.user_id
-    LEFT JOIN accounts a ON a.account_id = u.account_id
-    LEFT JOIN credit_transactions ct ON ct.reference_table = 'payments' AND ct.reference_id = p.id
-    ${whereClause}
-    ORDER BY p.created_at DESC
-    LIMIT $${pIdx} OFFSET $${pIdx + 1}
-  `;
-
-  const itemsRes = await pool.query(query, params);
+    WHERE ${where.join(' AND ')}`;
+  const countParams = [...params];
+  const [countRes, listRes] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS total, COALESCE(SUM(p.amount), 0)::numeric(14,2) AS php ${from_}`, countParams),
+    pool.query(
+      `
+      SELECT p.id, p.reference_id, p.payment_id, p.channel_code, p.amount, p.credits, p.currency, p.status,
+        p.created_at, p.processed_at, a.account_id, a.handle, a.display_name, u.email_address
+      ${from_}
+      ORDER BY p.created_at DESC, p.id DESC
+      ${pageClause(params, limit, offset)}
+      `,
+      params
+    ),
+  ]);
   return {
-    items: itemsRes.rows,
-    total,
-    page: Number(page),
-    limit: Number(limit),
+    total: num(countRes.rows[0]?.total),
+    sumPhp: num(countRes.rows[0]?.php),
+    items: listRes.rows.map((r) => ({
+      id: r.id,
+      referenceId: r.reference_id,
+      paymentId: r.payment_id || null,
+      channel: r.channel_code || null,
+      amountPhp: num(r.amount),
+      credits: num(r.credits),
+      currency: r.currency || 'PHP',
+      status: r.status || 'PENDING',
+      createdAt: r.created_at,
+      processedAt: r.processed_at || null,
+      member: { accountId: r.account_id || null, name: r.display_name || r.handle || 'Member', handle: r.handle || null },
+      email: r.email_address || null,
+    })),
+  };
+}
+
+async function listSubscriptionInvoices({ status, planId, search, from, to, limit, offset }) {
+  const where = ['TRUE'];
+  const params = [];
+  if (status && INVOICE_STATUSES[status]) {
+    params.push(INVOICE_STATUSES[status]);
+    where.push(`UPPER(COALESCE(si.status, '')) = ANY($${params.length}::text[])`);
+  }
+  if (planId) {
+    params.push(planId);
+    where.push(`p.plan_id = $${params.length}::uuid`);
+  }
+  const dated = 'COALESCE(si.paid_at, si.failed_at, si.created_at)';
+  if (from) {
+    params.push(from);
+    where.push(`${dated} >= $${params.length}::date`);
+  }
+  if (to) {
+    params.push(to);
+    where.push(`${dated} < ($${params.length}::date + 1)`);
+  }
+  if (search) {
+    params.push(likePattern(search));
+    const i = params.length;
+    where.push(`(
+      COALESCE(a.handle, '') ILIKE $${i} OR COALESCE(a.display_name, '') ILIKE $${i}
+      OR COALESCE(u.email_address, '') ILIKE $${i} OR COALESCE(si.xendit_cycle_id, '') ILIKE $${i}
+    )`);
+  }
+  const from_ = `
+    FROM subscription_invoices si
+    LEFT JOIN subscriptions s ON s.subscription_id = si.subscription_id
+    LEFT JOIN plans p ON p.plan_id = s.plan_id
+    LEFT JOIN users u ON u.user_id = s.user_id
+    LEFT JOIN accounts a ON a.account_id = u.account_id
+    WHERE ${where.join(' AND ')}`;
+  const countParams = [...params];
+  const [countRes, listRes] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS total, COALESCE(SUM(${INVOICE_CENTS_SQL}), 0)::bigint AS cents ${from_}`, countParams),
+    pool.query(
+      `
+      SELECT si.subscription_invoice_id, si.xendit_cycle_id, si.status, si.attempt_count,
+        si.billing_period_start, si.billing_period_end, si.paid_at, si.failed_at, si.created_at,
+        ${INVOICE_CENTS_SQL} AS amount_cents,
+        p.name AS plan_name, a.account_id, a.handle, a.display_name, u.email_address
+      ${from_}
+      ORDER BY ${dated} DESC, si.subscription_invoice_id DESC
+      ${pageClause(params, limit, offset)}
+      `,
+      params
+    ),
+  ]);
+  return {
+    total: num(countRes.rows[0]?.total),
+    sumPhp: phpFromCents(countRes.rows[0]?.cents),
+    items: listRes.rows.map((r) => ({
+      id: r.subscription_invoice_id,
+      cycleId: r.xendit_cycle_id || null,
+      plan: r.plan_name || '—',
+      amountPhp: phpFromCents(r.amount_cents),
+      status: r.status || 'UNKNOWN',
+      attempts: num(r.attempt_count),
+      periodStart: r.billing_period_start || null,
+      periodEnd: r.billing_period_end || null,
+      paidAt: r.paid_at || null,
+      failedAt: r.failed_at || null,
+      createdAt: r.created_at,
+      member: { accountId: r.account_id || null, name: r.display_name || r.handle || 'Member', handle: r.handle || null },
+      email: r.email_address || null,
+    })),
+  };
+}
+
+const SUBSCRIPTION_FILTERS = {
+  active: `UPPER(COALESCE(s.status, '')) = 'ACTIVE' AND NOT COALESCE(s.cancel_at_period_end, FALSE)`,
+  canceling: `UPPER(COALESCE(s.status, '')) = 'ACTIVE' AND COALESCE(s.cancel_at_period_end, FALSE)`,
+  trial: `UPPER(COALESCE(s.status, '')) = 'ACTIVE' AND s.trial_ends_at > NOW()`,
+  ended: `UPPER(COALESCE(s.status, '')) <> 'ACTIVE'`,
+};
+
+async function listSubscriptions({ status, planId, search, includeFree, limit, offset }) {
+  const where = [];
+  const params = [];
+  if (!includeFree && !planId) where.push('p.amount_php_cents > 0');
+  if (status && SUBSCRIPTION_FILTERS[status]) where.push(SUBSCRIPTION_FILTERS[status]);
+  if (planId) {
+    params.push(planId);
+    where.push(`p.plan_id = $${params.length}::uuid`);
+  }
+  if (search) {
+    params.push(likePattern(search));
+    const i = params.length;
+    where.push(`(
+      COALESCE(a.handle, '') ILIKE $${i} OR COALESCE(a.display_name, '') ILIKE $${i}
+      OR COALESCE(u.email_address, '') ILIKE $${i}
+    )`);
+  }
+  const from_ = `
+    FROM subscriptions s
+    INNER JOIN plans p ON p.plan_id = s.plan_id
+    LEFT JOIN users u ON u.user_id = s.user_id
+    LEFT JOIN accounts a ON a.account_id = u.account_id
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+  const countParams = [...params];
+  const [countRes, listRes] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS total ${from_}`, countParams),
+    pool.query(
+      `
+      SELECT s.subscription_id, s.status, s.cancel_at_period_end, s.canceled_at, s.trial_ends_at,
+        s.current_period_end, s.next_billing_at, s.created_at,
+        p.name AS plan_name, p.amount_php_cents, p.billing_period,
+        a.account_id, a.handle, a.display_name, u.email_address,
+        COALESCE((
+          SELECT SUM(CASE
+            WHEN si.amount_php_cents > 0 AND p.amount_php_cents > 0 AND si.amount_php_cents * 100 = p.amount_php_cents
+              THEN si.amount_php_cents * 100
+            ELSE COALESCE(si.amount_php_cents, 0)
+          END)
+          FROM subscription_invoices si
+          WHERE si.subscription_id = s.subscription_id AND UPPER(COALESCE(si.status, '')) IN ('SUCCEEDED', 'PAID')
+        ), 0)::bigint AS billed_cents
+      ${from_}
+      ORDER BY s.created_at DESC, s.subscription_id DESC
+      ${pageClause(params, limit, offset)}
+      `,
+      params
+    ),
+  ]);
+  return {
+    total: num(countRes.rows[0]?.total),
+    items: listRes.rows.map((r) => ({
+      id: r.subscription_id,
+      plan: r.plan_name,
+      pricePhp: phpFromCents(r.amount_php_cents),
+      billingPeriod: r.billing_period || 'MONTH',
+      status: r.status || 'UNKNOWN',
+      cancelAtPeriodEnd: Boolean(r.cancel_at_period_end),
+      canceledAt: r.canceled_at || null,
+      trialEndsAt: r.trial_ends_at || null,
+      currentPeriodEnd: r.current_period_end || null,
+      nextBillingAt: r.next_billing_at || null,
+      startedAt: r.created_at,
+      billedPhp: phpFromCents(r.billed_cents),
+      member: { accountId: r.account_id || null, name: r.display_name || r.handle || 'Member', handle: r.handle || null },
+      email: r.email_address || null,
+    })),
+  };
+}
+
+function maskAccountNumber(value) {
+  const digits = String(value || '').replace(/\s+/g, '');
+  if (!digits) return null;
+  return digits.length <= 4 ? '••••' : `•••• ${digits.slice(-4)}`;
+}
+
+async function listCashouts({ status, channel, search, from, to, limit, offset }) {
+  const where = ['TRUE'];
+  const params = [];
+  if (status && CASHOUT_STATUSES[status]) {
+    params.push(CASHOUT_STATUSES[status]);
+    where.push(`UPPER(c.status) = ANY($${params.length}::text[])`);
+  }
+  if (channel) {
+    params.push(channel.toUpperCase());
+    where.push(`UPPER(c.xendit_channel_code) = $${params.length}`);
+  }
+  if (from) {
+    params.push(from);
+    where.push(`c.created_at >= $${params.length}::date`);
+  }
+  if (to) {
+    params.push(to);
+    where.push(`c.created_at < ($${params.length}::date + 1)`);
+  }
+  if (search) {
+    params.push(likePattern(search));
+    const i = params.length;
+    where.push(`(
+      c.reference_id ILIKE $${i} OR c.cashout_id::text ILIKE $${i}
+      OR COALESCE(a.handle, '') ILIKE $${i} OR COALESCE(a.display_name, '') ILIKE $${i}
+      OR COALESCE(c.account_name, '') ILIKE $${i}
+    )`);
+  }
+  const from_ = `
+    FROM cashouts c
+    LEFT JOIN users u ON u.user_id = c.user_id
+    LEFT JOIN accounts a ON a.account_id = u.account_id
+    WHERE ${where.join(' AND ')}`;
+  const countParams = [...params];
+  const [countRes, listRes] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS total, COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS cents ${from_}`, countParams),
+    pool.query(
+      `
+      SELECT c.cashout_id, c.reference_id, c.xendit_channel_code, c.account_no, c.account_name,
+        c.amount_credits, c.fee_php_cents, c.net_amount_php_cents, c.status, c.failure_code,
+        c.created_at, c.updated_at, a.account_id, a.handle, a.display_name
+      ${from_}
+      ORDER BY c.created_at DESC, c.cashout_id DESC
+      ${pageClause(params, limit, offset)}
+      `,
+      params
+    ),
+  ]);
+  return {
+    total: num(countRes.rows[0]?.total),
+    sumPhp: phpFromCents(countRes.rows[0]?.cents),
+    items: listRes.rows.map((r) => ({
+      id: r.cashout_id,
+      referenceId: r.reference_id,
+      channel: r.xendit_channel_code || null,
+      // Full payout account numbers stay out of analytics; the last four identify it.
+      accountNumber: maskAccountNumber(r.account_no),
+      accountName: r.account_name || null,
+      credits: num(r.amount_credits),
+      feePhp: phpFromCents(r.fee_php_cents),
+      netPhp: phpFromCents(r.net_amount_php_cents),
+      status: r.status,
+      failureCode: r.failure_code || null,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at || null,
+      member: { accountId: r.account_id || null, name: r.display_name || r.handle || 'Member', handle: r.handle || null },
+    })),
+  };
+}
+
+async function listFinanceFilterOptions() {
+  const [plans, topupChannels, cashoutChannels] = await Promise.all([
+    pool.query(`SELECT plan_id, name, amount_php_cents FROM plans WHERE deleted_at IS NULL ORDER BY amount_php_cents ASC, name ASC`),
+    pool.query(`
+      SELECT DISTINCT UPPER(channel_code) AS channel FROM payments
+      WHERE payment_type = 'TOPUP' AND COALESCE(channel_code, '') <> ''
+      ORDER BY 1 LIMIT 30
+    `),
+    pool.query(`
+      SELECT DISTINCT UPPER(xendit_channel_code) AS channel FROM cashouts
+      WHERE COALESCE(xendit_channel_code, '') <> ''
+      ORDER BY 1 LIMIT 30
+    `),
+  ]);
+  return {
+    plans: plans.rows.map((p) => ({ planId: p.plan_id, name: p.name, paid: num(p.amount_php_cents) > 0 })),
+    topupChannels: topupChannels.rows.map((r) => r.channel),
+    cashoutChannels: cashoutChannels.rows.map((r) => r.channel),
   };
 }
 
 module.exports = {
-  getAnalyticsOverview,
-  fetchPlatformEconomyDetails,
-  fetchPlatformTransactionsList,
-  fetchUserTransactionsList,
-  fetchTopupTransactionsList,
+  TOPUP_STATUSES,
+  INVOICE_STATUSES,
+  CASHOUT_STATUSES,
+  fetchCalendar,
+  fetchMemberSummary,
+  fetchNewestMembers,
+  fetchEmailDomains,
+  fetchStaffRoles,
+  fetchPeriodTotals,
+  fetchSeries,
+  fetchTrackingSince,
+  fetchActiveSeries,
+  fetchEngagementTotals,
+  fetchWeeklyCohorts,
+  fetchTopupBreakdown,
+  fetchSubscriptionBreakdown,
+  fetchFeeBreakdown,
+  fetchCashoutBreakdown,
+  fetchTicketStats,
+  fetchQueueCounts,
+  fetchCommunityStats,
+  fetchAuthorNames,
+  listTopups,
+  listSubscriptionInvoices,
+  listSubscriptions,
+  listCashouts,
+  listFinanceFilterOptions,
 };

@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import type { OrdersMainContext } from "./orders_main";
 import { stripMarkdown } from "@/lib/markdownPaste";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
 import { computeAcceptanceDeadlineMs, formatRemainingDuration } from "./orders_components/OrderLifecycleTracker";
 
 type OrderSubTab = "all" | "pending" | "inContract" | "inactive";
@@ -164,21 +165,19 @@ export const IncomingOrders: React.FC = () => {
       api
         .get("/api/gigs/orders/incoming")
         .then((res) => {
-          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
           let fetchedOrders = res.data.data || [];
           if (gigId) {
             fetchedOrders = fetchedOrders.filter((o: any) => o.gig_id === gigId);
           }
 
-          const formatAvatarUrl = (url: string) => {
+          const formatAvatarUrl = (url: string, fallbackName?: string) => {
             if (!url) return "";
-            if (url.startsWith("http")) return url;
-            return `${cloudFrontUrl}/${url.replace(/^\//, "")}`;
+            return constructAvatarUrl(url, fallbackName);
           };
 
           const mappedOrders = fetchedOrders.map((o: any) => ({
             ...o,
-            client_avatar: formatAvatarUrl(o.client_avatar),
+            client_avatar: formatAvatarUrl(o.client_avatar, o.client_name),
           }));
 
           setOrders(mappedOrders);

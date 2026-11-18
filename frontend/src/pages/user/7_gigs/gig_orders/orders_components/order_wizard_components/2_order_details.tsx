@@ -195,7 +195,7 @@ export const OrderDetails: React.FC<OrderDetailsProps> = ({
           <textarea
             rows={10}
             maxLength={1000}
-            className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-black/20 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none leading-relaxed placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+            className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-black/20 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none leading-relaxed placeholder:text-gray-400 dark:placeholder:text-zinc-500 custom-scrollbar"
             placeholder="Tell the freelancer what you're creating. For example:
 - Goal: Fast-paced YouTube tech review (approx. 8 minutes long)
 - Tone: Sleek, high-energy, modern transitions with background lo-fi music

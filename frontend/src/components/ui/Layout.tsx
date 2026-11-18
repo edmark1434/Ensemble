@@ -1,5 +1,4 @@
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
+import { Outlet, useLocation } from "react-router-dom";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
@@ -35,7 +34,6 @@ export const emitIncomingMessage = (sender: ChatTarget) => {
 
 const Layout = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
   const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
   const setIsSidebarCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
@@ -87,10 +85,9 @@ const Layout = () => {
   const activeFloatingId = useChatState((state) => state.activeFloatingId);
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
-  // Platform view: hide member actions here. StaffPreviewFrameBridge (in App) handles the
-  // console's navigation messages and keeps the frame off member-only pages.
+  // Platform view: no chat or calls for staff. StaffPreviewFrameBridge (in App) runs the view-only
+  // guard on every route, follows the console's navigation and keeps the frame off member-only pages.
   const isStaffView = isStaffPlatformViewer(user);
-  useStaffPlatformGuard(isStaffView, navigate);
 
   const isInboxPage = location.pathname.startsWith("/inbox");
   const isTeamProjectChat =
@@ -297,11 +294,6 @@ const Layout = () => {
             }
           }
         `}</style>
-        {isStaffView && (
-          <style>
-            {`[data-staff-preview-hide]{display:none !important;}`}
-          </style>
-        )}
         <Outlet context={{ openChatWithUser }} />
       </main>
 

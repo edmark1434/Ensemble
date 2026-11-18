@@ -305,6 +305,49 @@ function MentionLink({
   );
 }
 
+/** A handle `MENTION_PATTERN` can read on its own. */
+const PLAIN_HANDLE = /^[a-z0-9_](?:[a-z0-9_.]*[a-z0-9_])?$/;
+
+type MentionHit = { start: number; end: number; handle: string; accountId: string };
+
+/**
+ * Where each known "@handle" sits in `value`. Plain handles come from the pattern. Handles the
+ * pattern cannot read (older accounts whose handle was built from their full name, with
+ * spaces or commas, e.g. "@balili,mary kristine m.- bsed science6969") are found by their exact
+ * text from the mention map, longest first, so the whole name links instead of only "@balili".
+ */
+function findMentions(value: string, mentions: MentionMap): MentionHit[] {
+  const hits: MentionHit[] = [];
+  for (const match of value.matchAll(MENTION_PATTERN)) {
+    const handle = match[2];
+    const accountId = mentions[handle.toLowerCase()];
+    if (!accountId) continue;
+    const start = (match.index ?? 0) + match[1].length;
+    hits.push({ start, end: start + 1 + handle.length, handle, accountId });
+  }
+  const lower = value.toLowerCase();
+  const unusual = Object.keys(mentions)
+    .filter((key) => key && !PLAIN_HANDLE.test(key))
+    .sort((left, right) => right.length - left.length);
+  for (const key of unusual) {
+    let from = 0;
+    for (;;) {
+      const at = lower.indexOf(`@${key}`, from);
+      if (at === -1) break;
+      const end = at + 1 + key.length;
+      const before = at > 0 ? value[at - 1] : "";
+      const after = value[end] ?? "";
+      // Same edges as the pattern: not glued to a word, an email or another mention.
+      if (!/[A-Za-z0-9_.@]/.test(before) && !/[A-Za-z0-9_]/.test(after)) {
+        hits.push({ start: at, end, handle: value.slice(at + 1, end), accountId: mentions[key] });
+      }
+      from = end;
+    }
+  }
+  // Left to right; where two overlap, the longer one wins.
+  return hits.sort((left, right) => left.start - right.start || right.end - left.end);
+}
+
 /**
  * Text with every "@handle" that belongs to an account turned into a link to that profile.
  * Unknown handles stay plain text. Renders inline, so it drops into any paragraph unchanged.
@@ -326,16 +369,13 @@ export function MentionText({
   if (!mentions || !value.includes("@")) return <>{value}</>;
   const parts: ReactNode[] = [];
   let last = 0;
-  for (const match of value.matchAll(MENTION_PATTERN)) {
-    const handle = match[2];
-    const accountId = mentions[handle.toLowerCase()];
-    if (!accountId) continue;
-    const at = (match.index ?? 0) + match[1].length;
-    if (at > last) parts.push(value.slice(last, at));
+  for (const hit of findMentions(value, mentions)) {
+    if (hit.start < last) continue;
+    if (hit.start > last) parts.push(value.slice(last, hit.start));
     parts.push(
-      <MentionLink key={at} handle={handle} accountId={accountId} external={external} dark={dark} />
+      <MentionLink key={hit.start} handle={hit.handle} accountId={hit.accountId} external={external} dark={dark} />
     );
-    last = at + 1 + handle.length;
+    last = hit.end;
   }
   if (!parts.length) return <>{value}</>;
   if (last < value.length) parts.push(value.slice(last));
@@ -454,6 +494,13 @@ const RULING_TONES = {
     barDark: "bg-amber-500/20 text-amber-100",
     icon: "text-amber-500",
   },
+  notice: {
+    shell: "border-violet-300 bg-violet-50/80 dark:border-violet-400/40 dark:bg-violet-500/[0.07]",
+    shellDark: "border-violet-400/40 bg-violet-500/[0.07]",
+    bar: "bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-100",
+    barDark: "bg-violet-500/20 text-violet-100",
+    icon: "text-violet-500",
+  },
   payout: {
     shell: "border-emerald-300 bg-emerald-50/80 dark:border-emerald-400/40 dark:bg-emerald-500/[0.07]",
     shellDark: "border-emerald-400/40 bg-emerald-500/[0.07]",
@@ -548,7 +595,7 @@ export function DisputeDecisionCard({
           <ShieldCheckIcon className={tone.icon} />
           <span className={`text-[11px] font-bold ${strong}`}>Dispute Resolution</span>
           <span className={`text-[11px] ${muted}`}>
-            · {ruling.kind === "parties" || ruling.kind === "payout" ? "Ensemble platform notice" : "Ensemble platform decision"}
+            · {ruling.kind === "parties" || ruling.kind === "payout" || ruling.kind === "notice" ? "Ensemble platform notice" : "Ensemble platform decision"}
           </span>
         </div>
 

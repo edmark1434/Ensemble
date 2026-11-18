@@ -72,6 +72,12 @@
 - Staff credit adjustments are `Fund Transfer` self-transfers (source = destination, unsigned amount). Their sign, reason and actor live on the `CREDITS_ADJUSTED` `account_activity` row whose `reference_id` is the ledger row id. Rows from before that audit have no direction. Supply counts `balance_credits + frozen_balance_credits` (holds stay the member's).
 - Migration `1828600000000_credit-economy-desk-indexes` indexes `credit_transactions` by `(created_at, id)`, `(source_wallet_id, created_at)` and `(destination_wallet_id, created_at)`, plus the adjustment audit lookup.
 
+## Member activity and analytics indexes
+
+- `account_active_days (account_id, active_on)` (primary key) records each day a member account made an authenticated request. `checkSession` calls `trackActiveDay`, which writes at most one row per account per day per process and never blocks the request; staff sessions are not recorded. Days are the database `CURRENT_DATE`. Rows cascade with the account. Admin → Analytics derives DAU / WAU / MAU and signup-cohort retention from it; there is no data before the migration ran.
+- Migration `1828900000000_analytics-active-days` creates the table and indexes `account_active_days (active_on, account_id)`, `accounts (type, created_at)`, `payments (payment_type, created_at DESC)`, `cashouts (created_at DESC)` and `subscription_invoices (paid_at)` (partial, non-null) for the analytics date-range scans.
+- `subscription_invoices.amount_php_cents` is cents. The Xendit recurring-cycle webhook used to store the cycle `amount` (pesos) there; it now converts with `xenditAmountToCents`. Old rows are not rewritten: analytics multiplies a stored amount by 100 when that equals the subscription plan's price (`INVOICE_CENTS_SQL`). Paid invoices have Xendit status `SUCCEEDED` (seed data uses `PAID`).
+
 ## Badge catalog
 
 - Unlock rules live on `badges`: `trigger_event_code`, `condition_type` (`boolean` or `count`), and `condition_value`.

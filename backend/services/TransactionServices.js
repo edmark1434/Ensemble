@@ -269,6 +269,16 @@ function buildHumanReadableMeta(row, type, isCreditPurchase, direction) {
     }
 
     // Default / Fund Transfer variations
+    if (refTable === 'dev_credit_injection') {
+        return {
+            category: 'Fund Transfer',
+            title: 'Dev Credit Injection (Inserted)',
+            summary: 'Credits inserted via Dev Mode (Alt + I) into your Account Wallet.',
+            counterparty: 'Dev Mode (Inserted)',
+            walletFlow,
+        };
+    }
+
     if (refTable === 'teams') {
         return {
             category: 'Fund Transfer',

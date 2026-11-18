@@ -6,7 +6,6 @@ import useGlobalState from "@/lib/global_state";
 import { constructAvatarUrl } from "@/lib/accountAvatars";
 import { resolveBannerPreset, bannerPresetUrl } from "@/lib/profileBanners";
 import { getImageUrl } from "@/lib/utils";
-import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
 interface OrderSelectionProps {
   gig: Gig;
@@ -136,16 +135,6 @@ export const OrderSelection: React.FC<OrderSelectionProps> = ({
               </div>
             )}
           </div>
-
-          {!editOrderId && (
-            <div className="pt-4 border-t border-gray-100 dark:border-white/5">
-              <MarketplaceIdentitySelector
-                teamId={actingTeamId}
-                onChange={setActingTeamId}
-                label="Order Representation"
-              />
-            </div>
-          )}
         </div>
       </div>
 

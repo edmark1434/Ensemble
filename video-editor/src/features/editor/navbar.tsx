@@ -59,6 +59,7 @@ import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
 import { CommentsButton } from "@/features/editor/comments/comments-button";
 import { WorkspaceButton } from "@/features/editor/workspace/workspace-button";
+import { SavesButton } from "@/features/editor/saves/saves-button";
 import { useSnapshotPreview } from "./hooks/use-snapshot-preview";
 
 export default function Navbar({
@@ -93,12 +94,20 @@ export default function Navbar({
 
   const projectRole = useProjectRole(preview ? undefined : projectId);
   const canShare = !preview && canManageSharing(projectRole);
+  // Saves are for editors only: never in view/comment-only access, previews, or mobile.
+  const canUseSaves = isLargeScreen && !preview && !isViewOnly && canEditWithRole(projectRole) && !!projectId;
 
   useEffect(() => {
     if (!preview && projectId) return;
     const layout = useLayoutStore.getState();
     if (layout.activeRightItem === "workspace") layout.setActiveRightItem("controls");
   }, [preview, projectId]);
+
+  useEffect(() => {
+    if (canUseSaves) return;
+    const layout = useLayoutStore.getState();
+    if (layout.activeRightItem === "saves") layout.setActiveRightItem("controls");
+  }, [canUseSaves]);
 
   useEffect(() => {
     setTitle(projectName);
@@ -262,7 +271,8 @@ export default function Navbar({
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={!viewOnly ? onForceSave : undefined}
+                    onClick={!viewOnly && !compacting ? onForceSave : undefined}
+                    aria-label="Save project"
                     className={cn(
                       "hover:!bg-accent/30",
                       (viewOnly || status === "saving" || compacting) && "cursor-default"
@@ -281,9 +291,9 @@ export default function Navbar({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" align="center" sideOffset={1}>
                   {compacting
-                    ? "Compacting…"
+                    ? "Saving project…"
                     : compactError
-                      ? "Couldn't compact — click to retry"
+                      ? "Couldn't save — click to retry"
                       : status === "saving"
                         ? "Saving…"
                         : status === "error"
@@ -351,6 +361,7 @@ export default function Navbar({
             </Tooltip>
           {isLargeScreen && canComment && <CommentsButton />}
           {isLargeScreen && !preview && !isViewOnly && canEditWithRole(projectRole) && projectId && <WorkspaceButton />}
+          {canUseSaves && <SavesButton />}
           {portfolio && <PortfolioClipModal />}
           {!preview && <DownloadPopover stateManager={stateManager} />}
 

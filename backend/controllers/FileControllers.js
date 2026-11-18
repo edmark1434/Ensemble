@@ -2,6 +2,7 @@
 const {
     getAllProfileFilesServices,
     generateUploadUrl,
+    uploadFileToIntentService,
     finalizeUploadService
 } = require('../services/FileServices');
 const { getVideoUploadPolicy } = require('../services/UploadPolicyServices');
@@ -162,6 +163,28 @@ async function uploadFileToS3Controller(req, res) {
     }
 } */
 
+async function uploadFileToIntentController(req, res) {
+    try {
+        const userId = req.user?.account_id;
+        if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const { uploadIntentId } = req.params;
+        if (!uploadIntentId) {
+            return res.status(400).json({ success: false, message: 'Missing uploadIntentId' });
+        }
+
+        const result = await uploadFileToIntentService(userId, uploadIntentId, req.body);
+        return res.status(200).json({ success: true, ...result });
+    } catch (err) {
+        console.error('Error in uploadFileToIntentController:', err);
+        const statusCode = [400, 404, 409, 410, 422].includes(err.statusCode) ? err.statusCode : 500;
+        return res.status(statusCode).json({
+            success: false,
+            message: statusCode === 500 ? 'Failed to upload file' : err.message
+        });
+    }
+}
+
 async function registerFileController(req, res) {
     try {
         const userId = req.user?.account_id;
@@ -188,5 +211,6 @@ module.exports = {
     getVideoUploadPolicyController,
     getAllProfileFilesController,
     generateUploadUrlController,
+    uploadFileToIntentController,
     registerFileController
 };

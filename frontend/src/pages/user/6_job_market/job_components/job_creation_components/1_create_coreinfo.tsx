@@ -1289,7 +1289,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
               {walletBalance !== null && walletBalance < postingFeeCredits ? (
                 <button
                   type="button"
-                  onClick={() => window.open("/credits/shop", "_blank")}
+                  onClick={() => window.open("/credits", "_blank", "noopener,noreferrer")}
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
                 >
                   Top up Credits <ExternalLink className="h-3 w-3" />

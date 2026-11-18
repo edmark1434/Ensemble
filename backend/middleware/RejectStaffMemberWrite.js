@@ -2,16 +2,24 @@ const redisClient = require('../lib/Redis');
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+const STAFF_VIEW_ONLY_CODE = 'STAFF_VIEW_ONLY';
+const STAFF_VIEW_ONLY_MESSAGE =
+    'Staff accounts can view member pages but cannot take member actions. Use the staff console instead.';
+
 /**
- * Member-only route groups (forum posting, marketplace, jobs and gigs, teams, contracts,
- * wallets, messaging). Staff look at the member site through platform view, which is
+ * Member-only route groups. Staff look at the member site through platform view, which is
  * view-only; staff work goes through /api/admin, /api/moderator and /api/staff.
  *
  * The frontend already blocks these writes inside platform view. This is the server-side
  * rule, so a staff account cannot post, buy, message, or move credits as a member by
  * calling the API directly. Reads stay open so staff can see what members see.
+ *
+ * Webhooks under /payment and /verification carry no session cookie, so they pass.
+ * Under /users only member tools are listed: sign-in, 2FA, logout, token refresh and the
+ * read-only list-of-details stay open for staff.
  */
 const STAFF_BLOCKED_MEMBER_PREFIXES = [
+    // Community, marketplace, work and money.
     '/forum',
     '/inbox',
     '/accounts',
@@ -24,6 +32,22 @@ const STAFF_BLOCKED_MEMBER_PREFIXES = [
     '/dashboard',
     '/cashouts',
     '/google-meet',
+    // Buying credits or a plan; the staff account's own projects and terms templates.
+    '/payment',
+    '/subscription',
+    '/projects',
+    '/terms-of-service',
+    // Member feedback, onboarding, identity checks, profile skills, and AI drafting for member posts.
+    '/feedbacks',
+    '/surveys',
+    '/onboarding',
+    '/verification',
+    '/tags',
+    '/chat',
+    // Member support tickets, technical reports and profile edits.
+    '/users/tickets',
+    '/users/reports',
+    '/users/update-personal-details',
 ];
 
 async function rejectStaffMemberWrite(req, res, next) {
@@ -42,9 +66,14 @@ async function rejectStaffMemberWrite(req, res, next) {
     if (session?.type !== 'Staff') return next();
     return res.status(403).json({
         success: false,
-        code: 'STAFF_VIEW_ONLY',
-        message: 'Staff accounts can view member pages but cannot take member actions. Use the staff console instead.',
+        code: STAFF_VIEW_ONLY_CODE,
+        message: STAFF_VIEW_ONLY_MESSAGE,
     });
 }
 
-module.exports = { rejectStaffMemberWrite, STAFF_BLOCKED_MEMBER_PREFIXES };
+module.exports = {
+    rejectStaffMemberWrite,
+    STAFF_BLOCKED_MEMBER_PREFIXES,
+    STAFF_VIEW_ONLY_CODE,
+    STAFF_VIEW_ONLY_MESSAGE,
+};

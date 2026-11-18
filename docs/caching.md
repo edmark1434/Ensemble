@@ -26,6 +26,11 @@
 - `writeSettingsSection` saves a section in one transaction under a per-section advisory lock, reads it uncached, and clears the cache after writing. Other processes and raw SQL edits are picked up within the TTL; the settings page tells admins this (`propagationSeconds`).
 - Request paths seed default configuration rows once per process. `lib/Seed.js` still calls `ensureDefaultSettings` directly.
 
+## Admin analytics
+
+- `getAdminAnalyticsOverviewService` caches each computed overview in Redis for 60 seconds under `analytics:overview:v2:<rangeKey>:<from>:<to>:<bucket>`. Concurrent requests for the same key in one process share one computation. `refresh=1` recomputes and overwrites. Results with a failed section (`problems`) are never cached. Analytics writes nothing, so there is no invalidation; the page shows the generation time and says when a response was cached.
+- `services/ActiveDayServices.js` remembers, per process and per UTC day, which member accounts already got their `account_active_days` row (at most 50,000 ids; the set clears when the day changes or it fills). The insert is fire-and-forget with `ON CONFLICT DO NOTHING`, so a restart or a second process only costs a no-op insert. On a database error tracking pauses for five minutes and logs once.
+
 ## Staff console data (browser)
 
 - `frontend/src/lib/staffCache.ts` keeps the last successful response of each staff page/tab GET in memory, keyed by URL plus sorted params. There is no storage persistence and no TTL. Pages render the cached response, then always refetch on mount. Identical in-flight GETs are shared.
@@ -47,6 +52,7 @@
 - Presence requires heartbeat timestamps and expiration; disconnect events alone are unreliable.
 - Multiple tabs/devices should be counted or tracked independently so closing one connection does not mark the user offline.
 - Clients must recover from missed events by refetching current state.
+- Staff console presence ("Team on duty" on the admin dashboard) is owned by `services/StaffPresenceServices.js`. `CheckSession` refreshes `presence:staff:v1:<accountId>` (TTL 150 s) and `presence:staff:v1:last:<accountId>` (TTL 30 days) for staff sessions, at most once per 30 s per account per process. Staff consoles call `GET /api/staff/presence/heartbeat` every 60 s while visible. Offline means the key expired; logout deletes it. All tabs share one key, so closing one tab does not mark the person offline.
 
 ## Background reconciliation
 

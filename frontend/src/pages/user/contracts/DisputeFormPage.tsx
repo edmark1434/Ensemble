@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2, ArrowLeft } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import toast from "react-hot-toast";
+import { casePath } from "@/lib/cases";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
@@ -181,8 +182,10 @@ export const DisputeFormPage: React.FC = () => {
         details: formattedDetails,
       });
       if (res.data?.success) {
-        toast.success("Dispute submitted to Moderators for review.");
-        navigate("/contracts");
+        toast.success("Dispute filed. Staff will review it; you can add evidence here.");
+        // Open the new case: its first message is the platform summary of what was filed.
+        const disputeId = res.data?.data?.dispute_id;
+        navigate(disputeId ? casePath("dispute", String(disputeId)) : "/contracts");
       } else {
         toast.error(res.data?.message || "Failed to submit dispute.");
       }

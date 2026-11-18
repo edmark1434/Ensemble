@@ -64,6 +64,15 @@ async function createAssetController(req, res) {
   } catch (error) { return handleAssetError(res, error); }
 }
 
+async function createAdminAssetController(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.user?.account_id;
+    const staffId = req.session?.staff_id || req.user?.staff_id || null;
+    const asset = await createAssetServices(accountId, req.body, { isAdminAsset: true, staffId });
+    return res.status(201).json({ success: true, asset });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
 async function updateAssetController(req, res) {
   try {
     return res.json({ success: true, asset: await updateAssetServices(req.params.assetId, req.user.account_id, req.body) });
@@ -294,6 +303,7 @@ module.exports = {
   listAssetsController,
   getAssetController,
   createAssetController,
+  createAdminAssetController,
   updateAssetController,
   deleteAssetController,
   getAssetDownloadController,
