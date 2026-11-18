@@ -655,23 +655,45 @@ export default function AssetDetails() {
 
         <section className="mb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div className="flex items-center gap-4">
-            <img src={asset.creator_avatar_path ? mediaUrl(asset.creator_avatar_path) : `https://ui-avatars.com/api/?name=${encodeURIComponent(asset.creator_name || 'User')}&background=71717a&color=fff&size=128`} alt={asset.creator_name} className="h-12 w-12 rounded-full object-cover" />
+            {asset.is_admin_asset || asset.creator_avatar_path === "/ensemble_lg.svg" ? (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 p-2.5 dark:bg-white/10">
+                <img
+                  src="/ensemble_lg.svg"
+                  alt={asset.creator_name || "By Ensemble"}
+                  className="h-full w-full object-contain invert dark:invert-0"
+                />
+              </div>
+            ) : (
+              <img
+                src={asset.creator_avatar_path ? mediaUrl(asset.creator_avatar_path) : `https://ui-avatars.com/api/?name=${encodeURIComponent(asset.creator_name || 'User')}&background=71717a&color=fff&size=128`}
+                alt={asset.creator_name}
+                className="h-12 w-12 rounded-full object-cover"
+              />
+            )}
             <div>
               <p className="text-[9px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-500 mb-0.5">Uploaded By</p>
               <div className="flex items-center gap-2 mb-0.5">
                 <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{asset.creator_name}</p>
-                <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
-                  <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                  <span>{asset.creator_average_rating > 0 ? asset.creator_average_rating.toFixed(1) : "0.0"} ({asset.creator_rating_count})</span>
-                </div>
+                {asset.is_admin_asset ? (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    Official
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
+                    <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                    <span>{asset.creator_average_rating > 0 ? asset.creator_average_rating.toFixed(1) : "0.0"} ({asset.creator_rating_count})</span>
+                  </div>
+                )}
               </div>
               <p className="text-xs text-gray-500 dark:text-zinc-400">{asset.creator_handle ? `@${asset.creator_handle}` : ""}</p>
             </div>
           </div>
-          <button type="button" onClick={() => navigate(`/profile/${asset.owner_account_id}`)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0">
-            <User className="h-3.5 w-3.5 text-blue-400" />
-            <span>View Profile</span>
-          </button>
+          {!asset.is_admin_asset && (
+            <button type="button" onClick={() => navigate(`/profile/${asset.owner_account_id}`)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0">
+              <User className="h-3.5 w-3.5 text-blue-400" />
+              <span>View Profile</span>
+            </button>
+          )}
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 md:p-7 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">

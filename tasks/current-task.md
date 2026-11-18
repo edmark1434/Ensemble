@@ -1,20 +1,18 @@
-# Task: Admin Marketplace Asset Upload & Platform Revenue
+# Task: Admin Asset Creator Attribution (By Ensemble & Logo Profile)
 
 ## Implementation Objective
-Enable administrators to upload marketplace assets directly from the Admin Console (`Moderation` -> `Management` -> `Marketplace`) using the same upload modal used across the user platform. When users purchase an asset uploaded by an admin, no marketplace fee deduction will be applied, and 100% of the purchased credits will go straight into the platform's credits wallet ("platform credits money").
+For assets uploaded by admin/staff (`is_admin_asset = true`):
+1. Display name shown in the user platform should be `"By Ensemble"` instead of `"Admin User"` (or staff account name).
+2. Creator profile picture/avatar should display the Ensemble logo (`/ensemble_lg.svg`) with appropriate theme inversion (`invert dark:invert-0`) so it renders clearly in both light and dark modes.
+3. Creator handle for admin assets is represented as `@ensemble`.
+4. Hide or omit personal user profile navigation for platform/admin assets where appropriate.
+5. Prevent redundant prefixes like `"by By Ensemble"` in purchase dialogs.
 
-## Status: Completed
-
-All acceptance criteria satisfied:
-1. **Admin Console UI Integration**:
-   - Added **"Upload asset"** button in `MarketplaceManagementSection` / `MarketplaceControl` (`/admin/moderation?tab=management&section=marketplace`) following the Admin Console dark theme.
-   - Opens the same `AssetEditorModal` used by the user platform, forced into dark theme when rendered in the Admin Console.
-2. **Admin Asset Creation Flow**:
-   - Added `POST /api/admin/moderation/marketplace/assets` (`createAdminAssetController` -> `createAssetServices` -> `createAssetRepository`).
-   - Added migration `1829100000000_admin-market-assets.js` (`market_assets.is_admin_asset` + nullable `media_assets.owner_user_id`).
-   - Admin uploads bypass member posting limits, subscriptions, verification gates, and listing fees, and publish directly into the live catalog (`status = 'published'`, listing `status = 'approved'`).
-3. **Purchasing & Zero-Deduction Revenue Routing**:
-   - In `purchaseAssetRepository` and `publicAsset`, admin assets (`is_admin_asset` or staff-submitted) have `0%` fee deduction (`transactionFeeCredits = 0`).
-   - 100% of the purchased credits transfer directly from the buyer's wallet into the platform wallet (`wallets.type = 'platform wallets'`).
-4. **Verification**:
-   - User verification preference respected (no build/typecheck commands run).
+## Acceptance Criteria
+- `backend/repositories/AssetRepositories.js`: `ASSET_SELECT` returns `By Ensemble` as `creator_name`, `ensemble` as `creator_handle`, and `/ensemble_lg.svg` as `creator_avatar_path` for admin/staff assets.
+- `backend/services/AssetServices.js`: `publicAsset` ensures `creator_name: 'By Ensemble'`, `creator_handle: 'ensemble'`, and `creator_avatar_path: '/ensemble_lg.svg'` on all admin asset responses.
+- `frontend/src/pages/user/5_assets/assetTypes.ts`: `mediaUrl` preserves local assets like `/ensemble_lg.svg` without prefixing CloudFront CDN URL.
+- `frontend/src/pages/user/5_assets/AssetCard.tsx`: Displays the Ensemble logo profile avatar and `"By Ensemble"` display name.
+- `frontend/src/pages/user/5_assets/AssetDetails.tsx`: Displays the Ensemble logo profile avatar, `"By Ensemble"`, Official platform badge, and omits the user profile navigation button for admin assets.
+- `frontend/src/pages/user/5_assets/AssetPurchaseModal.tsx`: Formats `"By Ensemble"` cleanly without repeating the `"by"` prefix.
+- User preference: do not run automated build or verification commands.

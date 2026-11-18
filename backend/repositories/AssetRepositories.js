@@ -472,7 +472,18 @@ const ASSET_SELECT = `
          media.thumbnails, media.thumbnail_count,
          media.media_assets, media.media_asset_count,
          media.has_ydoc, media.processing_status,
-         owner.display_name AS creator_name, owner.handle AS creator_handle, owner_avatar.path AS creator_avatar_path,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN 'By Ensemble'
+           ELSE owner.display_name
+         END AS creator_name,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN 'ensemble'
+           ELSE owner.handle
+         END AS creator_handle,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN '/ensemble_lg.svg'
+           ELSE owner_avatar.path
+         END AS creator_avatar_path,
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
@@ -786,6 +797,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
          OR ma.description ILIKE '%' || $2 || '%'
          OR owner.display_name ILIKE '%' || $2 || '%'
          OR owner.handle ILIKE '%' || $2 || '%'
+         OR ((COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AND ('Ensemble' ILIKE '%' || $2 || '%' OR 'By Ensemble' ILIKE '%' || $2 || '%'))
          OR EXISTS (
            SELECT 1
            FROM market_asset_tags search_mat
@@ -1106,7 +1118,10 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       `SELECT ma.market_asset_id, ma.name, ma.price_credits, ma.status,
               (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AS is_admin_asset,
               owner.account_id AS owner_account_id,
-              owner.display_name AS creator_name,
+              CASE
+                WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN 'By Ensemble'
+                ELSE owner.display_name
+              END AS creator_name,
               buyer.display_name AS buyer_name,
               buyer_user.user_id AS buyer_user_id
        FROM market_assets ma

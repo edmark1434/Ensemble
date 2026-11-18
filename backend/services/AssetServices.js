@@ -352,6 +352,9 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
   return {
     ...safeAsset,
     is_admin_asset: isAdminAsset,
+    creator_name: isAdminAsset ? 'By Ensemble' : (safeAsset.creator_name || ''),
+    creator_handle: isAdminAsset ? 'ensemble' : (safeAsset.creator_handle || null),
+    creator_avatar_path: isAdminAsset ? '/ensemble_lg.svg' : (safeAsset.creator_avatar_path || null),
     owner_account_id: _ownerAccountId,
     review_status: safeAsset.is_owner ? (safeAsset.review_status || null) : undefined,
     rejection_reason: safeAsset.is_owner ? (safeAsset.rejection_reason || null) : undefined,
