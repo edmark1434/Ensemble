@@ -30,6 +30,7 @@ export interface AssetRecord {
   name: string;
   description: string;
   price_credits: number;
+  is_admin_asset?: boolean;
   transaction_fee_percent: number;
   transaction_fee_credits: number;
   owner_net_credits: number;

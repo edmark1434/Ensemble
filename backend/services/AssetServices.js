@@ -346,9 +346,12 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
   if (!asset) return asset;
   const { owner_account_id: _ownerAccountId, total_count: _totalCount, ...safeAsset } = asset;
   const priceCredits = Number(safeAsset.price_credits);
-  const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
+  const isAdminAsset = Boolean(safeAsset.is_admin_asset);
+  const effectiveFeePercent = isAdminAsset ? 0 : feePercent;
+  const transactionFeeCredits = isAdminAsset ? 0 : calculateAssetTransactionFee(priceCredits, effectiveFeePercent);
   return {
     ...safeAsset,
+    is_admin_asset: isAdminAsset,
     owner_account_id: _ownerAccountId,
     review_status: safeAsset.is_owner ? (safeAsset.review_status || null) : undefined,
     rejection_reason: safeAsset.is_owner ? (safeAsset.rejection_reason || null) : undefined,
@@ -359,7 +362,7 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
     average_rating: Number(safeAsset.average_rating || 0),
     creator_average_rating: Number(safeAsset.creator_average_rating || 0),
     creator_rating_count: Number(safeAsset.creator_rating_count || 0),
-    transaction_fee_percent: feePercent,
+    transaction_fee_percent: effectiveFeePercent,
     transaction_fee_credits: transactionFeeCredits,
     owner_net_credits: priceCredits - transactionFeeCredits,
   };
@@ -453,6 +456,9 @@ async function listAssetsServices(accountId, query = {}) {
     throw new AssetError('Unsupported asset status filter.', 400, 'VALIDATION_ERROR');
   }
 
+  const { ensureAnimatedGifDerivativesBackfilled } = require('./AssetPreviewServices');
+  await ensureAnimatedGifDerivativesBackfilled();
+
   const rows = await listAssetsRepository({
     accountId,
     search,
@@ -473,29 +479,50 @@ async function listAssetsServices(accountId, query = {}) {
 
 async function getAssetServices(assetId, accountId) {
   requireUuid(assetId);
+  const { ensureAnimatedGifDerivativesBackfilled } = require('./AssetPreviewServices');
+  await ensureAnimatedGifDerivativesBackfilled();
   const feePercent = await getMarketplaceTransactionFeePercent();
   const asset = await getAssetRepository(assetId, accountId);
   if (!asset) throw new AssetError('Asset not found.', 404, 'ASSET_NOT_FOUND');
   return publicAsset(asset, feePercent);
 }
 
-async function createAssetServices(accountId, payload) {
+async function createAssetServices(accountId, payload, { isAdminAsset = false, staffId = null } = {}) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
     const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
     const { assertWarningAllows } = require('./WarningBandServices');
-    if (String(data.status).toLowerCase() === 'published') {
+    if (!isAdminAsset && String(data.status).toLowerCase() === 'published') {
       await assertWarningAllows(accountId, 'publish_asset');
     }
-    // New publishes always await moderator approval before going live.
-    const reviewRequired = String(data.status).toLowerCase() === 'published';
+    // New member publishes await moderator approval before going live.
+    // Admin uploads go straight into the live catalog without entering the review queue.
+    const reviewRequired = !isAdminAsset && String(data.status).toLowerCase() === 'published';
 
     // When review is required, asset is created as draft while awaiting moderator approval
     const requestedStatus = data.status;
     data.status = reviewRequired ? 'draft' : requestedStatus;
 
     // Save the listing and its processing jobs atomically; storage work runs afterwards.
-    const assetId = await createAssetRepository(accountId, data);
+    const assetId = await createAssetRepository(accountId, data, new Map(), { isAdminAsset, staffId });
+    try {
+      const { processNextMediaJob } = require('./MediaJobServices');
+      if (data.type === 'image') {
+        const maxInlineJobs = Math.min(8, (data.originalFileIds?.length || 0) + (data.thumbnailFileIds?.length || 0));
+        for (let i = 0; i < maxInlineJobs; i += 1) {
+          const outcome = await processNextMediaJob();
+          if (!outcome) break;
+        }
+      }
+      void (async () => {
+        for (let i = 0; i < 25; i += 1) {
+          const outcome = await processNextMediaJob().catch(() => null);
+          if (!outcome) break;
+        }
+      })();
+    } catch {
+      /* Background worker can still pick up any remaining jobs. */
+    }
     let asset = await getAssetServices(assetId, accountId);
 
     let reviewInfo = { queued: false };
@@ -518,7 +545,7 @@ async function createAssetServices(accountId, payload) {
     if (reviewInfo.queued) {
       return { ...asset, reviewQueued: true, reviewMessage: reviewInfo.message };
     }
-    if (String(asset?.status).toLowerCase() === 'published') {
+    if (!isAdminAsset && String(asset?.status).toLowerCase() === 'published') {
       const { scheduleBadgeEvaluation } = require('./BadgeServices');
       scheduleBadgeEvaluation(accountId);
     }

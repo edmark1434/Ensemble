@@ -12,6 +12,9 @@ function canvasToFile(canvas: HTMLCanvasElement, filename: string, quality: numb
 }
 
 async function resizeImage(file: File, maxWidth: number, maxHeight: number, quality: number, suffix: string, maxScale = 1) {
+  if (file.type === "image/gif" || /\.gif$/i.test(file.name)) {
+    return file;
+  }
   const bitmap = await createImageBitmap(file);
   try {
     const scale = Math.min(maxScale, maxWidth / bitmap.width, maxHeight / bitmap.height);
