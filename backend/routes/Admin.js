@@ -17,6 +17,8 @@ const {
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
   postAdminRescindWarning,
+  getAdminWarningLiftPreview,
+  postAdminLiftWarningPoints,
   postAdminAccountPardon,
   getAdminAccountActivity,
   getAdminAccountProfileDetails,
@@ -117,6 +119,9 @@ router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTea
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
 router.post('/accounts/:accountId/warnings/:violationId/rescind', [checkSession, requireUserTeamAccess], postAdminRescindWarning);
+// Lifting points can clear several warnings at once, so it sits with pardon (Admin/Support).
+router.get('/accounts/:accountId/warnings/lift-preview', [checkSession, requireUserTeamFullWrite], getAdminWarningLiftPreview);
+router.post('/accounts/:accountId/warnings/lift', [checkSession, requireUserTeamFullWrite], postAdminLiftWarningPoints);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/accounts/:accountId/profile', [checkSession, requireUserTeamAccess], getAdminAccountProfileDetails);

@@ -356,7 +356,7 @@ const ReplyInput = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { timedOut: forumTimedOut } = useForumTimeout();
+  const { locked: forumTimedOut } = useForumTimeout();
 
   const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
@@ -603,7 +603,7 @@ const CommentItem = ({
 }) => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   // Initialize showChildren based on isCollapsed - collapsed by default
   const [showChildren, setShowChildren] = useState(!isCollapsed);
   const [isEditing, setIsEditing] = useState(false);
@@ -1218,7 +1218,7 @@ const Forums = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);

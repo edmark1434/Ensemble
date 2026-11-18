@@ -1,7 +1,7 @@
 export const DEFAULT_MERIT = 100;
 
 const ACTIVE_WARNING_STATUSES = new Set(["active", "open", "pending"]);
-const INACTIVE_WARNING_STATUSES = new Set(["expired", "rescinded", "pardoned", "reversed", "deleted"]);
+const INACTIVE_WARNING_STATUSES = new Set(["expired", "rescinded", "pardoned", "reversed", "deleted", "lifted"]);
 
 export type MeritWarning = {
   points?: number | null;

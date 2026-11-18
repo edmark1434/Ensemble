@@ -107,7 +107,11 @@ api.interceptors.response.use(
 
         const restrictionCode = err?.response?.data?.code;
         if (restrictionCode === "ACCOUNT_SUSPENDED") {
-            showErrorToast(err.response?.data?.message || "Your account is suspended. You can look around Ensemble. Actions stay off until this ends.");
+            // Fixed id: repeated blocked actions replace this toast instead of stacking new ones.
+            showErrorToast(
+                err.response?.data?.message || "Your account is suspended. You can look around Ensemble. Actions stay off until this ends.",
+                { id: "account-suspended" },
+            );
             return Promise.reject(err);
         }
 

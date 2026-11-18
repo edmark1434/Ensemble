@@ -235,6 +235,8 @@ async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
     UPDATE accounts a
     SET status = ${RESTING_STATUS_SQL},
         suspension_ends_at = NULL,
+        suspension_source = NULL,
+        auto_suspend_lift_merit = NULL,
         ban_ends_at = NULL,
         lock_ends_at = NULL
     FROM expired e
@@ -325,6 +327,14 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
       console.warn('Warning band refresh skipped:', err.message)
     );
   }
+  // Automatic suspensions whose member has climbed back to the recovery merit.
+  let autoSuspensionsLifted = 0;
+  try {
+    const { liftRecoveredAutoSuspensions } = require('./ModerationPolicy');
+    autoSuspensionsLifted = (await liftRecoveredAutoSuspensions({ limit })).length;
+  } catch (err) {
+    console.warn('Auto-suspension recovery sweep skipped:', err.message);
+  }
   // Credit holds with an end date (including ones an accepted appeal shortened to 24 hours).
   let creditHoldsReleased = 0;
   try {
@@ -333,7 +343,12 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
   } catch (err) {
     console.warn('Credit hold release skipped:', err.message);
   }
-  return { lifted: lifted.length, warningsExpired: lapsed.rowCount || 0, creditHoldsReleased };
+  return {
+    lifted: lifted.length,
+    warningsExpired: lapsed.rowCount || 0,
+    autoSuspensionsLifted,
+    creditHoldsReleased,
+  };
 }
 
 function warningExpiry({ durationDays, points } = {}) {
@@ -466,6 +481,9 @@ async function getAccountAccess(accountId) {
       expireElapsedWarnings(accountId),
     ]);
     await refreshBandAfterLapse(accountId, lapsedPoints);
+    // Catches recoveries the refresh above did not see (e.g. a lift level set before it ran).
+    const { liftRecoveredAutoSuspensions } = require('./ModerationPolicy');
+    await liftRecoveredAutoSuspensions({ accountId, limit: 1 });
   } catch (err) {
     console.warn('Could not lift an expired suspension or warning:', err.message);
   }
@@ -728,7 +746,7 @@ async function getOwnAccountRecord(accountId) {
   const [warnings, restrictions, activity] = await Promise.all([
     pool.query(
       `
-      SELECT violation_id, violation_number, type, reason, points, status, created_at, expires_at
+      SELECT violation_id, violation_number, type, reason, points, points_original, status, created_at, expires_at
       FROM violations
       WHERE account_id = $1 AND deleted_at IS NULL
       ORDER BY created_at DESC
@@ -760,6 +778,7 @@ async function getOwnAccountRecord(accountId) {
             'VIOLATION_ISSUED',
             'WARNING_ISSUED',
             'WARNING_RESCINDED',
+            'WARNING_POINTS_LIFTED',
             'ACCOUNT_PARDONED',
             'APPEAL_DECISION'
           )
@@ -781,6 +800,7 @@ async function getOwnAccountRecord(accountId) {
       type: row.type,
       reason: row.reason,
       points: row.points,
+      originalPoints: row.points_original == null ? null : Number(row.points_original),
       status: row.status,
       createdAt: row.created_at,
       expiresAt: row.expires_at,

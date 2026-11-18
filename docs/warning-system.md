@@ -208,6 +208,10 @@ Product limits and auto-suspend follow `warning_thresholds`. Admin CRUD is at `/
 
 **Once per crossing** means: hitting 20 suspends them. After 7 days the suspend lifts even if they still have 20 points. They then live in Frozen/Restricted until points expire. A **new** warning that puts them at 20+ (or 30+) again starts a new cooldown. Already-Suspended accounts are not stacked with another auto-suspend.
 
+**Bands end by themselves.** Limited, Restricted and Frozen access are worked out live from active points, so each one ends the moment merit climbs back past its floor (Frozen access, from 16 points, ends at merit 85). Points drop when warnings expire, or when staff rescind a warning or lift points (§12).
+
+**Early lift of an auto-suspension.** Each auto-suspend row has `lift_at_merit` (1–100, or empty for "run the full clock"). It must be above the merit the row starts at. Seeded rows use **81** (back under 20 points). When the engine suspends someone it copies that value onto the account (`accounts.suspension_source = 'auto'`, `auto_suspend_lift_merit`), the same way a warning copies its catalog clock, so later edits only affect new suspensions. Once merit reaches it (expiry, rescind, lift), the suspension ends straight away, is recorded (`ACCOUNT_STATUS_CHANGED`, action `auto_suspend_lifted`) and the member is told. Staff suspensions are never ended this way: any staff status change, pardon, or expiry clears the marker.
+
 Lock and ban stay **staff-only**.
 
 ---
@@ -291,11 +295,14 @@ A Restricted user who is also suspended still cannot write. A Frozen-access user
 |---|---|---|---|
 | Warning expires | System | that row drops out of the sum | Band recalculated |
 | Rescind one warning | Staff who can warn | that row no longer counts; stays on the Record as rescinded | Band recalculated |
+| Lift points | Admin / Support | N points (or up to a target merit) come off active warnings, longest-lasting first, or off one chosen warning; a row lifted to 0 becomes `lifted`; rows stay on the Record | Band recalculated; auto-suspension ends if its recovery merit is reached |
 | Pardon | Admin / Support | all warning hits cleared | Active, 0 points |
 | Appeal accepted | Support | standing lift in 24h; leftover warnings still count | Ban/lock/suspend end in 24h, then band from leftover points |
 | Appeal denied | Support | unchanged | optional 12-month appeal block |
 
 Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`) and by the one-minute `reconcileExpiredStandings` sweep. They do not wait for staff. When an expiry moves the band, the member is notified ("Your Platform Merit recovered to …"). A rescind always notifies the member with their new merit.
+
+A lift lowers `violations.points` (what still counts) and keeps the issued value in `violations.points_original`, so the Record shows "3 of 8 lifted". Staff must write a reason (staff-only; the member never sees it). Activity `WARNING_POINTS_LIFTED`. The member is notified with their new merit and, when a band ended, which one. Nobody lifts on their own account; only Admin lifts on a staff account. The desks offer quick lifts per band ("End Frozen access · lift 3 → merit 85").
 
 ---
 
@@ -378,8 +385,9 @@ Frozen access: no proposals, no new DMs, no cashout.
 ### Tables
 
 - `warning_defs` — named library: slug, label, category, points 1–10, duration_days 1–365, desks jsonb, note, is_system, sort_order, deleted_at. Migration `1826400000000_warning-defs` plus `1826600000000_warning-duration-and-thresholds`.
-- `warning_thresholds` — min_points, effect (`none` / `record` / `limited` / `restricted` / `frozen` / `auto_suspend`), label, suspend_days, is_system, deleted_at.
-- `violations` — issued cases: type (label), reason, points, status, staff_id, expires_at.
+- `warning_thresholds` — min_points, effect (`none` / `record` / `limited` / `restricted` / `frozen` / `auto_suspend`), label, suspend_days, lift_at_merit (auto-suspend only), is_system, deleted_at.
+- `violations` — issued cases: type (label), reason, points (what still counts), points_original (set on the first lift), status (`active` … `rescinded` / `lifted` / `expired` / `pardoned`), staff_id, expires_at.
+- `accounts.suspension_source` (`auto` for engine suspensions) and `accounts.auto_suspend_lift_merit`. Migration `1829200000000_warning-lift-and-auto-suspend-recovery`.
 - `punishment_defs` — named ban / suspend / timeout library. See [punishment-system.md](punishment-system.md) and [database.md](database.md).
 
 ### APIs
@@ -387,9 +395,11 @@ Frozen access: no proposals, no new DMs, no cashout.
 - `GET /api/admin/warning-catalog?desk=` and `GET /api/moderator/warning-catalog?desk=`
 - `GET /api/admin/punishment-catalog?desk=&kind=` and `GET /api/moderator/punishment-catalog`
 - `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId` `{ label, category, points, durationDays, desks, note }`
-- `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId` `{ minPoints, effect, label, suspendDays, note }` (Admin only)
+- `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId` `{ minPoints, effect, label, suspendDays, liftAtMerit, note }` (Admin only)
 - `POST /api/admin/accounts/:accountId/warn` `{ warningId, reason }`
 - `POST /api/admin/accounts/:accountId/warnings/:violationId/rescind`
+- `GET /api/admin/accounts/:accountId/warnings/lift-preview` → points, merit, band, band floors, quick-lift options (Admin / Support)
+- `POST /api/admin/accounts/:accountId/warnings/lift` `{ points | targetMerit, violationId?, reason }` (Admin / Support)
 - Moderator restriction desks: `POST .../restrictions/violations` with the same `{ warningId, reason }`
 
 ### Code
@@ -400,6 +410,8 @@ Frozen access: no proposals, no new DMs, no cashout.
 - Duration: catalog `duration_days` via `warningExpiry` in `AccountRestriction.js` (staff-sent clocks ignored)
 - Thresholds: `WarningThresholdServices` / `WarningThresholdRepositories`; live cache in `WarningBands.js`
 - Active sum + auto-suspend: `sumActiveWarningPoints`, `maybeAutoSuspendAfterWarning` in `ModerationPolicy.js`
+- Early auto-suspension lift: `liftRecoveredAutoSuspensions` in `ModerationPolicy.js` (called from `refreshWarningBand`, `getAccountAccess`, and `reconcileExpiredStandings`)
+- Lift points: `WarningLiftServices` / `WarningLiftRepositories`; UI `LiftWarningPointsPanel` (Admin User & Team history, moderator Restrictions desk)
 - Admin UI: `/admin/warnings`, warn picker `WarningPresetFields`
 - Product limits: `backend/lib/WarningBands.js` `ACTION_ALLOW`, enforced by `WarningBandServices.assertWarningAllows`
 

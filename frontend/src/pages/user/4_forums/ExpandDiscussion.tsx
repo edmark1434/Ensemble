@@ -88,7 +88,7 @@ const ReplyComposer = ({
   const [attachments, setAttachments] = useState<{ key: string; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { timedOut: forumTimedOut } = useForumTimeout();
+  const { locked: forumTimedOut } = useForumTimeout();
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -213,7 +213,7 @@ const CommentNode = ({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
   const [showChildren, setShowChildren] = useState(false);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const lockedTitle = forumTimedOut ? forumTimeoutMessage : undefined;
   const lockedClass = forumTimedOut ? FORUM_LOCKED_CLASS : "";
   const isAuthor = sameUser(comment.user_id, currentUserId);
@@ -390,7 +390,7 @@ const ExpandDiscussion = () => {
   const { postId } = useParams();
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const currentUserId = user?.user_id || user?.userId || "";
   const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [group, setGroup] = useState<Group | null>(null);

@@ -21,14 +21,20 @@ const BANDS = [
   { id: 'frozen', min: 16, max: 9999, label: 'Frozen access' },
 ];
 
+/**
+ * Merit at which the seeded auto-suspensions end early: back out of auto-suspend range
+ * (fewer than 20 active points). Only auto-suspend rows carry `liftAtMerit`.
+ */
+const AUTO_SUSPEND_LIFT_MERIT = DEFAULT_MERIT - AUTO_SUSPEND_POINTS + 1;
+
 const DEFAULT_THRESHOLDS = Object.freeze([
-  { minPoints: 0, effect: 'none', label: 'Clear', suspendDays: null },
-  { minPoints: 1, effect: 'record', label: 'Record', suspendDays: null },
-  { minPoints: 3, effect: 'limited', label: 'Limited', suspendDays: null },
-  { minPoints: 8, effect: 'restricted', label: 'Restricted', suspendDays: null },
-  { minPoints: 16, effect: 'frozen', label: 'Frozen access', suspendDays: null },
-  { minPoints: 20, effect: 'auto_suspend', label: 'Auto-suspend 7 days', suspendDays: 7 },
-  { minPoints: 30, effect: 'auto_suspend', label: 'Auto-suspend 14 days', suspendDays: 14 },
+  { minPoints: 0, effect: 'none', label: 'Clear', suspendDays: null, liftAtMerit: null },
+  { minPoints: 1, effect: 'record', label: 'Record', suspendDays: null, liftAtMerit: null },
+  { minPoints: 3, effect: 'limited', label: 'Limited', suspendDays: null, liftAtMerit: null },
+  { minPoints: 8, effect: 'restricted', label: 'Restricted', suspendDays: null, liftAtMerit: null },
+  { minPoints: 16, effect: 'frozen', label: 'Frozen access', suspendDays: null, liftAtMerit: null },
+  { minPoints: 20, effect: 'auto_suspend', label: 'Auto-suspend 7 days', suspendDays: 7, liftAtMerit: AUTO_SUSPEND_LIFT_MERIT },
+  { minPoints: 30, effect: 'auto_suspend', label: 'Auto-suspend 14 days', suspendDays: 14, liftAtMerit: AUTO_SUSPEND_LIFT_MERIT },
 ]);
 
 const ACTION_ALLOW = {
@@ -93,17 +99,29 @@ function warningDurationDays(points) {
   return WARNING_DURATION_DAYS[clampWarningPoints(points) - 1];
 }
 
+/** Platform Merit 1–100, or null for "no early lift". */
+function clampLiftMerit(value) {
+  if (value == null || value === '') return null;
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return null;
+  return Math.max(1, Math.min(DEFAULT_MERIT, n));
+}
+
 function normalizeThresholdRows(rows) {
   const list = Array.isArray(rows) ? rows : [];
   return list
-    .map((row) => ({
-      minPoints: Math.max(0, Math.round(Number(row.minPoints ?? row.min_points) || 0)),
-      effect: String(row.effect || '').trim().toLowerCase(),
-      label: String(row.label || '').trim() || String(row.effect || 'Threshold'),
-      suspendDays: row.suspendDays != null || row.suspend_days != null
-        ? clampDurationDays(row.suspendDays ?? row.suspend_days, 7)
-        : null,
-    }))
+    .map((row) => {
+      const effect = String(row.effect || '').trim().toLowerCase();
+      return {
+        minPoints: Math.max(0, Math.round(Number(row.minPoints ?? row.min_points) || 0)),
+        effect,
+        label: String(row.label || '').trim() || String(row.effect || 'Threshold'),
+        suspendDays: row.suspendDays != null || row.suspend_days != null
+          ? clampDurationDays(row.suspendDays ?? row.suspend_days, 7)
+          : null,
+        liftAtMerit: effect === 'auto_suspend' ? clampLiftMerit(row.liftAtMerit ?? row.lift_at_merit) : null,
+      };
+    })
     .filter((row) => THRESHOLD_EFFECTS.includes(row.effect))
     .sort((a, b) => a.minPoints - b.minPoints || a.effect.localeCompare(b.effect));
 }
@@ -157,12 +175,22 @@ function warningBandError(message, code = 'WARNING_RESTRICTED', statusCode = 403
   return error;
 }
 
-function autoSuspendDaysForPoints(points, thresholdRows) {
+/** The auto-suspend row these points land on, or null when they are below every one. */
+function autoSuspendRowForPoints(points, thresholdRows) {
   const n = Math.max(0, Number(points) || 0);
   const rows = resolveThresholds(thresholdRows).filter((row) => row.effect === 'auto_suspend');
   const match = [...rows].reverse().find((row) => n >= row.minPoints);
-  if (match) return match.suspendDays || AUTO_SUSPEND_DAYS;
-  return 0;
+  if (!match) return null;
+  return {
+    minPoints: match.minPoints,
+    label: match.label,
+    suspendDays: match.suspendDays || AUTO_SUSPEND_DAYS,
+    liftAtMerit: match.liftAtMerit ?? null,
+  };
+}
+
+function autoSuspendDaysForPoints(points, thresholdRows) {
+  return autoSuspendRowForPoints(points, thresholdRows)?.suspendDays || 0;
 }
 
 async function refreshLiveThresholds() {
@@ -189,6 +217,7 @@ module.exports = {
   AUTO_SUSPEND_LONG_POINTS,
   AUTO_SUSPEND_DAYS,
   AUTO_SUSPEND_LONG_DAYS,
+  AUTO_SUSPEND_LIFT_MERIT,
   BANDS,
   PRODUCT_BAND_IDS,
   THRESHOLD_EFFECTS,
@@ -197,10 +226,12 @@ module.exports = {
   meritFromWarningPoints,
   clampWarningPoints,
   clampDurationDays,
+  clampLiftMerit,
   warningDurationDays,
   bandForPoints,
   actionAllowed,
   warningBandError,
+  autoSuspendRowForPoints,
   autoSuspendDaysForPoints,
   setLiveThresholds,
   getLiveThresholds,

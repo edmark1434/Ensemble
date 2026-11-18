@@ -147,6 +147,7 @@ Warning points stay on leftover unexpired rows. After appeal lift, the auto band
 | Action | Who | Warning points | Access |
 |---|---|---|---|
 | Rescind one warning | Staff who can warn | that row no longer counts | Unchanged, except remaining band/suspend |
+| Lift points | Admin / Support Moderator | N points (or up to a target merit) stop counting; warnings stay on the Record | Band follows the new merit; an auto-suspension ends once its recovery merit is reached ([warning-system.md](warning-system.md) §8, §12) |
 | Pardon | Admin / Support Moderator | all warning hits cleared | Active |
 | Appeal accepted | Support via “Appeal an account penalty” | recompute after 24h lift | ban/lock/suspend end in 24h |
 | Appeal denied | Support | unchanged | optional 12-month appeal block |
@@ -444,6 +445,8 @@ Frozen access is a warning-point band, not a standing. It is on this map so staf
 
 **Owner:** Record modal — standing, warnings, timeouts, recent activity. Warning points and auto band live in the same modal.
 
+**Suspended members are stopped before they start.** The backend refuses every write, and the client also switches writes off up front so nobody fills in a form for nothing. `SuspensionGuard` (`frontend/src/components/account/SuspensionGuard.tsx`, rules in `frontend/src/lib/suspensionGuard.ts`) locks write controls site-wide. Locked controls are faded, show a not-allowed cursor and an amber dashed ring on hover, have a tooltip, and give one heads-up toast on click; typing, uploads and form submits are blocked too. Reading, navigation, search, filters, logout, the appeal page and support tickets stay open. `SuspendedRouteGate` shows a "paused" page instead of write-only pages (job/gig create and edit, proposals, gig orders, checkout, new project, dispute form, team invite/join, business verification). Forum controls treat a suspension like a timeout. A control that must stay usable while suspended goes inside `data-suspension-keep`.
+
 **Owner status bar:** while signed in, a bar under the header shows Suspended, Frozen access, Credits on hold, or Forum timeout with a live countdown. "How to fix" opens a sheet listing, for each one, what is paused, when it ends (`suspensionEndsAt`, `warningBandEndsAt`, `creditsFrozenUntil`, `forumTimeoutEndsAt` from `getAccountAccess`) and how to get back to normal (wait, or appeal). The appeal page and the wallet show the same list. Copy lives in `frontend/src/lib/standing.ts`. Frozen access and credit holds can be hidden until they change; a suspension cannot.
 
 **Never public:** warning text, points, staff names, case IDs, pardoned rows as active.
@@ -496,7 +499,7 @@ active warning points reach 20
 
 ## 13. Anti-abuse and implementation
 
-- Staff cannot invent a custom point value. They warn, rescind, or pardon. Active points are summed from `violations`.
+- Staff cannot invent a custom point value. They warn, rescind, lift points, or pardon. Lifting only ever lowers points. Active points are summed from `violations`.
 - Nobody can suspend their own account. Moderators cannot suspend a moderator or an admin. Only Admin can suspend those staff accounts. Auto-suspend from warning points is unchanged.
 - Only warnings add points. Timeout, suspend, lock, ban, and disputes never add a second hit.
 - Expired suspend/ban/lock and expired warnings lift in a **background job**, not only on next page load.

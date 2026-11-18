@@ -10,6 +10,7 @@ const {
   THRESHOLD_EFFECTS,
   PRODUCT_BAND_IDS,
   DEFAULT_THRESHOLDS,
+  DEFAULT_MERIT,
   clampDurationDays,
   setLiveThresholds,
 } = require('../lib/WarningBands');
@@ -53,6 +54,36 @@ function normalizeSuspendDays(effect, suspendDays) {
   return clampDurationDays(suspendDays, 7);
 }
 
+function hasOwn(body, key) {
+  return Boolean(body) && Object.prototype.hasOwnProperty.call(body, key);
+}
+
+/**
+ * Merit at which an auto-suspension ends early. Empty means it always runs its full clock.
+ * It must sit above the merit the suspension starts at, or it would lift straight away.
+ */
+function normalizeLiftAtMerit(effect, value, minPoints) {
+  if (effect !== 'auto_suspend') return null;
+  if (value == null || value === '') return null;
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1 || n > DEFAULT_MERIT) {
+    throw serviceError(`Early lift merit must be between 1 and ${DEFAULT_MERIT}, or empty to keep the full suspension.`);
+  }
+  const startsAtMerit = Math.max(0, DEFAULT_MERIT - minPoints);
+  if (n <= startsAtMerit) {
+    throw serviceError(
+      `This auto-suspend starts at ${startsAtMerit} merit (${minPoints} warning points), so the early lift must be above ${startsAtMerit}.`
+    );
+  }
+  return n;
+}
+
+function liftAtMeritFromBody(body) {
+  if (hasOwn(body, 'liftAtMerit')) return body.liftAtMerit;
+  if (hasOwn(body, 'lift_at_merit')) return body.lift_at_merit;
+  return undefined;
+}
+
 async function listWarningThresholdsService() {
   try {
     const rows = await listWarningThresholds();
@@ -68,6 +99,7 @@ async function listWarningThresholdsService() {
     ...row,
     min_points: row.minPoints,
     suspend_days: row.suspendDays,
+    lift_at_merit: row.liftAtMerit,
     note: '',
     is_system: true,
     sort_order: index,
@@ -79,6 +111,7 @@ async function createWarningThresholdService(body) {
   const effect = normalizeEffect(body?.effect);
   const label = normalizeLabel(body?.label, effect);
   const suspendDays = normalizeSuspendDays(effect, body?.suspendDays ?? body?.suspend_days);
+  const liftAtMerit = normalizeLiftAtMerit(effect, liftAtMeritFromBody(body), minPoints);
   const note = String(body?.note || '').trim().slice(0, 500);
   const existing = await getWarningThresholdByMinPoints(minPoints);
   if (existing) {
@@ -89,6 +122,7 @@ async function createWarningThresholdService(body) {
     effect,
     label,
     suspendDays,
+    liftAtMerit,
     note,
     isSystem: false,
     sortOrder: Number.isFinite(Number(body?.sortOrder)) ? Number(body.sortOrder) : minPoints,
@@ -112,7 +146,14 @@ async function updateWarningThresholdService(thresholdId, body) {
     }
   }
   const suspendSource = body?.suspendDays ?? body?.suspend_days;
+  // Re-check the lift whenever it, the effect, or the trigger point moves.
+  const liftSource = liftAtMeritFromBody(body);
+  const liftChanged = liftSource !== undefined || body?.effect != null || minPoints !== current.minPoints;
+  const liftAtMerit = liftChanged
+    ? normalizeLiftAtMerit(effect, liftSource === undefined ? current.liftAtMerit : liftSource, minPoints)
+    : undefined;
   const updated = await updateWarningThreshold(thresholdId, {
+    liftAtMerit,
     minPoints,
     effect,
     label: body?.label != null ? normalizeLabel(body.label, effect) : undefined,

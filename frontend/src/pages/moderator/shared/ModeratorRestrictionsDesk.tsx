@@ -11,6 +11,7 @@ import { WarningPresetFields } from '@/pages/admin/userTeam/components/WarningPr
 import { PunishmentPresetFields } from '@/pages/admin/userTeam/components/PunishmentPresetFields';
 import type { PunishmentKind, PunishmentPreset } from '@/lib/punishmentCatalog';
 import { getUserTeamCapabilities, type UserTeamVariant } from '@/pages/admin/userTeam/userTeamCapabilities';
+import { LiftWarningPointsPanel } from '@/pages/admin/userTeam/components/LiftWarningPointsPanel';
 import { accentText, titleCaseWords, type Accent } from './ui';
 import { meritBandLabel, meritFromWarningPoints } from '@/lib/merit';
 
@@ -37,6 +38,8 @@ type ViolationRow = {
   type: string;
   reason?: string | null;
   points: number;
+  /** Points it was issued with, when staff lifted some or all of them. */
+  originalPoints?: number | null;
   status: string;
   issuedBy: string;
   createdAt: string;
@@ -144,7 +147,8 @@ function statusTone(status: string): ChipTone {
 
 function warningBucket(row: ViolationRow): Exclude<WarningScope, 'all'> {
   const status = String(row.status || '').toLowerCase();
-  if (status === 'rescinded') return 'rescinded';
+  // A warning lifted to zero points no longer counts, like a rescinded one.
+  if (status === 'rescinded' || status === 'lifted') return 'rescinded';
   if (status === 'expired' || row.active === false) return 'expired';
   return 'active';
 }
@@ -915,7 +919,14 @@ export default function ModeratorRestrictionsDesk({
                                   </div>
                                   <p className="mt-2 text-sm text-zinc-200">
                                     {row.type}
-                                    <span className="text-zinc-500"> · {row.points} pts</span>
+                                    <span className="text-zinc-500">
+                                      {' · '}
+                                      {String(row.status || '').toLowerCase() === 'lifted'
+                                        ? `${row.originalPoints ?? row.points} pts, all lifted`
+                                        : row.originalPoints != null && Number(row.originalPoints) > Number(row.points)
+                                          ? `${row.points} pts (${Number(row.originalPoints) - Number(row.points)} of ${row.originalPoints} lifted)`
+                                          : `${row.points} pts`}
+                                    </span>
                                   </p>
                                   {row.reason ? <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-zinc-400">{row.reason}</p> : null}
                                   <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-500">
@@ -1090,6 +1101,22 @@ export default function ModeratorRestrictionsDesk({
                   <Fact label="Warnings" value={String(selectedWarnings.length)} />
                   <Fact label="Account id" value={shortId(selected.accountId)} title={selected.accountId} />
                 </dl>
+
+                {caps.canPardon && activePoints > 0 ? (
+                  <div className="mt-4">
+                    <LiftWarningPointsPanel
+                      accountId={selected.accountId}
+                      activeWarnings={selectedWarnings
+                        .filter((row) => warningBucket(row) === 'active')
+                        .map((row) => ({
+                          violationId: row.id,
+                          label: `${row.type} (${row.number || shortId(row.id)})`,
+                          points: Math.min(10, Math.max(1, Math.round(Number(row.points) || 1))),
+                        }))}
+                      onLifted={load}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="mt-4">
                   <Segmented

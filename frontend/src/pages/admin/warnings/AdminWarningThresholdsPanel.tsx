@@ -16,6 +16,8 @@ type Threshold = {
   effect: ThresholdEffect;
   label: string;
   suspendDays: number | null;
+  /** Auto-suspend only: Platform Merit at which the suspension ends early. Null = full clock. */
+  liftAtMerit: number | null;
   note: string;
   is_system?: boolean;
 };
@@ -25,8 +27,15 @@ type ThresholdForm = {
   effect: ThresholdEffect;
   label: string;
   suspendDays: number;
+  /** Empty string = no early lift. */
+  liftAtMerit: string;
   note: string;
 };
+
+/** Platform Merit a member must climb back to before a band starting at `minPoints` ends. */
+function meritThatEnds(minPoints: number) {
+  return Math.min(100, Math.max(1, 101 - minPoints));
+}
 
 const EFFECTS: { id: ThresholdEffect; label: string; hint: string }[] = [
   { id: 'none', label: 'Clear', hint: 'Full access' },
@@ -42,6 +51,7 @@ const emptyForm = (): ThresholdForm => ({
   effect: 'limited',
   label: '',
   suspendDays: 7,
+  liftAtMerit: '',
   note: '',
 });
 
@@ -57,10 +67,15 @@ function effectLabel(effect: string) {
 const THRESHOLDS_URL = '/api/admin/warning-thresholds';
 
 function thresholdRows(data: unknown): Threshold[] {
-  return ((data || []) as (Threshold & { min_points?: number; suspend_days?: number | null })[]).map((row) => ({
+  return ((data || []) as (Threshold & {
+    min_points?: number;
+    suspend_days?: number | null;
+    lift_at_merit?: number | null;
+  })[]).map((row) => ({
     ...row,
     minPoints: Number(row.minPoints ?? row.min_points ?? 0),
     suspendDays: row.suspendDays ?? row.suspend_days ?? null,
+    liftAtMerit: row.liftAtMerit ?? row.lift_at_merit ?? null,
     note: row.note || '',
   }));
 }
@@ -96,6 +111,7 @@ export default function AdminWarningThresholdsPanel() {
       effect: row.effect,
       label: row.label,
       suspendDays: row.suspendDays || 7,
+      liftAtMerit: row.liftAtMerit == null ? '' : String(row.liftAtMerit),
       note: row.note || '',
     });
     setFormError('');
@@ -110,6 +126,7 @@ export default function AdminWarningThresholdsPanel() {
       effect: form.effect,
       label: form.label.trim(),
       suspendDays: form.effect === 'auto_suspend' ? Number(form.suspendDays) : null,
+      liftAtMerit: form.effect === 'auto_suspend' && form.liftAtMerit.trim() !== '' ? Number(form.liftAtMerit) : null,
       note: form.note.trim(),
     };
     try {
@@ -153,8 +170,10 @@ export default function AdminWarningThresholdsPanel() {
       <div className="mb-4 flex items-start justify-between gap-3">
         <p className="max-w-2xl text-xs leading-relaxed text-zinc-500">
           When a user&apos;s <span className="text-zinc-300">active warning points</span> reach a row,
-          that punishment applies until points drop below it. Auto-suspend is a standing cooldown and
-          does not stack if they are already suspended.
+          that punishment applies until points drop below it, so it ends by itself once their Platform
+          Merit climbs back to the level shown (warnings expire, or staff rescind or lift points).
+          Auto-suspend is a standing cooldown and does not stack if they are already suspended; it can
+          also end early once merit recovers.
         </p>
         <button
           type="button"
@@ -191,9 +210,25 @@ export default function AdminWarningThresholdsPanel() {
                     <span className="mt-0.5 block text-[11px] text-zinc-500">{effectLabel(row.effect)}</span>
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
-                    {row.effect === 'auto_suspend'
-                      ? `${row.suspendDays || 7} day cooldown`
-                      : 'Until points drop below this row'}
+                    {row.effect === 'auto_suspend' ? (
+                      <>
+                        {`${row.suspendDays || 7} day cooldown`}
+                        <span className="mt-0.5 block text-[11px] text-emerald-300/80">
+                          {row.liftAtMerit != null
+                            ? `Ends early at merit ${row.liftAtMerit}`
+                            : 'Runs the full clock'}
+                        </span>
+                      </>
+                    ) : row.effect === 'none' ? (
+                      'Full access'
+                    ) : (
+                      <>
+                        Until points drop below this row
+                        <span className="mt-0.5 block text-[11px] text-emerald-300/80">
+                          Ends by itself at merit {meritThatEnds(row.minPoints)}
+                        </span>
+                      </>
+                    )}
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-zinc-500">{row.note || '—'}</td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -322,6 +357,49 @@ export default function AdminWarningThresholdsPanel() {
                         {days}d
                       </button>
                     ))}
+                  </div>
+                </label>
+              ) : null}
+              {form.effect === 'auto_suspend' ? (
+                <label>
+                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                    End early when Platform Merit recovers to
+                  </span>
+                  <input
+                    type="number"
+                    min={meritThatEnds(Number(form.minPoints) || 0)}
+                    max={100}
+                    value={form.liftAtMerit}
+                    placeholder="Empty = run the full suspension"
+                    onChange={(event) => setForm((current) => ({ ...current, liftAtMerit: event.target.value }))}
+                    className={fieldClass}
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    This suspension starts at merit {Math.max(0, 100 - (Number(form.minPoints) || 0))}. Once warnings
+                    expire or staff rescind or lift points and merit reaches this number, the suspension ends right
+                    away and the member is told. Staff suspensions are never ended this way. Changes apply to new
+                    auto-suspensions.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          liftAtMerit: String(meritThatEnds(Number(current.minPoints) || 0)),
+                        }))
+                      }
+                      className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:text-white"
+                    >
+                      As soon as they drop under this row ({meritThatEnds(Number(form.minPoints) || 0)})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, liftAtMerit: '' }))}
+                      className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:text-white"
+                    >
+                      Never, run the full clock
+                    </button>
                   </div>
                 </label>
               ) : null}

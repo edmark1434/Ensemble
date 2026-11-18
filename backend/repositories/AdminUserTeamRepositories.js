@@ -160,6 +160,7 @@ async function fetchHistoryForAccounts(accountIds) {
         v.type,
         v.reason,
         v.points,
+        v.points_original,
         v.status,
         v.created_at,
         v.expires_at,
@@ -216,6 +217,8 @@ async function fetchHistoryForAccounts(accountIds) {
       type: row.type || 'Violation',
       reason: row.reason || '—',
       points: Number(row.points || 0),
+      // Issued points when staff lifted some (or all) of them; null when never lifted.
+      originalPoints: row.points_original == null ? null : Number(row.points_original),
       by: row.issued_by,
       timeAgo: formatRelativeTime(row.created_at),
       expiresAt: row.expires_at || null,
@@ -1353,7 +1356,10 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     SET status = CASE WHEN $1::text = 'Active' THEN ${restingStatusSql()} ELSE $1::text END,
         suspension_ends_at = $2,
         ban_ends_at = $3,
-        lock_ends_at = $4
+        lock_ends_at = $4,
+        -- A staff decision replaces any automatic suspension, so merit recovery no longer ends it.
+        suspension_source = NULL,
+        auto_suspend_lift_merit = NULL
     WHERE account_id = $5
     RETURNING status
     `,
@@ -1876,6 +1882,8 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       UPDATE accounts
       SET status = ${restingStatusSql()},
           suspension_ends_at = NULL,
+          suspension_source = NULL,
+          auto_suspend_lift_merit = NULL,
           ban_ends_at = NULL,
           lock_ends_at = NULL
       WHERE account_id = $1
