@@ -1,14 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Check, Edit, X, Save, AlertTriangle } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Check, Info, Loader2, Lock, Pencil, Save, Search, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
-import { showSuccessToast, showErrorToast } from '@/components/utility/toast';
+import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 
-interface Feature {
+interface PlanFeature {
   feature_id: string;
-  category: string;
+  feature_key?: string;
   title: string;
   value: string;
+}
+
+interface CatalogFeature {
+  feature_id: string;
+  feature_key?: string;
+  title: string;
+  description?: string;
 }
 
 interface Plan {
@@ -17,193 +24,423 @@ interface Plan {
   description: string;
   price: number;
   days_of_trials: number;
-  features: Feature[];
+  is_free?: boolean;
+  features: PlanFeature[];
 }
 
-const PLANS_URL = '/api/admin/subscriptions/plans';
+type PlanRules = { descriptionMax: number; priceMax: number; trialDaysMax: number; featureValueMax: number };
+type PlansPayload = { plans: Plan[]; allFeatures: CatalogFeature[]; rules?: PlanRules };
+type FieldErrors = Record<string, string>;
 
-function cachedPlans(): { plans: Plan[]; allFeatures: Feature[] } | null {
+const PLANS_URL = '/api/admin/subscriptions/plans';
+const FALLBACK_RULES: PlanRules = { descriptionMax: 500, priceMax: 100000, trialDaysMax: 90, featureValueMax: 100 };
+
+const INPUT =
+  'w-full rounded-xl border bg-[#0c0d12] px-3 py-2 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50';
+const tone = (invalid?: boolean) =>
+  invalid ? 'border-amber-500/50 focus:ring-amber-500/15' : 'border-white/10 focus:border-rose-500/40 focus:ring-rose-500/15';
+
+function cachedPlans(): PlansPayload | null {
   const cached = peekStaffGet(PLANS_URL);
   return cached?.data?.success ? cached.data.data : null;
 }
 
-export function AdminSubscriptionsTab() {
-  const [plans, setPlans] = useState<Plan[]>(() => cachedPlans()?.plans ?? []);
-  const [allFeatures, setAllFeatures] = useState<Feature[]>(() => cachedPlans()?.allFeatures ?? []);
-  const [loading, setLoading] = useState(() => !cachedPlans());
+const isFreePlan = (plan: Plan) => plan.is_free ?? Number(plan.price) === 0;
 
-  // Edit Modal State
-  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  const [editForm, setEditForm] = useState<{
-    name: string;
-    description: string;
-    price: number;
-    days_of_trials: number;
-    selectedFeatures: { feature_id: string; value: string }[];
-  }>({ name: '', description: '', price: 0, days_of_trials: 0, selectedFeatures: [] });
-  const [isSaving, setIsSaving] = useState(false);
+const formatPrice = (price: number) =>
+  `₱${price.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
+function planIcon(name: string) {
+  const key = name.toLowerCase();
+  if (key === 'premium') return '/icons/subscription/premium.png';
+  if (key === 'business' || key === 'studio') return '/icons/subscription/studio.png';
+  return '/icons/subscription/freemium.png';
+}
+
+function FieldError({ children }: { children?: string }) {
+  if (!children) return null;
+  return (
+    <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-300">
+      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+      {children}
+    </p>
+  );
+}
+
+type EditForm = {
+  description: string;
+  priceText: string;
+  trialText: string;
+  features: { feature_id: string; value: string }[];
+};
+
+function formFromPlan(plan: Plan): EditForm {
+  return {
+    description: plan.description || '',
+    priceText: String(plan.price),
+    trialText: String(plan.days_of_trials || 0),
+    features: plan.features.map((f) => ({ feature_id: f.feature_id, value: f.value ?? '' })),
+  };
+}
+
+function validate(form: EditForm, plan: Plan, rules: PlanRules): FieldErrors {
+  const errors: FieldErrors = {};
+  const free = isFreePlan(plan);
+  const description = form.description.trim();
+  if (!description) errors.description = 'Required.';
+  else if (description.length > rules.descriptionMax) errors.description = `Use ${rules.descriptionMax} characters or fewer.`;
+
+  const price = Number(form.priceText);
+  if (form.priceText.trim() === '' || !Number.isFinite(price)) errors.price = 'Enter a number.';
+  else if (Math.abs(Math.round(price * 100) - price * 100) > 1e-6) errors.price = 'Use at most 2 decimal places.';
+  else if (free && price !== 0) errors.price = 'The free plan must stay at ₱0.';
+  else if (!free && (price < 1 || price > rules.priceMax)) errors.price = `Enter a price from ₱1 to ₱${rules.priceMax.toLocaleString()}.`;
+
+  const days = Number(form.trialText);
+  if (form.trialText.trim() === '' || !Number.isInteger(days) || days < 0 || days > rules.trialDaysMax) {
+    errors.days_of_trials = `Enter a whole number from 0 to ${rules.trialDaysMax}.`;
+  } else if (free && days > 0) {
+    errors.days_of_trials = 'The free plan has no trial.';
+  }
+
+  for (const f of form.features) {
+    if (f.value.trim().length > rules.featureValueMax) errors[`features.${f.feature_id}`] = `Use ${rules.featureValueMax} characters or fewer.`;
+  }
+  return errors;
+}
+
+function PlanEditor({
+  plan,
+  catalog,
+  rules,
+  onClose,
+  onSaved,
+}: {
+  plan: Plan;
+  catalog: CatalogFeature[];
+  rules: PlanRules;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [form, setForm] = useState<EditForm>(() => formFromPlan(plan));
+  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+  const titleId = useId();
+  const free = isFreePlan(plan);
+
+  const initial = useMemo(() => JSON.stringify(formFromPlan(plan)), [plan]);
+  const dirty = JSON.stringify(form) !== initial;
+  const errors = { ...validate(form, plan, rules), ...serverErrors };
+  const hasErrors = Object.keys(errors).length > 0;
+
+  const close = () => {
+    if (saving) return;
+    if (dirty && !window.confirm('Discard your changes to this plan?')) return;
+    onClose();
+  };
+  const closeRef = useRef(close);
   useEffect(() => {
-    fetchPlans();
+    closeRef.current = close;
+  });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  const update = (patch: Partial<EditForm>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+    if (Object.keys(serverErrors).length) setServerErrors({});
+  };
+  const selected = new Map(form.features.map((f) => [f.feature_id, f]));
+  const toggle = (featureId: string) =>
+    update({
+      features: selected.has(featureId)
+        ? form.features.filter((f) => f.feature_id !== featureId)
+        : [...form.features, { feature_id: featureId, value: '' }],
+    });
+  const setValue = (featureId: string, value: string) =>
+    update({ features: form.features.map((f) => (f.feature_id === featureId ? { ...f, value } : f)) });
+
+  const q = query.trim().toLowerCase();
+  const visible = q ? catalog.filter((f) => f.title.toLowerCase().includes(q) || f.feature_key?.toLowerCase().includes(q)) : catalog;
+
+  const save = async () => {
+    if (hasErrors || !dirty) return;
+    setSaving(true);
+    try {
+      await api.put(`/api/admin/subscriptions/plans/${plan.plan_id}`, {
+        description: form.description.trim(),
+        price: Number(form.priceText),
+        days_of_trials: Number(form.trialText),
+        features: form.features.map((f) => ({ feature_id: f.feature_id, value: f.value.trim() })),
+      });
+      showSuccessToast(`${plan.name} plan saved`);
+      await onSaved();
+      onClose();
+    } catch (err: unknown) {
+      const body = (err as { response?: { data?: { message?: string; errors?: FieldErrors } } })?.response?.data;
+      if (body?.errors) setServerErrors(body.errors);
+      showErrorToast(body?.message || 'The plan could not be saved');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 md:pl-[260px]" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <button type="button" className="absolute inset-0 bg-black/70" onClick={close} aria-label="Close" />
+      <div className="relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src={planIcon(plan.name)} alt="" className="h-8 w-8 object-contain" />
+            <div className="min-w-0">
+              <h2 id={titleId} className="text-base font-bold text-white">
+                Edit {plan.name} plan
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-500">Members see these details on the Credits &amp; Subscriptions page.</p>
+            </div>
+          </div>
+          <button type="button" onClick={close} className="rounded-lg p-1.5 text-zinc-400 hover:text-white" aria-label="Close">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid flex-1 gap-6 overflow-y-auto px-5 py-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium text-zinc-500">Plan name</p>
+              <p className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm text-zinc-300">
+                <Lock className="h-3.5 w-3.5 text-zinc-500" />
+                {plan.name}
+              </p>
+              <p className="mt-1 text-[11px] text-zinc-600">Names identify tiers in code (free plan, team limits), so they are fixed.</p>
+            </div>
+            <div>
+              <label htmlFor={`${titleId}-price`} className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+                Monthly price
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-zinc-500">₱</span>
+                <input
+                  id={`${titleId}-price`}
+                  type="text"
+                  inputMode="decimal"
+                  value={form.priceText}
+                  disabled={free}
+                  onChange={(e) => update({ priceText: e.target.value.replace(/[^\d.]/g, '') })}
+                  className={`${INPUT} ${tone(Boolean(errors.price))} pl-7 tabular-nums`}
+                />
+              </div>
+              <FieldError>{errors.price}</FieldError>
+              {free && <p className="mt-1 text-[11px] text-zinc-600">The free plan stays at ₱0.</p>}
+            </div>
+            <div>
+              <label htmlFor={`${titleId}-trial`} className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+                Free trial
+              </label>
+              <div className="relative">
+                <input
+                  id={`${titleId}-trial`}
+                  type="text"
+                  inputMode="numeric"
+                  value={form.trialText}
+                  disabled={free}
+                  onChange={(e) => update({ trialText: e.target.value.replace(/\D/g, '') })}
+                  className={`${INPUT} ${tone(Boolean(errors.days_of_trials))} pr-14 tabular-nums`}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-zinc-500">days</span>
+              </div>
+              <FieldError>{errors.days_of_trials}</FieldError>
+            </div>
+            <div>
+              <label htmlFor={`${titleId}-description`} className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-zinc-500">
+                Description
+                <span className={form.description.trim().length > rules.descriptionMax ? 'text-amber-300' : 'text-zinc-600'}>
+                  {form.description.trim().length}/{rules.descriptionMax}
+                </span>
+              </label>
+              <textarea
+                id={`${titleId}-description`}
+                value={form.description}
+                onChange={(e) => update({ description: e.target.value })}
+                rows={4}
+                className={`${INPUT} ${tone(Boolean(errors.description))} resize-none`}
+              />
+              <FieldError>{errors.description}</FieldError>
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[11px] font-medium text-zinc-500">Included features</p>
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">{form.features.length} included</span>
+            </div>
+            <div className="relative mb-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Filter features"
+                aria-label="Filter features"
+                className={`${INPUT} ${tone()} pl-8`}
+              />
+            </div>
+            <FieldError>{errors.features}</FieldError>
+            <ul className="max-h-[340px] divide-y divide-white/[0.05] overflow-y-auto rounded-xl border border-white/[0.08] bg-[#0c0d12]">
+              {visible.map((feature) => {
+                const current = selected.get(feature.feature_id);
+                const valueError = errors[`features.${feature.feature_id}`];
+                return (
+                  <li key={feature.feature_id} className={`px-3 py-2.5 ${current ? 'bg-rose-500/[0.04]' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={Boolean(current)}
+                        aria-label={feature.title}
+                        onClick={() => toggle(feature.feature_id)}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+                          current ? 'border-rose-400 bg-rose-500' : 'border-white/20 hover:border-white/40'
+                        }`}
+                      >
+                        {current && <Check className="h-3.5 w-3.5 text-white" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggle(feature.feature_id)}
+                        className={`min-w-0 flex-1 text-left text-sm ${current ? 'font-medium text-white' : 'text-zinc-400'}`}
+                      >
+                        {feature.title}
+                      </button>
+                      {current && (
+                        <input
+                          type="text"
+                          value={current.value}
+                          onChange={(e) => setValue(feature.feature_id, e.target.value)}
+                          placeholder="e.g. 1080p, Unlimited"
+                          aria-label={`${feature.title} value`}
+                          className={`w-1/2 rounded-lg border bg-[#14151c] px-2 py-1 text-right text-xs text-emerald-300 outline-none focus:ring-2 ${tone(Boolean(valueError))}`}
+                        />
+                      )}
+                    </div>
+                    <FieldError>{valueError}</FieldError>
+                  </li>
+                );
+              })}
+              {!visible.length && <li className="px-3 py-4 text-xs text-zinc-500">No features match “{query}”.</li>}
+            </ul>
+            <p className="mt-2 text-[11px] text-zinc-600">
+              Some values are read by the product (for example team or upload limits), so keep the format consistent: a number, “Unlimited”, or a resolution.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/[0.08] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-start gap-2 text-[11px] text-zinc-500">
+            <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+            Members see changes right away. Recurring billing already set up with the payment provider is not changed by this save.
+          </p>
+          <div className="flex shrink-0 justify-end gap-2">
+            <button type="button" onClick={close} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving || hasErrors || !dirty}
+              className="inline-flex items-center gap-2 rounded-xl bg-rose-500/90 px-5 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save plan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AdminSubscriptionsTab() {
+  const [payload, setPayload] = useState<PlansPayload | null>(cachedPlans);
+  const [loading, setLoading] = useState(() => !cachedPlans());
+  const [loadError, setLoadError] = useState('');
+  const [editing, setEditing] = useState<Plan | null>(null);
 
   const fetchPlans = async () => {
     try {
       const res = await staffGet(PLANS_URL);
       if (res.data?.success) {
-        setPlans(res.data.data.plans);
-        setAllFeatures(res.data.data.allFeatures);
+        setPayload(res.data.data);
+        setLoadError('');
+      } else {
+        setLoadError('Subscription plans could not be loaded.');
       }
-    } catch (err) {
-      console.error('Failed to fetch admin plans:', err);
-      showErrorToast('Failed to load subscription plans');
+    } catch {
+      setLoadError('Subscription plans could not be loaded.');
     } finally {
       setLoading(false);
     }
   };
 
-  const getSubscriptionIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "premium":
-        return "/icons/subscription/premium.png";
-      case "business":
-      case "studio":
-        return "/icons/subscription/studio.png";
-      default:
-        return "/icons/subscription/freemium.png";
-    }
-  };
+  useEffect(() => {
+    void fetchPlans();
+  }, []);
 
-  const handleEditClick = (plan: Plan) => {
-    setEditingPlan(plan);
-    setEditForm({
-      name: plan.name,
-      description: plan.description,
-      price: plan.price,
-      days_of_trials: plan.days_of_trials,
-      selectedFeatures: plan.features.map(f => ({ feature_id: f.feature_id, value: f.value })),
-    });
-  };
-
-  const toggleFeature = (featureId: string, defaultValue: string) => {
-    setEditForm(prev => {
-      const isSelected = prev.selectedFeatures.some(f => f.feature_id === featureId);
-      return {
-        ...prev,
-        selectedFeatures: isSelected 
-          ? prev.selectedFeatures.filter(f => f.feature_id !== featureId)
-          : [...prev.selectedFeatures, { feature_id: featureId, value: defaultValue }]
-      };
-    });
-  };
-
-  const updateFeatureValue = (featureId: string, newValue: string) => {
-    setEditForm(prev => ({
-      ...prev,
-      selectedFeatures: prev.selectedFeatures.map(f => 
-        f.feature_id === featureId ? { ...f, value: newValue } : f
-      )
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!editingPlan) return;
-    setIsSaving(true);
-    try {
-      // Save plan details
-      await api.put(`/api/admin/subscriptions/plans/${editingPlan.plan_id}`, {
-        name: editForm.name,
-        description: editForm.description,
-        price: editForm.price,
-        days_of_trials: editForm.days_of_trials
-      });
-
-      // Save features
-      await api.put(`/api/admin/subscriptions/plans/${editingPlan.plan_id}/features`, {
-        features: editForm.selectedFeatures
-      });
-
-      showSuccessToast(`${editForm.name} updated successfully!`);
-      setEditingPlan(null);
-      await fetchPlans(); // Refetch to show updated data
-    } catch (err) {
-      console.error(err);
-      showErrorToast('Failed to update plan');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
-      </div>
-    );
-  }
+  const rules = payload?.rules ?? FALLBACK_RULES;
+  const plans = payload?.plans ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-white">Subscription Packages</h2>
-          <p className="text-sm text-zinc-400">Manage the plans, prices, and exact features offered to users.</p>
-        </div>
+    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
+      <div className="border-b border-white/[0.06] px-5 py-4">
+        <h2 className="text-sm font-semibold text-white">Subscription plans</h2>
+        <p className="mt-0.5 text-xs text-zinc-500">Monthly price, free trial and included features of each membership tier.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3 items-stretch">
-        {plans.map((tier) => {
-          const isFree = tier.price === 0;
-          const isPremium = tier.name.toLowerCase() === "premium";
-          const isBusiness = tier.name.toLowerCase() === "business" || tier.name.toLowerCase() === "studio";
-
-          return (
-            <div
-              key={tier.plan_id}
-              className={`flex flex-col justify-between rounded-2xl border p-6 relative transition-all duration-300 backdrop-blur-xl ${
-                isPremium
-                  ? "border-amber-500/40 bg-gradient-to-b from-amber-500/[0.08] via-amber-500/[0.02] to-transparent shadow-[0_0_20px_rgba(245,158,11,0.05)]"
-                  : isBusiness
-                  ? "border-cyan-500/40 bg-gradient-to-br from-cyan-500/[0.08] via-transparent to-purple-500/[0.08] shadow-[0_0_20px_rgba(6,182,212,0.05)]"
-                  : "border-white/10 bg-white/[0.02]"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2.5">
-                    <img
-                      src={getSubscriptionIcon(tier.name)}
-                      alt={tier.name}
-                      className="h-8 w-8 object-contain drop-shadow-[0_3px_10px_rgba(255,255,255,0.18)]"
-                    />
-                    <span>{tier.name}</span>
-                  </h3>
-                  {isPremium && (
-                    <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-300">
-                      Most popular
-                    </span>
-                  )}
+      {loading && !payload ? (
+        <div className="grid gap-4 p-5 md:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="console-skeleton h-56 rounded-2xl" />
+          ))}
+        </div>
+      ) : loadError && !payload ? (
+        <div className="p-5">
+          <p className="text-sm text-red-200">{loadError}</p>
+          <button type="button" onClick={() => void fetchPlans()} className="mt-3 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:text-white">
+            Try again
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4 p-5 md:grid-cols-3">
+          {plans.map((plan) => {
+            const free = isFreePlan(plan);
+            return (
+              <article key={plan.plan_id} className="flex flex-col rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
+                <div className="flex items-center gap-2.5">
+                  <img src={planIcon(plan.name)} alt="" className="h-8 w-8 object-contain" />
+                  <h3 className="text-base font-bold text-white">{plan.name}</h3>
                 </div>
-                <p className="text-xs text-zinc-400 mb-5">{tier.description}</p>
-
-                <div className="text-3xl font-extrabold text-white mb-2">
-                  {isFree ? "Free" : `₱${tier.price.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
-                  {!isFree && <span className="text-sm font-normal text-zinc-500 ml-1">/mo</span>}
-                </div>
-                {tier.days_of_trials > 0 && (
-                  <p className="text-xs text-blue-400 font-medium mb-6">{tier.days_of_trials}-Day Free Trial Included</p>
-                )}
-
-                <div className="h-px bg-white/10 my-6" />
-
-                <ul className="space-y-3 mb-8">
-                  {tier.features && tier.features.length > 0 ? (
-                    tier.features.map((feature) => (
+                <p className="mt-2 line-clamp-3 text-xs text-zinc-400">{plan.description}</p>
+                <p className="mt-4 text-2xl font-bold text-white">
+                  {free ? 'Free' : formatPrice(plan.price)}
+                  {!free && <span className="ml-1 text-sm font-normal text-zinc-500">/mo</span>}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {plan.days_of_trials > 0 ? `${plan.days_of_trials}-day free trial` : 'No free trial'}
+                </p>
+                <div className="my-4 h-px bg-white/[0.06]" />
+                <ul className="flex-1 space-y-2">
+                  {plan.features.length ? (
+                    plan.features.map((feature) => (
                       <li key={feature.feature_id} className="flex items-start gap-2 text-xs">
-                        <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
                         <span className="text-zinc-300">
-                          {feature.title}{" "}
-                          <strong className="font-bold text-white ml-1">{feature.value}</strong>
+                          {feature.title}
+                          {feature.value && <strong className="ml-1 font-semibold text-white">{feature.value}</strong>}
                         </span>
                       </li>
                     ))
@@ -211,154 +448,30 @@ export function AdminSubscriptionsTab() {
                     <li className="text-xs text-zinc-500">No features assigned</li>
                   )}
                 </ul>
-              </div>
-
-              <button 
-                onClick={() => handleEditClick(tier)}
-                className={`w-full py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-                  isPremium
-                    ? "bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]"
-                    : "bg-white/10 hover:bg-white/20 text-white"
-                }`}
-              >
-                <Edit className="h-4 w-4" /> Edit Plan Details
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Edit Modal */}
-      {editingPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#111218] border border-white/10 rounded-2xl w-full max-w-3xl flex flex-col max-h-[90dvh] overflow-hidden shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/[0.02]">
-              <div>
-                <h3 className="text-xl font-bold text-white">Edit {editingPlan.name} Plan</h3>
-                <p className="text-xs text-zinc-400">Changes will reflect instantly on the user side.</p>
-              </div>
-              <button onClick={() => setEditingPlan(null)} className="p-2 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 flex flex-col md:flex-row gap-8">
-              {/* Left Column: Basic Info */}
-              <div className="md:w-1/3 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">Plan Name</label>
-                  <input 
-                    type="text" 
-                    value={editForm.name} 
-                    onChange={e => setEditForm({...editForm, name: e.target.value})}
-                    className="w-full bg-[#0a0b0f] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">Description</label>
-                  <textarea 
-                    value={editForm.description} 
-                    onChange={e => setEditForm({...editForm, description: e.target.value})}
-                    rows={3}
-                    className="w-full bg-[#0a0b0f] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">Monthly Price (PHP)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-zinc-500">₱</span>
-                    <input 
-                      type="number" 
-                      value={editForm.price} 
-                      onChange={e => setEditForm({...editForm, price: Number(e.target.value)})}
-                      className="w-full bg-[#0a0b0f] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">Trial Days</label>
-                  <input 
-                    type="number" 
-                    value={editForm.days_of_trials} 
-                    onChange={e => setEditForm({...editForm, days_of_trials: Number(e.target.value)})}
-                    className="w-full bg-[#0a0b0f] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Right Column: Features Toggle */}
-              <div className="md:w-2/3 border-t md:border-t-0 md:border-l border-white/5 pt-6 md:pt-0 md:pl-8">
-                <label className="block text-xs font-semibold text-zinc-400 mb-3 uppercase flex items-center justify-between">
-                  <span>Included Features</span>
-                  <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{editForm.selectedFeatures.length} active</span>
-                </label>
-                <div className="bg-[#0a0b0f] border border-white/10 rounded-xl overflow-hidden h-[300px] overflow-y-auto">
-                  <div className="divide-y divide-white/5">
-                    {allFeatures.map(feature => {
-  const selectedFeat = editForm.selectedFeatures.find(f => f.feature_id === feature.feature_id);
-  const isSelected = !!selectedFeat;
-  return (
-    <div 
-      key={feature.feature_id}
-      className={`flex items-center gap-3 p-3 transition-colors ${isSelected ? 'bg-blue-500/[0.03]' : ''}`}
-    >
-      <div 
-        onClick={() => toggleFeature(feature.feature_id, feature.value || '')}
-        className={`cursor-pointer shrink-0 w-5 h-5 rounded flex items-center justify-center border transition-colors hover:border-blue-500 ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-transparent border-white/20'}`}
-      >
-        {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
-      </div>
-      <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
-        <p 
-          onClick={() => toggleFeature(feature.feature_id, feature.value || '')}
-          className={`text-sm cursor-pointer transition-colors ${isSelected ? 'text-white font-medium' : 'text-zinc-400'}`}
-        >
-          {feature.title}
-        </p>
-        {isSelected && (
-          <input
-            type="text"
-            value={selectedFeat.value}
-            onChange={(e) => updateFeatureValue(feature.feature_id, e.target.value)}
-            placeholder="e.g. 1080p, Unlimited"
-            className="w-1/2 bg-[#1a1b23] border border-white/10 rounded px-2 py-1 text-xs text-emerald-400 focus:outline-none focus:border-blue-500 text-right"
-          />
-        )}
-      </div>
-    </div>
-  );
-})}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-6 border-t border-white/5 bg-white/[0.01] flex items-center justify-between">
-              <div className="flex items-center gap-2 text-amber-500/80 text-xs font-medium">
-                <AlertTriangle className="h-4 w-4" /> Editing live subscription tier
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setEditingPlan(null)}
-                  className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:text-white transition-colors"
+                <button
+                  type="button"
+                  onClick={() => setEditing(plan)}
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.04]"
                 >
-                  Cancel
+                  <Pencil className="h-4 w-4" />
+                  Edit plan
                 </button>
-                <button 
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isSaving ? <><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</> : <><Save className="h-4 w-4" /> Save Changes</>}
-                </button>
-              </div>
-            </div>
-          </div>
+              </article>
+            );
+          })}
+          {!plans.length && <p className="text-sm text-zinc-500">No subscription plans found.</p>}
         </div>
       )}
-    </div>
+
+      {editing && payload && (
+        <PlanEditor
+          plan={editing}
+          catalog={payload.allFeatures}
+          rules={rules}
+          onClose={() => setEditing(null)}
+          onSaved={fetchPlans}
+        />
+      )}
+    </section>
   );
 }

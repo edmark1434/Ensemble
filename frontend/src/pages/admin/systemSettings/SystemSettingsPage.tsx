@@ -1,300 +1,143 @@
-import { AdminSubscriptionsTab } from '../creditEconomy/components/AdminSubscriptionsTab';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  AlertTriangle,
-  Award,
-  CheckCircle2,
-  Coins,
-  Database,
-  Globe,
-  Loader2,
-  RefreshCw,
-  Save,
-  Settings2,
-  Shield,
-} from 'lucide-react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Award, Coins, Globe, RefreshCw, Shield, type LucideIcon } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '@/lib/axios';
-import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
-import { prefetchStaffRoute } from '@/lib/staffPrefetch';
+import { prefetchStaffRoute, prefetchStaffTab } from '@/lib/staffPrefetch';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
-import {
-  AdminBadgesPanel,
-  type BadgesSection,
-} from '../badges/AdminBadgesPage';
-import type {
-  EconomySettings,
-  PlatformSettings,
-  SecuritySettings,
-  SettingsOverview,
-} from './settingsTypes';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
+import { AdminSubscriptionsTab } from '../creditEconomy/components/AdminSubscriptionsTab';
+import { formatRelative } from '../creditEconomy/economyUi';
+import { AdminBadgesPanel, type BadgesSection } from '../badges/AdminBadgesPage';
+import type { FieldErrors, SettingsDrafts, SettingsOverview, SettingsTabId } from './settingsTypes';
+import {
+  SECTION_LABELS,
+  countChanges,
+  draftsFrom,
+  feeUsageOf,
+  rulesOf,
+  saveRisks,
+  validateSection,
+  type SaveRisk,
+} from './settingsLogic';
+import { ConfirmDialog, SaveBar, useUnsavedChangesGuard } from './settingsUi';
+import { AlertList, ChangeHistoryPanel, LiveStatusStrip } from './SettingsOverviewParts';
+import PlatformSettingsPanel from './PlatformSettingsPanel';
+import EconomySettingsPanel from './EconomySettingsPanel';
+import SecuritySettingsPanel from './SecuritySettingsPanel';
 
-type SettingsTabId = 'platform' | 'economy' | 'security';
 type TabId = SettingsTabId | 'badges';
 
-const TABS: { id: TabId; label: string; icon: typeof Settings2 }[] = [
+const SECTIONS: SettingsTabId[] = ['platform', 'economy', 'security'];
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'platform', label: 'Platform', icon: Globe },
   { id: 'economy', label: 'Economy', icon: Coins },
   { id: 'security', label: 'Security', icon: Shield },
   { id: 'badges', label: 'Badges', icon: Award },
 ];
-
+const VALID_TABS = TABS.map((t) => t.id);
 const BADGE_SECTIONS: BadgesSection[] = ['catalog', 'grant'];
-
-const fieldClass =
-  'rounded-lg border border-white/10 bg-[#0c0d12] px-3 py-2 text-sm text-white outline-none transition focus:border-rose-500/40 focus:ring-2 focus:ring-rose-500/15';
-
-function Toggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-start justify-between gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left transition hover:border-white/10"
-    >
-      <div className="min-w-0">
-        <p className="font-medium text-white">{label}</p>
-        {description && <p className="mt-0.5 text-xs text-zinc-500">{description}</p>}
-      </div>
-      <span
-        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${
-          checked ? 'bg-rose-500' : 'bg-zinc-700'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
-            checked ? 'left-[22px]' : 'left-0.5'
-          }`}
-        />
-      </span>
-    </button>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  hint,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-  step?: number | 'any';
-  hint?: string;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{label}</span>
-      <input
-        type="number"
-        value={Number.isFinite(value) ? value : 0}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={fieldClass}
-      />
-      {hint && <span className="text-[11px] text-zinc-600">{hint}</span>}
-    </label>
-  );
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{label}</span>
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className={fieldClass}
-      />
-    </label>
-  );
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-  dirty,
-  saving,
-  onSave,
-  onDiscard,
-  updatedAt,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  dirty?: boolean;
-  saving?: boolean;
-  onSave?: () => void;
-  onDiscard?: () => void;
-  updatedAt?: string | null;
-}) {
-  return (
-    <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-white">{title}</h2>
-          {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
-          {updatedAt && (
-            <p className="mt-1 text-[11px] text-zinc-600">
-              Last saved {new Date(updatedAt).toLocaleString()}
-            </p>
-          )}
-        </div>
-        {dirty && (
-          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-amber-200">
-            Unsaved changes
-          </span>
-        )}
-      </div>
-      <div className="space-y-3">{children}</div>
-      {onSave && (
-        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving || !dirty}
-            className="inline-flex items-center gap-2 rounded-xl bg-rose-500/90 px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save to database
-          </button>
-          {dirty && onDiscard && (
-            <button
-              type="button"
-              onClick={onDiscard}
-              disabled={saving}
-              className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-400 hover:text-white"
-            >
-              Discard
-            </button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function stableStringify(value: unknown) {
-  return JSON.stringify(value);
-}
-
 const SETTINGS_URL = '/api/admin/settings-overview';
 
-function settingsDrafts(d: SettingsOverview) {
-  const platform = { ...d.sections.platform.value };
-  if (platform.sessionTimeoutDays == null && platform.sessionTimeoutMinutes != null) {
-    platform.sessionTimeoutDays = Math.max(1, Math.round(platform.sessionTimeoutMinutes / 1440));
-  }
-  return {
-    platform,
-    economy: JSON.parse(JSON.stringify(d.sections.economy.value)) as EconomySettings,
-    security: {
-      ...d.sections.security.value,
-      allowedAdminIps: [...(d.sections.security.value.allowedAdminIps || [])],
-    },
-  };
+type PerSection<T> = Record<SettingsTabId, T>;
+const perSection = <T,>(make: (section: SettingsTabId) => T): PerSection<T> =>
+  ({ platform: make('platform'), economy: make('economy'), security: make('security') });
+
+type ApiError = { response?: { status?: number; data?: { message?: string; code?: string; errors?: FieldErrors } } };
+
+function cachedOverview(): SettingsOverview | null {
+  const cached = peekStaffGet(SETTINGS_URL);
+  return cached?.data?.success ? (cached.data.data as SettingsOverview) : null;
+}
+
+function versionsOf(data: SettingsOverview | null): PerSection<string | null> {
+  return perSection((s) => data?.sections[s]?.version ?? null);
 }
 
 export default function SystemSettingsPage() {
-  const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
   const paramSection = searchParams.get('section');
-  const valid: TabId[] = ['platform', 'economy', 'security', 'badges'];
-  const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'platform';
-  const initialBadgeSection =
-    paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection)
-      ? (paramSection as BadgesSection)
-      : 'catalog';
 
-  const [data, setData] = useState<SettingsOverview | null>(() => {
-    const cached = peekStaffGet(SETTINGS_URL);
-    return cached?.data?.success ? cached.data.data : null;
-  });
+  const [data, setData] = useState<SettingsOverview | null>(cachedOverview);
+  const [drafts, setDrafts] = useState<SettingsDrafts | null>(() => (data ? draftsFrom(data) : null));
+  /** Version each draft was started from; a save sends it so the server can refuse stale edits. */
+  const [baseVersions, setBaseVersions] = useState<PerSection<string | null>>(() => versionsOf(data));
   const [loading, setLoading] = useState(() => !data);
-  const [error, setError] = useState('');
-  const [tab, setTab] = useState<TabId>(initialTab);
-  const [badgeSection, setBadgeSection] = useState<BadgesSection>(initialBadgeSection);
+  const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<SettingsTabId | null>(null);
+  const [serverErrors, setServerErrors] = useState<PerSection<FieldErrors>>(() => perSection(() => ({})));
+  const [pendingSave, setPendingSave] = useState<{ section: SettingsTabId; risks: SaveRisk[] } | null>(null);
+  const [conflict, setConflict] = useState<{ section: SettingsTabId; message: string } | null>(null);
+  const [confirmReload, setConfirmReload] = useState(false);
 
-  const [platform, setPlatform] = useState<PlatformSettings | null>(() =>
-    data ? settingsDrafts(data).platform : null
+  const [tab, setTab] = useState<TabId>(paramTab && VALID_TABS.includes(paramTab) ? paramTab : 'platform');
+  const [badgeSection, setBadgeSection] = useState<BadgesSection>(
+    paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection) ? (paramSection as BadgesSection) : 'catalog'
   );
-  const [economy, setEconomy] = useState<EconomySettings | null>(() =>
-    data ? settingsDrafts(data).economy : null
-  );
-  const [security, setSecurity] = useState<SecuritySettings | null>(() =>
-    data ? settingsDrafts(data).security : null
-  );
-  const [ipDraft, setIpDraft] = useState('');
 
-  const applyData = (d: SettingsOverview, keepEdits = false) => {
-    setData(d);
-    const drafts = settingsDrafts(d);
-    const edited = keepEdits ? dirtyRef.current : null;
-    if (!edited?.platform) setPlatform(drafts.platform);
-    if (!edited?.economy) setEconomy(drafts.economy);
-    if (!edited?.security) {
-      setSecurity(drafts.security);
-      setIpDraft('');
-    }
-  };
+  const saved = useMemo(() => (data ? draftsFrom(data) : null), [data]);
 
-  const load = async (silent = false) => {
-    if (!silent && !peekStaffGet(SETTINGS_URL)) setLoading(true);
-    else setRefreshing(true);
-    setError('');
-    try {
-      const res = await staffGet(SETTINGS_URL);
-      if (res.data?.success) applyData(res.data.data, !silent);
-      else setError('Failed to load system settings from database');
-    } catch {
-      setError('Failed to load system settings from database');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const changeCounts = useMemo<PerSection<number>>(
+    () => perSection((s) => (saved && drafts ? countChanges(saved[s], drafts[s]) : 0)),
+    [saved, drafts]
+  );
+  const changeCountsRef = useRef(changeCounts);
+  const dataRef = useRef(data);
+  useEffect(() => {
+    changeCountsRef.current = changeCounts;
+    dataRef.current = data;
+  }, [changeCounts, data]);
+
+  const errors = useMemo<PerSection<FieldErrors>>(
+    () => perSection((s) => (data && drafts ? { ...validateSection(s, drafts, data), ...serverErrors[s] } : {})),
+    [data, drafts, serverErrors]
+  );
+
+  const anyDirty = SECTIONS.some((s) => changeCounts[s] > 0);
+  useUnsavedChangesGuard(anyDirty);
+
+  /** Take new server data. Sections with unsaved edits keep their draft and base version unless `discard`. */
+  const applyData = useCallback((next: SettingsOverview, { discard = [] as SettingsTabId[] } = {}) => {
+    const fresh = draftsFrom(next);
+    const freshVersions = versionsOf(next);
+    const keep = (s: SettingsTabId) => changeCountsRef.current[s] > 0 && !discard.includes(s);
+    setData(next);
+    setDrafts((prev) => (prev ? perSection((s) => (keep(s) ? prev[s] : fresh[s])) as SettingsDrafts : fresh));
+    setBaseVersions((prev) => perSection((s) => (keep(s) ? prev[s] : freshVersions[s])));
+  }, []);
+
+  const load = useCallback(
+    async ({ discardAll = false } = {}) => {
+      const hasData = Boolean(cachedOverview()) || Boolean(dataRef.current);
+      if (hasData) setRefreshing(true);
+      else setLoading(true);
+      setLoadError('');
+      try {
+        const res = await staffGet(SETTINGS_URL);
+        if (res.data?.success) {
+          applyData(res.data.data, { discard: discardAll ? SECTIONS : [] });
+          if (discardAll) setServerErrors(perSection(() => ({})));
+        } else {
+          setLoadError('System settings could not be loaded.');
+        }
+      } catch {
+        setLoadError('System settings could not be loaded.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [applyData]
+  );
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
-    if (paramTab && valid.includes(paramTab)) setTab(paramTab);
+    if (paramTab && VALID_TABS.includes(paramTab)) setTab(paramTab);
     if (paramTab === 'badges') {
       if (paramSection && BADGE_SECTIONS.includes(paramSection as BadgesSection)) {
         setBadgeSection(paramSection as BadgesSection);
@@ -307,10 +150,7 @@ export default function SystemSettingsPage() {
     setTab(id);
     if (id === 'badges') {
       prefetchStaffRoute('/admin/badges');
-      setSearchParams(
-        badgeSection === 'catalog' ? { tab: id } : { tab: id, section: badgeSection },
-        { replace: true }
-      );
+      setSearchParams(badgeSection === 'catalog' ? { tab: id } : { tab: id, section: badgeSection }, { replace: true });
       return;
     }
     setSearchParams(id === 'platform' ? {} : { tab: id }, { replace: true });
@@ -318,573 +158,291 @@ export default function SystemSettingsPage() {
 
   const switchBadgeSection = (section: BadgesSection) => {
     setBadgeSection(section);
-    setSearchParams(
-      section === 'catalog' ? { tab: 'badges' } : { tab: 'badges', section },
-      { replace: true }
-    );
+    setSearchParams(section === 'catalog' ? { tab: 'badges' } : { tab: 'badges', section }, { replace: true });
   };
 
-  const dirty = useMemo(() => {
-    if (!data || !platform || !economy || !security) {
-      return {
-        platform: false,
-        economy: false,
-        security: false,
-      } satisfies Record<SettingsTabId, boolean>;
+  const updateDraft = <S extends SettingsTabId>(section: S, value: SettingsDrafts[S]) => {
+    setDrafts((prev) => (prev ? { ...prev, [section]: value } : prev));
+    if (Object.keys(serverErrors[section]).length) {
+      setServerErrors((prev) => ({ ...prev, [section]: {} }));
     }
-    return {
-      platform: stableStringify(platform) !== stableStringify(data.sections.platform.value),
-      economy: stableStringify(economy) !== stableStringify(data.sections.economy.value),
-      security: stableStringify(security) !== stableStringify(data.sections.security.value),
-    } satisfies Record<SettingsTabId, boolean>;
-  }, [data, platform, economy, security]);
+  };
 
-  const dirtyRef = useRef(dirty);
-  useEffect(() => {
-    dirtyRef.current = dirty;
-  }, [dirty]);
+  const discard = (section: SettingsTabId) => {
+    if (!saved) return;
+    setDrafts((prev) => (prev ? { ...prev, [section]: saved[section] } : prev));
+    setBaseVersions((prev) => ({ ...prev, [section]: data?.sections[section]?.version ?? null }));
+    setServerErrors((prev) => ({ ...prev, [section]: {} }));
+  };
 
-  const saveSection = async (section: SettingsTabId, values: object) => {
-    setSaving(true);
+  const doSave = async (section: SettingsTabId) => {
+    if (!drafts) return;
+    setSaving(section);
     try {
-      const res = await api.patch('/api/admin/settings', { section, values });
+      const res = await api.patch('/api/admin/settings', {
+        section,
+        values: drafts[section],
+        baseVersion: baseVersions[section] ?? undefined,
+      });
       if (res.data?.success) {
-        applyData(res.data.data);
-        showSuccessToast(`${section[0].toUpperCase()}${section.slice(1)} settings saved to database`);
+        applyData(res.data.data, { discard: [section] });
+        setServerErrors((prev) => ({ ...prev, [section]: {} }));
+        showSuccessToast(res.data.changed === false ? 'No changes to save' : `${SECTION_LABELS[section]} settings saved`);
       } else {
-        showErrorToast('Failed to save settings');
+        showErrorToast('Settings could not be saved');
       }
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Failed to save settings';
-      showErrorToast(message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const discardSection = (section: SettingsTabId) => {
-    if (!data) return;
-    if (section === 'platform') {
-      const plat = { ...data.sections.platform.value };
-      if (plat.sessionTimeoutDays == null && plat.sessionTimeoutMinutes != null) {
-        plat.sessionTimeoutDays = Math.max(1, Math.round(plat.sessionTimeoutMinutes / 1440));
+      const response = (err as ApiError).response;
+      const body = response?.data;
+      if (response?.status === 400 && body?.errors) {
+        setServerErrors((prev) => ({ ...prev, [section]: body.errors || {} }));
+        showErrorToast(body.message || 'Some settings need attention');
+      } else if (response?.status === 409) {
+        setConflict({ section, message: body?.message || 'These settings were changed by someone else.' });
+      } else if (response?.status === 403 && body?.code === 'ADMIN_IP_NOT_ALLOWED') {
+        showErrorToast('Your network is not on the admin IP allowlist.');
+      } else {
+        showErrorToast(body?.message || 'Settings could not be saved');
       }
-      setPlatform(plat);
-    }
-    if (section === 'economy') setEconomy(JSON.parse(JSON.stringify(data.sections.economy.value)));
-    if (section === 'security') {
-      setSecurity({
-        ...data.sections.security.value,
-        allowedAdminIps: [...(data.sections.security.value.allowedAdminIps || [])],
-      });
-      setIpDraft('');
+    } finally {
+      setSaving(null);
+      setPendingSave(null);
     }
   };
 
-  if (loading) {
-    return (
-      <ConsolePageSkeleton />
-    );
-  }
+  const requestSave = (section: SettingsTabId) => {
+    if (!saved || !drafts || !data) return;
+    const risks = saveRisks(section, saved, drafts, data);
+    if (risks.length) setPendingSave({ section, risks });
+    else void doSave(section);
+  };
 
-  if (!data || !platform || !economy || !security) {
+  const requestRefresh = () => {
+    if (anyDirty) setConfirmReload(true);
+    else void load();
+  };
+
+  if (loading && !data) return <ConsolePageSkeleton />;
+
+  if (!data || !drafts || !saved) {
     return (
-      <main className="p-8 md:pl-[284px]">
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
-          {error || 'Settings unavailable'}
-          <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">
-            Retry
+      <main className="relative min-h-screen p-6 md:pl-[260px] md:pr-8 md:pt-8">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-200">
+          <p className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4" />
+            {loadError || 'System settings are unavailable.'}
+          </p>
+          <button type="button" onClick={() => void load()} className="mt-4 rounded-xl border border-red-400/30 px-4 py-2 text-xs hover:bg-red-500/10">
+            Try again
           </button>
         </div>
       </main>
     );
   }
 
-  const addIp = () => {
-    const ip = ipDraft.trim();
-    if (!ip) return;
-    if (security.allowedAdminIps.includes(ip)) {
-      showErrorToast('IP already in allowlist');
-      return;
-    }
-    setSecurity({ ...security, allowedAdminIps: [...security.allowedAdminIps, ip] });
-    setIpDraft('');
-  };
+  const rules = rulesOf(data);
+  const section = tab === 'badges' ? null : tab;
+  const tabAlerts = section ? data.alerts.filter((a) => !a.tab || a.tab === section) : [];
+  const lastSaved = SECTIONS.map((s) => data.sections[s]?.updatedAt)
+    .filter(Boolean)
+    .sort()
+    .pop();
 
   return (
-    <main className="min-h-screen md:pl-[260px]">
+    <main className="relative min-h-screen md:pl-[260px]">
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
-        <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between md:px-8">
-          <div>
+        <div className="flex flex-col gap-3 px-4 py-4 sm:px-6 md:px-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Configuration</p>
             <h1 className="text-xl font-bold text-white">System settings</h1>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-              <span className="inline-flex items-center gap-1">
-                <Database className="h-3 w-3 text-emerald-400" />
-                Loaded from <code className="text-zinc-400">configuration</code>
-              </span>
-              <span>·</span>
-              <span>@{user?.username || 'admin'}</span>
+            <p className="mt-1 text-xs text-zinc-500">
+              Platform-wide rules for members, money and staff access.
+              {data.propagationSeconds ? ` Saved changes reach every server within about ${data.propagationSeconds} seconds.` : ''}
             </p>
           </div>
-          {tab !== 'badges' && (
-            <button
-              type="button"
-              onClick={() => void load(true)}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh from DB
-            </button>
+          {section && (
+            <div className="flex items-center gap-3">
+              {lastSaved && <span className="hidden text-[11px] text-zinc-500 sm:inline">Last change {formatRelative(lastSaved)}</span>}
+              <button
+                type="button"
+                onClick={requestRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2 text-sm text-zinc-300 transition hover:text-white disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Reload
+              </button>
+            </div>
           )}
         </div>
-        <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => switchTab(id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
-                tab === id ? 'border-rose-400 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-              {id !== 'badges' && dirty[id] && (
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-              )}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
-        {data.alerts.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {data.alerts.map((a) => (
-              <span
-                key={a.id}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
-                  a.severity === 'warning'
-                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                    : 'border-white/10 bg-white/[0.03] text-zinc-300'
+        <nav className="flex gap-1 overflow-x-auto px-2 sm:px-4 md:px-6" aria-label="Settings sections">
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const dirty = id !== 'badges' && changeCounts[id] > 0;
+            const warnings = id !== 'badges' ? data.alerts.filter((a) => a.tab === id && a.severity === 'warning').length : 0;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => switchTab(id)}
+                onMouseEnter={() => id === 'economy' && prefetchStaffTab('systemSettings', 'economy')}
+                aria-current={tab === id ? 'page' : undefined}
+                className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition sm:px-4 ${
+                  tab === id ? 'border-rose-400 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
                 }`}
               >
-                {a.severity === 'warning' ? (
-                  <AlertTriangle className="h-3 w-3" />
-                ) : (
-                  <CheckCircle2 className="h-3 w-3" />
+                <Icon className="h-4 w-4" />
+                {label}
+                {dirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Unsaved changes" />}
+                {!dirty && warnings > 0 && (
+                  <span className="rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-200" title={`${warnings} warning${warnings === 1 ? '' : 's'}`}>
+                    {warnings}
+                  </span>
                 )}
-                {a.message}
-              </span>
-            ))}
-          </div>
-        )}
+              </button>
+            );
+          })}
+        </nav>
+      </header>
 
-        {tab === 'platform' && (
-          <SectionCard
-            title="Platform identity & access"
-            description="Site branding, sessions, registration, and maintenance controls."
-            dirty={dirty.platform}
-            saving={saving}
-            updatedAt={data.sections.platform.updatedAt}
-            onSave={() => void saveSection('platform', platform)}
-            onDiscard={() => discardSection('platform')}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField label="Site name" value={platform.siteName} onChange={(v) => setPlatform({ ...platform, siteName: v })} />
-              <TextField label="Support email" value={platform.supportEmail} onChange={(v) => setPlatform({ ...platform, supportEmail: v })} />
-              <NumberField
-                label="Session timeout (days)"
-                value={platform.sessionTimeoutDays ?? (platform.sessionTimeoutMinutes ? Math.max(1, Math.round(platform.sessionTimeoutMinutes / 1440)) : 30)}
-                onChange={(v) => setPlatform({ ...platform, sessionTimeoutDays: v })}
-                min={1}
-                max={365}
+      {section ? (
+        <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+          <LiveStatusStrip data={data} onOpen={switchTab} />
+          <AlertList alerts={tabAlerts} />
+
+          {section === 'platform' && (
+            <PlatformSettingsPanel
+              draft={drafts.platform}
+              saved={saved.platform}
+              defaults={data.defaults?.platform}
+              rules={rules.platform}
+              errors={errors.platform}
+              onChange={(next) => updateDraft('platform', next)}
+            />
+          )}
+
+          {section === 'economy' && (
+            <div className="space-y-6">
+              <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
+                Wallet balances, holds and the ledger live in{' '}
+                <Link to="/admin/credit-economy" className="font-medium text-rose-300 hover:underline">
+                  Credits &amp; Economy
+                </Link>
+                .
+              </p>
+              <EconomySettingsPanel
+                draft={drafts.economy}
+                saved={saved.economy}
+                defaults={data.defaults?.economy}
+                rules={rules.economy}
+                feeUsage={feeUsageOf(data)}
+                errors={errors.economy}
+                onChange={(next) => updateDraft('economy', next)}
               />
             </div>
-            <Toggle
-              label="Maintenance mode"
-              description="Blocks member login and the product app. Landing pages and admin/staff consoles stay available."
-              checked={platform.maintenanceMode}
-              onChange={(v) => setPlatform({ ...platform, maintenanceMode: v })}
+          )}
+
+          {section === 'security' && (
+            <SecuritySettingsPanel
+              draft={drafts.security}
+              saved={saved.security}
+              defaults={data.defaults?.security}
+              rules={rules.security}
+              errors={errors.security}
+              staff={data.staff || []}
+              viewerIp={data.viewer?.ip ?? null}
+              emailDelivery={data.delivery?.email !== false}
+              onChange={(next) => updateDraft('security', next)}
             />
-            <Toggle
-              label="Registration enabled"
-              description="Allow new user sign-ups"
-              checked={platform.registrationEnabled}
-              onChange={(v) => setPlatform({ ...platform, registrationEnabled: v })}
-            />
-          </SectionCard>
-        )}
+          )}
 
-        {tab === 'economy' && (
-          <div className="space-y-6">
-            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Credit packages, fees, marketplace rules, and subscriptions are edited here. Wallet activity and the audit log live in{' '}
-              <Link
-                to="/admin/credit-economy"
-                className="font-medium text-rose-400 hover:underline"
-              >
-                Credits & Economy
-              </Link>
-              .
-            </p>
-            <SectionCard
-              title="Credit value"
-              description="How much 1 platform credit is worth in Philippine pesos (PHP)."
-              dirty={dirty.economy}
-              saving={saving}
-              updatedAt={data.sections.economy.updatedAt}
-              onSave={() => void saveSection('economy', economy)}
-              onDiscard={() => discardSection('economy')}
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <NumberField
-                  label="PHP per credit"
-                  value={economy.creditValuePhp ?? 1}
-                  onChange={(v) => setEconomy({ ...economy, creditValuePhp: v })}
-                  min={0.01}
-                  max={1000}
-                  step="any"
-                  hint="Default is ₱1. Used for custom top-ups and cashout conversion."
-                />
-              </div>
-            </SectionCard>
-            <SectionCard
-              title="Credit packages"
-              description="Top-up packages shown to users. Sales counts are stored with each package."
-              dirty={dirty.economy}
-              saving={saving}
-              updatedAt={data.sections.economy.updatedAt}
-              onSave={() => void saveSection('economy', economy)}
-              onDiscard={() => discardSection('economy')}
-            >
-              <div className="space-y-3">
-                {economy.creditPackages.map((p, i) => (
-                  <div key={p.id} className="grid gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-6">
-                    <TextField
-                      label="Name"
-                      value={p.name}
-                      onChange={(v) => {
-                        const pkgs = [...economy.creditPackages];
-                        pkgs[i] = { ...p, name: v };
-                        setEconomy({ ...economy, creditPackages: pkgs });
-                      }}
-                    />
-                    <NumberField
-                      label="Credits"
-                      value={p.credits}
-                      onChange={(v) => {
-                        const pkgs = [...economy.creditPackages];
-                        pkgs[i] = { ...p, credits: v };
-                        setEconomy({ ...economy, creditPackages: pkgs });
-                      }}
-                    />
-                    <NumberField
-                      label="Price (PHP)"
-                      value={p.pricePhp}
-                      onChange={(v) => {
-                        const pkgs = [...economy.creditPackages];
-                        pkgs[i] = { ...p, pricePhp: v };
-                        setEconomy({ ...economy, creditPackages: pkgs });
-                      }}
-                    />
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Sales (DB)</span>
-                      <div className="rounded-lg border border-white/10 bg-[#0c0d12] px-3 py-2 text-sm tabular-nums text-zinc-300">
-                        {p.salesCount.toLocaleString()}
-                      </div>
-                    </div>
-                    <Toggle
-                      label="Active"
-                      checked={p.active}
-                      onChange={(v) => {
-                        const pkgs = [...economy.creditPackages];
-                        pkgs[i] = { ...p, active: v };
-                        setEconomy({ ...economy, creditPackages: pkgs });
-                      }}
-                    />
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEconomy({
-                            ...economy,
-                            creditPackages: economy.creditPackages.filter((x) => x.id !== p.id),
-                          });
-                        }}
-                        className="w-full rounded-lg border border-red-500/30 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEconomy({
-                      ...economy,
-                      creditPackages: [
-                        ...economy.creditPackages,
-                        {
-                          id: `pkg-${Date.now()}`,
-                          name: 'New package',
-                          credits: 1000,
-                          pricePhp: 999,
-                          active: true,
-                          salesCount: 0,
-                        },
-                      ],
-                    })
-                  }
-                  className="w-full rounded-xl border border-dashed border-white/15 px-4 py-3 text-sm text-zinc-500 hover:border-white/25 hover:text-zinc-300"
-                >
-                  + Add package
-                </button>
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Fee management"
-              description="Platform fee schedule by product area."
-              dirty={dirty.economy}
-              saving={saving}
-              updatedAt={data.sections.economy.updatedAt}
-              onSave={() => void saveSection('economy', economy)}
-              onDiscard={() => discardSection('economy')}
-            >
-              <div className="space-y-3">
-                {economy.feeSettings.map((f, i) => (
-                  <div key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                    <p className="font-medium text-white">{f.label}</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      <NumberField
-                        label="Percent"
-                        value={f.percent}
-                        onChange={(v) => {
-                          const fees = [...economy.feeSettings];
-                          fees[i] = { ...f, percent: v };
-                          setEconomy({ ...economy, feeSettings: fees });
-                        }}
-                      />
-                      <NumberField
-                        label="Flat fee (credits)"
-                        value={f.flatFee}
-                        onChange={(v) => {
-                          const fees = [...economy.feeSettings];
-                          fees[i] = { ...f, flatFee: v };
-                          setEconomy({ ...economy, feeSettings: fees });
-                        }}
-                      />
-                      <TextField
-                        label="Applies to"
-                        value={f.appliesTo}
-                        onChange={(v) => {
-                          const fees = [...economy.feeSettings];
-                          fees[i] = { ...f, appliesTo: v };
-                          setEconomy({ ...economy, feeSettings: fees });
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Marketplace economy rules"
-              description="Listing fees, escrow, payouts, and refunds."
-              dirty={dirty.economy}
-              saving={saving}
-              updatedAt={data.sections.economy.updatedAt}
-              onSave={() => void saveSection('economy', economy)}
-              onDiscard={() => discardSection('economy')}
-            >
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <NumberField
-                  label="Listing fee (credits)"
-                  value={economy.marketplaceSettings.listingFeeCredits}
-                  onChange={(v) =>
-                    setEconomy({
-                      ...economy,
-                      marketplaceSettings: { ...economy.marketplaceSettings, listingFeeCredits: v },
-                    })
-                  }
-                />
-                <NumberField
-                  label="Transaction fee (%)"
-                  value={economy.marketplaceSettings.transactionFeePercent}
-                  onChange={(v) =>
-                    setEconomy({
-                      ...economy,
-                      marketplaceSettings: { ...economy.marketplaceSettings, transactionFeePercent: v },
-                    })
-                  }
-                />
-                <NumberField
-                  label="Min payout (credits)"
-                  value={economy.marketplaceSettings.minPayoutCredits}
-                  onChange={(v) =>
-                    setEconomy({
-                      ...economy,
-                      marketplaceSettings: { ...economy.marketplaceSettings, minPayoutCredits: v },
-                    })
-                  }
-                />
-                <NumberField
-                  label="Refund window (days)"
-                  value={economy.marketplaceSettings.refundWindowDays}
-                  onChange={(v) =>
-                    setEconomy({
-                      ...economy,
-                      marketplaceSettings: { ...economy.marketplaceSettings, refundWindowDays: v },
-                    })
-                  }
-                />
-              </div>
-            </SectionCard>
-
-            <AdminSubscriptionsTab />
-          </div>
-        )}
-
-        {tab === 'security' && (
-          <div className="space-y-4">
-            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
-              Auth and access controls for staff consoles and member login lockouts.
-            </p>
-          <SectionCard
-            title="Security & compliance"
-            description="Staff auth, lockouts, and admin IP allowlist."
-            dirty={dirty.security}
-            saving={saving}
-            updatedAt={data.sections.security.updatedAt}
-            onSave={() => void saveSection('security', security)}
-            onDiscard={() => discardSection('security')}
-          >
-            <Toggle label="Require staff 2FA" checked={security.requireStaff2fa} onChange={(v) => setSecurity({ ...security, requireStaff2fa: v })} />
-            <Toggle
-              label="IP allowlist for admin"
-              description="When enabled, only listed IPs can access admin routes"
-              checked={security.ipAllowlistEnabled}
-              onChange={(v) => setSecurity({ ...security, ipAllowlistEnabled: v })}
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <NumberField label="Min password length" value={security.minPasswordLength} onChange={(v) => setSecurity({ ...security, minPasswordLength: v })} min={6} max={32} />
-              <NumberField label="Lockout after failed attempts" value={security.lockoutAfterFailedAttempts} onChange={(v) => setSecurity({ ...security, lockoutAfterFailedAttempts: v })} min={3} max={20} />
-              <NumberField label="Lockout duration (min)" value={security.lockoutDurationMinutes} onChange={(v) => setSecurity({ ...security, lockoutDurationMinutes: v })} min={5} max={120} />
-              <NumberField label="Audit log retention (days)" value={security.auditLogRetentionDays} onChange={(v) => setSecurity({ ...security, auditLogRetentionDays: v })} min={30} max={365} />
+          {section === 'economy' && (
+            <div className="space-y-3 border-t border-white/[0.06] pt-6">
+              <p className="text-xs text-zinc-500">Subscription plans save on their own, from each plan&apos;s editor.</p>
+              <AdminSubscriptionsTab />
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-              <p className="text-sm font-medium text-white">Allowed admin IPs</p>
-              <p className="mt-1 text-xs text-zinc-500">One address per entry. Example: 192.168.1.10</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  value={ipDraft}
-                  onChange={(e) => setIpDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addIp();
-                    }
-                  }}
-                  placeholder="Add IP address"
-                  className={`min-w-[200px] flex-1 ${fieldClass}`}
-                />
-                <button
-                  type="button"
-                  onClick={addIp}
-                  className="rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
-                >
-                  Add
-                </button>
-              </div>
-              <ul className="mt-3 space-y-2">
-                {security.allowedAdminIps.length === 0 && (
-                  <li className="text-xs text-zinc-600">No IPs configured.</li>
-                )}
-                {security.allowedAdminIps.map((ip) => (
-                  <li
-                    key={ip}
-                    className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-sm text-zinc-300"
-                  >
-                    <code>{ip}</code>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSecurity({
-                          ...security,
-                          allowedAdminIps: security.allowedAdminIps.filter((x) => x !== ip),
-                        })
-                      }
-                      className="text-xs text-rose-300 hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </SectionCard>
-          </div>
-        )}
+          )}
 
-        {tab === 'badges' && (
+          <ChangeHistoryPanel entries={data.changeHistory || []} section={section} />
+
+          <SaveBar
+            sectionLabel={SECTION_LABELS[section]}
+            changeCount={changeCounts[section]}
+            errorCount={Object.keys(errors[section]).length}
+            saving={saving === section}
+            onSave={() => requestSave(section)}
+            onDiscard={() => discard(section)}
+          />
+        </div>
+      ) : (
+        <div className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
           <AdminBadgesPanel section={badgeSection} onSectionChange={switchBadgeSection} />
-        )}
+        </div>
+      )}
 
-        {tab !== 'badges' && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-              <h2 className="font-semibold text-white">Change history</h2>
-              <p className="mt-1 text-xs text-zinc-500">Recent writes to configuration</p>
-              <ul className="mt-4 space-y-2">
-                {data.changeHistory.length ? (
-                  data.changeHistory.map((h) => (
-                    <li
-                      key={h.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
-                    >
-                      <span className="capitalize text-white">{h.section}</span>
-                      <span className="shrink-0 text-right text-xs text-zinc-500">
-                        {h.updatedBy}
-                        <br />
-                        {h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '—'}
-                      </span>
-                    </li>
-                  ))
-                ) : (
-                  <li className="text-sm text-zinc-500">No saved changes yet.</li>
-                )}
-              </ul>
-            </section>
+      {pendingSave && (
+        <ConfirmDialog
+          title={`Save ${SECTION_LABELS[pendingSave.section]} settings?`}
+          confirmLabel="Save changes"
+          tone={pendingSave.risks.some((r) => r.tone === 'danger') ? 'danger' : 'default'}
+          busy={saving === pendingSave.section}
+          onCancel={() => setPendingSave(null)}
+          onConfirm={() => void doSave(pendingSave.section)}
+        >
+          <p className="text-zinc-400">These changes take effect for everyone as soon as you save:</p>
+          <ul className="mt-3 space-y-2">
+            {pendingSave.risks.map((risk) => (
+              <li
+                key={risk.id}
+                className={`rounded-xl border px-3 py-2.5 ${
+                  risk.tone === 'danger' ? 'border-red-500/25 bg-red-500/[0.07]' : 'border-amber-500/20 bg-amber-500/[0.06]'
+                }`}
+              >
+                <p className="font-medium text-white">{risk.title}</p>
+                <p className="mt-0.5 text-xs text-zinc-400">{risk.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </ConfirmDialog>
+      )}
 
-            <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
-              <h2 className="font-semibold text-white">Staff editors</h2>
-              <p className="mt-1 text-xs text-zinc-500">Accounts that can update these settings</p>
-              <ul className="mt-4 space-y-2">
-                {data.staffEditors.map((s) => (
-                  <li
-                    key={String(s.staffId)}
-                    className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm"
-                  >
-                    <span className="text-white">{s.name}</span>
-                    <span className="text-xs text-zinc-500">{s.role}</span>
-                  </li>
-                ))}
-                {!data.staffEditors.length && (
-                  <li className="text-sm text-zinc-500">No staff accounts found.</li>
-                )}
-              </ul>
-            </section>
-          </div>
-        )}
-      </div>
+      {conflict && (
+        <ConfirmDialog
+          title="Settings changed elsewhere"
+          confirmLabel="Reload and discard my edits"
+          tone="danger"
+          onCancel={() => setConflict(null)}
+          onConfirm={() => {
+            setConflict(null);
+            void load({ discardAll: true });
+          }}
+        >
+          <p>{conflict.message}</p>
+          <p className="mt-2 text-xs text-zinc-500">
+            Keep editing to copy your values somewhere first. Nothing was saved.
+          </p>
+        </ConfirmDialog>
+      )}
+
+      {confirmReload && (
+        <ConfirmDialog
+          title="Reload settings?"
+          confirmLabel="Discard edits and reload"
+          tone="danger"
+          onCancel={() => setConfirmReload(false)}
+          onConfirm={() => {
+            setConfirmReload(false);
+            void load({ discardAll: true });
+          }}
+        >
+          <p>
+            Unsaved edits in{' '}
+            {SECTIONS.filter((s) => changeCounts[s] > 0)
+              .map((s) => SECTION_LABELS[s])
+              .join(', ')}{' '}
+            will be discarded.
+          </p>
+        </ConfirmDialog>
+      )}
     </main>
   );
 }

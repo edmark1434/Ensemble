@@ -37,6 +37,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
         trimAfter={trimAfter}
         playbackRate={playbackRate}
         src={details.src}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         volume={volume}
       />
     );
@@ -58,7 +59,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
       onError={() => setFailed(src)}
       preload="auto"
       pauseWhenBuffering={false}
-      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
     />}
     {(loaded !== src || failed === src) && <MediaPlaceholder failed={failed === src} />}
   </>);
@@ -91,7 +92,10 @@ export const Video = ({
   const children = (
     <BoxAnim
       style={calculateContainerStyles(details, crop, {
-        overflow: "hidden"
+        overflow: "hidden",
+        transform: "none",
+        left: 0,
+        top: 0
       })}
       animationIn={animationIn}
       animationOut={animationOut}

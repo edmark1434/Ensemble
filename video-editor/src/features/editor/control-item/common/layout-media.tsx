@@ -1,3 +1,4 @@
+import { resizeMediaFrame } from "../../utils/dimensions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -5,7 +6,7 @@ import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
 import React, { useEffect, useState } from "react";
-import { Crop, FlipHorizontal, FlipVertical, Info, Link, RotateCw, Unlink } from "lucide-react";
+import { Crop, FlipHorizontal, FlipVertical, Link, RotateCw, Unlink } from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "cn";
@@ -51,6 +52,17 @@ export const LayoutMediaControls = ({ trackItem, showCrop = true }: LayoutMediaC
       } else {
         nextDisplayW = curDisplayW * factor;
       }
+    }
+
+    if (trackItem.type === "image" || trackItem.type === "video") {
+      const width = nextDisplayW / (Math.abs(curSx) || 1);
+      const height = nextDisplayH / (Math.abs(curSy) || 1);
+      dispatch(EDIT_OBJECT, { payload: { [id]: { details: {
+        ...resizeMediaFrame(details, width, height),
+        left: parseNumeric(details.left) + (nextDisplayW - curDisplayW - width + baseW) / 2,
+        top: parseNumeric(details.top) + (nextDisplayH - curDisplayH - height + baseH) / 2,
+      } } } });
+      return;
     }
 
     const nextSx = baseW > 0 ? signX * (nextDisplayW / baseW) : curSx;
@@ -166,10 +178,6 @@ export const LayoutMediaControls = ({ trackItem, showCrop = true }: LayoutMediaC
               )}
             </div>
           </div>
-        </div>
-        <div className="flex gap-2 items-start text-xs text-muted-foreground text-pretty">
-          <Info size={16} />
-          <span>You can achieve stretching via unlinked width and height</span>
         </div>
         <div className="flex gap-2">
           <MediaPosition

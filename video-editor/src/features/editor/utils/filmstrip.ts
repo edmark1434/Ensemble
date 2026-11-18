@@ -4,7 +4,7 @@ export const calculateThumbnailSegmentLayout = (
   thumbnailWidth: number
 ): FilmstripBacklogOptions => {
   // Calculate the maximum number of thumbnails based on the thumbnail width
-  let maxThumbnails = Math.floor(1200 / thumbnailWidth);
+  let maxThumbnails = Math.max(1, Math.floor(1200 / thumbnailWidth));
 
   // Calculate the total width required for the thumbnails
   let segmentSize = maxThumbnails * thumbnailWidth;

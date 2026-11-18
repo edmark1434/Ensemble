@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { pool } = require('../lib/Database');
 const {
   DEFAULT_SETTINGS,
@@ -6,16 +7,11 @@ const {
   listDefaultConfigurationRows,
   assembleSection,
   deepMergeSettings,
+  rowMapFromRows,
   configurationKeyPrefixFilter,
-  sectionKeyFromConfigurationKey,
 } = require('../lib/PlatformConfiguration');
 
-function stripMeta(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  const clone = { ...value };
-  delete clone._meta;
-  return clone;
-}
+const SETTINGS_EVENT_CODE = 'SETTINGS_UPDATED';
 
 async function ensureDefaultSettings() {
   const rows = listDefaultConfigurationRows();
@@ -55,7 +51,7 @@ function ensureDefaultSettingsOnce() {
 }
 
 /**
- * Per-process section cache. Saves through updateSettingsSection clear it at once;
+ * Per-process section cache. Saves through writeSettingsSection clear it at once;
  * other processes and raw SQL edits are picked up within the TTL.
  */
 const SECTION_CACHE_TTL_MS = Math.max(0, Number(process.env.SETTINGS_CACHE_TTL_MS ?? 15000) || 0);
@@ -65,8 +61,8 @@ function clearSettingsCache() {
   sectionCache.clear();
 }
 
-async function readSectionRows(sectionKey) {
-  const result = await pool.query(
+async function readSectionRows(sectionKey, db = pool) {
+  const result = await db.query(
     `SELECT configuration_key, name, description, current_value_literal, default_value_literal, updated_at
      FROM configuration
      WHERE configuration_key LIKE $1
@@ -76,21 +72,37 @@ async function readSectionRows(sectionKey) {
   return result.rows;
 }
 
-async function loadSectionValue(key, defaults) {
+/**
+ * Stable fingerprint of a section's stored values. A save sends back the version it
+ * started from, so a save made on top of someone else's newer change is refused.
+ */
+function computeSectionVersion(rows) {
+  const body = (rows || [])
+    .map((row) => `${row.configuration_key}=${row.current_value_literal ?? ''}`)
+    .sort()
+    .join('\n');
+  return crypto.createHash('sha1').update(body).digest('hex').slice(0, 16);
+}
+
+function sectionValueFromRows(sectionKey, rows) {
+  const defaults = DEFAULT_SETTINGS[sectionKey];
+  return rows.length ? assembleSection(sectionKey, defaults, rows) : structuredClone(defaults);
+}
+
+async function loadSectionValue(key) {
   const rows = await readSectionRows(key);
-  if (!rows.length) return structuredClone(defaults);
-  return assembleSection(key, defaults, rows);
+  return sectionValueFromRows(key, rows);
 }
 
 async function getSectionValue(key) {
   const defaults = DEFAULT_SETTINGS[key];
   if (!defaults) return null;
-  if (!SECTION_CACHE_TTL_MS) return loadSectionValue(key, defaults);
+  if (!SECTION_CACHE_TTL_MS) return loadSectionValue(key);
 
   const now = Date.now();
   let entry = sectionCache.get(key);
   if (!entry || entry.expiresAt <= now) {
-    const promise = loadSectionValue(key, defaults);
+    const promise = loadSectionValue(key);
     entry = { promise, expiresAt: now + SECTION_CACHE_TTL_MS };
     sectionCache.set(key, entry);
     promise.catch(() => {
@@ -100,16 +112,12 @@ async function getSectionValue(key) {
   return structuredClone(await entry.promise);
 }
 
-async function getSettingsOverview() {
+/** Every section, uncached, with its last-saved time, default state and version. */
+async function loadAllSettingsSections() {
   await ensureDefaultSettingsOnce();
-
-  const [loaded, staffResult, historyResult] = await Promise.all([
-    Promise.all(SECTION_KEYS.map(async (key) => {
+  const loaded = await Promise.all(
+    SECTION_KEYS.map(async (key) => {
       const rows = await readSectionRows(key);
-      const defaults = DEFAULT_SETTINGS[key];
-      const value = rows.length
-        ? assembleSection(key, defaults, rows)
-        : structuredClone(defaults);
       const updatedAt = rows.reduce((latest, row) => {
         if (!row.updated_at) return latest;
         if (!latest) return row.updated_at;
@@ -118,147 +126,77 @@ async function getSettingsOverview() {
       const isDefault =
         !rows.length ||
         rows.every((row) => row.current_value_literal === row.default_value_literal);
-      return { key, value, updatedAt, isDefault };
-    })),
-    pool.query(`
-      SELECT s.staff_id, s.role,
-        COALESCE(a.display_name, NULLIF(TRIM(s.first_name || ' ' || s.last_name), ''), s.email_address) AS name
-      FROM staff s
-      INNER JOIN accounts a ON a.account_id = s.account_id
-      WHERE a.deleted_at IS NULL
-      ORDER BY s.role, name
-    `),
-    pool.query(`
-      SELECT configuration_key, name, updated_at
-      FROM configuration
-      ORDER BY updated_at DESC NULLS LAST
-      LIMIT 12
-    `),
-  ]);
-
-  const sectionMap = Object.fromEntries(loaded.map((s) => [s.key, s]));
-
-  return {
-    lastUpdated: new Date().toISOString(),
-    sections: sectionMap,
-    defaults: DEFAULT_SETTINGS,
-    staffEditors: staffResult.rows.map((r) => ({
-      staffId: r.staff_id,
-      name: r.name,
-      role: r.role,
-    })),
-    changeHistory: historyResult.rows.map((r, i) => ({
-      id: `chg-${i}`,
-      section: r.name || sectionKeyFromConfigurationKey(r.configuration_key),
-      updatedAt: r.updated_at,
-      updatedBy: 'System',
-    })),
-    alerts: buildSettingsAlerts(sectionMap),
-    dataSources: {
-      persisted: ['configuration'],
-      tables: ['configuration'],
-    },
-  };
+      return {
+        key,
+        value: sectionValueFromRows(key, rows),
+        updatedAt,
+        isDefault,
+        version: computeSectionVersion(rows),
+      };
+    })
+  );
+  return Object.fromEntries(loaded.map((section) => [section.key, section]));
 }
 
-function buildSettingsAlerts(sections) {
-  const alerts = [];
-  if (sections.platform?.value?.maintenanceMode) {
-    alerts.push({
-      id: 'maintenance',
-      message: 'Maintenance mode is ON — member login and the product app are blocked. Landing + admin/staff remain available.',
-      severity: 'warning',
-    });
-  }
-  if (!sections.platform?.value?.registrationEnabled) {
-    alerts.push({
-      id: 'registration-off',
-      message: 'New user registration is disabled.',
-      severity: 'warning',
-    });
-  }
-  if (sections.security?.value?.requireStaff2fa === false) {
-    alerts.push({
-      id: '2fa-off',
-      message: 'Staff two-factor authentication is not required.',
-      severity: 'info',
-    });
-  }
-  if (sections.security?.value?.ipAllowlistEnabled) {
-    const ips = sections.security.value.allowedAdminIps || [];
-    alerts.push({
-      id: 'ip-allowlist',
-      message: `Admin IP allowlist is enabled (${ips.length} address${ips.length === 1 ? '' : 'es'}).`,
-      severity: ips.length ? 'info' : 'warning',
-    });
-  }
-  const inactivePkgs = (sections.economy?.value?.creditPackages || []).filter((p) => !p.active);
-  if (inactivePkgs.length) {
-    alerts.push({
-      id: 'inactive-pkgs',
-      message: `${inactivePkgs.length} credit package(s) marked inactive.`,
-      severity: 'info',
-    });
-  }
-  return alerts;
+function versionConflictError() {
+  const error = new Error('These settings were changed by someone else after you opened them.');
+  error.code = 'SETTINGS_VERSION_CONFLICT';
+  error.statusCode = 409;
+  return error;
 }
 
-async function updateSettingsSection(sectionKey, values) {
-  if (!DEFAULT_SETTINGS[sectionKey]) {
-    throw new Error(`Unknown settings section: ${sectionKey}`);
-  }
+/**
+ * Save one section in a single transaction.
+ *
+ * The section is locked for the duration, so two admins saving at once cannot interleave.
+ * `buildNextValue(currentValue)` runs against the locked current value and returns
+ * `{ value, changes }`; it may throw to abort. Only rows whose value changed get a new
+ * `updated_at`. `afterWrite(client, result)` runs inside the same transaction (the audit row).
+ *
+ * @returns {Promise<{ changed: boolean, changes: unknown[], version: string }>}
+ */
+async function writeSettingsSection(sectionKey, { baseVersion = null, buildNextValue, afterWrite } = {}) {
+  const defaults = DEFAULT_SETTINGS[sectionKey];
+  if (!defaults) throw new Error(`Unknown settings section: ${sectionKey}`);
 
   await ensureDefaultSettingsOnce();
 
-  const current = await loadSectionValue(sectionKey, DEFAULT_SETTINGS[sectionKey]);
-  const merged = stripMeta(
-    deepMergeSettings(DEFAULT_SETTINGS[sectionKey], current, values)
-  );
-
+  const client = await pool.connect();
+  let committed = false;
   try {
-    if (sectionKey === 'platform') {
-      delete merged.sessionTimeoutMinutes;
-      await pool.query(
-        'DELETE FROM configuration WHERE configuration_key = $1',
-        ['platform.sessionTimeoutMinutes']
-      );
-    }
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`configuration:${sectionKey}`]);
 
-    if (sectionKey === 'security' && Array.isArray(merged.allowedAdminIps)) {
-      merged.allowedAdminIps = merged.allowedAdminIps
-        .map((ip) => String(ip || '').trim())
-        .filter(Boolean);
-    }
+    const currentRows = await readSectionRows(sectionKey, client);
+    const currentVersion = computeSectionVersion(currentRows);
+    if (baseVersion && baseVersion !== currentVersion) throw versionConflictError();
 
-    if (sectionKey === 'economy') {
-      const creditValue = Number(merged.creditValuePhp);
-      merged.creditValuePhp =
-        Number.isFinite(creditValue) && creditValue > 0
-          ? Math.round(creditValue * 10000) / 10000
-          : DEFAULT_SETTINGS.economy.creditValuePhp;
-    }
+    const previousValue = sectionValueFromRows(sectionKey, currentRows);
+    const { value: nextValue, changes = [] } = await buildNextValue(structuredClone(previousValue));
 
-    if (sectionKey === 'economy') {
-      const { ACTIVE_FEE_SETTING_IDS } = require('../lib/PlatformConfiguration');
-      const allowed = new Set(ACTIVE_FEE_SETTING_IDS);
-      if (Array.isArray(merged.feeSettings)) {
-        merged.feeSettings = merged.feeSettings.filter((fee) => fee && allowed.has(fee.id));
-      }
-      if (merged.marketplaceSettings && typeof merged.marketplaceSettings === 'object') {
-        delete merged.marketplaceSettings.escrowHoldDays;
-      }
-    }
+    const nextRows = flattenSection(sectionKey, nextValue, defaults);
+    const keptKeys = nextRows.map((row) => row.configuration_key);
+    const currentByKey = rowMapFromRows(currentRows);
 
-    const rows = flattenSection(sectionKey, merged, DEFAULT_SETTINGS[sectionKey]);
-    const keptKeys = rows.map((row) => row.configuration_key);
-    await pool.query(
+    const removed = await client.query(
       `DELETE FROM configuration
        WHERE configuration_key LIKE $1
          AND NOT (configuration_key = ANY($2::text[]))`,
       [configurationKeyPrefixFilter(sectionKey), keptKeys]
     );
-    for (const row of rows) {
-      await pool.query(
+    let valueRowsChanged = removed.rowCount || 0;
+
+    for (const row of nextRows) {
+      const existing = currentByKey[row.configuration_key];
+      const valueChanged = !existing || existing.current_value_literal !== row.current_value_literal;
+      const metaChanged =
+        !existing ||
+        existing.name !== row.name ||
+        existing.description !== row.description ||
+        existing.default_value_literal !== row.default_value_literal;
+      if (!valueChanged && !metaChanged) continue;
+      if (valueChanged) valueRowsChanged += 1;
+      await client.query(
         `INSERT INTO configuration (
            configuration_key, name, description, current_value_literal, default_value_literal, updated_at
          ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
@@ -267,29 +205,124 @@ async function updateSettingsSection(sectionKey, values) {
            description = EXCLUDED.description,
            current_value_literal = EXCLUDED.current_value_literal,
            default_value_literal = EXCLUDED.default_value_literal,
-           updated_at = CURRENT_TIMESTAMP`,
+           updated_at = CASE WHEN $6::boolean THEN CURRENT_TIMESTAMP ELSE configuration.updated_at END`,
         [
           row.configuration_key,
           row.name,
           row.description,
           row.current_value_literal,
           row.default_value_literal,
+          valueChanged,
         ]
       );
     }
+
+    const changed = valueRowsChanged > 0 || changes.length > 0;
+    if (changed && afterWrite) {
+      await afterWrite(client, { previousValue, nextValue, changes });
+    }
+
+    const commit = await client.query('COMMIT');
+    if (String(commit?.command || '').toUpperCase() === 'ROLLBACK') {
+      const error = new Error('Settings could not be saved. Nothing was changed.');
+      error.code = 'COMMIT_ROLLED_BACK';
+      error.statusCode = 500;
+      throw error;
+    }
+    committed = true;
+
+    const savedRows = changed ? await readSectionRows(sectionKey) : currentRows;
+    return { changed, changes, version: computeSectionVersion(savedRows) };
+  } catch (err) {
+    if (!committed) await client.query('ROLLBACK').catch(() => {});
+    throw err;
   } finally {
+    client.release();
     clearSettingsCache();
   }
+}
 
-  return getSettingsOverview();
+/** Staff accounts with role and whether they have an authenticator app set up. */
+async function listSettingsStaff() {
+  const result = await pool.query(`
+    SELECT s.staff_id, s.role, a.handle,
+      COALESCE(a.display_name, NULLIF(TRIM(s.first_name || ' ' || s.last_name), ''), s.email_address) AS name,
+      EXISTS (
+        SELECT 1 FROM account_authentication_secrets aas WHERE aas.account_id = s.account_id
+      ) AS has_authenticator
+    FROM staff s
+    INNER JOIN accounts a ON a.account_id = s.account_id
+    WHERE a.deleted_at IS NULL
+    ORDER BY (s.role = 'Admin') DESC, s.role, name
+  `);
+  return result.rows.map((row) => ({
+    staffId: row.staff_id,
+    name: row.name,
+    handle: row.handle || null,
+    role: row.role,
+    hasAuthenticator: Boolean(row.has_authenticator),
+  }));
+}
+
+/** Most recent settings saves from the audit log, with the staff member who saved. */
+async function listSettingsChangeHistory({ limit = 15 } = {}) {
+  const result = await pool.query(
+    `
+    SELECT aa.account_activity_id, aa.reference_id, aa.metadata, aa.created_at,
+      s.role AS actor_role,
+      COALESCE(
+        sa.display_name,
+        NULLIF(TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')), '')
+      ) AS actor_name
+    FROM account_activity aa
+    LEFT JOIN staff s ON s.staff_id = aa.actor_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = s.account_id
+    WHERE aa.event_code = $1
+    ORDER BY aa.created_at DESC, aa.account_activity_id DESC
+    LIMIT $2
+    `,
+    [SETTINGS_EVENT_CODE, Math.min(Math.max(Number(limit) || 15, 1), 50)]
+  );
+  return result.rows.map((row) => {
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    return {
+      id: row.account_activity_id,
+      section: metadata.section || row.reference_id || 'settings',
+      updatedAt: row.created_at,
+      updatedBy: row.actor_name || 'Unknown staff',
+      actorRole: row.actor_role || null,
+      changes: Array.isArray(metadata.changes) ? metadata.changes : [],
+      changeCount: Number(metadata.changeCount) || (Array.isArray(metadata.changes) ? metadata.changes.length : 0),
+    };
+  });
+}
+
+/** Paid top-ups grouped by credits and price, to count sales of each package. */
+async function countPaidTopupsByCreditsAndPrice() {
+  const result = await pool.query(`
+    SELECT credits, amount, COUNT(*)::int AS sales
+    FROM payments
+    WHERE payment_type = 'TOPUP' AND status = 'PAID'
+    GROUP BY credits, amount
+  `);
+  return result.rows.map((row) => ({
+    credits: Number(row.credits),
+    pricePhp: Number(row.amount),
+    sales: Number(row.sales) || 0,
+  }));
 }
 
 module.exports = {
-  getSettingsOverview,
-  updateSettingsSection,
+  SETTINGS_EVENT_CODE,
+  SECTION_CACHE_TTL_MS,
   ensureDefaultSettings,
   getSectionValue,
   clearSettingsCache,
+  loadAllSettingsSections,
+  writeSettingsSection,
+  listSettingsStaff,
+  listSettingsChangeHistory,
+  countPaidTopupsByCreditsAndPrice,
   deepMergeSettings,
   DEFAULT_SETTINGS,
 };

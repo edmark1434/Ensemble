@@ -16,6 +16,86 @@
 
 ---
 
+# Active Task: Platform view audit (Admin and every moderator console)
+
+Editor follow-up: fix the custom server request handler type error and confirm the editor passes `tsc --noEmit`.
+
+## Implementation Objective
+
+Platform view must show members' pages reliably and stay view-only for staff, in the frame and on the
+server, for Admin, Forum, Marketplace, Support and Jobs & Gigs moderators and the staff portal.
+
+## Defects found and fixed
+
+- Forum discussion pages showed "not found": the page loads authors with `POST /api/users/list-of-details`,
+  which the frame's write guard rejected. Read-only POSTs are now allowed (`STAFF_VIEW_ALLOWED_POST`).
+- After the 1-hour access token expired, the frame could not refresh it (refresh is a POST) and pages broke.
+  Refresh is allowed; a failed refresh shows a "session could not be refreshed" banner in the console.
+- The member onboarding tour opened its welcome overlay over platform view (`/home`). It never runs for staff.
+- Staff notification toasts appeared as member toasts inside the frame. The frame keeps the socket only.
+- Console pages, sign-in pages, `/settings`, `/setup`, the appeal page, `/projects/open` and the staff account's
+  own pages (`/projects`, saved/applied/my lists, workspaces, team invite/join) rendered in the frame (some outside
+  `Layout`, so with no guard at all). `StaffPreviewFrameBridge` (in `App`, every route) swaps them for a public page.
+- "Projects" (the staff account's own empty project library) was a platform-view section and a sidebar item;
+  replaced by Teams.
+- Jobs & Gigs "View on platform" and dispute @mentions opened the main site in a new tab, which has no staff
+  session on the admin host. Both open the console's platform view (new tab) now.
+- Links with `target="_blank"` and `window.open` did nothing (sandbox blocks popups). Links to this site open in
+  the frame; other sites open in a normal `noopener` tab.
+- The view-only rule existed only in the browser. `RejectStaffMemberWrite` refuses member writes from staff
+  sessions (403 `STAFF_VIEW_ONLY`).
+
+## Added
+
+- Console toolbar: Back (frame history only), Reload, Home, address bar (paths, member links, shared
+  platform-view links), Copy member-site link; loading state; `?path=` follows the frame (reload/share safe);
+  role start page (Forum → /forums, Marketplace → /assets, Jobs → /jobs/postings); scrollable sections on phones.
+- Guard: re-checks on text/label changes, blocks file drops, one "view-only" notice for blocked actions.
+
+## Acceptance criteria
+
+- Every console's Platform view opens on its start page, sections and Back/Reload/Home work, the address bar
+  opens pasted member links and rejects other sites and console pages with a message.
+- Forum discussions, profiles, jobs, gigs, assets, teams and public disputes load for staff; an hour later they
+  still load.
+- Member tools and the staff account's own pages are never shown; console/sign-in pages never render in the frame.
+- No onboarding tour or member notification toast appears in the frame.
+- A staff session calling a member write route (e.g. `POST /api/forum/discussions`) gets 403 `STAFF_VIEW_ONLY`;
+  every staff console action (admin/moderator/staff APIs, ticket attachments) still works.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
+
+---
+
+# Active Task: Platform Merit in gig ranking and creation previews
+
+## Implementation Objective
+
+Every place that ranks or previews by Platform Merit uses the real merit (100 minus active, unexpired
+warning points), not a hardcoded 100.
+
+## Changes
+
+- `WarningBandRepositories.platformMeritSql(column)`: SQL expression with the same rule as
+  `sumActiveWarningPoints` (not deleted, status active/open/pending, `expires_at` null or in the future,
+  each row 1–10).
+- `GigRepositories`: gig list, saved gigs and gig detail select `freelancerMerit` and return it, so
+  `gig_ranking.ts` stops ranking every seller at 100. `Gig` type has `freelancerMerit`.
+- Gig and personal job creation previews read `user.restriction.merit` (from `/api/users/me`) instead of
+  the never-set `user.merit_score` / `user.merit`. Team job preview stays at 100 (teams have no merit).
+- Restrictions desk weighs each active warning 1–10 like the backend.
+
+## Acceptance criteria
+
+- A seller with active warnings ranks with lower merit in gig discovery; once those warnings expire or
+  are rescinded, their gigs rank at full merit again.
+- The gig / job creation preview shows the member's current merit.
+- Restrictions desk "Active warning points" matches the backend sum.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
+
+---
+
 # Active Task (video editor): Free-plan export finishes but shows "Download expired"
 
 ## Implementation Objective
@@ -312,3 +392,30 @@ Update the subcontractor search and nomination flow in `frontend/src/pages/user/
 - Subcontracting terms note reminds the lead to know who they are subcontracting to and that the owner must confirm the invitation after inviting.
 - Backend `createSubcontractProposal` validates `verifications.is_verified = true` for every candidate.
 - No builds, type checks, lint, or other verification commands run unless explicitly requested.
+
+---
+
+# Active Task: Admin System Settings audit and redesign
+
+## Implementation Objective
+
+Make Admin → System settings safe and trustworthy: every saved value is validated on the backend, high-impact
+changes cannot lock admins or staff out, each save is atomic and attributed, and the page shows what each
+setting actually does.
+
+## Acceptance criteria
+
+- `/api/admin/subscriptions/plans*` require `checkSession` + `requireAdmin` (they had no auth).
+- Settings PATCH goes controller → `AdminSettingsServices` → repository. Invalid values return 400 with
+  field-level `errors`; unknown keys are dropped; one transaction per save; a stale `baseVersion` returns 409.
+- The admin IP allowlist accepts IPs and CIDR ranges, cannot be enabled empty, and cannot be saved without
+  the saving admin's own IP.
+- Each save writes a `SETTINGS_UPDATED` `account_activity` row with the actor and a field diff; change history
+  shows who changed what.
+- Package sales come from paid top-ups, not the never-updated `salesCount`.
+- "Require staff 2FA" emails the code to staff without an authenticator app (previously it was never sent),
+  with an attempt cap and resend throttle.
+- Deactivating every credit package stops package sales (no silent fallback to legacy packs).
+- Subscription plan edits are validated, saved atomically, keep the free plan at ₱0, and cannot rename tiers.
+- Settings UI: one save bar per section, field errors, defaults and reset, confirmations for risky changes,
+  fee rows labelled by what is actually charged, unsaved-changes guard.

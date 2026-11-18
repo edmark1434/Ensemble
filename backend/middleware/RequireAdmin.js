@@ -1,12 +1,5 @@
 const { getSecuritySettings } = require('../lib/ModerationPolicy');
-
-function normalizeIp(ip) {
-  if (!ip) return '';
-  const trimmed = String(ip).trim();
-  if (trimmed === '::1') return '127.0.0.1';
-  if (trimmed.startsWith('::ffff:')) return trimmed.replace('::ffff:', '');
-  return trimmed;
-}
+const { allowlistEntries, ipMatchesAllowlist } = require('../lib/IpAllowlist');
 
 async function requireAdmin(req, res, next) {
   const session = req.session;
@@ -28,22 +21,15 @@ async function requireAdmin(req, res, next) {
   try {
     const security = await getSecuritySettings();
     if (security?.ipAllowlistEnabled) {
-      const rawAllowed = security.allowedAdminIps;
-      const allowedList = Array.isArray(rawAllowed)
-        ? rawAllowed
-        : typeof rawAllowed === 'string'
-          ? rawAllowed.split(',').map((s) => s.trim()).filter(Boolean)
-          : [];
+      const allowedList = allowlistEntries(security.allowedAdminIps);
 
       if (allowedList.length > 0) {
         // req.ip honours TRUST_PROXY; the first X-Forwarded-For entry is client-controlled.
-        const rawIp = req.ip || req.socket?.remoteAddress;
-        const clientIp = normalizeIp(rawIp);
-        const isAllowed = allowedList.some((allowed) => normalizeIp(allowed) === clientIp);
-
-        if (!isAllowed) {
+        const clientIp = req.ip || req.socket?.remoteAddress;
+        if (!ipMatchesAllowlist(clientIp, allowedList)) {
           return res.status(403).json({
             success: false,
+            code: 'ADMIN_IP_NOT_ALLOWED',
             message: 'Forbidden: IP address not allowed for admin access',
           });
         }

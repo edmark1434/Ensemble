@@ -3,6 +3,7 @@ import { subject, type EventBusData } from "@designcombo/events";
 import { generateId } from "@designcombo/timeline";
 import type { ITrack, ITrackItem, State } from "@designcombo/types";
 import useStore from "../store/use-store";
+import { normalizeDimensionsToCanvas } from "./dimensions";
 import { ensureFont } from "./fonts";
 import { seedDefaultFont } from "./seed-default-font";
 import { calculateTextHeight } from "./text";
@@ -65,10 +66,14 @@ function createItem(payload: AddPayload, type: string, state: State, options: Re
   const duration = payload.duration || (details.duration ? details.duration * 1000 : 5000);
   const from = Math.max(0, payload.display?.from ?? 0);
   const trim = { from: payload.trim?.from ?? 0, to: payload.trim?.to ?? duration };
-  const width = details.width || (type === "text" ? 600 : state.size.width);
-  const height = details.height || (type === "text"
+  const isMedia = type === "video" || type === "image";
+  const fitted = isMedia && (!details.transform || details.transform === "none") && !details.crop && options.scaleMode !== "fill"
+    ? normalizeDimensionsToCanvas(details.width, details.height, state.size.width, state.size.height)
+    : undefined;
+  const width = fitted?.width ?? (details.width || (type === "text" ? 600 : state.size.width));
+  const height = fitted?.height ?? (details.height || (type === "text"
     ? calculateTextHeight({ ...details, text: details.text || "", fontSize: `${details.fontSize || 120}px`, width: `${width}px` } as any)
-    : state.size.height);
+    : state.size.height));
   const scale = options.scaleMode === "fill"
     ? Math.max(state.size.width / width, state.size.height / height)
     : Math.min(state.size.width / width, state.size.height / height) * (options.scaleAspectRatio || 1);
@@ -93,9 +98,9 @@ function createItem(payload: AddPayload, type: string, state: State, options: Re
       } : {}),
       ...details,
       width, height,
-      top: details.top ?? `${(state.size.height - height) / 2}px`,
-      left: details.left ?? `${(state.size.width - width) / 2}px`,
-      transform: details.transform || (type === "text" ? "none" : `scale(${scale})`),
+      top: (fitted ? undefined : details.top) ?? `${(state.size.height - height) / 2}px`,
+      left: (fitted ? undefined : details.left) ?? `${(state.size.width - width) / 2}px`,
+      transform: details.transform || (type === "text" || fitted ? "none" : `scale(${scale})`),
     },
     metadata: { previewUrl: "", ...payload.metadata },
   } as ITrackItem;
@@ -170,8 +175,7 @@ function add(event: EventBusData, stateManager: StateManager) {
   }
   const src = payload.details.src;
   const needsDuration = type !== "image" && !payload.duration && !payload.details.duration;
-  const needsSize = type !== "audio" && (!payload.details.width || !payload.details.height ||
-    (type === "image" && !payload.details.transform));
+  const needsSize = type !== "audio" && (!payload.details.width || !payload.details.height);
   if (!src || src.startsWith("pending-upload:") || (!needsDuration && !needsSize)) return;
   const targetDoc = useStore.getState().collabSchema;
   void probe(src, type).then(metadata => {
@@ -183,12 +187,6 @@ function add(event: EventBusData, stateManager: StateManager) {
         const resolved = createItem({
           ...payload, details: { ...payload.details, width: metadata.width, height: metadata.height },
         }, type, state, options);
-        // Images may already have menu-normalized dimensions. Native insertion
-        // preserves those dimensions while scaling against the source size.
-        if (type === "image") {
-          resolved.details.width = payload.details.width || metadata.width;
-          resolved.details.height = payload.details.height || metadata.height;
-        }
         for (const key of ["width", "height", "top", "left", "transform"] as const) {
           if (details[key] === (item.details as any)[key]) details[key] = (resolved.details as any)[key];
         }

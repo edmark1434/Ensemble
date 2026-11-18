@@ -327,8 +327,11 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         } else if (status === "in-progress" || status === "queued") {
           setTimeout(() => get().actions.pollJobStatus(jobId), 1000);
         } else if (status === "failed") {
-          toast.error("Export failed. Please try again.", { id: "editor-export" });
-          set({ exporting: false, error: "Render failed." });
+          const message = statusInfo.errorCode === "RENDER_TIMEOUT"
+            ? "The render timed out before the export finished."
+            : "Render failed.";
+          toast.error(message, { id: "editor-export" });
+          set({ exporting: false, error: message });
         }
       } catch (error) {
         if (get().cancelled || get().jobId !== jobId || get().output) return;

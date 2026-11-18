@@ -404,7 +404,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       termsOfService,
       slots: slots || 3,
       freelancerSubscriptionPlan: rawSubscriptionPlan,
-      freelancerMerit: user?.merit_score ?? user?.merit ?? 100,
+      // Live merit from /api/users/me (`restriction.merit`, active unexpired warnings only).
+      freelancerMerit: user?.restriction?.merit ?? 100,
       isSaved: false,
       isOwnGig: true,
       canManageGig: true,

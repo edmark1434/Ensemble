@@ -87,9 +87,8 @@ export const fetchAllFontItems = async (): Promise<GoogleFontApiItem[]> => {
     }
     const data: { items: GoogleFontApiItem[] } = await response.json();
     _cachedItems = data.items;
-    _fetchPromise = null;
     return _cachedItems;
-  })();
+  })().finally(() => { _fetchPromise = null; });
 
   return _fetchPromise;
 };

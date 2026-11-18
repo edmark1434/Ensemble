@@ -23,7 +23,7 @@
 ## Platform settings
 
 - `getSectionValue` (`backend/repositories/AdminSettingsRepositories.js`) caches each `configuration` section in process memory for 15 seconds (`SETTINGS_CACHE_TTL_MS`; `0` disables it). Concurrent readers share one query, and callers receive a clone.
-- `updateSettingsSection` reads the section uncached and clears the cache after writing. Other processes and raw SQL edits are picked up within the TTL.
+- `writeSettingsSection` saves a section in one transaction under a per-section advisory lock, reads it uncached, and clears the cache after writing. Other processes and raw SQL edits are picked up within the TTL; the settings page tells admins this (`propagationSeconds`).
 - Request paths seed default configuration rows once per process. `lib/Seed.js` still calls `ensureDefaultSettings` directly.
 
 ## Staff console data (browser)

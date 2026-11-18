@@ -333,7 +333,7 @@ export function useKeyboardShortcuts(
         const clip = getClipboard();
         if (!clip) return;
 
-        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = stateManager.getState();
         const time = getCurrentTime();
         const result = cloneIntoNewTracks(clip, time, {
           trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
