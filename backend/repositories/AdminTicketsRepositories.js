@@ -4776,6 +4776,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     disputeId,
     replyToId: replyTarget ? replyTarget.id : null,
     attachments: options.attachments || [],
+    mentionAccountIds: [row.by_account_id, row.for_account_id],
   });
 
   const number = row.dispute_number || 'Dispute';

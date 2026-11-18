@@ -4,14 +4,7 @@ import { ControlItem } from "./control-item";
 import useLayoutStore from "./store/use-layout-store";
 import { CommentsPanel } from "./comments/comments-panel";
 import { WorkspacePanel } from "./workspace/workspace-panel";
-
-// Placeholder panel - swap this out for the real Saves implementation
-// once it exists.
-const SavesPanel = () => (
-  <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-    Save history is coming soon.
-  </div>
-);
+import { SavesPanel } from "./saves/saves-panel";
 
 export const RightPanelContent = ({
   panelRef,

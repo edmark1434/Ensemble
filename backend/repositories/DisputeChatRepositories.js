@@ -252,18 +252,42 @@ async function resolveMentionHandles(handles) {
 }
 
 /**
+ * `{ handle (lower case): account id }` for these accounts. Older handles were built from a
+ * person's full name and can hold spaces or commas ("balili,mary kristine m.- bsed science6969"),
+ * which no "@handle" pattern can read out of text, so the parties are always in the mention map
+ * and the client matches their handles by exact text.
+ */
+async function loadAccountHandles(accountIds) {
+  const ids = [...new Set((accountIds || []).filter(Boolean).map(String))].filter((id) =>
+    ACCOUNT_UUID.test(id)
+  );
+  if (!ids.length) return {};
+  const result = await pool.query(
+    `SELECT account_id, LOWER(handle) AS handle FROM accounts WHERE account_id = ANY($1::uuid[]) AND handle IS NOT NULL`,
+    [ids]
+  );
+  const mentions = {};
+  for (const row of result.rows) mentions[row.handle] = String(row.account_id);
+  return mentions;
+}
+
+/**
  * Profile pictures and @mention links for a dispute view. Adds `authorAvatar` to each message
- * and returns the avatars of `accountIds` (the parties) plus the mention map. Decoration only:
- * a failed lookup leaves the view without pictures or links instead of failing it.
+ * and returns the avatars of `accountIds` (the parties) plus the mention map. The parties'
+ * and authors' own handles are always in the map, whatever characters they hold. Decoration
+ * only: a failed lookup leaves the view without pictures or links instead of failing it.
  * @returns {Promise<{ messages: object[], avatars: Map<string,string>, mentions: Record<string,string> }>}
  */
 async function decorateDisputeView(messages, { accountIds = [], texts = [] } = {}) {
   const list = Array.isArray(messages) ? messages : [];
   try {
-    const [avatars, mentions] = await Promise.all([
-      loadAccountAvatarPaths([...accountIds, ...list.map((m) => m.senderAccountId)]),
+    const people = [...accountIds, ...list.map((m) => m.senderAccountId)];
+    const [avatars, mentioned, own] = await Promise.all([
+      loadAccountAvatarPaths(people),
       resolveMentionHandles(extractMentionHandles([...texts, ...list.map((m) => m.body)])),
+      loadAccountHandles(people),
     ]);
+    const mentions = { ...own, ...mentioned };
     return {
       messages: list.map((m) => ({
         ...m,
@@ -532,6 +556,7 @@ async function postDisputeSystemMessage(row, body, { audience = 'parties' } = {}
     isInternal: false,
     notifyAccountIds: partyIds.filter(Boolean),
     disputeId: row.dispute_id,
+    mentionAccountIds: [row.by_account_id, row.for_account_id],
   });
 }
 
@@ -748,6 +773,8 @@ async function createDisputeMessage({
   disputeId = null,
   replyToId = null,
   attachments = [],
+  /** The case's parties, so their "@handle" in this message links for live readers too. */
+  mentionAccountIds = [],
 }) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot send dispute chat messages');
@@ -799,7 +826,9 @@ async function createDisputeMessage({
   await touchDisputeInbox(chatId, preview, now, { audience: normalizedAudience });
 
   // Live readers get the author's picture and this message's mention links with it.
-  const decorated = await decorateDisputeView([{ senderAccountId: accountId, body }]);
+  const decorated = await decorateDisputeView([{ senderAccountId: accountId, body }], {
+    accountIds: mentionAccountIds,
+  });
 
   const mapped = {
     id: String(insertedId),
@@ -1302,15 +1331,94 @@ async function getAccountDispute(disputeId, accountId) {
     })
   );
   const { messages, mentions } = await decorateDisputeView(visibleMessages, {
+    accountIds: [row.by_account_id, row.for_account_id],
     texts: [row.description],
   });
   return {
     ...mapDisputeSummary(row, accountId),
+    details: await loadDisputeCaseDetails(disputeId),
     settlement: await getDisputeSettlementForParty(disputeId, accountId),
     chatId,
     messages,
     mentions,
   };
+}
+
+function caseParty(accountId, name, handle) {
+  if (!accountId) return null;
+  return { accountId: String(accountId), name: name || handle || 'Member', handle: handle || null };
+}
+
+/**
+ * The case file a party reads next to the discussion: who filed against whom, the contract,
+ * the credits involved, the complaint, and the outcome once decided. Only for parties who may
+ * see the case (the filer, and both parties once it is public); never for the limited view.
+ * Selects `d.*` so a column from a newer migration that is not applied yet cannot break it.
+ */
+async function loadDisputeCaseDetails(disputeId) {
+  try {
+    const result = await pool.query(
+      `
+      SELECT d.*,
+             COALESCE(ia.display_name, NULLIF(TRIM(CONCAT_WS(' ', iu.first_name, iu.last_name)), '')) AS initiator_name,
+             ia.handle AS initiator_handle,
+             COALESCE(ra.display_name, NULLIF(TRIM(CONCAT_WS(' ', ru.first_name, ru.last_name)), '')) AS respondent_name,
+             ra.handle AS respondent_handle,
+             ${CONTRACT_TITLE_SQL} AS contract_title,
+             ct.contract_type AS contract_kind,
+             ct.status AS contract_status,
+             ct.rate_credits AS contract_rate
+      FROM disputes d
+      LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
+      LEFT JOIN users iu ON iu.account_id = ia.account_id
+      LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
+      LEFT JOIN users ru ON ru.account_id = ra.account_id
+      LEFT JOIN contracts ct ON ct.contract_id = d.contract_id
+      WHERE d.dispute_id = $1 AND d.deleted_at IS NULL
+      `,
+      [disputeId]
+    );
+    const r = result.rows[0];
+    if (!r) return null;
+    const { disputeResolutionLabel } = require('../lib/DisputeResolutions');
+    const outcomeKey = r.resolution_outcome || null;
+    const closed = String(r.status || '').toLowerCase() === 'closed';
+    return {
+      type: r.type || 'Contract',
+      title: r.title || null,
+      complaint: r.description || null,
+      priority: r.priority || null,
+      filedAt: r.created_at || null,
+      openedAt: r.opened_at || null,
+      disputer: caseParty(r.by_account_id, r.initiator_name, r.initiator_handle),
+      disputee: caseParty(r.for_account_id, r.respondent_name, r.respondent_handle),
+      contract: r.contract_id
+        ? {
+            id: String(r.contract_id),
+            title: r.contract_title || null,
+            kind: String(r.contract_kind || '').toLowerCase() === 'gig' ? 'Gig order' : 'Job contract',
+            status: r.contract_status || null,
+            rateCredits: Number(r.contract_rate || 0),
+          }
+        : null,
+      creditsInvolved: Number(r.credit_amount_involved || 0),
+      // Filed after the contract ended: its payments are final, only conduct is decided.
+      conductOnly: Boolean(r.contract_ended_at_filing),
+      outcome: closed
+        ? {
+            key: outcomeKey,
+            label: (outcomeKey && disputeResolutionLabel(outcomeKey))
+              || financialOutcomeLabel(r.financial_resolution_kind)
+              || 'Closed',
+            notes: r.resolution_notes || null,
+            decidedAt: r.resolved_at || r.financial_resolution_at || null,
+          }
+        : null,
+    };
+  } catch (error) {
+    console.warn('Dispute case details skipped:', error.message);
+    return null;
+  }
 }
 
 async function postPublicDisputeComment(
@@ -1418,6 +1526,7 @@ async function postPublicDisputeComment(
     disputeId,
     replyToId: replyTarget ? replyTarget.id : null,
     attachments: files,
+    mentionAccountIds: [row.by_account_id, row.for_account_id],
   });
   const number = row.dispute_number || 'Dispute';
   if (pendingReview) {

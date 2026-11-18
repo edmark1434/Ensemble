@@ -103,6 +103,21 @@ function normalizeLockoutIp(ip) {
     );
 }
 
+/**
+ * Handle for an account that did not pick one (social sign-in): letters and digits from the
+ * name plus four random digits. Names from Google often hold commas, spaces and dashes
+ * ("BALILI, MARY KRISTINE M. - BSED SCIENCE"), which made handles nobody could @mention.
+ */
+function generatedHandle(firstName, lastName) {
+    const plain = (value) => String(value || '')
+        .normalize('NFKD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+    const base = `${plain(firstName)}${plain(lastName)}`.slice(0, 40) || 'user';
+    return `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
 //function to validate email format using a regular expression
 function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -296,7 +311,7 @@ async function registerUser(signupPayload = {}, options = {}) {
     //create account and user in the database, hash the password if provided, and return the created user and account information
     const account = await createAccount({
         displayName: [firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || null,
-        handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
+        handle: username ?? generatedHandle(firstName, lastName),
         type: type ?? 'User',
         status: 'active',
     });

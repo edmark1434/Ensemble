@@ -58,7 +58,7 @@ export async function copyTemplate(snapshot: DocSnapshot, name: string,
     name, width: root.size?.width || 1920, height: root.size?.height || 1080,
     durationSeconds: Math.max(0, Math.floor((root.duration || 0) / 1000)),
     document: encodeTemplate(root, name),
-    scenes: [...scenes.values()].map(({ id, state }) => ({ id, name: state.projectName || "Scene",
+    scenes: [...scenes].map(([sourceId, { id, state }]) => ({ sourceId, id, name: state.projectName || "Scene",
       width: state.size?.width || 1920, height: state.size?.height || 1080, fps: state.fps || 30,
       document: encodeTemplate(state, state.projectName || "Scene") })),
   };

@@ -15,7 +15,7 @@ import {
   endSession,
   loadSnapshot,
   attachPersistence,
-  requestCompact,
+  requestProjectSave,
   PersistenceHandle,
   PersistenceStatus,
 } from "../collab/persistence";
@@ -30,6 +30,8 @@ import { dispatch } from "@designcombo/events";
 import { PLAYER_PAUSE } from "@/features/editor/constants/events";
 import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
 import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset";
+import { PROJECT_SAVES_UPDATED_EVENT } from "@/features/editor/types/project-saves";
+import { toast } from "sonner";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -180,23 +182,27 @@ export function useCollabDoc(
     };
     undoManager.on("stack-item-popped", handleUndoRedo);
 
-    // Skips the debounce and persists whatever's queued right now — wired
-    // up to the navbar's save-status button. Reads persistenceHandle at
-    // call time (not creation time), so this stays a stable function
-    // reference even though the handle itself isn't ready until the async
-    // setup below completes.
+    // Skips the debounce and persists whatever's queued right now, then
+    // creates a save (project + scene snapshots together) — wired up to the
+    // navbar's save button. Reads persistenceHandle at call time (not
+    // creation time), so this stays a stable function reference even though
+    // the handle itself isn't ready until the async setup below completes.
     const forceSave = () => {
-      if (cancelled) return;
+      if (cancelled || !persistenceHandle) return;
       setCollab((prev) => (prev ? { ...prev, compactStatus: "compacting" } : prev));
       persistenceHandle
-        ?.forceFlush()
-        .then(() => requestCompact(target))
-        .then(() => {
+        .forceFlush()
+        .then(() => requestProjectSave(rootProjectId))
+        .then(({ created }) => {
+          window.dispatchEvent(new Event(PROJECT_SAVES_UPDATED_EVENT));
+          if (created) toast.success("Project saved");
+          else toast("No changes since the last save");
           if (cancelled) return;
           setCollab((prev) => (prev ? { ...prev, compactStatus: "idle" } : prev));
         })
         .catch((err) => {
           console.error("useCollabDoc: force save failed", err);
+          toast.error(err instanceof Error ? err.message : "Couldn't save the project.");
           if (cancelled) return;
           setCollab((prev) => (prev ? { ...prev, compactStatus: "error" } : prev));
         });

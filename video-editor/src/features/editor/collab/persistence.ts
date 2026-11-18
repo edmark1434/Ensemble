@@ -148,10 +148,11 @@ export function attachPersistence(
   return { teardown, forceFlush };
 }
 
-export async function requestCompact(target: CollabTarget): Promise<void> {
-  const res = await fetch(`${collabApiBase(target)}/compact`, { method: "POST" });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Failed to compact project (${res.status}): ${body}`);
-  }
+// One save = the project document and every scene document compacted and
+// recorded together, whichever of them is open. Always keyed by the project.
+export async function requestProjectSave(projectId: string): Promise<{ created: boolean }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/saves`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to save project (${res.status})`);
+  return { created: !!data.created };
 }

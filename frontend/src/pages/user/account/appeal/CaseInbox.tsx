@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Clock,
+  FileText,
   CornerUpLeft,
   ExternalLink,
   Gavel,
@@ -38,7 +40,17 @@ import {
   errorMessage,
   isAppealTicket,
 } from './appealShared';
-import { AttachButton, MessageAttachments, PendingFileList, uploadPendingFiles, usePendingFiles } from './appealAttachments';
+import {
+  AttachButton,
+  MessageAttachments,
+  PendingFileList,
+  SendingAttachments,
+  releasePendingFiles,
+  uploadPendingFiles,
+  usePendingFiles,
+  type AttachmentPayload,
+  type PendingFile,
+} from './appealAttachments';
 
 /** Live `caseUpdated` events do the work; this only catches a missed event. */
 const POLL_MS = 60_000;
@@ -51,6 +63,36 @@ type TicketInfo = {
   people?: number;
 };
 
+/** A reply the member sent that the server has not confirmed yet. */
+type OutgoingMessage = {
+  localId: string;
+  target: CaseSelection;
+  body: string;
+  files: PendingFile[];
+  /** Set once the files are uploaded, so a retry only re-sends the message. */
+  uploaded: AttachmentPayload[] | null;
+  replyToId: string | null;
+  createdAt: string;
+  status: 'sending' | 'failed';
+  error?: string;
+};
+
+type CaseParty = { accountId: string; name: string; handle: string | null };
+
+/** `details` on a party's dispute read (`loadDisputeCaseDetails`). */
+type DisputeCaseDetails = {
+  type?: string;
+  title?: string | null;
+  complaint?: string | null;
+  filedAt?: string | null;
+  disputer?: CaseParty | null;
+  disputee?: CaseParty | null;
+  contract?: { id: string; title: string | null; kind: string; status: string | null; rateCredits: number } | null;
+  creditsInvolved?: number;
+  conductOnly?: boolean;
+  outcome?: { key: string | null; label: string; notes: string | null; decidedAt: string | null } | null;
+};
+
 type ThreadState = {
   loading: boolean;
   error: string | null;
@@ -60,7 +102,138 @@ type ThreadState = {
   appealDecision?: AppealDecision;
   mentions?: MentionMap;
   ticket?: TicketInfo;
+  details?: DisputeCaseDetails | null;
 };
+
+function credits(amount?: number) {
+  const value = Number(amount || 0);
+  return `${value.toLocaleString()} credit${value === 1 ? '' : 's'}`;
+}
+
+function PartyName({ party, accountId }: { party?: CaseParty | null; accountId: string }) {
+  if (!party) return <span className="text-gray-500 dark:text-zinc-500">Unknown</span>;
+  const isYou = Boolean(accountId) && party.accountId === accountId;
+  return (
+    <span className="min-w-0">
+      <Link
+        to={`/profile/${party.accountId}`}
+        className="font-semibold text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+      >
+        {party.name}
+      </Link>
+      {party.handle ? <span className="text-gray-500 dark:text-zinc-500"> @{party.handle}</span> : null}
+      {isYou ? (
+        <span className="ml-1.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+          You
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2 py-1.5 text-xs">
+      <dt className="text-gray-500 dark:text-zinc-500">{label}</dt>
+      <dd className="min-w-0 break-words text-gray-800 dark:text-zinc-200">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * The case file both parties read beside the discussion: who filed against whom, the contract,
+ * the credits at stake, the complaint, and the decision once there is one.
+ */
+function DisputeDetailsPanel({
+  details,
+  access,
+  accountId,
+  mentions,
+}: {
+  details: DisputeCaseDetails;
+  access: CaseAccess | null;
+  accountId: string;
+  mentions?: MentionMap;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const closed = Boolean(access?.closed);
+  const complaint = String(details.complaint || '').trim();
+  const long = complaint.length > 280;
+  const escrowLine = details.conductOnly
+    ? 'The contract had already ended, so its payments are final. Staff decide on conduct only.'
+    : closed
+      ? 'The case is decided. Any payout is listed with the ruling.'
+      : details.creditsInvolved
+        ? 'On hold. Neither side can move these credits until staff decide.'
+        : null;
+
+  return (
+    <dl className="divide-y divide-gray-100 dark:divide-white/5">
+      <DetailRow label="Filed by">
+        <PartyName party={details.disputer} accountId={accountId} />
+      </DetailRow>
+      <DetailRow label="Against">
+        <PartyName party={details.disputee} accountId={accountId} />
+      </DetailRow>
+      {details.contract ? (
+        <DetailRow label="Order">
+          {details.contract.kind}
+          {details.contract.title ? <> · “{details.contract.title}”</> : null}
+          {details.contract.status ? (
+            <span className="text-gray-500 dark:text-zinc-500"> · {details.contract.status}</span>
+          ) : null}
+        </DetailRow>
+      ) : null}
+      {details.contract?.rateCredits ? <DetailRow label="Contract value">{credits(details.contract.rateCredits)}</DetailRow> : null}
+      {details.creditsInvolved || escrowLine ? (
+        <DetailRow label="Credits involved">
+          {details.creditsInvolved ? <span className="font-semibold">{credits(details.creditsInvolved)}</span> : null}
+          {escrowLine ? (
+            <span className="block text-gray-500 dark:text-zinc-500">{escrowLine}</span>
+          ) : null}
+        </DetailRow>
+      ) : null}
+      <DetailRow label="Filed">{details.filedAt ? formatStandingWhen(details.filedAt) : '—'}</DetailRow>
+      <DetailRow label="Stage">
+        {access?.stageLabel || '—'}
+        <span className="text-gray-500 dark:text-zinc-500">
+          {' '}
+          · {access?.visibility ? 'Public: both parties and the community can follow it' : 'Private: only the filer and staff'}
+        </span>
+      </DetailRow>
+      {details.outcome ? (
+        <DetailRow label="Decision">
+          <span className="font-semibold">{details.outcome.label}</span>
+          {details.outcome.decidedAt ? (
+            <span className="text-gray-500 dark:text-zinc-500"> · {formatStandingWhen(details.outcome.decidedAt)}</span>
+          ) : null}
+          {details.outcome.notes ? (
+            <span className="mt-0.5 block whitespace-pre-wrap text-gray-600 dark:text-zinc-400">
+              <MentionText text={details.outcome.notes} mentions={mentions} />
+            </span>
+          ) : null}
+        </DetailRow>
+      ) : null}
+      {complaint ? (
+        <DetailRow label="Complaint">
+          {details.title ? <span className="block font-semibold">{details.title}</span> : null}
+          <span className={`mt-0.5 block whitespace-pre-wrap text-gray-700 dark:text-zinc-300 ${long && !expanded ? 'line-clamp-4' : ''}`}>
+            <MentionText text={complaint} mentions={mentions} />
+          </span>
+          {long ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="mt-1 text-[11px] font-semibold text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {expanded ? 'Show less' : 'Show the full complaint'}
+            </button>
+          ) : null}
+        </DetailRow>
+      ) : null}
+    </dl>
+  );
+}
 
 const EMPTY_THREAD: ThreadState = { loading: false, error: null, messages: [], access: null };
 
@@ -236,7 +409,11 @@ export default function CaseInbox({
   const [thread, setThread] = useState<ThreadState>(EMPTY_THREAD);
   const [reply, setReply] = useState('');
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
-  const [sending, setSending] = useState(false);
+  // The case file starts open on the Cases page (room to spare) and folded on the appeal page.
+  const [showDetails, setShowDetails] = useState(tall);
+  const [outbox, setOutbox] = useState<OutgoingMessage[]>([]);
+  const outboxRef = useRef<OutgoingMessage[]>([]);
+  outboxRef.current = outbox;
   const replyFiles = usePendingFiles();
   const clearReplyFiles = replyFiles.clear;
   const requestRef = useRef(0);
@@ -269,6 +446,7 @@ export default function CaseInbox({
         access: data.access || null,
         appealDecision,
         mentions: target.kind === 'dispute' ? data.mentions || {} : undefined,
+        details: target.kind === 'dispute' ? data.details || null : undefined,
         ticket:
           target.kind === 'ticket'
             ? {
@@ -334,13 +512,8 @@ export default function CaseInbox({
     };
   }, [onRefreshLists, loadThread]);
 
-  // Scroll the thread itself (never the window) when new messages arrive.
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || thread.messages.length === lastCountRef.current) return;
-    lastCountRef.current = thread.messages.length;
-    el.scrollTop = el.scrollHeight;
-  }, [thread.messages.length]);
+  // Previews of messages still sending are freed when the inbox goes away.
+  useEffect(() => () => outboxRef.current.forEach((item) => releasePendingFiles(item.files)), []);
 
   const selectedTicket = selection?.kind === 'ticket' ? tickets.find((t) => t.id === selection.id) || null : null;
   const selectedDispute = selection?.kind === 'dispute' ? disputes.find((d) => d.id === selection.id) || null : null;
@@ -356,47 +529,125 @@ export default function CaseInbox({
     [thread.messages]
   );
 
-  async function sendReply() {
-    if (!selection || !canCompose || sending || thread.loading) return;
+  // This case's unconfirmed replies. One the server already returned (a live refresh can land
+  // before the send finishes) is not shown twice.
+  const visibleOutbox = useMemo(() => {
+    if (!selection) return [];
+    return outbox.filter((item) => {
+      if (item.target.kind !== selection.kind || item.target.id !== selection.id) return false;
+      if (item.status !== 'sending' || !item.body) return true;
+      const sentAt = new Date(item.createdAt).getTime() - 5000;
+      return !thread.messages.some((message) => {
+        const sender = message.senderId || message.senderAccountId;
+        return (
+          sender &&
+          String(sender) === accountId &&
+          String(message.body || '').trim() === item.body &&
+          new Date(message.createdAt || 0).getTime() >= sentAt
+        );
+      });
+    });
+  }, [outbox, selection, thread.messages, accountId]);
+
+  // Scroll the thread itself (never the window) when a message arrives or is sent.
+  const shownCount = thread.messages.length + visibleOutbox.length;
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || shownCount === lastCountRef.current) return;
+    lastCountRef.current = shownCount;
+    el.scrollTop = el.scrollHeight;
+  }, [shownCount]);
+
+  /**
+   * Upload and save one outgoing message in the background. The bubble is already on screen;
+   * on success it is swapped for the saved message, on failure it stays with Retry / Remove.
+   */
+  const deliver = useCallback(
+    async (item: OutgoingMessage) => {
+      const { target } = item;
+      try {
+        const attachments =
+          item.uploaded ??
+          (await uploadPendingFiles(item.files, target.kind === 'ticket' ? 'ticket-attachments' : 'chat-attachments'));
+        // Remember finished uploads so a retry does not upload the files again.
+        setOutbox((list) => list.map((entry) => (entry.localId === item.localId ? { ...entry, uploaded: attachments } : entry)));
+        const payload = { body: item.body, ...(attachments.length ? { attachments } : {}) };
+        const res =
+          target.kind === 'ticket'
+            ? await api.post(`/api/users/tickets/${target.id}/messages`, {
+                ...payload,
+                ...(item.replyToId ? { replyToMessageId: item.replyToId } : {}),
+              })
+            : await api.post(`/api/accounts/disputes/${target.id}/messages`, {
+                ...payload,
+                ...(item.replyToId ? { replyToId: item.replyToId } : {}),
+              });
+        const saved: ThreadMessage | undefined = target.kind === 'ticket' ? res.data?.data : res.data?.data?.message;
+        const current = selectionRef.current;
+        const stillOpen = current?.kind === target.kind && current.id === target.id;
+        if (stillOpen && saved?.id) {
+          setThread((state) =>
+            state.messages.some((message) => String(message.id) === String(saved.id))
+              ? state
+              : { ...state, messages: [...state.messages, saved] }
+          );
+        }
+        setOutbox((list) => list.filter((entry) => entry.localId !== item.localId));
+        releasePendingFiles(item.files);
+        // The server's copy (audience, attachments, links) and the case state, quietly.
+        if (stillOpen) void loadThread(target, true);
+        void onRefreshLists().catch(() => undefined);
+      } catch (err) {
+        setOutbox((list) =>
+          list.map((entry) =>
+            entry.localId === item.localId
+              ? {
+                  ...entry,
+                  status: 'failed',
+                  error: errorMessage(err, err instanceof Error && err.message ? err.message : 'Not sent.'),
+                }
+              : entry
+          )
+        );
+      }
+    },
+    [loadThread, onRefreshLists]
+  );
+
+  function sendReply() {
+    if (!selection || !canCompose || thread.loading) return;
     const body = reply.trim();
-    const files = replyFiles.files;
-    if (!body && !files.length) return;
-    const target = selection;
-    const parentId = replyTo ? String(replyTo.id) : null;
-    setSending(true);
+    if (!body && !replyFiles.files.length) return;
+    const item: OutgoingMessage = {
+      localId: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      target: selection,
+      body,
+      files: replyFiles.take(),
+      uploaded: null,
+      replyToId: replyTo ? String(replyTo.id) : null,
+      createdAt: new Date().toISOString(),
+      status: 'sending',
+    };
+    // The message is on screen straight away; the composer is free for the next one.
+    setOutbox((list) => [...list, item]);
     setReply('');
     setReplyTo(null);
-    if (replyRef.current) replyRef.current.style.height = 'auto';
-    try {
-      const attachments = await uploadPendingFiles(
-        files,
-        target.kind === 'ticket' ? 'ticket-attachments' : 'chat-attachments'
-      );
-      const payload = { body, ...(attachments.length ? { attachments } : {}) };
-      if (target.kind === 'ticket') {
-        await api.post(`/api/users/tickets/${target.id}/messages`, {
-          ...payload,
-          ...(parentId ? { replyToMessageId: parentId } : {}),
-        });
-      } else {
-        const res = await api.post(`/api/accounts/disputes/${target.id}/messages`, {
-          ...payload,
-          ...(parentId ? { replyToId: parentId } : {}),
-        });
-        if (res.data?.message) showSuccessToast(res.data.message);
-      }
-      if (selectionRef.current?.kind === target.kind && selectionRef.current.id === target.id) {
-        replyFiles.clear();
-        await loadThread(target, true);
-      }
-      void onRefreshLists().catch(() => undefined);
-    } catch (err) {
-      setReply(body);
-      if (parentId) setReplyTo(messageById.get(parentId) || null);
-      showErrorToast(errorMessage(err, err instanceof Error && err.message ? err.message : 'Could not send that reply.'));
-    } finally {
-      setSending(false);
+    if (replyRef.current) {
+      replyRef.current.style.height = 'auto';
+      replyRef.current.focus();
     }
+    void deliver(item);
+  }
+
+  function retryOutgoing(item: OutgoingMessage) {
+    const next: OutgoingMessage = { ...item, status: 'sending', error: undefined };
+    setOutbox((list) => list.map((entry) => (entry.localId === item.localId ? next : entry)));
+    void deliver(next);
+  }
+
+  function removeOutgoing(item: OutgoingMessage) {
+    setOutbox((list) => list.filter((entry) => entry.localId !== item.localId));
+    releasePendingFiles(item.files);
   }
 
   function messageIsOwn(message: ThreadMessage) {
@@ -555,6 +806,35 @@ export default function CaseInbox({
               </div>
 
               {selectedTicket ? <DecisionNotice decision={thread.appealDecision ?? null} /> : null}
+              {selectedDispute && thread.details ? (
+                <div className="border-b border-gray-200 bg-white dark:border-white/10 dark:bg-dark-surface">
+                  <button
+                    type="button"
+                    onClick={() => setShowDetails((open) => !open)}
+                    aria-expanded={showDetails}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:text-zinc-200 dark:hover:bg-white/5"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
+                    <span className="flex-1">Case details</span>
+                    {!showDetails && thread.details.creditsInvolved ? (
+                      <span className="font-normal text-gray-500 dark:text-zinc-500">
+                        {credits(thread.details.creditsInvolved)} involved
+                      </span>
+                    ) : null}
+                    <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showDetails ? (
+                    <div className="max-h-64 overflow-y-auto px-4 pb-3">
+                      <DisputeDetailsPanel
+                        details={thread.details}
+                        access={access}
+                        accountId={accountId}
+                        mentions={thread.mentions}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {access?.attention && !access.closed ? (
                 <div className="flex items-start gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-900 dark:text-amber-100">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -664,6 +944,60 @@ export default function CaseInbox({
                         </div>
                       );
                     })}
+                    {visibleOutbox.map((item) => {
+                      const parent = item.replyToId ? messageById.get(item.replyToId) : undefined;
+                      const failed = item.status === 'failed';
+                      return (
+                        <div key={item.localId} className="my-2 flex justify-end">
+                          <div className="flex max-w-[85%] flex-col sm:max-w-[75%]">
+                            {parent ? (
+                              <span className="mb-1 block max-w-full self-end truncate rounded-lg border-l-2 border-gray-300 bg-white/70 px-2.5 py-1 text-[11px] text-gray-500 dark:border-white/20 dark:bg-white/5 dark:text-zinc-400">
+                                {authorLabel(parent, messageIsOwn(parent))}: {quoteSnippet(parent.body) || 'Attachment'}
+                              </span>
+                            ) : null}
+                            {item.body ? (
+                              <div
+                                className={`self-end whitespace-pre-wrap break-words rounded-2xl rounded-br-md px-4 py-2.5 text-sm text-white transition-opacity ${
+                                  failed ? 'bg-rose-600/90' : 'bg-blue-600 opacity-75'
+                                }`}
+                              >
+                                {item.body}
+                              </div>
+                            ) : null}
+                            <SendingAttachments files={item.files} />
+                            <span className="mt-1 flex items-center justify-end gap-2 px-1 text-[11px] text-gray-500 dark:text-zinc-500">
+                              {failed ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                                    <AlertCircle className="h-3 w-3" />
+                                    {item.error || 'Not sent.'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => retryOutgoing(item)}
+                                    className="font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                                  >
+                                    Retry
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeOutgoing(item)}
+                                    className="font-semibold text-gray-500 hover:underline dark:text-zinc-400"
+                                  >
+                                    Remove
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="inline-flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  {item.files.length && !item.uploaded ? 'Uploading…' : 'Sending…'}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -702,7 +1036,6 @@ export default function CaseInbox({
                     if (event.dataTransfer.types.includes('Files')) event.preventDefault();
                   }}
                   onDrop={(event) => {
-                    if (sending) return;
                     event.preventDefault();
                     replyFiles.add(event.dataTransfer.files);
                   }}
@@ -737,11 +1070,11 @@ export default function CaseInbox({
                       </button>
                     </div>
                   ) : null}
-                  <PendingFileList files={replyFiles.files} onRemove={replyFiles.remove} disabled={sending} />
+                  <PendingFileList files={replyFiles.files} onRemove={replyFiles.remove} />
                   <div className="flex items-end gap-2">
                     <AttachButton
                       onPick={replyFiles.add}
-                      disabled={sending || thread.loading}
+                      disabled={thread.loading}
                       count={replyFiles.files.length}
                     />
                     <textarea
@@ -779,11 +1112,11 @@ export default function CaseInbox({
                     <button
                       type="button"
                       onClick={() => void sendReply()}
-                      disabled={sending || (!reply.trim() && !replyFiles.files.length)}
+                      disabled={!reply.trim() && !replyFiles.files.length}
                       className="rounded-xl bg-blue-600 p-2.5 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label="Send reply"
                     >
-                      {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                      <Send className="h-5 w-5" />
                     </button>
                   </div>
                 </div>

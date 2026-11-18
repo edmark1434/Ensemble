@@ -212,6 +212,20 @@ interface BlockYjsUpdatesTable {
   block_id: string;
 }
 
+interface ProjectSavesTable {
+  project_save_id: Generated<string>;
+  project_id: string;
+  yjs_snapshot_id: number;
+  created_by_user_id: string | null;
+  created_at: Generated<Date>;
+}
+
+interface ProjectSaveBlocksTable {
+  project_save_id: string;
+  block_id: string;
+  yjs_snapshot_id: number;
+}
+
 interface MarketAssetsTable {
   market_asset_id: Generated<string>;
   name: string;
@@ -299,6 +313,8 @@ interface Database {
   project_yjs_snapshots: ProjectYjsSnapshotsTable;
   block_yjs_updates: BlockYjsUpdatesTable;
   block_yjs_snapshots: BlockYjsSnapshotsTable;
+  project_saves: ProjectSavesTable;
+  project_save_blocks: ProjectSaveBlocksTable;
 
   market_assets: MarketAssetsTable;
   market_media_assets: MarketMediaAssetsTable;
