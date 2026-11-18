@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import type { OrdersMainContext } from "./orders_main";
 import { stripMarkdown } from "@/lib/markdownPaste";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
 import { computeAcceptanceDeadlineMs, formatRemainingDuration } from "./orders_components/OrderLifecycleTracker";
 
 type OrderSubTab = "all" | "pending" | "inContract" | "inactive";
@@ -141,10 +142,9 @@ export const SentOrders: React.FC = () => {
     });
   };
 
-  const formatAvatarUrl = (url: string) => {
+  const formatAvatarUrl = (url: string, fallbackName?: string) => {
     if (!url) return "";
-    if (url.startsWith("http")) return url;
-    return `${import.meta.env.VITE_CLOUDFRONT_URL}/${url.replace(/^\//, "")}`;
+    return constructAvatarUrl(url, fallbackName);
   };
 
   useEffect(() => {
@@ -156,7 +156,7 @@ export const SentOrders: React.FC = () => {
           const visibleOrders = fetched.filter((o: any) => o.status !== "Withdrawn");
           const mapped = visibleOrders.map((o: any) => ({
             ...o,
-            freelancer_avatar: formatAvatarUrl(o.freelancer_avatar),
+            freelancer_avatar: formatAvatarUrl(o.freelancer_avatar, o.freelancer_name),
           }));
 
           setOrders(mapped);

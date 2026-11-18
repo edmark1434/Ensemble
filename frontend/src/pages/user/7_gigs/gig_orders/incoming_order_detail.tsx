@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 
 import { useParams, useNavigate } from "react-router-dom";
 
+import { constructAvatarUrl } from "@/lib/accountAvatars";
+
 import {
 
   Loader2,
@@ -132,13 +134,8 @@ export const IncomingOrderDetail = () => {
 
 
   const formatAvatarUrl = (url: string) => {
-
     if (!url) return "";
-
-    if (url.startsWith("http")) return url;
-
-    return `${import.meta.env.VITE_CLOUDFRONT_URL}/${url.replace(/^\//, "")}`;
-
+    return constructAvatarUrl(url);
   };
 
 
