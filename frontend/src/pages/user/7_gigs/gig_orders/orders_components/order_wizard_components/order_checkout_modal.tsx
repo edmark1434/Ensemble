@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { X, ShieldCheck, AlertCircle, ShoppingCart, Loader2 } from "lucide-react";
+import { X, ShieldCheck, AlertCircle, ShoppingCart, Loader2, ExternalLink } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SlideCommit } from "@/components/ui/SlideCommit";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import useGlobalState from "@/lib/global_state";
 
 interface OrderCheckoutModalProps {
@@ -41,37 +42,68 @@ export const OrderCheckoutModal: React.FC<OrderCheckoutModalProps> = ({
   const [isLoadingBalance, setIsLoadingBalance] = useState(initialCredits === null);
 
   useEffect(() => {
+    if (
+      rawGlobalCredits !== undefined &&
+      rawGlobalCredits !== null &&
+      !isNaN(Number(rawGlobalCredits))
+    ) {
+      setWalletBalance(Number(rawGlobalCredits));
+      setIsLoadingBalance(false);
+    }
+  }, [rawGlobalCredits]);
+
+  useEffect(() => {
     if (!isOpen) return;
     let isCancelled = false;
 
-    // Refresh live balance from accounts wallet endpoint
-    api
-      .get("/api/accounts/wallet", { params: { type: "account_wallets" } })
-      .then((res) => {
-        if (!isCancelled) {
-          const raw = res.data?.wallet?.balance_credits;
-          if (raw !== undefined && raw !== null && !isNaN(Number(raw))) {
-            const val = Number(raw);
-            setWalletBalance(val);
-            const currentUser = useGlobalState.getState().user;
-            if (currentUser) {
-              useGlobalState.getState().setUser({
-                ...currentUser,
-                wallet: { ...(currentUser.wallet || {}), balance_credits: val },
-              });
+    const refreshBalance = () => {
+      api
+        .get("/api/accounts/wallet", { params: { type: "account_wallets" } })
+        .then((res) => {
+          if (!isCancelled) {
+            const raw = res.data?.wallet?.balance_credits;
+            if (raw !== undefined && raw !== null && !isNaN(Number(raw))) {
+              const val = Number(raw);
+              setWalletBalance(val);
+              const currentUser = useGlobalState.getState().user;
+              if (currentUser) {
+                useGlobalState.getState().setUser({
+                  ...currentUser,
+                  wallet: { ...(currentUser.wallet || {}), balance_credits: val },
+                });
+              }
             }
           }
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to fetch wallet balance:", err);
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoadingBalance(false);
-      });
+        })
+        .catch((err) => {
+          console.warn("Failed to fetch wallet balance:", err);
+        })
+        .finally(() => {
+          if (!isCancelled) setIsLoadingBalance(false);
+        });
+    };
+
+    refreshBalance();
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshBalance();
+      }
+    };
+
+    socket.on("walletBalanceUpdated", refreshBalance);
+    window.addEventListener("focus", refreshBalance);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isCancelled = true;
+      socket.off("walletBalanceUpdated", refreshBalance);
+      window.removeEventListener("focus", refreshBalance);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [isOpen]);
 
@@ -195,11 +227,13 @@ export const OrderCheckoutModal: React.FC<OrderCheckoutModalProps> = ({
               </span>
             </div>
             <Link
-              to="/credits/shop"
+              to="/credits"
               target="_blank"
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-xs hover:opacity-90 transition shrink-0"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-xs hover:opacity-90 transition shrink-0"
             >
-              Top Up
+              <span>Top Up</span>
+              <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
         )}
