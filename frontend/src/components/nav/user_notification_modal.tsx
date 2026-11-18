@@ -103,6 +103,17 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       referencePath = `${referencePath}${sep}taskId=${encodeURIComponent(notification.reference_id)}`;
     }
 
+    if (
+      (notification.reference_prefix === "MILESTONE_REVISION_REQUESTED" ||
+        notification.reference_prefix === "MILESTONE_REVISION_PURCHASED" ||
+        notification.reference_prefix === "MILESTONE_REVISION") &&
+      referencePath.startsWith("/dashboard/tasks/") &&
+      !referencePath.includes("tab=")
+    ) {
+      const sep = referencePath.includes("?") ? "&" : "?";
+      referencePath = `${referencePath}${sep}tab=submissions`;
+    }
+
     const directConversationMatch = referencePath.match(
       /^\/inbox\/(?!direct(?:\/|$)|marketplace(?:\/|$))([^/?#]+)/
     );

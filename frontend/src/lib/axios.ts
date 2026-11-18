@@ -2,7 +2,13 @@ import axios from "axios";
 import { API_BASE_URL } from "./api";
 import useGlobalState from "./global_state";
 import { showErrorToast } from "@/components/utility/toast";
-import { isStaffPreviewFrame } from "./staffPlatformView";
+import {
+  isStaffPreviewFrame,
+  postToStaffPreviewParent,
+  staffPreviewInteractedRecently,
+  STAFF_PREVIEW_SESSION_MESSAGE,
+} from "./staffPlatformView";
+import { showStaffViewOnlyNotice } from "@/components/staff/StaffPlatformView";
 import { authFailureHref } from "./consoleHosts";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
@@ -35,13 +41,25 @@ async function getCsrfToken() {
 
 const CSRF_EXEMPT_URL = /\/api\/(?:chat|users\/(?:login|signup|signup-save-session|verify-email|resend-verification-email|refresh-token|forgot-password|reset-password))(?:$|[?#])/;
 
+/**
+ * POSTs that only read or keep the session alive. Platform view needs them: the forum
+ * discussion page loads its authors with list-of-details, and an access token lasts an hour.
+ */
+const STAFF_VIEW_ALLOWED_POST = /\/api\/users\/(?:refresh-token|list-of-details)(?:$|[?#])/;
+
+function isStaffPlatformFrame() {
+  return useGlobalState.getState().user?.type === "Staff" && isStaffPreviewFrame();
+}
+
 function rejectStaffPlatformWrite(config: { method?: string; url?: string }) {
-  if (useGlobalState.getState().user?.type !== "Staff") return null;
-  if (!isStaffPreviewFrame()) return null;
+  if (!isStaffPlatformFrame()) return null;
   const method = String(config.method || "get").toLowerCase();
   const url = String(config.url || "");
   const reading = method === "get" || method === "head" || method === "options";
   if (reading && !/\/download(?:$|[?#/])/i.test(url)) return null;
+  if (method === "post" && STAFF_VIEW_ALLOWED_POST.test(url)) return null;
+  // Background writes (read receipts and the like) fail quietly; a click gets an explanation.
+  if (staffPreviewInteractedRecently()) showStaffViewOnlyNotice();
   return Promise.reject(Object.assign(new Error("Platform view is browse-only."), {
     code: "STAFF_VIEW_ONLY",
     config,
@@ -151,9 +169,17 @@ api.interceptors.response.use(
                     return api(originalRequest);
                 }
 
+                // Inside platform view the console owns sign-in; the frame only reports it.
+                if (isStaffPlatformFrame()) {
+                    postToStaffPreviewParent({ type: STAFF_PREVIEW_SESSION_MESSAGE });
+                    return Promise.reject(err);
+                }
                 window.location.href = authFailureHref();
                 return Promise.reject(err);
             } catch (refreshError) {
+                if (isStaffPlatformFrame()) {
+                    postToStaffPreviewParent({ type: STAFF_PREVIEW_SESSION_MESSAGE });
+                }
                 return Promise.reject(refreshError);
             }
         }

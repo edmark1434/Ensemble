@@ -694,7 +694,7 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
                   {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
-                      className="w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#0c0d12] rounded-[4px] border border-zinc-200 dark:border-white/10 p-4 animate-pulse space-y-3 min-h-[560px]"
+                      className="w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#121214] rounded-[4px] border border-zinc-200 dark:border-white/10 p-4 animate-pulse space-y-3 min-h-[560px]"
                     >
                       <div className="h-5 w-24 bg-zinc-200 dark:bg-zinc-800 rounded-[2px]" />
                       <div className="h-28 bg-zinc-200 dark:bg-zinc-800 rounded-[2px]" />
@@ -739,7 +739,7 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
                           e.stopPropagation();
                           handleDropOnColumn(col.id, e);
                         }}
-                        className={`w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#0c0d12] rounded-[4px] border transition-all duration-150 p-4 flex flex-col min-h-[560px] ${
+                        className={`w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#121214] rounded-[4px] border transition-all duration-150 p-4 flex flex-col min-h-[560px] ${
                           isDragOver
                             ? "border-zinc-900 dark:border-white ring-2 ring-zinc-900/10 dark:ring-white/10 bg-zinc-100/80 dark:bg-zinc-900/80"
                             : "border-zinc-200 dark:border-white/10"
@@ -800,7 +800,7 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
                                   setDragOverColumnId(null);
                                 }}
                                 onClick={() => handleOpenEditModal(task)}
-                                className={`group/card bg-white dark:bg-[#12141a] p-4 rounded-[2px] border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
+                                className={`group/card bg-white dark:bg-zinc-900 p-4 rounded-[2px] border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
                                   isDragging
                                     ? "opacity-40 scale-[0.98] border-zinc-900 dark:border-white pointer-events-none"
                                     : "border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/25 hover:shadow-xs hover:bg-zinc-50/70 dark:hover:bg-[#161822]"
@@ -936,7 +936,7 @@ export const TeamTaskboard: React.FC<TeamTaskboardProps> = ({
                                         e.stopPropagation();
                                         handleUpdateStatus(task.task_id, e.target.value as TeamTask["status"]);
                                       }}
-                                      className="text-[10px] font-medium rounded-[2px] border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#0c0d12] px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
+                                      className="text-[10px] font-medium rounded-[2px] border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#121214] px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
                                     >
                                       <option value="todo">To Do</option>
                                       <option value="in_progress">In Progress</option>

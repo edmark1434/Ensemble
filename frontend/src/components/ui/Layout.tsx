@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
-import { isStaffPlatformViewer, isStaffPreviewFrame, staffPreviewViewFallback, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
+import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import { useRealtimeNotifications } from "@/components/nav/user_header.tsx";
@@ -87,29 +87,10 @@ const Layout = () => {
   const activeFloatingId = useChatState((state) => state.activeFloatingId);
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
+  // Platform view: hide member actions here. StaffPreviewFrameBridge (in App) handles the
+  // console's navigation messages and keeps the frame off member-only pages.
   const isStaffView = isStaffPlatformViewer(user);
-  useStaffPlatformGuard(isStaffView);
-
-  useEffect(() => {
-    if (!isStaffPreviewFrame()) return;
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data as { type?: string; path?: string } | null;
-      if (!data || data.type !== STAFF_PREVIEW_NAV_MESSAGE) return;
-      const path = String(data.path || "");
-      if (!path.startsWith("/") || path.startsWith("//")) return;
-      navigate(staffPreviewViewFallback(path) || path);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [navigate]);
-
-  useEffect(() => {
-    if (!isStaffView) return;
-    const fallback = staffPreviewViewFallback(location.pathname);
-    if (!fallback || fallback === location.pathname) return;
-    navigate(fallback, { replace: true });
-  }, [isStaffView, location.pathname, navigate]);
+  useStaffPlatformGuard(isStaffView, navigate);
 
   const isInboxPage = location.pathname.startsWith("/inbox");
   const isTeamProjectChat =

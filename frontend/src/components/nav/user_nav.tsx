@@ -196,7 +196,12 @@ const UserNav: React.FC<UserNavProps> = () => {
         );
     };
 
-    const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
+    // Projects lists the signed-in account's own projects, so platform view (staff) has nothing to show there.
+    const primaryNavState = isGuestMode
+        ? primaryNavInitial.filter(item => item.label !== "Teams")
+        : isStaffPreview
+            ? primaryNavInitial.filter(item => item.label !== "Projects")
+            : primaryNavInitial;
     const marketplaceTopState = marketplaceTopInitial;
     const jobsState = hidePersonalNav ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
     const gigsState = hidePersonalNav ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;

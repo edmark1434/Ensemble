@@ -133,6 +133,9 @@ const TAB_DATA: Record<string, Record<string, DataRequest[]>> = {
       '/api/admin/moderation/jobs/postings',
     ],
   },
+  systemSettings: {
+    economy: ['/api/admin/subscriptions/plans'],
+  },
 };
 
 function prefetchAll(requests: DataRequest[] = []) {

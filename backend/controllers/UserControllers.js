@@ -273,25 +273,30 @@ async function loginCredentials(req, res) {
             const { getSecuritySettings } = require('../lib/ModerationPolicy');
             const security = await getSecuritySettings();
             if (security?.requireStaff2fa && !twoFactorSecret) {
+                // Staff without an authenticator app get a code by email (StaffEmailCodeServices).
+                const { issueStaffEmailCode, verifyStaffEmailCode } = require('../services/StaffEmailCodeServices');
                 const staffEmail = (credentials.email_address || credentials.email || '').toLowerCase();
-                const expected2fa = await redis.get(`staff2fa:${staffEmail}`);
                 if (!submitted2fa) {
-                    const crypto = require('crypto');
-                    const code = crypto.randomInt(100000, 999999).toString();
-                    await redis.set(`staff2fa:${staffEmail}`, code, { EX: 10 * 60 });
+                    const issued = await issueStaffEmailCode({
+                        email: staffEmail,
+                        name: credentials.displayName || credentials.display_name || null,
+                    });
                     return res.status(200).json({
                         success: true,
                         require2fa: true,
-                        message: 'Two-factor authentication code required for staff login',
-                        email: staffEmail,
+                        twoFactorMethod: 'email',
+                        emailHint: issued.emailHint,
+                        message: `We emailed a sign-in code to ${issued.emailHint}.`,
                     });
-                } else if (submitted2fa !== expected2fa) {
+                }
+                const verification = await verifyStaffEmailCode({ email: staffEmail, code: submitted2fa });
+                if (!verification.ok) {
                     return res.status(401).json({
                         success: false,
-                        message: 'Invalid two-factor authentication code',
+                        require2fa: true,
+                        twoFactorMethod: 'email',
+                        message: verification.message,
                     });
-                } else {
-                    await redis.del(`staff2fa:${staffEmail}`);
                 }
             }
         }

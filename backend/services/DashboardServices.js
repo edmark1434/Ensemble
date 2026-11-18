@@ -87,9 +87,13 @@ async function notifyAndBroadcast({ task, actorId, recipientId, submission, mile
         client_message: 'MILESTONE_MESSAGE',
     };
     const isRecipientClient = String(recipientId) === String(task.client_account_id);
-    const referencePath = isRecipientClient
-        ? `/dashboard/review/${task.contract_id}`
-        : `/dashboard/tasks/${task.contract_id}`;
+    const teamProjectId = task.team_project_id || task.user_role?.team_id || null;
+    const referencePath =
+        action === 'revision_request' && teamProjectId
+            ? `/team-project/${teamProjectId}?tab=submissions`
+            : isRecipientClient
+                ? `/dashboard/review/${task.contract_id}`
+                : `/dashboard/tasks/${task.contract_id}`;
     const io = safeIo();
 
     try {

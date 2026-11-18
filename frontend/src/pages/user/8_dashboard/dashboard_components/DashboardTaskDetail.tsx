@@ -45,7 +45,7 @@ export const DashboardTaskDetail = () => {
             if (response.data.success) {
                 const fetchedTask = response.data.data;
                 if (fetchedTask.team_project_id || fetchedTask.job_hiring_type === 'team' || Number(fetchedTask.job_no_of_hires) > 1) {
-                    navigate(`/team-project/${fetchedTask.team_project_id || fetchedTask.job_id}`, { replace: true });
+                    navigate(`/team-project/${fetchedTask.team_project_id || fetchedTask.job_id}${window.location.search}`, { replace: true });
                     return;
                 }
                 setTask(fetchedTask);

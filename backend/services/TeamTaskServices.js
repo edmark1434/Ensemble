@@ -277,11 +277,39 @@ async function listWorkspacesServices(teamId, actorAccountId) {
   const context = await teamContext(teamId, actorAccountId);
   const cards = await TeamTaskRepositories.listContractWorkspaces(context.teamId, context.actorAccountId);
   return {
-    items: cards.map((card) => ({
-      ...card,
-      can_open: context.canManage || Boolean(card.is_workspace_member),
-      can_manage: context.canManage,
-    })),
+    items: cards.map((card) => {
+      const canOpen = context.canManage || Boolean(card.is_workspace_member);
+      if (!canOpen) {
+        return {
+          contract_id: card.contract_id,
+          contract_type: card.contract_type,
+          contract_status: card.contract_status,
+          contract_value: null,
+          listing_id: null,
+          listing_title: null,
+          listing_type: card.listing_type,
+          team_role: null,
+          client_name: null,
+          freelancer_name: null,
+          workspace_id: null,
+          workspace_updated_at: null,
+          total_tasks: null,
+          completed_tasks: null,
+          next_due_at: null,
+          workspace_member_count: null,
+          is_workspace_member: false,
+          can_open: false,
+          can_manage: context.canManage,
+          is_hidden: true,
+        };
+      }
+      return {
+        ...card,
+        can_open: true,
+        can_manage: context.canManage,
+        is_hidden: false,
+      };
+    }),
     current_user_role: context.membership.role,
   };
 }

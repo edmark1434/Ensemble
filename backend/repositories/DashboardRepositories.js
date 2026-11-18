@@ -1200,7 +1200,7 @@ async function buyRevision({
              WHERE reference_table = 'contract_milestone_revisions'
                AND reference_id = $1
                AND type = 'Escrow Hold'
-               AND LOWER(status) = 'completed'`,
+               AND LOWER(status::text) = 'completed'`,
             [milestoneId]
         );
         const revHold = Number(previousRevisionsSum.rows[0]?.total_revision_credits || 0);
@@ -1379,6 +1379,28 @@ async function buyRevision({
             ]
         );
 
+        const teamProjectRes = await client.query(
+            `SELECT COALESCE(
+                (SELECT tcw.team_id
+                 FROM team_contract_workspaces tcw
+                 WHERE tcw.contract_id = $1
+                 LIMIT 1),
+                (SELECT t.team_id
+                 FROM job_contracts jc
+                 JOIN proposals p ON p.proposal_id = jc.proposal_id
+                 JOIN teams t ON t.job_id = p.job_id
+                 WHERE jc.contract_id = $1
+                   AND t.team_type = 'contractual'
+                   AND t.deleted_at IS NULL
+                 LIMIT 1)
+             ) AS team_project_id`,
+            [contractId]
+        );
+        const teamProjectId = teamProjectRes.rows[0]?.team_project_id || null;
+        const revisionNotificationPath = teamProjectId
+            ? `/team-project/${teamProjectId}?tab=submissions`
+            : `/dashboard/tasks/${contractId}`;
+
         const notificationResult = await client.query(
             `INSERT INTO notifications (
                 message, is_read, reference_table, reference_prefix,
@@ -1388,7 +1410,7 @@ async function buyRevision({
              RETURNING *`,
             [
                 `${participants.client_name} purchased an additional revision for "${milestone.name}" in "${participants.listing_title}". ${priceCredits} credits are now on hold.`,
-                `/dashboard/tasks/${contractId}`,
+                revisionNotificationPath,
                 idempotencyKey,
                 participants.freelancer_account_id,
             ]

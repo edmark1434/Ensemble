@@ -84,7 +84,7 @@ export function computeGigRankingBreakdown(
   const ratingNorm = Math.max(0, Math.min(1, bayesianRating / 5.0));
 
   // Platform Merit (22% of 35 = 7.70 pts): 0..100 scale, defaults to 100
-  const rawMerit = (gig as any).freelancerMerit ?? (gig as any).clientMerit;
+  const rawMerit = gig.freelancerMerit;
   const freelancerMerit =
     typeof rawMerit === "number" && !Number.isNaN(rawMerit)
       ? Math.max(0, Math.min(100, rawMerit))

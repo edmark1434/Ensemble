@@ -86,6 +86,8 @@ export interface Gig {
   ordersCount?: number;
   pendingOrdersCount?: number;
   freelancerAccountId?: string;
+  /** Seller's Platform Merit from the backend (100 minus active, unexpired warning points). */
+  freelancerMerit?: number;
   freelancerSubscriptionPlan?: string;
   discoveryOrderKey?: number;
   team_id?: string | null;

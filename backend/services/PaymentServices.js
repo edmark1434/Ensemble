@@ -57,13 +57,18 @@ async function validateTopupRequest(body = {}) {
 
     let pack = null;
     if (body.itemType === 'topup') {
+        // Admin packages are authoritative. The legacy packs only stand in when the
+        // configuration cannot be read; otherwise deactivating a package would not stop its sale.
+        let configurationReadable = false;
         try {
             const economy = await getSectionValue('economy');
-            const creditPackages = Array.isArray(economy?.creditPackages) ? economy.creditPackages : [];
+            configurationReadable = Array.isArray(economy?.creditPackages);
+            const creditPackages = configurationReadable ? economy.creditPackages : [];
             const configuredPack = creditPackages.find(p => p && p.active !== false && Number(p.credits) === credits);
-            if (configuredPack) {
+            const configuredPrice = Number(configuredPack?.pricePhp);
+            if (configuredPack && Number.isFinite(configuredPrice) && configuredPrice > 0) {
                 pack = {
-                    amount: Number(configuredPack.pricePhp),
+                    amount: configuredPrice,
                     name: `${configuredPack.name} (${Number(configuredPack.credits).toLocaleString()} Credits)`
                 };
             }
@@ -71,7 +76,7 @@ async function validateTopupRequest(body = {}) {
             console.error('Error fetching economy configuration in validateTopupRequest:', err);
         }
 
-        if (!pack && TOPUP_PACKS.has(credits)) {
+        if (!pack && !configurationReadable && TOPUP_PACKS.has(credits)) {
             pack = TOPUP_PACKS.get(credits);
         }
 

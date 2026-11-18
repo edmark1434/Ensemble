@@ -10,6 +10,7 @@ import {
   Layers,
   Coins,
   Search,
+  Lock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
@@ -19,20 +20,21 @@ interface WorkspaceCard {
   contract_id: string;
   contract_type: string;
   contract_status: string;
-  contract_value: number;
-  listing_id: string;
-  listing_title: string;
+  contract_value: number | null;
+  listing_id: string | null;
+  listing_title: string | null;
   listing_type: "job" | "gig";
-  team_role: "client" | "freelancer";
-  client_name: string;
-  freelancer_name: string;
+  team_role: "client" | "freelancer" | null;
+  client_name: string | null;
+  freelancer_name: string | null;
   workspace_id?: string | null;
-  total_tasks: number;
-  completed_tasks: number;
+  total_tasks: number | null;
+  completed_tasks: number | null;
   next_due_at?: string | null;
-  workspace_member_count: number;
+  workspace_member_count: number | null;
   can_open: boolean;
   can_manage: boolean;
+  is_hidden?: boolean;
 }
 
 interface TeamContractsTabProps {
@@ -112,13 +114,16 @@ export const TeamContractsTab: React.FC<TeamContractsTabProps> = ({
     void loadData();
   }, [loadData]);
 
-  const filteredWorkspaces = workspaces.filter(
-    (w) =>
-      !searchQuery.trim() ||
-      w.listing_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      w.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      w.freelancer_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredWorkspaces = workspaces.filter((w) => {
+    if (!searchQuery.trim()) return true;
+    if (w.is_hidden || !w.can_open) return false;
+    const query = searchQuery.toLowerCase();
+    return (
+      (w.listing_title || "").toLowerCase().includes(query) ||
+      (w.client_name || "").toLowerCase().includes(query) ||
+      (w.freelancer_name || "").toLowerCase().includes(query)
+    );
+  });
 
   const filteredProposals = proposals.filter(
     (p) =>
@@ -197,6 +202,47 @@ export const TeamContractsTab: React.FC<TeamContractsTabProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredWorkspaces.map((card) => {
+              if (card.is_hidden || !card.can_open) {
+                return (
+                  <div
+                    key={card.contract_id}
+                    className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-xs space-y-4 opacity-85"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                          {card.listing_type}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300">
+                          {card.contract_status}
+                        </span>
+                      </div>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400">
+                        <Lock className="w-3 h-3" />
+                        <span>Hidden</span>
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] px-3.5 py-3 flex items-start gap-2.5">
+                      <Lock className="w-4 h-4 text-gray-400 dark:text-zinc-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700 dark:text-zinc-200">
+                          Content hidden
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                          You are not assigned to this contract. Only assigned team members can view its details.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-white/5 text-xs text-gray-400 dark:text-zinc-500">
+                      <span>Contract exists for this team</span>
+                      <span>Restricted access</span>
+                    </div>
+                  </div>
+                );
+              }
+
               const otherParty =
                 card.team_role === "client" ? card.freelancer_name : card.client_name;
               return (
@@ -224,7 +270,7 @@ export const TeamContractsTab: React.FC<TeamContractsTabProps> = ({
 
                     <div className="text-right shrink-0">
                       <span className="font-mono text-sm font-black text-gray-900 dark:text-white">
-                        {card.contract_value.toLocaleString()}
+                        {(card.contract_value ?? 0).toLocaleString()}
                       </span>
                       <span className="text-[10px] text-gray-400 block">credits</span>
                     </div>

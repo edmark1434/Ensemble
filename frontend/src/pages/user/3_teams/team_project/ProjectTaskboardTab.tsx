@@ -2596,7 +2596,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       e.stopPropagation();
                       handleDropOnColumn(col.id as any, e);
                     }}
-                    className={`w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#0c0d12] rounded-[4px] border transition-all duration-150 p-4 flex flex-col min-h-[560px] ${
+                    className={`w-[320px] sm:w-[335px] lg:w-[350px] shrink-0 bg-zinc-50/70 dark:bg-[#121214] rounded-[4px] border transition-all duration-150 p-4 flex flex-col min-h-[560px] ${
                       isDragOver
                         ? 'border-zinc-900 dark:border-white ring-2 ring-zinc-900/10 dark:ring-white/10 bg-zinc-100/80 dark:bg-zinc-900/80'
                         : 'border-zinc-200 dark:border-white/10'
@@ -2673,7 +2673,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               setDragOverColumnId(null);
                             }}
                             onClick={() => handleCardClick(task)}
-                            className={`group/card bg-white dark:bg-[#12141a] p-4 rounded-[2px] border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
+                            className={`group/card bg-white dark:bg-zinc-900 p-4 rounded-[2px] border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
                               isDragging
                                 ? 'opacity-40 scale-[0.98] border-zinc-900 dark:border-white pointer-events-none'
                                 : isSelected
