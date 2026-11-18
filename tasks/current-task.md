@@ -1,4 +1,45 @@
-# Active Task: Admin dashboard links; dispute filing summary, public invite, private-case audiences; closed state in every member view
+# Active Task: Cases — one place for a member's tickets and disputes
+
+## Implementation Objective
+
+Tickets and disputes leave the chat inbox and live in **Cases** (`/support/cases`) for every member; banned and
+locked members see the same cases on the appeal page. The server decides what a member may do on each case
+(`access`), so every view (Cases, appeal page, contract disputes, case bar, sidebar badge) agrees, including
+for banned, locked and suspended members, and keeps agreeing when the rules change. Members are actively told
+about open disputes and cases waiting on them.
+
+## Changes
+
+- Backend: `services/CaseServices.js` (rules: `buildTicketAccess`, `buildDisputeAccess`; lists, detail,
+  summary; `caseUpdated` per member via `announceTicketCase` / `announceDisputeCase`; `notifyCaseOpened`),
+  `repositories/CaseRepositories.js`. `GET /api/users/cases/summary` (in the banned read allowlist).
+  Member ticket/dispute endpoints return `access`. Inbox lists and member socket room joins leave cases out
+  (staff keep them). Member ticket and dispute notifications link to Cases; new tickets/disputes notify the
+  filer; "made public" notifies each party with its own message.
+- Frontend: `lib/cases.ts` (types, `useCaseStore`, `useCaseEvents`, `useCaseSummarySync`), `CasesPage`,
+  rewritten `CaseInbox` (server access, ticket header, rating, reply-to, audience pills, mentions, attention,
+  live updates), `useCaseLists` (Cases + appeal page), `CaseStatusBar` (stacked under the standing bar),
+  sidebar **Cases** with badge, chat store refuses case conversations + `CaseConversationRedirect`, inbox
+  pointer to Cases, contract disputes page links to Cases (notes composer removed), dispute form opens the new
+  case, ticket form links to the conversation, invite accept opens the case, banned redirect keeps `?ticket=`.
+
+## Acceptance criteria
+
+- `/inbox` shows no ticket or dispute; an old ticket notification or `/inbox/direct` link opens the case in Cases.
+- Cases lists every ticket and dispute; amber dot and banner on cases waiting for the member; replying, rating,
+  read-only reasons and the public-page link match what the server accepts.
+- A suspended member sees non-appeal tickets and every dispute as read-only with the reason; a banned/locked
+  member gets the same on `/account/appeal`, and `/support/cases?ticket=X` lands there on ticket X.
+- Staff reply / close / make public / resolve: the member's open Cases thread, list, case bar and badge update
+  without a reload. A private dispute's disputee receives nothing about it.
+- An open dispute shows the case bar on every member page until hidden; it returns when something changes.
+- Staff ticket desks still receive live ticket messages.
+
+## Status: Implemented — awaiting user verification (`pnpm typecheck`).
+
+---
+
+# Previous task: Admin dashboard links; dispute filing summary, public invite, private-case audiences; closed state in every member view
 
 ## Implementation Objective
 
