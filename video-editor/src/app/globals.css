@@ -635,6 +635,31 @@ html, body {
     overflow: hidden;
 }
 
+/* Native time segments must inherit the editor's typography. */
+.workspace-time-input::-webkit-datetime-edit,
+.workspace-time-input::-webkit-datetime-edit-fields-wrapper,
+.workspace-time-input::-webkit-datetime-edit-hour-field,
+.workspace-time-input::-webkit-datetime-edit-minute-field,
+.workspace-time-input::-webkit-datetime-edit-ampm-field,
+.workspace-time-input::-webkit-datetime-edit-text {
+    font: inherit;
+}
+
+.workspace-time-input::-webkit-datetime-edit {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    padding: 0;
+}
+
+.workspace-time-input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+}
+
+.workspace-time-input::-webkit-calendar-picker-indicator {
+    display: none;
+}
+
 /* Premounted video descendants may set pointer-events:auto themselves. */
 .designcombo-scene-item[data-canvas-active="false"],
 .designcombo-scene-item[data-canvas-active="false"] * {

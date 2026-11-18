@@ -5,6 +5,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DraggablePanel } from "@/components/draggable-panel";
 import type { DateRange } from "react-day-picker";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +29,9 @@ function dueDate(value: string | null) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : dateFormat.format(date);
+}
+function dateTimeInput(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 function statusLabel(value: string) {
   return value.replace(/_/g, " ").replace(/^./, letter => letter.toUpperCase());
@@ -91,14 +95,15 @@ function compareWorkspaceTasks(a: WorkspaceTask, b: WorkspaceTask) {
   const priorityDifference = priorityRank(a.priority) - priorityRank(b.priority);
   if (priorityDifference !== 0) return priorityDifference;
 
+  const statusDifference = statuses.findIndex(status => status.key === a.status)
+    - statuses.findIndex(status => status.key === b.status);
+  if (statusDifference !== 0) return statusDifference;
+
   const dueA = a.dueAt ? Date.parse(a.dueAt) : Number.POSITIVE_INFINITY;
   const dueB = b.dueAt ? Date.parse(b.dueAt) : Number.POSITIVE_INFINITY;
   const validDueA = Number.isNaN(dueA) ? Number.POSITIVE_INFINITY : dueA;
   const validDueB = Number.isNaN(dueB) ? Number.POSITIVE_INFINITY : dueB;
-  if (validDueA !== validDueB) return validDueA - validDueB;
-
-  return statuses.findIndex(status => status.key === a.status)
-    - statuses.findIndex(status => status.key === b.status);
+  return validDueA === validDueB ? 0 : validDueA - validDueB;
 }
 function milestoneColor(status: string) {
   const value = status.toLowerCase();
@@ -115,6 +120,15 @@ function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId
   const [statusOpen, setStatusOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState<DateRange>();
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("23:59");
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!dateOpen) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [dateOpen]);
   const inFlight = useRef(false);
   const status = statuses.find(item => item.key === task.status)!;
   const priority = priorities.find(item => item.key === task.priority) ?? priorities[1];
@@ -122,9 +136,50 @@ function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId
   const endLabel = dueDate(task.dueAt);
   const start = startLabel && task.startsAt ? new Date(task.startsAt) : undefined;
   const end = endLabel && task.dueAt ? new Date(task.dueAt) : undefined;
+  const earliestDate = new Date(now);
+  earliestDate.setHours(0, 0, 0, 0);
+  const firstMonth = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+  const preferredMonth = start ?? end ?? earliestDate;
   const rangeLabel = startLabel && endLabel ? `${startLabel} - ${endLabel}`
     : endLabel ? `Due ${endLabel}` : startLabel ? `Starts ${startLabel}` : "Pick a date";
   const disabled = saving || task.locked;
+  const nextMinute = new Date((Math.floor(now / 60_000) + 1) * 60_000);
+  const isToday = (day?: Date) => day?.toDateString() === earliestDate.toDateString();
+  const noTimesLeftToday = nextMinute.toDateString() !== earliestDate.toDateString();
+  const minimumTime = (day?: Date) => isToday(day) ? dateTimeInput(nextMinute) : undefined;
+  const draftTimestamp = (day: Date | undefined, time: string) => {
+    if (!day || !/^\d{2}:\d{2}$/.test(time)) return NaN;
+    const [hours, minutes] = time.split(":").map(Number);
+    const date = new Date(day);
+    date.setHours(hours, minutes, 0, 0);
+    return date.getTime();
+  };
+  const selectDateRange = (range: DateRange | undefined, selectedDay: Date) => {
+    const current = new Date();
+    setNow(current.getTime());
+    setDateDraft(range);
+    setError(null);
+    if (selectedDay.toDateString() !== current.toDateString()) return;
+
+    const lastMinuteToday = new Date(current);
+    lastMinuteToday.setHours(23, 59, 0, 0);
+    const suggested = new Date(Math.min(current.getTime() + 10 * 60_000, lastMinuteToday.getTime()));
+    if (range?.from?.toDateString() === current.toDateString()) setStartTime(dateTimeInput(suggested));
+    if (range?.to?.toDateString() === current.toDateString()) setEndTime(dateTimeInput(suggested));
+  };
+  const clampTime = (day: Date | undefined, time: string) => {
+    const current = new Date();
+    if (day?.toDateString() !== current.toDateString() || !(draftTimestamp(day, time) <= current.getTime())) return time;
+    // Minute-only inputs must round up to satisfy the API's strictly-future rule.
+    const earliest = new Date((Math.floor(current.getTime() / 60_000) + 1) * 60_000);
+    return earliest.toDateString() === current.toDateString() ? dateTimeInput(earliest) : "23:59";
+  };
+  const validTime = (day: Date | undefined, time: string, existing?: Date) =>
+    Boolean(existing && day?.toDateString() === existing.toDateString() && time === dateTimeInput(existing))
+    || draftTimestamp(day, time) > now;
+  const timesValid = validTime(dateDraft?.from, startTime, start)
+    && validTime(dateDraft?.to, endTime, end);
+  const rangeOrdered = draftTimestamp(dateDraft?.to, endTime) >= draftTimestamp(dateDraft?.from, startTime);
   const update = async (changes: { status?: string; priority?: string; starts_at?: string | null; due_at?: string | null }) => {
     if (inFlight.current) return false;
     inFlight.current = true;
@@ -149,11 +204,38 @@ function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId
   };
   const saveRange = async (range: DateRange | null) => {
     if (range && (!range.from || !range.to)) return;
-    const from = range?.from ? new Date(range.from) : null;
-    const to = range?.to ? new Date(range.to) : null;
-    from?.setHours(0, 0, 0, 0);
-    to?.setHours(23, 59, 59, 999);
-    if (await update({ starts_at: from?.toISOString() ?? null, due_at: to?.toISOString() ?? null })) {
+    const changes: { starts_at?: string; due_at?: string } = {};
+    const dates = [
+      { field: "starts_at" as const, day: range?.from, time: startTime, existing: start },
+      { field: "due_at" as const, day: range?.to, time: endTime, existing: end },
+    ];
+    for (const { field, day, time, existing } of dates) {
+      if (!day) {
+        if (existing) changes[field] = "CLEAR";
+        continue;
+      }
+      if (!/^\d{2}:\d{2}$/.test(time)) {
+        setError("Choose a start and end time.");
+        return;
+      }
+      // Keep the original timestamp when its displayed date and time are unchanged.
+      if (existing && day.toDateString() === existing.toDateString() && time === dateTimeInput(existing)) continue;
+      const date = new Date(day);
+      const [hours, minutes] = time.split(":").map(Number);
+      date.setHours(hours, minutes, 0, 0);
+      if (date.getTime() <= Date.now()) {
+        setError("New start and end dates must be ahead of the current time.");
+        return;
+      }
+      changes[field] = date.toISOString();
+    }
+    const effectiveStart = changes.starts_at === "CLEAR" ? null : changes.starts_at ?? task.startsAt;
+    const effectiveEnd = changes.due_at === "CLEAR" ? null : changes.due_at ?? task.dueAt;
+    if (effectiveStart && effectiveEnd && Date.parse(effectiveEnd) < Date.parse(effectiveStart)) {
+      setError("End date & time cannot be earlier than the start date & time.");
+      return;
+    }
+    if (Object.keys(changes).length === 0 || await update(changes)) {
       setDateOpen(false);
     }
   };
@@ -181,7 +263,7 @@ function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId
         </Popover>
         <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
           <PopoverTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="w-full min-w-0 justify-between gap-2 px-2 text-xs" aria-label={`Priority for ${task.title}`} disabled={disabled}>
+            <Button type="button" variant="outline" size="sm" className="w-full min-w-0 justify-between gap-2 px-2 text-xs" aria-label={`Priority for ${task.title}`} disabled={saving}>
               <span className="flex min-w-0 items-center gap-2"><Flag aria-hidden size={14} className={cn("shrink-0", priority.color)} /><span className="truncate">{priority.label}</span></span>
               <ChevronDown aria-hidden size={14} className="shrink-0 text-muted-foreground" />
             </Button>
@@ -199,12 +281,14 @@ function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId
         <Popover open={dateOpen} onOpenChange={open => {
           if (open) {
             setDateDraft(start ? { from: start, to: end } : undefined);
+            setStartTime(dateTimeInput(start ?? new Date(Date.now() + 3_600_000)));
+            setEndTime(end ? dateTimeInput(end) : "23:59");
             setError(null);
           }
           setDateOpen(open);
         }}>
           <PopoverTrigger asChild>
-            <Button type="button" variant="outline" disabled={disabled}
+            <Button type="button" variant="outline" disabled={saving}
               aria-label={`Task date range for ${task.title}: ${rangeLabel}`}
               className={cn("w-full min-w-0 justify-start text-left font-normal",
                 !start && !end && "text-muted-foreground", task.status === "overdue" && "text-red-500")}>
@@ -214,22 +298,50 @@ function TaskItem({ task, projectId, onSaved }: { task: WorkspaceTask; projectId
           <PopoverContent
             align="end"
             collisionPadding={12}
+            sticky="always"
             className="pointer-events-none z-[250] w-max max-w-[calc(100dvw-1.5rem)] border-0 bg-transparent p-0 shadow-none"
             aria-label={`Task date range for ${task.title}`}
             onKeyDown={event => { if (event.key !== "Escape") event.stopPropagation(); }}>
             <DraggablePanel title="Date range" onClose={() => setDateOpen(false)}
-              className="max-h-(--radix-popover-content-available-height) text-card-foreground">
-              <div className="min-h-0 space-y-4 overflow-auto">
-                <Calendar mode="range" selected={dateDraft} onSelect={setDateDraft}
-                  defaultMonth={start ?? end} numberOfMonths={2} disabled={disabled} autoFocus
-                  className="p-0" />
-                {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
-                <div className="flex justify-end gap-2">
-                  {(start || end) && <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => void saveRange(null)}>Clear</Button>}
-                  <Button type="button" size="sm" disabled={disabled || !dateDraft?.from || !dateDraft.to}
-                    onClick={() => { if (dateDraft) void saveRange(dateDraft); }}>Save</Button>
+              className="max-w-[calc(100dvw-2rem)] text-card-foreground">
+              <ScrollArea className="h-auto w-fit max-w-full [&>[data-slot=scroll-area-viewport]]:h-auto [&>[data-slot=scroll-area-viewport]]:max-h-[calc(100dvh-7rem)]">
+                <div className="flex flex-col gap-4">
+                  <Calendar mode="range" selected={dateDraft} onSelect={selectDateRange}
+                    defaultMonth={preferredMonth < firstMonth ? firstMonth : preferredMonth}
+                    startMonth={firstMonth} numberOfMonths={2}
+                    disabled={saving ? true : { before: earliestDate }} excludeDisabled autoFocus
+                    className="p-0" />
+                  <div className="grid grid-cols-2 gap-4 font-sans">
+                    <label className="flex min-w-0 flex-col gap-2 text-xs text-muted-foreground">
+                      <span>Start time</span>
+                      <Input type="time" step={60} value={startTime} min={minimumTime(dateDraft?.from)}
+                        disabled={saving || (isToday(dateDraft?.from) && noTimesLeftToday)}
+                        aria-invalid={Boolean(dateDraft?.from && !validTime(dateDraft.from, startTime, start))}
+                        className="workspace-time-input block appearance-none bg-background py-0 font-sans text-sm leading-normal text-foreground"
+                        onChange={event => setStartTime(clampTime(dateDraft?.from, event.target.value))}
+                        onBlur={event => setStartTime(clampTime(dateDraft?.from, event.target.value))} />
+                    </label>
+                    <label className="flex min-w-0 flex-col gap-2 text-xs text-muted-foreground">
+                      <span>End time</span>
+                      <Input type="time" step={60} value={endTime} min={minimumTime(dateDraft?.to)}
+                        disabled={saving || (isToday(dateDraft?.to) && noTimesLeftToday)}
+                        aria-invalid={Boolean(dateDraft?.to && !validTime(dateDraft.to, endTime, end))}
+                        className="workspace-time-input block appearance-none bg-background py-0 font-sans text-sm leading-normal text-foreground"
+                        onChange={event => setEndTime(clampTime(dateDraft?.to, event.target.value))}
+                        onBlur={event => setEndTime(clampTime(dateDraft?.to, event.target.value))} />
+                    </label>
+                  </div>
+                  {dateDraft?.from && dateDraft.to && !timesValid && (
+                    <p className="text-xs text-muted-foreground">Choose a future time for each changed date.</p>
+                  )}
+                  {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+                  <div className="flex justify-end gap-2">
+                    {(start || end) && <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => void saveRange(null)}>Clear</Button>}
+                    <Button type="button" size="sm" disabled={saving || !timesValid || !rangeOrdered}
+                      onClick={() => { if (dateDraft) void saveRange(dateDraft); }}>Save</Button>
+                  </div>
                 </div>
-              </div>
+              </ScrollArea>
             </DraggablePanel>
           </PopoverContent>
         </Popover>

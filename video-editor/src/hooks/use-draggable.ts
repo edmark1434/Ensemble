@@ -1,4 +1,4 @@
-import { RefObject, useRef, useState } from "react";
+import { RefObject, useLayoutEffect, useRef, useState } from "react";
 
 interface UseDraggableOptions {
   clampToViewport?: boolean;
@@ -24,10 +24,11 @@ export function useDraggable<T extends HTMLElement>(
     // panel's untransformed origin before clamping the new offset against it.
     const originLeft = rect.left - offset.x;
     const originTop = rect.top - offset.y;
-    const minX = -originLeft;
-    const minY = -originTop;
-    const maxX = window.innerWidth - rect.width - originLeft;
-    const maxY = window.innerHeight - rect.height - originTop;
+    const viewport = window.visualViewport;
+    const minX = (viewport?.offsetLeft ?? 0) - originLeft;
+    const minY = (viewport?.offsetTop ?? 0) - originTop;
+    const maxX = Math.max(minX, minX + (viewport?.width ?? window.innerWidth) - rect.width);
+    const maxY = Math.max(minY, minY + (viewport?.height ?? window.innerHeight) - rect.height);
     return {
       x: Math.min(Math.max(next.x, minX), maxX),
       y: Math.min(Math.max(next.y, minY), maxY)
@@ -35,6 +36,22 @@ export function useDraggable<T extends HTMLElement>(
   };
 
   const setOffset = (next: { x: number; y: number }) => setOffsetState(clamp(next));
+
+  useLayoutEffect(() => {
+    if (!clampToViewport) return;
+    let frame: number;
+    const keepInViewport = () => {
+      const next = clamp(offset);
+      if (Math.abs(next.x - offset.x) > 0.5 || Math.abs(next.y - offset.y) > 0.5) {
+        setOffsetState(next);
+      }
+      // Popper can move its ancestor without resizing the panel (scrolling,
+      // layout shifts, or opening animations), so track the rendered bounds.
+      frame = window.requestAnimationFrame(keepInViewport);
+    };
+    frame = window.requestAnimationFrame(keepInViewport);
+    return () => window.cancelAnimationFrame(frame);
+  });
 
   const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
     dragState.current = {

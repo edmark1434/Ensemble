@@ -71,6 +71,45 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, data) {
   return result;
 }
 
+async function updateEditorTask(teamId, taskId, viewerAccountId, changes) {
+  const fail = (message, statusCode) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    throw error;
+  };
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (![teamId, taskId, viewerAccountId].every(value => typeof value === 'string' && uuid.test(value))) {
+    fail('Invalid task update.', 400);
+  }
+  const allowedFields = ['status', 'priority', 'starts_at', 'due_at'];
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes) ||
+      !Object.keys(changes).length || Object.keys(changes).some(key => !allowedFields.includes(key))) {
+    fail('Unsupported task changes.', 400);
+  }
+  const data = { ...changes };
+  if (data.status === 'pending') data.status = 'todo';
+  if (data.status === 'review') data.status = 'in_review';
+  if (data.status !== undefined && !['todo', 'in_progress', 'in_review'].includes(data.status)) {
+    fail('Choose To do, In progress, or In review.', 422);
+  }
+  if (data.priority !== undefined && !['low', 'normal', 'high', 'urgent'].includes(data.priority)) {
+    fail('Invalid task priority.', 422);
+  }
+  for (const field of ['starts_at', 'due_at']) {
+    if (data[field] === null) data[field] = 'CLEAR';
+    if (data[field] !== undefined && data[field] !== 'CLEAR' &&
+        (typeof data[field] !== 'string' || !Number.isFinite(Date.parse(data[field])))) {
+      fail('Invalid task date & time.', 422);
+    }
+  }
+  const tasks = await getProjectTaskboard(teamId, viewerAccountId);
+  const task = tasks.find(item => String(item.task_id) === taskId);
+  if (!task?.assignees?.some(assignee => String(assignee.account_id) === viewerAccountId)) {
+    fail('Task unavailable or no longer assigned to you.', 403);
+  }
+  return updateProjectTask(teamId, taskId, viewerAccountId, data);
+}
+
 async function createProjectTask(teamId, viewerAccountId, data) {
   if (!data?.title) {
     const error = new Error('Task title is required');
@@ -277,6 +316,7 @@ async function unlinkVideoProject(teamId, projectId, viewerAccountId) {
 }
 
 module.exports = {
+  updateEditorTask,
   getProjectDetails,
   getProjectTaskboard,
   updateProjectTask,

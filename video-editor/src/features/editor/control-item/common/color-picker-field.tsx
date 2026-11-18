@@ -171,6 +171,7 @@ export function ColorPickerField({
       <PopoverContent
         side="bottom"
         align="start"
+        sticky="always"
         className="pointer-events-none z-[250] w-3xs border-0 bg-transparent p-0 shadow-none"
       >
         <DraggablePanel title={popoverTitle} onClose={() => setOpen(false)} anchorRef={anchorRef}>

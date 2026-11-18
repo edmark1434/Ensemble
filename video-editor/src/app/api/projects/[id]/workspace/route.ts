@@ -44,8 +44,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       signal: AbortSignal.timeout(30_000), cache: "no-store",
     });
     if (!response.ok) {
-      const result = await response.json();
-      return NextResponse.json({ error: result.error || "Unable to update task." }, { status: response.status });
+      const result = await response.json().catch(() => null);
+      const error = response.status < 500
+        ? result?.error || result?.message || "Unable to update task."
+        : "Unable to update task. Please try again.";
+      return NextResponse.json({ error }, { status: response.status });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
