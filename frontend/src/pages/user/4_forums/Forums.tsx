@@ -41,6 +41,7 @@ import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_foru
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
 import useGlobalState from "@/lib/global_state";
 import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
+import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
 import {
   buildForumCommentTree,
   uploadForumCommentImage,
@@ -355,6 +356,7 @@ const ReplyInput = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { timedOut: forumTimedOut } = useForumTimeout();
 
   const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
@@ -399,6 +401,14 @@ const ReplyInput = ({
       textarea.setSelectionRange(newCursorPos, newCursorPos + (selectedText?.length || 0));
     }, 0);
   };
+
+  if (forumTimedOut) {
+    return (
+      <div className="mt-4">
+        <ForumTimeoutComposerLock />
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4" data-staff-composer>
@@ -593,6 +603,7 @@ const CommentItem = ({
 }) => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
+  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   // Initialize showChildren based on isCollapsed - collapsed by default
   const [showChildren, setShowChildren] = useState(!isCollapsed);
   const [isEditing, setIsEditing] = useState(false);
@@ -738,7 +749,9 @@ const CommentItem = ({
                 <div className="relative">
                   <button
                     onClick={() => setShowCommentMenu(!showCommentMenu)}
-                    className="rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10"
+                    disabled={forumTimedOut}
+                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                    className={`rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                   >
                     <MoreVertical className="h-3 w-3" />
                   </button>
@@ -809,16 +822,20 @@ const CommentItem = ({
             <div className="mt-2 flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => onLike(postId, comment.comment_id)}
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
                 className={`inline-flex items-center gap-1 text-xs transition ${
                   isLiked ? "text-red-400" : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
-                }`}
+                } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
               >
                 <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
                 <span>{comment.likes?.length || 0}</span>
               </button>
               <button
                 onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
+                className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
               >
                 <Reply className="h-3 w-3" />
                 <span>Reply</span>
@@ -2204,11 +2221,13 @@ const Forums = () => {
                 <div className="relative">
                   <button
                     onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                    className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+                    disabled={forumTimedOut}
+                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                    className={`rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
-                  {postMenuOpen === post.id && (
+                  {postMenuOpen === post.id && !forumTimedOut && (
                     <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl overflow-hidden z-20">
                       <button
                         onClick={() => {
@@ -2234,7 +2253,12 @@ const Forums = () => {
                   )}
                 </div>
               ) : (
-                <button onClick={() => setReportingPost(post)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400">
+                <button
+                  onClick={() => setReportingPost(post)}
+                  disabled={forumTimedOut}
+                  title={forumTimedOut ? forumTimeoutMessage : undefined}
+                  className={`text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                >
                   Report
                 </button>
               )}
@@ -2264,11 +2288,13 @@ const Forums = () => {
 
               <button
                 onClick={() => handleLikePost(post.id)}
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
-                  isLiked 
-                    ? "text-red-400 hover:text-red-300" 
+                  isLiked
+                    ? "text-red-400 hover:text-red-300"
                     : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
-                }`}
+                } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                 type="button"
               >
                 <Heart className={`h-3.5 w-3.5 transition-all ${isLiked ? "fill-red-400" : ""}`} />
@@ -2277,16 +2303,19 @@ const Forums = () => {
 
               <button
                 onClick={() => handleSavePost(post.id)}
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
-                  isSaved 
-                    ? "text-yellow-400 hover:text-yellow-300" 
+                  isSaved
+                    ? "text-yellow-400 hover:text-yellow-300"
                     : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
-                }`}
+                } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                 type="button"
               >
                 <Bookmark className={`h-3.5 w-3.5 transition-all ${isSaved ? "fill-yellow-400" : ""}`} />
                 <span>{isSaved ? "Saved" : "Save"}</span>
               </button>
+              <ForumTimeoutPill />
             </div>
 
             {isExpanded && (
@@ -2362,12 +2391,13 @@ const Forums = () => {
               </div>
               {!group.joined ? (
                 <button
-                  className="flex items-center gap-1.5 rounded-full bg-blue-500 px-3 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-blue-600 hover:scale-105 disabled:opacity-50"
+                  className={`flex items-center gap-1.5 rounded-full bg-blue-500 px-3 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-blue-600 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     joinGroup(group.id);
                   }}
-                  disabled={joiningGroupId === group.id}
+                  disabled={forumTimedOut || joiningGroupId === group.id}
+                  title={forumTimedOut ? forumTimeoutMessage : undefined}
                 >
                   {joiningGroupId === group.id ? (
                     <Loader2 className="h-3 w-3 animate-spin" />

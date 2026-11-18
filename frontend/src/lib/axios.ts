@@ -112,7 +112,11 @@ api.interceptors.response.use(
         }
 
         if (restrictionCode === "FORUM_TIMEOUT") {
-            showErrorToast(err.response?.data?.message || "You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.");
+            // Fixed id: repeated blocked actions replace this toast instead of stacking new ones.
+            showErrorToast(
+                err.response?.data?.message || "You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.",
+                { id: "forum-timeout" },
+            );
             return Promise.reject(err);
         }
 
