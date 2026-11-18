@@ -249,9 +249,9 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   
                   const firstMid = [firstName, middleName].filter(Boolean).join(" ");
                   if (lastName) {
-                    return `${firstMid}, ${lastName} ${suffix || ""}`.trim();
+                    return `${firstMid} ${lastName} ${suffix || ""}`.trim();
                   }
-                  return firstMid;
+                  return [firstMid, suffix].filter(Boolean).join(" ");
                 })()}
               </span>
               <div className="flex items-center gap-2">
