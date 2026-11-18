@@ -52,6 +52,7 @@
 - Presence requires heartbeat timestamps and expiration; disconnect events alone are unreliable.
 - Multiple tabs/devices should be counted or tracked independently so closing one connection does not mark the user offline.
 - Clients must recover from missed events by refetching current state.
+- Staff console presence ("Team on duty" on the admin dashboard) is owned by `services/StaffPresenceServices.js`. `CheckSession` refreshes `presence:staff:v1:<accountId>` (TTL 150 s) and `presence:staff:v1:last:<accountId>` (TTL 30 days) for staff sessions, at most once per 30 s per account per process. Staff consoles call `GET /api/staff/presence/heartbeat` every 60 s while visible. Offline means the key expired; logout deletes it. All tabs share one key, so closing one tab does not mark the person offline.
 
 ## Background reconciliation
 

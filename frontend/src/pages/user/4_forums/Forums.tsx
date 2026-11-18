@@ -40,6 +40,7 @@ import api from "@/lib/axios";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
 import useGlobalState from "@/lib/global_state";
+import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import {
   buildForumCommentTree,
   uploadForumCommentImage,
@@ -1200,6 +1201,7 @@ const Forums = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
+  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
@@ -1999,8 +2001,10 @@ const Forums = () => {
       showSuccessToast(`"${postData.title}" posted successfully!`);
     } catch (error: any) {
       console.error(error);
-      const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
-      showErrorToast(errorMessage);
+      if (!isRestrictionErrorHandled(error)) {
+        const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
+        showErrorToast(errorMessage);
+      }
       throw error;
     }
   };
@@ -2051,12 +2055,13 @@ const Forums = () => {
       setIsGuestLoginOpen(true);
       return;
     }
+    if (forumTimedOut) return;
     if (activeTab === "groups" || activeTab === "my-groups") {
       setIsCreateGroupOpen(true);
     } else {
       setIsNewDiscussionOpen(true);
     }
-  }, [activeTab, isForumAuthenticated]);
+  }, [activeTab, isForumAuthenticated, forumTimedOut]);
 
   // ==================== RENDER HELPERS ====================
   const renderFilterSidebar = () => {
@@ -2482,7 +2487,9 @@ const Forums = () => {
                 type="button"
                 data-tour="forums-new-discussion"
                 onClick={handleActionClick}
-                className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap"
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
+                className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
                 <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -2601,8 +2608,8 @@ const Forums = () => {
                           <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                           searchQuery ? "No matching discussions" : "No discussions yet",
                           searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a discussion in one of your selected groups",
-                          !searchQuery ? "Create Discussion" : undefined,
-                          !searchQuery ? handleActionClick : undefined
+                          !searchQuery && !forumTimedOut ? "Create Discussion" : undefined,
+                          !searchQuery && !forumTimedOut ? handleActionClick : undefined
                         )
                       )}
                       
@@ -2640,8 +2647,8 @@ const Forums = () => {
                       <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                       searchQuery ? "No matching discussions" : "No discussions yet",
                       searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a new discussion in one of your groups!",
-                      !searchQuery ? "Create Discussion" : undefined,
-                      !searchQuery ? handleActionClick : undefined
+                      !searchQuery && !forumTimedOut ? "Create Discussion" : undefined,
+                      !searchQuery && !forumTimedOut ? handleActionClick : undefined
                     )
                   ) : (
                     <>

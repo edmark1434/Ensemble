@@ -2,6 +2,7 @@ const redisClient = require('../lib/Redis');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { rejectRestrictedAccount, rejectSuspendedWrite, rejectForumTimeout } = require('../lib/AccountRestriction');
 const { trackActiveDay } = require('../services/ActiveDayServices');
+const { touchStaffPresence } = require('../services/StaffPresenceServices');
 
 async function checkSession(req,res,next){
     const sessionId = req.cookies?.sessionId;
@@ -39,6 +40,8 @@ async function checkSession(req,res,next){
     }
     // Member activity for Admin → Analytics (one write per account per day, never awaited).
     trackActiveDay(req.session);
+    // Staff "Team on duty" presence (throttled Redis heartbeat, never awaited).
+    touchStaffPresence(req.session);
     next();
 }
 

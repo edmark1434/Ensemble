@@ -1,18 +1,13 @@
-# Task: Admin Asset Creator Attribution (By Ensemble & Logo Profile)
+# Task: Admin Dashboard "Team on duty" Online/Offline Presence
 
 ## Implementation Objective
-For assets uploaded by admin/staff (`is_admin_asset = true`):
-1. Display name shown in the user platform should be `"By Ensemble"` instead of `"Admin User"` (or staff account name).
-2. Creator profile picture/avatar should display the Ensemble logo (`/ensemble_lg.svg`) with appropriate theme inversion (`invert dark:invert-0`) so it renders clearly in both light and dark modes.
-3. Creator handle for admin assets is represented as `@ensemble`.
-4. Hide or omit personal user profile navigation for platform/admin assets where appropriate.
-5. Prevent redundant prefixes like `"by By Ensemble"` in purchase dialogs.
+The "Team on duty" panel on the admin dashboard lists every staff account but never says who is working right now. Show who is active (has a staff console open) and who is offline, with a last-seen time.
 
 ## Acceptance Criteria
-- `backend/repositories/AssetRepositories.js`: `ASSET_SELECT` returns `By Ensemble` as `creator_name`, `ensemble` as `creator_handle`, and `/ensemble_lg.svg` as `creator_avatar_path` for admin/staff assets.
-- `backend/services/AssetServices.js`: `publicAsset` ensures `creator_name: 'By Ensemble'`, `creator_handle: 'ensemble'`, and `creator_avatar_path: '/ensemble_lg.svg'` on all admin asset responses.
-- `frontend/src/pages/user/5_assets/assetTypes.ts`: `mediaUrl` preserves local assets like `/ensemble_lg.svg` without prefixing CloudFront CDN URL.
-- `frontend/src/pages/user/5_assets/AssetCard.tsx`: Displays the Ensemble logo profile avatar and `"By Ensemble"` display name.
-- `frontend/src/pages/user/5_assets/AssetDetails.tsx`: Displays the Ensemble logo profile avatar, `"By Ensemble"`, Official platform badge, and omits the user profile navigation button for admin assets.
-- `frontend/src/pages/user/5_assets/AssetPurchaseModal.tsx`: Formats `"By Ensemble"` cleanly without repeating the `"by"` prefix.
+- `backend/services/StaffPresenceServices.js`: Redis heartbeat presence under `presence:staff:v1:<accountId>` (150 s TTL) plus `presence:staff:v1:last:<accountId>` (30-day last seen). Writes are throttled to once per 30 s per account per process. Logout deletes the online key.
+- `backend/middleware/CheckSession.js`: every authenticated staff request refreshes presence (fire-and-forget).
+- `backend/routes/Staff.js`: `GET /api/staff/presence/heartbeat` keeps idle open console tabs online.
+- `frontend/src/pages/staff/StaffOutlet.tsx`: every staff console (admin, moderator desks, staff portal) pings the heartbeat every 60 s while the tab is visible, and again when it becomes visible.
+- `backend/controllers/AdminControllers.js` + `AdminRepositories.js`: `staffRoster` entries carry `isOnline` and `lastSeenAt`; online staff are listed first, in the existing role order.
+- `frontend/src/pages/admin/AdminDashboard.tsx`: green/grey status dot, "Active now" or "Offline · seen X ago", dimmed offline rows, and an "N of M online now" subtitle.
 - User preference: do not run automated build or verification commands.

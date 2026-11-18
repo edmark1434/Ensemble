@@ -50,6 +50,7 @@ import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal.tsx"
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal.tsx";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import useGlobalState from "@/lib/global_state";
+import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import {
   buildForumCommentTree,
   uploadForumCommentImage,
@@ -850,6 +851,7 @@ const SelectedGroup = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
+  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
   const [memberRoleFilter, setMemberRoleFilter] = useState<"All" | "Admin" | "Member">("All");
@@ -1556,8 +1558,10 @@ const SelectedGroup = () => {
       }
     }catch(error: any) {
       console.error("Error creating post:", error);
-      const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
-      showErrorToast(errorMessage);
+      if (!isRestrictionErrorHandled(error)) {
+        const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
+        showErrorToast(errorMessage);
+      }
       throw error;
     }
   };
@@ -2090,7 +2094,9 @@ const SelectedGroup = () => {
                 {isActiveMember && (
                   <button
                     onClick={() => setIsNewDiscussionOpen(true)}
-                    className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap"
+                    disabled={forumTimedOut}
+                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                    className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                   >
                     <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
                     <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>

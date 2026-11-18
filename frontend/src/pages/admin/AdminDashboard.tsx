@@ -354,6 +354,7 @@ function Initial({ name }: { name: string }) {
 }
 
 function MainGrid({ data }: { data: AdminDashboardData }) {
+  const onlineStaff = data.staffRoster.filter((s) => s.isOnline).length;
   return (
     <div className="grid gap-6 xl:grid-cols-3">
       <Panel
@@ -409,16 +410,34 @@ function MainGrid({ data }: { data: AdminDashboardData }) {
         title="Team on duty"
         icon={UserCog}
         iconTone="text-rose-400"
-        subtitle="Staff and moderators with console access."
+        subtitle={`${onlineStaff} of ${data.staffRoster.length} online now · staff and moderators with console access.`}
         action={<PanelLink to="/admin/moderation?tab=management&section=moderators">Manage</PanelLink>}
       >
         <ul className="scroll-thin mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
           {data.staffRoster.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] p-3 transition-colors hover:bg-white/[0.04]">
-              <Initial name={s.name} />
+            <li
+              key={s.id}
+              className={`flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] p-3 transition-colors hover:bg-white/[0.04] ${s.isOnline ? '' : 'opacity-60'}`}
+            >
+              <span className="relative shrink-0">
+                <Initial name={s.name} />
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#12131a] ${s.isOnline ? 'bg-emerald-400' : 'bg-zinc-600'}`}
+                  aria-hidden
+                />
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-white">{s.name}</p>
-                <p className="truncate text-xs text-zinc-500">@{s.username}</p>
+                <p className="truncate text-xs text-zinc-500">
+                  @{s.username} ·{' '}
+                  {s.isOnline ? (
+                    <span className="text-emerald-300">Active now</span>
+                  ) : (
+                    <span title={s.lastSeenAt ? formatDateTime(s.lastSeenAt) : undefined}>
+                      Offline{s.lastSeenAt ? ` · seen ${formatRelative(s.lastSeenAt)}` : ''}
+                    </span>
+                  )}
+                </p>
               </div>
               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${rolePill(s.role)}`}>{s.roleLabel}</span>
             </li>
