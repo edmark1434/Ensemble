@@ -237,7 +237,7 @@ export default function SupportModeratorDashboard() {
 
   if (error || !data) {
     return (
-      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-3 md:pl-[260px]">
+      <main className="relative flex min-h-screen flex-col items-center justify-center gap-3 md:pl-[260px]">
         <p className="text-sm text-zinc-500">Failed to load support overview from the database.</p>
         <button
           type="button"
@@ -268,7 +268,7 @@ export default function SupportModeratorDashboard() {
   const trend = charts.activityTrend || [];
 
   return (
-    <main className="relative z-10 min-h-screen md:pl-[260px]" style={{ animation: "fadeIn 420ms ease" }}>
+    <main className="relative min-h-screen md:pl-[260px]" style={{ animation: "fadeIn 420ms ease" }}>
       {selectedTicketId != null && (
         <ModeratorTicketDetailModal
           ticketId={selectedTicketId}

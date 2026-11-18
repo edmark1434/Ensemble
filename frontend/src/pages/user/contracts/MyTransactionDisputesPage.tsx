@@ -12,6 +12,7 @@ import {
   DisputeAttachments,
   DisputeDecisionCard,
   DisputeSettlementCard,
+  MentionText,
   RoleChip,
   StatusPill,
   VisibilityPill,
@@ -20,7 +21,12 @@ import {
   isClosedStatus,
   isDisputeDecision,
 } from "@/pages/user/disputes/disputeUi";
-import type { DisputeAttachment, DisputeSettlement, ViewerRole } from "@/pages/user/disputes/disputeUi";
+import type {
+  DisputeAttachment,
+  DisputeSettlement,
+  MentionMap,
+  ViewerRole,
+} from "@/pages/user/disputes/disputeUi";
 import {
   InboxUploadMediaButton,
   InboxUploadMediaPreview,
@@ -39,6 +45,8 @@ type DisputeMessage = {
   replyToId?: string | null;
   audience?: string;
   authorRole?: string | null;
+  /** Stored profile picture path of the author. */
+  authorAvatar?: string | null;
   attachments?: DisputeAttachment[];
 };
 
@@ -148,6 +156,8 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const [loadingNotes, setLoadingNotes] = useState(Boolean(dispute.canAddInformation));
   const [settlement, setSettlement] = useState<DisputeSettlement | null>(null);
   const [latestRuling, setLatestRuling] = useState<DisputeMessage | null>(null);
+  /** "@handle" → account id, so mentions in notes and rulings link to profiles. */
+  const [mentions, setMentions] = useState<MentionMap>({});
 
   // Private notes while the filer can still add them; once closed, the ruling and any payout.
   // `updatedAt` moves on every live update, so a ruling or payout made elsewhere shows here.
@@ -159,6 +169,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
         if (cancelled) return;
         const messages: DisputeMessage[] = Array.isArray(res.data?.data?.messages) ? res.data.data.messages : [];
         if (dispute.canAddInformation) setNotes(messages);
+        setMentions(res.data?.data?.mentions || {});
         setSettlement(res.data?.data?.settlement || null);
         setLatestRuling([...messages].reverse().find((message) => isDisputeDecision(message)) || null);
         if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
@@ -187,6 +198,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
       audience?: string;
       message_id_reply?: string | null;
       author_role?: string | null;
+      mentions?: MentionMap;
       attachments?: DisputeAttachment[];
     }) => {
       const room = payload?.conversationId || payload?.conversation_id;
@@ -196,6 +208,9 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
       const audience = String(payload.audience || "").toLowerCase();
       // Staff-only notes never appear in the party's notes panel.
       if (audience === "staff") return;
+      if (payload.mentions && Object.keys(payload.mentions).length) {
+        setMentions((current) => ({ ...current, ...payload.mentions }));
+      }
       setNotes((current) =>
         upsertNote(current, {
           id: String(id),
@@ -206,6 +221,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           replyToId: payload.replyToId ?? payload.message_id_reply ?? null,
           audience,
           authorRole: payload.authorRole ?? payload.author_role ?? null,
+          ...(payload.authorAvatar !== undefined ? { authorAvatar: payload.authorAvatar } : {}),
           attachments: payload.attachments ?? [],
         })
       );
@@ -231,12 +247,17 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
     if (sending || (!text && !pendingFiles.length)) return;
     const parentId = replyToId;
     const pendingId = `pending-${Date.now()}`;
+    // Your own picture, from an earlier note of yours, while this one sends.
+    const myAvatar =
+      notes.find((item) => String(item.authorType || "").toLowerCase() !== "staff" && item.authorAvatar)
+        ?.authorAvatar || null;
     setNotes((current) => [
       ...current,
       {
         id: pendingId,
         authorName: "You",
         authorType: "user",
+        authorAvatar: myAvatar,
         body: text,
         createdAt: new Date().toISOString(),
         replyToId: parentId,
@@ -264,8 +285,12 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
         ...(uploaded.length ? { attachments: uploaded } : {}),
       });
       toast.success(res.data?.message || "Sent to staff. The other party cannot see this yet.");
-      const saved = res.data?.data?.message as DisputeMessage | undefined;
+      const saved = res.data?.data?.message as (DisputeMessage & { mentions?: MentionMap }) | undefined;
       if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
+      if (saved?.mentions && Object.keys(saved.mentions).length) {
+        const extra = saved.mentions;
+        setMentions((current) => ({ ...current, ...extra }));
+      }
       if (saved?.id) {
         setNotes((current) =>
           upsertNote(
@@ -278,6 +303,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
               createdAt: saved.createdAt || new Date().toISOString(),
               replyToId: saved.replyToId ?? parentId,
               authorRole: saved.authorRole ?? null,
+              authorAvatar: saved.authorAvatar ?? myAvatar,
               attachments: saved.attachments || [],
             }
           )
@@ -364,7 +390,11 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
       {!open && (settlement || (latestRuling && !publicDiscussion)) ? (
         <section className="space-y-3 border-t border-gray-100 p-5 dark:border-white/5">
           {latestRuling && !publicDiscussion ? (
-            <DisputeDecisionCard body={latestRuling.body} when={formatWhen(latestRuling.createdAt)} />
+            <DisputeDecisionCard
+              body={latestRuling.body}
+              when={formatWhen(latestRuling.createdAt)}
+              mentions={mentions}
+            />
           ) : null}
           <DisputeSettlementCard settlement={settlement} />
         </section>
@@ -408,6 +438,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                       <DisputeDecisionCard
                         body={message.body}
                         when={pending ? "Sending…" : formatWhen(message.createdAt)}
+                        mentions={mentions}
                       >
                         <DisputeAttachments
                           attachments={message.attachments}
@@ -428,6 +459,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                     <Avatar
                       name={fromStaff ? message.authorName : "You"}
                       role={fromStaff ? "staff" : "disputer"}
+                      src={message.authorAvatar}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -454,7 +486,7 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
                         </p>
                       ) : null}
                       <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-zinc-300">
-                        {message.body}
+                        <MentionText text={message.body} mentions={mentions} />
                       </p>
                       <DisputeAttachments
                         attachments={message.attachments}

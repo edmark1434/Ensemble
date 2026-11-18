@@ -1584,7 +1584,7 @@ function StaffFormModal({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
+      <div className="relative max-h-[90dvh] w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
         <div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-4">
           <div>
             <h2 className="text-lg font-bold text-white">
@@ -1602,7 +1602,7 @@ function StaffFormModal({
         </div>
 
         <form onSubmit={(e) => void handleSubmit(e)}>
-          <div className="max-h-[calc(90vh-160px)] space-y-4 overflow-y-auto px-6 py-5">
+          <div className="max-h-[calc(90dvh-160px)] space-y-4 overflow-y-auto px-6 py-5">
             {formError && (
               <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
                 {formError}
@@ -1750,7 +1750,7 @@ function ConfirmDeleteModal({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
+      <div className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
         <h2 className="text-lg font-bold text-white">Delete {name}?</h2>
         <p className="mt-2 text-sm text-zinc-400">
           This soft-deletes the staff account and bans access. Historical moderation records are kept.

@@ -44,8 +44,10 @@ import {
 } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 import {
+  Avatar,
   DisputeAttachments,
   DisputeDecisionCard,
+  MentionText,
   isDisputeDecision,
 } from "@/pages/user/disputes/disputeUi";
 import { BTN, BTN_BASE, ConfirmDialog, FIELD, Pill, SidebarSection } from "./staffCaseUi";
@@ -63,6 +65,8 @@ type DisputeSocketMessage = {
   author_role?: string | null;
   senderAccountId?: string | null;
   sender_id?: string | null;
+  authorAvatar?: string | null;
+  mentions?: Record<string, string>;
   body?: string;
   message_content?: string;
   isInternal?: boolean;
@@ -90,6 +94,7 @@ function mapDisputeSocketMessage(raw: DisputeSocketMessage | null | undefined): 
     authorType: String(raw.authorType || raw.author_type || "staff"),
     authorName: String(raw.authorName || raw.author_name || "Unknown"),
     authorRole: raw.authorRole ?? raw.author_role ?? null,
+    ...(raw.authorAvatar !== undefined ? { authorAvatar: raw.authorAvatar } : {}),
     body: String(raw.body || raw.message_content || ""),
     isInternal: Boolean(
       raw.isInternal ||
@@ -568,9 +573,15 @@ export default function ModeratorDisputeDetailModal({
       if (!matchesRoom(payload)) return;
       const mapped = mapDisputeSocketMessage(payload);
       if (!mapped) return;
+      const extraMentions =
+        payload.mentions && Object.keys(payload.mentions).length ? payload.mentions : null;
       setDetail((current) => {
         if (!current) return current;
-        return { ...current, messages: mergeDisputeMessage(current.messages || [], mapped) };
+        return {
+          ...current,
+          ...(extraMentions ? { mentions: { ...(current.mentions || {}), ...extraMentions } } : {}),
+          messages: mergeDisputeMessage(current.messages || [], mapped),
+        };
       });
     };
 
@@ -1143,8 +1154,15 @@ export default function ModeratorDisputeDetailModal({
   const dispute = detail?.dispute;
   const closed = dispute ? isDisputeClosed(toApiToken(dispute.status)) || Boolean(dispute.isClosed) : false;
   const banned = String(dispute?.sanctionType || "").toLowerCase() === "ban";
+  // Filed after the contract ended: its milestone payments are final, so no settle or reversal.
+  const conductOnly = Boolean(dispute?.conductOnly);
   const canSettle = Boolean(
-    dispute && canDecide && !closed && !dispute.financialResolution && Number(dispute.creditAmount || 0) > 0
+    dispute &&
+      canDecide &&
+      !closed &&
+      !conductOnly &&
+      !dispute.financialResolution &&
+      Number(dispute.creditAmount || 0) > 0
   );
   const canDismiss = Boolean(
     dispute && canDecide && adminMode && !closed && toApiToken(dispute.status) === "pending_review"
@@ -1336,7 +1354,13 @@ export default function ModeratorDisputeDetailModal({
             {dispute && (
               <>
                 <p className="mt-1 text-xs text-zinc-500">
-                  @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
+                  <MentionText
+                    text={`@${dispute.initiator.username} vs @${dispute.respondent.username}`}
+                    mentions={detail?.mentions}
+                    external
+                    dark
+                  />{" "}
+                  · {dispute.type || "General"} ·{" "}
                   {dispute.creditAmount.toLocaleString()} credits · Opened {formatDateTime(dispute.openedAt)}
                 </p>
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -1428,10 +1452,16 @@ export default function ModeratorDisputeDetailModal({
                     {dispute.description && (
                       <article className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                          Complaint from @{dispute.initiator.username}
+                          Complaint from{" "}
+                          <MentionText
+                            text={`@${dispute.initiator.username}`}
+                            mentions={detail.mentions}
+                            external
+                            dark
+                          />
                         </p>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                          {dispute.description}
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300">
+                          <MentionText text={dispute.description} mentions={detail.mentions} external dark />
                         </p>
                       </article>
                     )}
@@ -1454,6 +1484,8 @@ export default function ModeratorDisputeDetailModal({
                               dark
                               body={m.body}
                               when={pending ? "Sending…" : formatDateTime(m.createdAt)}
+                              mentions={detail.mentions}
+                              externalLinks
                             >
                               <DisputeAttachments
                                 attachments={m.attachments}
@@ -1468,12 +1500,14 @@ export default function ModeratorDisputeDetailModal({
                         <article
                           key={m.id}
                           id={`dispute-msg-${m.id}`}
-                          className={`group rounded-xl border border-l-2 border-white/[0.08] px-4 py-3 transition ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""} ${
+                          className={`group flex gap-3 rounded-xl border border-l-2 border-white/[0.08] px-4 py-3 transition ${audienceAccentClass(currentAudience)} ${pending ? "opacity-60" : ""} ${
                             awaitingReview
                               ? "border-l-amber-400/70 bg-amber-500/[0.06]"
                               : "bg-white/[0.02]"
                           }`}
                         >
+                          <Avatar dark name={m.authorName} role={m.authorRole || m.authorType} src={m.authorAvatar} />
+                          <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
                               <span className="font-medium text-zinc-100">{m.authorName}</span>
@@ -1541,8 +1575,8 @@ export default function ModeratorDisputeDetailModal({
                               </p>
                             )
                           ) : null}
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">
-                            {m.body}
+                          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200">
+                            <MentionText text={m.body} mentions={detail.mentions} external dark />
                           </p>
                           <DisputeAttachments
                             attachments={m.attachments}
@@ -1580,6 +1614,7 @@ export default function ModeratorDisputeDetailModal({
                               )}
                             </div>
                           )}
+                          </div>
                         </article>
                       );
                     })}
@@ -1941,14 +1976,34 @@ export default function ModeratorDisputeDetailModal({
                   const contractRole = contractRoleOf(person.username);
                   return (
                     <div key={label} className="flex items-center justify-between gap-2 text-sm">
-                      <div className="min-w-0">
-                        <p className="text-[11px] text-zinc-500">{label}</p>
-                        <p className="truncate text-white">
-                          {person.name}
-                          {person.username && person.username !== "—" ? (
-                            <span className="text-zinc-500"> @{person.username}</span>
-                          ) : null}
-                        </p>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <Avatar
+                          dark
+                          name={person.name}
+                          role={label === "Disputer" ? "disputer" : "disputee"}
+                          src={person.avatar}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-zinc-500">{label}</p>
+                          <p className="truncate text-white">
+                            {person.name}
+                            {person.username && person.username !== "—" ? (
+                              <>
+                                {" "}
+                                <MentionText
+                                  text={`@${person.username}`}
+                                  mentions={
+                                    person.accountId
+                                      ? { [person.username.toLowerCase()]: String(person.accountId) }
+                                      : null
+                                  }
+                                  external
+                                  dark
+                                />
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
                       </div>
                       {contractRole ? (
                         <span
@@ -2147,6 +2202,15 @@ export default function ModeratorDisputeDetailModal({
           >
             {resolveMode === "choose" ? (
               <div className="space-y-2">
+                {conductOnly ? (
+                  <p className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-300">
+                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
+                    <span>
+                      This dispute was filed after the contract ended. Its milestone payments are final,
+                      so credits can't be refunded or reversed. Record an outcome, or sanction a party.
+                    </span>
+                  </p>
+                ) : null}
                 {canSettle ? (
                   <button
                     type="button"
@@ -2248,7 +2312,7 @@ export default function ModeratorDisputeDetailModal({
                     ) : null}
                   </div>
                 ) : null}
-                {escrowRemaining > 0 ? (
+                {escrowRemaining > 0 && !conductOnly ? (
                   <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
                     {escrowRemaining.toLocaleString()} credits are still frozen. Closing without settling
                     unfreezes them and the contract carries on as before. Use Settle escrow if the money

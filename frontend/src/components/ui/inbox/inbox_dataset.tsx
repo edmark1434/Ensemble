@@ -3,6 +3,10 @@ export interface Members {
   role: string;
   status?: "active" | "left" | "removed";
   joined_at: Date | string;
+  /** Filled in by the inbox API from the member's account. */
+  name?: string;
+  username?: string | null;
+  avatar_preset_url?: string | null;
 }
 
 export interface PinnedMessage {
@@ -94,6 +98,8 @@ export interface Message {
   sender_id: number | string;
   author_type?: "staff" | "user" | string;
   author_name?: string;
+  /** Dispute threads: `resolution` marks a platform ruling, else disputer / disputee / staff. */
+  author_role?: string | null;
   message_type: string;
   message_content: string;
   message_id_reply: string;

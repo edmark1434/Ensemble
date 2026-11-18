@@ -51,6 +51,7 @@ import {
 } from "./inbox_functions/inbox_timeof_message";
 import { ChatImagePreview } from "./inbox_functions/chat_image_preview";
 import { TeamInviteCard, parseTeamInviteMessage } from "./inbox_components/TeamInviteCard";
+import { DisputeDecisionCard, formatWhen, isDisputeDecision } from "@/pages/user/disputes/disputeUi";
 
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_TYPING_ACCOUNTS: string[] = [];
@@ -965,6 +966,39 @@ const InboxMain = () => {
           }`}
         >
           <InboxUnsentMessage isSender={isSender} body={message.message_content} />
+        </div>
+      );
+    }
+
+    // A dispute ruling (decision, reopen, settlement, payout) renders as the same verdict card
+    // the staff console and the dispute page show, never as a chat bubble.
+    const isDisputeConversation =
+      selectedConversation?.conversation_type === "dispute" ||
+      Boolean(selectedConversation?.dispute_id);
+    if (
+      isDisputeConversation &&
+      isDisputeDecision({
+        authorRole: message.author_role,
+        authorType: message.author_type,
+        body: message.message_content,
+      })
+    ) {
+      // The thread's members are the people a ruling names, so their handles link to profiles.
+      const mentions: Record<string, string> = {};
+      for (const member of selectedConversation?.members || []) {
+        if (member.username) mentions[member.username.toLowerCase()] = String(member.account_id);
+      }
+      return (
+        <div
+          key={message._id}
+          data-message-id={message._id}
+          className="mx-auto my-5 w-full max-w-2xl px-1"
+        >
+          <DisputeDecisionCard
+            body={message.message_content}
+            when={formatWhen(message.created_at ? String(message.created_at) : null)}
+            mentions={mentions}
+          />
         </div>
       );
     }

@@ -57,7 +57,7 @@ export default function StaffPlatformPreviewPage() {
   const activePath = sectionForPath(shownPath);
 
   return (
-    <main className="relative z-10 flex h-screen flex-col md:pl-[260px]">
+    <main className="relative flex h-[calc(100dvh-3.5rem)] flex-col md:h-screen md:pl-[260px]">
       <header className="border-b border-white/[0.06] px-4 py-4 md:px-6">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sky-300">

@@ -304,7 +304,7 @@ export default function JobsGigsControl({
   };
 
   const totalForView = counts ? counts[statusFilter] : null;
-  const shellClass = embedded ? "relative z-10 space-y-5" : "relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10";
+  const shellClass = embedded ? "relative space-y-5" : "relative min-h-screen px-6 py-8 md:pl-[260px] md:px-10";
   const Shell = embedded ? "div" : "main";
 
   const refreshButton = (

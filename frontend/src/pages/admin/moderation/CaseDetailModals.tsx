@@ -338,7 +338,7 @@ export function ReportCaseDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
       <motion.div
-        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0f1016] shadow-2xl"
+        className="relative flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0f1016] shadow-2xl"
         animate={preview ? { scale: 0.97, opacity: 0.55 } : { scale: 1, opacity: 1 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       >

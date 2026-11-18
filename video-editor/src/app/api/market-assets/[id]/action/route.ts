@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Browser writes must originate in the editor, even when session cookies are sent.
-  if (request.headers.get("origin") !== request.nextUrl.origin) {
+  if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   }
   const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;

@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Loader2, ChevronDown, ArrowLeft } from "lucide-react";
+import { AlertTriangle, Loader2, ArrowLeft } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import toast from "react-hot-toast";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import {
   type ContractActiveDispute,
+  type ContractDisputeFiling,
+  contractDisputeBlockLabel,
   contractDisputeDetail,
   contractDisputePath,
+  contractDisputeWindowText,
 } from "./contractDispute";
 
 // Same interface as in contracts.tsx
@@ -23,10 +28,27 @@ interface DetailedContract {
   freelancerName: string;
   clientAvatar?: string;
   freelancerAvatar?: string;
+  status?: string;
   totalValueCredits: number;
   milestones?: any[];
   activeDispute?: ContractActiveDispute | null;
+  disputeFiling?: ContractDisputeFiling | null;
 }
+
+const MAX_DETAILS_CHARS = 2000;
+
+const DISPUTE_REASONS: GlideSelectOption[] = [
+  { value: "Milestone Submission Conflict", label: "Milestone Submission Conflict" },
+  { value: "Non-delivery of work", label: "Non-delivery of work" },
+  { value: "Unresponsive", label: "Unresponsive / Poor Communication" },
+  { value: "Quality below expectations", label: "Quality below expectations" },
+  { value: "Scope creep / Demanding extra work", label: "Scope creep / Demanding extra work" },
+  { value: "Other", label: "Other" },
+];
+
+// An ended contract can still be disputed, but its milestone payments are final (no refunds).
+// Matches ENDED_CONTRACT_STATUSES in backend/lib/DisputeEscrow.js.
+const ENDED_CONTRACT_STATUSES = ["Done", "Closed", "Cancelled", "Completed", "Rejected"];
 
 export const DisputeFormPage: React.FC = () => {
   const { user, theme } = useGlobalState();
@@ -91,22 +113,17 @@ export const DisputeFormPage: React.FC = () => {
               freelancerAccountId: c.freelancer_account_id,
               clientName: c.client_name || c.client_handle,
               freelancerName: c.freelancer_name || c.freelancer_handle,
-              clientAvatar: c.client_avatar 
-                ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.client_avatar.startsWith('/') ? '' : '/'}${c.client_avatar}` 
-                : undefined,
-              freelancerAvatar: c.freelancer_avatar
-                ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.freelancer_avatar.startsWith('/') ? '' : '/'}${c.freelancer_avatar}` 
-                : undefined,
+              clientAvatar: c.client_avatar || undefined,
+              freelancerAvatar: c.freelancer_avatar || undefined,
               status: derivedStatus,
               totalValueCredits: parseFloat(c.rate_credits) || 0,
               milestones: mappedMilestones,
               activeDispute: c.active_dispute || null,
+              disputeFiling: c.dispute_filing || null,
             };
           });
           
-          const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
-          const filteredContracts = mappedContracts.filter((c: any) => validStatuses.includes(c.status));
-          setActiveContracts(filteredContracts);
+          setActiveContracts(mappedContracts);
         }
       } catch (err) {
         console.error("Failed to fetch contracts:", err);
@@ -121,6 +138,12 @@ export const DisputeFormPage: React.FC = () => {
   const selectedContract = activeContracts.find(c => c.id === selectedContractId);
   const existingDispute = selectedContract?.activeDispute || null;
   const existingDisputePath = contractDisputePath(existingDispute);
+  const contractEnded = Boolean(selectedContract?.status && ENDED_CONTRACT_STATUSES.includes(selectedContract.status));
+  // One dispute per side per contract, and 30 days after an ended contract; the server enforces both.
+  const filing = selectedContract?.disputeFiling || null;
+  const filingBlocked = Boolean(!existingDispute && filing && !filing.canFile);
+  const previousDisputePath = contractDisputePath(filing?.previousDispute);
+  const windowText = contractDisputeWindowText(filing);
   const contestedMilestone = selectedContract?.milestones?.find((m: any) => String(m.id) === String(paramMilestoneId));
   
   let opponentName = "Unknown";
@@ -144,7 +167,7 @@ export const DisputeFormPage: React.FC = () => {
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
-    if (!selectedContractId || !reason || !details || existingDispute) return;
+    if (!selectedContractId || !reason || !details || existingDispute || filingBlocked) return;
     submittingRef.current = true;
     setIsSubmitting(true);
     
@@ -198,47 +221,57 @@ export const DisputeFormPage: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-gray-200 dark:border-white/10"
+          className="overflow-visible rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-gray-200 dark:border-white/10"
         >
-          <div className="border-b border-gray-100 dark:border-white/5 px-6 py-5 bg-red-50/50 dark:bg-red-500/5">
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-              <AlertTriangle className="h-6 w-6" />
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Report a Dispute</h2>
+          <div className="rounded-t-2xl border-b border-gray-100 dark:border-white/5 px-6 py-5 bg-rose-50/60 dark:bg-rose-500/5">
+            <div className="flex items-center gap-2.5 text-rose-600 dark:text-rose-400">
+              <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">File a Dispute</h2>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  Submit a formal contract dispute. Our moderation team will review the contract and details provided.
+                </p>
+              </div>
             </div>
-            <p className="mt-2 text-sm text-gray-500 dark:text-zinc-400">
-              Submit a formal dispute. Our moderation team will review the contract and details provided.
-            </p>
           </div>
 
           <div className="px-6 py-6 space-y-6">
             {loading ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-rose-500" />
               </div>
             ) : (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-zinc-300">Select Contract</label>
-                  <div className="relative">
-                    <select
-                      value={selectedContractId}
-                      onChange={(e) => setSelectedContractId(e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all"
-                    >
-                      <option className="bg-white dark:bg-[#1E1E24]" value="" disabled>Choose an active contract...</option>
-                      {activeContracts.map(c => (
-                        <option
-                          className="bg-white dark:bg-[#1E1E24]"
-                          key={c.id}
-                          value={c.id}
-                          disabled={Boolean(c.activeDispute) && c.id !== selectedContractId}
-                        >
-                          {c.activeDispute ? `${c.title} (already under dispute)` : c.title}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-                  </div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                    Select Contract
+                  </label>
+                  <GlideSelect
+                    options={activeContracts.map((c) => {
+                      // Blocked contracts stay selectable; the banner below explains and Submit stays off.
+                      const blockLabel = c.activeDispute ? null : contractDisputeBlockLabel(c.disputeFiling);
+                      return {
+                        value: c.id,
+                        label: c.title,
+                        tag: c.activeDispute
+                          ? `${c.status || "Active"} · In Dispute`
+                          : blockLabel
+                            ? `${c.status || "Active"} · ${blockLabel}`
+                            : c.status || "Active",
+                      };
+                    })}
+                    value={selectedContractId}
+                    onChange={(val) => setSelectedContractId(val)}
+                    placeholder="Choose a contract..."
+                    size="md"
+                    fullWidth
+                    radius={12}
+                    maxVisibleItems={6}
+                    showTags
+                    ariaLabel="Select Contract"
+                  />
                 </div>
 
                 {existingDispute && (
@@ -266,6 +299,50 @@ export const DisputeFormPage: React.FC = () => {
                   </div>
                 )}
 
+                {filingBlocked && filing && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-500/40 dark:bg-rose-500/10 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-300" />
+                      <div>
+                        <p className="text-sm font-bold text-rose-900 dark:text-rose-100">
+                          {contractDisputeBlockLabel(filing)}
+                        </p>
+                        <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">{filing.reason}</p>
+                      </div>
+                    </div>
+                    {previousDisputePath ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(previousDisputePath)}
+                        className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                      >
+                        View your dispute
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+
+                {selectedContract && contractEnded && !existingDispute && !filingBlocked && (
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-900 dark:text-amber-100">This contract has ended</p>
+                      <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                        You can still report what happened, but its milestone payments are final, so no credits
+                        can be refunded. Staff can review the other member's conduct and warn, suspend or ban them.
+                        {windowText ? ` ${windowText}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedContract && !existingDispute && !filingBlocked && (
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    You can file one dispute per contract, and its ruling is final. Include everything that
+                    went wrong in this one.
+                  </p>
+                )}
+
                 <AnimatePresence mode="popLayout">
                   {selectedContract && (
                     <motion.div
@@ -274,9 +351,16 @@ export const DisputeFormPage: React.FC = () => {
                       exit={{ opacity: 0, height: 0 }}
                       className="rounded-xl bg-gray-50 dark:bg-white/5 p-5 border border-gray-200 dark:border-white/10 space-y-4"
                     >
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1 font-semibold uppercase tracking-wider">Dispute Title</div>
-                        <div className="font-bold text-red-600 dark:text-red-400 text-base">Dispute of {myName} vs {opponentName}</div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1 font-semibold uppercase tracking-wider">Dispute Title</div>
+                          <div className="font-bold text-red-600 dark:text-red-400 text-base">Dispute of {myName} vs {opponentName}</div>
+                        </div>
+                        {selectedContract.status && (
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-zinc-300 dark:border-white/15 bg-white dark:bg-white/5 text-zinc-700 dark:text-zinc-300">
+                            {selectedContract.status}
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                         <div className="flex items-center gap-6">
@@ -284,12 +368,15 @@ export const DisputeFormPage: React.FC = () => {
                           <div>
                             <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1.5 font-semibold uppercase tracking-wider">Reporting Party (You)</div>
                             <div className="flex items-center gap-2.5">
-                              <img src={myAvatar || "https://i.pravatar.cc/150?u=" + myName} alt={myName} className="h-6 w-6 rounded-full object-cover border border-gray-200 dark:border-zinc-700" />
-                              <div className="flex items-center gap-1.5">
-                                <div className="font-bold text-gray-900 dark:text-white text-sm">{myName}</div>
-                                <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified Level 2" />
-                                <img src="/icons/subscription/premium.png" alt="Premium" className="h-3.5 w-3.5 object-contain" title="Premium Subscription" />
-                              </div>
+                              <img
+                                src={constructAvatarUrl(myAvatar, myName)}
+                                alt={myName}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(myName);
+                                }}
+                                className="h-7 w-7 rounded-full object-cover border border-gray-200 dark:border-zinc-700"
+                              />
+                              <div className="font-bold text-gray-900 dark:text-white text-sm">{myName}</div>
                             </div>
                           </div>
 
@@ -299,18 +386,23 @@ export const DisputeFormPage: React.FC = () => {
                           <div>
                             <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1.5 font-semibold uppercase tracking-wider">Disputing With</div>
                             <div className="flex items-center gap-2.5">
-                              <img src={opponentAvatar || "https://i.pravatar.cc/150?u=" + opponentName} alt={opponentName} className="h-6 w-6 rounded-full object-cover border border-gray-200 dark:border-zinc-700" />
-                              <div className="flex items-center gap-1.5">
-                                <div className="font-bold text-gray-900 dark:text-white text-sm">{opponentName}</div>
-                                <img src="/icons/verification/lvl1_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified Level 1" />
-                                <img src="/icons/subscription/freemium.png" alt="Freemium" className="h-3.5 w-3.5 object-contain" title="Basic Subscription" />
-                              </div>
+                              <img
+                                src={constructAvatarUrl(opponentAvatar, opponentName)}
+                                alt={opponentName}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(opponentName);
+                                }}
+                                className="h-7 w-7 rounded-full object-cover border border-gray-200 dark:border-zinc-700"
+                              />
+                              <div className="font-bold text-gray-900 dark:text-white text-sm">{opponentName}</div>
                             </div>
                           </div>
                         </div>
 
                         <div className="text-left md:text-right">
-                          <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1 font-semibold uppercase tracking-wider">Amount Involved</div>
+                          <div className="text-xs text-gray-500 dark:text-zinc-400 mb-1 font-semibold uppercase tracking-wider">
+                            {contractEnded ? "Contract Value" : "Amount Involved"}
+                          </div>
                           <div className="font-bold text-yellow-500 text-sm flex items-center md:justify-end gap-1.5">
                             <CreditIcon className="h-4 w-4 text-yellow-500" />
                             <span>{selectedContract.totalValueCredits?.toLocaleString() || 0} Credits</span>
@@ -332,32 +424,45 @@ export const DisputeFormPage: React.FC = () => {
                 </AnimatePresence>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-zinc-300">Reason for Dispute</label>
-                  <div className="relative">
-                    <select
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all"
-                    >
-                      <option className="bg-white dark:bg-[#1E1E24]" value="" disabled>Select a reason...</option>
-                      <option className="bg-white dark:bg-[#1E1E24]" value="Milestone Submission Conflict">Milestone Submission Conflict</option>
-                      <option className="bg-white dark:bg-[#1E1E24]" value="Non-delivery of work">Non-delivery of work</option>
-                      <option className="bg-white dark:bg-[#1E1E24]" value="Unresponsive">Unresponsive / Poor Communication</option>
-                      <option className="bg-white dark:bg-[#1E1E24]" value="Quality below expectations">Quality below expectations</option>
-                      <option className="bg-white dark:bg-[#1E1E24]" value="Scope creep / Demanding extra work">Scope creep / Demanding extra work</option>
-                      <option className="bg-white dark:bg-[#1E1E24]" value="Other">Other</option>
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-                  </div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                    Reason for Dispute
+                  </label>
+                  <GlideSelect
+                    options={DISPUTE_REASONS}
+                    value={reason}
+                    onChange={(val) => setReason(val)}
+                    placeholder="Select a reason..."
+                    size="md"
+                    fullWidth
+                    radius={12}
+                    maxVisibleItems={6}
+                    ariaLabel="Reason for Dispute"
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 dark:text-zinc-300">Details</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                      Details
+                    </label>
+                    <span
+                      className={`text-[11px] font-medium ${
+                        details.length >= MAX_DETAILS_CHARS
+                          ? "text-rose-500 font-semibold"
+                          : details.length >= MAX_DETAILS_CHARS - 200
+                          ? "text-amber-500"
+                          : "text-gray-400 dark:text-zinc-500"
+                      }`}
+                    >
+                      {details.length} / {MAX_DETAILS_CHARS}
+                    </span>
+                  </div>
                   <textarea
                     value={details}
-                    onChange={(e) => setDetails(e.target.value)}
+                    maxLength={MAX_DETAILS_CHARS}
+                    onChange={(e) => setDetails(e.target.value.slice(0, MAX_DETAILS_CHARS))}
                     placeholder="Please explain the situation in detail..."
-                    className="w-full min-h-[120px] resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+                    className="scroll-thin w-full min-h-[130px] resize-y rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-rose-500/50 focus:ring-2 focus:ring-rose-500/20 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-600"
                   />
                 </div>
               </>
@@ -376,7 +481,7 @@ export const DisputeFormPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!selectedContractId || !reason || !details || isSubmitting || Boolean(existingDispute)}
+              disabled={!selectedContractId || !reason || !details || isSubmitting || Boolean(existingDispute) || filingBlocked}
               className="flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-8 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(220,38,38,0.3)]"
             >
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit Dispute"}

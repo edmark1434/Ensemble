@@ -3,6 +3,7 @@ import { renderServerHeaders } from "@/lib/render-server";
 
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 
 const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL || "http://localhost:3001";
 
@@ -44,6 +45,12 @@ export async function GET(
       );
     }
 
+    // Never hand the browser the render server's own link (local-queue outputs
+    // point at the internal host); downloads go through the editor instead.
+    if (statusData?.status === "completed" && statusData?.videoUrl) {
+      statusData.videoUrl = `/api/render/${encodeURIComponent(id)}/download`;
+    }
+
     return NextResponse.json(statusData, { status: 200 });
   } catch (error) {
     console.error(error);
@@ -58,7 +65,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   try {
     const { id } = await params;
     const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;

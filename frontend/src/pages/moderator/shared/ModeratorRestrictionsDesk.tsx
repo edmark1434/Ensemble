@@ -756,8 +756,8 @@ export default function ModeratorRestrictionsDesk({
   ];
 
   const shellClass = embedded
-    ? 'relative z-10 min-w-0 overflow-x-hidden space-y-5'
-    : 'relative z-10 min-h-screen min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 md:pl-[260px] md:px-10 md:py-8';
+    ? 'relative min-w-0 overflow-x-hidden space-y-5'
+    : 'relative min-h-screen min-w-0 overflow-x-hidden px-4 py-6 sm:px-6 md:pl-[260px] md:px-10 md:py-8';
   const Shell = embedded ? 'div' : 'main';
 
   return (

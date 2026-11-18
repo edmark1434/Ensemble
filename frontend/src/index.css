@@ -347,16 +347,33 @@ body {
   transform: translateX(-100%);
 }
 
-/* Phones: page headers stick below the console's mobile top bar (h-14). */
+/* Phones: only the console's mobile top bar stays pinned; a second sticky page header (title + tabs)
+   would cover a third of the screen. */
 @media (max-width: 767px) {
   .staff-console main > header.sticky {
-    top: 3.5rem;
+    position: static;
   }
 }
 
+/* Dialog overlays. A dialog taller than the screen scrolls inside its overlay and starts at the top
+   (plain flex centering pushes its header and close button above the viewport, out of reach). */
+.staff-console .fixed.inset-0.items-center:not(.pointer-events-none) {
+  align-items: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Click-to-close backdrops stay pinned to the viewport while the overlay scrolls. */
+.staff-console .fixed.inset-0 > .absolute.inset-0 {
+  position: fixed;
+}
+
+/* Entry animations use fill-mode `backwards`, never `both`/`forwards`: an animation that stays "in
+   effect" after it ends makes the browser treat the element as `will-change: transform`, which turns it
+   into the containing block and stacking context of every `position: fixed` dialog inside it. Dialogs
+   then render inside the card instead of over the screen and slide under the sticky header. */
 @media (prefers-reduced-motion: no-preference) {
   .console-nav-indicator {
-    animation: console-indicator 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: console-indicator 0.25s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   .console-skeleton::after {
@@ -365,12 +382,12 @@ body {
 
   /* Page entry: plays when a page (or a tab's content) mounts. */
   .staff-console main {
-    animation: console-fade 0.25s ease-out both;
+    animation: console-fade 0.25s ease-out backwards;
   }
   .staff-console main > header + div > *,
   .staff-console main > header + section,
   .staff-console .console-stagger > * {
-    animation: console-rise 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: console-rise 0.36s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   .staff-console main > header + div > *:nth-child(2),
   .staff-console .console-stagger > *:nth-child(2) { animation-delay: 40ms; }
@@ -385,10 +402,10 @@ body {
 
   /* Modals: backdrop fades, panel pops. Excludes the fixed ambient background layer. */
   .staff-console .fixed.inset-0:not(.pointer-events-none) {
-    animation: console-fade 0.18s ease-out both;
+    animation: console-fade 0.18s ease-out backwards;
   }
   .staff-console .fixed.inset-0:not(.pointer-events-none) > .relative {
-    animation: console-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: console-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   /* Interactive feedback. */
@@ -420,10 +437,10 @@ body {
   /* Proportional bars grow from the left once, on mount. */
   .console-bar {
     transform-origin: left center;
-    animation: console-bar 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: console-bar 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   .console-drawer-panel {
-    animation: console-drawer 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: console-drawer 0.24s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 }

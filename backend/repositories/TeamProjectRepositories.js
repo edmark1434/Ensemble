@@ -1420,11 +1420,15 @@ async function syncTeamWorkspaceArchivedStatus(dbClientOrPool, teamId, actorAcco
     if (updateRes.rows.length > 0) {
       const wsRes = await db.query(`SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1`, [teamId]);
       const workspace_id = wsRes.rows[0]?.workspace_id;
-      if (workspace_id) {
+      // actor_account_id is NOT NULL, so a system-driven archive (e.g. a dispute settlement)
+      // logs no activity row. Never swallow an error here: callers pass their transaction
+      // client, a failed statement aborts that transaction, and the caller's COMMIT then
+      // silently rolls back all of its work while reporting success.
+      if (workspace_id && actorAccountId) {
         await db.query(`
           INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
           VALUES ($1, $2, 'team_project_archived', $3)
-        `, [workspace_id, actorAccountId || null, JSON.stringify({ reason })]).catch(() => {});
+        `, [workspace_id, actorAccountId, JSON.stringify({ reason })]);
       }
       return true;
     }

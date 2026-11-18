@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { Download, FileText, Gavel } from "lucide-react";
 import { chatAttachmentUrl } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
+import { mainSiteOrigin } from "@/lib/consoleHosts";
 import { isDisputeDecision, parseDisputeRuling } from "./disputeRuling";
 export { isDisputeDecision, parseDisputeRuling } from "./disputeRuling";
 export type { ParsedRuling } from "./disputeRuling";
@@ -176,22 +179,159 @@ function LockIcon() {
   );
 }
 
-export function Avatar({ name, role }: { name?: string | null; role?: string | null }) {
+const AVATAR_BOX = { sm: "h-8 w-8", md: "h-10 w-10", lg: "h-12 w-12" } as const;
+const AVATAR_TEXT = { sm: "text-xs", md: "text-sm", lg: "text-base" } as const;
+
+/**
+ * A member's profile picture, ringed in their dispute role's colour. `src` is the stored
+ * avatar path (or a URL); without one, or if it fails to load, the initial stands in.
+ */
+export function Avatar({
+  name,
+  role,
+  size = "sm",
+  src,
+  dark = false,
+}: {
+  name?: string | null;
+  role?: string | null;
+  size?: keyof typeof AVATAR_BOX;
+  src?: string | null;
+  /** Force the dark palette (staff console, which is dark regardless of theme). */
+  dark?: boolean;
+}) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const key = roleKey(role);
+  const url = resolveAvatarPath(src);
   const initial = String(name || "?").trim().charAt(0).toUpperCase() || "?";
-  const tone =
-    key === "disputer"
+  const tone = dark
+    ? key === "disputer"
+      ? "bg-sky-500/15 text-sky-200"
+      : key === "disputee"
+        ? "bg-cyan-500/15 text-cyan-200"
+        : key === "staff"
+          ? "bg-amber-500/15 text-amber-200"
+          : "bg-white/10 text-zinc-200"
+    : key === "disputer"
       ? "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200"
       : key === "disputee"
         ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-500/15 dark:text-cyan-200"
         : key === "staff"
           ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
           : "bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-zinc-200";
+  const ring = dark
+    ? key === "disputer"
+      ? "ring-sky-400/40"
+      : key === "disputee"
+        ? "ring-cyan-400/40"
+        : key === "staff"
+          ? "ring-amber-400/40"
+          : "ring-white/10"
+    : key === "disputer"
+      ? "ring-sky-300/80 dark:ring-sky-400/40"
+      : key === "disputee"
+        ? "ring-cyan-300/80 dark:ring-cyan-400/40"
+        : key === "staff"
+          ? "ring-amber-300/80 dark:ring-amber-400/40"
+          : "ring-gray-200 dark:ring-white/10";
+  if (url && failedUrl !== url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        loading="lazy"
+        onError={() => setFailedUrl(url)}
+        className={`shrink-0 rounded-full object-cover ring-2 ${dark ? "bg-white/10" : "bg-gray-100 dark:bg-white/10"} ${AVATAR_BOX[size]} ${ring}`}
+      />
+    );
+  }
   return (
-    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${tone}`}>
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold ${AVATAR_BOX[size]} ${AVATAR_TEXT[size]} ${tone}`}
+    >
       {initial}
     </span>
   );
+}
+
+/** Lower-cased handle → account id, sent with dispute payloads as `mentions`. */
+export type MentionMap = Record<string, string>;
+
+// Same rule as the server: "@handle" not glued to a word, an email or another mention.
+const MENTION_PATTERN = /(^|[^A-Za-z0-9_.@])@([A-Za-z0-9_](?:[A-Za-z0-9_.]*[A-Za-z0-9_])?)/g;
+
+function MentionLink({
+  handle,
+  accountId,
+  external,
+  dark,
+}: {
+  handle: string;
+  accountId: string;
+  external: boolean;
+  dark: boolean;
+}) {
+  const className = `rounded-sm font-semibold underline-offset-2 transition hover:underline focus-visible:underline focus-visible:outline-none ${
+    dark
+      ? "text-sky-300 hover:text-sky-200"
+      : "text-sky-700 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+  }`;
+  if (external) {
+    // Staff consoles live on their own host: open the member profile on the main site.
+    return (
+      <a
+        href={`${mainSiteOrigin()}/profile/${accountId}`}
+        target="_blank"
+        rel="noreferrer"
+        title={`Open @${handle}’s profile in a new tab`}
+        className={className}
+      >
+        @{handle}
+      </a>
+    );
+  }
+  return (
+    <Link to={`/profile/${accountId}`} title={`View @${handle}’s profile`} className={className}>
+      @{handle}
+    </Link>
+  );
+}
+
+/**
+ * Text with every "@handle" that belongs to an account turned into a link to that profile.
+ * Unknown handles stay plain text. Renders inline, so it drops into any paragraph unchanged.
+ */
+export function MentionText({
+  text,
+  mentions,
+  external = false,
+  dark = false,
+}: {
+  text?: string | null;
+  mentions?: MentionMap | null;
+  /** Open profiles on the main site in a new tab (staff consoles). */
+  external?: boolean;
+  /** Force the dark link colour (staff console). */
+  dark?: boolean;
+}) {
+  const value = String(text ?? "");
+  if (!mentions || !value.includes("@")) return <>{value}</>;
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const match of value.matchAll(MENTION_PATTERN)) {
+    const handle = match[2];
+    const accountId = mentions[handle.toLowerCase()];
+    if (!accountId) continue;
+    const at = (match.index ?? 0) + match[1].length;
+    if (at > last) parts.push(value.slice(last, at));
+    parts.push(
+      <MentionLink key={at} handle={handle} accountId={accountId} external={external} dark={dark} />
+    );
+    last = at + 1 + handle.length;
+  }
+  if (!parts.length) return <>{value}</>;
+  if (last < value.length) parts.push(value.slice(last));
+  return <>{parts}</>;
 }
 
 export type DisputeAttachment = {
@@ -323,12 +463,18 @@ export function DisputeDecisionCard({
   body,
   when,
   dark = false,
+  mentions = null,
+  externalLinks = false,
   children,
 }: {
   body?: string | null;
   when?: string | null;
   /** Force the dark palette for the staff console, which is dark regardless of theme. */
   dark?: boolean;
+  /** Turns "@handle" in the finding and the staff note into profile links. */
+  mentions?: MentionMap | null;
+  /** Staff consoles: open those profiles on the main site in a new tab. */
+  externalLinks?: boolean;
   children?: ReactNode;
 }) {
   const ruling = parseDisputeRuling(body);
@@ -373,7 +519,7 @@ export function DisputeDecisionCard({
             key={index}
             className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${bodyText}`}
           >
-            {paragraph}
+            <MentionText text={paragraph} mentions={mentions} external={externalLinks} dark={dark} />
           </p>
         ))}
 
@@ -382,7 +528,9 @@ export function DisputeDecisionCard({
             <p className={`text-[10px] font-bold uppercase tracking-[0.14em] ${muted}`}>
               Reviewing staff noted
             </p>
-            <p className={`mt-0.5 whitespace-pre-wrap break-words text-sm ${bodyText}`}>{ruling.note}</p>
+            <p className={`mt-0.5 whitespace-pre-wrap break-words text-sm ${bodyText}`}>
+              <MentionText text={ruling.note} mentions={mentions} external={externalLinks} dark={dark} />
+            </p>
           </div>
         ) : null}
 

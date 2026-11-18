@@ -13,7 +13,7 @@ export const DevModeWidget: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key.toLowerCase() === "i") {
+      if ((e.altKey || e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
         e.preventDefault();
         setIsOpen((prev) => !prev);
       }
@@ -131,7 +131,7 @@ export const DevModeWidget: React.FC = () => {
             {/* Footer */}
             <div className="px-4 py-3 bg-gray-50 dark:bg-white/5 border-t border-gray-200 dark:border-white/10 text-center">
               <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                Press <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300">Alt</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300">I</kbd> to toggle this widget
+                Press <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300">Ctrl</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300">Alt</kbd> +<kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300">I</kbd> to toggle this widget
               </p>
             </div>
           </motion.div>

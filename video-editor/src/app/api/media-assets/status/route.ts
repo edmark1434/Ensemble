@@ -1,11 +1,12 @@
 import { activeProjectIds } from "@/lib/db/project-availability";
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { db } from "@/lib/db";
 import { missingUploadSources } from "@/lib/db/upload-usage";
 
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin)
+  if (!isSameOriginRequest(request))
     return NextResponse.json({ error: "Invalid origin." }, { status: 403 });
   const token = request.cookies.get(EDITOR_SESSION_COOKIE)?.value;
   const session = token ? await verifyEditorSession(token) : null;

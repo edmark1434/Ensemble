@@ -28,6 +28,7 @@ const {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  decorateDisputeView,
   swapDisputePartyLabels,
   createDisputeMessage,
   updateDisputeMessageAudience,
@@ -57,7 +58,11 @@ const {
   DISPUTE_PAYOUT_MAX_DAYS,
 } = require('../lib/DisputeResolutions');
 const { listDisputePayouts, planReversalRoute } = require('./DisputeFinancialRepositories');
-const { milestonePaidOutSql, milestoneEscrowState } = require('../lib/DisputeEscrow');
+const {
+  milestonePaidOutSql,
+  milestoneEscrowState,
+  CONDUCT_ONLY_DISPUTE_MESSAGE,
+} = require('../lib/DisputeEscrow');
 const {
   ROLE_TO_TICKET_TYPES,
   TICKET_TYPES,
@@ -538,6 +543,8 @@ function mapDisputeRow(row) {
     resolutionOutcome: row.resolution_outcome || null,
     resolutionOutcomeLabel: disputeResolutionLabel(row.resolution_outcome),
     isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
+    // Filed after the contract ended: staff can record an outcome or sanction, never move credits.
+    conductOnly: Boolean(row.contract_ended_at_filing),
     financialResolution: row.financial_resolution_at
       ? {
           at: row.financial_resolution_at,
@@ -4355,6 +4362,8 @@ async function loadDisputeCaseFile(row) {
   const milestoneContractById = new Map(
     milestoneResult.rows.map((milestone) => [String(milestone.contract_milestone_id), String(milestone.contract_id)])
   );
+  // Filed after the contract ended: its milestone payments are final, nothing is reversible.
+  const conductOnly = Boolean(row.contract_ended_at_filing);
   // The case file also lists the parties' other contracts for context; only this dispute's
   // own contract (and anything linked to the dispute) can be reversed from here.
   const inDisputeScope = (tx) => {
@@ -4445,10 +4454,12 @@ async function loadDisputeCaseFile(row) {
         reversedByTransactionId: tx.reversed_by_transaction_id || null,
         reversalScheduled: scheduledReversalIds.has(String(tx.credit_transaction_id)),
         reversal: {
-          allowed: Boolean(route.allowed) && inDisputeScope(tx),
+          allowed: Boolean(route.allowed) && inDisputeScope(tx) && !conductOnly,
           reason: !inDisputeScope(tx)
             ? 'This transaction belongs to another contract between these accounts.'
-            : route.allowed
+            : conductOnly
+              ? CONDUCT_ONLY_DISPUTE_MESSAGE
+              : route.allowed
               ? null
               : route.reason,
           fromName: tx.destination_name,
@@ -4463,6 +4474,7 @@ async function loadDisputeCaseFile(row) {
           !alreadyReversed &&
           !tx.reverses_credit_transaction_id &&
           !row.financial_resolution_at &&
+          !conductOnly &&
           inDisputeScope(tx) &&
           Boolean(route.allowed),
       };
@@ -4557,10 +4569,26 @@ async function getDisputeDetail(disputeId, staffSession = null) {
       return entry ? { ...option, preview: build(entry, names) } : option;
     });
 
+  // Profile pictures for every author and both parties, and "@handle" → profile links.
+  const view = await decorateDisputeView(messages, {
+    accountIds: [row.by_account_id, row.for_account_id],
+    // The parties' own handles too: the console header links them.
+    texts: [
+      row.description,
+      row.reason,
+      row.initiator_handle ? `@${row.initiator_handle}` : null,
+      row.respondent_handle ? `@${row.respondent_handle}` : null,
+    ],
+  });
+  const dispute = mapDisputeRow(row);
+  dispute.initiator.avatar = view.avatars.get(String(row.by_account_id)) || null;
+  dispute.respondent.avatar = view.avatars.get(String(row.for_account_id)) || null;
+
   return {
-    dispute: mapDisputeRow(row),
+    dispute,
     caseFile,
-    messages,
+    messages: view.messages,
+    mentions: view.mentions,
     chatId,
     chatAvailable,
     permissions,

@@ -37,6 +37,22 @@ function domainError(message, statusCode = 400, code = null) {
   return error;
 }
 
+/**
+ * COMMIT, and fail loudly if nothing was saved. When any statement inside the transaction
+ * failed and its error was swallowed, Postgres answers COMMIT with ROLLBACK and no error, so
+ * a ruling would report "paid" while no credit moved.
+ */
+async function commitOrThrow(client) {
+  const result = await client.query('COMMIT');
+  if (String(result?.command || '').toUpperCase() === 'ROLLBACK') {
+    throw domainError(
+      'The ruling could not be saved, so no credits moved. Try again, or contact an engineer if it keeps failing.',
+      500,
+      'COMMIT_ROLLED_BACK'
+    );
+  }
+}
+
 function compensatingType(originalType) {
   switch (String(originalType || '')) {
     case CREDIT_TRANSACTION_TYPE.ESCROW_HOLD:
@@ -698,7 +714,7 @@ async function settleEscrow({
       contractEnd = await endContractAfterSettlement(client, dispute.contract_id);
     }
 
-    await client.query('COMMIT');
+    await commitOrThrow(client);
     return {
       kind: 'escrow_settle',
       clientCredits,
@@ -967,7 +983,7 @@ async function reverseTransaction({
 
     if (immediate) payout = await releasePayout(client, payout, { staffId });
 
-    await client.query('COMMIT');
+    await commitOrThrow(client);
     return {
       kind: 'transaction_reverse',
       reversedTransactionId: original.credit_transaction_id,
@@ -1024,7 +1040,7 @@ async function releaseDisputePayouts({ disputeId, staffId }) {
       ? await endContractAfterSettlement(client, dispute.contract_id)
       : null;
     await client.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
-    await client.query('COMMIT');
+    await commitOrThrow(client);
     return { paid, contractEnd };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1057,7 +1073,7 @@ async function rescheduleDisputePayouts({ disputeId, releaseAt }) {
     );
     if (!result.rows.length) throw domainError('No payout is waiting on this dispute.', 409, 'NO_PAYOUT');
     await client.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
-    await client.query('COMMIT');
+    await commitOrThrow(client);
     return { payouts: result.rows };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1165,7 +1181,7 @@ async function cancelDisputePayouts({ disputeId, staffId, reason }) {
       `,
       [disputeId, remaining]
     );
-    await client.query('COMMIT');
+    await commitOrThrow(client);
     return { cancelled: cancelled.rows, returned, staffId, kind: dispute.financial_resolution_kind };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1230,7 +1246,7 @@ async function releaseDuePayouts({ limit = 25 } = {}) {
         ? await endContractAfterSettlement(client, dispute.contract_id)
         : null;
       await client.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
-      await client.query('COMMIT');
+      await commitOrThrow(client);
       results.push({ disputeId, paid, contractEnd });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});

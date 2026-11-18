@@ -162,6 +162,46 @@ function milestoneEscrowState({ status, paidOut }) {
   return 'open';
 }
 
+// Contract statuses after which no more work or payments happen. A dispute filed on one of
+// these is conduct-only (`disputes.contract_ended_at_filing`): its milestone payments are final.
+const ENDED_CONTRACT_STATUSES = ['done', 'completed', 'closed', 'cancelled', 'rejected'];
+
+function isContractEnded(status) {
+  return ENDED_CONTRACT_STATUSES.includes(String(status || '').trim().toLowerCase());
+}
+
+const CONDUCT_ONLY_DISPUTE_MESSAGE =
+  "This dispute was filed after the contract ended. Its milestone payments are final, so credits can't be refunded or reversed. Record an outcome, or warn, suspend or ban a party instead.";
+
+// A contract can be disputed until this many days after `contracts.ended_at`
+// (stamped by the trigger in migration 1828800000000_contract-ended-at).
+const DISPUTE_FILING_WINDOW_DAYS = 30;
+
+/**
+ * Filing limits on top of "one open dispute per contract":
+ *   DISPUTE_ALREADY_FILED  each side files at most one dispute per contract; its ruling is final
+ *                          and anything new goes through reopening that case
+ *   DISPUTE_WINDOW_CLOSED  the contract ended more than DISPUTE_FILING_WINDOW_DAYS ago
+ * `previousDispute` is the filer's own earlier dispute on the contract (not deleted).
+ * @returns {{ code: string, message: string } | null}
+ */
+function disputeFilingBlock({ previousDispute = null, windowClosed = false } = {}) {
+  if (previousDispute) {
+    const number = previousDispute.dispute_number ? ` ${previousDispute.dispute_number}` : '';
+    return {
+      code: 'DISPUTE_ALREADY_FILED',
+      message: `You already filed dispute${number} on this contract. Each side can file one dispute per contract, and its ruling is final. If something new has happened, contact Support to reopen that case.`,
+    };
+  }
+  if (windowClosed) {
+    return {
+      code: 'DISPUTE_WINDOW_CLOSED',
+      message: `This contract ended more than ${DISPUTE_FILING_WINDOW_DAYS} days ago, so it can no longer be disputed. To report a member's behavior, contact Support.`,
+    };
+  }
+  return null;
+}
+
 async function getOpenContractDispute(db, contractId) {
   if (!contractId) return null;
   const result = await (db || pool).query(OPEN_DISPUTE_SQL, [contractId]);
@@ -257,4 +297,9 @@ module.exports = {
   contractEscrowHoldings,
   milestonePaidOutSql,
   milestoneEscrowState,
+  ENDED_CONTRACT_STATUSES,
+  isContractEnded,
+  CONDUCT_ONLY_DISPUTE_MESSAGE,
+  DISPUTE_FILING_WINDOW_DAYS,
+  disputeFilingBlock,
 };

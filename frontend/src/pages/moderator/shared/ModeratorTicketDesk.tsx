@@ -279,7 +279,7 @@ export default function ModeratorTicketDesk({
 
   if (error && tickets.length === 0) {
     return (
-      <main className="relative z-10 p-8 md:pl-[260px]">
+      <main className="relative p-8 md:pl-[260px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
           {error}
           <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">

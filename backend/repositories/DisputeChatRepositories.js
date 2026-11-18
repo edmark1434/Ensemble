@@ -183,6 +183,101 @@ function canViewerSeeMessage(
   return Boolean(isStaff);
 }
 
+const ACCOUNT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// "@handle" not glued to a word, an email or another mention. A trailing dot is punctuation.
+const MENTION_PATTERN = /(^|[^A-Za-z0-9_.@])@([A-Za-z0-9_](?:[A-Za-z0-9_.]*[A-Za-z0-9_])?)/g;
+const MAX_MENTION_LOOKUPS = 100;
+
+/** Lower-cased handles mentioned as "@handle" across some texts. */
+function extractMentionHandles(texts) {
+  const handles = new Set();
+  for (const text of texts || []) {
+    if (!text) continue;
+    for (const match of String(text).matchAll(MENTION_PATTERN)) {
+      handles.add(match[2].toLowerCase());
+      if (handles.size >= MAX_MENTION_LOOKUPS) return [...handles];
+    }
+  }
+  return [...handles];
+}
+
+/**
+ * Profile picture path (a `files.path`, resolved to a URL by the client) per account id:
+ * the chosen avatar, else the newest uploaded profile file. Accounts without one are absent.
+ */
+async function loadAccountAvatarPaths(accountIds) {
+  const ids = [...new Set((accountIds || []).filter(Boolean).map(String))].filter((id) =>
+    ACCOUNT_UUID.test(id)
+  );
+  if (!ids.length) return new Map();
+  const result = await pool.query(
+    `
+    SELECT a.account_id,
+           COALESCE(
+             f.path,
+             (
+               SELECT f2.path
+               FROM account_profile_files apf
+               JOIN files f2 ON f2.file_id = apf.file_id
+               WHERE apf.account_id = a.account_id
+               ORDER BY f2.created_at DESC
+               LIMIT 1
+             )
+           ) AS avatar_path
+    FROM accounts a
+    LEFT JOIN files f ON f.file_id = a.avatar_file_id
+    WHERE a.account_id = ANY($1::uuid[])
+    `,
+    [ids]
+  );
+  return new Map(
+    result.rows.filter((row) => row.avatar_path).map((row) => [String(row.account_id), row.avatar_path])
+  );
+}
+
+/** `{ handle (lower case): account id }` for the mentioned handles that belong to an account. */
+async function resolveMentionHandles(handles) {
+  const list = [...new Set((handles || []).map((h) => String(h || '').toLowerCase()).filter(Boolean))].slice(
+    0,
+    MAX_MENTION_LOOKUPS
+  );
+  if (!list.length) return {};
+  const result = await pool.query(
+    `SELECT account_id, LOWER(handle) AS handle FROM accounts WHERE LOWER(handle) = ANY($1::text[])`,
+    [list]
+  );
+  const mentions = {};
+  for (const row of result.rows) mentions[row.handle] = String(row.account_id);
+  return mentions;
+}
+
+/**
+ * Profile pictures and @mention links for a dispute view. Adds `authorAvatar` to each message
+ * and returns the avatars of `accountIds` (the parties) plus the mention map. Decoration only:
+ * a failed lookup leaves the view without pictures or links instead of failing it.
+ * @returns {Promise<{ messages: object[], avatars: Map<string,string>, mentions: Record<string,string> }>}
+ */
+async function decorateDisputeView(messages, { accountIds = [], texts = [] } = {}) {
+  const list = Array.isArray(messages) ? messages : [];
+  try {
+    const [avatars, mentions] = await Promise.all([
+      loadAccountAvatarPaths([...accountIds, ...list.map((m) => m.senderAccountId)]),
+      resolveMentionHandles(extractMentionHandles([...texts, ...list.map((m) => m.body)])),
+    ]);
+    return {
+      messages: list.map((m) => ({
+        ...m,
+        authorAvatar: (m.senderAccountId && avatars.get(String(m.senderAccountId))) || null,
+      })),
+      avatars,
+      mentions,
+    };
+  } catch (error) {
+    console.warn('Dispute avatars and mentions skipped:', error.message);
+    return { messages: list, avatars: new Map(), mentions: {} };
+  }
+}
+
 /** Load all messages for a dispute chat from the Mongo `messages` collection. */
 async function listDisputeMessages(chatId) {
   if (!chatId || !isMongoReady()) return [];
@@ -648,6 +743,9 @@ async function createDisputeMessage({
       : '');
   await touchDisputeInbox(chatId, preview, now, { audience: normalizedAudience });
 
+  // Live readers get the author's picture and this message's mention links with it.
+  const decorated = await decorateDisputeView([{ senderAccountId: accountId, body }]);
+
   const mapped = {
     id: String(insertedId),
     conversationId: String(chatId),
@@ -656,6 +754,8 @@ async function createDisputeMessage({
     authorName: authorName || 'Staff',
     authorRole,
     senderAccountId: accountId,
+    authorAvatar: decorated.messages[0]?.authorAvatar || null,
+    mentions: decorated.mentions,
     body,
     isInternal: Boolean(isInternal) || privateToAuthorAndStaff,
     audience: normalizedAudience,
@@ -724,9 +824,15 @@ async function updateDisputeMessageAudience(
     _id: new ObjectId(String(messageId)),
     conversation_id: String(chatId),
   });
-  const mapped = doc
+  let decorated = null;
+  if (doc) {
+    // A newly published reply reaches readers who never had it, so send its picture and links.
+    const view = await decorateDisputeView([mapMongoDisputeMessage(doc)]);
+    decorated = { ...view.messages[0], mentions: view.mentions };
+  }
+  const mapped = decorated
     ? {
-        ...mapMongoDisputeMessage(doc),
+        ...decorated,
         conversationId: String(chatId),
         disputeId: disputeId ? String(disputeId) : null,
       }
@@ -994,6 +1100,9 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
       d.visibility,
       d.by_account_id,
       d.for_account_id,
+      d.created_at,
+      d.updated_at,
+      d.resolved_at,
       COALESCE(ia.display_name, NULLIF(TRIM(CONCAT_WS(' ', iu.first_name, iu.last_name)), '')) AS initiator_name,
       ia.handle AS initiator_handle,
       COALESCE(ra.display_name, NULLIF(TRIM(CONCAT_WS(' ', ru.first_name, ru.last_name)), '')) AS respondent_name,
@@ -1026,7 +1135,7 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
   const closed = String(row.status || '').toLowerCase() === 'closed';
   // Forum view: everyone sees the open discussion. A staff reply aimed at one party or at
   // `parties` stays with its audience, so the "only you and staff" badge means what it says.
-  const messages = (await listDisputeMessages(chatId)).filter((message) => {
+  const visibleMessages = (await listDisputeMessages(chatId)).filter((message) => {
     const audience = String(message.audience || '').toLowerCase();
     if (audience === 'public') return true;
     return canViewerSeeMessage(message, {
@@ -1037,6 +1146,14 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
       visibility: true,
     });
   });
+  const { messages, avatars, mentions } = await decorateDisputeView(visibleMessages, {
+    accountIds: [row.by_account_id, row.for_account_id],
+    texts: [
+      row.description,
+      row.initiator_handle ? `@${row.initiator_handle}` : null,
+      row.respondent_handle ? `@${row.respondent_handle}` : null,
+    ],
+  });
 
   return {
     id: row.dispute_id,
@@ -1045,16 +1162,23 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     type: row.type || 'Contract',
     status: String(row.status || 'open').toLowerCase(),
     description: row.description || null,
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    resolvedAt: row.resolved_at || null,
     initiator: {
       accountId: row.by_account_id || null,
       name: row.initiator_name || 'Unknown',
       handle: row.initiator_handle || null,
+      avatar: avatars.get(String(row.by_account_id)) || null,
     },
     respondent: {
       accountId: row.for_account_id || null,
       name: row.respondent_name || 'Unknown',
       handle: row.respondent_handle || null,
+      avatar: avatars.get(String(row.for_account_id)) || null,
     },
+    // Lower-cased handle → account id, so "@handle" in any message links to that profile.
+    mentions,
     isParty,
     // Lets the client say who else can read each message it was given.
     viewerRole: isFiler ? 'disputer' : isRespondent ? 'disputee' : viewerAccountId ? 'community' : null,
@@ -1102,7 +1226,7 @@ async function getAccountDispute(disputeId, accountId) {
   }
   if (!row.visibility && !filer) return null;
   const chatId = await getDisputeChatId(disputeId);
-  const messages = (await listDisputeMessages(chatId)).filter((message) =>
+  const visibleMessages = (await listDisputeMessages(chatId)).filter((message) =>
     canViewerSeeMessage(message, {
       accountId,
       isParty,
@@ -1111,11 +1235,15 @@ async function getAccountDispute(disputeId, accountId) {
       visibility: Boolean(row.visibility),
     })
   );
+  const { messages, mentions } = await decorateDisputeView(visibleMessages, {
+    texts: [row.description],
+  });
   return {
     ...mapDisputeSummary(row, accountId),
     settlement: await getDisputeSettlementForParty(disputeId, accountId),
     chatId,
     messages,
+    mentions,
   };
 }
 
@@ -1327,6 +1455,7 @@ module.exports = {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  decorateDisputeView,
   swapDisputePartyLabels,
   getDisputeMessage,
   resolveDisputeReplyTarget,

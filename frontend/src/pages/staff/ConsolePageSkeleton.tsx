@@ -5,7 +5,7 @@
  */
 export default function ConsolePageSkeleton({ tiles = 4, tabs = true }: { tiles?: number; tabs?: boolean }) {
   return (
-    <main className="relative z-10 min-h-screen md:pl-[260px]" aria-busy="true" aria-label="Loading">
+    <main className="relative min-h-screen md:pl-[260px]" aria-busy="true" aria-label="Loading">
       <div className="border-b border-white/[0.06] px-6 py-4 md:px-8">
         <div className="console-skeleton h-2.5 w-28 rounded-full" />
         <div className="console-skeleton mt-3 h-5 w-56 rounded-lg" />

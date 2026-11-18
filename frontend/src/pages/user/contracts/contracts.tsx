@@ -30,6 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import {
   type ContractActiveDispute,
+  type ContractDisputeFiling,
   contractDisputeHeadline,
   contractDisputePath,
 } from "./contractDispute";
@@ -131,6 +132,7 @@ export interface DetailedContract {
   // Milestones
   milestones: MilestoneItem[];
   activeDispute?: ContractActiveDispute | null;
+  disputeFiling?: ContractDisputeFiling | null;
 }
 
 // ============================================================================
@@ -309,6 +311,7 @@ export const Contracts: React.FC = () => {
         portfolioDuration: c.portfolio_use_duration_seconds || 60,
         milestones: mappedMilestones,
         activeDispute: c.active_dispute || null,
+        disputeFiling: c.dispute_filing || null,
       };
     });
   }, []);
@@ -548,29 +551,38 @@ export const Contracts: React.FC = () => {
               </button>
             </div>
 
-            {(() => {
-              const activeDisputeCount = contracts.filter((contract) => contract.activeDispute).length;
-              return (
-                <button
-                  onClick={() => navigate('/contracts/disputes')}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors mb-2 shrink-0 ${
-                    activeDisputeCount > 0
-                      ? 'border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:bg-rose-500/25'
-                      : 'border border-zinc-300 dark:border-white/10 bg-white dark:bg-white/5 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10'
-                  }`}
-                >
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  {activeDisputeCount > 0 ? `Active disputes (${activeDisputeCount})` : 'Your disputes'}
-                </button>
-              );
-            })()}
-            <button
-              onClick={() => navigate('/contracts/dispute-form')}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-300 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0 shadow-2xs shrink-0"
-            >
-              <AlertCircle className="h-3.5 w-3.5" />
-              Report a Dispute
-            </button>
+            <div className="flex items-center gap-2 pb-2 shrink-0">
+              {(() => {
+                const activeDisputeCount = contracts.filter((contract) => contract.activeDispute).length;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/contracts/disputes')}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                      activeDisputeCount > 0
+                        ? 'border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:bg-rose-500/25'
+                        : 'border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <ScrollText className="h-3.5 w-3.5 opacity-80" />
+                    <span>My Dispute Records</span>
+                    {activeDisputeCount > 0 && (
+                      <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-rose-600 text-white">
+                        {activeDisputeCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })()}
+              <button
+                type="button"
+                onClick={() => navigate('/contracts/dispute-form')}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-300 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/15 px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/25 transition-all shadow-2xs cursor-pointer shrink-0"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                <span>File a Dispute</span>
+              </button>
+            </div>
           </div>
 
           {/* Animated Tab Switch Container */}
@@ -922,10 +934,49 @@ export const Contracts: React.FC = () => {
                             </div>
                             <div className="space-y-0.5 col-span-2 sm:col-span-1">
                               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Deadline</span>
-                              <div className="text-xs font-bold truncate">
-                                {contract.dueDate ? (
-                                  <span className="text-rose-700 dark:text-rose-400 font-bold">Due {new Date(contract.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                ) : (
+                              <div className="text-xs font-bold">
+                                {contract.dueDate ? (() => {
+                                  const dueMs = new Date(contract.dueDate).getTime();
+                                  const diffMs = dueMs - Date.now();
+                                  const isDoneOrArchived = isArchived || contract.status === 'Done' || contract.status === 'Completed';
+                                  const isOverdue = !isDoneOrArchived && diffMs <= 0;
+                                  let remainingText = '';
+                                  if (!isDoneOrArchived && !Number.isNaN(diffMs)) {
+                                    if (diffMs <= 0) {
+                                      const absDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+                                      remainingText = absDays > 0 ? `Overdue ${absDays}d` : 'Overdue';
+                                    } else {
+                                      const hrs = Math.floor(diffMs / (1000 * 60 * 60));
+                                      if (hrs < 24) {
+                                        const h = Math.max(1, hrs);
+                                        remainingText = `${h} ${h === 1 ? 'hr' : 'hrs'} from now`;
+                                      } else {
+                                        const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                                        remainingText = `${days} ${days === 1 ? 'day' : 'days'} from now`;
+                                      }
+                                    }
+                                  }
+                                  return (
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={isOverdue ? 'text-rose-700 dark:text-rose-400 font-bold' : 'text-zinc-900 dark:text-zinc-100 font-bold'}>
+                                        Due {new Date(contract.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </span>
+                                      {remainingText && (
+                                        <span
+                                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                                            isOverdue
+                                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                                              : diffMs <= 24 * 60 * 60 * 1000
+                                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                                              : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                                          }`}
+                                        >
+                                          {remainingText}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })() : (
                                   <span className="text-zinc-700 dark:text-zinc-300">Flexible Delivery</span>
                                 )}
                               </div>

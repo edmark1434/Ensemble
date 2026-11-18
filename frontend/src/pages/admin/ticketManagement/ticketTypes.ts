@@ -4,6 +4,8 @@ export type TicketPerson = {
   name: string;
   username?: string;
   email?: string | null;
+  /** Stored profile picture path (dispute parties). */
+  avatar?: string | null;
 };
 
 export type TicketAssignee = {
@@ -102,6 +104,8 @@ export type TicketMessage = {
   authorType: string;
   authorName: string;
   authorRole?: string | null;
+  /** Stored profile picture path of the author (dispute threads). */
+  authorAvatar?: string | null;
   body: string;
   attachments?: TicketAttachment[];
   isInternal: boolean;
@@ -197,6 +201,8 @@ export type Dispute = {
   resolutionOutcome?: string | null;
   resolutionOutcomeLabel?: string | null;
   isClosed?: boolean;
+  /** Filed after the contract ended: staff can record an outcome or sanction, but never move credits. */
+  conductOnly?: boolean;
   financialResolution?: DisputeFinancialResolution | null;
 };
 
