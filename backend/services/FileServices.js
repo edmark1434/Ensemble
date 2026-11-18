@@ -191,7 +191,7 @@ async function generateStandaloneUploadUrl(folder, filename, contentType, cacheC
         });
 
         const uploadUrl = signUrl
-            ? await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY })
+            ? await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY, signingDate: await s3.getSigningDate() })
             : null;
 
         console.log('📝 Generated upload URL:', {
@@ -234,6 +234,7 @@ async function generateUploadUrl(accountId, folder, filename, contentType) {
         CacheControl: 'private, no-store'
     });
     const expiresAt = new Date(Date.now() + URL_EXPIRY * 1000);
+    const signingDate = await s3.getSigningDate();
     const [intent, uploadUrl] = await Promise.all([
         createUploadIntentRepository({
             accountId: safeAccountId,
@@ -244,7 +245,7 @@ async function generateUploadUrl(accountId, folder, filename, contentType) {
             maxSizeBytes: prepared.maxFileSize,
             expiresAt,
         }),
-        getSignedUrl(s3, command, { expiresIn: URL_EXPIRY }),
+        getSignedUrl(s3, command, { expiresIn: URL_EXPIRY, signingDate }),
     ]);
     return {
         uploadUrl,
@@ -271,7 +272,7 @@ async function generateOnboardingAvatarUploadUrl(userId, filename, contentType) 
     return {
         ...result,
         key,
-        uploadUrl: await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY })
+        uploadUrl: await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY, signingDate: await s3.getSigningDate() })
     };
 }
 
@@ -435,7 +436,34 @@ async function generateProtectedAssetUrl(path, filename, contentType, dispositio
         ResponseContentType: contentType || 'application/octet-stream',
         ResponseContentDisposition: `${disposition}; filename="${safeFilename}"`,
     });
-    return getSignedUrl(s3, command, { expiresIn });
+    return getSignedUrl(s3, command, { expiresIn, signingDate: await s3.getSigningDate() });
+}
+
+async function uploadFileToIntentService(accountId, uploadIntentId, bodyBuffer) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(uploadIntentId || ''))) {
+        const error = new Error('Invalid upload intent'); error.statusCode = 400; throw error;
+    }
+    const existing = await getUploadIntentForOwnerRepository(uploadIntentId, accountId);
+    if (!existing) { const error = new Error('Upload intent not found'); error.statusCode = 404; throw error; }
+    if (existing.consumed_at || existing.status === 'consumed') {
+        const error = new Error('Upload intent has already been used'); error.statusCode = 409; throw error;
+    }
+    if (new Date(existing.expires_at).getTime() <= Date.now()) {
+        const error = new Error('Upload intent has expired'); error.statusCode = 410; throw error;
+    }
+    const buffer = Buffer.isBuffer(bodyBuffer) ? bodyBuffer : Buffer.from(bodyBuffer || []);
+    if (buffer.length <= 0 || buffer.length > Number(existing.max_size_bytes)) {
+        const error = new Error('Uploaded file size is invalid'); error.statusCode = 422; throw error;
+    }
+    await s3.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: existing.staging_key,
+        Body: buffer,
+        ContentLength: buffer.length,
+        ContentType: existing.expected_mime_type,
+        CacheControl: 'private, no-store',
+    }));
+    return { uploaded: true, uploadIntentId };
 }
 
 async function generateProtectedAssetDownloadUrl(path, filename, contentType) {
@@ -469,6 +497,7 @@ module.exports = {
     getAllProfileFilesServices,
     generateUploadUrl,
     uploadFileToS3,
+    uploadFileToIntentService,
     getUploadConfig,
     finalizeUploadService,
     generateOnboardingAvatarUploadUrl,

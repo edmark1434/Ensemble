@@ -14,10 +14,12 @@ import {
   ShoppingBag,
   SquareArrowOutUpRight,
   Timer,
+  Upload,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import AssetEditorModal from '@/pages/user/5_assets/AssetEditorModal';
 import ListingThumb from './ListingThumb';
 import RowActionsMenu, { type MenuItem } from '@/pages/admin/userTeam/components/RowActionsMenu';
 import ListingDetailModal, {
@@ -201,9 +203,11 @@ const SELECT_CLASS =
 export default function MarketplaceControl({
   apiBase = DEFAULT_API_BASE,
   embedded = false,
+  allowUpload = false,
 }: {
   apiBase?: string;
   embedded?: boolean;
+  allowUpload?: boolean;
 } = {}) {
   const overviewUrl = `${apiBase}/overview`;
   const listingsUrl = `${apiBase}/listings`;
@@ -212,6 +216,7 @@ export default function MarketplaceControl({
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortId>('newest');
   const [limit, setLimit] = useState<number>(PAGE_STEPS[0]);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const firstParams = listingParams('pending', 'all', '', 'newest', PAGE_STEPS[0]);
   const [listings, setListings] = useState<MarketplaceListing[]>(() => {
     const cached = peekStaffGet(listingsUrl, firstParams);
@@ -389,6 +394,22 @@ export default function MarketplaceControl({
     </button>
   );
 
+  const actionButtons = (
+    <div className="flex flex-wrap items-center gap-2">
+      {allowUpload && (
+        <button
+          type="button"
+          onClick={() => setUploadModalOpen(true)}
+          className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/15 px-3.5 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-500/50 hover:bg-amber-500/25"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Upload asset
+        </button>
+      )}
+      {refreshButton}
+    </div>
+  );
+
   return (
     <Shell className={shellClass} style={embedded ? undefined : { animation: 'fadeIn 420ms ease' }}>
       {!embedded ? (
@@ -403,10 +424,10 @@ export default function MarketplaceControl({
               assets that are already live — a takedown, or a re-approval after a copyright report.
             </p>
           </div>
-          {refreshButton}
+          {actionButtons}
         </div>
       ) : (
-        <div className="flex justify-end">{refreshButton}</div>
+        <div className="flex justify-end">{actionButtons}</div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -741,6 +762,20 @@ export default function MarketplaceControl({
           onOpenListing={(id) => {
             setSellerAccountId(null);
             setSelectedId(id);
+          }}
+        />
+      )}
+
+      {allowUpload && uploadModalOpen && (
+        <AssetEditorModal
+          open={uploadModalOpen}
+          isAdminUpload
+          createEndpoint={`${apiBase}/assets`}
+          onClose={() => setUploadModalOpen(false)}
+          onSaved={() => {
+            setUploadModalOpen(false);
+            changeStatus('approved');
+            void refreshAll();
           }}
         />
       )}
