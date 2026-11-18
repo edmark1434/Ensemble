@@ -165,7 +165,7 @@ export function When({ value, pending = false, className = "" }: { value?: strin
 
 const PANEL_TITLE = "text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 dark:text-zinc-400";
 
-function Panel({
+export function Panel({
   title,
   icon,
   children,
@@ -257,9 +257,9 @@ export function VersusParties({ discussion, className = "" }: { discussion: Disc
   );
 }
 
-type StepState = "done" | "current" | "upcoming";
+export type StepState = "done" | "current" | "upcoming";
 
-function StepDot({ state }: { state: StepState }) {
+export function StepDot({ state }: { state: StepState }) {
   if (state === "done") {
     return (
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white dark:bg-emerald-500/90">
@@ -392,7 +392,7 @@ function viewerPart(discussion: Discussion, signedIn: boolean) {
   };
 }
 
-function ComplaintText({ text, mentions }: { text: string; mentions?: MentionMap }) {
+export function ComplaintText({ text, mentions }: { text: string; mentions?: MentionMap }) {
   const [open, setOpen] = useState(false);
   const long = text.length > 320;
   return (

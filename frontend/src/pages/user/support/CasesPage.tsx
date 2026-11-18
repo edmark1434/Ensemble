@@ -99,7 +99,7 @@ export default function CasesPage() {
   return (
     <div className="min-h-screen bg-gray-50 font-['Plus_Jakarta_Sans'] dark:bg-dark-base">
       <UserHeader pageTitle="Cases" />
-      <main className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6">
+      <main className="mx-auto w-full max-w-[96rem] space-y-5 px-4 py-6 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Cases</h1>

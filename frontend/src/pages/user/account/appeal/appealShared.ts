@@ -61,6 +61,10 @@ export type ThreadMessage = {
   /** Dispute messages: who can read it. */
   audience?: string | null;
   isUnsent?: boolean;
+  /** Dispute messages: the author's stored profile picture path. */
+  authorAvatar?: string | null;
+  /** Dispute messages: a community reply still waiting for staff. */
+  pendingReview?: boolean;
 };
 
 export type AppealDecision = 'accepted' | 'denied' | 'denied_permanent' | null;
