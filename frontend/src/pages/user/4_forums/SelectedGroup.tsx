@@ -868,7 +868,7 @@ const SelectedGroup = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
-  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
   const [memberRoleFilter, setMemberRoleFilter] = useState<"All" | "Admin" | "Member">("All");
@@ -1243,7 +1243,8 @@ const SelectedGroup = () => {
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
-      showErrorToast("Failed to post reply. Please try again.");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
       return;
     }
   };
@@ -1295,7 +1296,8 @@ const SelectedGroup = () => {
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
-      showErrorToast("Failed to post reply. Please try again.");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
       return;
     }
   };
@@ -2282,9 +2284,9 @@ const SelectedGroup = () => {
                               ) : (
                                 <button
                                   onClick={() => setReportingPost(post)}
-                                  disabled={forumTimedOut}
-                                  title={forumTimedOut ? forumTimeoutMessage : undefined}
-                                  className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                                  disabled={reportLocked}
+                                  title={reportLocked ? forumTimeoutMessage : undefined}
+                                  className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
                                 >
                                   <Flag className="h-3.5 w-3.5" />
                                   Report

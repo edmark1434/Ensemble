@@ -1039,7 +1039,9 @@ function rejectForumTimeout(req, res) {
   if (warningBand && !actionAllowed('forum_write', warningBand)) {
     res.status(403).json({
       success: false,
-      code: BLOCKING_CODES.warningFrozen,
+      // Same code as every other merit-band refusal (WarningBandServices); this fires for
+      // Restricted as well as Frozen access, so WARNING_FROZEN was misleading.
+      code: 'WARNING_RESTRICTED',
       message: ACTION_MESSAGES.forum_write,
       restriction: req.accountAccess,
     });

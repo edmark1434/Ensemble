@@ -150,6 +150,25 @@ api.interceptors.response.use(
         }
 
         if (
+            (restrictionCode === "WARNING_RESTRICTED" || restrictionCode === "WARNING_FROZEN") &&
+            String(originalRequest?.url || "").includes("api/forum")
+        ) {
+            // Platform Merit is in a band that pauses forum posting (Restricted or Frozen).
+            // Keep the standing current so the forum switches its write controls off, even
+            // when the band changed after this page loaded, and explain it once.
+            const restriction = err.response?.data?.restriction;
+            const current = useGlobalState.getState().user;
+            if (current && restriction && current.restriction?.warningBand !== restriction.warningBand) {
+                useGlobalState.getState().setUser({ ...current, restriction });
+            }
+            showErrorToast(
+                err.response?.data?.message || "Your Platform Merit is too low to post in the forums. You can still read.",
+                { id: "forum-merit" },
+            );
+            return Promise.reject(err);
+        }
+
+        if (
             restrictionCode === "ACCOUNT_BANNED" ||
             (restrictionCode === "ACCOUNT_LOCKED" && err.response?.data?.restriction?.blocked !== true)
         ) {

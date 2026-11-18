@@ -246,6 +246,8 @@ Legend: **OK** = allowed. **NO** = blocked.
 | Tickets / appeals / disputes on existing work | OK | OK | OK |
 | Discovery ranking | Buried (specified) | Hidden from featured (specified) | Removed (specified) |
 
+Forum writes at Restricted or Frozen are refused by `rejectForumTimeout` with `403 WARNING_RESTRICTED` (reports stay open). The forum pages read `user.restriction.warningBand` through `useForumTimeout` and switch their write controls off up front with a "Low merit" lock, the same way they do for a timeout or suspension.
+
 Existing open jobs, gigs, and listings are **not** auto-deleted.
 
 During **auto-suspend**, treat them as Suspended: reads only. After it ends, fall back to this table.
