@@ -11,6 +11,7 @@ import { useMediaStorage } from "../hooks/use-media-storage";
 import { cn } from "@/lib/utils";
 import { useViewOnly } from "../hooks/use-view-only";
 import { UploadDropOverlay } from "../components/upload-drop-overlay";
+import { PresenceCursors } from "./presence-cursors";
 
 const SceneEmpty = ({ onFileDrag, isFileDragOver, dropError }: {
   onFileDrag: (event: React.DragEvent<HTMLDivElement>) => void;
@@ -70,6 +71,7 @@ const SceneEmpty = ({ onFileDrag, isFileDragOver, dropError }: {
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         >
           {!viewOnly && <UploadDropOverlay isDragOver={isFileDragOver} error={dropError} />}
+          <PresenceCursors containerRef={containerRef} style={{ inset: 0 }} />
           <DroppableArea
             onDragStateChange={setIsDraggingOver}
             disabled={viewOnly}

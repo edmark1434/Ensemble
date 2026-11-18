@@ -1,4 +1,16 @@
 import type * as awarenessProtocol from "y-protocols/awareness";
+import { isEqual } from "lodash";
+
+// All presence fields share one awareness event. A moving cursor shouldn't
+// redraw selections, reapply transforms or rebuild the working-inside list.
+export function whenPresenceChanges<T>(notify: (value: T) => void) {
+  let previous: T | undefined;
+  return (value: T) => {
+    if (isEqual(previous, value)) return;
+    previous = value;
+    notify(value);
+  };
+}
 
 export interface LiveTransformPatch {
   left?: number;
@@ -67,6 +79,7 @@ export function subscribeToRemoteLiveTransforms(
   awareness: awarenessProtocol.Awareness,
   onChange: (statesByClient: Map<number, LiveTransformClientState>) => void,
 ): () => void {
+  const publish = whenPresenceChanges(onChange);
   const handleChange = () => {
     const now = Date.now();
     const result = new Map<number, LiveTransformClientState>();
@@ -81,7 +94,7 @@ export function subscribeToRemoteLiveTransforms(
       if (updatedAt === undefined || now - updatedAt > STALE_MS) return;
       result.set(clientId, { patches, userId: getUserId(state), userName: getUserName(state) });
     });
-    onChange(result);
+    publish(result);
   };
   awareness.on("change", handleChange);
   handleChange();
@@ -171,6 +184,7 @@ export function subscribeToRemoteSelections(
   awareness: awarenessProtocol.Awareness,
   onChange: (statesByClient: Map<number, SelectionClientState>) => void,
 ): () => void {
+  const publish = whenPresenceChanges(onChange);
   const handleChange = () => {
     const result = new Map<number, SelectionClientState>();
     awareness.getStates().forEach((state, clientId) => {
@@ -179,7 +193,7 @@ export function subscribeToRemoteSelections(
       if (!ids || ids.length === 0) return;
       result.set(clientId, { itemIds: ids, userId: getUserId(state), userName: getUserName(state) });
     });
-    onChange(result);
+    publish(result);
   };
   awareness.on("change", handleChange);
   handleChange();
@@ -237,6 +251,7 @@ export function subscribeToRemoteWorkingInside(
   awareness: awarenessProtocol.Awareness,
   onChange: (byItemId: Map<string, RemoteActiveEditor[]>) => void,
 ): () => void {
+  const publish = whenPresenceChanges(onChange);
   const handleChange = () => {
     const result = new Map<string, RemoteActiveEditor[]>();
     awareness.getStates().forEach((state, clientId) => {
@@ -261,7 +276,7 @@ export function subscribeToRemoteWorkingInside(
         result.set(working.sceneItemId, [editor]);
       }
     });
-    onChange(result);
+    publish(result);
   };
   awareness.on("change", handleChange);
   handleChange();

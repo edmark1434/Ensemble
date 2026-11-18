@@ -160,7 +160,9 @@ export function attachWsProvider(
     updated: number[];
     removed: number[]
   }, origin: unknown) => {
-    if (origin === remoteOrigin) return;
+    // Reconnect sends the latest awareness snapshot, including the current
+    // cursor and playhead. Only durable document updates need offline replay.
+    if (origin === remoteOrigin || ws?.readyState !== WebSocket.OPEN) return;
     const changed = [...added, ...updated, ...removed];
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MESSAGE_AWARENESS);

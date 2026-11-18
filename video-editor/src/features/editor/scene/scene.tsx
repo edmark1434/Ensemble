@@ -6,6 +6,7 @@ import SceneEmpty from "./empty";
 import Board from "./board";
 import useZoom from "../hooks/use-zoom";
 import { SceneInteractions } from "./interactions";
+import { PresenceCursors } from "./presence-cursors";
 import { SceneRef } from "./scene.types";
 import { CanvasPreviewZoomContext } from "../components/media-placeholder";
 import { UploadDropOverlay } from "../components/upload-drop-overlay";
@@ -81,6 +82,9 @@ const Scene = forwardRef<
       )}
       {trackItemIds.length === 0 && (
         <SceneEmpty onFileDrag={handleFileDrag} isFileDragOver={fileDrop.isDragOver} dropError={fileDrop.dragError} />
+      )}
+      {trackItemIds.length > 0 && (
+        <PresenceCursors containerRef={containerRef} style={{ width: size.width * zoom, height: size.height * zoom }} />
       )}
       <div
         onDragEnterCapture={handleFileDrag}

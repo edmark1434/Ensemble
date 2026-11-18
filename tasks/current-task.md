@@ -1,6 +1,8 @@
 # Active Task: Platform view audit (Admin and every moderator console)
 
-Editor follow-up: fix the custom server request handler type error and confirm the editor passes `tsc --noEmit`.
+Editor objective: match cursor and playhead name labels to the existing square-cornered presence labels.
+
+Editor acceptance criteria: canvas cursors, timeline cursors and remote playheads all display names with square corners.
 
 ## Implementation Objective
 
