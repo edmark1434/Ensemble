@@ -1,6 +1,5 @@
 import "./src/env-loader"; // must stay the first import — loads env before ./websocket (and transitively @/lib/db) evaluates
 import { createServer } from "http";
-import { parse as parseQuery } from "node:querystring";
 import next from "next";
 import { attachWebSocketServer } from "@/websocket";
 
@@ -20,7 +19,8 @@ app.prepare().then(() => {
       res.writeHead(400).end();
       return;
     }
-    handle(req, res, { pathname: url.pathname, query: parseQuery(url.search.slice(1)) });
+    req.url = url.pathname + url.search;
+    handle(req, res);
   });
 
   attachWebSocketServer(server, app);

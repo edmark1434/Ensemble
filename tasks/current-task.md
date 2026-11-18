@@ -1,5 +1,7 @@
 # Active Task: Platform view audit (Admin and every moderator console)
 
+Editor follow-up: fix the custom server request handler type error and confirm the editor passes `tsc --noEmit`.
+
 ## Implementation Objective
 
 Platform view must show members' pages reliably and stay view-only for staff, in the frame and on the
