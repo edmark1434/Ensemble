@@ -33,6 +33,7 @@ export interface MilestoneItem {
 
 export interface ContractItem {
   contract_id: string;
+  is_team_gig_member?: boolean;
   contract_type: string;
   contract_status: string;
   rate_credits: number;
@@ -123,16 +124,21 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   ).trim();
 
   // If client: sees all contracts for all members in this workspace
-  // If freelancer/contributor: sees only their own contract
+  // If freelancer/contributor: sees their own contract or team gig contracts they belong to
   const visibleContracts = isClient
     ? contracts
     : contracts.filter((c) => {
         if (!resolvedAccountId) return true;
-        return String(c.freelancer_account_id).trim() === resolvedAccountId;
+        return (
+          String(c.freelancer_account_id).trim() === resolvedAccountId ||
+          Boolean(c.is_team_gig_member)
+        );
       });
 
   const myContract = contracts.find(
-    (c) => String(c.freelancer_account_id).trim() === resolvedAccountId
+    (c) =>
+      String(c.freelancer_account_id).trim() === resolvedAccountId ||
+      Boolean(c.is_team_gig_member)
   );
 
   const fetchProposals = useCallback(async () => {

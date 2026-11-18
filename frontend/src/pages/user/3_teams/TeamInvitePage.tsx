@@ -97,7 +97,7 @@ export default function TeamInvitePage() {
       setJoining(true);
       try {
         await api.patch(`/api/teams/${team.team_id}/invitations/accept`);
-        showSuccessToast("Join request submitted. Awaiting team leader approval.");
+        showSuccessToast(`Welcome to ${team.display_name}!`);
         navigate(`/teams/${team.team_id}`);
       } catch (err: unknown) {
         const msg =
@@ -150,7 +150,7 @@ export default function TeamInvitePage() {
           to="/"
           className="inline-flex items-center gap-2 text-xl font-bold tracking-tight hover:opacity-80 transition"
         >
-          <img src="/ensemble_lg.svg" alt="Ensemble" className="h-8 w-8" />
+          <img src="/ensemble_lg.svg" alt="Ensemble" className="h-8 w-8 invert dark:invert-0" />
           <span>Ensemble</span>
         </Link>
       </div>
@@ -265,9 +265,11 @@ export default function TeamInvitePage() {
               <div className="mt-3 pt-2.5 border-t border-gray-200/60 dark:border-white/5 flex items-center justify-center gap-1.5 text-[11px] text-gray-500 dark:text-zinc-400">
                 <CheckCircle2 className="h-3 w-3 text-blue-400" />
                 <span>
-                  {team.join_policy === "Open"
-                    ? "Direct Join — No approval required"
-                    : "Approval Required — Request submitted to team admins"}
+                  {team.current_user_status === "Invited"
+                    ? "Direct Join — You were invited to this team"
+                    : team.join_policy === "Open"
+                      ? "Direct Join — No approval required"
+                      : "Approval Required — Request submitted to team admins"}
                 </span>
               </div>
             </div>
@@ -337,12 +339,12 @@ export default function TeamInvitePage() {
                     {joining ? (
                       <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
-                        Submitting Request...
+                        Accepting Invitation...
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="h-4 w-4" />
-                        <span>Accept Invitation & Request to Join</span>
+                        <span>Accept Invitation</span>
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}

@@ -44,6 +44,7 @@ import UserHeader from "@/components/nav/user_header";
 import SmartTabBar, { type SmartTabItem } from "@/components/ui/SmartTabBar";
 import { motion } from "framer-motion";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
@@ -52,6 +53,7 @@ import EditTeamModal, {
   type TeamFormValues,
 } from "./team_modals/EditTeamModal";
 import LeaveTeamModal from "./team_modals/LeaveTeamModal";
+import DeleteTeamModal from "./team_modals/DeleteTeamModal";
 import RemoveMemberModal from "./team_modals/RemoveMemberModal";
 import ReportTeamModal from "./team_modals/ReportTeamModal";
 import AddTeamReviewModal from "./team_modals/AddTeamReviewModal";
@@ -225,6 +227,7 @@ export default function SelectedTeam() {
   const [showMenu, setShowMenu] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -375,14 +378,17 @@ export default function SelectedTeam() {
   };
 
   const deleteTeam = async () => {
-    if (
-      !window.confirm(
-        `Delete ${team?.display_name || "this Team"}? This cannot be undone.`,
-      )
-    )
-      return;
-    await mutate("", "delete");
-    navigate("/teams");
+    if (saving) return;
+    setSaving(true);
+    try {
+      await api.delete(`/api/teams/${id}`);
+      showSuccessToast("Team deleted");
+      navigate("/teams");
+    } catch (error: unknown) {
+      showErrorToast(axiosMessage(error, "Unable to delete team"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openInviteModal = () => {
@@ -693,8 +699,8 @@ export default function SelectedTeam() {
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
 
-            {/* Public or Private Indicator on banner top-left */}
-            <div className="absolute top-3.5 left-3.5 z-10">
+            {/* Public/Private & Team Credits on banner top-left */}
+            <div className="absolute top-3.5 left-3.5 z-10 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md bg-black/60 text-white border border-white/15 shadow-sm">
                 {team.visibility === "Private" ? (
                   <Lock className="w-3.5 h-3.5 text-zinc-300" />
@@ -703,6 +709,23 @@ export default function SelectedTeam() {
                 )}
                 <span>{team.visibility === "Private" ? "Private" : "Public"}</span>
               </span>
+
+              {wallet && (permissions.can_view_wallet || isOwnerOrAdminOrLeader) && (
+                <button
+                  type="button"
+                  onClick={() => selectTab("wallet")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md bg-black/60 hover:bg-black/75 text-amber-300 font-['Plus_Jakarta_Sans',sans-serif] font-semibold text-xs border border-amber-400/30 shadow-sm cursor-pointer transition"
+                  title="View Team Wallet & Escrow"
+                >
+                  <CreditIcon className="w-4 h-4" />
+                  <span>Team Credits: {Number(wallet.available_balance || 0).toLocaleString()}</span>
+                  {Number(wallet.escrow_balance || 0) > 0 && (
+                    <span className="text-zinc-300 font-normal">
+                      ({Number(wallet.escrow_balance).toLocaleString()} in escrow)
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Verify as Business and Message on banner bottom-right */}
@@ -920,7 +943,7 @@ export default function SelectedTeam() {
                         )}
                         {permissions.can_delete_team && (
                           <button
-                            onClick={() => { setShowMenu(false); void deleteTeam(); }}
+                            onClick={() => { setShowMenu(false); setShowDelete(true); }}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer text-left"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1005,24 +1028,6 @@ export default function SelectedTeam() {
                   <span>{codeCopied ? "Copied!" : team.join_code}</span>
                 </button>
               )}
-
-              {/* Wallet */}
-              {wallet && (permissions.can_view_wallet || isOwnerOrAdminOrLeader) && (
-                <button
-                  type="button"
-                  onClick={() => selectTab("wallet")}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold text-[11px] border border-amber-500/20 cursor-pointer transition"
-                  title="View Team Wallet & Escrow"
-                >
-                  <Coins className="w-3 h-3 text-amber-500 shrink-0" />
-                  <span>{Number(wallet.available_balance || 0).toLocaleString()} cr</span>
-                  {Number(wallet.escrow_balance || 0) > 0 && (
-                    <span className="text-zinc-500 dark:text-zinc-400 font-normal">
-                      ({Number(wallet.escrow_balance).toLocaleString()} in escrow)
-                    </span>
-                  )}
-                </button>
-              )}
             </div>
           </div>
 
@@ -1047,7 +1052,7 @@ export default function SelectedTeam() {
 
         {membership?.status === "Invited" && (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
-            <span className="text-emerald-200">You have been invited to join this Team! Accept to submit your request to join for team approval.</span>
+            <span className="text-emerald-200">You have been invited to join this Team!</span>
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() =>
@@ -1059,7 +1064,7 @@ export default function SelectedTeam() {
                 }
                 className="cursor-pointer rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-4 py-1.5 text-xs font-bold text-white transition shadow-sm"
               >
-                Accept & Request to Join
+                Accept Invitation
               </button>
               <button
                 onClick={() => void mutate("/invitations/decline", "patch")}
@@ -1153,6 +1158,12 @@ export default function SelectedTeam() {
         onClose={() => setShowLeave(false)}
         teamName={team.display_name}
         onConfirm={() => void mutate("/leave")}
+      />
+      <DeleteTeamModal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        teamName={team.display_name}
+        onConfirm={deleteTeam}
       />
       <RemoveMemberModal
         isOpen={Boolean(memberToRemove)}
@@ -1844,7 +1855,7 @@ function TeamTabContent({
           <div className="divide-y divide-gray-100 dark:divide-white/5">
             {requests.map((member) => (
               <div
-                key={member.team_member_id}
+                key={member.team_member_id || member.account_id}
                 className="flex items-center justify-between py-3"
               >
                 <div>
@@ -2036,7 +2047,7 @@ function TeamTabContent({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {activeMembers.map((member) => (
           <div
-            key={member.team_member_id}
+            key={member.team_member_id || member.account_id}
             className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 shadow-xs flex items-center justify-between"
           >
             <div className="flex items-center gap-3 min-w-0">

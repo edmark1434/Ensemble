@@ -145,7 +145,17 @@ const NotificationsPage: React.FC = () => {
         if (socket.connected) socket.emit("markMessageAsRead", n.notification_id);
       } catch { /* ignore read error and still navigate */ }
     }
-    const path = n.reference_path || (n.reference_prefix === "follow" && n.reference_id ? `/profile/${n.reference_id}` : "");
+    let path = n.reference_path || (n.reference_prefix === "follow" && n.reference_id ? `/profile/${n.reference_id}` : "");
+    if (
+      (n.reference_prefix === "MILESTONE_REVISION_REQUESTED" ||
+        n.reference_prefix === "MILESTONE_REVISION_PURCHASED" ||
+        n.reference_prefix === "MILESTONE_REVISION") &&
+      path.startsWith("/dashboard/tasks/") &&
+      !path.includes("tab=")
+    ) {
+      const sep = path.includes("?") ? "&" : "?";
+      path = `${path}${sep}tab=submissions`;
+    }
     const convMatch = path.match(/^\/inbox\/(?!direct(?:\/|$)|marketplace(?:\/|$))([^/?#]+)/);
     const qi = path.indexOf("?");
     const convId = new URLSearchParams(qi >= 0 ? path.slice(qi + 1) : "").get("conversation") || convMatch?.[1];

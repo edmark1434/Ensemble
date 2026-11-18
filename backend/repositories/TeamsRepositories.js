@@ -199,6 +199,66 @@ async function upsertMembership(teamId,userId,role,status,invitedBy=null) { retu
 async function updateMembership(teamId,userId,fields) { const allowed=['role','status']; const entries=Object.entries(fields).filter(([k])=>allowed.includes(k)); const vals=entries.map(([,v])=>v); vals.push(teamId,userId); return (await pool.query(`UPDATE team_members SET ${entries.map(([k],i)=>`${k}=$${i+1}`).join(',')},updated_at=NOW() WHERE team_id=$${vals.length-1} AND user_id=$${vals.length} RETURNING *`,vals)).rows[0]||null; }
 async function updateTeam(teamId, accountId, data) { const client=await pool.connect(); try { await client.query('BEGIN'); const a=(await client.query(`UPDATE accounts SET display_name=COALESCE($3,display_name),handle=COALESCE($4,handle),description=COALESCE($5,description),tagline=COALESCE($6,tagline),avatar_file_id=COALESCE($7,avatar_file_id) WHERE account_id=$1 AND EXISTS(SELECT 1 FROM teams WHERE team_id=$2 AND account_id=$1) RETURNING *`,[accountId,teamId,data.name,data.handle,data.description,data.tagline,data.avatarFileId])).rows[0]; const t=(await client.query(`UPDATE teams SET visibility=COALESCE($2,visibility),join_policy=COALESCE($3,join_policy),category=COALESCE($4,category),website=COALESCE($5,website),location=COALESCE($6,location),updated_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId,data.visibility,data.joinPolicy,data.category,data.website,data.location])).rows[0]; await client.query('COMMIT'); return {...t,...a}; } catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();} }
 async function softDeleteTeam(teamId){return (await pool.query(`UPDATE teams SET deleted_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId])).rows[0];}
+async function hasActiveAssignedContract(teamId, accountId) {
+  const res = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM team_contract_workspaces tcw
+         JOIN contracts c ON c.contract_id = tcw.contract_id
+        WHERE tcw.team_id = $1
+          AND LOWER(c.status) IN ('active', 'waiting')
+          AND (
+            tcw.project_lead_account_id = $2
+            OR EXISTS (
+              SELECT 1
+                FROM team_workspace_members twm
+               WHERE twm.workspace_id = tcw.workspace_id
+                 AND twm.account_id = $2
+            )
+          )
+     ) AS has_active`,
+    [teamId, accountId]
+  );
+  return Boolean(res.rows[0]?.has_active);
+}
+async function hasActiveTeamContract(teamId) {
+  const res = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM teams t
+         JOIN jobs j ON j.client_account_id = t.account_id
+         JOIN proposals p ON p.job_id = j.job_id
+         JOIN job_contracts jc ON jc.proposal_id = p.proposal_id
+         JOIN contracts c ON c.contract_id = jc.contract_id
+        WHERE t.team_id = $1 AND t.deleted_at IS NULL AND LOWER(c.status) IN ('active', 'waiting')
+       UNION ALL
+       SELECT 1
+         FROM teams t
+         JOIN proposals p ON p.freelancer_account_id = t.account_id
+         JOIN job_contracts jc ON jc.proposal_id = p.proposal_id
+         JOIN contracts c ON c.contract_id = jc.contract_id
+        WHERE t.team_id = $1 AND t.deleted_at IS NULL AND LOWER(c.status) IN ('active', 'waiting')
+       UNION ALL
+       SELECT 1
+         FROM teams t
+         JOIN gig_requests gr ON gr.client_account_id = t.account_id
+         JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+         JOIN contracts c ON c.contract_id = gc.contract_id
+        WHERE t.team_id = $1 AND t.deleted_at IS NULL AND LOWER(c.status) IN ('active', 'waiting')
+       UNION ALL
+       SELECT 1
+         FROM teams t
+         JOIN gigs g ON g.freelancer_account_id = t.account_id
+         JOIN gig_tiers gt ON gt.gig_id = g.gig_id
+         JOIN gig_requests gr ON gr.gig_tier_id = gt.gig_tier_id
+         JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+         JOIN contracts c ON c.contract_id = gc.contract_id
+        WHERE t.team_id = $1 AND t.deleted_at IS NULL AND LOWER(c.status) IN ('active', 'waiting')
+     ) AS has_active`,
+    [teamId]
+  );
+  return Boolean(res.rows[0]?.has_active);
+}
 async function findByCode(code){return (await pool.query(`SELECT * FROM teams WHERE upper(join_code)=upper($1) AND deleted_at IS NULL`,[code])).rows[0]||null;}
 async function getTeamInvitePreview(code, accountId = null) {
   return (await pool.query(`
@@ -970,5 +1030,5 @@ async function deleteTeamVideoProject(teamId, projectId) {
   return { success: true };
 }
 
-module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
 

@@ -1553,6 +1553,14 @@ async function getProjectContracts(teamId, viewerAccountId) {
            COALESCE(job_freelancer_acc.display_name, gig_freelancer_acc.display_name) as freelancer_name,
            COALESCE(job_freelancer_acc.handle, gig_freelancer_acc.handle) as freelancer_handle,
            COALESCE(job_freelancer_f.path, gig_freelancer_f.path) as freelancer_avatar_path,
+           EXISTS (
+             SELECT 1 FROM teams tm
+             JOIN team_members tmm ON tmm.team_id = tm.team_id
+             JOIN users u ON u.user_id = tmm.user_id
+             WHERE tm.account_id = g.freelancer_account_id
+               AND u.account_id = $3
+               AND tmm.status = 'Active'
+           ) as is_team_gig_member,
            EXISTS(
              SELECT 1 FROM ratings r
               WHERE r.contract_id = c.contract_id
@@ -1608,7 +1616,18 @@ async function getProjectContracts(teamId, viewerAccountId) {
       LEFT JOIN accounts gig_freelancer_acc ON gig_freelancer_acc.account_id = g.freelancer_account_id
       LEFT JOIN files gig_freelancer_f ON gig_freelancer_f.file_id = gig_freelancer_acc.avatar_file_id
      WHERE tcw.team_id = $1
-       AND ($2 = TRUE OR COALESCE(p.freelancer_account_id, g.freelancer_account_id) = $3)
+       AND (
+         $2 = TRUE
+         OR COALESCE(p.freelancer_account_id, g.freelancer_account_id) = $3
+         OR EXISTS (
+           SELECT 1 FROM teams tm
+           JOIN team_members tmm ON tmm.team_id = tm.team_id
+           JOIN users u ON u.user_id = tmm.user_id
+           WHERE tm.account_id = g.freelancer_account_id
+             AND u.account_id = $3
+             AND tmm.status = 'Active'
+         )
+       )
      ORDER BY COALESCE(jm.order_index, 0) ASC, c.created_at ASC
   `;
 
