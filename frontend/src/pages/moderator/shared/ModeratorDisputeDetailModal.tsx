@@ -682,11 +682,16 @@ export default function ModeratorDisputeDetailModal({
     Boolean(assigneeStaffId) && !(canAssignOthers || Boolean(perms?.isAdmin));
   const canPickHandler =
     adminMode && !assigneeLocked && (canAssignOthers || canAssignMyself || canSelfAssign);
-  const replyAudienceOptions = REPLY_AUDIENCE_OPTIONS.filter((option) => {
-    if (option.value !== "public") return true;
-    // Public-page replies only make sense after the dispute itself is visible.
-    return Boolean(detail?.dispute?.visibility);
-  });
+  const disputeIsPublic = Boolean(detail?.dispute?.visibility);
+  // A private case belongs to the filer and staff only: the disputee cannot open it yet and
+  // there is no public page, so only "Staff" and "Disputer" are offered until it is made public.
+  const replyAudienceOptions = REPLY_AUDIENCE_OPTIONS.filter(
+    (option) => disputeIsPublic || option.value === "staff" || option.value === "disputer"
+  );
+  useEffect(() => {
+    if (!replyAudienceOptions.some((option) => option.value === replyAudience)) setReplyAudience("staff");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disputeIsPublic, replyAudience]);
 
   /**
    * PATCH the case. The response carries the refreshed case, so the form (resolution notes

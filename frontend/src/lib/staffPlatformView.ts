@@ -20,7 +20,7 @@ const ACTION_PATHS: RegExp[] = [
   /^\/(?:workspaces|team-project|team-projects)(?:\/|$)/i,
   /^\/(?:credits|credits-subscriptions|settings|notifications|account-verification-status|transactions|terms-of-services|contracts|contract|dashboard|inbox|review|update|orders|my-orders)(?:\/|$)/i,
   /^\/profile$/i,
-  /^\/support\/ticket$/i,
+  /^\/support\/(?:ticket|cases)$/i,
 ];
 
 /** Not member pages at all: sign-in, setup, the appeal page. Platform view never shows them. */
@@ -31,6 +31,19 @@ const VIEW_PATH = /^\/(?:home|forums|jobs|gigs|assets|discovery|teams|search|dis
 
 const PASSIVE_CONTROL_LABEL =
   /\b(back|previous|next|close|menu|expand|collapse|theme|grid|list|filter|sort|search)\b/i;
+
+/**
+ * First path segment of a member-site route. A single word typed into the platform-view address
+ * bar that is not one of these is a people search ("jane" → /search/user/jane), not a page.
+ */
+const MEMBER_ROUTE_SEGMENT =
+  /^(?:home|forums|jobs|gigs|assets|discovery|teams|search|disputes|profile|projects|inbox|workspaces|team-project|team-projects|credits|credits-subscriptions|settings|notifications|account-verification-status|transactions|terms-of-services|contracts|contract|dashboard|review|update|orders|my-orders|support|landing|login|signup|verify-email|forgot-password|reset-password|setup|account|admin|staff|moderator|platform-view)$/i;
+
+const PEOPLE_SEARCH_MAX_LENGTH = 100;
+
+const SEARCH_FIELD_HINT = /\b(?:search|find|look ?up)\b/i;
+const TEXT_INPUT_TYPES = new Set(["text", "search"]);
+const NON_FIELD_INPUT_TYPES = new Set(["hidden", "button", "submit", "reset", "image"]);
 
 export const STAFF_PREVIEW_NAV_MESSAGE = "ensemble-staff-preview-nav";
 /** Frame → console: the page the frame shows now. */
@@ -69,9 +82,17 @@ function isEnsembleHost(hostname: string): boolean {
   }
 }
 
+/** Member people-search page for a name, @handle or skill. */
+export function peopleSearchPath(query: string): string | null {
+  const text = query.replace(/\s+/g, " ").trim().slice(0, PEOPLE_SEARCH_MAX_LENGTH);
+  if (!text || text === "@") return null;
+  return `/search/user/${encodeURIComponent(text)}`;
+}
+
 /**
- * A member page typed or pasted into platform view: a path ("/forums", "forums/group/1")
- * or a link to the member site or a console host. Other sites return null.
+ * A member page typed or pasted into platform view: a path ("/forums", "forums/group/1"),
+ * a link to the member site or a console host, or a people search ("@jane", "jane doe",
+ * "motion designer"). Other sites return null.
  */
 export function memberPathFromInput(value: string): string | null {
   const raw = value.trim();
@@ -83,9 +104,14 @@ export function memberPathFromInput(value: string): string | null {
     }
     return memberPreviewPath(raw);
   }
+  if (raw.startsWith("@")) return peopleSearchPath(raw);
   const looksLikeUrl = /^[a-z][a-z\d+.-]*:\/\//i.test(raw)
     || /^(?:localhost|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:[/?#]|$)/i.test(raw);
-  if (!looksLikeUrl) return memberPreviewPath(`/${raw}`);
+  if (!looksLikeUrl) {
+    const firstSegment = raw.split(/[/?#]/)[0];
+    const isRoute = !/\s/.test(raw) && MEMBER_ROUTE_SEGMENT.test(firstSegment);
+    return isRoute ? memberPreviewPath(`/${raw}`) : peopleSearchPath(raw);
+  }
   try {
     const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
@@ -187,6 +213,24 @@ function pathFromHref(href: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A search box: one or two plain text fields that only read (GET), with nothing to write or
+ * upload. Search works in platform view; every other form is a member action and is blocked.
+ */
+export function isStaffPreviewSearchForm(form: HTMLFormElement): boolean {
+  if (String(form.method || "get").toLowerCase() !== "get") return false;
+  if (form.querySelector("textarea, select[multiple], [contenteditable='true']")) return false;
+  const fields = Array.from(form.querySelectorAll("input")).filter(
+    (input) => !NON_FIELD_INPUT_TYPES.has(input.type),
+  );
+  if (!fields.length || fields.length > 2) return false;
+  if (fields.some((input) => !TEXT_INPUT_TYPES.has(input.type))) return false;
+  if (form.getAttribute("role") === "search") return true;
+  return fields.some((input) => input.type === "search" || SEARCH_FIELD_HINT.test(
+    [input.placeholder, input.getAttribute("aria-label"), input.name, input.id].filter(Boolean).join(" "),
+  ));
 }
 
 /** Action control to hide in the staff preview. Links that open people, forums, jobs, and listings stay. */

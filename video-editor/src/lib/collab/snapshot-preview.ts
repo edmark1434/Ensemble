@@ -21,8 +21,15 @@ function decode(document: Uint8Array): DocSnapshot {
   } finally { schema.awareness.destroy(); doc.destroy(); }
 }
 
-async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date }) {
+type SceneDocumentReader = (blockId: string) => Promise<Uint8Array | null>;
+
+// Scenes resolve against the capture time by default; a save passes the exact
+// scene documents it was taken with.
+async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date }, readScene?: SceneDocumentReader) {
   const { project_id: sourceProjectId, created_at: capturedAt } = saved;
+  const readSceneDocument: SceneDocumentReader = readScene ?? (blockId => sourceProjectId
+    ? readSceneAtSnapshot(blockId, sourceProjectId, capturedAt).then(row => row?.document ?? null)
+    : Promise.resolve(null));
   const snapshot = decode(saved.document);
   const scenes: Record<string, DocSnapshot> = {};
   const media: ITrackItem[] = [];
@@ -35,9 +42,7 @@ async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string
       const details = item.details as unknown as ISceneDetails;
       const blockId = details.blockId;
       if (!/^[0-9a-f-]{36}$/i.test(blockId || "") || seen.has(blockId) || seen.size > 10) continue;
-      if (!sceneCache.has(blockId)) sceneCache.set(blockId, sourceProjectId
-        ? readSceneAtSnapshot(blockId, sourceProjectId, capturedAt).then(row => row ? decode(row.document) : null)
-        : Promise.resolve(null));
+      if (!sceneCache.has(blockId)) sceneCache.set(blockId, readSceneDocument(blockId).then(document => document ? decode(document) : null));
       const scene = await sceneCache.get(blockId);
       if (scene) {
         // Resolve against the capture time, never the scene's live/latest document.
@@ -56,11 +61,25 @@ export async function loadSnapshotPreview(snapshotId: number, userId: string) {
   const saved = await readPreviewSnapshot(snapshotId, userId);
   if (!saved) return null;
   const { snapshot, scenes, media } = await hydrateSnapshot(saved);
+  const missingSources = await resolveProjectPlayback(snapshot, media, saved.project_id, userId);
+  return { snapshot, scenes, missingSources, name: snapshot.projectName || saved.name };
+}
+
+// Read-only playback of a save. Access is checked by the caller.
+export async function loadProjectSavePreview(save: { document: Uint8Array; project_id: string; created_at: Date; name: string },
+  sceneDocuments: Map<string, Uint8Array>, userId: string) {
+  const { snapshot, scenes, media } = await hydrateSnapshot(save, async blockId => sceneDocuments.get(blockId)
+    ?? (await readSceneAtSnapshot(blockId, save.project_id, save.created_at))?.document ?? null);
+  const missingSources = await resolveProjectPlayback(snapshot, media, save.project_id, userId);
+  return { snapshot, scenes, missingSources, name: snapshot.projectName || save.name };
+}
+
+async function resolveProjectPlayback(snapshot: DocSnapshot, media: ITrackItem[], projectId: string, userId: string) {
   const assetIds = [...new Set(media.flatMap(item => {
     const metadata = item.metadata as { market?: boolean; market_asset_id?: string } | undefined;
     return metadata?.market && metadata.market_asset_id ? [metadata.market_asset_id] : [];
   }))];
-  const licenses = assetIds.length ? await getProjectMarketLicenses(saved.project_id, userId, assetIds) : null;
+  const licenses = assetIds.length ? await getProjectMarketLicenses(projectId, userId, assetIds) : null;
   const missing = new Set(await missingUploadSources(mediaSources(snapshot)));
   for (const item of media) {
     const metadata = item.metadata as { market?: boolean; market_asset_id?: string; media_asset_id?: string } | undefined;
@@ -76,7 +95,7 @@ export async function loadSnapshotPreview(snapshotId: number, userId: string) {
     // store/license subscription or URL is written back to the saved snapshot.
     item.metadata = { ...item.metadata, market: false };
   }
-  return { snapshot, scenes, missingSources: [...missing], name: snapshot.projectName || saved.name };
+  return [...missing];
 }
 
 export async function loadMarketTemplatePreview(assetId: string, snapshotId?: number) {

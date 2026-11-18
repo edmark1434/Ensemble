@@ -1,6 +1,7 @@
 const redisClient = require('../lib/Redis');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { rejectRestrictedAccount, rejectSuspendedWrite, rejectForumTimeout } = require('../lib/AccountRestriction');
+const { trackActiveDay } = require('../services/ActiveDayServices');
 
 async function checkSession(req,res,next){
     const sessionId = req.cookies?.sessionId;
@@ -36,6 +37,8 @@ async function checkSession(req,res,next){
             message: 'Invalid session payload',
         });
     }
+    // Member activity for Admin → Analytics (one write per account per day, never awaited).
+    trackActiveDay(req.session);
     next();
 }
 

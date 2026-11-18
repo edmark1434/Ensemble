@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { ArrowLeft, ChevronDown, ClipboardList, Clock, Gavel, LogOut, ShieldCheck } from 'lucide-react';
 import api from '@/lib/axios';
@@ -12,10 +12,9 @@ import { formatStandingWhen, nextStandingChange, standingConditions } from '@/li
 import { isAppealLimitedMember } from '@/lib/appealAccess';
 import AppealForm from './appeal/AppealForm';
 import CaseInbox from './appeal/CaseInbox';
+import { useCaseLists } from './appeal/useCaseLists';
 import {
   type CaseSelection,
-  type DisputeRow,
-  type TicketRow,
   DEFAULT_PENALTY_COPY,
   PENALTY_COPY,
   isAppealTicket,
@@ -63,15 +62,18 @@ export default function AccountAccessPage() {
   const accountId = String(user?.account_id || '');
 
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const [tickets, setTickets] = useState<TicketRow[]>([]);
-  const [disputes, setDisputes] = useState<DisputeRow[]>([]);
-  const [listsLoading, setListsLoading] = useState(true);
-  const [listsError, setListsError] = useState(false);
-  const [selection, setSelection] = useState<CaseSelection | null>(null);
+  const [searchParams] = useSearchParams();
+  // Notifications and the case bar link straight to a case: `?ticket=` / `?dispute=`.
+  const [selection, setSelection] = useState<CaseSelection | null>(() => {
+    const ticket = searchParams.get('ticket');
+    const dispute = searchParams.get('dispute');
+    if (ticket) return { kind: 'ticket', id: ticket };
+    if (dispute) return { kind: 'dispute', id: dispute };
+    return null;
+  });
   const [showRecord, setShowRecord] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
   const decidedRef = useRef(new Set<string>());
-  const listsLoadedRef = useRef(false);
 
   const conditions = useMemo(() => standingConditions(restriction), [restriction]);
   const primary = conditions[0] || null;
@@ -81,29 +83,29 @@ export default function AccountAccessPage() {
   const appealOnly =
     isAppealLimitedMember(user) || conditions.some((c) => c.id === 'banned' || c.id === 'locked');
   const canLeave = !appealOnly;
-  // Matches `appealTicketsOnly` on the backend: these members reply only on the appeal ticket.
-  const replyLimited = appealOnly || conditions.some((c) => c.id === 'suspended');
   const hasPenalty = conditions.length > 0 || appealOnly;
   const copy = primary ? PENALTY_COPY[primary.id] : DEFAULT_PENALTY_COPY;
 
-  const loadLists = useCallback(async () => {
-    const [ticketResult, disputeResult] = await Promise.allSettled([
-      api.get('/api/users/tickets'),
-      api.get('/api/users/disputes'),
-    ]);
-    if (ticketResult.status === 'fulfilled') setTickets(ticketResult.value.data?.data || []);
-    if (disputeResult.status === 'fulfilled') setDisputes(disputeResult.value.data?.data || []);
-    const failed = ticketResult.status === 'rejected' && disputeResult.status === 'rejected';
-    // A failed background refresh keeps what is already shown.
-    if (!failed) listsLoadedRef.current = true;
-    setListsError(failed && !listsLoadedRef.current);
-    setListsLoading(false);
-    if (failed) throw ticketResult.reason;
+  // What each case allows (appeal-only replies, read-only disputes) comes from the server and
+  // is re-read whenever the standing changes, so this page can never drift from the rules.
+  const standingKey = `${user?.status || ''}|${restriction?.code || ''}|${conditions.map((c) => c.id).join(',')}`;
+  const { tickets, disputes, listsLoading, listsError, loadLists } = useCaseLists(standingKey);
+
+  // A link straight to a case (notification, case bar) lands on the conversation, not the hero.
+  const linkedOnArrival = useRef(Boolean(selection));
+  useEffect(() => {
+    if (!linkedOnArrival.current) return;
+    linkedOnArrival.current = false;
+    window.requestAnimationFrame(() => inboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }, []);
 
+  // Old links name the ticket's chat (`?conversation=`); open that ticket once the list is in.
+  const conversationParam = searchParams.get('conversation');
   useEffect(() => {
-    void loadLists().catch(() => undefined);
-  }, [loadLists]);
+    if (!conversationParam || listsLoading) return;
+    const ticket = tickets.find((row) => row.chatId && String(row.chatId) === conversationParam);
+    if (ticket) setSelection({ kind: 'ticket', id: ticket.id });
+  }, [conversationParam, listsLoading, tickets]);
 
   // When a penalty's clock runs out, re-read the standing so the page reflects it.
   const nextChange = nextStandingChange(conditions);
@@ -121,7 +123,10 @@ export default function AccountAccessPage() {
     void refreshCurrentUser();
   }, []);
 
-  const openAppeal = tickets.find((ticket) => isAppealTicket(ticket) && !isClosedStatus(ticket.status)) || null;
+  const openAppeal =
+    tickets.find(
+      (ticket) => isAppealTicket(ticket) && !(ticket.access ? ticket.access.closed : isClosedStatus(ticket.status))
+    ) || null;
 
   function openCase(next: CaseSelection) {
     setSelection(next);
@@ -359,7 +364,6 @@ export default function AccountAccessPage() {
             onSelect={setSelection}
             onRefreshLists={loadLists}
             accountId={accountId}
-            replyLimited={replyLimited}
             onAppealDecision={handleAppealDecision}
           />
         </div>

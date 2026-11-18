@@ -3,6 +3,7 @@ import { Bell, CheckCheck, InboxIcon, Users, Activity, CreditCard, Shield } from
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import TicketInviteActions from "@/components/nav/TicketInviteActions";
+import { casePath } from "@/lib/cases";
 import { getFollower, getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import { useAccountAvatars } from "@/lib/accountAvatars";
 import AccountAvatar from "@/components/ui/AccountAvatar";
@@ -38,7 +39,7 @@ const TRANSACTION_PREFIXES = new Set([
 ]);
 const SYSTEM_PREFIXES = new Set([
   "VERIFICATION", "BUSINESS_VERIFICATION", "IDENTITY_REVERIFICATION", "SUSPEND", "MARKETPLACE",
-  "TICKET_ASSIGNED", "TICKET_RESOLVED", "TICKET_REPLY", "TICKET_INTERNAL_REPLY",
+  "TICKET_ASSIGNED", "TICKET_RESOLVED", "TICKET_REPLY", "TICKET_INTERNAL_REPLY", "TICKET_RECEIVED",
   "BADGE_GRANTED", "WARNING", "ACCOUNT_WARNING", "ACCOUNT_BANNED", "ACCOUNT_LOCKED", "RESTORE",
 ]);
 
@@ -312,7 +313,7 @@ const NotificationsPage: React.FC = () => {
                               onDone={(result, chatId) => {
                                 setNotifications((prev) => prev.map((item) => item.notification_id === n.notification_id ? { ...item, is_read: true } : item));
                                 void api.patch(`/api/notifications/${n.notification_id}/read`).catch(() => undefined);
-                                if (result === "accepted" && chatId) navigate("/inbox/direct", { state: { conversationId: chatId } });
+                                if (result === "accepted" && chatId) navigate(casePath("ticket", String(n.reference_id)));
                               }}
                             />
                           </div>

@@ -2,11 +2,15 @@ import { useEffect } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { showCustomToast } from "@/components/utility/toast";
 import {
+  isStaffPreviewSearchForm,
   markStaffPreviewInteraction,
   sameOriginPath,
   staffPreviewHideTarget,
   staffPreviewViewFallback,
 } from "@/lib/staffPlatformView";
+
+/** Hides what `useStaffPlatformGuard` marks. Rendered by the frame bridge while the guard runs. */
+export const STAFF_PREVIEW_HIDE_CSS = "[data-staff-preview-hide]{display:none !important;}";
 
 const ACTION_QUERY = "button, a, [role='button'], textarea, input, [contenteditable='true']";
 const VIEW_ONLY_TOAST_ID = "staff-platform-view-only";
@@ -57,6 +61,8 @@ export function useStaffPlatformGuard(active: boolean, navigate: NavigateFunctio
       // auxclick also fires for the right button; only a middle click opens links.
       if (event.type === "auxclick" && (event as MouseEvent).button !== 1) return;
       if (event.type === "submit") {
+        // Search boxes (header creator search, people search, discovery) only read; the page handles them.
+        if (event.target instanceof HTMLFormElement && isStaffPreviewSearchForm(event.target)) return;
         stop(event);
         showStaffViewOnlyNotice();
         return;

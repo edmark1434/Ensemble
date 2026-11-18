@@ -250,7 +250,7 @@ function KpiGrid({ data }: { data: AdminDashboardData }) {
         sub="Accounts awaiting identity review"
         icon={BadgeCheck}
         accent="text-amber-400"
-        to="/admin/moderation?tab=cases"
+        to="/admin/moderation?tab=cases&queue=identity"
       />
       <KpiCard
         label="Open disputes"
@@ -258,7 +258,7 @@ function KpiGrid({ data }: { data: AdminDashboardData }) {
         sub="Cases not closed yet"
         icon={Shield}
         accent="text-orange-400"
-        to="/admin/ticket-management"
+        to="/admin/moderation?tab=cases&queue=disputes"
       />
       <KpiCard
         label="Credits held by members"
@@ -296,7 +296,7 @@ function KpiGrid({ data }: { data: AdminDashboardData }) {
         sub={`${breakdowns.staffByRole.length} role type${breakdowns.staffByRole.length === 1 ? '' : 's'} assigned`}
         icon={UserCog}
         accent="text-rose-400"
-        to="/admin/moderation?tab=management"
+        to="/admin/moderation?tab=management&section=moderators"
       />
     </div>
   );
@@ -362,7 +362,7 @@ function MainGrid({ data }: { data: AdminDashboardData }) {
         icon={BadgeCheck}
         iconTone="text-amber-400"
         subtitle="Members who are not fully active yet — review identity and status before granting access."
-        action={<PanelLink to="/admin/moderation?tab=cases">Review all ({data.verificationQueue.length})</PanelLink>}
+        action={<PanelLink to="/admin/moderation?tab=cases&queue=identity">Review all ({data.verificationQueue.length})</PanelLink>}
       >
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[600px] text-left text-sm">
@@ -410,7 +410,7 @@ function MainGrid({ data }: { data: AdminDashboardData }) {
         icon={UserCog}
         iconTone="text-rose-400"
         subtitle="Staff and moderators with console access."
-        action={<PanelLink to="/admin/moderation?tab=management">Manage</PanelLink>}
+        action={<PanelLink to="/admin/moderation?tab=management&section=moderators">Manage</PanelLink>}
       >
         <ul className="scroll-thin mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
           {data.staffRoster.map((s) => (

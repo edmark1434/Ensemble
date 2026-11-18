@@ -115,6 +115,17 @@ export function usePendingFiles() {
     setFiles([]);
   }, []);
 
+  /**
+   * Empty the list and hand the files over without revoking their previews: a message that is
+   * still sending shows them. The caller revokes them with `releasePendingFiles` when done.
+   */
+  const take = useCallback(() => {
+    const taken = filesRef.current;
+    filesRef.current = [];
+    setFiles([]);
+    return taken;
+  }, []);
+
   useEffect(
     () => () => {
       filesRef.current.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
@@ -122,7 +133,39 @@ export function usePendingFiles() {
     []
   );
 
-  return { files, add, remove, clear };
+  return { files, add, remove, clear, take };
+}
+
+/** Free the previews of files taken with `take()`. */
+export function releasePendingFiles(files: PendingFile[]) {
+  files.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+}
+
+/** Files of a message that is still sending: image previews from memory, names for the rest. */
+export function SendingAttachments({ files }: { files: PendingFile[] }) {
+  if (!files.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap justify-end gap-2">
+      {files.map((item) =>
+        item.previewUrl ? (
+          <img
+            key={item.id}
+            src={item.previewUrl}
+            alt={item.file.name}
+            className="max-h-48 max-w-[16rem] rounded-xl border border-gray-200 object-cover dark:border-white/10"
+          />
+        ) : (
+          <span
+            key={item.id}
+            className="flex max-w-[16rem] items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 dark:border-white/10 dark:bg-dark-elevated dark:text-zinc-200"
+          >
+            {item.kind === 'video' ? <Film className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />}
+            <span className="truncate">{item.file.name}</span>
+          </span>
+        )
+      )}
+    </div>
+  );
 }
 
 /** Uploads every pending file; throws with a readable message when one fails. */

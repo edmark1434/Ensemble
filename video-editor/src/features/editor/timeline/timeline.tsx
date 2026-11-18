@@ -10,6 +10,8 @@ import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
 import CanvasTimeline from "./items/timeline";
 import useStore from "../store/use-store";
 import Playhead from "./playhead";
+import { PresencePlayheads } from "./presence-playheads";
+import { TimelinePresenceCursors } from "./timeline-presence-cursors";
 import { useTheme } from "next-themes";
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import {
@@ -1256,7 +1258,9 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
         stateManager={stateManager}
       />
       <Playhead scrollLeft={scrollLeft} />
+      <PresencePlayheads scrollLeft={scrollLeft} width={canvasSize.width} />
       <div ref={dropAreaRef} className="relative">
+        <TimelinePresenceCursors containerRef={timelineContainerRef} scrollLeft={scrollLeft} />
         {!readOnly && (
           <UploadDropOverlay isDragOver={fileDrop.isDragOver} error={fileDrop.dragError} className="z-50" />
         )}

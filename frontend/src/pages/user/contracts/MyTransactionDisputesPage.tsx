@@ -1,53 +1,37 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Check, CornerUpLeft, Loader2, Lock, Plus, Send, X } from "lucide-react";
+import { AlertCircle, Check, Plus } from "lucide-react";
 import api from "@/lib/axios";
-import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
-import toast from "react-hot-toast";
+import { casePath, useCaseEvents, type CaseAccess } from "@/lib/cases";
 import {
-  AudiencePill,
-  Avatar,
   Card,
-  DisputeAttachments,
   DisputeDecisionCard,
   DisputeSettlementCard,
-  MentionText,
-  RoleChip,
   StatusPill,
   VisibilityPill,
-  audienceNotice,
   formatWhen,
   isClosedStatus,
   isDisputeDecision,
+  parseDisputeRuling,
 } from "@/pages/user/disputes/disputeUi";
 import type {
-  DisputeAttachment,
   DisputeSettlement,
   MentionMap,
   ViewerRole,
 } from "@/pages/user/disputes/disputeUi";
-import {
-  InboxUploadMediaButton,
-  InboxUploadMediaPreview,
-  uploadChatAttachment,
-  useInboxUploadMedia,
-} from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
-import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 
+/**
+ * Contract disputes at a glance: progress, the ruling and the payout. The conversation (notes
+ * for staff, replies) lives in Cases (`/support/cases?dispute=`), so there is one place to
+ * talk about a case and it follows the same rules for every member, penalised or not.
+ */
 type DisputeMessage = {
   id: string;
-  authorName?: string;
   authorType?: string;
+  authorRole?: string | null;
   body?: string;
   createdAt?: string | null;
-  conversationId?: string;
-  replyToId?: string | null;
-  audience?: string;
-  authorRole?: string | null;
-  /** Stored profile picture path of the author. */
-  authorAvatar?: string | null;
-  attachments?: DisputeAttachment[];
 };
 
 type DisputeRow = {
@@ -60,30 +44,14 @@ type DisputeRow = {
   visibility?: boolean;
   filedByMe?: boolean;
   viewerRole?: ViewerRole;
-  canAddInformation?: boolean;
   updatedAt?: string;
-  chatId?: string | null;
   /** A private case shown to the disputee only because a money ruling touched them. */
   limited?: boolean;
   contractTitle?: string | null;
   outcomeLabel?: string | null;
+  /** What the member may do on it, from the server. */
+  access?: CaseAccess;
 };
-
-const MAX_LENGTH = 2000;
-
-function quoteSnippet(body?: string, limit = 140) {
-  const text = String(body || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
-}
-
-function upsertNote(list: DisputeMessage[], next: DisputeMessage) {
-  const idx = list.findIndex((item) => String(item.id) === String(next.id));
-  if (idx === -1) return [...list, next];
-  const copy = [...list];
-  copy[idx] = { ...copy[idx], ...next };
-  return copy;
-}
 
 function isTransactionDispute(row: DisputeRow) {
   const type = String(row.type || "").toLowerCase();
@@ -145,183 +113,37 @@ function DisputeProgress({ dispute }: { dispute: DisputeRow }) {
 function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const open = isOpen(dispute);
   const publicDiscussion = Boolean(dispute.visibility);
-  const [notes, setNotes] = useState<DisputeMessage[]>([]);
-  const [chatId, setChatId] = useState<string | null>(dispute.chatId || null);
-  const [draft, setDraft] = useState("");
-  const [replyToId, setReplyToId] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const { mediaList, fileInputRef, openFilePicker, handleFileChange, removeMedia, clearMedia } =
-    useInboxUploadMedia(4, 100);
-  const [loadingNotes, setLoadingNotes] = useState(Boolean(dispute.canAddInformation));
   const [settlement, setSettlement] = useState<DisputeSettlement | null>(null);
   const [latestRuling, setLatestRuling] = useState<DisputeMessage | null>(null);
-  /** "@handle" → account id, so mentions in notes and rulings link to profiles. */
+  /** "@handle" → account id, so mentions in rulings link to profiles. */
   const [mentions, setMentions] = useState<MentionMap>({});
 
-  // Private notes while the filer can still add them; once closed, the ruling and any payout.
+  // Once closed: the ruling and any payout. The conversation itself lives in Cases.
   // `updatedAt` moves on every live update, so a ruling or payout made elsewhere shows here.
   useEffect(() => {
-    if (!dispute.canAddInformation && open) return;
+    if (open) return;
     let cancelled = false;
     api.get(`/api/users/disputes/${dispute.id}`)
       .then((res) => {
         if (cancelled) return;
         const messages: DisputeMessage[] = Array.isArray(res.data?.data?.messages) ? res.data.data.messages : [];
-        if (dispute.canAddInformation) setNotes(messages);
         setMentions(res.data?.data?.mentions || {});
         setSettlement(res.data?.data?.settlement || null);
-        setLatestRuling([...messages].reverse().find((message) => isDisputeDecision(message)) || null);
-        if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
+        // The filing summary and the "now public" invite are platform notices, not rulings.
+        setLatestRuling(
+          [...messages]
+            .reverse()
+            .find((message) => isDisputeDecision(message) && parseDisputeRuling(message.body).kind !== "notice") || null
+        );
       })
-      .catch(() => {
-        if (!cancelled && dispute.canAddInformation) setNotes([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingNotes(false);
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [dispute.canAddInformation, dispute.id, dispute.updatedAt, open]);
+  }, [dispute.id, dispute.updatedAt, open]);
 
-  useEffect(() => {
-    if (!chatId || !dispute.canAddInformation) return;
-
-    const onLive = (payload: DisputeMessage & {
-      conversation_id?: string;
-      _id?: string;
-      author_name?: string;
-      author_type?: string;
-      message_content?: string;
-      created_at?: string;
-      audience?: string;
-      message_id_reply?: string | null;
-      author_role?: string | null;
-      mentions?: MentionMap;
-      attachments?: DisputeAttachment[];
-    }) => {
-      const room = payload?.conversationId || payload?.conversation_id;
-      if (room && String(room) !== String(chatId)) return;
-      const id = payload?.id || payload?._id;
-      if (!id) return;
-      const audience = String(payload.audience || "").toLowerCase();
-      // Staff-only notes never appear in the party's notes panel.
-      if (audience === "staff") return;
-      if (payload.mentions && Object.keys(payload.mentions).length) {
-        setMentions((current) => ({ ...current, ...payload.mentions }));
-      }
-      setNotes((current) =>
-        upsertNote(current, {
-          id: String(id),
-          authorName: payload.authorName || payload.author_name || "Staff",
-          authorType: payload.authorType || payload.author_type,
-          body: payload.body || payload.message_content || "",
-          createdAt: payload.createdAt || payload.created_at || new Date().toISOString(),
-          replyToId: payload.replyToId ?? payload.message_id_reply ?? null,
-          audience,
-          authorRole: payload.authorRole ?? payload.author_role ?? null,
-          ...(payload.authorAvatar !== undefined ? { authorAvatar: payload.authorAvatar } : {}),
-          attachments: payload.attachments ?? [],
-        })
-      );
-    };
-
-    const join = () => socket.emit("joinRoom", { conversation_id: String(chatId) });
-    if (!socket.connected) socket.connect();
-    join();
-    socket.on("connect", join);
-    socket.on("disputeMessage", onLive);
-    socket.on("disputeMessageUpdated", onLive);
-    return () => {
-      socket.off("connect", join);
-      socket.off("disputeMessage", onLive);
-      socket.off("disputeMessageUpdated", onLive);
-      socket.emit("leaveRoom", { conversation_id: String(chatId) });
-    };
-  }, [chatId, dispute.canAddInformation]);
-
-  const sendMoreInformation = async () => {
-    const text = draft.trim();
-    const pendingFiles = mediaList;
-    if (sending || (!text && !pendingFiles.length)) return;
-    const parentId = replyToId;
-    const pendingId = `pending-${Date.now()}`;
-    // Your own picture, from an earlier note of yours, while this one sends.
-    const myAvatar =
-      notes.find((item) => String(item.authorType || "").toLowerCase() !== "staff" && item.authorAvatar)
-        ?.authorAvatar || null;
-    setNotes((current) => [
-      ...current,
-      {
-        id: pendingId,
-        authorName: "You",
-        authorType: "user",
-        authorAvatar: myAvatar,
-        body: text,
-        createdAt: new Date().toISOString(),
-        replyToId: parentId,
-        attachments: pendingFiles.map((media) => ({
-          attachment_id: media.id,
-          attachment_type: media.type,
-          attachment_key: media.previewUrl,
-          attachment_url: media.previewUrl,
-          attachment_name: media.file.name,
-          attachment_size: media.file.size,
-        })),
-      },
-    ]);
-    setDraft("");
-    setReplyToId(null);
-    setSending(true);
-    try {
-      const uploaded = pendingFiles.length
-        ? await Promise.all(pendingFiles.map((media) => uploadChatAttachment(media)))
-        : [];
-      clearMedia();
-      const res = await api.post(`/api/accounts/disputes/${dispute.id}/messages`, {
-        body: text,
-        ...(parentId ? { replyToId: parentId } : {}),
-        ...(uploaded.length ? { attachments: uploaded } : {}),
-      });
-      toast.success(res.data?.message || "Sent to staff. The other party cannot see this yet.");
-      const saved = res.data?.data?.message as (DisputeMessage & { mentions?: MentionMap }) | undefined;
-      if (res.data?.data?.chatId) setChatId(String(res.data.data.chatId));
-      if (saved?.mentions && Object.keys(saved.mentions).length) {
-        const extra = saved.mentions;
-        setMentions((current) => ({ ...current, ...extra }));
-      }
-      if (saved?.id) {
-        setNotes((current) =>
-          upsertNote(
-            current.filter((item) => String(item.id) !== pendingId),
-            {
-              id: String(saved.id),
-              authorName: saved.authorName || "You",
-              authorType: saved.authorType || "user",
-              body: saved.body || text,
-              createdAt: saved.createdAt || new Date().toISOString(),
-              replyToId: saved.replyToId ?? parentId,
-              authorRole: saved.authorRole ?? null,
-              authorAvatar: saved.authorAvatar ?? myAvatar,
-              attachments: saved.attachments || [],
-            }
-          )
-        );
-      } else {
-        const refresh = await api.get(`/api/users/disputes/${dispute.id}`);
-        setNotes(Array.isArray(refresh.data?.data?.messages) ? refresh.data.data.messages : []);
-        if (refresh.data?.data?.chatId) setChatId(String(refresh.data.data.chatId));
-      }
-    } catch (err: any) {
-      setNotes((current) => current.filter((item) => String(item.id) !== pendingId));
-      setDraft(text);
-      setReplyToId(parentId);
-      toast.error(err?.response?.data?.message || "Could not send that information.");
-    } finally {
-      setSending(false);
-    }
-  };
+  const attention = open ? dispute.access?.attention || null : null;
+  const canReply = Boolean(dispute.access?.canReply);
 
   return (
     <Card className="overflow-hidden">
@@ -364,26 +186,38 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
 
         <DisputeProgress dispute={dispute} />
 
+        {attention ? (
+          <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-900 dark:text-amber-100">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {attention}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3 dark:border-white/5">
           <span className="text-[11px] text-gray-500 dark:text-zinc-500">
+            {dispute.access?.stageLabel ? `${dispute.access.stageLabel} · ` : ""}
             Updated {formatWhen(dispute.updatedAt, false) || "—"}
           </span>
-          {publicDiscussion ? (
-            <Link
-              to={`/disputes/${dispute.id}`}
-              className="rounded-xl bg-gray-900 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
-            >
-              {open ? "Open discussion" : "View discussion"}
-            </Link>
-          ) : open ? (
-            <span className="text-xs font-medium text-gray-600 dark:text-zinc-300">
-              {dispute.filedByMe ? "Staff are reviewing your dispute" : "Waiting for staff"}
-            </span>
-          ) : (
-            <span className="text-xs text-gray-500 dark:text-zinc-500">
-              {dispute.limited ? "Decided privately" : "Closed before it was made public"}
-            </span>
-          )}
+          <span className="flex flex-wrap items-center gap-2">
+            {publicDiscussion ? (
+              <Link
+                to={`/disputes/${dispute.id}`}
+                className="rounded-xl border border-gray-200 px-3.5 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"
+              >
+                Public page
+              </Link>
+            ) : null}
+            {dispute.limited ? (
+              <span className="text-xs text-gray-500 dark:text-zinc-500">Decided privately</span>
+            ) : (
+              <Link
+                to={casePath("dispute", dispute.id)}
+                className="rounded-xl bg-gray-900 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
+              >
+                {open && canReply ? (dispute.filedByMe && !publicDiscussion ? "Add information" : "Reply") : "View conversation"}
+              </Link>
+            )}
+          </span>
         </div>
       </div>
 
@@ -399,187 +233,6 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
           <DisputeSettlementCard settlement={settlement} />
         </section>
       ) : null}
-
-      {dispute.canAddInformation ? (
-        <section className="border-t border-gray-100 bg-gray-50/70 p-5 dark:border-white/5 dark:bg-white/[0.02]">
-          <div className="flex items-start gap-2">
-            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Private notes for staff</h4>
-              <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
-                Only you and staff can see these. The other party can’t read or reply until staff make the dispute public. Escrow stays frozen meanwhile.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            {loadingNotes ? (
-              <p className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading notes…
-              </p>
-            ) : notes.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-gray-200 px-3 py-3 text-xs text-gray-500 dark:border-white/10 dark:text-zinc-500">
-                No notes yet. Add evidence, dates, or anything staff should know.
-              </p>
-            ) : (
-              notes.map((message) => {
-                const fromStaff = String(message.authorType || "").toLowerCase() === "staff";
-                const pending = String(message.id).startsWith("pending-");
-                const parent = message.replyToId
-                  ? notes.find((item) => String(item.id) === String(message.replyToId))
-                  : undefined;
-                const notice = audienceNotice(message.audience, dispute.viewerRole);
-                const decision = isDisputeDecision(message);
-
-                if (decision) {
-                  return (
-                    <div key={message.id} className={pending ? "opacity-60" : ""}>
-                      <DisputeDecisionCard
-                        body={message.body}
-                        when={pending ? "Sending…" : formatWhen(message.createdAt)}
-                        mentions={mentions}
-                      >
-                        <DisputeAttachments
-                          attachments={message.attachments}
-                          onPreview={(url) => setPreviewUrl(url)}
-                        />
-                      </DisputeDecisionCard>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={message.id}
-                    className={`group flex gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-dark-surface ${
-                      pending ? "opacity-60" : ""
-                    }`}
-                  >
-                    <Avatar
-                      name={fromStaff ? message.authorName : "You"}
-                      role={fromStaff ? "staff" : "disputer"}
-                      src={message.authorAvatar}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-xs font-semibold text-gray-900 dark:text-white">
-                          {fromStaff ? message.authorName || "Staff" : "You"}
-                        </span>
-                        {fromStaff ? <RoleChip role="staff" /> : null}
-                        <AudiencePill audience={message.audience} viewerRole={dispute.viewerRole} />
-                        <span className="ml-auto text-[11px] text-gray-400 dark:text-zinc-500">
-                          {pending ? "Sending…" : formatWhen(message.createdAt)}
-                        </span>
-                      </div>
-                      {notice ? (
-                        <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300/80">{notice.detail}</p>
-                      ) : null}
-                      {message.replyToId ? (
-                        <p className="mt-1 flex items-center gap-1.5 rounded-lg border-l-2 border-gray-300 bg-gray-50 px-2 py-1 text-[11px] text-gray-500 dark:border-white/20 dark:bg-white/[0.04] dark:text-zinc-400">
-                          <CornerUpLeft className="h-3 w-3 shrink-0" />
-                          <span className="truncate">
-                            {parent
-                              ? `${parent.authorType === "staff" ? parent.authorName || "Staff" : "You"}: ${quoteSnippet(parent.body)}`
-                              : "Replying to an earlier note"}
-                          </span>
-                        </p>
-                      ) : null}
-                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-zinc-300">
-                        <MentionText text={message.body} mentions={mentions} />
-                      </p>
-                      <DisputeAttachments
-                        attachments={message.attachments}
-                        onPreview={(url) => setPreviewUrl(url)}
-                      />
-                      {!pending ? (
-                        <button
-                          type="button"
-                          onClick={() => setReplyToId(String(message.id))}
-                          className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-400 opacity-0 transition hover:text-gray-700 focus:opacity-100 group-hover:opacity-100 dark:text-zinc-500 dark:hover:text-white"
-                        >
-                          <CornerUpLeft className="h-3 w-3" />
-                          Reply
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="mt-3 space-y-2">
-            {replyToId ? (
-              <div className="flex items-start gap-2 rounded-xl border-l-2 border-gray-300 bg-gray-50 px-3 py-2 dark:border-white/20 dark:bg-white/[0.04]">
-                <p className="min-w-0 flex-1 truncate text-[11px] text-gray-600 dark:text-zinc-300">
-                  <CornerUpLeft className="mr-1 inline h-3 w-3" />
-                  Replying to{" "}
-                  {quoteSnippet(
-                    notes.find((item) => String(item.id) === String(replyToId))?.body,
-                    80
-                  ) || "an earlier note"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setReplyToId(null)}
-                  aria-label="Cancel reply"
-                  className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-200 hover:text-gray-700 dark:text-zinc-500 dark:hover:bg-white/10 dark:hover:text-white"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : null}
-            {mediaList.length ? (
-              <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10">
-                <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
-              </div>
-            ) : null}
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                  event.preventDefault();
-                  void sendMoreInformation();
-                }
-                if (event.key === "Escape" && replyToId) {
-                  event.preventDefault();
-                  setReplyToId(null);
-                }
-              }}
-              maxLength={MAX_LENGTH}
-              rows={3}
-              placeholder={replyToId ? "Reply to this note…" : "Add a note for staff…"}
-              className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 dark:border-white/10 dark:bg-dark-surface dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-white/30"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] tabular-nums text-gray-400 dark:text-zinc-600">
-                {draft.length}/{MAX_LENGTH}
-              </span>
-              <div className="flex items-center gap-1">
-                <InboxUploadMediaButton
-                  fileInputRef={fileInputRef}
-                  onFileChange={handleFileChange}
-                  onClick={openFilePicker}
-                  disabled={sending || mediaList.length >= 4}
-                  title="Attach evidence — images or files (max 4)"
-                />
-                <button
-                  type="button"
-                  onClick={() => void sendMoreInformation()}
-                  disabled={sending || (!draft.trim() && !mediaList.length)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
-                >
-                  {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  {sending ? "Sending" : "Send to staff"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      ) : null}
-      <ChatImagePreview url={previewUrl} onClose={() => setPreviewUrl(null)} />
     </Card>
   );
 }
@@ -607,48 +260,22 @@ export default function MyTransactionDisputesPage() {
     };
   }, []);
 
-  // Staff decisions land here without a reload: resolved, reopened, made public, closed,
-  // parties swapped, payouts. The list is read back from the server, because a swap changes
-  // who filed the case (and whether this member may still see it) — not just its status.
-  useEffect(() => {
-    let timer: number | undefined;
-    const refetch = () => {
+  // Staff decisions and replies land here without a reload: resolved, reopened, made public,
+  // closed, parties swapped, payouts, "waiting for you". The list is read back from the server,
+  // because a swap changes who filed the case (and whether this member may still see it).
+  const refetchTimer = useRef<number | undefined>(undefined);
+  const scheduleRefetch = useCallback(() => {
+    window.clearTimeout(refetchTimer.current);
+    refetchTimer.current = window.setTimeout(() => {
       api
         .get("/api/users/disputes")
         // Each change moves the case's updatedAt, so its card re-reads the ruling and payouts.
         .then((res) => setRows(Array.isArray(res.data?.data) ? res.data.data : []))
         .catch(() => undefined);
-    };
-    const onState = (payload: {
-      disputeId?: string;
-      status?: string;
-      visibility?: boolean;
-      closed?: boolean;
-    }) => {
-      if (!payload?.disputeId) return;
-      setRows((current) =>
-        current.map((row) =>
-          String(row.id) === String(payload.disputeId)
-            ? {
-                ...row,
-                status: payload.status ?? row.status,
-                visibility: payload.visibility ?? row.visibility,
-                canAddInformation: payload.closed || payload.visibility ? false : row.canAddInformation,
-              }
-            : row
-        )
-      );
-      window.clearTimeout(timer);
-      timer = window.setTimeout(refetch, 250);
-    };
-
-    if (!socket.connected) socket.connect();
-    socket.on("disputeUpdated", onState);
-    return () => {
-      window.clearTimeout(timer);
-      socket.off("disputeUpdated", onState);
-    };
+    }, 250);
   }, []);
+  useEffect(() => () => window.clearTimeout(refetchTimer.current), []);
+  useCaseEvents(scheduleRefetch);
 
   const transactionDisputes = rows.filter(isTransactionDispute);
   const active = transactionDisputes.filter(isOpen);
@@ -664,6 +291,11 @@ export default function MyTransactionDisputesPage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Transaction disputes</h1>
             <p className="mt-1 max-w-xl text-sm text-gray-500 dark:text-zinc-400">
               Disputes you filed, and disputes that name you once staff make them public. Opening a dispute freezes the remaining escrow.
+              Notes for staff and replies are in{" "}
+              <Link to="/support/cases" className="font-semibold text-gray-700 hover:underline dark:text-zinc-200">
+                Cases
+              </Link>
+              .
             </p>
           </div>
           <Link

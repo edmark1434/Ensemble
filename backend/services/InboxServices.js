@@ -4281,11 +4281,27 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
 
 
 
-async function getInboxByAccountIdServices(accountId, conversationType) {
+/** Tickets and disputes: members follow them in Cases, so member inbox lists leave them out. */
+const CASE_CONVERSATION_TYPES = new Set(['ticket', 'dispute']);
+
+function isCaseConversation(inbox) {
+    return Boolean(
+        CASE_CONVERSATION_TYPES.has(String(inbox?.conversation_type || '').toLowerCase())
+        || inbox?.ticket_id
+        || inbox?.support_ticket_id
+        || inbox?.dispute_id
+    );
+}
+
+async function getInboxByAccountIdServices(accountId, conversationType, { includeCases = true } = {}) {
 
     const personalAccountId = await requireAccount(accountId);
 
     validateConversationType(conversationType);
+
+    if (!includeCases && CASE_CONVERSATION_TYPES.has(String(conversationType || '').toLowerCase())) {
+        return [];
+    }
 
     const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
 
@@ -4295,7 +4311,7 @@ async function getInboxByAccountIdServices(accountId, conversationType) {
 
     const enrichedInboxes = await enrichInboxesWithMemberProfiles(
 
-        normalizedInboxes,
+        includeCases ? normalizedInboxes : normalizedInboxes.filter((inbox) => !isCaseConversation(inbox)),
 
         actorIds
 
@@ -4311,7 +4327,11 @@ async function getInboxByAccountIdServices(accountId, conversationType) {
 
 
 
-async function getAllInboxesByAccountIdServices(accountId) {
+/**
+ * Every conversation of an account. `includeCases: false` leaves out tickets and disputes (the
+ * member chat inbox); socket room joins keep them so staff desks still get live ticket events.
+ */
+async function getAllInboxesByAccountIdServices(accountId, { includeCases = true } = {}) {
 
     const personalAccountId = await requireAccount(accountId);
 
@@ -4319,7 +4339,9 @@ async function getAllInboxesByAccountIdServices(accountId) {
 
     const conversations = await Promise.all(
 
-        CONVERSATION_TYPES.map((type) => getInboxByAccountId(actorIds, type))
+        CONVERSATION_TYPES
+            .filter((type) => includeCases || !CASE_CONVERSATION_TYPES.has(type))
+            .map((type) => getInboxByAccountId(actorIds, type))
 
     );
 
@@ -4355,7 +4377,10 @@ async function getAllInboxesByAccountIdServices(accountId) {
 
     const enrichedConversations = await enrichInboxesWithMemberProfiles(
 
-        normalizedConversations,
+        // A legacy direct/group row linked to a ticket or dispute is still a case.
+        includeCases
+            ? normalizedConversations
+            : normalizedConversations.filter((inbox) => !isCaseConversation(inbox)),
 
         actorIds
 

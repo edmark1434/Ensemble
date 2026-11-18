@@ -8,6 +8,9 @@ import api from '@/lib/axios';
 import { showSuccessToast } from '@/components/utility/toast';
 import { SwipeToast } from '@/components/ui/SwipeToast';
 import { isConsoleLoginPath } from '@/lib/consoleHosts';
+import { isAppealLimitedMember } from '@/lib/appealAccess';
+import { CASES_PATH, casePath, useCaseStore, useCaseSummarySync } from '@/lib/cases';
+import { CaseStatusBar } from '@/components/cases/CaseStatusBar';
 import {
   APPEAL_PATH,
   type StandingCondition,
@@ -282,52 +285,50 @@ function StandingStatusBar({
   const others = conditions.length - 1;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] z-[45] flex justify-center px-3 animate-enter sm:top-[4.75rem] sm:px-4">
-      <div
-        role="status"
-        aria-live="polite"
-        className={`pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-2.5 rounded-xl border bg-white/95 px-3 py-1.5 shadow-md backdrop-blur-md dark:bg-[#15161b]/95 ${tone.border}`}
-        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+    <div
+      role="status"
+      aria-live="polite"
+      className={`pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-2.5 rounded-xl border bg-white/95 px-3 py-1.5 shadow-md backdrop-blur-md dark:bg-[#15161b]/95 ${tone.border}`}
+      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+    >
+      <button type="button" onClick={onDetails} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <span className="shrink-0 text-xs font-bold text-zinc-900 dark:text-white">{primary.label}</span>
+        <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
+          {primary.id === 'credit_hold' ? `${primary.title} · ` : ''}
+          {when}
+          {others > 0 ? ` · +${others} more` : ''}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onDetails}
+        className="inline-flex shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
       >
-        <button type="button" onClick={onDetails} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-          <span className="shrink-0 text-xs font-bold text-zinc-900 dark:text-white">{primary.label}</span>
-          <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
-            {primary.id === 'credit_hold' ? `${primary.title} · ` : ''}
-            {when}
-            {others > 0 ? ` · +${others} more` : ''}
-          </span>
-        </button>
+        How to fix
+      </button>
+      <button
+        type="button"
+        onClick={onAppeal}
+        className="hidden shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5 sm:inline-flex"
+      >
+        Appeal
+      </button>
+      {dismissible ? (
         <button
           type="button"
-          onClick={onDetails}
-          className="inline-flex shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
+          aria-label="Hide until something changes"
+          onClick={() => {
+            writeDismissed(key);
+            setDismissed(key);
+          }}
+          className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white"
         >
-          How to fix
+          <X className="h-3.5 w-3.5" />
         </button>
-        <button
-          type="button"
-          onClick={onAppeal}
-          className="hidden shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5 sm:inline-flex"
-        >
-          Appeal
-        </button>
-        {dismissible ? (
-          <button
-            type="button"
-            aria-label="Hide until something changes"
-            onClick={() => {
-              writeDismissed(key);
-              setDismissed(key);
-            }}
-            className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -641,14 +642,38 @@ export function AccountRestrictionHost() {
 
   const showBar = conditions.length > 0 && location.pathname !== APPEAL_PATH;
 
+  // Open cases (disputes, and tickets waiting on the member). Banned and locked members follow
+  // theirs on the appeal page, which has its own list.
+  const caseMember =
+    user?.type === 'User' && Boolean(user?.account_id) && !standing?.blocked && !isAppealLimitedMember(user);
+  const standingKey = `${user?.status || ''}|${standing?.code || ''}|${standing?.suspended ? 1 : 0}`;
+  useCaseSummarySync(caseMember, standingKey);
+  const caseSummary = useCaseStore((state) => state.summary);
+  const showCaseBar =
+    caseMember &&
+    Boolean(caseSummary) &&
+    location.pathname !== APPEAL_PATH &&
+    !location.pathname.startsWith(CASES_PATH);
+
   return (
     <>
-      {showBar ? (
-        <StandingStatusBar
-          conditions={conditions}
-          onDetails={() => setDetailsOpen(true)}
-          onAppeal={() => navigate(APPEAL_PATH)}
-        />
+      {showBar || showCaseBar ? (
+        <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] z-[45] flex flex-col items-center gap-1.5 px-3 animate-enter sm:top-[4.75rem] sm:px-4">
+          {showBar ? (
+            <StandingStatusBar
+              conditions={conditions}
+              onDetails={() => setDetailsOpen(true)}
+              onAppeal={() => navigate(APPEAL_PATH)}
+            />
+          ) : null}
+          {showCaseBar && caseSummary ? (
+            <CaseStatusBar
+              summary={caseSummary}
+              onOpen={(item) => navigate(casePath(item.kind, item.id))}
+              onOpenAll={() => navigate(CASES_PATH)}
+            />
+          ) : null}
+        </div>
       ) : null}
       <StandingDetailsModal open={detailsOpen} conditions={conditions} onClose={() => setDetailsOpen(false)} />
       {blocked ? (

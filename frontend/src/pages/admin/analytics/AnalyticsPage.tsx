@@ -2,296 +2,261 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
-  BadgeDollarSign,
-  BarChart3,
-  CheckCircle2,
-  Coins,
+  Banknote,
   LayoutGrid,
-  Lightbulb,
+  Loader2,
   MessageSquare,
   RefreshCw,
-  Search,
   Shield,
   Star,
-  TrendingUp,
-  UserPlus,
   Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import useGlobalState from '@/lib/global_state';
+import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { prefetchStaffRoute } from '@/lib/staffPrefetch';
-import { AdminFeedbacksPanel } from '../feedbacks/AdminFeedbacksPage';
-import type { PlatformAnalytics } from './analyticsTypes';
-import {
-  AreaChart,
-  ChartCard,
-  DonutChart,
-  HorizontalBarChart,
-  LineChart,
-  VerticalBarChart,
-} from './components/AnalyticsCharts';
-import AnalyticsFilters, {
-  DEFAULT_ANALYTICS_FILTERS,
-  filterByDateWindow,
-  filterMembersByState,
-  isFilterActive,
-  type AnalyticsFilterState,
-} from './components/AnalyticsFilters';
-import PlatformEconomyAnalytics from './components/PlatformEconomyAnalytics';
-import RateLimitMonitorPanel from './components/RateLimitMonitorPanel';
+import { showErrorToast } from '@/components/utility/toast.ts';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
+import { formatRelative } from '../creditEconomy/economyUi';
+import { AdminFeedbacksPanel } from '../feedbacks/AdminFeedbacksPage';
+import type { Bucket, LedgerKind, PlatformAnalytics, RangeKey } from './analyticsTypes';
+import { fmtDay } from './analyticsFormat';
+import { Notice } from './analyticsUi';
+import AnalyticsRangePicker, { type RangeSelection } from './components/AnalyticsRangePicker';
+import OverviewTab from './components/OverviewTab';
+import MembersTab from './components/MembersTab';
+import CommunityTab from './components/CommunityTab';
+import MoneyTab from './components/MoneyTab';
+import OperationsTab from './components/OperationsTab';
+import RateLimitMonitorPanel from './components/RateLimitMonitorPanel';
 
-type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health' | 'traffic' | 'feedback';
+type TabId = 'overview' | 'members' | 'community' | 'money' | 'operations' | 'traffic' | 'feedback';
 
-// Tabs that load their own data instead of the analytics overview.
-const STANDALONE_TABS: TabId[] = ['traffic', 'feedback'];
-
-const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
-  { id: 'growth', label: 'Growth & members', icon: TrendingUp },
+  { id: 'members', label: 'Members', icon: Users },
   { id: 'community', label: 'Community', icon: MessageSquare },
-  { id: 'economy', label: 'Credits', icon: Coins },
-  { id: 'finance', label: 'Platform finance & transactions', icon: BadgeDollarSign },
-  { id: 'health', label: 'Platform health', icon: Shield },
+  { id: 'money', label: 'Revenue & credits', icon: Banknote },
+  { id: 'operations', label: 'Operations', icon: Shield },
   { id: 'traffic', label: 'Traffic & rate limits', icon: Activity },
   { id: 'feedback', label: 'Feedback', icon: Star },
 ];
 
-const DEFAULT_FILTERS: AnalyticsFilterState = DEFAULT_ANALYTICS_FILTERS;
+/** Old `?tab=` values from before the redesign, so saved links still land somewhere sensible. */
+const LEGACY_TABS: Record<string, TabId> = {
+  growth: 'members',
+  economy: 'money',
+  finance: 'money',
+  health: 'operations',
+};
+
+// Tabs that load their own data instead of the analytics overview.
+const STANDALONE_TABS: TabId[] = ['traffic', 'feedback'];
 const ANALYTICS_URL = '/api/admin/analytics-overview';
+const RANGE_KEYS: RangeKey[] = ['7d', '30d', '90d', '12m', 'ytd', 'all', 'custom'];
+const BUCKETS: Bucket[] = ['day', 'week', 'month'];
+const LEDGER_KINDS: LedgerKind[] = ['topups', 'invoices', 'subscriptions', 'cashouts'];
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-function formatDate(value: string | null) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+function resolveTab(raw: string | null): TabId {
+  if (!raw) return 'overview';
+  if (TABS.some((t) => t.id === raw)) return raw as TabId;
+  return LEGACY_TABS[raw] || 'overview';
 }
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon: typeof Users;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-          <p className="mt-1.5 break-words text-2xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
-          {sub && <p className="mt-1 break-words text-xs text-zinc-500">{sub}</p>}
-        </div>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/10">
-          <Icon className="h-4 w-4 text-rose-400" />
-        </div>
-      </div>
-    </div>
-  );
+function readSelection(params: URLSearchParams): RangeSelection {
+  const raw = params.get('range') as RangeKey | null;
+  const selection: RangeSelection = { range: raw && RANGE_KEYS.includes(raw) ? raw : '30d' };
+  if (selection.range === 'custom') {
+    const from = params.get('from') || '';
+    const to = params.get('to') || '';
+    if (ISO_DAY.test(from) && ISO_DAY.test(to)) {
+      selection.from = from;
+      selection.to = to;
+    } else {
+      selection.range = '30d';
+    }
+  }
+  const bucket = params.get('bucket') as Bucket | null;
+  if (bucket && BUCKETS.includes(bucket)) selection.bucket = bucket;
+  return selection;
 }
 
-function DataTable({
-  title,
-  columns,
-  rows,
-}: {
-  title: string;
-  columns: string[];
-  rows: string[][];
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#12131a]">
-      <div className="border-b border-white/[0.06] px-4 py-3">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06] bg-[#0c0d12] text-[10px] uppercase tracking-wide text-zinc-600">
-              {columns.map((c) => (
-                <th key={c} className="px-4 py-3 font-medium">
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={i} className="border-b border-white/[0.04] text-zinc-300 last:border-0">
-                {row.map((cell, j) => (
-                  <td key={j} className="px-4 py-2.5">
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-zinc-500">
-                  No results for current filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
+/** The default (30 days, automatic interval) sends no params so it matches the route prefetch. */
+function requestParamsOf(selection: RangeSelection): Record<string, string> | undefined {
+  const params: Record<string, string> = {};
+  if (selection.range !== '30d') params.range = selection.range;
+  if (selection.range === 'custom') {
+    params.from = selection.from || '';
+    params.to = selection.to || '';
+  }
+  if (selection.bucket) params.bucket = selection.bucket;
+  return Object.keys(params).length ? params : undefined;
+}
+
+function errorMessage(err: unknown, fallback: string) {
+  const message = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+  return typeof message === 'string' && message ? message : fallback;
 }
 
 export default function AnalyticsPage() {
-  const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health', 'traffic', 'feedback'];
-  const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
+  const tab = resolveTab(searchParams.get('tab'));
+  const standalone = STANDALONE_TABS.includes(tab);
+  const selection = useMemo(() => readSelection(searchParams), [searchParams]);
+  const requestParams = useMemo(() => requestParamsOf(selection), [selection]);
+  const requestKey = JSON.stringify(requestParams ?? {});
+  const ledgerParam = searchParams.get('ledger') as LedgerKind | null;
+  const ledgerKind: LedgerKind = ledgerParam && LEDGER_KINDS.includes(ledgerParam) ? ledgerParam : 'topups';
 
-  const [data, setData] = useState<PlatformAnalytics | null>(() => {
-    const cached = peekStaffGet(ANALYTICS_URL);
-    return cached?.data?.success ? cached.data.data : null;
+  const [loaded, setLoaded] = useState<{ key: string; data: PlatformAnalytics } | null>(() => {
+    const cached = peekStaffGet(ANALYTICS_URL, requestParams);
+    return cached?.data?.success ? { key: requestKey, data: cached.data.data } : null;
   });
-  const [loading, setLoading] = useState(() => !data);
-  const [error, setError] = useState('');
-  const [tab, setTab] = useState<TabId>(initialTab);
-  const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState<AnalyticsFilterState>(DEFAULT_FILTERS);
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
-  const load = async (silent = false) => {
-    if (!silent && !peekStaffGet(ANALYTICS_URL)) setLoading(true);
-    else setRefreshing(true);
-    setError('');
+  useEffect(() => {
+    if (standalone) return;
+    let cancelled = false;
+    staffGet(ANALYTICS_URL, requestParams)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.data?.success) setLoaded({ key: requestKey, data: res.data.data });
+        else setFailure({ key: requestKey, message: res.data?.message || 'Failed to load analytics.' });
+      })
+      .catch((err) => {
+        if (!cancelled) setFailure({ key: requestKey, message: errorMessage(err, 'Failed to load analytics.') });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [standalone, requestKey, requestParams, reloadToken]);
+
+  // Data for the selected range if we have it; otherwise keep showing the last range (dimmed).
+  const current = loaded?.key === requestKey ? loaded.data : null;
+  const cached = current ? null : peekStaffGet(ANALYTICS_URL, requestParams)?.data;
+  const data: PlatformAnalytics | null = current || (cached?.success ? cached.data : null) || loaded?.data || null;
+  const upToDate = Boolean(current || cached?.success);
+  const error = failure?.key === requestKey ? failure.message : '';
+  // Waiting for the server's answer for this range (cached data stays fully visible meanwhile).
+  const revalidating = !standalone && !current && !error;
+  // Showing another range's numbers until this one arrives: dim them.
+  const pending = revalidating && !upToDate;
+
+  const updateParams = (mutate: (params: URLSearchParams) => void) => {
+    const next = new URLSearchParams(searchParams);
+    mutate(next);
+    setSearchParams(next, { replace: true });
+  };
+
+  const switchTab = (id: TabId) => {
+    if (id === 'feedback') prefetchStaffRoute('/admin/feedbacks');
+    updateParams((p) => {
+      if (id === 'overview') p.delete('tab');
+      else p.set('tab', id);
+      if (id !== 'money') p.delete('ledger');
+    });
+  };
+
+  const changeRange = (next: RangeSelection) => {
+    updateParams((p) => {
+      ['range', 'from', 'to', 'bucket'].forEach((k) => p.delete(k));
+      if (next.range !== '30d') p.set('range', next.range);
+      if (next.range === 'custom' && next.from && next.to) {
+        p.set('from', next.from);
+        p.set('to', next.to);
+      }
+      if (next.bucket) p.set('bucket', next.bucket);
+    });
+  };
+
+  const changeLedger = (kind: LedgerKind) => {
+    updateParams((p) => {
+      p.set('tab', 'money');
+      if (kind === 'topups') p.delete('ledger');
+      else p.set('ledger', kind);
+    });
+  };
+
+  const retry = () => {
+    setFailure(null);
+    setReloadToken((n) => n + 1);
+  };
+
+  const refresh = async () => {
+    setRefreshing(true);
     try {
-      const res = await staffGet(ANALYTICS_URL);
-      if (res.data?.success) setData(res.data.data);
-      else setError('Failed to load platform analytics');
-    } catch {
-      setError('Failed to load platform analytics');
+      const res = await api.get(ANALYTICS_URL, { params: { ...(requestParams || {}), refresh: '1' } });
+      if (res.data?.success) {
+        setLoaded({ key: requestKey, data: res.data.data });
+        setFailure(null);
+      } else {
+        showErrorToast(res.data?.message || 'Could not refresh analytics.');
+      }
+    } catch (err) {
+      showErrorToast(errorMessage(err, 'Could not refresh analytics.'));
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    void load();
-  }, []);
+  if (!standalone && !data && !error) return <ConsolePageSkeleton />;
 
-  useEffect(() => {
-    if (paramTab && valid.includes(paramTab)) {
-      setTab(paramTab);
-      if (paramTab === 'feedback') prefetchStaffRoute('/admin/feedbacks');
-    }
-  }, [paramTab]);
-
-  const switchTab = (id: TabId) => {
-    setTab(id);
-    if (id === 'feedback') prefetchStaffRoute('/admin/feedbacks');
-    setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
-  };
-
-  const q = search.trim().toLowerCase();
-
-  const filteredMembers = useMemo(() => {
-    if (!data) return [];
-    let list = filterMembersByState(data.memberDirectory, filters);
-    if (q) {
-      list = list.filter(
-        (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.username.toLowerCase().includes(q) ||
-          m.status.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [data, filters, q]);
-
-  const filteredWeeks = useMemo(() => {
-    if (!data) return [];
-    return filterByDateWindow(data.growth.signupsByWeek, filters, 'weekStart');
-  }, [data, filters]);
-
-  const filteredMonths = useMemo(() => {
-    if (!data) return [];
-    return filterByDateWindow(data.growth.signupsByMonth, filters, 'monthStart');
-  }, [data, filters]);
-
-  const filteredActivity = useMemo(() => {
-    if (!data?.growth.activityTrend) return [];
-    return filterByDateWindow(data.growth.activityTrend, filters, 'weekStart');
-  }, [data, filters]);
-
-  const availableYears = useMemo(() => {
-    if (!data) return [new Date().getFullYear()];
-    const years = new Set<number>([new Date().getFullYear()]);
-    for (const m of data.memberDirectory) {
-      if (m.joinedAt) years.add(new Date(m.joinedAt).getFullYear());
-    }
-    for (const w of data.growth.signupsByWeek) {
-      if (w.weekStart) years.add(new Date(w.weekStart).getFullYear());
-    }
-    return [...years].sort((a, b) => b - a);
-  }, [data]);
-
-  const standalone = STANDALONE_TABS.includes(tab);
-
-  if (loading && !standalone) {
-    return (
-      <ConsolePageSkeleton />
-    );
-  }
-
-  if (!data && !standalone) {
-    return (
-      <main className="p-8 md:pl-[284px]">
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
-          {error}
-          <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">
-            Retry
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  const kpis = data?.kpis;
-  const alerts = data?.alerts || [];
-  const filterActive = isFilterActive(filters);
+  const range = data?.range;
+  const subtitle =
+    tab === 'feedback'
+      ? 'Suggestions and ratings from members'
+      : tab === 'traffic'
+        ? 'API request volume, 429 responses and client addresses (this server only)'
+        : range
+          ? `${range.label} · ${fmtDay(range.from)} – ${fmtDay(range.to)}${
+              range.previous ? ` · compared with the ${range.days} days before` : ''
+            }`
+          : 'Platform analytics';
 
   return (
-    <main className="min-h-screen md:pl-[260px]">
+    <main className="relative min-h-screen md:pl-[260px]">
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
-        <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between md:px-8">
-          <div>
+        <div className="flex flex-col gap-3 px-6 py-4 md:px-8 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Analytics</p>
             <h1 className="text-xl font-bold text-white">Platform analytics</h1>
-            <p className="mt-1 text-xs text-zinc-500">
-              {tab === 'feedback'
-                ? `Suggestions & ratings · @${user?.username || 'admin'}`
-                : tab === 'traffic'
-                  ? `API request volume, 429 responses & IP pass-through · @${user?.username || 'admin'}`
-                  : `${filterActive ? `${filteredMembers.length} filtered` : kpis?.totalMembers ?? '—'} members · engagement ${kpis?.engagementScore ?? '—'}/100 · @${user?.username || 'admin'}`}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
+              <span>{subtitle}</span>
+              {!standalone && data && (
+                <span className="inline-flex items-center gap-1.5 text-zinc-600">
+                  {revalidating ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {pending ? 'Loading…' : 'Updating…'}
+                    </>
+                  ) : (
+                    <>
+                      · Updated {formatRelative(data.generatedAt)}
+                      {data.cached ? ' (cached up to a minute)' : ''}
+                    </>
+                  )}
+                </span>
+              )}
             </p>
           </div>
           {!standalone && (
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[200px] flex-1 lg:w-72">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search members…"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-                />
-              </div>
+              <AnalyticsRangePicker
+                value={selection}
+                days={upToDate ? range?.days ?? null : null}
+                today={range?.today ?? null}
+                onChange={changeRange}
+              />
               <button
                 type="button"
-                onClick={() => void load(true)}
-                disabled={refreshing}
-                className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
+                onClick={() => void refresh()}
+                disabled={refreshing || pending}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2 text-sm text-zinc-300 hover:border-white/20 hover:text-white disabled:opacity-50"
+                title="Recalculate now instead of using the one-minute cache"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
@@ -299,11 +264,12 @@ export default function AnalyticsPage() {
             </div>
           )}
         </div>
-        <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
+        <nav aria-label="Analytics sections" className="flex gap-1 overflow-x-auto px-4 md:px-6">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
+              aria-current={tab === id ? 'page' : undefined}
               onClick={() => switchTab(id)}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
                 tab === id ? 'border-rose-400 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
@@ -313,670 +279,40 @@ export default function AnalyticsPage() {
               {label}
             </button>
           ))}
-        </div>
+        </nav>
       </header>
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
         {tab === 'feedback' && <AdminFeedbacksPanel />}
         {tab === 'traffic' && <RateLimitMonitorPanel />}
 
-        {!standalone && data && (
-          <>
-        <AnalyticsFilters
-          filters={filters}
-          onChange={setFilters}
-          resultCount={filteredMembers.length}
-          totalCount={data.memberDirectory.length}
-          availableYears={availableYears}
-        />
-
-        <div className="flex flex-wrap gap-2">
-          {alerts.map((a) => (
-            <span
-              key={a.id}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
-                a.severity === 'warning'
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                  : a.severity === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                    : 'border-white/10 bg-white/[0.03] text-zinc-300'
-              }`}
-            >
-              {a.severity === 'success' ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-              {a.message}
+        {!standalone && error && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-500/20 bg-rose-500/[0.07] px-5 py-4 text-sm text-rose-100">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-300" />
+              {data ? `Could not load this range: ${error} Showing ${data.range.label.toLowerCase()} instead.` : error}
             </span>
-          ))}
-        </div>
+            <button type="button" onClick={retry} className="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs font-medium hover:bg-rose-500/10">
+              Try again
+            </button>
+          </div>
+        )}
 
-        {tab === 'overview' && (
-          <OverviewTab
-            data={data}
-            filteredMembers={filteredMembers}
-            filteredWeeks={filteredWeeks}
-            filteredMonths={filteredMonths}
-            filteredActivity={filteredActivity}
-            filterActive={filterActive}
-            granularity={filters.granularity}
-          />
-        )}
-        {tab === 'growth' && (
-          <GrowthTab
-            data={data}
-            filteredMembers={filteredMembers}
-            filteredWeeks={filteredWeeks}
-            filteredMonths={filteredMonths}
-          />
-        )}
-        {tab === 'community' && <CommunityTab data={data} />}
-        {tab === 'economy' && <EconomyTab data={data} filteredMembers={filteredMembers} />}
-        {tab === 'finance' && <PlatformEconomyAnalytics data={data} filteredMembers={filteredMembers} />}
-        {tab === 'health' && <HealthTab data={data} filteredMembers={filteredMembers} />}
-          </>
+        {!standalone && data && (
+          <div className={`space-y-6 transition-opacity ${pending ? 'pointer-events-none opacity-60' : ''}`} aria-busy={pending}>
+            {data.problems.length > 0 && (
+              <Notice tone="warning">
+                Some figures could not be loaded ({data.problems.join(', ')}). They show as zero or blank. Refresh to try again.
+              </Notice>
+            )}
+            {tab === 'overview' && <OverviewTab data={data} />}
+            {tab === 'members' && <MembersTab data={data} />}
+            {tab === 'community' && <CommunityTab data={data} />}
+            {tab === 'money' && <MoneyTab data={data} ledgerKind={ledgerKind} onLedgerKindChange={changeLedger} />}
+            {tab === 'operations' && <OperationsTab data={data} />}
+          </div>
         )}
       </div>
     </main>
-  );
-}
-
-function OverviewTab({
-  data,
-  filteredMembers,
-  filteredWeeks,
-  filteredMonths,
-  filteredActivity,
-  filterActive,
-  granularity,
-}: {
-  data: PlatformAnalytics;
-  filteredMembers: PlatformAnalytics['memberDirectory'];
-  filteredWeeks: PlatformAnalytics['growth']['signupsByWeek'];
-  filteredMonths: PlatformAnalytics['growth']['signupsByMonth'];
-  filteredActivity: NonNullable<PlatformAnalytics['growth']['activityTrend']>;
-  filterActive: boolean;
-  granularity: AnalyticsFilterState['granularity'];
-}) {
-  const { kpis, growth, charts, insights, community } = data;
-
-  const cumulativeArea = filteredWeeks.map((w) => ({
-    label: w.week,
-    value: w.cumulativeMembers,
-  }));
-
-  const activitySeries = filteredActivity.length
-    ? filteredActivity
-    : data.growth.activityTrend || [];
-
-  const signupChartData =
-    granularity === 'month' || granularity === 'year'
-      ? filteredMonths.map((m) => ({
-          label: granularity === 'year' ? m.label.split(' ')[1] || m.label : m.label.split(' ')[0],
-          value: m.value,
-        }))
-      : filteredWeeks.map((w) => ({ label: w.week, value: w.newMembers }));
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard
-          label="Total members"
-          value={filterActive ? filteredMembers.length : kpis.totalMembers}
-          sub={`${kpis.activeMembers} active platform-wide`}
-          icon={Users}
-        />
-        <KpiCard
-          label="New this week"
-          value={kpis.newMembersThisWeek}
-          sub={`${kpis.memberGrowthPercent >= 0 ? '+' : ''}${kpis.memberGrowthPercent}% WoW`}
-          icon={UserPlus}
-        />
-        <KpiCard label="Engagement score" value={`${kpis.engagementScore}/100`} icon={Activity} />
-        <KpiCard
-          label="Verified members"
-          value={`${kpis.verifiedMembersPercent}%`}
-          sub={`${data.audience.byVerification.fullyVerified} fully verified`}
-          icon={CheckCircle2}
-        />
-        <KpiCard
-          label="Profile completion"
-          value={`${kpis.profileCompletePercent}%`}
-          sub={`${data.audience.profileHealth.completeProfiles} complete profiles`}
-          icon={Shield}
-        />
-        <KpiCard
-          label="Credits in circulation"
-          value={kpis.totalCreditsInCirculation.toLocaleString()}
-          sub={`${kpis.activeMembers} active members`}
-          icon={Coins}
-        />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        <KpiCard
-          label="Open tickets"
-          value={kpis.openTickets ?? data.liveModules?.openTickets ?? 0}
-          sub={`${data.liveModules?.tickets ?? 0} total`}
-          icon={AlertTriangle}
-        />
-        <KpiCard
-          label="Ticket satisfaction"
-          value={kpis.ticketSatisfaction == null ? '—' : `${kpis.ticketSatisfaction}/5`}
-          sub={`${kpis.ticketRatings ?? 0} ratings after resolve`}
-          icon={CheckCircle2}
-        />
-        <KpiCard
-          label="Open reports"
-          value={kpis.openReports ?? data.liveModules?.openReports ?? 0}
-          sub={`${data.liveModules?.reports ?? 0} total`}
-          icon={AlertTriangle}
-        />
-        <KpiCard
-          label="Open disputes"
-          value={kpis.openDisputes ?? data.liveModules?.openDisputes ?? 0}
-          sub={`${data.liveModules?.disputes ?? 0} total`}
-          icon={Shield}
-        />
-        <KpiCard label="Teams" value={kpis.teams ?? data.liveModules?.teams ?? 0} icon={Users} />
-        <KpiCard
-          label="Marketplace listings"
-          value={kpis.marketplaceListings ?? data.liveModules?.marketplaceListings ?? 0}
-          sub={`${data.liveModules?.pendingListings ?? 0} pending review`}
-          icon={LayoutGrid}
-        />
-        <KpiCard
-          label="Credit transactions"
-          value={data.liveModules?.creditTransactions ?? data.economy.creditTransactions ?? 0}
-          icon={Coins}
-        />
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <ChartCard>
-          <LineChart
-            title="Platform activity"
-            subtitle="Signups, tickets, reports, listings & credit transactions from the database"
-            labels={activitySeries.map((e) => e.label)}
-            series={[
-              { label: 'Signups', color: '#34d399', values: activitySeries.map((e) => e.signups) },
-              { label: 'Tickets', color: '#60a5fa', values: activitySeries.map((e) => e.tickets) },
-              { label: 'Reports', color: '#fbbf24', values: activitySeries.map((e) => e.reports) },
-              {
-                label: 'Credit tx',
-                color: '#f472b6',
-                values: activitySeries.map((e) => e.creditTransactions),
-              },
-              { label: 'Listings', color: '#a78bfa', values: activitySeries.map((e) => e.listings) },
-            ]}
-          />
-        </ChartCard>
-        <ChartCard>
-          <VerticalBarChart
-            title={granularity === 'month' || granularity === 'year' ? 'Signups by period' : 'Weekly signups'}
-            subtitle="Filtered by the selected date range"
-            data={signupChartData}
-            color="#fb7185"
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <ChartCard>
-          <DonutChart title="Verification mix" segments={charts.verificationMix} />
-        </ChartCard>
-        <ChartCard>
-          <DonutChart title="Member status" segments={charts.statusMix} />
-        </ChartCard>
-        <ChartCard>
-          <AreaChart
-            title="Cumulative growth"
-            subtitle="Members over time"
-            data={cumulativeArea.length ? cumulativeArea : [{ label: '—', value: 0 }]}
-            color="#34d399"
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <ChartCard>
-          <HorizontalBarChart
-            title="Live module counts"
-            subtitle="Direct PostgreSQL totals"
-            data={(charts.platformActivity || []).map((p) => ({ label: p.label, value: p.value }))}
-            colorFrom="#60a5fa"
-            colorTo="#fb7185"
-          />
-        </ChartCard>
-        <ChartCard>
-          <DonutChart title="Marketplace listings" segments={charts.listingStatusMix || []} />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <ChartCard>
-          <VerticalBarChart
-            title="Members by status"
-            data={data.audience.byStatus.map((s) => ({ label: s.label, value: s.count }))}
-            color="#60a5fa"
-          />
-        </ChartCard>
-        <ChartCard>
-          <HorizontalBarChart
-            title="Credit balance tiers"
-            data={charts.creditBuckets.map((t) => ({ label: t.label, value: t.count }))}
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <ChartCard>
-          <div className="mb-4 flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-400" />
-            <p className="text-sm font-semibold text-white">Insights</p>
-          </div>
-          <ul className="space-y-3">
-            {insights.map((i) => (
-              <li key={i.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm">
-                <p className="font-medium text-white">{i.title}</p>
-                <p className="mt-1 text-xs text-zinc-500">{i.detail}</p>
-              </li>
-            ))}
-          </ul>
-        </ChartCard>
-        <div className="grid gap-5">
-          <DataTable
-            title="Top members by credits"
-            columns={['Rank', 'Member', 'Credits', 'Status']}
-            rows={data.audience.topMembers.slice(0, 6).map((m) => [
-              String(m.rank),
-              m.name,
-              m.credits.toLocaleString(),
-              m.status,
-            ])}
-          />
-          <DataTable
-            title="Newest members"
-            columns={['Member', 'Status', 'Joined']}
-            rows={growth.newestMembers.slice(0, 5).map((m) => [m.name, m.status, formatDate(m.joinedAt)])}
-          />
-        </div>
-      </div>
-
-      {community.available && community.topGroups && community.topGroups.length > 0 && (
-        <DataTable
-          title="Largest community groups"
-          columns={['Group', 'Members', 'Status']}
-          rows={community.topGroups.map((g) => [g.name, String(g.members), g.status])}
-        />
-      )}
-    </div>
-  );
-}
-
-function GrowthTab({
-  data,
-  filteredMembers,
-  filteredWeeks,
-  filteredMonths,
-}: {
-  data: PlatformAnalytics;
-  filteredMembers: PlatformAnalytics['memberDirectory'];
-  filteredWeeks: PlatformAnalytics['growth']['signupsByWeek'];
-  filteredMonths: PlatformAnalytics['growth']['signupsByMonth'];
-}) {
-  const { growth, charts, audience } = data;
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-4">
-        {[
-          ['Trend', growth.trendLabel],
-          ['WoW change', `${growth.weekOverWeekChange}%`],
-          ['Avg signups/week', growth.avgSignupsPerWeek],
-          ['Retention est.', `${growth.retentionEstimate}%`],
-        ].map(([l, v]) => (
-          <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-[#12131a] px-4 py-3">
-            <p className="text-[10px] uppercase text-zinc-600">{l}</p>
-            <p className="text-xl font-bold text-white">{v}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ChartCard>
-          <AreaChart
-            title="Signup momentum"
-            subtitle="Weekly new members in selected range"
-            data={filteredWeeks.map((w) => ({ label: w.week, value: w.newMembers }))}
-          />
-        </ChartCard>
-        <ChartCard>
-          <HorizontalBarChart
-            title="Credit balance tiers"
-            data={charts.creditBuckets.map((t) => ({ label: t.label, value: t.count }))}
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ChartCard>
-          <DonutChart title="Verification breakdown" segments={data.charts.verificationMix} />
-        </ChartCard>
-        <ChartCard>
-          <VerticalBarChart
-            title="Signup email domains"
-            data={audience.emailDomains.map((d) => ({ label: d.domain, value: d.count }))}
-            color="#34d399"
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ChartCard>
-          <VerticalBarChart
-            title="Members by status"
-            data={data.audience.byStatus.map((s) => ({ label: s.label, value: s.count }))}
-            color="#818cf8"
-          />
-        </ChartCard>
-        <ChartCard>
-          <VerticalBarChart
-            title="Monthly signups"
-            data={filteredMonths.map((m) => ({ label: m.label.split(' ')[0], value: m.value }))}
-            color="#34d399"
-          />
-        </ChartCard>
-      </div>
-
-      <DataTable
-        title="Filtered member directory"
-        columns={['Member', 'Username', 'Status', 'Verification', 'Credits', 'Joined']}
-        rows={filteredMembers.slice(0, 25).map((m) => [
-          m.name,
-          `@${m.username}`,
-          m.status,
-          m.verification,
-          m.credits.toLocaleString(),
-          formatDate(m.joinedAt),
-        ])}
-      />
-
-      <DataTable
-        title="Newest signups (platform-wide)"
-        columns={['Member', 'Username', 'Status', 'Joined']}
-        rows={growth.newestMembers.map((m) => [
-          m.name,
-          `@${m.username}`,
-          m.status,
-          formatDate(m.joinedAt),
-        ])}
-      />
-    </div>
-  );
-}
-
-function CommunityTab({ data }: { data: PlatformAnalytics }) {
-  const { community, charts } = data;
-
-  if (!community.available) {
-    return (
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-10 text-center">
-        <MessageSquare className="mx-auto h-12 w-12 text-amber-400" />
-        <p className="mt-4 text-lg font-semibold text-white">Community metrics unavailable</p>
-        <p className="mt-2 text-sm text-zinc-500">{community.message}</p>
-      </div>
-    );
-  }
-
-  const s = community.summary!;
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ['Forum groups', s.total],
-          ['Active groups', s.active],
-          ['Members in groups', s.totalMembers],
-          ['Participation rate', community.participationRate != null ? `${community.participationRate}%` : '—'],
-          ['Discussions', community.discussions?.total ?? 0],
-          ['Avg comments', community.discussions?.avgComments ?? 0],
-          ['Avg group size', s.avgMembersPerGroup],
-          ['Inactive groups', s.inactive],
-        ].map(([l, v]) => (
-          <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-[#14151c] px-4 py-3">
-            <p className="text-[10px] uppercase text-zinc-600">{l}</p>
-            <p className="text-xl font-bold text-white">{v}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard>
-          <HorizontalBarChart
-            title="Popular forum tags"
-            data={(community.popularTags ?? []).map((t) => ({ label: t.tag, value: t.count }))}
-          />
-        </ChartCard>
-        <ChartCard>
-          <VerticalBarChart
-            title="Group size distribution"
-            data={charts.groupSizeDistribution.map((g) => ({ label: g.label, value: g.count }))}
-            color="#818cf8"
-          />
-        </ChartCard>
-      </div>
-
-      <ChartCard>
-        <VerticalBarChart
-          title="Top groups by membership"
-          data={(community.topGroups ?? []).map((g) => ({ label: g.name.slice(0, 12), value: g.members }))}
-          color="#f472b6"
-        />
-      </ChartCard>
-
-      <DataTable
-        title="Recent discussions"
-        columns={['Title', 'Comments', 'Author ID']}
-        rows={(community.recentDiscussions ?? []).map((d) => [d.title, String(d.comments), String(d.authorId ?? '—')])}
-      />
-    </div>
-  );
-}
-
-function EconomyTab({
-  data,
-  filteredMembers,
-}: {
-  data: PlatformAnalytics;
-  filteredMembers: PlatformAnalytics['memberDirectory'];
-}) {
-  const { economy, charts } = data;
-
-  const filteredCredits = filteredMembers.reduce((s, m) => s + m.credits, 0);
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Credits in circulation" value={economy.totalCreditsInCirculation.toLocaleString()} icon={Coins} />
-        <KpiCard label="Avg credits / member" value={economy.avgCreditsPerMember.toLocaleString()} icon={Users} />
-        <KpiCard
-          label="Credit transactions"
-          value={economy.creditTransactions ?? data.liveModules?.creditTransactions ?? 0}
-          icon={Activity}
-        />
-        <KpiCard label="Filtered credits" value={filteredCredits.toLocaleString()} icon={TrendingUp} />
-      </div>
-
-      {filteredMembers.length !== data.memberDirectory.length && (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-sm text-rose-100">
-          Filtered subset: {filteredCredits.toLocaleString()} credits across {filteredMembers.length} members
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard>
-          <DonutChart
-            title="Credit balance tiers"
-            segments={charts.creditBuckets.map((b, i) => ({
-              label: b.label,
-              value: b.count,
-              color: ['#34d399', '#60a5fa', '#a78bfa', '#fb7185'][i] || '#71717a',
-            }))}
-          />
-        </ChartCard>
-        <ChartCard>
-          <HorizontalBarChart
-            title="Credit leaders"
-            data={economy.creditLeaders.map((m) => ({ label: m.name.slice(0, 18), value: m.credits }))}
-          />
-        </ChartCard>
-      </div>
-
-      <DataTable
-        title="Economy leaders detail"
-        columns={['Member', 'Username', 'Credits']}
-        rows={economy.creditLeaders.map((m) => [m.name, `@${m.username}`, m.credits.toLocaleString()])}
-      />
-    </div>
-  );
-}
-
-function HealthTab({
-  data,
-  filteredMembers,
-}: {
-  data: PlatformAnalytics;
-  filteredMembers: PlatformAnalytics['memberDirectory'];
-}) {
-  const { operations, audience, kpis, comingSoon, liveModules } = data;
-  const ph = audience.profileHealth;
-  const score = operations.platformHealthScore;
-  const modules = liveModules || {
-    teams: 0,
-    marketplaceListings: 0,
-    pendingListings: 0,
-    approvedListings: 0,
-    jobs: 0,
-    projects: 0,
-    creditTransactions: 0,
-    reports: 0,
-    openReports: 0,
-    disputes: 0,
-    openDisputes: 0,
-    tickets: 0,
-    openTickets: 0,
-    violations: 0,
-    activeViolations: 0,
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-3">
-        <ChartCard className="flex flex-col items-center justify-center text-center">
-          <p className="text-sm font-semibold text-white">Platform health score</p>
-          <div className="relative mt-4 flex h-36 w-36 items-center justify-center">
-            <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-              <circle
-                cx="50"
-                cy="50"
-                r="42"
-                fill="none"
-                stroke={score >= 70 ? '#34d399' : score >= 40 ? '#fbbf24' : '#f87171'}
-                strokeWidth="8"
-                strokeDasharray={`${(score / 100) * 264} 264`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="text-4xl font-bold text-white">{score}</span>
-          </div>
-          <p className="mt-2 text-xs text-zinc-500">Composite of members, profiles & community</p>
-        </ChartCard>
-        <ChartCard className="lg:col-span-2">
-          <VerticalBarChart
-            title="Moderation team capacity"
-            data={operations.moderationTeam.map((r) => ({ label: r.role.split(' ')[0], value: r.count }))}
-            color="#34d399"
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ['Active moderators', operations.activeModerators],
-          ['Pending verifications', operations.pendingVerifications],
-          ['Suspended accounts', operations.suspendedAccounts],
-          ['Banned accounts', operations.bannedAccounts ?? 0],
-          ['Non-active accounts', operations.nonActiveAccounts],
-          ['Open tickets', operations.openTickets ?? modules.openTickets],
-          ['Open reports', operations.openReports ?? modules.openReports],
-          ['Open disputes', operations.openDisputes ?? modules.openDisputes],
-          ['Active violations', operations.activeViolations ?? modules.activeViolations],
-          ['Pending listings', operations.pendingListings ?? modules.pendingListings],
-          ['Complete profiles', ph.completeProfiles],
-          ['Avatar rate', `${ph.avatarRate}%`],
-        ].map(([l, v]) => (
-          <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-[#14151c] px-4 py-3">
-            <p className="text-[10px] uppercase text-zinc-600">{l}</p>
-            <p className="text-xl font-bold text-white">{v}</p>
-          </div>
-        ))}
-      </div>
-
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <h2 className="font-semibold text-white">Live database modules</h2>
-        <p className="mt-1 text-xs text-zinc-500">Counts scanned directly from PostgreSQL</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ['Teams', modules.teams],
-            ['Jobs', modules.jobs],
-            ['Projects', modules.projects],
-            ['Listings', modules.marketplaceListings],
-            ['Approved listings', modules.approvedListings],
-            ['Credit transactions', modules.creditTransactions],
-            ['Reports', modules.reports],
-            ['Disputes', modules.disputes],
-            ['Tickets', modules.tickets],
-            ['Violations', modules.violations],
-            ['Tagline rate', `${ph.taglineRate}%`],
-            ['Filtered members', filteredMembers.length],
-          ].map(([l, v]) => (
-            <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <p className="text-[10px] uppercase text-zinc-600">{l}</p>
-              <p className="text-lg font-bold text-white">{v}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <ChartCard>
-        <DonutChart
-          title="Profile completion"
-          segments={[
-            { label: 'With avatar', value: ph.withAvatar, color: '#60a5fa' },
-            { label: 'With tagline', value: ph.withTagline, color: '#a78bfa' },
-            { label: 'Complete both', value: ph.completeProfiles, color: '#34d399' },
-            {
-              label: 'Incomplete',
-              value: Math.max(0, audience.totalMembers - ph.completeProfiles),
-              color: '#52525b',
-            },
-          ].filter((s) => s.value > 0)}
-        />
-      </ChartCard>
-
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <h2 className="font-semibold text-white">{comingSoon.title}</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {comingSoon.modules.map((m) => (
-            <div key={m.name} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <p className="font-medium text-white">{m.name}</p>
-              <p className="mt-1 text-xs text-zinc-500">{m.metrics}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-4 text-xs text-zinc-600">
-          {kpis.moderationTeamSize} staff accounts currently support platform operations.
-        </p>
-      </section>
-    </div>
   );
 }

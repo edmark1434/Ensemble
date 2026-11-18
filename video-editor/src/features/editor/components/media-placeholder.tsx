@@ -41,6 +41,7 @@ export function MediaPlaceholder({
   return (
     <output
       ref={ref}
+      className={loading ? "opacity-50" : undefined}
       style={{
         position: "absolute",
         inset: 0,
@@ -48,11 +49,11 @@ export function MediaPlaceholder({
         alignItems: "center",
         justifyContent: "center",
         gap: 8 / scale,
-        backgroundColor: loading ? "#2E1D12" : "#27272a",
+        backgroundColor: loading ? "var(--primary)" : "#27272a",
         backgroundImage: loading ? "none" : SCENE_PATTERN,
         backgroundSize: `${12 / scale}px ${12 / scale}px`,
         boxShadow: loading ? "none" : "inset 0 0 0 99999px rgba(0,0,0,0.25)",
-        color: loading ? "#fdba74" : "#d4d4d8",
+        color: loading ? "var(--primary-foreground)" : "#d4d4d8",
         fontFamily: "var(--font-plus-jakarta-sans), sans-serif",
         fontSize: 14 / scale,
         fontWeight: 500,

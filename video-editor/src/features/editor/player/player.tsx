@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import Composition from "./composition";
 import { Player as RemotionPlayer, PlayerRef } from "@remotion/player";
 import useStore from "../store/use-store";
+import { useSharePlayhead } from "../collab/position-presence";
 
 const CHECKERBOARD_STYLE: React.CSSProperties = {
   backgroundImage:
@@ -13,6 +14,7 @@ const CHECKERBOARD_STYLE: React.CSSProperties = {
 const Player = () => {
   const playerRef = useRef<PlayerRef>(null);
   const { setPlayerRef, duration, fps, size, muted } = useStore();
+  useSharePlayhead(playerRef, fps);
 
   useEffect(() => {
     setPlayerRef(playerRef as React.RefObject<PlayerRef>);

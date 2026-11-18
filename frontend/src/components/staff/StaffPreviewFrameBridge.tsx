@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
+import { STAFF_PREVIEW_HIDE_CSS, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
 import {
   isStaffConsolePath,
   isStaffPreviewFrame,
@@ -25,7 +26,9 @@ function frameHistoryIndex(): number {
  * - reports the page it shows so the console can show it and keep its own URL in sync;
  * - keeps staff on member pages: console pages, sign-in pages, and member-only tools are
  *   swapped for their section's public page;
- * - opens this site's links in place, since a new tab would leave the console.
+ * - opens this site's links in place, since a new tab would leave the console;
+ * - runs the view-only guard (hide and block member actions) on every page, including the
+ *   landing and not-found pages that render outside `Layout`.
  */
 export default function StaffPreviewFrameBridge() {
   const inFrame = isStaffPreviewFrame();
@@ -33,6 +36,9 @@ export default function StaffPreviewFrameBridge() {
   const location = useLocation();
   const isStaff = useGlobalState((state) => state.user?.type === "Staff");
   const current = `${location.pathname}${location.search}${location.hash}`;
+  const guarded = inFrame && isStaff;
+
+  useStaffPlatformGuard(guarded, navigate);
 
   useEffect(() => {
     if (!inFrame) return;
@@ -93,5 +99,5 @@ export default function StaffPreviewFrameBridge() {
     };
   }, [inFrame, isStaff, navigate]);
 
-  return null;
+  return guarded ? <style>{STAFF_PREVIEW_HIDE_CSS}</style> : null;
 }

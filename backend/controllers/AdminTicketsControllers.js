@@ -2,7 +2,6 @@ const {
   getTicketsOverview,
   getTicketDetail,
   getTicketQueueFacts,
-  listParticipantTicketIds,
   searchTicketParticipants,
   addTicketParticipant,
   removeTicketParticipant,
@@ -35,7 +34,14 @@ const {
   submitTicketSatisfaction,
   adjustTicketCredits,
 } = require('../repositories/TicketHelpRepositories');
-const { pool } = require('../lib/Database');
+const {
+  listMemberTickets,
+  getMemberTicket,
+  listMemberDisputes,
+  getMemberDispute,
+  getCaseSummary,
+  notifyCaseOpened,
+} = require('../services/CaseServices');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
 const { createStaffTicketService } = require('../services/TicketServices');
@@ -280,7 +286,7 @@ async function postAdminDisputeMessage(req, res) {
     if (msg.includes('MongoDB')) {
       return res.status(503).json({ success: false, message: msg });
     }
-    const isClient = /assign yourself|view only|could not match/i.test(msg);
+    const isClient = Number(err?.statusCode) === 400 || /assign yourself|view only|could not match/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
@@ -308,7 +314,7 @@ async function patchAdminDisputeMessage(req, res) {
     if (msg.includes('MongoDB')) {
       return res.status(503).json({ success: false, message: msg });
     }
-    const isClient = /assign yourself|invalid|not found/i.test(msg);
+    const isClient = Number(err?.statusCode) === 400 || /assign yourself|invalid|not found/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
@@ -472,6 +478,12 @@ async function createPublicTicket(req, res) {
       },
       req.session
     );
+    await notifyCaseOpened({
+      accountId: requesterAccountId,
+      kind: 'ticket',
+      id: data.ticket.id,
+      number: data.ticket.number,
+    });
 
     res.status(201).json({
       success: true,
@@ -523,37 +535,8 @@ async function listMyTickets(req, res) {
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    const participantTicketIds = await listParticipantTicketIds(accountId);
-    const result = await pool.query(
-      `
-      SELECT ticket_id, ticket_number, reason, type, priority, status,
-             message_count, last_message_at, created_at, updated_at, resolved_at
-      FROM tickets
-      WHERE deleted_at IS NULL
-        AND (account_id = $1 OR ticket_id = ANY($2::uuid[]))
-      ORDER BY updated_at DESC NULLS LAST, created_at DESC
-      `,
-      [accountId, participantTicketIds]
-    );
-    res.status(200).json({
-      success: true,
-      data: result.rows.map((r) => ({
-        id: r.ticket_id,
-        number: r.ticket_number,
-        subject: r.reason,
-        reason: r.reason,
-        type: r.type,
-        category: r.type,
-        priority: r.priority,
-        status: r.status,
-        messageCount: Number(r.message_count || 0),
-        lastMessageAt: r.last_message_at,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-        closedAt: r.resolved_at,
-        resolvedAt: r.resolved_at,
-      })),
-    });
+    const data = await listMemberTickets(accountId, req.accountAccess);
+    res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error listing user tickets:', err);
     res.status(500).json({ success: false, message: 'Failed to load tickets' });
@@ -566,8 +549,7 @@ async function listMyDisputes(req, res) {
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    const { listAccountDisputes } = require('../repositories/DisputeChatRepositories');
-    const data = await listAccountDisputes(accountId);
+    const data = await listMemberDisputes(accountId, req.accountAccess);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error listing user disputes:', err);
@@ -581,8 +563,7 @@ async function getMyDispute(req, res) {
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    const { getAccountDispute } = require('../repositories/DisputeChatRepositories');
-    const data = await getAccountDispute(req.params.id, accountId);
+    const data = await getMemberDispute(req.params.id, accountId, req.accountAccess);
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -597,23 +578,29 @@ async function getMyTicket(req, res) {
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    const data = await getTicketDetail(req.params.id);
-    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (!sessionCanReadTicket(data, accountId)) {
-      return res.status(403).json({ success: false, message: 'Not your ticket' });
+    const result = await getMemberTicket(req.params.id, accountId, req.accountAccess);
+    if (result.status !== 200) {
+      return res.status(result.status).json({ success: false, message: result.message });
     }
-    // Hide staff internal notes from requesters.
-    data.messages = (data.messages || []).filter((m) => !m.isInternal);
-    delete data.assignableStaff;
-    delete data.permissions;
-    delete data.timeline;
-    delete data.payments;
-    delete data.articles;
-    delete data.canAdjustCredits;
-    res.status(200).json({ success: true, data });
+    res.status(200).json({ success: true, data: result.data });
   } catch (err) {
     console.error('Error fetching user ticket:', err);
     res.status(500).json({ success: false, message: 'Failed to load ticket' });
+  }
+}
+
+/** Open cases and what needs the member: the case bar and the sidebar badge. */
+async function getMyCaseSummary(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const data = await getCaseSummary(accountId, req.accountAccess);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error loading case summary:', err);
+    res.status(500).json({ success: false, message: 'Failed to load your cases' });
   }
 }
 
@@ -903,6 +890,7 @@ module.exports = {
   listMyDisputes,
   getMyDispute,
   getMyTicket,
+  getMyCaseSummary,
   postMyTicketMessage,
   postMyTicketInvite,
   createMyTechnicalReport,

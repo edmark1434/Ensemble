@@ -127,6 +127,7 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   ACCOUNT_LOCKED:             tone("rose", i(XCircle)),
   RESTORE:                    tone("green", i(CheckCircle2)),
   // Tickets
+  TICKET_RECEIVED:            tone("indigo", i(Ticket)),
   TICKET_ASSIGNED:            tone("indigo", i(Ticket)),
   TICKET_RESOLVED:            tone("green", i(CheckCircle2)),
   TICKET_REPLY:               tone("indigo", i(Ticket)),
@@ -187,6 +188,7 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   TICKET_CLOSE_SCHEDULED: "Ticket Closing Soon",
   TICKET_REPLY: "Ticket Reply", TICKET_INTERNAL_REPLY: "Internal Reply",
   TICKET_INVITE: "Ticket Invite",
+  TICKET_RECEIVED: "Ticket Received",
 };
 
 export function getNotificationLabel(prefix: string): string {

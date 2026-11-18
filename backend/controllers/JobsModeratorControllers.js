@@ -191,7 +191,7 @@ async function postDisputeMessage(req, res) {
   } catch (err) {
     console.error('Error adding dispute message:', err);
     const msg = err.message || 'Failed to add message';
-    const isClient = /permission|assign yourself|MongoDB|not found/i.test(msg);
+    const isClient = Number(err?.statusCode) === 400 || /permission|assign yourself|MongoDB|not found/i.test(msg);
     res.status(msg.includes('MongoDB') ? 503 : isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
@@ -219,7 +219,7 @@ async function patchDisputeMessage(req, res) {
     if (msg.includes('MongoDB')) {
       return res.status(503).json({ success: false, message: msg });
     }
-    const isClient = /assign yourself|invalid|not found|permission/i.test(msg);
+    const isClient = Number(err?.statusCode) === 400 || /assign yourself|invalid|not found|permission/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }

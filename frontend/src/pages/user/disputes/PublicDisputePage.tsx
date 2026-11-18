@@ -444,8 +444,9 @@ export default function PublicDisputePage() {
       const category = messageCategory(message);
       counts[category] += 1;
       if (category === "rulings") {
-        latestRuling = message;
         const kind = parseDisputeRuling(message.body).kind;
+        // Notices (filing summary, "now public" invite) decide nothing, so they are not the latest ruling.
+        if (kind !== "notice") latestRuling = message;
         if (kind === "decision" || kind === "reopen") latestCaseRuling = message;
       } else {
         people.add(String(message.senderAccountId || `${message.authorName}|${message.authorRole}`));

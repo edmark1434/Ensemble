@@ -30,5 +30,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/editor/:path*", "/preview/:path*"],
+  matcher: ["/editor/:path*", "/preview/:path*", "/saves/:path*"],
 };

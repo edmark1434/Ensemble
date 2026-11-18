@@ -814,6 +814,7 @@ const BANNED_READ_ALLOWLIST = [
   /^\/api\/users\/tickets\/[^/]+$/,
   /^\/api\/users\/disputes$/,
   /^\/api\/users\/disputes\/[^/]+$/,
+  /^\/api\/users\/cases\/summary$/,
   /^\/api\/accounts\/disputes\/[^/]+$/,
 ];
 

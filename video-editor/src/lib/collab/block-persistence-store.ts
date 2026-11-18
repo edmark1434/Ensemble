@@ -71,13 +71,17 @@ export function withBlockSnapshotLock<T>(blockId: string, fn: () => Promise<T>):
 // isn't currently open by anyone. Also fixes the fact that compactBlock
 // itself never trims block_yjs_updates, so those rows never got flushed
 // unless someone force-saved while that specific block's room was open.
-export async function compactBlockFromStorage(blockId: string): Promise<void> {
+// extraUpdate (e.g. a live room's state) is merged on top, the same way
+// compactProject takes one. Returns the id of the snapshot that now holds
+// the block's state (the existing one when there was nothing new to merge),
+// or undefined when the block has no state at all.
+export async function compactBlockFromStorage(blockId: string, extraUpdate?: Uint8Array): Promise<string | undefined> {
   const snapshotRow = await db
     .selectFrom("block_yjs_snapshots")
     .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "block_yjs_snapshots.yjs_snapshot_id")
     .where("block_yjs_snapshots.block_id", "=", blockId)
     .orderBy("yjs_snapshots.created_at", "desc")
-    .select(["yjs_snapshots.document", "yjs_snapshots.created_at"])
+    .select(["yjs_snapshots.yjs_snapshot_id", "yjs_snapshots.document", "yjs_snapshots.created_at"])
     .executeTakeFirst();
 
   let updatesQuery = db
@@ -92,15 +96,16 @@ export async function compactBlockFromStorage(blockId: string): Promise<void> {
   }
 
   const updateRows = await updatesQuery.execute();
-  if (!snapshotRow && updateRows.length === 0) return;
+  if (updateRows.length === 0 && !extraUpdate) return snapshotRow ? String(snapshotRow.yjs_snapshot_id) : undefined;
 
   const doc = new Y.Doc({ gc: false });
   if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
   for (const row of updateRows) Y.applyUpdate(doc, row.update);
+  if (extraUpdate) Y.applyUpdate(doc, extraUpdate);
   const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
   doc.destroy();
 
-  await db.transaction().execute(async (trx) => {
+  return db.transaction().execute(async (trx) => {
     const newSnapshot = await trx
       .insertInto("yjs_snapshots")
       .values({ document: compacted })
@@ -117,5 +122,6 @@ export async function compactBlockFromStorage(blockId: string): Promise<void> {
       await trx.deleteFrom("block_yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
       await trx.deleteFrom("yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
     }
+    return String(newSnapshot.yjs_snapshot_id);
   });
 }

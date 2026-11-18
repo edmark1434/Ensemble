@@ -1,3 +1,5 @@
+import { casePath } from "@/lib/cases";
+
 /**
  * The open dispute on a contract, as the contracts API reports it to one viewer.
  *
@@ -52,7 +54,8 @@ export function contractDisputeWindowText(filing?: ContractDisputeFiling | null)
 export function contractDisputePath(dispute?: ContractActiveDispute | null): string | null {
   if (!dispute) return null;
   if (dispute.visibility && dispute.id) return `/disputes/${dispute.id}`;
-  if (dispute.filedByViewer) return "/contracts/disputes";
+  // A private case is the filer's conversation with staff, in Cases.
+  if (dispute.filedByViewer) return dispute.id ? casePath("dispute", dispute.id) : "/contracts/disputes";
   return null;
 }
 
