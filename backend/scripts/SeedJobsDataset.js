@@ -653,55 +653,59 @@ async function replaceAndSeed25Jobs() {
     const freshClients = otherUsers.slice(Math.min(3, otherUsers.length - 1));
     const applicantPool = otherUsers;
 
-    // 2. Safely remove old non-contracted jobs so we have a clean 25-job marketplace
-    await client.query(`
-      DELETE FROM proposal_milestones
-      WHERE proposal_id IN (
-        SELECT p.proposal_id FROM proposals p
-        WHERE p.proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
-      )
-    `);
-    await client.query(`
-      DELETE FROM proposals
-      WHERE proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
-    `);
-    await client.query(`
-      DELETE FROM job_saves
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM job_tags
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM job_attachments
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM job_milestones
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
-    await client.query(`
-      DELETE FROM jobs
-      WHERE job_id NOT IN (
-        SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
-      )
-    `);
+    const appendMode = process.argv.includes('--append');
 
-    // Ensure Randal Schuppe has 0 ratings so his Rising Job Posts qualify for the green Rising badge
-    if (randalUser) {
-      await client.query(`DELETE FROM ratings WHERE account_id = $1`, [randalUser.account_id]);
-    }
-    for (const fc of freshClients) {
-      await client.query(`DELETE FROM ratings WHERE account_id = $1`, [fc.account_id]);
+    // 2. Safely remove old non-contracted jobs so we have a clean 25-job marketplace (skipped in --append mode)
+    if (!appendMode) {
+      await client.query(`
+        DELETE FROM proposal_milestones
+        WHERE proposal_id IN (
+          SELECT p.proposal_id FROM proposals p
+          WHERE p.proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
+        )
+      `);
+      await client.query(`
+        DELETE FROM proposals
+        WHERE proposal_id NOT IN (SELECT proposal_id FROM job_contracts WHERE proposal_id IS NOT NULL)
+      `);
+      await client.query(`
+        DELETE FROM job_saves
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM job_tags
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM job_attachments
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM job_milestones
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+      await client.query(`
+        DELETE FROM jobs
+        WHERE job_id NOT IN (
+          SELECT DISTINCT p.job_id FROM proposals p JOIN job_contracts jc ON p.proposal_id = jc.proposal_id
+        )
+      `);
+
+      // Ensure Randal Schuppe has 0 ratings so his Rising Job Posts qualify for the green Rising badge
+      if (randalUser) {
+        await client.query(`DELETE FROM ratings WHERE account_id = $1`, [randalUser.account_id]);
+      }
+      for (const fc of freshClients) {
+        await client.query(`DELETE FROM ratings WHERE account_id = $1`, [fc.account_id]);
+      }
     }
 
     // Ensure Trusted Clients have 4.8 - 5.0 ratings
@@ -731,6 +735,13 @@ async function replaceAndSeed25Jobs() {
 
     for (let i = 0; i < JOBS_25.length; i++) {
       const item = JOBS_25[i];
+      if (appendMode) {
+        const dup = await client.query(
+          `SELECT 1 FROM jobs WHERE LOWER(title) = LOWER($1) AND deleted_at IS NULL LIMIT 1`,
+          [item.title]
+        );
+        if (dup.rows.length > 0) continue;
+      }
       typeStats[item.jobType] = (typeStats[item.jobType] || 0) + 1;
       archetypeStats[item.archetype] = (archetypeStats[item.archetype] || 0) + 1;
       totalProposalsCount += (item.proposalsToSeed || 0);

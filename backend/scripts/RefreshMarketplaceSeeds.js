@@ -4,11 +4,12 @@
  *
  * Options:
  *   --days=14   Number of days from NOW() to set application_deadline (default: 14)
+ *   --append    Add any missing seeded Jobs & Gigs without deleting existing ones
  *   --reseed    Run SeedJobsDataset.js and SeedGigsDataset.js for a full clean dataset reset
  *
  * Usage:
  *   node backend/scripts/RefreshMarketplaceSeeds.js
- *   node backend/scripts/RefreshMarketplaceSeeds.js --days=14
+ *   node backend/scripts/RefreshMarketplaceSeeds.js --append
  *   node backend/scripts/RefreshMarketplaceSeeds.js --reseed
  */
 require('dotenv').config({ quiet: true, path: require('path').resolve(__dirname, '../.env') });
@@ -24,18 +25,24 @@ function parseDaysArg() {
 
 async function run() {
   const shouldReseed = process.argv.includes('--reseed');
+  const shouldAppend = process.argv.includes('--append');
   const days = parseDaysArg();
 
-  if (shouldReseed) {
-    console.log(`Reseeding Jobs & Gigs datasets (application_deadline = +${days} days)...`);
+  if (shouldReseed || shouldAppend) {
+    const modeFlag = shouldReseed ? '--reseed' : '--append';
+    console.log(
+      `${shouldReseed ? 'Reseeding' : 'Appending missing'} Jobs & Gigs datasets (${modeFlag}, application_deadline = +${days} days)...`
+    );
     const scriptsDir = __dirname;
-    execFileSync(process.execPath, [path.join(scriptsDir, 'SeedJobsDataset.js'), `--days=${days}`], {
-      stdio: 'inherit',
-    });
-    execFileSync(process.execPath, [path.join(scriptsDir, 'SeedGigsDataset.js')], {
-      stdio: 'inherit',
-    });
-    return;
+    const jobArgs = [path.join(scriptsDir, 'SeedJobsDataset.js'), `--days=${days}`];
+    const gigArgs = [path.join(scriptsDir, 'SeedGigsDataset.js')];
+    if (shouldAppend) {
+      jobArgs.push('--append');
+      gigArgs.push('--append');
+    }
+    execFileSync(process.execPath, jobArgs, { stdio: 'inherit' });
+    execFileSync(process.execPath, gigArgs, { stdio: 'inherit' });
+    if (shouldReseed) return;
   }
 
   const res = await pool.query(

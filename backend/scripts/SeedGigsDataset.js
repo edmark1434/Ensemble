@@ -688,33 +688,44 @@ async function replaceAndSeed25Gigs() {
     const otherSellers = users.filter((u) => u.account_id !== users[0].account_id);
     const buyerAccount = users[0];
 
-    // 2. Cleanly remove all existing gigs and their dependent records
-    await client.query(`
-      DELETE FROM ratings
-      WHERE contract_id IN (SELECT contract_id FROM gig_contracts)
-    `);
-    const oldContractsRes = await client.query(`SELECT contract_id FROM gig_contracts`);
-    const oldContractIds = oldContractsRes.rows.map((r) => r.contract_id);
-    await client.query(`DELETE FROM gig_contracts`);
-    if (oldContractIds.length > 0) {
-      await client.query(`DELETE FROM contracts WHERE contract_id = ANY($1::uuid[])`, [oldContractIds]);
+    const appendMode = process.argv.includes('--append');
+
+    // 2. Cleanly remove all existing gigs and their dependent records (skipped in --append mode)
+    if (!appendMode) {
+      await client.query(`
+        DELETE FROM ratings
+        WHERE contract_id IN (SELECT contract_id FROM gig_contracts)
+      `);
+      const oldContractsRes = await client.query(`SELECT contract_id FROM gig_contracts`);
+      const oldContractIds = oldContractsRes.rows.map((r) => r.contract_id);
+      await client.query(`DELETE FROM gig_contracts`);
+      if (oldContractIds.length > 0) {
+        await client.query(`DELETE FROM contracts WHERE contract_id = ANY($1::uuid[])`, [oldContractIds]);
+      }
+      await client.query(`DELETE FROM gig_responses`);
+      await client.query(`DELETE FROM gig_requests`);
+      await client.query(`DELETE FROM gig_requirement_choices`);
+      await client.query(`DELETE FROM gig_requirements`);
+      await client.query(`DELETE FROM gig_saves`);
+      await client.query(`DELETE FROM gig_tags`);
+      await client.query(`DELETE FROM gig_attachments`);
+      await client.query(`DELETE FROM gig_milestones`);
+      await client.query(`DELETE FROM gig_tiers`);
+      await client.query(`DELETE FROM gigs`);
     }
-    await client.query(`DELETE FROM gig_responses`);
-    await client.query(`DELETE FROM gig_requests`);
-    await client.query(`DELETE FROM gig_requirement_choices`);
-    await client.query(`DELETE FROM gig_requirements`);
-    await client.query(`DELETE FROM gig_saves`);
-    await client.query(`DELETE FROM gig_tags`);
-    await client.query(`DELETE FROM gig_attachments`);
-    await client.query(`DELETE FROM gig_milestones`);
-    await client.query(`DELETE FROM gig_tiers`);
-    await client.query(`DELETE FROM gigs`);
 
     const archetypeStats = { A_RISING_CREATOR: 0, B_VETERAN_AVAILABLE: 0, C_VETERAN_BUSY_QUEUE: 0, D_LOW_EFFORT: 0 };
     let totalOrdersCount = 0;
 
     for (let i = 0; i < GIGS_25.length; i++) {
       const item = GIGS_25[i];
+      if (appendMode) {
+        const dup = await client.query(
+          `SELECT 1 FROM gigs WHERE LOWER(title) = LOWER($1) AND LOWER(COALESCE(status, '')) != 'deleted' LIMIT 1`,
+          [item.title]
+        );
+        if (dup.rows.length > 0) continue;
+      }
       archetypeStats[item.archetype] = (archetypeStats[item.archetype] || 0) + 1;
       totalOrdersCount += (item.pendingOrdersToSeed || 0);
       const sellerAccount =
