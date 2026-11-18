@@ -150,7 +150,7 @@ export interface AssetPagination {
 
 export function mediaUrl(path?: string | null) {
   if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(path) || path.startsWith("/ensemble") || path.startsWith("/icons") || path.startsWith("/logo")) return path;
   const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
   return base ? `${base}/${path.replace(/^\/+/, "")}` : path;
 }

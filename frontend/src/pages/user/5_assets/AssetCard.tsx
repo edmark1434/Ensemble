@@ -205,7 +205,15 @@ export const AssetCard: React.FC<AssetCardProps> = ({
         <div className="flex items-center justify-between">
           {/* Creator */}
           <div className="flex items-center gap-2 min-w-0">
-            {asset.creator_avatar_path ? (
+            {asset.is_admin_asset || asset.creator_avatar_path === "/ensemble_lg.svg" ? (
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 p-1 dark:bg-white/10">
+                <img
+                  src="/ensemble_lg.svg"
+                  alt={asset.creator_name || "By Ensemble"}
+                  className="h-full w-full object-contain invert dark:invert-0"
+                />
+              </span>
+            ) : asset.creator_avatar_path ? (
               <img
                 src={mediaUrl(asset.creator_avatar_path)}
                 alt={asset.creator_name}
@@ -213,7 +221,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
               />
             ) : (
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                {asset.creator_name.slice(0, 1).toUpperCase()}
+                {(asset.creator_name || "E").slice(0, 1).toUpperCase()}
               </span>
             )}
             <div className="flex flex-col min-w-0">
