@@ -645,6 +645,7 @@ const GigCreatePage: React.FC = () => {
         thumbnailFileId,
         galleryFileIds: galleryFileIds.filter(Boolean),
         acting_team_id: postingAs === "team" && actingTeamId ? actingTeamId : null,
+        included_member_account_ids: postingAs === "team" && actingTeamId ? includedMemberIds : [],
       };
 
       await api.post("/api/gigs", gigPayload);

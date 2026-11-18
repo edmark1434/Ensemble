@@ -1,6 +1,16 @@
 const { pool } = require('../lib/Database');
 const { nanoid } = require('nanoid');
 
+let gigIncludedMembersColumnEnsured = false;
+async function ensureGigIncludedMembersColumn(dbClientOrPool = pool) {
+  if (gigIncludedMembersColumnEnsured) return;
+  await dbClientOrPool.query(`
+    ALTER TABLE gigs
+    ADD COLUMN IF NOT EXISTS included_member_account_ids JSONB NOT NULL DEFAULT '[]'::jsonb
+  `);
+  gigIncludedMembersColumnEnsured = true;
+}
+
 /**
  * Ensures a Contractual Team Project exists for a team job post and links the candidate.
  * Called inside a database transaction (dbClient).
@@ -195,6 +205,7 @@ async function ensureContractualTeamProject(dbClient, {
 
   // 4. Register Freelancer (and all included team members if a Team proposal) in team_members
   let extraTeamMemberAccountIds = [];
+  let teamLeaderAccountId = null;
   const teamCheck = await dbClient.query(`
     SELECT t.team_id
       FROM teams t
@@ -204,12 +215,27 @@ async function ensureContractualTeamProject(dbClient, {
 
   if (teamCheck.rows.length > 0) {
     const tmRes = await dbClient.query(`
-      SELECT u.account_id
+      SELECT u.account_id, tm.role
         FROM team_members tm
         JOIN users u ON u.user_id = tm.user_id
        WHERE tm.team_id = $1 AND tm.status = 'Active'
+       ORDER BY CASE WHEN tm.role = 'Owner' THEN 1 WHEN tm.role = 'Leader' THEN 2 WHEN tm.role = 'Manager' THEN 3 ELSE 4 END ASC
     `, [teamCheck.rows[0].team_id]);
-    extraTeamMemberAccountIds = tmRes.rows.map(r => r.account_id).filter(Boolean);
+    if (tmRes.rows.length > 0 && tmRes.rows[0].account_id) {
+      teamLeaderAccountId = tmRes.rows[0].account_id;
+    }
+    const includedSet = new Set(includedMemberAccountIds.map(String));
+    extraTeamMemberAccountIds = tmRes.rows
+      .filter((r) => {
+        if (!r.account_id) return false;
+        if (includedSet.size === 0) return true;
+        return (
+          r.role === 'Owner' ||
+          (proposedByAccountId && String(r.account_id) === String(proposedByAccountId)) ||
+          includedSet.has(String(r.account_id))
+        );
+      })
+      .map((r) => r.account_id);
   }
 
   const candidateAccountIds = Array.from(
@@ -246,7 +272,7 @@ async function ensureContractualTeamProject(dbClient, {
     }
 
     // Determine the user account to assign tasks to (prefer person who submitted the proposal if freelancer is a team account)
-    const primaryAssigneeAccountId = proposedByAccountId || freelancerAccountId;
+    const primaryAssigneeAccountId = proposedByAccountId || teamLeaderAccountId || freelancerAccountId;
 
     // If freelancer applied for a specific milestone role, assign those tasks to them
     if (targetMilestoneId) {
@@ -323,9 +349,12 @@ async function ensureContractualGigWorkspace(dbClient, {
   freelancerAccountId,
   linkedProjectId = null,
 }) {
+  await ensureGigIncludedMembersColumn(dbClient);
+
   // 1. Fetch gig details
   const gigRes = await dbClient.query(`
     SELECT g.gig_id, g.title, g.description, g.category, g.freelancer_account_id,
+           COALESCE(g.included_member_account_ids, '[]'::jsonb) as included_member_account_ids,
            (SELECT ga.file_id FROM gig_attachments ga WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail_file_id
       FROM gigs g
      WHERE g.gig_id = $1
@@ -333,6 +362,9 @@ async function ensureContractualGigWorkspace(dbClient, {
 
   if (gigRes.rows.length === 0) return null;
   const gig = gigRes.rows[0];
+  const includedMemberAccountIds = Array.isArray(gig?.included_member_account_ids)
+    ? gig.included_member_account_ids.map(String).filter(Boolean)
+    : [];
 
   // 2. Check if contractual team already exists for this gig contract
   let teamRes = await dbClient.query(`
@@ -521,7 +553,7 @@ async function ensureContractualGigWorkspace(dbClient, {
     }
   }
 
-  // 4. Register Freelancer (and all active team members if freelancer is a Team account)
+  // 4. Register Freelancer (and included team members if freelancer is a Team account)
   let extraTeamMemberAccountIds = [];
   let primaryAssigneeAccountId = freelancerAccountId;
 
@@ -540,14 +572,21 @@ async function ensureContractualGigWorkspace(dbClient, {
        WHERE tm.team_id = $1 AND tm.status = 'Active'
        ORDER BY CASE WHEN tm.role = 'Owner' THEN 1 WHEN tm.role = 'Leader' THEN 2 WHEN tm.role = 'Manager' THEN 3 ELSE 4 END ASC
     `, [teamCheck.rows[0].team_id]);
-    extraTeamMemberAccountIds = tmRes.rows.map(r => r.account_id).filter(Boolean);
     if (tmRes.rows.length > 0 && tmRes.rows[0].account_id) {
       primaryAssigneeAccountId = tmRes.rows[0].account_id;
     }
+    const includedSet = new Set(includedMemberAccountIds.map(String));
+    extraTeamMemberAccountIds = tmRes.rows
+      .filter((r) => {
+        if (!r.account_id) return false;
+        if (includedSet.size === 0) return true;
+        return r.role === 'Owner' || includedSet.has(String(r.account_id));
+      })
+      .map((r) => r.account_id);
   }
 
   const candidateAccountIds = Array.from(
-    new Set([freelancerAccountId, primaryAssigneeAccountId, ...extraTeamMemberAccountIds].filter(Boolean).map(String))
+    new Set([freelancerAccountId, primaryAssigneeAccountId, ...includedMemberAccountIds, ...extraTeamMemberAccountIds].filter(Boolean).map(String))
   );
 
   for (const accId of candidateAccountIds) {
@@ -715,6 +754,19 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
          SET is_archived = TRUE, archived_at = COALESCE(archived_at, NOW())
        WHERE team_id = $1 AND is_archived = FALSE
     `, [project.team_id]).catch((err) => console.error('Self-healing workspace archive failed:', err));
+  }
+  if (!project.is_client && viewerAccountId) {
+    try {
+      const perms = await resolveProjectMemberRemovalPermissions(pool, project.team_id, viewerAccountId);
+      const viewerMeta = perms.getMemberTeamMeta(viewerAccountId);
+      if (viewerMeta?.is_team_leader) {
+        project.user_role = 'Team Leader';
+      } else if (viewerMeta?.hired_team_role && viewerMeta.hired_team_role !== 'Member') {
+        project.user_role = `Team ${viewerMeta.hired_team_role}`;
+      }
+    } catch (_) {
+      // Ignore metadata enrichment failure
+    }
   }
   return project;
 }
@@ -1557,10 +1609,36 @@ async function getProjectContracts(teamId, viewerAccountId) {
              SELECT 1 FROM teams tm
              JOIN team_members tmm ON tmm.team_id = tm.team_id
              JOIN users u ON u.user_id = tmm.user_id
-             WHERE tm.account_id = g.freelancer_account_id
+             WHERE tm.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
                AND u.account_id = $3
                AND tmm.status = 'Active'
+               AND EXISTS (
+                 SELECT 1 FROM team_workspace_members twm
+                 WHERE twm.workspace_id = tcw.workspace_id
+                   AND twm.account_id = $3
+               )
            ) as is_team_gig_member,
+           (
+             COALESCE(job_freelancer_acc.type, gig_freelancer_acc.type) = 'Team'
+             OR EXISTS (
+               SELECT 1 FROM teams tm_c
+               WHERE tm_c.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
+                 AND tm_c.deleted_at IS NULL
+             )
+           ) as is_team_contract,
+           (
+             p.proposed_by_account_id = $3
+             OR EXISTS (
+               SELECT 1 FROM teams tm_c
+               JOIN team_members tmm_c ON tmm_c.team_id = tm_c.team_id
+               JOIN users u_c ON u_c.user_id = tmm_c.user_id
+               WHERE tm_c.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
+                 AND tm_c.deleted_at IS NULL
+                 AND u_c.account_id = $3
+                 AND tmm_c.status = 'Active'
+                 AND LOWER(COALESCE(tmm_c.role, '')) IN ('owner', 'admin', 'leader', 'team leader', 'manager', 'representative')
+             )
+           ) as can_manage_team_contributors,
            EXISTS(
              SELECT 1 FROM ratings r
               WHERE r.contract_id = c.contract_id
@@ -1623,9 +1701,14 @@ async function getProjectContracts(teamId, viewerAccountId) {
            SELECT 1 FROM teams tm
            JOIN team_members tmm ON tmm.team_id = tm.team_id
            JOIN users u ON u.user_id = tmm.user_id
-           WHERE tm.account_id = g.freelancer_account_id
+           WHERE tm.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
              AND u.account_id = $3
              AND tmm.status = 'Active'
+             AND EXISTS (
+               SELECT 1 FROM team_workspace_members twm
+               WHERE twm.workspace_id = tcw.workspace_id
+                 AND twm.account_id = $3
+             )
          )
        )
      ORDER BY COALESCE(jm.order_index, 0) ASC, c.created_at ASC
@@ -1860,9 +1943,343 @@ async function getProjectHistory(teamId) {
 }
 
 /**
+ * Resolve which workspace members a viewer is allowed to remove.
+ */
+async function resolveProjectMemberRemovalPermissions(dbClientOrPool, teamId, viewerAccountId) {
+  const contractsRes = await dbClientOrPool.query(`
+    SELECT COALESCE(j.client_account_id, gr.client_account_id) AS client_account_id,
+           COALESCE(p.freelancer_account_id, g.freelancer_account_id) AS freelancer_account_id,
+           p.proposed_by_account_id,
+           tmcw.workspace_id,
+           a_team.display_name AS project_title
+      FROM teams t
+      JOIN accounts a_team ON a_team.account_id = t.account_id
+      LEFT JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN team_contract_workspaces tmcw ON tmcw.team_id = t.team_id
+      LEFT JOIN job_contracts jc ON jc.contract_id = tmcw.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN gig_contracts gc ON gc.contract_id = tmcw.contract_id
+      LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+      LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+      LEFT JOIN gigs g ON g.gig_id = COALESCE(t.gig_id, gt.gig_id)
+     WHERE t.team_id = $1
+  `, [teamId]);
+
+  const protectedAccountIds = new Set();
+  const teamAccountIds = new Set();
+  const proposedByAccountIds = new Set();
+  const hiredTeamMemberMeta = new Map();
+  let isViewerClient = false;
+  let canViewerManageTeamContributors = false;
+  let primaryWorkspaceId = null;
+  let projectTitle = 'Team Project';
+
+  for (const row of contractsRes.rows) {
+    if (row.workspace_id && !primaryWorkspaceId) primaryWorkspaceId = row.workspace_id;
+    if (row.project_title) projectTitle = row.project_title;
+    if (row.client_account_id) {
+      protectedAccountIds.add(String(row.client_account_id));
+      if (viewerAccountId && String(row.client_account_id) === String(viewerAccountId)) {
+        isViewerClient = true;
+      }
+    }
+    if (row.freelancer_account_id) {
+      teamAccountIds.add(String(row.freelancer_account_id));
+    }
+    if (row.proposed_by_account_id) {
+      proposedByAccountIds.add(String(row.proposed_by_account_id));
+      if (viewerAccountId && String(row.proposed_by_account_id) === String(viewerAccountId)) {
+        canViewerManageTeamContributors = true;
+      }
+    }
+  }
+
+  if (teamAccountIds.size > 0) {
+    const regTeamRes = await dbClientOrPool.query(`
+      SELECT t.account_id AS team_account_id,
+             a_t.display_name AS team_name,
+             a_t.handle AS team_handle,
+             u.account_id AS member_account_id,
+             tm.role
+        FROM teams t
+        JOIN accounts a_t ON a_t.account_id = t.account_id
+        JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
+        JOIN users u ON u.user_id = tm.user_id
+       WHERE t.account_id = ANY($1::uuid[])
+         AND t.deleted_at IS NULL
+    `, [Array.from(teamAccountIds)]);
+
+    const resolvedTeamAccounts = new Set(regTeamRes.rows.map((r) => String(r.team_account_id)));
+    for (const accId of teamAccountIds) {
+      if (!resolvedTeamAccounts.has(accId)) {
+        // Solo freelancer account: cannot be removed from their own contract workspace
+        protectedAccountIds.add(accId);
+      }
+    }
+
+    for (const r of regTeamRes.rows) {
+      const memberAccId = String(r.member_account_id);
+      const roleLower = String(r.role || '').toLowerCase();
+      const isTeamOwner = roleLower === 'owner';
+      const isTeamLeader = isTeamOwner || proposedByAccountIds.has(memberAccId);
+      if (isTeamOwner) {
+        protectedAccountIds.add(memberAccId);
+      }
+      const existingMeta = hiredTeamMemberMeta.get(memberAccId);
+      if (!existingMeta || isTeamLeader) {
+        hiredTeamMemberMeta.set(memberAccId, {
+          is_team_leader: Boolean(isTeamLeader),
+          hired_team_role: r.role || 'Member',
+          hired_team_name: r.team_name || null,
+          hired_team_handle: r.team_handle || null,
+        });
+      }
+      if (
+        viewerAccountId &&
+        memberAccId === String(viewerAccountId) &&
+        ['owner', 'admin', 'leader', 'team leader', 'manager', 'representative'].includes(roleLower)
+      ) {
+        canViewerManageTeamContributors = true;
+      }
+    }
+  }
+
+  const canRemoveMember = (memberRow) => {
+    if (!viewerAccountId || !memberRow?.account_id) return false;
+    const targetAccId = String(memberRow.account_id);
+    if (targetAccId === String(viewerAccountId)) return false;
+    if (String(memberRow.team_role || '').toLowerCase() === 'owner') return false;
+    if (protectedAccountIds.has(targetAccId)) return false;
+
+    if (memberRow.is_subcontractor || String(memberRow.team_role || '') === 'Subcontractor') {
+      const isParentContractor =
+        memberRow.parent_contractor_account_id &&
+        String(memberRow.parent_contractor_account_id) === String(viewerAccountId);
+      return Boolean(isViewerClient || canViewerManageTeamContributors || isParentContractor);
+    }
+
+    return Boolean(isViewerClient || canViewerManageTeamContributors);
+  };
+
+  const getMemberTeamMeta = (accountId) =>
+    accountId ? hiredTeamMemberMeta.get(String(accountId)) || null : null;
+
+  return {
+    canRemoveMember,
+    getMemberTeamMeta,
+    teamAccountIds: Array.from(teamAccountIds),
+    canViewerManageTeamContributors,
+    primaryWorkspaceId,
+    projectTitle,
+  };
+}
+
+/**
+ * List active members of the hired regular team(s) on this workspace, indicating which are already in the workspace.
+ */
+async function getAvailableTeamMembersForProject(teamId, viewerAccountId) {
+  const perms = await resolveProjectMemberRemovalPermissions(pool, teamId, viewerAccountId);
+  if (!perms.canViewerManageTeamContributors) {
+    const err = new Error('Only the Team Leader or an authorized team manager can manage workspace team members.');
+    err.statusCode = 403;
+    throw err;
+  }
+  if (!perms.teamAccountIds.length) {
+    return [];
+  }
+
+  const res = await pool.query(`
+    SELECT DISTINCT ON (a.account_id)
+           a.account_id,
+           a.display_name,
+           a.handle,
+           f.path AS avatar_path,
+           tm.role AS team_role,
+           a_t.display_name AS team_name,
+           a_t.handle AS team_handle,
+           EXISTS (
+             SELECT 1
+               FROM team_members tm_ws
+               JOIN users u_ws ON u_ws.user_id = tm_ws.user_id
+              WHERE tm_ws.team_id = $1
+                AND u_ws.account_id = a.account_id
+                AND tm_ws.status = 'Active'
+           ) AS already_in_workspace
+      FROM teams t
+      JOIN accounts a_t ON a_t.account_id = t.account_id
+      JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
+      JOIN users u ON u.user_id = tm.user_id
+      JOIN accounts a ON a.account_id = u.account_id
+      LEFT JOIN files f ON f.file_id = a.avatar_file_id
+     WHERE t.account_id = ANY($2::uuid[])
+       AND t.deleted_at IS NULL
+     ORDER BY a.account_id, CASE WHEN tm.role = 'Owner' THEN 0 ELSE 1 END, a.display_name ASC
+  `, [teamId, perms.teamAccountIds]);
+
+  return res.rows;
+}
+
+/**
+ * Add active members of the hired regular team into the contractual project workspace as contributors.
+ */
+async function addProjectTeamMembers(teamId, rawAccountIds, viewerAccountId) {
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const requestedIds = Array.isArray(rawAccountIds)
+    ? Array.from(new Set(rawAccountIds.map((id) => String(id || '').trim()).filter((id) => uuidRe.test(id))))
+    : [];
+
+  if (requestedIds.length === 0) {
+    const err = new Error('Select at least one team member to add as a contributor.');
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const perms = await resolveProjectMemberRemovalPermissions(pool, teamId, viewerAccountId);
+  if (!perms.canViewerManageTeamContributors) {
+    const err = new Error('Only the Team Leader or an authorized team manager can add team members to this workspace.');
+    err.statusCode = 403;
+    throw err;
+  }
+  if (!perms.teamAccountIds.length) {
+    const err = new Error('This workspace contract does not belong to a team.');
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await ensureGigIncludedMembersColumn(client);
+
+    // Verify requested accounts are active members of the hired team
+    const validRes = await client.query(`
+      SELECT DISTINCT u.account_id, u.user_id
+        FROM teams t
+        JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
+        JOIN users u ON u.user_id = tm.user_id
+       WHERE t.account_id = ANY($1::uuid[])
+         AND t.deleted_at IS NULL
+         AND u.account_id = ANY($2::uuid[])
+    `, [perms.teamAccountIds, requestedIds]);
+
+    if (validRes.rows.length === 0) {
+      const err = new Error('Selected users are not active members of your team.');
+      err.statusCode = 422;
+      throw err;
+    }
+
+    const wsRes = await client.query(`
+      SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1
+    `, [teamId]);
+    const workspaceIds = wsRes.rows.map((r) => r.workspace_id).filter(Boolean);
+
+    const addedAccountIds = [];
+    for (const row of validRes.rows) {
+      const accId = String(row.account_id);
+      addedAccountIds.push(accId);
+
+      await client.query(`
+        INSERT INTO team_members (team_id, user_id, role, status, joined_at, updated_at)
+        VALUES ($1, $2, 'Member', 'Active', NOW(), NOW())
+        ON CONFLICT (team_id, user_id)
+        DO UPDATE SET
+          role = CASE WHEN team_members.role = 'Owner' THEN 'Owner' ELSE 'Member' END,
+          status = 'Active',
+          deleted_at = NULL,
+          updated_at = NOW()
+      `, [teamId, row.user_id]);
+
+      for (const wsId of workspaceIds) {
+        await client.query(`
+          INSERT INTO team_workspace_members (workspace_id, account_id, added_by_account_id)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (workspace_id, account_id) DO NOTHING
+        `, [wsId, accId, viewerAccountId]);
+      }
+
+      await client.query(`
+        UPDATE proposals
+           SET included_member_account_ids = CASE
+                 WHEN COALESCE(included_member_account_ids, '[]'::jsonb) ? ($2::text)
+                 THEN COALESCE(included_member_account_ids, '[]'::jsonb)
+                 ELSE COALESCE(included_member_account_ids, '[]'::jsonb) || to_jsonb($2::text)
+               END
+         WHERE proposal_id IN (
+           SELECT jc.proposal_id
+             FROM team_contract_workspaces tcw
+             JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
+            WHERE tcw.team_id = $1
+         )
+      `, [teamId, accId]);
+
+      await client.query(`
+        UPDATE gigs
+           SET included_member_account_ids = CASE
+                 WHEN COALESCE(included_member_account_ids, '[]'::jsonb) ? ($2::text)
+                 THEN COALESCE(included_member_account_ids, '[]'::jsonb)
+                 ELSE COALESCE(included_member_account_ids, '[]'::jsonb) || to_jsonb($2::text)
+               END
+         WHERE gig_id IN (
+           SELECT gt.gig_id
+             FROM team_contract_workspaces tcw
+             JOIN gig_contracts gc ON gc.contract_id = tcw.contract_id
+             JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+             JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+            WHERE tcw.team_id = $1
+           UNION
+           SELECT t.gig_id FROM teams t WHERE t.team_id = $1 AND t.gig_id IS NOT NULL
+         )
+      `, [teamId, accId]);
+    }
+
+    if (perms.primaryWorkspaceId) {
+      await client.query(`
+        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+        VALUES ($1, $2, 'members_added', $3)
+      `, [
+        perms.primaryWorkspaceId,
+        viewerAccountId,
+        JSON.stringify({ added_account_ids: addedAccountIds }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    // Sync linked video projects access outside the transaction
+    try {
+      const linkedProjs = await pool.query(`
+        SELECT DISTINCT twp.project_id
+          FROM team_workspace_projects twp
+          JOIN team_contract_workspaces tcw ON tcw.workspace_id = twp.workspace_id
+         WHERE tcw.team_id = $1
+        UNION
+        SELECT project_id FROM team_contract_workspaces WHERE team_id = $1 AND project_id IS NOT NULL
+      `, [teamId]);
+      for (const lp of linkedProjs.rows) {
+        if (lp.project_id) {
+          await ensureWorkspaceMembersHaveProjectAccess(teamId, lp.project_id);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync video project members after adding team members:', err.message);
+    }
+
+    return {
+      added_account_ids: addedAccountIds,
+      project_title: perms.projectTitle,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Fetch project members roster.
  */
-async function getProjectMembers(teamId) {
+async function getProjectMembers(teamId, viewerAccountId = null) {
   const query = `
     SELECT DISTINCT ON (a.account_id)
            a.account_id, a.display_name, a.handle,
@@ -1901,8 +2318,151 @@ async function getProjectMembers(teamId) {
      WHERE t.team_id = $1
      ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, cs_jm.order_index, cs_cm.index, 0) ASC
   `;
-  const res = await pool.query(query, [teamId]);
-  return res.rows;
+  const [res, perms] = await Promise.all([
+    pool.query(query, [teamId]),
+    resolveProjectMemberRemovalPermissions(pool, teamId, viewerAccountId),
+  ]);
+  const enriched = res.rows.map((row) => {
+    const meta = perms.getMemberTeamMeta(row.account_id);
+    return {
+      ...row,
+      is_team_leader: Boolean(meta?.is_team_leader),
+      hired_team_role: meta?.hired_team_role || null,
+      hired_team_name: meta?.hired_team_name || null,
+      hired_team_handle: meta?.hired_team_handle || null,
+      can_remove: perms.canRemoveMember(row),
+    };
+  });
+
+  enriched.sort((a, b) => {
+    const rank = (m) => {
+      if (m.team_role === 'Owner') return 0;
+      if (m.is_team_leader) return 1;
+      if (m.is_subcontractor || m.team_role === 'Subcontractor') return 3;
+      return 2;
+    };
+    const rDiff = rank(a) - rank(b);
+    if (rDiff !== 0) return rDiff;
+    return String(a.display_name || '').localeCompare(String(b.display_name || ''));
+  });
+
+  return enriched;
+}
+
+/**
+ * Remove a contributor or subcontractor from a contractual project workspace.
+ */
+async function removeProjectMember(teamId, memberAccountId, viewerAccountId) {
+  const members = await getProjectMembers(teamId, viewerAccountId);
+  const target = members.find((m) => String(m.account_id) === String(memberAccountId));
+  if (!target) {
+    const err = new Error('Contributor not found in this workspace.');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!target.can_remove) {
+    const err = new Error('You do not have permission to remove this contributor from the workspace.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await ensureGigIncludedMembersColumn(client);
+
+    const { primaryWorkspaceId, projectTitle } = await resolveProjectMemberRemovalPermissions(
+      client,
+      teamId,
+      viewerAccountId
+    );
+
+    await client.query(`
+      UPDATE team_members
+         SET status = 'Removed', updated_at = NOW()
+       WHERE team_id = $1
+         AND user_id IN (SELECT user_id FROM users WHERE account_id = $2)
+    `, [teamId, memberAccountId]);
+
+    await client.query(`
+      DELETE FROM team_workspace_members
+       WHERE account_id = $2
+         AND workspace_id IN (
+           SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1
+         )
+    `, [teamId, memberAccountId]);
+
+    await client.query(`
+      DELETE FROM team_workspace_task_assignees
+       WHERE account_id = $2
+         AND task_id IN (
+           SELECT twt.task_id
+             FROM team_workspace_tasks twt
+             JOIN team_contract_workspaces tcw ON tcw.workspace_id = twt.workspace_id
+            WHERE tcw.team_id = $1
+         )
+    `, [teamId, memberAccountId]);
+
+    await client.query(`
+      DELETE FROM contract_subcontractors
+       WHERE account_id = $2
+         AND contract_id IN (
+           SELECT contract_id FROM team_contract_workspaces WHERE team_id = $1
+         )
+    `, [teamId, memberAccountId]);
+
+    await client.query(`
+      UPDATE proposals
+         SET included_member_account_ids = COALESCE(included_member_account_ids, '[]'::jsonb) - $2::text
+       WHERE proposal_id IN (
+         SELECT jc.proposal_id
+           FROM team_contract_workspaces tcw
+           JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
+          WHERE tcw.team_id = $1
+       )
+    `, [teamId, memberAccountId]);
+
+    await client.query(`
+      UPDATE gigs
+         SET included_member_account_ids = COALESCE(included_member_account_ids, '[]'::jsonb) - $2::text
+       WHERE gig_id IN (
+         SELECT gt.gig_id
+           FROM team_contract_workspaces tcw
+           JOIN gig_contracts gc ON gc.contract_id = tcw.contract_id
+           JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+           JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+          WHERE tcw.team_id = $1
+         UNION
+         SELECT t.gig_id FROM teams t WHERE t.team_id = $1 AND t.gig_id IS NOT NULL
+       )
+    `, [teamId, memberAccountId]);
+
+    if (primaryWorkspaceId) {
+      await client.query(`
+        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+        VALUES ($1, $2, 'member_removed', $3)
+      `, [
+        primaryWorkspaceId,
+        viewerAccountId,
+        JSON.stringify({
+          removed_account_id: memberAccountId,
+          removed_handle: target.handle || null,
+          removed_name: target.display_name || null,
+        }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+    return {
+      removed_account_id: memberAccountId,
+      project_title: projectTitle,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -2987,6 +3547,9 @@ module.exports = {
   getTeamContractContext,
   getProjectHistory,
   getProjectMembers,
+  getAvailableTeamMembersForProject,
+  addProjectTeamMembers,
+  removeProjectMember,
   getProjectMilestones,
   getSubcontractProposals,
   createSubcontractProposal,

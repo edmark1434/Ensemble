@@ -1165,9 +1165,14 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
                         Client
                       </span>
                     )}
+                    {m.is_team_leader && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        Team Leader
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                    {m.milestone_role || m.team_role || 'Contributor'}
+                    {m.is_team_leader ? 'Team Leader' : (m.milestone_role || m.team_role || 'Contributor')}
                   </p>
                 </div>
               </div>

@@ -9,6 +9,43 @@ const { platformMeritSql } = require('./WarningBandRepositories');
 /** Seller's Platform Merit (100 minus active, unexpired warning points) for gig ranking. */
 const FREELANCER_MERIT_SQL = `${platformMeritSql('g.freelancer_account_id')} as "freelancerMerit"`;
 
+const GIG_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let gigIncludedMembersColumnEnsured = false;
+
+async function ensureGigIncludedMembersColumn(dbClientOrPool = pool) {
+    if (gigIncludedMembersColumnEnsured) return;
+    await dbClientOrPool.query(`
+        ALTER TABLE gigs
+        ADD COLUMN IF NOT EXISTS included_member_account_ids JSONB NOT NULL DEFAULT '[]'::jsonb
+    `);
+    gigIncludedMembersColumnEnsured = true;
+}
+
+async function normalizeGigIncludedMemberAccountIds(dbClient, teamAccountId, actorAccountId, rawIds) {
+    const ownerRes = await dbClient.query(
+        `SELECT u.account_id
+         FROM teams t
+         JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active' AND tm.role = 'Owner'
+         JOIN users u ON u.user_id = tm.user_id
+         WHERE t.account_id = $1 AND t.deleted_at IS NULL`,
+        [teamAccountId]
+    );
+    if (ownerRes.rows.length === 0) {
+        return [];
+    }
+    const teamOwnerIds = ownerRes.rows.map((r) => String(r.account_id));
+    const list = Array.isArray(rawIds) ? rawIds : [];
+    return Array.from(
+        new Set(
+            [
+                ...teamOwnerIds,
+                ...(actorAccountId && String(actorAccountId) !== String(teamAccountId) ? [String(actorAccountId)] : []),
+                ...list.map((id) => String(id || '').trim()),
+            ].filter((id) => GIG_UUID_REGEX.test(id))
+        )
+    );
+}
+
 
 
 async function createGigRepository(gigData) {
@@ -192,16 +229,23 @@ async function createGigRepository(gigData) {
 
 
         // 1. Insert base gig with 'Open' status
+        await ensureGigIncludedMembersColumn(client);
+        const validIncludedIds = await normalizeGigIncludedMemberAccountIds(
+            client,
+            gigData.freelancer_account_id,
+            gigData.payer_account_id,
+            gigData.included_member_account_ids
+        );
 
         const gigQuery = `
 
             INSERT INTO gigs (
 
-                freelancer_account_id, title, description, payment_type, no_of_concurrent_max, status, category
+                freelancer_account_id, title, description, payment_type, no_of_concurrent_max, status, category, included_member_account_ids
 
             ) VALUES (
 
-                $1, $2, $3, $4, $5, $6, $7
+                $1, $2, $3, $4, $5, $6, $7, $8::jsonb
 
             ) RETURNING gig_id;
 
@@ -221,7 +265,9 @@ async function createGigRepository(gigData) {
 
             'Open',
 
-            gigData.category || 'Other'
+            gigData.category || 'Other',
+
+            JSON.stringify(validIncludedIds)
 
         ];
 
@@ -904,6 +950,7 @@ async function toggleGigSaveRepository(gigId, accountId) {
 
 
 async function getSavedGigsRepository(accountId) {
+    await ensureGigIncludedMembersColumn(pool);
 
     const query = `
 
@@ -1092,7 +1139,9 @@ async function getSavedGigsRepository(accountId) {
 
             tm.visibility as "teamVisibility",
 
-            (tm.team_id IS NOT NULL) as "isTeam"
+            (tm.team_id IS NOT NULL) as "isTeam",
+
+            COALESCE(g.included_member_account_ids, '[]'::jsonb) as "includedMemberAccountIds"
 
         FROM gigs g
 
@@ -1853,6 +1902,7 @@ async function getOrderByIdRepository(orderId, accountIds) {
 
 
 async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
+    await ensureGigIncludedMembersColumn(pool);
 
     const query = `
 
@@ -2115,7 +2165,9 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             tm.visibility as "teamVisibility",
 
-            (tm.team_id IS NOT NULL) as "isTeam"
+            (tm.team_id IS NOT NULL) as "isTeam",
+
+            COALESCE(g.included_member_account_ids, '[]'::jsonb) as "includedMemberAccountIds"
 
         FROM gigs g
 
@@ -2219,7 +2271,9 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
         teamVisibility: row.teamVisibility || null,
 
-        isTeam: Boolean(row.isTeam || row.teamId)
+        isTeam: Boolean(row.isTeam || row.teamId),
+
+        includedMemberAccountIds: Array.isArray(row.includedMemberAccountIds) ? row.includedMemberAccountIds : []
 
     };
 
@@ -2265,13 +2319,24 @@ async function updateGigRepository(gigId, accountIds, gigData) {
 
 
 
-        await client.query(
-
-            'UPDATE gigs SET title = $1, description = $2, no_of_concurrent_max = $3, category = $4 WHERE gig_id = $5',
-
-            [gigData.title, gigData.description, gigData.slots || 1, gigData.category || 'Other', gigId]
-
-        );
+        await ensureGigIncludedMembersColumn(client);
+        if (Array.isArray(gigData.included_member_account_ids)) {
+            const validIncludedIds = await normalizeGigIncludedMemberAccountIds(
+                client,
+                accountId,
+                gigData.freelancer_account_id,
+                gigData.included_member_account_ids
+            );
+            await client.query(
+                'UPDATE gigs SET title = $1, description = $2, no_of_concurrent_max = $3, category = $4, included_member_account_ids = $5::jsonb WHERE gig_id = $6',
+                [gigData.title, gigData.description, gigData.slots || 1, gigData.category || 'Other', JSON.stringify(validIncludedIds), gigId]
+            );
+        } else {
+            await client.query(
+                'UPDATE gigs SET title = $1, description = $2, no_of_concurrent_max = $3, category = $4 WHERE gig_id = $5',
+                [gigData.title, gigData.description, gigData.slots || 1, gigData.category || 'Other', gigId]
+            );
+        }
 
 
 

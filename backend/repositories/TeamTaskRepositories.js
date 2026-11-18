@@ -53,6 +53,7 @@ async function listContractWorkspaces(teamId, viewerAccountId) {
     `${ELIGIBLE_CONTRACTS_CTE}
      SELECT ec.*,
             tcw.workspace_id,
+            tcw.team_id AS workspace_team_id,
             tcw.updated_at AS workspace_updated_at,
             COALESCE(task_counts.total_tasks, 0)::int AS total_tasks,
             COALESCE(task_counts.completed_tasks, 0)::int AS completed_tasks,
@@ -63,8 +64,13 @@ async function listContractWorkspaces(teamId, viewerAccountId) {
                WHERE twm.workspace_id = tcw.workspace_id AND twm.account_id = $2
             ) AS is_workspace_member
        FROM eligible_contracts ec
-       LEFT JOIN team_contract_workspaces tcw
-         ON tcw.team_id = $1 AND tcw.contract_id = ec.contract_id
+       LEFT JOIN LATERAL (
+         SELECT *
+           FROM team_contract_workspaces tcw_inner
+          WHERE tcw_inner.contract_id = ec.contract_id
+          ORDER BY (tcw_inner.team_id = $1) DESC, tcw_inner.updated_at DESC NULLS LAST
+          LIMIT 1
+       ) tcw ON TRUE
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS total_tasks,
                 COUNT(*) FILTER (WHERE twt.status = 'completed')::int AS completed_tasks,

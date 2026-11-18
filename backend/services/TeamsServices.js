@@ -134,6 +134,6 @@ async function deleteVideoProject(id, a, projectId) {
   return R.deleteTeamVideoProject(id, projectId);
 }
 
-module.exports={TeamError,create,list,detail,update,remove,members,requests,join,joinCode,invitePreview,manage,invite,invitation,leave,transfer,wallet,transactions,distributeFunds,addFunds,marketplacePosts,reviews:R.reviews,review,report,chat,permissions,STATUSES,creationEligibility,teamMemberLimit,listTasks,createTask,updateTask,deleteTask,videoProjects,createVideoProject,deleteVideoProject};
+module.exports={TeamError,create,list,detail,update,remove,members,requests,syncChat,join,joinCode,invitePreview,manage,invite,invitation,leave,transfer,wallet,transactions,distributeFunds,addFunds,marketplacePosts,reviews:R.reviews,review,report,chat,permissions,STATUSES,creationEligibility,teamMemberLimit,listTasks,createTask,updateTask,deleteTask,videoProjects,createVideoProject,deleteVideoProject};
 
 

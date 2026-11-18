@@ -1,3 +1,21 @@
+# Active Task: Team contract tab visibility, workspace member selection, and contributor removal
+
+## Implementation Objective
+
+1. The Team Leader (and assigned team members) must be able to view their team's active contracts on `/teams/:id` (Contracts tab) and open the contract workspace.
+2. When a team submits a job proposal or posts a gig with a selected subset of team members (`included_member_account_ids`), initiating the contract workspace must only add the selected members (plus the Team Owner/Leader and proposer), rather than adding all active members of the team.
+3. Allow authorized leads (Team Owner/Admin/Leader, parent contractor, or Project Client) to remove a contributor or subcontractor from an active project workspace (`/team-project/:id`).
+
+## Acceptance criteria
+
+- Opening the Contracts tab on `/teams/:id` loads the team's contracts (`data.data.items`) using `team.team_id` and navigates to the contract workspace when clicking **Workspace**.
+- Team job proposals and team gig posts with selected `included_member_account_ids` only add the selected members (and Team Owner/Leader) to `team_members` and `team_workspace_members` when the contract workspace is initialized.
+- Unselected team members are not added to the contract workspace and see the contract as hidden/restricted on the team's Contracts tab.
+- In `/team-project/:id` (**Contract & Members**), solo contracts show **Add Subcontractor**, whereas team contracts replace it with **Add Team Member as Contributor** (allowing the Team Leader/manager to select active team members and add/re-add them directly to the workspace).
+- In `/team-project/:id` (**Contract & Members → Members**), the hired Team Leader is clearly labeled (`Team Leader` badge and `Contributor (Team Leader)` header pill), and authorized leads see a **Remove** button for removable contributors/subcontractors.
+
+---
+
 # Active Task: Platform view audit (Admin and every moderator console)
 
 Editor objective: match cursor and playhead name labels to the existing square-cornered presence labels.

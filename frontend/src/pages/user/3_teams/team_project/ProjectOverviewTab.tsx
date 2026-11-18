@@ -686,7 +686,7 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                         key={m.account_id || idx}
                         src={constructAvatarUrl(m.avatar_path, m.display_name)}
                         alt={m.display_name}
-                        title={`${m.display_name} (${m.milestone_role || m.team_role || 'Contributor'})`}
+                        title={`${m.display_name} (${m.is_team_leader ? 'Team Leader' : (m.milestone_role || m.team_role || 'Contributor')})`}
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.display_name);
                         }}
