@@ -18,8 +18,10 @@ const selectFields = `
   f.path AS file_path,
   f.mime_type,
   f.size_bytes,
-  COALESCE(ptf.path, aa.metadata->>'thumbnail_path') AS project_thumbnail_path,
-  COALESCE(pvf.video_path, aa.metadata->>'video_path') AS project_video_path
+  CASE WHEN aa.attachment_kind = 'file' THEN aa.metadata->>'thumbnail_path'
+       ELSE COALESCE(ptf.path, aa.metadata->>'thumbnail_path') END AS project_thumbnail_path,
+  CASE WHEN aa.attachment_kind = 'file' THEN f.path
+       ELSE COALESCE(pvf.video_path, aa.metadata->>'video_path') END AS project_video_path
 `;
 
 async function getProfileAttachmentsRepository(accountId, includePrivate = false) {
@@ -38,7 +40,7 @@ async function getProfileAttachmentsRepository(accountId, includePrivate = false
        FROM media_assets ma
        LEFT JOIN files pf ON pf.file_id = ma.proxy_file_id AND pf.deleted_at IS NULL
        LEFT JOIN files of ON of.file_id = ma.original_file_id AND of.deleted_at IS NULL
-       WHERE p.project_id IS NOT NULL
+       WHERE aa.attachment_kind = 'link' AND p.project_id IS NOT NULL
          AND ma.project_id = p.project_id
          AND ma.deleted_at IS NULL
          AND (ma.type ILIKE 'video%' OR of.mime_type ILIKE 'video%' OR pf.mime_type ILIKE 'video%')

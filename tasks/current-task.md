@@ -1,3 +1,31 @@
+# Active Task: Portfolio clip picker layout and playback
+
+Use the editor header for clip navigation, range fields and export. Play the selected frames with the standard playback controls, show the range over the timeline lanes, and give the clip preview the space occupied by the controls panel.
+
+Open with the full timeline in view, keep seeks inside the selected clip, and show thin range edges and two-decimal time fields with text-sm labels.
+
+Keep the selection tint uniform through the lanes and support vertical wheel scrolling over the clip timeline and its drag handles.
+
+Match the edge grips to timeline item handles in the primary color, space the header fields apart, and confirm that extending a capped selection moves its opposite edge.
+
+Stretch the outer trim grips across the visible timeline height and allow dragging the selected lanes to move both endpoints together.
+
+Maximizing the timeline must fit the available editor panel. Keep the upload target within the visible timeline and end the clip selection at the bottom of the last visible lane.
+
+Use the editor's form dialog styling for Add clip to portfolio in `video-editor/src/features/editor/modals/portfolio-clip-modal.tsx` (without a header `DialogDescription`, keeping `Title` and `Description (optional)` fields and standard footer actions), render a primary `Export portfolio clip` navbar button, format `Start` and `End` fields as `0:00` (or `0:00:00`) and selected duration as human-readable (e.g. `2m 1s selected`), show the 2nd step unlicensed paid assets `DraggablePanel` dropdown (`Pay for assets in the project` / `Get watermarked draft`) only when unlicensed marketplace assets exist within the selected clip range, match the `Export` progress modal (queue position, percentage, elapsed timer, cancel, failure state) to the editor's export flow, render portfolio clips at `720p@30fps` on Free and `1080p@30fps` on Premium/Business, keep portfolio card footers vertically aligned whether or not a description is present, and display the clip's saved title once in the profile portfolio item modal header with its description below the video.
+
+# Active Task: Profile page crash
+
+The profile should render without referencing the removed project callback, and selecting a portfolio project should open the editor clip picker.
+
+# Active Task: Match exported media sizing to the editor
+
+Exports and project thumbnails should fill each image or video's saved box using the same centered crop as the canvas, including after side-handle resizes. Previously cached thumbnails should refresh on the next thumbnail job.
+
+# Active Task: Portfolio project clips
+
+Select an approved project from the profile, open its read-only editor preview, and choose an excerpt with the timeline band. Check the contract's portfolio permission and duration cap at submission and publication. Publish the excerpt and its poster to S3 and retain playback for existing entries.
+
 # Active Task: Team contract tab visibility, workspace member selection, and contributor removal
 
 ## Implementation Objective

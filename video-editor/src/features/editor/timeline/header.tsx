@@ -43,7 +43,8 @@ import {
 } from "../utils/timeline";
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import { Slider } from "@/components/ui/slider";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePortfolioPicker } from "../portfolio/portfolio-picker";
 import useUpdateAnsestors from "../hooks/use-update-ansestors";
 import { ITimelineScaleState, ITrackItem } from "@designcombo/types";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
@@ -127,9 +128,8 @@ const IconDeleteRight = ({ size }: { size: number }) => (
   </svg>
 );
 
-const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
+const Header = ({ toggleFullHeight, stateManager }: {
   toggleFullHeight: () => void;
-  timelineHeight: number;
   stateManager: StateManager;
 }) => {
   const [playing, setPlaying] = useState(false);
@@ -178,6 +178,15 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
     setActiveRightItem("comments");
   };
   const timelineOffsetX = useTimelineOffsetX();
+  const clipProjectId = usePortfolioPicker()?.projectId;
+  const fittedProject = useRef<string | null>(null);
+  useEffect(() => {
+    if (!clipProjectId || fittedProject.current === clipProjectId || !isLargeScreen || !timeline || duration <= 0) return;
+    fittedProject.current = clipProjectId;
+    const fit = getFitZoomLevel(duration, scale.zoom, timelineOffsetX);
+    dispatch(TIMELINE_SCALE_CHANGED, { payload: { scale: fit } });
+    timeline.scrollTo({ scrollLeft: 0 });
+  }, [clipProjectId, isLargeScreen, timeline, duration, scale.zoom, timelineOffsetX]);
 
   const doActiveDelete = () => {
     dispatch(LAYER_DELETE);
@@ -299,7 +308,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
     };
   }, [playerRef]);
 
-  const isFull = timelineHeight >= window.innerHeight;
+  const isFull = useStore(state => state.timelineMaximized);
   const activeItems = activeIds.map(id => trackItemsMap[id]).filter(Boolean);
   const selectionStart = activeIds.length > 0
     ? Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))

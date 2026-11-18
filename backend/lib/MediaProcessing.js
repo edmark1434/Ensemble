@@ -224,7 +224,17 @@ async function processAudio({ inputPath, workDir, tagPath }) {
   return { proxyPath, thumbnailPath, durationSeconds: Math.max(1, Math.round(info.duration)), tagCount: delays.length };
 }
 
+async function makePortfolioPoster(clip, poster, startMs, endMs) {
+  const info = await probe(clip);
+  if (!info.hasVideo || !info.duration || Math.abs(info.duration * 1000 - (endMs - startMs)) > 150) {
+    throw new Error('Rendered clip does not cover the selected range.');
+  }
+  await run(ffmpegBinary(), ['-y', '-v', 'error', '-i', clip, '-frames:v', '1',
+    '-vf', 'scale=640:640:force_original_aspect_ratio=decrease', poster]);
+}
+
 module.exports = {
+  makePortfolioPoster,
   probe,
   cappedDimensions,
   normalizeVideoOriginal,

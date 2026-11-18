@@ -3,6 +3,7 @@ import { MarketAssetLicensing } from "./components/market-asset-licensing";
 import Timeline from "./timeline";
 import useStore from "./store/use-store";
 import Navbar from "./navbar";
+import { PortfolioBand, usePortfolioPicker } from "./portfolio/portfolio-picker";
 import useTimelineEvents from "./hooks/use-timeline-events";
 import Scene from "./scene";
 import { SceneRef } from "./scene/scene.types";
@@ -391,9 +392,10 @@ const Panels = ({
 }: any) => {
   const { showMenuItem: menuItemOpen, setControlsPanelRef } = useLayoutStore();
   const canComment = useCanComment();
+  const portfolio = usePortfolioPicker();
   const showMenuItem = menuItemOpen && !viewOnly;
 
-  const { activeSceneBlockId } = useStore();
+  const { activeSceneBlockId, timelineHeight, timelineMaximized } = useStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
   const rightPanelRef = useRef<ImperativePanelHandle>(null);
   const controlsPanelRef = useRef<HTMLDivElement>(null);
@@ -423,6 +425,7 @@ const Panels = ({
     return (
       <div className="relative flex min-h-0 min-w-0 h-full w-full flex-col bg-background">
         <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} viewOnly={viewOnly} />
+        {portfolio && <PortfolioBand />}
         <div aria-hidden inert style={{
           position: "absolute",
           top: -99999,
@@ -439,8 +442,8 @@ const Panels = ({
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-background">
-      <div className="flex-1 relative overflow-hidden w-full h-full">
+    <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+      <div className="flex-1 min-h-0 relative overflow-hidden w-full">
         <div className="flex h-full flex-1">
           {!viewOnly && (
             <>
@@ -451,7 +454,9 @@ const Panels = ({
             </>
           )}
 
-          <ResizablePanelGroup direction="horizontal" className="w-full h-full overflow-hidden">
+          {portfolio ? (
+            <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} viewOnly />
+          ) : <ResizablePanelGroup direction="horizontal" className="w-full h-full overflow-hidden">
             <ResizablePanel
               ref={menuPanelRef}
               collapsible
@@ -488,12 +493,13 @@ const Panels = ({
 
             {/* commenters are view-only, but still need the thread window */}
             {(!viewOnly || canComment) && <FloatingControl anchorRef={controlsPanelRef} />}
-          </ResizablePanelGroup>
+          </ResizablePanelGroup>}
         </div>
       </div>
 
-      <div className="relative w-full border-t border-border/80 bg-card">
-        <div className={cn(timelineLoading && "pointer-events-none opacity-60 transition-opacity")}>
+      <div className="relative max-h-full w-full shrink-0 border-t border-border/80 bg-card"
+        style={{ height: timelineMaximized ? "100%" : timelineHeight + 1 }}>
+        <div className={cn("h-full", timelineLoading && "pointer-events-none opacity-60 transition-opacity")}>
           {playerRef && <Timeline key={timelineKey} stateManager={stateManager} readOnly={viewOnly} />}
         </div>
         {timelineLoading && (
@@ -634,7 +640,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
 
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);
-  const { timeline, playerRef } = useStore();
+  const { playerRef } = useStore();
   const { activeIds, trackItemsMap, transitionsMap } = useStore();
   const [loaded, setLoaded] = useState(false);
   const [trackItem, setTrackItem] = useState<ITrackItem | null>(null);
@@ -670,30 +676,11 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   //   dispatch(DESIGN_LOAD, { payload: design });
   // }, []);
 
-  const handleTimelineResize = () => {
-    const timelineContainer = document.getElementById("timeline-container");
-    if (!timelineContainer) return;
-
-    const containerWidth = document.getElementById("timeline-header")?.clientWidth || 0;
-    const containerHeight =
-      (document.getElementById("playhead")?.clientHeight || 0) -
-      (document.getElementById("playhead-handle")?.clientHeight || 0) - 26;
-
-    timeline?.resize(
-      { height: containerHeight, width: containerWidth },
-      { force: true },
-    );
-
-    setTimeout(() => {
-      sceneRef.current?.recalculateZoom();
-    }, 100);
-  };
-
   useEffect(() => {
-    const onResize = () => handleTimelineResize();
+    const onResize = () => sceneRef.current?.recalculateZoom();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [timeline]);
+  }, []);
 
   useEffect(() => {
     if (activeIds.length === 1) {

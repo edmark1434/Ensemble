@@ -71,13 +71,6 @@ interface DetailsListBodyProps {
   isOwner?: boolean;
   onUploadPDF?: (file: File) => Promise<void>;
   onAddExternalLink?: (data: { name: string; url: string; description: string }) => Promise<void>;
-  onAddProject?: (data: {
-    projectId: string;
-    name: string;
-    description: string;
-    clipStartSeconds: number;
-    clipEndSeconds: number;
-  }) => Promise<void>;
   onDeletePortfolioItem?: (id: string) => Promise<void>;
   userDetails?: any;
   onUpdateIntroduction?: (intro: string) => Promise<void>;
@@ -218,7 +211,6 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   isOwner = false,
   onUploadPDF,
   onAddExternalLink,
-  onAddProject,
   onDeletePortfolioItem,
   userDetails,
   onUpdateIntroduction,
@@ -719,7 +711,6 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                   isLoading={loading}
                   onUploadPDF={onUploadPDF}
                   onAddExternalLink={onAddExternalLink}
-                  onAddProject={onAddProject}
                   onDeleteItem={onDeletePortfolioItem}
                 />
               </div>

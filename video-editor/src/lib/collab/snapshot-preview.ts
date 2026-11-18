@@ -9,6 +9,11 @@ import type { ISceneDetails, SceneRenderContent } from "@/features/editor/types/
 import { readPublishedMarketTemplate, readTemplateMarketMedia, readTemplateUpload } from "@/lib/db/template-copy";
 import { buildPublicUrl } from "@/lib/s3";
 import { isGeneratedMarketProxy } from "@/lib/market-proxy";
+import { createHash } from "node:crypto";
+import { db } from "@/lib/db";
+import { loadLatestProjectState } from "./persistence-store";
+import { loadLatestBlockState } from "./block-persistence-store";
+import { liveRooms } from "./live-rooms";
 
 function decode(document: Uint8Array): DocSnapshot {
   const doc = new Y.Doc();
@@ -21,7 +26,8 @@ function decode(document: Uint8Array): DocSnapshot {
   } finally { schema.awareness.destroy(); doc.destroy(); }
 }
 
-async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date }) {
+async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date },
+  currentBlock?: (blockId: string) => Promise<DocSnapshot | null>) {
   const { project_id: sourceProjectId, created_at: capturedAt } = saved;
   const snapshot = decode(saved.document);
   const scenes: Record<string, DocSnapshot> = {};
@@ -35,12 +41,12 @@ async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string
       const details = item.details as unknown as ISceneDetails;
       const blockId = details.blockId;
       if (!/^[0-9a-f-]{36}$/i.test(blockId || "") || seen.has(blockId) || seen.size > 10) continue;
-      if (!sceneCache.has(blockId)) sceneCache.set(blockId, sourceProjectId
+      if (!sceneCache.has(blockId)) sceneCache.set(blockId, currentBlock ? currentBlock(blockId) : sourceProjectId
         ? readSceneAtSnapshot(blockId, sourceProjectId, capturedAt).then(row => row ? decode(row.document) : null)
         : Promise.resolve(null));
       const scene = await sceneCache.get(blockId);
       if (scene) {
-        // Resolve against the capture time, never the scene's live/latest document.
+        // Copy each instance so nested media resolution cannot mutate a sibling scene.
         details.content = structuredClone({ trackItemsMap: scene.trackItemsMap, trackItemIds: scene.trackItemIds,
           transitionsMap: scene.transitionsMap, size: scene.size, background: scene.background }) as SceneRenderContent;
       }
@@ -56,11 +62,16 @@ export async function loadSnapshotPreview(snapshotId: number, userId: string) {
   const saved = await readPreviewSnapshot(snapshotId, userId);
   if (!saved) return null;
   const { snapshot, scenes, media } = await hydrateSnapshot(saved);
+  return preparePrivatePreview(snapshot, scenes, media, saved.project_id, userId, saved.name);
+}
+
+async function preparePrivatePreview(snapshot: DocSnapshot, scenes: Record<string, DocSnapshot>, media: ITrackItem[],
+  projectId: string, userId: string, name: string) {
   const assetIds = [...new Set(media.flatMap(item => {
     const metadata = item.metadata as { market?: boolean; market_asset_id?: string } | undefined;
     return metadata?.market && metadata.market_asset_id ? [metadata.market_asset_id] : [];
   }))];
-  const licenses = assetIds.length ? await getProjectMarketLicenses(saved.project_id, userId, assetIds) : null;
+  const licenses = assetIds.length ? await getProjectMarketLicenses(projectId, userId, assetIds) : null;
   const missing = new Set(await missingUploadSources(mediaSources(snapshot)));
   for (const item of media) {
     const metadata = item.metadata as { market?: boolean; market_asset_id?: string; media_asset_id?: string } | undefined;
@@ -76,7 +87,38 @@ export async function loadSnapshotPreview(snapshotId: number, userId: string) {
     // store/license subscription or URL is written back to the saved snapshot.
     item.metadata = { ...item.metadata, market: false };
   }
-  return { snapshot, scenes, missingSources: [...missing], name: snapshot.projectName || saved.name };
+  return { snapshot, scenes, missingSources: [...missing], name: snapshot.projectName || name };
+}
+
+async function currentDocument(kind: "project" | "block", id: string) {
+  const live = await liveRooms.get(`${kind}:${id}`);
+  if (live) return Y.encodeStateAsUpdate(live.doc);
+  const { snapshot, updates } = await (kind === "project" ? loadLatestProjectState(id) : loadLatestBlockState(id));
+  const parts = snapshot ? [snapshot, ...updates] : updates;
+  return parts.length ? Y.mergeUpdates(parts) : null;
+}
+
+// Called only after the main site's portfolio access and contract check.
+export async function loadPortfolioComposition(projectId: string) {
+  const document = await currentDocument("project", projectId);
+  if (!document) return null;
+  const blocks = await db.selectFrom("blocks").select("block_id").where("project_id", "=", projectId)
+    .where("deleted_at", "is", null).execute();
+  const allowed = new Set(blocks.map(block => block.block_id));
+  const content = await hydrateSnapshot({ document, project_id: projectId, created_at: new Date() }, async blockId => {
+    if (!allowed.has(blockId)) return null;
+    const bytes = await currentDocument("block", blockId);
+    return bytes ? decode(bytes) : null;
+  });
+  const version = createHash("sha256").update(JSON.stringify(content.snapshot)).digest("hex");
+  const duration = content.snapshot.trackItemIds.reduce((end, id) =>
+    Math.max(end, content.snapshot.trackItemsMap[id]?.display.to || 0), content.snapshot.duration || 0);
+  return { ...content, version, duration };
+}
+
+export async function portfolioPlayback(content: NonNullable<Awaited<ReturnType<typeof loadPortfolioComposition>>>,
+  projectId: string, userId: string, name: string) {
+  return preparePrivatePreview(content.snapshot, content.scenes, content.media, projectId, userId, name);
 }
 
 export async function loadMarketTemplatePreview(assetId: string, snapshotId?: number) {

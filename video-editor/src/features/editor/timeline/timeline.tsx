@@ -5,7 +5,8 @@ import { useFileDropUpload } from "../hooks/use-file-drop-upload";
 import { UploadDropOverlay } from "../components/upload-drop-overlay";
 import { LocalFileDrag } from "./local-file-drag";
 import Header from "./header";
-import Ruler from "./ruler";
+import Ruler, { RULER_HEIGHT } from "./ruler";
+import { PortfolioBand, usePortfolioPicker } from "../portfolio/portfolio-picker";
 import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
 import CanvasTimeline from "./items/timeline";
 import useStore from "../store/use-store";
@@ -179,6 +180,7 @@ const getItemRect = (item: any): { left: number; top: number; width: number; hei
 
 const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true }: { stateManager: StateManager; readOnly?: boolean; allowSceneNavigation?: boolean }) => {
   const preview = useSnapshotPreview();
+  const isPortfolioClip = !!usePortfolioPicker();
   const fileDrop = useFileDropUpload();
   // prevent duplicate scroll events
   const canScrollRef = useRef(false);
@@ -220,7 +222,6 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
 
   const {
     timelineContainerRef,
-    timelineHeight,
     onMouseDown,
     onMouseMove,
     onMouseOut,
@@ -305,11 +306,10 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
 
     if (!canvasEl || !timelineContainerEl) return;
 
-    const containerWidth =
-      (document.getElementById("timeline-header")?.clientWidth || 0);
-    const containerHeight =
-      (document.getElementById("playhead")?.clientHeight || 0) -
-      (document.getElementById("playhead-handle")?.clientHeight || 0) - 26;
+    const area = dropAreaRef.current;
+    if (!area) return;
+    const containerWidth = area.clientWidth;
+    const containerHeight = Math.max(0, area.clientHeight - RULER_HEIGHT);
     const canvas = new CanvasTimeline(canvasEl, {
       width: containerWidth,
       height: containerHeight,
@@ -404,6 +404,14 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
 
     setCanvasSize({ width: containerWidth, height: containerHeight });
     setTimeline(canvas);
+    const observer = new ResizeObserver(() => {
+      const width = area.clientWidth;
+      const height = Math.max(0, area.clientHeight - RULER_HEIGHT);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.resize({ width, height }, { force: true });
+      }
+    });
+    observer.observe(area);
 
     canvas.scrollTo({ scrollLeft: 0 });
 
@@ -641,6 +649,7 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     });
 
     return () => {
+      observer.disconnect();
       unsubscribeTransitionZOrder();
       localFileDragRef.current?.cancel();
       localFileDragRef.current = null;
@@ -662,6 +671,32 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     const time = unitsToTimeMs(units, scale.zoom);
     playerRef?.current?.seekTo(Math.round((time * fps) / 1000));
   };
+
+  useEffect(() => {
+    const area = dropAreaRef.current;
+    if (!area || !isPortfolioClip) return;
+
+    // Listen above the canvas so range handles and the ruler scroll the same lanes.
+    const scrollClipTimeline = (event: WheelEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas || event.ctrlKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const unit = event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? canvas.height
+        : event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      const dx = (event.shiftKey ? event.deltaX || event.deltaY : event.deltaX) * unit;
+      const dy = event.shiftKey ? 0 : event.deltaY * unit;
+      const [, , , , x, y] = canvas.viewportTransform;
+      const maxLeft = Math.max(0, canvas.bounding.width + canvas.spacing.left + canvas.spacing.right - canvas.width);
+      const left = Math.max(0, Math.min(maxLeft, canvas.spacing.left - x + dx));
+      const top = Math.max(0, Math.min(Math.max(0, canvas.bounding.height - canvas.height), dy - y));
+      canvas.scrollTo({ scrollLeft: left, scrollTop: top });
+      setScrollLeft(left);
+    };
+
+    area.addEventListener("wheel", scrollClipTimeline, { capture: true, passive: false });
+    return () => area.removeEventListener("wheel", scrollClipTimeline, true);
+  }, [isPortfolioClip]);
 
   const onRulerScroll = (newScrollLeft: number) => {
     // Update the timeline canvas scroll position
@@ -1241,9 +1276,8 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
       onDragLeaveCapture={handleFileDrag}
       onDropCapture={handleFileDrag}
       id="timeline-container"
-      className="relative w-full overflow-hidden bg-card py-0"
+      className="relative flex h-full w-full flex-col overflow-hidden bg-card"
       style={{
-        height: `${timelineHeight}px`,
         borderTopWidth: "1px",
         borderTopStyle: "solid",
         borderTopColor: "transparent"
@@ -1254,12 +1288,11 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     >
       <Header
         toggleFullHeight={toggleFullHeight}
-        timelineHeight={timelineHeight}
         stateManager={stateManager}
       />
       <Playhead scrollLeft={scrollLeft} />
       <PresencePlayheads scrollLeft={scrollLeft} width={canvasSize.width} />
-      <div ref={dropAreaRef} className="relative">
+      <div ref={dropAreaRef} className="relative min-h-0 flex-1 overflow-hidden">
         <TimelinePresenceCursors containerRef={timelineContainerRef} scrollLeft={scrollLeft} />
         {!readOnly && (
           <UploadDropOverlay isDragOver={fileDrop.isDragOver} error={fileDrop.dragError} className="z-50" />
@@ -1269,6 +1302,7 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
           scrollLeft={scrollLeft}
           onScroll={onRulerScroll}
         />
+        {preview && <PortfolioBand scrollLeft={scrollLeft} />}
         <div className="flex">
           <div
             style={{

@@ -219,13 +219,12 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       id: String(attachment.account_attachment_id),
       type: isProject ? "project" : attachment.attachment_kind === "link" ? "link" : "document",
       title: attachment.name,
-      description:
-        attachment.description ||
-        (isProject
-          ? meta.contract_title || "Studio Project Showcase"
-          : attachment.attachment_kind === "link"
-          ? attachment.external_url || "Website"
-          : attachment.file_name || "PDF document"),
+      description: isProject
+        ? attachment.description || ""
+        : attachment.description ||
+          (attachment.attachment_kind === "link"
+            ? attachment.external_url || "Website"
+            : attachment.file_name || "PDF document"),
       thumbnail: thumbPath ? constructAvatarUrl(thumbPath) : undefined,
       videoUrl: videoPath ? constructAvatarUrl(videoPath) : undefined,
       fileUrl: attachment.file_path
@@ -234,6 +233,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       externalUrl: attachment.external_url || undefined,
       createdAt: attachment.created_at,
       projectId: meta.project_id ? String(meta.project_id) : undefined,
+      renderedClip: isProject && attachment.attachment_kind === "file",
       clipStartSeconds: meta.clip_start_seconds !== undefined ? Number(meta.clip_start_seconds) : undefined,
       clipEndSeconds: meta.clip_end_seconds !== undefined ? Number(meta.clip_end_seconds) : undefined,
       maxAllowedSeconds: meta.max_allowed_seconds ? Number(meta.max_allowed_seconds) : null,
@@ -364,35 +364,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       toast.success("Website added to your profile.");
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Unable to add website.");
-      throw error;
-    }
-  };
-
-  const handleAddProject = async (data: {
-    projectId: string;
-    name: string;
-    description: string;
-    clipStartSeconds: number;
-    clipEndSeconds: number;
-  }) => {
-    if (!isOwner) return;
-    try {
-      const response = await api.post("/api/accounts/profile/attachments", {
-        attachment_kind: "link",
-        attachment_type: "project",
-        name: data.name,
-        description: data.description,
-        project_id: data.projectId,
-        clip_start_seconds: data.clipStartSeconds,
-        clip_end_seconds: data.clipEndSeconds,
-      });
-      setPortfolioItems((current) => [
-        mapAttachmentToPortfolioItem(response.data.attachment),
-        ...current,
-      ]);
-      toast.success("Project added to your portfolio.");
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Unable to add project to portfolio.");
       throw error;
     }
   };
@@ -701,7 +672,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           api.get(`/api/accounts/profile/${id}?t=${new Date().getTime()}`),
           api.get(`/api/tags/`),
           api.get(`api/accounts/links/${id}`),
-          api.get(`/api/accounts/profile/${id}/attachments`),
+          api.get(`/api/accounts/profile/${id}/attachments?t=${new Date().getTime()}`),
           api.get(`/api/accounts/${id}/galleries`)
         ]);
 
@@ -1179,7 +1150,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               isOwner={isOwner}
               onUploadPDF={handleUploadResume}
               onAddExternalLink={handleAddWebsite}
-              onAddProject={handleAddProject}
               onDeletePortfolioItem={handleDeletePortfolioItem}
               onUpdateIntroduction={(intro) => {
                 setUserDetails(prev => prev ? { ...prev, introduction: intro } : null);

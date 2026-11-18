@@ -37,6 +37,7 @@ export async function GET(
     }
 
     const statusData = await response.json();
+    if (statusData?.data?.portfolioFrameRange) return NextResponse.json({ message: "Portfolio export is managed by the clip picker." }, { status: 404 });
 
     if (!response.ok) {
       return NextResponse.json(
