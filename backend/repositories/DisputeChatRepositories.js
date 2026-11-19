@@ -471,6 +471,9 @@ function emitDisputeChat(
  */
 async function emitDisputeState(disputeId, { reason = null } = {}) {
   if (!disputeId) return null;
+  // Durable state first: pause or resume the contract to match the case, then broadcast.
+  // Lazy require: the hold service sends notifications and must not load with this module.
+  await require('../services/ContractDisputeHoldServices').syncHoldForDispute(disputeId);
   let row = null;
   try {
     const result = await pool.query(

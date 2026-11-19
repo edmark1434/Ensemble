@@ -8,6 +8,7 @@ const {
   contractEscrowHoldings,
   milestonePaidOutSql,
   milestoneEscrowState,
+  isContractEnded,
 } = require('../lib/DisputeEscrow');
 
 /**
@@ -367,25 +368,18 @@ async function releasePayout(client, payout, { staffId = null } = {}) {
 }
 
 /**
- * End a contract once its settlement has been paid: unfinished milestones are cancelled and
- * the contract closes, so nothing can be released or refunded from it twice. Waits while any
- * settlement payout on the contract is still due.
+ * End a contract when an escrow settlement is ruled: the ruling decides the contract, and the
+ * payout date only decides when the credits move. Unfinished milestones are cancelled, the gig
+ * order is cancelled and team workspaces are archived, so no more work, release or refund can
+ * happen on it. Escrow stays frozen until the payouts are paid (see the escrow guards).
+ *
+ * What changed is kept in `contracts.dispute_settlement_end`, so withdrawing the ruling
+ * (`restoreContractAfterWithdrawnSettlement`) puts the contract back exactly as it was.
+ * `dispute_hold_since` is left as it is: a restored contract is still on hold under the reopened case.
+ * Before migration 1829900000000 the snapshot column is missing; the contract still ends.
  */
-async function endContractAfterSettlement(client, contractId) {
+async function endContractAfterSettlement(client, contractId, { disputeId = null } = {}) {
   if (!contractId) return null;
-  const waiting = await client.query(
-    `
-    SELECT 1
-    FROM dispute_payouts p
-    JOIN disputes d ON d.dispute_id = p.dispute_id
-    WHERE d.contract_id = $1
-      AND p.kind = ANY($2::text[])
-      AND p.status = ANY($3::text[])
-    LIMIT 1
-    `,
-    [contractId, SETTLEMENT_PAYOUT_KINDS, WAITING_PAYOUT_STATUSES]
-  );
-  if (waiting.rows.length) return null;
 
   const contract = await client.query(
     `SELECT contract_id, status FROM contracts WHERE contract_id = $1 FOR UPDATE`,
@@ -393,7 +387,7 @@ async function endContractAfterSettlement(client, contractId) {
   );
   const current = contract.rows[0];
   if (!current) return null;
-  if (['cancelled', 'closed', 'completed', 'rejected'].includes(String(current.status || '').toLowerCase())) {
+  if (isContractEnded(current.status)) {
     return { contractStatus: current.status, cancelledMilestones: 0, alreadyEnded: true };
   }
 
@@ -403,10 +397,13 @@ async function endContractAfterSettlement(client, contractId) {
   );
   const cancelled = await client.query(
     `
-    UPDATE contract_milestones
+    UPDATE contract_milestones cm
     SET status = 'cancelled'
-    WHERE contract_id = $1
-      AND status NOT IN ('completed', 'cancelled', 'abandoned')
+    FROM contract_milestones prev
+    WHERE cm.contract_milestone_id = prev.contract_milestone_id
+      AND cm.contract_id = $1
+      AND cm.status NOT IN ('completed', 'cancelled', 'abandoned')
+    RETURNING cm.contract_milestone_id AS id, prev.status AS previous_status
     `,
     [contractId]
   );
@@ -415,11 +412,27 @@ async function endContractAfterSettlement(client, contractId) {
     contractStatus,
     contractId,
   ]);
-  await client.query(
+  const gigRequests = await client.query(
     `
-    UPDATE gig_requests
+    UPDATE gig_requests gr
     SET status = 'Cancelled', updated_at = NOW()
-    WHERE gig_request_id IN (SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1)
+    FROM gig_requests prev
+    WHERE gr.gig_request_id = prev.gig_request_id
+      AND gr.gig_request_id IN (SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1)
+      AND gr.status IS DISTINCT FROM 'Cancelled'
+    RETURNING gr.gig_request_id AS id, prev.status AS previous_status
+    `,
+    [contractId]
+  );
+
+  // Team workspaces this end archives (and only those) are un-archived if the ruling is withdrawn.
+  const liveTeams = await client.query(
+    `
+    SELECT DISTINCT t.team_id
+    FROM team_contract_workspaces tcw
+    JOIN teams t ON t.team_id = tcw.team_id
+    WHERE tcw.contract_id = $1
+      AND t.is_archived = FALSE
     `,
     [contractId]
   );
@@ -430,7 +443,98 @@ async function endContractAfterSettlement(client, contractId) {
     null,
     'Contract ended by a dispute settlement'
   );
+  const archivedTeams = liveTeams.rows.length
+    ? await client.query(
+      `SELECT team_id FROM teams WHERE team_id = ANY($1::uuid[]) AND is_archived = TRUE`,
+      [liveTeams.rows.map((row) => row.team_id)]
+    )
+    : { rows: [] };
+
+  const snapshot = {
+    disputeId: disputeId ? String(disputeId) : null,
+    endedAt: new Date().toISOString(),
+    contractStatus: current.status,
+    endedStatus: contractStatus,
+    milestones: cancelled.rows.map((row) => ({ id: row.id, status: row.previous_status })),
+    gigRequests: gigRequests.rows.map((row) => ({ id: row.id, status: row.previous_status })),
+    archivedTeamIds: archivedTeams.rows.map((row) => row.team_id),
+  };
+  // A savepoint keeps a missing column (migration not run yet) from aborting the transaction.
+  await client.query('SAVEPOINT dispute_settlement_snapshot');
+  try {
+    await client.query(
+      `UPDATE contracts SET dispute_settlement_end = $2::jsonb WHERE contract_id = $1`,
+      [contractId, JSON.stringify(snapshot)]
+    );
+    await client.query('RELEASE SAVEPOINT dispute_settlement_snapshot');
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT dispute_settlement_snapshot');
+    if (error.code !== '42703') throw error;
+  }
+
   return { contractStatus, cancelledMilestones: cancelled.rowCount || 0, alreadyEnded: false };
+}
+
+/**
+ * Undo `endContractAfterSettlement` when that settlement ruling is withdrawn: the contract,
+ * its milestones and its gig order go back to what they were, and the workspaces it archived
+ * are un-archived. Only rows still in the state the settlement left are restored. The case has
+ * been reopened, so the contract comes back on hold until the case is decided again.
+ */
+async function restoreContractAfterWithdrawnSettlement(client, contractId, disputeId) {
+  if (!contractId) return null;
+  let res;
+  await client.query('SAVEPOINT dispute_settlement_restore');
+  try {
+    res = await client.query(
+      `SELECT status, dispute_settlement_end FROM contracts WHERE contract_id = $1 FOR UPDATE`,
+      [contractId]
+    );
+    await client.query('RELEASE SAVEPOINT dispute_settlement_restore');
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT dispute_settlement_restore');
+    if (error.code === '42703') return null;
+    throw error;
+  }
+  const row = res.rows[0];
+  const snapshot = row?.dispute_settlement_end;
+  if (!snapshot || String(snapshot.disputeId || '') !== String(disputeId)) return null;
+  if (String(row.status || '') !== String(snapshot.endedStatus || '')) {
+    // Something else changed the contract since; leave it and just drop the snapshot.
+    await client.query(`UPDATE contracts SET dispute_settlement_end = NULL WHERE contract_id = $1`, [contractId]);
+    return { restored: false };
+  }
+
+  await client.query(
+    `UPDATE contracts SET status = $2, dispute_settlement_end = NULL WHERE contract_id = $1`,
+    [contractId, snapshot.contractStatus]
+  );
+  for (const milestone of snapshot.milestones || []) {
+    await client.query(
+      `UPDATE contract_milestones SET status = $3
+       WHERE contract_milestone_id = $1 AND contract_id = $2 AND status = 'cancelled'`,
+      [milestone.id, contractId, milestone.status]
+    );
+  }
+  for (const request of snapshot.gigRequests || []) {
+    await client.query(
+      `UPDATE gig_requests SET status = $2, updated_at = NOW()
+       WHERE gig_request_id = $1 AND status = 'Cancelled'`,
+      [request.id, request.status]
+    );
+  }
+  if ((snapshot.archivedTeamIds || []).length) {
+    await client.query(
+      `UPDATE teams SET is_archived = FALSE, archived_at = NULL
+       WHERE team_id = ANY($1::uuid[]) AND is_archived = TRUE`,
+      [snapshot.archivedTeamIds]
+    );
+  }
+  return {
+    restored: true,
+    contractStatus: snapshot.contractStatus,
+    restoredMilestones: (snapshot.milestones || []).length,
+  };
 }
 
 async function assertNoWaitingPayouts(client, disputeId) {
@@ -706,13 +810,13 @@ async function settleEscrow({
       freelancerCredits,
     });
 
-    let contractEnd = null;
     if (immediate) {
       const paid = [];
       for (const payout of payouts) paid.push(await releasePayout(client, payout, { staffId }));
       payouts = paid;
-      contractEnd = await endContractAfterSettlement(client, dispute.contract_id);
     }
+    // The ruling decides the contract: it ends now, whenever the credits are paid.
+    const contractEnd = await endContractAfterSettlement(client, dispute.contract_id, { disputeId });
 
     await commitOrThrow(client);
     return {
@@ -1036,8 +1140,9 @@ async function releaseDisputePayouts({ disputeId, staffId }) {
 
     const paid = [];
     for (const payout of waiting) paid.push(await releasePayout(client, payout, { staffId }));
+    // Normally already ended when the settlement was ruled; this covers older rulings.
     const contractEnd = paid.some((p) => SETTLEMENT_PAYOUT_KINDS.includes(p.kind))
-      ? await endContractAfterSettlement(client, dispute.contract_id)
+      ? await endContractAfterSettlement(client, dispute.contract_id, { disputeId })
       : null;
     await client.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
     await commitOrThrow(client);
@@ -1163,6 +1268,11 @@ async function cancelDisputePayouts({ disputeId, staffId, reason }) {
       [disputeId, reason || null, WAITING_PAYOUT_STATUSES]
     );
 
+    // A settlement ended the contract when it was ruled; withdrawing it brings the contract back.
+    const contractRestore = dispute.financial_resolution_kind === 'escrow_settle' && dispute.contract_id
+      ? await restoreContractAfterWithdrawnSettlement(client, dispute.contract_id, disputeId)
+      : null;
+
     const remaining = dispute.contract_id
       ? await remainingEscrowCredits(client, disputeId, dispute.contract_id)
       : 0;
@@ -1182,7 +1292,14 @@ async function cancelDisputePayouts({ disputeId, staffId, reason }) {
       [disputeId, remaining]
     );
     await commitOrThrow(client);
-    return { cancelled: cancelled.rows, returned, staffId, kind: dispute.financial_resolution_kind };
+    return {
+      cancelled: cancelled.rows,
+      returned,
+      staffId,
+      kind: dispute.financial_resolution_kind,
+      contractId: dispute.contract_id || null,
+      contractRestore,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -1242,8 +1359,9 @@ async function releaseDuePayouts({ limit = 25 } = {}) {
       }
       const paid = [];
       for (const payout of payouts) paid.push(await releasePayout(client, payout));
+      // Normally already ended when the settlement was ruled; this covers older rulings.
       const contractEnd = paid.some((p) => SETTLEMENT_PAYOUT_KINDS.includes(p.kind))
-        ? await endContractAfterSettlement(client, dispute.contract_id)
+        ? await endContractAfterSettlement(client, dispute.contract_id, { disputeId })
         : null;
       await client.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
       await commitOrThrow(client);
@@ -1356,4 +1474,5 @@ module.exports = {
   cancelDisputePayouts,
   releaseDuePayouts,
   listDisputePayouts,
+  endContractAfterSettlement,
 };

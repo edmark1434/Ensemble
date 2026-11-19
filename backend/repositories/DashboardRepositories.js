@@ -1150,6 +1150,9 @@ async function buyRevision({
             error.statusCode = 409;
             throw error;
         }
+        // A revision purchase adds credits to the contract's escrow, which is frozen while the
+        // contract is on dispute hold (open case or a ruling's payout still waiting).
+        await assertNoOpenContractDispute(client, contractId);
 
         const permissions = await getContractPermissions(contractId, clientAccountId, client);
         if (!permissions || !permissions.canBuyRevision) {

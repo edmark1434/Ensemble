@@ -660,6 +660,27 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Contract dispute hold: end contracts whose settlement ruling stands, and pause / resume
+    // contracts to match their disputes (resuming moves deadlines forward) — runs every 5 minutes.
+    // Each dispute change already syncs its contract; this catches anything else.
+    let isContractDisputeHoldJobRunning = false;
+    cron.schedule("*/5 * * * *", async () => {
+        if (isContractDisputeHoldJobRunning) return;
+        isContractDisputeHoldJobRunning = true;
+        try {
+            const { reconcileContractDisputeHoldsServices } = require('../services/ContractDisputeHoldServices');
+            const result = await reconcileContractDisputeHoldsServices();
+            if (result.ended || result.synced) {
+                console.log(`Contract dispute holds: ended ${result.ended}, synced ${result.synced}`);
+            }
+        } catch (err) {
+            // The hold columns arrive with migration 1829900000000; stay quiet until it runs.
+            if (err.code !== '42703') console.error("Contract dispute hold reconcile failed:", err.message);
+        } finally {
+            isContractDisputeHoldJobRunning = false;
+        }
+    });
+
     // Job 8: Accepted gig orders < 2h confirmation reminder & 24h auto-expiration — runs every 5 minutes
     let isAcceptedGigOrderReconcileRunning = false;
     cron.schedule("*/5 * * * *", async () => {

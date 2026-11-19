@@ -54,6 +54,84 @@ export type ContractDisputeFiling = {
   pendingPayout?: ContractDisputePendingPayout | null;
 };
 
+/**
+ * A contract during and after a dispute (`dispute_hold` from the contracts API).
+ * `since`: when the current hold began. While a dispute is open, or a ruling's payout is still
+ * waiting, escrow is frozen and the contract's clock is stopped; when the hold lifts, its
+ * deadlines move forward by the time spent on hold.
+ * `settlement`: set when an escrow settlement ruling ended the contract (id and number are null
+ * when the viewer cannot open that case).
+ */
+export type ContractDisputeHold = {
+  since?: string | null;
+  settlement?: (ContractActiveDispute & { endedAt?: string | null }) | null;
+};
+
+const ENDED_CONTRACT_STATUSES = ["done", "completed", "closed", "cancelled", "rejected"];
+
+export type ContractHoldState =
+  | { kind: "none" }
+  /** A dispute on the contract is open. */
+  | { kind: "dispute"; since: string | null }
+  /** The case is closed but a ruling's payout has not been paid yet. */
+  | { kind: "payout"; since: string | null; payout: ContractDisputePendingPayout | null }
+  /** An escrow settlement ruling ended the contract. */
+  | { kind: "settled"; settlement: NonNullable<ContractDisputeHold["settlement"]>; payout: ContractDisputePendingPayout | null };
+
+/** Where a contract stands with respect to disputes, for banners, badges and the countdown. */
+export function contractHoldState(contract: {
+  status?: string | null;
+  activeDispute?: ContractActiveDispute | null;
+  disputeFiling?: ContractDisputeFiling | null;
+  disputeHold?: ContractDisputeHold | null;
+}): ContractHoldState {
+  const ended = ENDED_CONTRACT_STATUSES.includes(String(contract.status || "").toLowerCase());
+  const payout = contract.disputeFiling?.pendingPayout || null;
+  if (ended) {
+    const settlement = contract.disputeHold?.settlement;
+    return settlement ? { kind: "settled", settlement, payout } : { kind: "none" };
+  }
+  const since = contract.disputeHold?.since || null;
+  if (contract.activeDispute) return { kind: "dispute", since };
+  if (payout) return { kind: "payout", since, payout };
+  return { kind: "none" };
+}
+
+function shortDate(value?: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** "dispute DIS-123456" when the viewer may see the number, else "the dispute". */
+function disputeName(dispute?: { number?: string | null } | null): string {
+  return dispute?.number ? `dispute ${dispute.number}` : "the dispute";
+}
+
+/** One-line explanation of a hold or a settlement for banners and cards. */
+export function contractHoldDetail(state: ContractHoldState): string | null {
+  if (state.kind === "dispute") {
+    const since = shortDate(state.since);
+    return `The contract is on hold${since ? ` since ${since}` : ""}: escrow is frozen and every deadline is paused. When the case closes, deadlines move forward by the time spent on hold.`;
+  }
+  if (state.kind === "payout") {
+    const failed = state.payout?.payoutStatus === "failed";
+    const date = failed ? null : shortDate(state.payout?.releaseAt);
+    return `The ruling on ${disputeName(state.payout)} is waiting to be paid${date ? ` on ${date}` : ""}${
+      failed ? " (staff are retrying the payout)" : ""
+    }. Until then escrow stays frozen and deadlines stay paused; they move forward by the time spent on hold once it is paid.`;
+  }
+  if (state.kind === "settled") {
+    const ended = shortDate(state.settlement.endedAt);
+    const date = state.payout?.payoutStatus === "scheduled" ? shortDate(state.payout?.releaseAt) : null;
+    return `This contract was ended${ended ? ` on ${ended}` : ""} by the settlement ruling on ${disputeName(state.settlement)}. Unfinished milestones were cancelled, and the escrow is paid out as ruled${
+      date ? ` on ${date}` : state.payout ? " once the payout goes through" : ""
+    }.`;
+  }
+  return null;
+}
+
 /** Short label for a contract the viewer can no longer dispute, or null when they can. */
 export function contractDisputeBlockLabel(filing?: ContractDisputeFiling | null): string | null {
   if (!filing || filing.canFile) return null;

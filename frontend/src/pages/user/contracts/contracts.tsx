@@ -31,8 +31,11 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import {
   type ContractActiveDispute,
   type ContractDisputeFiling,
+  type ContractDisputeHold,
   contractDisputeHeadline,
   contractDisputePath,
+  contractHoldDetail,
+  contractHoldState,
 } from "./contractDispute";
 import useGlobalState from "@/lib/global_state";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
@@ -133,6 +136,7 @@ export interface DetailedContract {
   milestones: MilestoneItem[];
   activeDispute?: ContractActiveDispute | null;
   disputeFiling?: ContractDisputeFiling | null;
+  disputeHold?: ContractDisputeHold | null;
 }
 
 // ============================================================================
@@ -312,6 +316,7 @@ export const Contracts: React.FC = () => {
         milestones: mappedMilestones,
         activeDispute: c.active_dispute || null,
         disputeFiling: c.dispute_filing || null,
+        disputeHold: c.dispute_hold || null,
       };
     });
   }, []);
@@ -802,6 +807,11 @@ export const Contracts: React.FC = () => {
                       (m) => m.status === "Claimed"
                     ).length;
                     const totalMilestones = contract.milestones.length;
+                    // An open dispute has its own strip below; this covers a ruling's payout
+                    // still holding the contract, and a contract a settlement ruling ended.
+                    const holdState = contractHoldState(contract);
+                    const holdDetail =
+                      holdState.kind === "payout" || holdState.kind === "settled" ? contractHoldDetail(holdState) : null;
 
                     return (
                       <motion.div
@@ -824,7 +834,8 @@ export const Contracts: React.FC = () => {
                         {/* Top accent bar */}
                         <div className={`h-1.5 w-full ${
                           contract.activeDispute ? 'bg-rose-500' :
-                          contract.status === 'Active' ? 'bg-emerald-500' : 
+                          holdState.kind === 'payout' ? 'bg-amber-500' :
+                          contract.status === 'Active' ? 'bg-emerald-500' :
                           contract.status === 'Waiting' ? 'bg-sky-500' : 
                           contract.status === 'Done' ? 'bg-purple-500' : 'bg-zinc-300 dark:bg-zinc-700'
                         }`} />
@@ -864,6 +875,14 @@ export const Contracts: React.FC = () => {
                               {contract.activeDispute ? (
                                 <span className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200">
                                   Under dispute
+                                </span>
+                              ) : holdState.kind === "payout" ? (
+                                <span className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200">
+                                  On hold
+                                </span>
+                              ) : holdState.kind === "settled" ? (
+                                <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-zinc-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300">
+                                  Settled by dispute
                                 </span>
                               ) : null}
                               {getStatusBadge(contract.status)}
@@ -915,6 +934,18 @@ export const Contracts: React.FC = () => {
                               </div>
                             );
                           })() : null}
+
+                          {holdDetail ? (
+                            <p
+                              className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                                holdState.kind === "payout"
+                                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                                  : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
+                              }`}
+                            >
+                              {holdDetail}
+                            </p>
+                          ) : null}
 
                           {/* Stats Grid: Value, Milestones, Deadline */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-zinc-50/90 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">

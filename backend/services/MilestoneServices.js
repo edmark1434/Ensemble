@@ -16,7 +16,6 @@ const {
     getOverdueMilestonesNowStalled,
     markMilestoneStalled,
     getStalledMilestonesNowAbandoned,
-    markMilestoneAbandoned,
     getSubmissionsReadyForAutoApproval,
     autoApproveMilestoneSubmit,
     getApproachingDeadlineMilestones,
@@ -164,8 +163,9 @@ async function reconcileAbandonedMilestonesServices() {
     let abandoned = 0;
     for (const m of milestones) {
         try {
-            await markMilestoneAbandoned(m.contract_milestone_id);
-            // Automatically refund remaining escrow to the client
+            // Refund first: it accepts a stalled milestone and leaves it `cancelled`. Marking it
+            // abandoned beforehand left it abandoned with its credits stuck in escrow whenever the
+            // refund failed, and the job never picked it up again.
             const refundResult = await cancelMilestoneAndRefund({
                 milestoneId:         m.contract_milestone_id,
                 clientAccountId:     m.client_account_id,
