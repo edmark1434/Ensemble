@@ -18,7 +18,7 @@ Active warning points are the same sum the backend already uses: unrescinded `vi
 
 When a warning expires or is rescinded, merit comes back by itself. Admin and Support can also **lift points** (a number of points, or up to a target merit) without deleting the warnings; the Record shows how much was lifted. Completions, reviews, verification, credits, and subscriptions never change merit.
 
-**Merit triggers punishments; punishments do not follow merit.** When a warning takes merit down to a threshold level, that level's punishment starts and runs a fixed number of days (seeded: 97 Limited 3d, 92 Restricted 5d, 90 Mute 3d, 85 Mute 5d, 84 Frozen access 7d, 80 suspend 7d, 70 suspend 14d). It runs its full time even if merit recovers, and it never changes merit. Lower levels carry harsher punishments, so they add up as merit keeps dropping. See [warning-system.md](warning-system.md) §8.
+**Merit triggers punishments; punishments do not follow merit.** When a warning takes merit down to a threshold level, that level's punishment starts and runs a fixed number of days (seeded: 95 Limited 1d, 90 Mute 1d, 85 Mute 2d, 80 Restricted 2d, 75 Frozen access 3d, 70 suspend 3d, 60 suspend 7d). It runs its full time even if merit recovers, and it never changes merit. Lower levels carry harsher punishments, so they add up as merit keeps dropping. See [warning-system.md](warning-system.md) §8.
 
 ---
 
@@ -32,17 +32,17 @@ When a warning expires or is rescinded, merit comes back by itself. Admin and Su
 | Public chips | Banned / Suspended / Locked / Timeout / Under dispute. Not the merit band name, not warning text. |
 | Staff desks | Warning points, catalog, thresholds. Not this display name. |
 
-Display tiers (from remaining merit). They describe the number only and never name a punishment, because punishments run on their own clocks:
+Display tiers (from remaining merit), cut at the seeded punishment levels. They describe the number only and never name a punishment, because punishments run on their own clocks:
 
-| Merit | Label |
-|---|---|
-| **100** | Trusted |
-| **95–99** | Good |
-| **85–94** | Fair |
-| **70–84** | Low |
-| **69 and below** | Very low |
+| Merit | Label | Seeded levels inside it |
+|---|---|---|
+| **100** | Trusted | — |
+| **96–99** | Good | none |
+| **86–95** | Fair | Limited (95), Mute (90) |
+| **76–85** | Low | Mute (85), Restricted (80) |
+| **75 and below** | Very low | Frozen access (75), suspensions (70, 60) |
 
-What is actually paused comes from the running automatic punishments (status bar, Record), not from the ring.
+What is actually paused comes from the running automatic punishments. The owner sees them under their merit ring and on the Record ("Running now: Mute until …", or "No limits running"); staff see them next to merit on every desk. Visitors see the tier only.
 
 ---
 

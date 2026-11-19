@@ -33,7 +33,11 @@ Automatic punishments no longer follow Platform Merit live. When a warning takes
 - Staff UI: `/admin/warnings` → Merit punishments (rule = "when merit drops to N" → punishment → days); `MeritPenaltiesPanel` in the Admin history modal and the moderator Restrictions desk; running punishments on desk chips, the case summary and the admin profile.
 - Member UI: status bar / How to fix show `merit_limits` (strictest band) and `muted` with fixed end dates and "runs its full time"; forum locks show "Muted" / "Low merit" with when posting returns; Record lists automatic punishments; merit ring tiers are neutral (Trusted / Good / Fair / Low / Very low).
 - Runs before the migration too: bands then follow points live and rule edits say the migration is needed.
-- User preference: do not run automated build or verification commands.
+
+### Follow-up: rebalance, Unfreeze, status next to merit
+- Migration `1829600000000_rebalance-merit-punishments`: gentler seed (95 Limited 1d, 90 Mute 1d, 85 Mute 2d, 80 Restricted 2d, 75 Frozen access 3d, 70 auto-suspend 3d, 60 auto-suspend 7d). Only untouched first-seed rows are replaced; bands and mutes they already started are shortened to the new length of their kind. Running suspensions are left alone.
+- Unfreeze (Admin / Support): `POST /api/admin/accounts/:id/merit-penalties/end` `{ reason, penaltyIds?, effects? }` ends several (default all) running bands and mutes; the member is told what ended and what is still running. UI: Users list row menu "Unfreeze (end automatic limits)" (shown when something is running) → modal with checkboxes; "Unfreeze all" in the Automatic punishments panel (history modal, Restrictions desk).
+- Status next to merit: merit tiers cut at the ladder levels (Trusted / Good 96–99 / Fair 86–95 / Low 76–85 / Very low ≤75). Owner: profile merit ring and Performance card list what is running ("Mute · Nov 24, 3:00 PM" or "No limits running"); Record shows "Running now". Staff: running punishments next to merit in the Users list, history, profile, Restrictions desk, jobs and marketplace moderator detail, ticket case panel (`meritPenalties` in those payloads). Visitors see the tier and public chips only.
 
 ---
 

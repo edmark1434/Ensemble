@@ -89,6 +89,22 @@ async function listRunningMeritPenalties({ limit = 200 } = {}) {
   return rows.map(mapPenalty);
 }
 
+/** Running punishments for many accounts at once (staff lists). */
+async function listRunningMeritPenaltiesForAccounts(accountIds) {
+  const ids = [...new Set((accountIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return [];
+  const { rows } = await pool.query(
+    `
+    SELECT ${PENALTY_COLUMNS}, NULL::text AS violation_number
+    FROM merit_penalties mp
+    WHERE mp.account_id = ANY($1::uuid[]) AND ${RUNNING_SQL}
+    ORDER BY mp.ends_at DESC
+    `,
+    [ids]
+  );
+  return rows.map(mapPenalty);
+}
+
 async function getMeritPenalty(accountId, penaltyId, db = pool) {
   const { rows } = await db.query(
     `
@@ -138,6 +154,7 @@ async function insertMeritPenalty(db, {
 async function endMeritPenalties(db, {
   accountId,
   penaltyId = null,
+  penaltyIds = null,
   violationId = null,
   effects = null,
   reason,
@@ -156,6 +173,7 @@ async function endMeritPenalties(db, {
       AND ($2::text IS NULL OR mp.merit_penalty_id::text = $2::text)
       AND ($3::uuid IS NULL OR mp.violation_id = $3::uuid)
       AND ($4::text[] IS NULL OR mp.effect = ANY($4::text[]))
+      AND ($8::text[] IS NULL OR mp.merit_penalty_id::text = ANY($8::text[]))
     RETURNING ${PENALTY_COLUMNS}
     `,
     [
@@ -166,6 +184,7 @@ async function endMeritPenalties(db, {
       String(reason || 'staff').slice(0, 24),
       staffId || null,
       note ? String(note).slice(0, 1000) : null,
+      Array.isArray(penaltyIds) && penaltyIds.length ? penaltyIds.map(String) : null,
     ]
   );
   return rows.map(mapPenalty);
@@ -266,6 +285,7 @@ module.exports = {
   listActiveMeritPenalties,
   listMeritPenaltyHistory,
   listRunningMeritPenalties,
+  listRunningMeritPenaltiesForAccounts,
   getMeritPenalty,
   insertMeritPenalty,
   endMeritPenalties,

@@ -33,30 +33,30 @@ type ThresholdForm = {
 };
 
 const EFFECTS: { id: PunishmentEffect; label: string; hint: string; days: number }[] = [
-  { id: 'limited', label: 'Limited', hint: 'No urgent jobs. New marketplace listings go to review.', days: 3 },
+  { id: 'limited', label: 'Limited', hint: 'No urgent jobs. New marketplace listings go to review.', days: 1 },
   {
     id: 'restricted',
     label: 'Restricted',
     hint: 'No new jobs, gigs, listings, forum posts, marketplace comments or teams. 3 proposals a day.',
-    days: 5,
+    days: 2,
   },
   {
     id: 'mute',
     label: 'Mute',
     hint: 'No forum posts, marketplace comments or new conversations. Existing job, gig and contract threads stay open.',
-    days: 3,
+    days: 1,
   },
   {
     id: 'frozen',
     label: 'Frozen access',
     hint: 'Everything Restricted pauses, plus proposals, new conversations and cashout. Live work stays.',
-    days: 7,
+    days: 3,
   },
   {
     id: 'auto_suspend',
     label: 'Suspension',
     hint: 'Read-only account for the whole time. A longer suspension already running is never shortened.',
-    days: 7,
+    days: 3,
   },
 ];
 
@@ -66,7 +66,7 @@ const emptyForm = (): ThresholdForm => ({
   merit: 90,
   effect: 'mute',
   label: '',
-  durationDays: 3,
+  durationDays: 1,
   note: '',
 });
 
@@ -137,7 +137,7 @@ export default function AdminWarningThresholdsPanel() {
       merit: clampMerit(100 - row.minPoints),
       effect: row.effect,
       label: row.label,
-      durationDays: row.durationDays || effectInfo(row.effect)?.days || 7,
+      durationDays: row.durationDays || effectInfo(row.effect)?.days || 1,
       note: row.note || '',
     });
     setFormError('');
@@ -294,7 +294,8 @@ export default function AdminWarningThresholdsPanel() {
                   {editor === 'create' ? 'New punishment rule' : 'Edit punishment rule'}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Example: merit 90 → Mute 3 days, merit 85 → Mute 5 days. One rule per punishment type at each level.
+                  Example: merit 90 → Mute 1 day, merit 85 → Mute 2 days. Keep early levels short; one rule per
+                  punishment type at each level.
                 </p>
               </div>
               <button

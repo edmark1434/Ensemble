@@ -199,6 +199,17 @@ export async function endMeritPenaltyEarly(accountId: string, penaltyId: string,
   return res.data.data;
 }
 
+/**
+ * Unfreeze (Admin / Support): end running automatic punishments now. With no ids, every
+ * running band and mute ends; suspensions end with Unsuspend instead.
+ */
+export async function unfreezeAccount(accountId: string, input: { reason: string; penaltyIds?: string[] | null }) {
+  const res = await api.post(`/api/admin/accounts/${accountId}/merit-penalties/end`, input);
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not end the automatic punishments');
+  showSuccessToast(res.data.message || 'Automatic punishments ended');
+  return res.data.data;
+}
+
 export async function pardonAccount(accountId: string, note?: string) {
   const res = await api.post(`/api/admin/accounts/${accountId}/pardon`, { note });
   if (!res.data?.success) throw new Error(res.data?.message || 'Pardon failed');

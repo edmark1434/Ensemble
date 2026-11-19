@@ -35,14 +35,17 @@ export function meritFromWarnings(warnings: MeritWarning[] | null | undefined): 
 }
 
 /**
- * Plain tier for the merit number itself. Punishments are timed and run separately from merit
- * (they do not end when merit recovers), so these names never say what is locked.
+ * Plain tier for the merit number itself, cut at the seeded punishment levels (95 / 85 / 75):
+ * Good is above every automatic punishment, Fair covers Limited and the first mute, Low the
+ * longer mute and Restricted, Very low Frozen access and suspensions. Punishments are timed and
+ * run separately from merit (they do not end when merit recovers), so what is actually paused
+ * comes from the running punishments, shown next to this tier for the owner and staff.
  */
 export function meritBandLabel(merit: number): string {
   if (merit >= 100) return "Trusted";
-  if (merit >= 95) return "Good";
-  if (merit >= 85) return "Fair";
-  if (merit >= 70) return "Low";
+  if (merit >= 96) return "Good";
+  if (merit >= 86) return "Fair";
+  if (merit >= 76) return "Low";
   return "Very low";
 }
 

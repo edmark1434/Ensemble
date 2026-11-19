@@ -107,7 +107,7 @@ Seeded catalog durations by points (admin can set 1–365 independently):
 - Whole site still usable unless a warning band or another punishment says otherwise.
 - Private Record shows it.
 - Toast tells them a warning was issued.
-- Merit dropping to a threshold starts a timed punishment ([warning-system.md](warning-system.md) §8). Seeded: merit 97 Limited 3d, 92 Restricted 5d, 90 Mute 3d, 85 Mute 5d, 84 Frozen access 7d, **80 auto-suspend 7d**, 70 auto-suspend 14d. None of them add points, and none end when the warning expires.
+- Merit dropping to a threshold starts a timed punishment ([warning-system.md](warning-system.md) §8). Seeded: merit 95 Limited 1d, 90 Mute 1d, 85 Mute 2d, 80 Restricted 2d, 75 Frozen access 3d, **70 auto-suspend 3d**, 60 auto-suspend 7d. None of them add points, and none end when the warning expires.
 
 Staff pick a **named warning** from `warning_defs`. Points are locked to that row. Admin can create or edit rows at `/admin/warnings`. Case notes are free text. Seeded list: [warning-system.md](warning-system.md) §6.1.
 
@@ -123,7 +123,7 @@ Staff pick a **named timeout** from `punishment_defs` (`kind = timeout`). Durati
 
 ### 4.4 Suspension
 
-Read the whole platform. Writes blocked except logout, token refresh, mark notifications read. Cannot complete contract actions, chat-send, list, cash out, or ticket-create. Public Suspended chip. Auto-suspend is always 7 days. Manual 1–30 typical.
+Read the whole platform. Writes blocked except logout, token refresh, mark notifications read. Cannot complete contract actions, chat-send, list, cash out, or ticket-create. Public Suspended chip. Auto-suspend follows its rule (seeded 3 or 7 days). Manual 1–30 typical.
 
 Still allowed while suspended (`SUSPENDED_WRITE_ALLOWLIST` in `AccountRestriction.js`): reads that use POST (`/api/users/list-of-details`), chat read receipts and the inbox group-size sync, leaving/ending/syncing a call already running, the appeal ticket and its evidence uploads, two-factor setup/changes, and cancelling a subscription (stopping charges is never blocked). Over Socket.IO a suspended member may join and leave rooms (conversations, forums, disputes), read presence and active calls, and send read receipts (`SUSPENDED_SOCKET_EVENTS` in `WebSocket.js`); everything else is refused. Socket standing refreshes on every status change and at most every 30 seconds on a write event, so a suspension that starts or ends applies without a reconnect.
 
@@ -151,7 +151,7 @@ Warning points stay on leftover unexpired rows. After appeal lift, the auto band
 |---|---|---|---|
 | Rescind one warning | Staff who can warn | that row no longer counts | The automatic punishments **that warning started** end (including an automatic suspension it caused); others keep running |
 | Lift points | Admin / Support Moderator | N points (or up to a target merit) stop counting; warnings stay on the Record | Unchanged: running automatic punishments keep their clocks ([warning-system.md](warning-system.md) §8, §12) |
-| End early | Admin / Support Moderator | unchanged | One automatic punishment ends now (staff-only reason; member notified) |
+| Unfreeze / End early | Admin / Support Moderator | unchanged | The chosen automatic punishments (default all bands and mutes) end now; staff-only reason; member notified. Users list row menu → Unfreeze, or the Automatic punishments panel |
 | Pardon | Admin / Support Moderator | all warning hits cleared | Active; every automatic punishment ends |
 | Appeal accepted | Support via “Appeal an account penalty” (one appeal per penalty) | an accepted **warning** appeal rescinds that warning | only the appealed penalty: ends in 24h (default), now, or at an earlier time staff pick |
 | Appeal denied | Support | unchanged | that penalty: 12-month appeal block, or permanent; optional suspend/ban in the same step |
@@ -173,7 +173,7 @@ Specialist mods act from their report desks. Conviction bans go through the disp
 
 **If they are punished, are warning points added too?** Only if it is a **warning**. Timeout, suspend, lock, ban, notice, and disputes do not add points.
 
-**If warning points are high, what happens?** Each threshold merit drops past starts a timed punishment ([warning-system.md](warning-system.md) §8). Not an auto-ban. Auto-suspend is seeded at **merit 80** (7 days) and **merit 70** (14 days).
+**If warning points are high, what happens?** Each threshold merit drops past starts a timed punishment ([warning-system.md](warning-system.md) §8). Not an auto-ban. Auto-suspend is seeded at **merit 70** (3 days) and **merit 60** (7 days).
 
 **When does an automatic punishment end?** When its days run out. Not when the warning expires, not when staff lift points, not when merit recovers. Staff can end one early; pardon, an accepted appeal, or rescinding the warning that started it also end it.
 
@@ -437,12 +437,12 @@ Team / profile / inbox report ──► Support ──► full ladder except tre
 Each report stores a snapshot of the reported item. Staff get a platform-view link when the item still exists; otherwise the desk shows the snapshot (inbox messages are never linked).
 Ticket / appeal / identity / billing ──► Support ──► full ladder + pardon
 Dispute conviction ──► Support/Admin dispute decision ──► permanent ban (warn separately if points should apply)
-Merit drops to 80 ──► system ──► 7-day suspend (fixed clock, no extra points)
-Merit drops to 84 ──► system ──► Frozen access 7 days (no ban)
-Merit drops to 90 / 85 ──► system ──► Mute 3 / 5 days
+Merit drops to 70 / 60 ──► system ──► 3 / 7-day suspend (fixed clock, no extra points)
+Merit drops to 75 ──► system ──► Frozen access 3 days (no ban)
+Merit drops to 90 / 85 ──► system ──► Mute 1 / 2 days
 ```
 
-Frozen access and Mute are timed automatic punishments, not standings. They are on this map so staff do not confuse them with a ban. Every desk lists the running ones; Admin / Support can end one early.
+Frozen access and Mute are timed automatic punishments, not standings. They are on this map so staff do not confuse them with a ban. Every desk lists the running ones next to merit; Admin / Support can Unfreeze.
 
 ---
 
@@ -450,7 +450,7 @@ Frozen access and Mute are timed automatic punishments, not standings. They are 
 
 **Public** (`/profile/:id`, job/gig/asset author chips): chips for Banned / Suspended / Locked / Timeout / Under dispute. Star ratings and badge pins are the other systems. Badges hidden if Banned or Locked.
 
-**Owner:** Record modal — standing, warnings, timeouts, automatic punishments (running and past), recent activity. Platform Merit lives in the same modal.
+**Owner:** Record modal — Platform Merit with "Running now", standing, warnings, timeouts, automatic punishments (running and past), recent activity. The owner's profile merit ring lists what is running and until when; visitors see only the neutral merit tier and public chips.
 
 **Suspended members are stopped before they start.** The backend refuses every write, and the client also switches writes off up front so nobody fills in a form for nothing. `SuspensionGuard` (`frontend/src/components/account/SuspensionGuard.tsx`, rules in `frontend/src/lib/suspensionGuard.ts`) locks write controls site-wide. Locked controls are faded, show a not-allowed cursor and an amber dashed ring on hover, have a tooltip, and give one heads-up toast on click; typing, uploads and form submits are blocked too. Reading, navigation, search, filters, logout, the appeal page and support tickets stay open. `SuspendedRouteGate` shows a "paused" page instead of write-only pages (job/gig create and edit, proposals, gig orders, checkout, new project, dispute form, team invite/join, business verification). Forum controls treat a suspension like a timeout. A control that must stay usable while suspended goes inside `data-suspension-keep`.
 
@@ -469,10 +469,10 @@ Frozen access and Mute are timed automatic punishments, not standings. They are 
 ```
 Forum mod warns (conduct, 5pt)
   → standing: Active (timeout optional)
-  → merit 95: crosses 97 → Limited for 3 days
+  → merit 95: crosses 95 → Limited for 1 day
   → cannot post urgent jobs, listings go to review
   → can still take gig orders, write proposals, and post in forums
-3 days later Limited ends; merit stays 95 until the warning expires (14 days)
+1 day later Limited ends; merit stays 95 until the warning expires (14 days)
 ```
 
 ### Jobs no-show
@@ -480,18 +480,19 @@ Forum mod warns (conduct, 5pt)
 ```
 Jobs mod issues work warning 8pt for a no-show
   → standing still Active
-  → merit 92: Limited 3 days + Restricted 5 days
-  → forums unwritable, cannot post jobs or create gigs, 3 proposals/day
+  → merit 92: Limited 1 day
+  → no urgent jobs, listings go to review
   → live contract still deliverable
-after 5 days everything opens again, even though the warning runs 45 days
+after 1 day everything opens again, even though the warning runs 45 days
 ```
 
 ### Escalation
 
 ```
-merit 92 → 90 (new warning) → Mute 3 days
-merit 90 → 85 (another)     → Mute 5 days from now (covers the first)
-first warning expires        → merit 95, the mute keeps running
+merit 92 → 90 (new warning) → Mute 1 day
+merit 90 → 85 (another)     → Mute 2 days from now
+merit 85 → 80 (another)     → Restricted 2 days
+first warning expires        → merit recovers, running punishments keep their end
 ```
 
 ### Dispute conviction
@@ -505,9 +506,9 @@ escrow handled by staff, not by the band engine
 ### Three warnings
 
 ```
-merit drops to 80
-  → auto-suspend 7 days (fixed clock, no extra points)
-  → after 7 days the suspend lock lifts
+merit drops to 70
+  → auto-suspend 3 days (fixed clock, no extra points)
+  → after 3 days the suspend lock lifts
   → any band or mute still running applies until its own end
 ```
 

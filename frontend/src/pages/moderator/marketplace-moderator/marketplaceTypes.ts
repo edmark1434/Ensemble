@@ -84,6 +84,8 @@ export type ListingSellerContext = {
   status: string;
   joinedAt: string | null;
   merit: number;
+  /** Automatic merit punishments running now (timed). */
+  meritPenalties?: { id: string; effect: string; label: string; ruleLabel?: string | null; endsAt: string | null; triggerMerit?: number | null; meritAtStart?: number | null }[];
   listings: { total: number; approved: number; rejected: number; delisted: number; pending: number };
 };
 
@@ -323,6 +325,7 @@ export type SellerListingsHistory = {
     handle: string;
     status: string;
     merit?: number;
+    meritPenalties?: { id: string; effect: string; label: string; ruleLabel?: string | null; endsAt: string | null; triggerMerit?: number | null; meritAtStart?: number | null }[];
   };
   counts: {
     total: number;

@@ -4,10 +4,13 @@ import api from '@/lib/axios';
 import { showErrorToast } from '@/components/utility/toast';
 import {
   freezeAccountCredits,
+  getAccountMeritPenalties,
   handleAccountActionError,
   rescindWarning,
   setAccountVerification,
+  unfreezeAccount,
   warnAccount,
+  type MeritPenaltyRow,
 } from '../accountActions';
 import type {
   CreditActivityItem,
@@ -127,6 +130,152 @@ function ModalShell({
         {footer && <div className="border-t border-white/[0.08] px-6 py-4">{footer}</div>}
       </div>
     </div>
+  );
+}
+
+/**
+ * Unfreeze (Admin / Support): end the automatic merit punishments running on a member now,
+ * before their clocks run out. Every running band and mute is ticked by default; an automatic
+ * suspension is listed but ended with Remove suspension instead. Merit is not changed.
+ */
+export function UnfreezeAccountModal({
+  entityName,
+  accountId,
+  onClose,
+  onChanged,
+}: {
+  entityName: string;
+  accountId: string;
+  onClose: () => void;
+  onChanged?: () => void | Promise<void>;
+}) {
+  const [rows, setRows] = useState<MeritPenaltyRow[] | null>(null);
+  const [ready, setReady] = useState(true);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAccountMeritPenalties(accountId)
+      .then((data) => {
+        if (cancelled) return;
+        setReady(data.ready);
+        setRows(data.active);
+        setPicked(new Set(data.active.filter((row) => row.effect !== 'auto_suspend').map((row) => row.id)));
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          handleAccountActionError(err);
+          setRows([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  const endable = (rows || []).filter((row) => row.effect !== 'auto_suspend');
+  const suspension = (rows || []).find((row) => row.effect === 'auto_suspend') || null;
+  const canSubmit = picked.size > 0 && reason.trim().length >= 5 && !saving;
+
+  const toggle = (id: string) =>
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await unfreezeAccount(accountId, { reason: reason.trim(), penaltyIds: [...picked] });
+      await onChanged?.();
+      onClose();
+    } catch (err) {
+      handleAccountActionError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell
+      title={`Unfreeze ${entityName}`}
+      subtitle="End automatic merit punishments now. Merit and the warnings stay as they are."
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm text-zinc-400 hover:text-white">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => void submit()}
+            className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? 'Ending…' : picked.size ? `End ${picked.size} now` : 'End now'}
+          </button>
+        </div>
+      }
+    >
+      {rows === null ? (
+        <p className="text-sm text-zinc-400">Loading automatic punishments…</p>
+      ) : !ready ? (
+        <p className="text-sm text-zinc-400">Timed automatic punishments start once the latest database migration has run.</p>
+      ) : endable.length === 0 ? (
+        <p className="text-sm text-zinc-400">
+          Nothing automatic is running on this account{suspension ? ' except a suspension' : ''}.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <ul className="space-y-2">
+            {endable.map((row) => (
+              <li key={row.id}>
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 hover:border-white/20">
+                  <input
+                    type="checkbox"
+                    checked={picked.has(row.id)}
+                    onChange={() => toggle(row.id)}
+                    className="mt-0.5 h-4 w-4 rounded border-white/20 bg-transparent accent-sky-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-white">
+                      {row.label}
+                      {row.ruleLabel && row.ruleLabel !== row.label ? (
+                        <span className="font-normal text-zinc-500"> · {row.ruleLabel}</span>
+                      ) : null}
+                    </span>
+                    <span className="block text-xs text-zinc-500">
+                      Ends {formatDateTime(row.endsAt)} · started at merit {row.meritAtStart} (rule at {row.triggerMerit})
+                    </span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          {suspension ? (
+            <p className="text-xs text-zinc-500">
+              The automatic suspension (ends {formatDateTime(suspension.endsAt)}) is ended with Remove suspension.
+            </p>
+          ) : null}
+          <label className="block text-xs text-zinc-400">
+            Why (staff only, the member does not see this)
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={2}
+              maxLength={1000}
+              placeholder="e.g. Warning was a misunderstanding; reviewed on ticket TCK-1234."
+              className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-sky-400/50"
+            />
+          </label>
+          <p className="text-xs text-zinc-500">The member is told what ended and what is still running.</p>
+        </div>
+      )}
+    </ModalShell>
   );
 }
 

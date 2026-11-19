@@ -199,6 +199,22 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
               {displayedMerit} / {DEFAULT_MERIT}
               <span className="text-gray-500 dark:text-zinc-500"> · {meritBandLabel(displayedMerit)}</span>
             </p>
+            {(() => {
+              const running = (record.punishments || []).filter((item) => item.running);
+              return (
+                <p
+                  className={`mt-1 text-sm ${
+                    running.length ? 'text-amber-800 dark:text-amber-200' : 'text-emerald-700 dark:text-emerald-300'
+                  }`}
+                >
+                  {running.length
+                    ? `Running now: ${running
+                        .map((item) => `${item.label}${item.endsAt ? ` until ${formatWhen(item.endsAt)}` : ''}`)
+                        .join(' · ')}`
+                    : 'No automatic limits running.'}
+                </p>
+              );
+            })()}
             <p className="mt-1 text-xs text-gray-500">
               Starts at {DEFAULT_MERIT}. Only unexpired warnings lower it. When it drops to certain levels an
               automatic punishment starts for a set number of days; it runs its full time even after merit recovers.

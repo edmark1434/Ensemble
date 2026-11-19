@@ -4,6 +4,7 @@ import {
   endMeritPenaltyEarly,
   getAccountMeritPenalties,
   handleAccountActionError,
+  unfreezeAccount,
   type AccountMeritPenalties,
   type MeritPenaltyRow,
 } from '../accountActions';
@@ -163,6 +164,9 @@ export function MeritPenaltiesPanel({
   const [data, setData] = useState<AccountMeritPenalties | null>(null);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [unfreezing, setUnfreezing] = useState(false);
+  const [unfreezeReason, setUnfreezeReason] = useState('');
+  const [unfreezeSaving, setUnfreezeSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -190,6 +194,21 @@ export function MeritPenaltiesPanel({
     }
   };
 
+  const unfreezeAll = async () => {
+    setUnfreezeSaving(true);
+    try {
+      await unfreezeAccount(accountId, { reason: unfreezeReason.trim() });
+      setUnfreezing(false);
+      setUnfreezeReason('');
+      await load();
+      await onChanged?.();
+    } catch (err) {
+      handleAccountActionError(err);
+    } finally {
+      setUnfreezeSaving(false);
+    }
+  };
+
   if (loading && !data) {
     return (
       <p className="mb-6 flex items-center gap-2 text-xs text-zinc-500">
@@ -207,6 +226,7 @@ export function MeritPenaltiesPanel({
   }
 
   const past = data.history.filter((row) => !data.active.some((active) => active.id === row.id));
+  const endable = data.active.filter((row) => row.effect !== 'auto_suspend');
 
   return (
     <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.03] px-4 py-3">
@@ -218,8 +238,58 @@ export function MeritPenaltiesPanel({
             {data.active.length} running
           </span>
         </p>
-        <p className="text-[11px] text-zinc-500">Started by merit thresholds · each runs its full time</p>
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-zinc-500">Started by merit thresholds · each runs its full time</p>
+          {canEnd && endable.length > 0 && !unfreezing ? (
+            <button
+              type="button"
+              onClick={() => setUnfreezing(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-500/20"
+            >
+              <Snowflake className="h-3 w-3" />
+              Unfreeze all
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {unfreezing ? (
+        <div className="mt-3 space-y-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.04] px-3 py-2.5">
+          <p className="text-xs text-zinc-300">
+            Ends {endable.map((row) => row.label).join(', ')} now. Merit and the warnings stay as they are
+            {data.active.some((row) => row.effect === 'auto_suspend') ? '; the suspension ends with Remove suspension' : ''}.
+          </p>
+          <textarea
+            value={unfreezeReason}
+            onChange={(event) => setUnfreezeReason(event.target.value)}
+            rows={2}
+            maxLength={1000}
+            placeholder="Why (staff only, the member does not see this)"
+            className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-sky-400/50"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setUnfreezing(false);
+                setUnfreezeReason('');
+              }}
+              className="rounded-lg px-3 py-1.5 text-xs text-zinc-400 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={unfreezeSaving || unfreezeReason.trim().length < REASON_MIN}
+              onClick={() => void unfreezeAll()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {unfreezeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Unfreeze now
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {data.active.length ? (
         <ul className="mt-3 space-y-2">

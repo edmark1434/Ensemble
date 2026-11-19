@@ -276,6 +276,18 @@ export type PlatformUserAccount = {
   creditActivity: CreditActivityItem[];
   verification: VerificationDetail;
   merit?: number;
+  /** Automatic merit punishments running now (each on its own clock), strictest first. */
+  meritPenalties?: {
+    id: string;
+    effect: string;
+    label: string;
+    ruleLabel?: string | null;
+    startsAt?: string | null;
+    endsAt: string | null;
+    durationDays?: number | null;
+    triggerMerit?: number | null;
+    meritAtStart?: number | null;
+  }[];
   history: TeamHistory;
   stats: {
     totalAssets: number;

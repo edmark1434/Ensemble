@@ -24,6 +24,7 @@ import api from "@/lib/axios";
 import { staffPlatformViewHref } from "@/lib/staffRoutes";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { JobsGigsPostingDetail, UserJobsHistory } from "../shared/moderatorTypes";
+import { StaffPunishmentChips } from "@/components/account/MeritStatus";
 import {
   DEFAULT_JOBS_API_BASE,
   POSTING_ACTIONS,
@@ -812,6 +813,7 @@ export function UserHistoryModal({
                     <p className="text-xs text-zinc-500">
                       Account status: <span className="capitalize text-zinc-300">{history.account.status}</span>
                     </p>
+                    <StaffPunishmentChips penalties={history.account.meritPenalties} className="mt-1" />
                   </div>
                 </div>
                 <div className="text-right">

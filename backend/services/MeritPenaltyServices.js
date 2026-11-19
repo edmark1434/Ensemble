@@ -465,11 +465,8 @@ async function liftEndedAutoSuspension(accountId, { staffId = null, reason }) {
   return true;
 }
 
-/**
- * Staff end one running punishment early (Admin / Support). Automatic suspensions are ended
- * from Change standing (Unsuspend), which also closes their record.
- */
-async function endMeritPenaltyEarly(accountId, penaltyId, staffId, { reason } = {}) {
+/** Shared checks for staff ending punishments early. */
+async function assertCanEndEarly(accountId, staffId, reason) {
   if (!staffId) throw penaltyError('Staff session required', 401);
   const note = String(reason || '').trim();
   if (note.length < END_REASON_MIN) {
@@ -484,7 +481,32 @@ async function endMeritPenaltyEarly(accountId, penaltyId, staffId, { reason } = 
   }
   const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
   await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: accountId, action: 'end_punishment' });
+  return note;
+}
 
+async function announceEndedEarly(accountId, ended, staffId, note) {
+  await recordEnded(accountId, ended, { reason: 'staff', staffId, note });
+  const still = await getActiveMeritPunishments(accountId);
+  const frozen = ended.some((row) => row.effect === 'frozen');
+  await notifyMember(
+    accountId,
+    `Staff ended your automatic ${endedList(ended)} early${frozen ? ': your account is unfrozen' : ''}.${
+      still.list.length
+        ? ` Still running: ${still.list.map((p) => `${p.label} until ${formatWhen(p.endsAt)}`).join('; ')}.`
+        : ' Nothing automatic is running now.'
+    }`,
+    { prefix: 'WARNING_UP' }
+  );
+  await broadcastPunishmentChange(accountId);
+  return still.list;
+}
+
+/**
+ * Staff end one running punishment early (Admin / Support). Automatic suspensions are ended
+ * from Change standing (Unsuspend), which also closes their record.
+ */
+async function endMeritPenaltyEarly(accountId, penaltyId, staffId, { reason } = {}) {
+  const note = await assertCanEndEarly(accountId, staffId, reason);
   const penalty = await getMeritPenalty(accountId, penaltyId);
   if (!penalty) throw penaltyError('Punishment not found.', 404, 'MERIT_PENALTY_NOT_FOUND');
   if (penalty.endedAt || new Date(penalty.endsAt).getTime() <= Date.now()) {
@@ -500,18 +522,64 @@ async function endMeritPenaltyEarly(accountId, penaltyId, staffId, { reason } = 
 
   const ended = await endMeritPenalties(pool, { accountId, penaltyId, reason: 'staff', staffId, note });
   if (!ended.length) throw penaltyError('This punishment has already ended.', 409, 'MERIT_PENALTY_ENDED');
-  await recordEnded(accountId, ended, { reason: 'staff', staffId, note });
+  const running = await announceEndedEarly(accountId, ended, staffId, note);
+  return { accountId, ended: ended.map(publicPenalty), running };
+}
 
-  const still = await getActiveMeritPunishments(accountId);
-  await notifyMember(
+/**
+ * Unfreeze: staff end several running punishments at once (Admin / Support). With no
+ * `penaltyIds` or `effects`, every running band and mute ends. Suspensions are never ended
+ * here; Unsuspend does that.
+ * @param {{ reason: string, penaltyIds?: string[]|null, effects?: string[]|null }} input
+ */
+async function endMeritPenaltiesEarly(accountId, staffId, { reason, penaltyIds = null, effects = null } = {}) {
+  const note = await assertCanEndEarly(accountId, staffId, reason);
+  const allowed = ['limited', 'restricted', 'frozen', 'mute'];
+  const kinds = Array.isArray(effects) && effects.length
+    ? effects.map((e) => String(e).toLowerCase()).filter((e) => allowed.includes(e))
+    : allowed;
+  if (!kinds.length) throw penaltyError('Pick which punishments to end.');
+  const ids = Array.isArray(penaltyIds) && penaltyIds.length ? penaltyIds.map(String) : null;
+
+  const ended = await endMeritPenalties(pool, {
     accountId,
-    `Staff ended your automatic ${endedList(ended)} early.${
-      still.list.length ? ' Other automatic punishments keep their own end dates.' : ' Nothing automatic is running now.'
-    }`,
-    { prefix: 'WARNING_UP' }
-  );
-  await broadcastPunishmentChange(accountId);
-  return { accountId, ended: ended.map(publicPenalty), running: still.list };
+    penaltyIds: ids,
+    effects: kinds,
+    reason: 'staff',
+    staffId,
+    note,
+  });
+  if (!ended.length) {
+    throw penaltyError('Nothing automatic is running to end (suspensions end with Unsuspend).', 409, 'MERIT_PENALTY_NOTHING');
+  }
+  const running = await announceEndedEarly(accountId, ended, staffId, note);
+  return { accountId, ended: ended.map(publicPenalty), running };
+}
+
+/**
+ * Running punishments for many accounts, one entry per kind (the one ending last), strictest
+ * first. Map of accountId → list. Empty before the migration.
+ */
+async function runningPunishmentsByAccount(accountIds) {
+  const map = new Map();
+  if (!(accountIds || []).length || !(await tableReady())) return map;
+  const { listRunningMeritPenaltiesForAccounts } = require('../repositories/MeritPenaltyRepositories');
+  const rows = await listRunningMeritPenaltiesForAccounts(accountIds);
+  const byAccount = new Map();
+  for (const row of rows) {
+    const key = String(row.accountId);
+    if (!byAccount.has(key)) byAccount.set(key, []);
+    byAccount.get(key).push(row);
+  }
+  for (const [key, list] of byAccount) map.set(key, summarizePenalties(list).list);
+  return map;
+}
+
+/** Same, for one account (staff detail views). */
+async function runningPunishmentsFor(accountId) {
+  if (!accountId) return [];
+  const map = await runningPunishmentsByAccount([accountId]);
+  return map.get(String(accountId)) || [];
 }
 
 /**
@@ -626,6 +694,9 @@ module.exports = {
   listAccountMeritPenalties,
   applyMeritPunishmentsForWarning,
   endMeritPenaltyEarly,
+  endMeritPenaltiesEarly,
+  runningPunishmentsByAccount,
+  runningPunishmentsFor,
   endMeritPenaltiesForWarning,
   endAllMeritPenalties,
   closeAutoSuspensionRecords,

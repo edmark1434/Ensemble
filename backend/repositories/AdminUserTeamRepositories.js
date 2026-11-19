@@ -977,7 +977,8 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const [creditMap, historyMap, activityMap, assetStats, membershipsMap, lastActivityMap] = await Promise.all([
+  const { runningPunishmentsByAccount } = require('../services/MeritPenaltyServices');
+  const [creditMap, historyMap, activityMap, assetStats, membershipsMap, lastActivityMap, punishmentMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
     fetchActivityForAccounts(accountIds),
@@ -994,6 +995,10 @@ async function getUsersManagement() {
       : { rows: [] },
     fetchTeamMembershipsForUsers(userIds),
     fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
+    runningPunishmentsByAccount(accountIds).catch((err) => {
+      console.warn('Could not load running merit punishments:', err.message);
+      return new Map();
+    }),
   ]);
   const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
 
@@ -1015,6 +1020,8 @@ async function getUsersManagement() {
       ),
       history,
       merit: history.merit,
+      // Automatic merit punishments running now (timed; merit recovering does not end them).
+      meritPenalties: punishmentMap.get(String(u.accountId)) || [],
       stats: {
         totalAssets: Number(assetsByAccount.get(u.accountId) || 0),
         totalCredits: walletBalance,

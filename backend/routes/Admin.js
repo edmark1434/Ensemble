@@ -21,6 +21,7 @@ const {
   postAdminLiftWarningPoints,
   getAdminAccountMeritPenalties,
   postAdminEndMeritPenalty,
+  postAdminUnfreezeAccount,
   postAdminAccountPardon,
   getAdminAccountActivity,
   getAdminAccountProfileDetails,
@@ -127,6 +128,8 @@ router.post('/accounts/:accountId/warnings/lift', [checkSession, requireUserTeam
 // Automatic merit punishments: every User & Team desk can see them; ending one early sits with
 // pardon and lift (Admin / Support).
 router.get('/accounts/:accountId/merit-penalties', [checkSession, requireUserTeamAccess], getAdminAccountMeritPenalties);
+// Unfreeze: end several (default: all) running automatic bands and mutes at once.
+router.post('/accounts/:accountId/merit-penalties/end', [checkSession, requireUserTeamFullWrite], postAdminUnfreezeAccount);
 router.post('/accounts/:accountId/merit-penalties/:penaltyId/end', [checkSession, requireUserTeamFullWrite], postAdminEndMeritPenalty);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);

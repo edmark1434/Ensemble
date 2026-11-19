@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, FileWarning, Gavel, Info, Loader2 } from 'lucide-react';
 import { BTN, EmptyNote, Fact, PanelSection, Pill } from '@/pages/moderator/shared/staffCaseUi';
+import { StaffPunishmentChips } from '@/components/account/MeritStatus';
 import {
   StaffStandingSummary,
   StatusPill,
@@ -206,6 +207,7 @@ export function AppealStandingBrief({ context }: { context: TicketCaseContext | 
       <p className="font-medium text-zinc-200">
         Now: {requester.status} · Merit {requester.merit ?? '—'}
       </p>
+      <StaffPunishmentChips penalties={requester.meritPenalties} />
       {effects.length ? (
         effects.map((e) => <p key={e}>Accept → {e}</p>)
       ) : (

@@ -15,9 +15,9 @@ const MIN_DURATION_DAYS = 1;
 const MAX_DURATION_DAYS = 365;
 const WARNING_DURATION_DAYS = [3, 5, 7, 10, 14, 21, 30, 45, 60, 90];
 const RESTRICTED_PROPOSAL_DAILY_CAP = 3;
-/** Lowest seeded auto-suspend trigger, still sent with warning notices. */
-const AUTO_SUSPEND_POINTS = 20;
-const AUTO_SUSPEND_DAYS = 7;
+/** Lowest seeded auto-suspend trigger (merit 70), still sent with warning notices. */
+const AUTO_SUSPEND_POINTS = 30;
+const AUTO_SUSPEND_DAYS = 3;
 /** A row can trigger anywhere from merit 99 (1 point) down to merit 0 (100 points). */
 const MIN_TRIGGER_POINTS = 1;
 const MAX_TRIGGER_POINTS = DEFAULT_MERIT;
@@ -39,7 +39,7 @@ const EFFECT_LABELS = {
   auto_suspend: 'Suspension',
 };
 
-const DEFAULT_PENALTY_DAYS = { limited: 3, restricted: 5, frozen: 7, mute: 3, auto_suspend: 7 };
+const DEFAULT_PENALTY_DAYS = { limited: 1, restricted: 2, frozen: 3, mute: 1, auto_suspend: 3 };
 
 /** How a running band reads inside a sentence ("while Restricted access runs"). */
 const BAND_PHRASES = { limited: 'Limited access', restricted: 'Restricted access', frozen: 'Frozen access' };
@@ -47,17 +47,19 @@ const BAND_PHRASES = { limited: 'Limited access', restricted: 'Restricted access
 const NO_BAND = Object.freeze({ id: 'none', min: 0, max: 0, label: 'Clear', endsAt: null });
 
 /**
- * The live ladder seeded by `1829300000000_timed-merit-punishments` (and the fallback when the
- * table cannot be read). Merit = 100 − minPoints.
+ * The live ladder seeded by `1829600000000_rebalance-merit-punishments` (and the fallback when
+ * the table cannot be read). Merit = 100 − minPoints. Gentle on purpose: a single minor or
+ * moderate warning starts nothing or a one-day limit; punishments only get long after several
+ * warnings pile up.
  */
 const DEFAULT_PUNISHMENT_LADDER = Object.freeze([
-  { minPoints: 3, effect: 'limited', label: 'Limited 3 days', durationDays: 3 },
-  { minPoints: 8, effect: 'restricted', label: 'Restricted 5 days', durationDays: 5 },
-  { minPoints: 10, effect: 'mute', label: 'Mute 3 days', durationDays: 3 },
-  { minPoints: 15, effect: 'mute', label: 'Mute 5 days', durationDays: 5 },
-  { minPoints: 16, effect: 'frozen', label: 'Frozen access 7 days', durationDays: 7 },
-  { minPoints: 20, effect: 'auto_suspend', label: 'Auto-suspend 7 days', durationDays: 7 },
-  { minPoints: 30, effect: 'auto_suspend', label: 'Auto-suspend 14 days', durationDays: 14 },
+  { minPoints: 5, effect: 'limited', label: 'Limited 1 day', durationDays: 1 },
+  { minPoints: 10, effect: 'mute', label: 'Mute 1 day', durationDays: 1 },
+  { minPoints: 15, effect: 'mute', label: 'Mute 2 days', durationDays: 2 },
+  { minPoints: 20, effect: 'restricted', label: 'Restricted 2 days', durationDays: 2 },
+  { minPoints: 25, effect: 'frozen', label: 'Frozen access 3 days', durationDays: 3 },
+  { minPoints: 30, effect: 'auto_suspend', label: 'Auto-suspend 3 days', durationDays: 3 },
+  { minPoints: 40, effect: 'auto_suspend', label: 'Auto-suspend 7 days', durationDays: 7 },
 ]);
 
 /**

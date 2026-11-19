@@ -85,7 +85,7 @@
 
 ## Account standing, credit holds, deactivation
 
-- `GET /api/users/me` `restriction` (from `getAccountAccess`) adds `banEndsAt`, `lockEndsAt`, `warningBandLabel`, `warningBandEndsAt` (when active points drop below the current band, assuming no new warnings; null if a warning has no expiry), `creditsFrozen`, `frozenCredits`, `creditsFrozenAt`, `creditsFrozenUntil`, `creditsFrozenReason`, and `returnsToDeactivated`. Frozen access now carries its own `message`.
+- `GET /api/users/me` `restriction` (from `getAccountAccess`) adds `banEndsAt`, `lockEndsAt`, `warningBandLabel`, `warningBandEndsAt` (when the strictest running automatic band's fixed clock ends), `muted`, `mutedUntil`, `meritPenalties` (every automatic punishment running, strictest first), `creditsFrozen`, `frozenCredits`, `creditsFrozenAt`, `creditsFrozenUntil`, `creditsFrozenReason`, and `returnsToDeactivated`. Frozen access now carries its own `message`.
 - `POST /api/admin/accounts/:accountId/credits/freeze` body `{ freeze, reason, days? | endsAt? }`. `reason` (≥ 5 chars, shown to the member) is required to freeze; `days` 1–365 or `endsAt` within 365 days sets the release date, neither means until staff review. Refuses your own account and (unless Admin) staff accounts. 409 when nothing is available to hold or release.
 - Socket `account:credits_hold` `{ held, message, restriction }` follows a hold or release; the client refreshes its standing and wallet.
 - `POST /api/admin/accounts/:accountId/credits/adjust` body `{ amount, note }` (signed whole number, ≤ 1,000,000; `note` ≥ 5 chars, shown to the member). Deductions only touch spendable credits (409 when short). The ledger row stays a self-transfer; a `CREDITS_ADJUSTED` account_activity row (metadata `delta`, `reason`, `balanceBefore/After`, `creditTransactionId`) is written in the same transaction, then the member gets a notification and socket `account:credits_adjusted`. Ticket credit changes use the same path.
@@ -98,7 +98,8 @@
 
 - `GET /api/admin/warning-catalog?desk=` lists live named warnings for a desk (admin/support see all). Same payload on `GET /api/moderator/warning-catalog` for restriction-desk staff. Each row includes locked `points` and `durationDays`.
 - Admin CRUD: `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId`. Body `{ label, category, points, durationDays, desks, note }`. Points 1–10. Duration 1–365 days. Delete is a soft-delete. Staff-issued warnings copy points and duration; client-sent clocks are ignored.
-- Admin-only thresholds: `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId`. Body `{ minPoints, effect, label, suspendDays, note }`. Effects: `none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`. `suspendDays` is required for auto-suspend.
+- Admin-only punishment ladder: `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId`. Body `{ minPoints | triggerMerit, effect, label, durationDays, note }`. Effects: `limited`, `restricted`, `frozen`, `mute`, `auto_suspend`; `durationDays` 1–365 is required. See [warning-system.md](warning-system.md) §8.
+- Automatic punishments: `GET /api/admin/accounts/:accountId/merit-penalties` (`{ ready, active, history }`), `POST /api/admin/accounts/:accountId/merit-penalties/end` `{ reason, penaltyIds?, effects? }` (Unfreeze, Admin / Support), `POST /api/admin/accounts/:accountId/merit-penalties/:penaltyId/end` `{ reason }`. Staff list payloads (users management, jobs / marketplace moderator account context, ticket case summary) carry `meritPenalties`.
 
 ## Standing punishment library
 

@@ -732,6 +732,8 @@ async function getUserJobsHistory(accountId) {
     ),
     sumActiveWarningPoints(accountId),
   ]);
+  const { runningPunishmentsFor } = require('../services/MeritPenaltyServices');
+  const meritPenalties = await runningPunishmentsFor(accountId).catch(() => []);
 
   return {
     account: {
@@ -740,6 +742,7 @@ async function getUserJobsHistory(accountId) {
       handle: acc.handle || '—',
       status: acc.status,
       merit: meritFromWarningPoints(warningPoints),
+      meritPenalties,
     },
     jobs: jobsResult.rows.map((r) => ({
       id: r.job_id,
