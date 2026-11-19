@@ -17,6 +17,14 @@ The Credits & Economy desk (Admin and Support Moderator) ledger had filter gaps 
 - Migration `1829700000000_ledger-link-indexes` adds indexes for the reverse lookups and scopes. Everything works before it is applied, only slower.
 - User preference: do not run automated build or verification commands.
 
+### Follow-up: accurate overview, exact click-through, simpler desk
+- Every overview figure and alert opens a ledger / wallet view built from the same SQL the figure was counted with (`FLOW_KIND_SQL` / `LEDGER_KIND_SQL`, status `settled` = Completed + Reversed, rolling `sinceHours` / `olderThanHours` on `LOCALTIMESTAMP`). The ledger shows the entry count and the credit total of all matching rows (`totalCredits`) so a figure can be checked against it.
+- Money movement is split without overlap: Issued to members (top-ups, returned by the platform, other platform payouts, staff grants), Collected by the platform (platform fees, cashouts, other, staff deductions), Between members (escrow funded / released / refunded, marketplace sales / refunds, transfers). Fixed: escrow "paid out" counted fees taken from escrow; "Refunds" mixed platform refunds into member activity; "Between members" total showed all movement.
+- Support Moderator figures (flow, pending, failed, unpaid cashouts) leave out rows touching staff wallets, as its ledger does. Unpaid cashouts are counted from their ledger rows, so the count and credits match the ledger.
+- Locked in escrow opens contracts still holding escrow; Platform wallet opens its entries; wallet-health counts open the matching wallet filter.
+- Wallets and Holds filters live in the URL too; Copy link (desk header and wallet window) shares the exact view. Overview links add a history step so Back returns to the overview.
+- Simpler UI: alerts only on Overview (count badge on its tab); one "Show" picker replaces Category + Type, with fees grouped under "Platform fees"; plain row titles ("Marketplace sale", "Platform fee", "Staff grant"); one short chip per link (Fee 50 · Source · Original · Reversal); 5 quick views; Period picker; dates and amounts under More; one Export CSV.
+
 ---
 
 # Task (parallel): One appeal per penalty
@@ -84,4 +92,19 @@ Members can attach evidence (images, PDFs, videos) on the File a Dispute form in
 - `DisputeFormPage`: optional "Evidence" picker (shared `appealAttachments` helpers: up to 4 files; images 8 MB, PDFs 15 MB, videos 50 MB). Files upload to `chat-attachments` (the same folder dispute replies use) when the member submits, and go with `POST /api/contracts/:contractId/dispute` as `attachments`. If an upload fails, the toast names the file and nothing is filed.
 - Server: `createContractDispute` keeps only valid staging keys (`normalizeDisputeAttachments`, max 4). Once the case is committed, `postDisputeFiledEvidence` posts them as the filer's first reply under the case summary, visible only to the filer and staff (`author_and_staff`).
 - If the files cannot be posted, the dispute is still filed and the response has `evidence: { sent, posted, failed }`. The form then tells the member to add the files again by replying in the case.
+- User preference: do not run automated build or verification commands.
+
+---
+
+# Task (parallel): Staff credit changes in the logs; partial and timed credit holds
+
+## Implementation Objective
+Staff grants, deductions and credit holds are self-transfers on the ledger. The member's Transaction History showed an adjustment as an "Internal ↔ Sent Credit Transfer" with no sign or reason. The staff Users / Teams credit feed showed every one as "+" (and quieter accounts got no rows, because the feed read only the newest 500 ledger rows overall). Both logs now show what staff did. A freeze can hold a chosen amount and release at an exact date and time.
+
+## Acceptance Criteria
+- `lib/StaffLedgerNotes.js` joins each self-transfer to its audit row: CREDITS_ADJUSTED by ledger id; CREDITS_FROZEN / CREDITS_UNFROZEN by `metadata.creditTransactionId`, or by wallet, type and time for older rows.
+- Member Transaction History: grants are Incoming "Credits Added by Staff" and deductions are Outgoing "Credits Removed by Staff", each with the member-facing reason. Holds and releases show as "Held by Staff" / "Hold Released". A hold shows its reason and when it was set to end. A release note (staff-only) is never shown. These categories are on the Credits tab, in the filters and in the guide. The page reloads on `account:credits_adjusted` and `ensemble:wallet-changed`.
+- Staff Users / Teams credit feed: 8 rows per account. Grants are +, deductions −, an old adjustment with no recorded direction is neutral, and holds are amber (− when frozen, + when released) with the reason and release time.
+- Freeze takes optional `amount`: empty means every spendable credit. More than is spendable is a 409. The rest stays spendable and the member's notice names the amount held. Release: until reviewed, after N days, or an exact `endsAt` date and time (future, at most 365 days). The same form (`CreditHoldFields`) is used in the economy desk Freeze dialog (in bulk, the amount applies to each wallet) and in the Users / Teams credit modal.
+- No migration.
 - User preference: do not run automated build or verification commands.

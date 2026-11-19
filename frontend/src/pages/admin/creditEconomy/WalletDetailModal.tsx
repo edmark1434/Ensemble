@@ -6,6 +6,7 @@ import {
   Download,
   ExternalLink,
   Filter,
+  Link2,
   Loader2,
   Lock,
   PlusCircle,
@@ -17,7 +18,7 @@ import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { TeamOverviewModal, UserOverviewModal } from '../userTeam/components/AccountModals';
 import type { PlatformTeam, PlatformUserAccount } from '../userTeam/userTeamTypes';
 import { AdjustCreditsDialog, HoldCreditsDialog, ReleaseHoldDialog } from './CreditActionDialogs';
-import { exportLedger, LedgerEntryDetail, LedgerLinkChips } from './ledgerShared';
+import { entrySubtitle, entryTitle, exportLedger, LedgerEntryDetail, LedgerLinkChips } from './ledgerShared';
 import {
   CopyId,
   ECONOMY_ACCENT,
@@ -91,6 +92,13 @@ export default function WalletDetailModal({
   const [profileError, setProfileError] = useState('');
   const [profileUser, setProfileUser] = useState<PlatformUserAccount | null>(null);
   const [profileTeam, setProfileTeam] = useState<PlatformTeam | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyLink = () => {
+    void navigator.clipboard?.writeText(window.location.href).then(() => {
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1500);
+    });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -221,6 +229,15 @@ export default function WalletDetailModal({
                   <ExternalLink className="h-3 w-3 text-zinc-500" />
                 </button>
               )}
+              <button
+                type="button"
+                onClick={copyLink}
+                className="rounded-lg p-2 text-zinc-400 hover:text-white"
+                aria-label="Copy a link to this wallet"
+                title="Copy a link to this wallet"
+              >
+                {linkCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Link2 className="h-4 w-4" />}
+              </button>
               <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:text-white" aria-label="Close">
                 <X className="h-5 w-5" />
               </button>
@@ -394,7 +411,7 @@ export default function WalletDetailModal({
                               direction === id ? accent.chip : 'bg-white/[0.03] text-zinc-500 hover:text-zinc-300'
                             }`}
                           >
-                            {id === 'all' ? 'All' : id === 'in' ? 'Credits in' : 'Credits out'}
+                            {id === 'all' ? 'All' : id === 'in' ? 'Money in' : 'Money out'}
                           </button>
                         ))}
                         {tx.loading && <Loader2 className={`h-3.5 w-3.5 animate-spin ${accent.spinner}`} />}
@@ -404,7 +421,7 @@ export default function WalletDetailModal({
                           className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-300 hover:text-white"
                           title="Search, filter by date, type or amount, and export every entry of this wallet"
                         >
-                          <Filter className="h-3 w-3" /> Filter & export in the ledger
+                          <Filter className="h-3 w-3" /> Open in ledger
                         </button>
                         <button
                           type="button"
@@ -438,10 +455,10 @@ export default function WalletDetailModal({
                                 className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02]"
                               >
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm text-white">{e.isAdjustment ? 'Staff adjustment' : e.type}</p>
+                                  <p className="text-sm text-white">{entryTitle(e)}</p>
                                   <p className="truncate text-[11px] text-zinc-500">
                                     {formatDateTime(e.createdAt)} ·{' '}
-                                    {e.isAdjustment ? e.adjustment?.reason || 'No reason recorded' : `${e.direction === 'in' ? 'from' : 'to'} ${counterparty.name}`}
+                                    {e.isAdjustment || e.feeFor ? entrySubtitle(e) : `${e.direction === 'in' ? 'from' : 'to'} ${counterparty.name}`}
                                   </p>
                                   <LedgerLinkChips entry={e} onOpenTransaction={onOpenTransaction} />
                                 </div>

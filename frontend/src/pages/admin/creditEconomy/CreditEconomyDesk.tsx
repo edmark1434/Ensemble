@@ -3,8 +3,10 @@ import {
   AlertOctagon,
   AlertTriangle,
   BarChart3,
+  Check,
   CheckCircle2,
   Info,
+  Link2,
   LayoutGrid,
   Lock,
   RefreshCw,
@@ -19,9 +21,12 @@ import LedgerEntryModal from './LedgerEntryModal';
 import LedgerTab from './LedgerTab';
 import OverviewTab from './OverviewTab';
 import WalletDetailModal from './WalletDetailModal';
-import WalletsTab from './WalletsTab';
+import WalletsTab, { WALLET_PARAM_KEYS, writeWalletFilters } from './WalletsTab';
 import { ECONOMY_ACCENT, ECONOMY_API, formatRelative } from './economyUi';
 import { LEDGER_DEFAULTS, LEDGER_PARAM_KEYS, writeLedgerFilters } from './ledgerShared';
+
+/** Every tab filter in the URL (dropped when the tab changes). */
+const FILTER_PARAM_KEYS = [...new Set([...LEDGER_PARAM_KEYS, ...WALLET_PARAM_KEYS])];
 import type { EconomyAlert, EconomyOverview, EconomyTab, EconomyVariant, LedgerFilters } from './creditEconomyTypes';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
@@ -82,7 +87,6 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
-  const [presets, setPresets] = useState<Partial<Record<EconomyTab, Record<string, string>>>>({});
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -132,21 +136,24 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
   const setParam = (key: string, value: string | null) => patchParams({ [key]: value });
 
   /**
-   * Wallets and Holds take alert filters as presets; the Ledger keeps its filters in the URL
-   * (shareable, survive reload and Back), so they are written there and dropped on leaving.
+   * Every tab keeps its filters in the URL, so any view can be reloaded, opened with Back
+   * and shared with Copy link. Switching tabs drops the old tab's filters. Clicking the
+   * current tab keeps them; a link with filters (an overview figure, an alert) replaces them.
+   * Links from the overview add a history step so Back returns to the overview.
    */
   const switchTab = (id: EconomyTab, filters?: Record<string, string>) => {
-    if (id !== 'ledger') setPresets((prev) => ({ ...prev, [id]: filters ? { ...filters } : prev[id] }));
+    const sameTab = id === tab;
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (id !== 'ledger' || filters) LEDGER_PARAM_KEYS.forEach((k) => next.delete(k));
-        if (id === 'ledger' && filters) writeLedgerFilters(next, filters as Partial<LedgerFilters>);
+        if (!sameTab || filters) FILTER_PARAM_KEYS.forEach((k) => next.delete(k));
+        if (filters && id === 'ledger') writeLedgerFilters(next, filters as Partial<LedgerFilters>);
+        if (filters && (id === 'wallets' || id === 'holds')) writeWalletFilters(next, filters, id);
         if (id === 'overview') next.delete('tab');
         else next.set('tab', id);
         return next;
       },
-      { replace: true }
+      { replace: !(filters && tab === 'overview') }
     );
   };
 
@@ -155,7 +162,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        LEDGER_PARAM_KEYS.forEach((k) => next.delete(k));
+        FILTER_PARAM_KEYS.forEach((k) => next.delete(k));
         next.delete('wallet');
         next.delete('tx');
         next.set('tab', 'ledger');
@@ -164,6 +171,14 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
       },
       { replace: false }
     );
+  };
+
+  const [copied, setCopied] = useState(false);
+  const copyLink = () => {
+    void navigator.clipboard?.writeText(window.location.href).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
   };
 
   const refreshAll = () => {
@@ -197,7 +212,8 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
     wallets: data.supply.walletCount,
     holds: data.supply.holds.wallets,
   };
-  const actionable = data.alerts.filter((a) => a.severity !== 'success');
+  // Alerts live on the Overview; other tabs only show how many need a look.
+  const attention = data.alerts.filter((a) => a.severity === 'error' || a.severity === 'warning').length;
 
   return (
     <main className="min-h-screen md:pl-[260px]">
@@ -229,6 +245,15 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
             )}
             <button
               type="button"
+              onClick={copyLink}
+              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2 text-xs text-zinc-300 hover:text-white"
+              title="Copy a link to exactly this view: tab, filters and any open wallet or entry"
+            >
+              {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Link2 className="h-4 w-4" />}
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button
+              type="button"
               onClick={refreshAll}
               disabled={refreshing}
               className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
@@ -251,6 +276,11 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
             >
               <Icon className="h-4 w-4" />
               {label}
+              {id === 'overview' && attention > 0 && tab !== 'overview' && (
+                <span className="rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-200" title="Alerts on the Overview">
+                  {attention}
+                </span>
+              )}
               {tabCounts[id] != null && (
                 <span className={`rounded-full px-1.5 text-[10px] ${id === 'holds' && tabCounts[id] ? 'bg-amber-500/15 text-amber-200' : 'bg-white/[0.06] text-zinc-400'}`}>
                   {tabCounts[id]!.toLocaleString()}
@@ -268,9 +298,9 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
           </p>
         )}
 
-        {(tab === 'overview' || actionable.length > 0) && (
+        {tab === 'overview' && (
           <div className="grid gap-2 md:grid-cols-2">
-            {(tab === 'overview' ? data.alerts : actionable).map((a) => {
+            {data.alerts.map((a) => {
               const tone = ALERT_TONE[a.severity];
               const Icon = tone.icon;
               const body = (
@@ -280,7 +310,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
                     <span className="block text-sm font-medium">{a.title}</span>
                     <span className="block text-xs opacity-75">{a.detail}</span>
                   </span>
-                  {a.action && <span className="ml-auto shrink-0 self-center text-xs opacity-75">Review →</span>}
+                  {a.action && <span className="ml-auto shrink-0 self-center text-xs opacity-75">Show →</span>}
                 </>
               );
               return a.action ? (
@@ -316,7 +346,6 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
             variant={variant}
             viewer={data.viewer}
             mode={tab}
-            preset={presets[tab]}
             statuses={data.facets.accountStatuses}
             refreshToken={refreshToken}
             onView={(w) => openWallet(w.walletId)}

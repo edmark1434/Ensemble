@@ -20,6 +20,7 @@ import type {
   VerificationDetail,
 } from '../userTeamTypes';
 import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVerificationConfig';
+import { CreditHoldFields, useCreditHoldForm } from '../../creditEconomy/CreditHoldFields';
 import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule';
 import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } from '@/lib/merit';
 import { WarningPresetFields } from './WarningPresetFields';
@@ -760,19 +761,16 @@ export function CreditActivityModal({
   const [saving, setSaving] = useState(false);
   const isFrozen = frozenBalance > 0;
   const [holdOpen, setHoldOpen] = useState(false);
-  const [holdReason, setHoldReason] = useState('');
-  const [holdDays, setHoldDays] = useState<string>('');
-  const holdReasonOk = holdReason.trim().length >= 5;
-  const holdDaysNumber = holdDays === '' ? null : Number(holdDays);
-  const holdDaysOk = holdDaysNumber === null || (Number.isInteger(holdDaysNumber) && holdDaysNumber >= 1 && holdDaysNumber <= 365);
+  const [holdTouched, setHoldTouched] = useState(false);
+  const holdForm = useCreditHoldForm(totalCredits);
 
   const run = async (fn: () => Promise<unknown>) => {
     setSaving(true);
     try {
       await fn();
       setHoldOpen(false);
-      setHoldReason('');
-      setHoldDays('');
+      setHoldTouched(false);
+      holdForm.reset();
       onChanged?.();
     } catch (err) {
       handleAccountActionError(err);
@@ -790,18 +788,15 @@ export function CreditActivityModal({
           {holdOpen ? (
             <button
               type="button"
-              disabled={saving || !holdReasonOk || !holdDaysOk}
-              onClick={() =>
-                void run(() =>
-                  freezeAccountCredits(accountId, true, undefined, {
-                    reason: holdReason.trim(),
-                    days: holdDaysNumber,
-                  })
-                )
-              }
+              disabled={saving || (holdTouched && holdForm.hasError)}
+              onClick={() => {
+                setHoldTouched(true);
+                if (holdForm.hasError) return;
+                void run(() => freezeAccountCredits(accountId, true, undefined, holdForm.input()));
+              }}
               className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
             >
-              {isFrozen ? 'Hold new credits too' : 'Confirm hold'}
+              {isFrozen ? 'Hold these credits too' : 'Confirm hold'}
             </button>
           ) : (
             <button
@@ -829,38 +824,32 @@ export function CreditActivityModal({
       {holdOpen && (
         <div className="mb-5 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.05] p-4">
           <p className="text-xs text-zinc-400">
-            Holds the available balance. The member is notified with this reason and the end date, and can appeal.
-            An accepted appeal releases the credits within 24 hours.
+            Holds all or part of the available balance. The member is notified with this reason and the release time,
+            and can appeal. An accepted appeal releases the credits within 24 hours.
           </p>
           <label className="block text-xs font-medium text-zinc-300">
             Reason the member will see
             <textarea
-              value={holdReason}
-              onChange={(e) => setHoldReason(e.target.value)}
+              value={holdForm.reason}
+              onChange={(e) => holdForm.setReason(e.target.value)}
               rows={3}
               maxLength={500}
               className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
               placeholder="e.g. Chargeback under review on a recent purchase"
             />
-            {!holdReasonOk && holdReason.length > 0 && (
-              <span className="mt-1 block text-[11px] text-amber-300">At least 5 characters.</span>
+            {(holdTouched || holdForm.reason.length > 0) && holdForm.reasonError && (
+              <span className="mt-1 block text-[11px] text-amber-300">{holdForm.reasonError}.</span>
             )}
           </label>
-          <label className="block text-xs font-medium text-zinc-300">
-            Release after (days)
-            <input
-              type="number"
-              min={1}
-              max={365}
-              step={1}
-              value={holdDays}
-              onChange={(e) => setHoldDays(e.target.value)}
-              placeholder="Leave empty to hold until you review it"
-              className="mt-1 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-            {!holdDaysOk && <span className="mt-1 block text-[11px] text-amber-300">Whole days from 1 to 365.</span>}
-          </label>
-          <button type="button" onClick={() => setHoldOpen(false)} className="text-xs text-zinc-400 hover:text-white">
+          <CreditHoldFields form={holdForm} touched={holdTouched} />
+          <button
+            type="button"
+            onClick={() => {
+              setHoldOpen(false);
+              setHoldTouched(false);
+            }}
+            className="text-xs text-zinc-400 hover:text-white"
+          >
             Cancel
           </button>
         </div>
@@ -886,20 +875,35 @@ export function CreditActivityModal({
       <h3 className="mb-4 text-sm font-semibold text-zinc-400">Credits & economy activity feed</h3>
       <ul className="space-y-3">
         {activity.length === 0 && <li className="text-sm text-zinc-500">No credit transactions yet.</li>}
-        {activity.map((item) => (
-          <li key={item.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-white">{item.type}</p>
-              <p className="text-xs text-zinc-500">
-                {item.label} · {item.timeAgo}
+        {activity.map((item) => {
+          const tone = item.tone ?? (item.positive ? 'positive' : 'negative');
+          const amountClass =
+            tone === 'hold'
+              ? 'text-amber-300'
+              : tone === 'neutral'
+                ? 'text-zinc-300'
+                : tone === 'positive'
+                  ? 'text-emerald-400'
+                  : 'text-red-400';
+          return (
+            <li key={item.id} className="flex items-center justify-between gap-4 rounded-xl bg-white/[0.03] px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white">{item.type}</p>
+                <p className="text-xs text-zinc-500">
+                  {item.label} · {item.timeAgo}
+                  {tone === 'hold' && item.amount < 0 && (
+                    <> · {item.holdUntil ? `release set for ${formatDateTime(item.holdUntil)}` : 'until reviewed'}</>
+                  )}
+                </p>
+                {item.detail && <p className="mt-0.5 break-words text-xs text-zinc-400">{item.detail}</p>}
+              </div>
+              <p className={`shrink-0 font-semibold tabular-nums ${amountClass}`}>
+                {item.amount > 0 && tone !== 'neutral' ? '+' : ''}
+                {item.amount.toLocaleString()}
               </p>
-            </div>
-            <p className={`font-semibold tabular-nums ${item.positive ? 'text-emerald-400' : 'text-red-400'}`}>
-              {item.positive ? '+' : ''}
-              {item.amount.toLocaleString()}
-            </p>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </ModalShell>
   );

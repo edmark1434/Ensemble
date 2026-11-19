@@ -279,8 +279,52 @@ const LEDGER_JOINS = `
   LEFT JOIN cashouts co ON ct.reference_table = 'cashouts' AND co.cashout_id = ct.reference_id`;
 
 const ADJUSTMENT_ROW = `(ct.source_wallet_id = ct.destination_wallet_id AND ct.type::text = 'Fund Transfer')`;
+const IS_SELF = '(ct.source_wallet_id = ct.destination_wallet_id)';
+/** Wallet types of the two sides (`sw` / `dw` are `wallets` joined on the row's wallets). */
+const S_TYPE = `COALESCE(sw.type, '')`;
+const D_TYPE = `COALESCE(dw.type, '')`;
+const TO_MEMBER = `${S_TYPE} = 'platform wallets' AND ${D_TYPE} <> 'platform wallets'`;
+const TO_PLATFORM = `${D_TYPE} = 'platform wallets' AND ${S_TYPE} <> 'platform wallets'`;
+const SETTLED = `ct.status::text IN ${MOVED_STATUSES}`;
+
+/** True when either side is a staff member's wallet (hidden from Support Moderator). */
+const STAFF_TOUCH_SQL = `EXISTS (
+  SELECT 1 FROM account_wallets saw INNER JOIN staff ss ON ss.account_id = saw.account_id
+  WHERE saw.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
+)`;
+
+/**
+ * The overview's credit-flow figures, one predicate each. `fetchFlow` sums exactly these and
+ * the ledger filters by exactly these (`kind=flow_*`), so a figure and the rows it opens
+ * always agree. Together with `grant` / `deduction` below they make Issued and Collected.
+ */
+const FLOW_KIND_SQL = {
+  flow_volume: `(NOT ${IS_SELF})`,
+  // Issued: platform → member wallets.
+  flow_topups: `(${TO_MEMBER} AND ct.reference_table = 'payments')`,
+  flow_platform_refunds: `(${TO_MEMBER} AND COALESCE(ct.reference_table, '') <> 'payments' AND ct.type::text IN ${REFUND_TYPES})`,
+  flow_platform_payouts: `(${TO_MEMBER} AND COALESCE(ct.reference_table, '') <> 'payments' AND ct.type::text NOT IN ${REFUND_TYPES})`,
+  // Collected: member wallets → platform.
+  flow_fees: `(${TO_PLATFORM} AND ct.type::text IN ${FEE_TYPES})`,
+  flow_cashouts: `(${TO_PLATFORM} AND ct.type::text = 'Cashout')`,
+  flow_other_collected: `(${TO_PLATFORM} AND ct.type::text NOT IN ${FEE_TYPES} AND ct.type::text <> 'Cashout')`,
+  // Between members.
+  flow_escrow_funded: `(${D_TYPE} = 'escrow wallets' AND ${S_TYPE} <> 'escrow wallets')`,
+  flow_escrow_released: `(${S_TYPE} = 'escrow wallets' AND ${D_TYPE} = 'account wallets' AND ct.type::text <> 'Escrow Refund')`,
+  flow_escrow_refunded: `(${S_TYPE} = 'escrow wallets' AND ${D_TYPE} = 'account wallets' AND ct.type::text = 'Escrow Refund')`,
+  flow_transfers: `(${S_TYPE} = 'account wallets' AND ${D_TYPE} = 'account wallets' AND NOT ${IS_SELF} AND ct.type::text = 'Fund Transfer')`,
+  flow_sales: `(ct.type::text = 'Asset Purchase')`,
+  flow_sale_refunds: `(ct.type::text = 'Asset Refund')`,
+};
 
 const LEDGER_KIND_SQL = {
+  ...FLOW_KIND_SQL,
+  platform: `(${S_TYPE} = 'platform wallets' OR ${D_TYPE} = 'platform wallets')`,
+  escrow_open: `(EXISTS (
+    SELECT 1 FROM wallets ew
+    WHERE ew.type = 'escrow wallets' AND ew.balance_credits > 0
+      AND ew.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
+  ))`,
   adjustment: ADJUSTMENT_ROW,
   grant: `(${ADJUSTMENT_ROW} AND (adj.metadata->>'delta')::numeric > 0)`,
   deduction: `(${ADJUSTMENT_ROW} AND (adj.metadata->>'delta')::numeric < 0)`,
@@ -300,8 +344,11 @@ const LEDGER_KIND_SQL = {
   reversal: `(ct.reverses_credit_transaction_id IS NOT NULL)`,
 };
 
-/** Categories that read the adjustment audit row. */
+/** Categories that read the adjustment audit row, and those that read wallet types. */
 const ADJUSTMENT_KINDS = new Set(['grant', 'deduction', 'adjustment_unrecorded']);
+const WALLET_TYPE_KINDS = new Set(
+  Object.keys(LEDGER_KIND_SQL).filter((k) => LEDGER_KIND_SQL[k].includes('sw.type') || LEDGER_KIND_SQL[k].includes('dw.type'))
+);
 
 /** Wallets of a contract's escrow. */
 const contractWalletsSelect = (p) => `SELECT ew.wallet_id FROM escrow_wallets ew WHERE ew.contract_id = ${p}::uuid`;
@@ -343,6 +390,8 @@ async function listLedger({
   from = null,
   to = null,
   tzOffset = null,
+  sinceHours = null,
+  olderThanHours = null,
   minAmount = null,
   maxAmount = null,
   sort = 'newest',
@@ -360,12 +409,14 @@ async function listLedger({
   const q = normalizeSearch(search);
   const exactId = q && UUID_RE.test(q) ? q : null;
   const textSearch = q && !exactId ? q : null;
-  const needsParties = !includeStaff || Boolean(accountId) || Boolean(textSearch);
+  const needsParties = Boolean(accountId) || Boolean(textSearch);
   const needsAdjustment = Boolean(walletId && direction) || ADJUSTMENT_KINDS.has(kind) || Boolean(textSearch);
+  const needsWalletTypes = WALLET_TYPE_KINDS.has(kind);
 
-  if (!includeStaff) {
-    where.push('NOT COALESCE(src.is_staff, FALSE) AND NOT COALESCE(dst.is_staff, FALSE)');
-  }
+  if (!includeStaff) where.push(`NOT ${STAFF_TOUCH_SQL}`);
+  // Rolling windows, the same clock the overview and its alerts count with.
+  if (sinceHours != null) where.push(`ct.created_at >= LOCALTIMESTAMP - make_interval(hours => ${add(sinceHours)}::int)`);
+  if (olderThanHours != null) where.push(`ct.created_at < LOCALTIMESTAMP - make_interval(hours => ${add(olderThanHours)}::int)`);
   if (walletId) {
     const p = add(walletId);
     where.push(`(ct.source_wallet_id = ${p}::uuid OR ct.destination_wallet_id = ${p}::uuid)`);
@@ -396,7 +447,9 @@ async function listLedger({
     )`);
   }
   if (type) where.push(`ct.type::text = ${add(type)}`);
-  if (status) where.push(`ct.status::text = ${add(status)}`);
+  // "settled" = credits actually moved (Completed or Reversed), as the overview counts them.
+  if (status === 'settled') where.push(SETTLED);
+  else if (status) where.push(`ct.status::text = ${add(status)}`);
   if (kind && LEDGER_KIND_SQL[kind]) where.push(LEDGER_KIND_SQL[kind]);
   const offsetParam = (from || to) && tzOffset != null ? add(tzOffset) : null;
   if (from) where.push(`ct.created_at >= ${dayStartSql(add(from), offsetParam)}`);
@@ -458,6 +511,8 @@ async function listLedger({
   const limitParam = add(limit);
   const pageOffsetParam = add(offset);
   const filterJoins = [
+    needsWalletTypes ? 'LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id' : '',
+    needsWalletTypes ? 'LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id' : '',
     needsParties ? partyLateral('src', 'ct.source_wallet_id', { escrow: false }) : '',
     needsParties ? partyLateral('dst', 'ct.destination_wallet_id', { escrow: false }) : '',
     needsAdjustment ? ADJUSTMENT_LATERAL : '',
@@ -469,6 +524,7 @@ async function listLedger({
       SELECT
         ct.credit_transaction_id,
         COUNT(*) OVER() AS total_count,
+        SUM(ABS(ct.amount_credits)) OVER() AS total_credits,
         ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS rn
       FROM credit_transactions ct
       ${filterJoins}
@@ -476,7 +532,7 @@ async function listLedger({
       ORDER BY ${orderBy}
       LIMIT ${limitParam} OFFSET ${pageOffsetParam}
     )
-    SELECT ${LEDGER_COLUMNS}, page.total_count
+    SELECT ${LEDGER_COLUMNS}, page.total_count, page.total_credits
     FROM page
     INNER JOIN credit_transactions ct ON ct.credit_transaction_id = page.credit_transaction_id
     ${LEDGER_JOINS}
@@ -488,6 +544,8 @@ async function listLedger({
   return {
     items: result.rows.map((row) => mapLedgerRow(row, { walletId, accountId })),
     total: Number(result.rows[0]?.total_count || 0),
+    // Credits across every matching row, so a filtered ledger can be checked against a figure.
+    totalCredits: Number(result.rows[0]?.total_credits || 0),
     limit,
     offset,
   };
@@ -825,104 +883,96 @@ async function fetchSupply({ includeStaff = true } = {}) {
 }
 
 /**
- * Credit movement over the last `days` days, classified by wallet type so new transaction
- * types are counted without code changes: platform → member wallets is issued, member →
- * platform is collected, and signed staff adjustments are reported on their own.
+ * Credit movement over the last `days` days (a rolling window: now minus days × 24 hours),
+ * classified by wallet type so new transaction types are counted without code changes.
+ *
+ * Every figure is a `FLOW_KIND_SQL` / `LEDGER_KIND_SQL` predicate over settled rows
+ * (Completed or Reversed), summed by amount. The ledger opened from a figure uses the same
+ * predicate, status `settled` and `sinceHours`, so its entry count and credit total match.
+ * Support Moderator figures leave out rows that touch a staff wallet, as its ledger does.
  */
-async function fetchFlow({ days = 30 } = {}) {
-  const result = await pool.query(
-    `
-    WITH moves AS (
-      SELECT
-        ct.created_at,
-        ct.type::text AS type,
-        ct.status::text AS status,
-        ct.amount_credits::bigint AS amount,
-        ct.reference_table,
-        (ct.source_wallet_id = ct.destination_wallet_id) AS is_self,
-        COALESCE(sw.type, '') AS s_type,
-        COALESCE(dw.type, '') AS d_type,
-        (adj.metadata->>'delta')::numeric AS adj_delta
+async function fetchFlow({ days = 30, includeStaff = true } = {}) {
+  const hours = days * 24;
+  const staffFilter = includeStaff ? '' : `AND NOT ${STAFF_TOUCH_SQL}`;
+  const sum = (predicate) => `COALESCE(SUM(ABS(ct.amount_credits)) FILTER (WHERE ${SETTLED} AND ${predicate}), 0)::bigint`;
+  const K = LEDGER_KIND_SQL;
+  const from = `
       FROM credit_transactions ct
       LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
       LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-      ${ADJUSTMENT_LATERAL}
-      WHERE ct.created_at >= NOW() - make_interval(days => $1::int)
-    ),
-    moved AS (
-      SELECT * FROM moves WHERE status IN ${MOVED_STATUSES}
-    )
-    SELECT
-      (SELECT COUNT(*)::int FROM moves) AS total_rows,
-      (SELECT COUNT(*) FILTER (WHERE status = 'Completed')::int FROM moves) AS completed_rows,
-      (SELECT COUNT(*) FILTER (WHERE status = 'Pending')::int FROM moves) AS pending_rows,
-      (SELECT COUNT(*) FILTER (WHERE status = 'Failed')::int FROM moves) AS failed_rows,
-      (SELECT COUNT(*) FILTER (WHERE status = 'Reversed')::int FROM moves) AS reversed_rows,
-      COALESCE(SUM(amount) FILTER (WHERE NOT is_self), 0)::bigint AS volume,
-      COALESCE(SUM(amount) FILTER (WHERE s_type = 'platform wallets' AND d_type <> 'platform wallets' AND reference_table = 'payments'), 0)::bigint AS topups,
-      COALESCE(SUM(amount) FILTER (WHERE s_type = 'platform wallets' AND d_type <> 'platform wallets' AND COALESCE(reference_table, '') <> 'payments'), 0)::bigint AS platform_payouts,
-      COALESCE(SUM(adj_delta) FILTER (WHERE is_self AND adj_delta > 0), 0)::bigint AS grants,
-      COALESCE(-SUM(adj_delta) FILTER (WHERE is_self AND adj_delta < 0), 0)::bigint AS deductions,
-      COUNT(*) FILTER (WHERE is_self AND type = 'Fund Transfer')::int AS adjustment_rows,
-      COUNT(*) FILTER (WHERE is_self AND type = 'Fund Transfer' AND adj_delta IS NULL)::int AS unsigned_adjustments,
-      COALESCE(SUM(amount) FILTER (WHERE d_type = 'platform wallets' AND s_type <> 'platform wallets' AND type IN ${FEE_TYPES}), 0)::bigint AS fees,
-      COALESCE(SUM(amount) FILTER (WHERE d_type = 'platform wallets' AND s_type <> 'platform wallets' AND type = 'Cashout'), 0)::bigint AS cashouts,
-      COALESCE(SUM(amount) FILTER (WHERE d_type = 'platform wallets' AND s_type <> 'platform wallets' AND type NOT IN ${FEE_TYPES} AND type <> 'Cashout'), 0)::bigint AS other_collected,
-      COALESCE(SUM(amount) FILTER (WHERE d_type = 'escrow wallets' AND s_type <> 'escrow wallets'), 0)::bigint AS escrow_funded,
-      COALESCE(SUM(amount) FILTER (WHERE s_type = 'escrow wallets' AND d_type <> 'escrow wallets'), 0)::bigint AS escrow_paid_out,
-      COALESCE(SUM(amount) FILTER (WHERE type = 'Asset Purchase'), 0)::bigint AS marketplace,
-      COALESCE(SUM(amount) FILTER (WHERE type IN ${REFUND_TYPES}), 0)::bigint AS refunds
-    FROM moved
-    `,
-    [days]
-  );
+      ${ADJUSTMENT_LATERAL}`;
 
-  const series = await pool.query(
-    `
-    WITH days AS (
-      SELECT generate_series(
-        (CURRENT_DATE - ($1::int - 1))::timestamp,
-        CURRENT_DATE::timestamp,
-        INTERVAL '1 day'
-      )::date AS day
-    ),
-    moved AS (
+  const [result, series] = await Promise.all([
+    pool.query(
+      `
       SELECT
-        ct.created_at::date AS day,
-        ct.amount_credits::bigint AS amount,
-        (ct.source_wallet_id = ct.destination_wallet_id) AS is_self,
-        COALESCE(sw.type, '') AS s_type,
-        COALESCE(dw.type, '') AS d_type,
-        (adj.metadata->>'delta')::numeric AS adj_delta
-      FROM credit_transactions ct
-      LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
-      LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
-      ${ADJUSTMENT_LATERAL}
-      WHERE ct.created_at >= (CURRENT_DATE - ($1::int - 1))
-        AND ct.status IN ${MOVED_STATUSES}
-    )
-    SELECT
-      d.day,
-      COALESCE(SUM(m.amount) FILTER (WHERE NOT m.is_self), 0)::bigint AS volume,
-      COALESCE(SUM(m.amount) FILTER (WHERE m.s_type = 'platform wallets' AND m.d_type <> 'platform wallets'), 0)::bigint
-        + COALESCE(SUM(m.adj_delta) FILTER (WHERE m.is_self AND m.adj_delta > 0), 0)::bigint AS issued,
-      COALESCE(SUM(m.amount) FILTER (WHERE m.d_type = 'platform wallets' AND m.s_type <> 'platform wallets'), 0)::bigint
-        + COALESCE(-SUM(m.adj_delta) FILTER (WHERE m.is_self AND m.adj_delta < 0), 0)::bigint AS collected,
-      COUNT(m.amount)::int AS rows
-    FROM days d
-    LEFT JOIN moved m ON m.day = d.day
-    GROUP BY d.day
-    ORDER BY d.day
-    `,
-    [days]
-  );
+        COUNT(*)::int AS total_rows,
+        COUNT(*) FILTER (WHERE ct.status::text = 'Completed')::int AS completed_rows,
+        COUNT(*) FILTER (WHERE ct.status::text = 'Pending')::int AS pending_rows,
+        COUNT(*) FILTER (WHERE ct.status::text = 'Failed')::int AS failed_rows,
+        COUNT(*) FILTER (WHERE ct.status::text = 'Reversed')::int AS reversed_rows,
+        ${sum(K.flow_volume)} AS volume,
+        ${sum(K.flow_topups)} AS topups,
+        ${sum(K.flow_platform_refunds)} AS platform_refunds,
+        ${sum(K.flow_platform_payouts)} AS platform_payouts,
+        ${sum(K.grant)} AS grants,
+        ${sum(K.flow_fees)} AS fees,
+        ${sum(K.flow_cashouts)} AS cashouts,
+        ${sum(K.flow_other_collected)} AS other_collected,
+        ${sum(K.deduction)} AS deductions,
+        ${sum(K.flow_escrow_funded)} AS escrow_funded,
+        ${sum(K.flow_escrow_released)} AS escrow_released,
+        ${sum(K.flow_escrow_refunded)} AS escrow_refunded,
+        ${sum(K.flow_transfers)} AS transfers,
+        ${sum(K.flow_sales)} AS sales,
+        ${sum(K.flow_sale_refunds)} AS sale_refunds,
+        COUNT(*) FILTER (WHERE ${SETTLED} AND ${K.adjustment})::int AS adjustment_rows,
+        COUNT(*) FILTER (WHERE ${SETTLED} AND ${K.adjustment_unrecorded})::int AS unsigned_adjustments
+      ${from}
+      WHERE ct.created_at >= LOCALTIMESTAMP - make_interval(hours => $1::int)
+        ${staffFilter}
+      `,
+      [hours]
+    ),
+    // Daily chart (database calendar days), from the same predicates.
+    pool.query(
+      `
+      WITH days AS (
+        SELECT generate_series(
+          (CURRENT_DATE - ($1::int - 1))::timestamp,
+          CURRENT_DATE::timestamp,
+          INTERVAL '1 day'
+        )::date AS day
+      ),
+      moved AS (
+        SELECT
+          ct.created_at::date AS day,
+          ${sum(K.flow_volume)} AS volume,
+          ${sum(`(${K.flow_topups} OR ${K.flow_platform_refunds} OR ${K.flow_platform_payouts} OR ${K.grant})`)} AS issued,
+          ${sum(`(${K.flow_fees} OR ${K.flow_cashouts} OR ${K.flow_other_collected} OR ${K.deduction})`)} AS collected,
+          COUNT(*) FILTER (WHERE ${SETTLED})::int AS rows
+        ${from}
+        WHERE ct.created_at >= (CURRENT_DATE - ($1::int - 1))
+          ${staffFilter}
+        GROUP BY ct.created_at::date
+      )
+      SELECT d.day, COALESCE(m.volume, 0) AS volume, COALESCE(m.issued, 0) AS issued,
+             COALESCE(m.collected, 0) AS collected, COALESCE(m.rows, 0) AS rows
+      FROM days d
+      LEFT JOIN moved m ON m.day = d.day
+      ORDER BY d.day
+      `,
+      [days]
+    ),
+  ]);
 
   const r = result.rows[0] || {};
   const n = (key) => Number(r[key] || 0);
-  const issued = n('topups') + n('platform_payouts') + n('grants');
+  const issued = n('topups') + n('platform_refunds') + n('platform_payouts') + n('grants');
   const collected = n('fees') + n('cashouts') + n('other_collected') + n('deductions');
   return {
     days,
+    hours,
     rows: {
       total: n('total_rows'),
       completed: n('completed_rows'),
@@ -934,6 +984,7 @@ async function fetchFlow({ days = 30 } = {}) {
     issued: {
       total: issued,
       topups: n('topups'),
+      platformRefunds: n('platform_refunds'),
       platformPayouts: n('platform_payouts'),
       staffGrants: n('grants'),
     },
@@ -945,10 +996,14 @@ async function fetchFlow({ days = 30 } = {}) {
       staffDeductions: n('deductions'),
     },
     net: issued - collected,
-    escrowFunded: n('escrow_funded'),
-    escrowPaidOut: n('escrow_paid_out'),
-    marketplace: n('marketplace'),
-    refunds: n('refunds'),
+    between: {
+      escrowFunded: n('escrow_funded'),
+      escrowReleased: n('escrow_released'),
+      escrowRefunded: n('escrow_refunded'),
+      transfers: n('transfers'),
+      sales: n('sales'),
+      saleRefunds: n('sale_refunds'),
+    },
     adjustments: {
       rows: n('adjustment_rows'),
       unsigned: n('unsigned_adjustments'),
@@ -963,31 +1018,43 @@ async function fetchFlow({ days = 30 } = {}) {
   };
 }
 
-/** Credits that have not settled: pending ledger rows, cashouts and dispute payouts. */
-async function fetchInFlight() {
+/**
+ * Credits that have not settled: pending ledger rows, cashouts and dispute payouts. The
+ * ledger counts use the same clock and staff scope as the ledger filters they link to.
+ */
+async function fetchInFlight({ includeStaff = true } = {}) {
+  const staffFilter = includeStaff ? '' : `AND NOT ${STAFF_TOUCH_SQL}`;
   const [ledger, cashouts, payouts] = await Promise.all([
     pool.query(`
       SELECT
-        COUNT(*)::int AS count,
-        COALESCE(SUM(amount_credits), 0)::bigint AS credits,
-        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '24 hours')::int AS stale_count,
-        MIN(created_at) AS oldest_at,
-        (SELECT COUNT(*)::int FROM credit_transactions
-          WHERE status = 'Failed' AND created_at >= NOW() - INTERVAL '7 days') AS failed_week
-      FROM credit_transactions
-      WHERE status = 'Pending'
+        COUNT(*) FILTER (WHERE ct.status::text = 'Pending')::int AS count,
+        COALESCE(SUM(ABS(ct.amount_credits)) FILTER (WHERE ct.status::text = 'Pending'), 0)::bigint AS credits,
+        COUNT(*) FILTER (
+          WHERE ct.status::text = 'Pending' AND ct.created_at < LOCALTIMESTAMP - INTERVAL '24 hours'
+        )::int AS stale_count,
+        MIN(ct.created_at) FILTER (WHERE ct.status::text = 'Pending') AS oldest_at,
+        COUNT(*) FILTER (
+          WHERE ct.status::text = 'Failed' AND ct.created_at >= LOCALTIMESTAMP - INTERVAL '168 hours'
+        )::int AS failed_week
+      FROM credit_transactions ct
+      WHERE ct.status::text IN ('Pending', 'Failed')
+        ${staffFilter}
     `),
     pool.query(`
       SELECT
         COUNT(*)::int AS count,
-        COALESCE(SUM(amount_credits), 0)::bigint AS credits,
-        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '24 hours')::int AS stale_count,
-        MIN(created_at) AS oldest_at,
+        COALESCE(SUM(ABS(ct.amount_credits)), 0)::bigint AS credits,
+        COUNT(*) FILTER (WHERE ct.created_at < LOCALTIMESTAMP - INTERVAL '24 hours')::int AS stale_count,
+        MIN(ct.created_at) AS oldest_at,
         (SELECT COUNT(*)::int FROM cashouts
           WHERE UPPER(status) IN ('FAILED', 'REJECTED', 'REVERSED')
             AND created_at >= NOW() - INTERVAL '7 days') AS failed_week
-      FROM cashouts
-      WHERE UPPER(status) IN ('PENDING', 'PROCESSING', 'ACCEPTED', 'REQUESTED')
+      FROM credit_transactions ct
+      INNER JOIN cashouts c ON c.cashout_id = ct.reference_id
+      WHERE ct.type::text = 'Cashout'
+        AND ct.reference_table = 'cashouts'
+        AND UPPER(c.status) IN ${OPEN_CASHOUT_STATUSES}
+        ${staffFilter}
     `).catch(() => ({ rows: [{}] })),
     pool.query(`
       SELECT

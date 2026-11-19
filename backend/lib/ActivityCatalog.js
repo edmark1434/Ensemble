@@ -122,7 +122,7 @@ const EVENT_CATALOG = {
     label: 'Credits frozen',
     targetType: 'Wallet',
     severity: 'critical',
-    impact: 'Moved the wallet balance into a frozen balance the member cannot spend.',
+    impact: 'Moved some or all of the spendable balance into a frozen balance the member cannot spend.',
   },
   CREDITS_ADJUSTED: {
     label: 'Credits adjusted by staff',

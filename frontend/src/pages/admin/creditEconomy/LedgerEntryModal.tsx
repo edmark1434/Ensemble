@@ -5,7 +5,6 @@ import {
   CopyId,
   ECONOMY_ACCENT,
   ECONOMY_API,
-  formatCredits,
   formatDateTime,
   LedgerAmount,
   PartyCell,
@@ -19,11 +18,11 @@ import {
   type LedgerFilters,
   type LedgerParty,
 } from './creditEconomyTypes';
-import { entryTitle, LedgerEntryDetail, LedgerLinkChips } from './ledgerShared';
+import { entrySubtitle, entryTitle, LedgerEntryDetail, LedgerLinkChips } from './ledgerShared';
 
 const LINK_LABEL: Record<LedgerEntryDetailResponse['links'][number]['relation'], string> = {
-  fee: 'Platform fee on this movement',
-  fee_for: 'Fee charged on',
+  fee: 'Platform fee taken',
+  fee_for: 'Taken from',
   reverses: 'Reverses',
   reversed_by: 'Reversed by',
 };
@@ -146,7 +145,7 @@ export default function LedgerEntryModal({
               {current && <span className="ml-2 text-[10px] font-medium text-zinc-400">this entry</span>}
             </span>
             <span className="block truncate text-[11px] text-zinc-500">
-              {formatDateTime(e.createdAt)} · {e.source.name} → {e.isAdjustment ? 'same wallet' : e.destination.name}
+              {formatDateTime(e.createdAt)} · {e.isAdjustment ? entrySubtitle(e) : `${e.source.name} → ${e.destination.name}`}
             </span>
             <LedgerLinkChips entry={e} />
           </span>
@@ -180,7 +179,7 @@ export default function LedgerEntryModal({
               {entry && (
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500">
                   <span>{formatDateTime(entry.createdAt)}</span>
-                  <span>{entry.category}</span>
+                  <span>{entrySubtitle(entry)}</span>
                   <CopyId value={entry.id} />
                 </div>
               )}
@@ -224,7 +223,6 @@ export default function LedgerEntryModal({
                 <div className="flex flex-col items-center justify-center px-2 text-center">
                   <span className="text-xl"><LedgerAmount entry={entry} /></span>
                   <span className="text-[10px] text-zinc-600">credits</span>
-                  {entry.fee && <span className="text-[10px] text-zinc-500">+ fee {formatCredits(entry.fee.amount)}</span>}
                 </div>
                 {entry.isAdjustment ? (
                   <div className="flex items-center rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-xs text-zinc-500">
@@ -241,6 +239,7 @@ export default function LedgerEntryModal({
                 onOpenTransaction={go}
                 onShowInLedger={onShowInLedger}
                 showOpenEntry={false}
+                showLinks={false}
               />
 
               {data.links.length > 0 && (

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ArrowUpRight, Filter, Receipt, Undo2 } from 'lucide-react';
 import { CopyId, downloadCsv, formatCredits, shortId, StatusPill } from './economyUi';
-import { referenceLabel, type LedgerEntry, type LedgerFilters, type LedgerParty } from './creditEconomyTypes';
+import { referenceLabel, typeLabel, type LedgerEntry, type LedgerFilters, type LedgerParty } from './creditEconomyTypes';
 
 /**
  * Ledger pieces shared by the Ledger tab, the wallet modal and the entry modal: the URL
@@ -15,6 +15,8 @@ export const LEDGER_DEFAULTS: LedgerFilters = {
   status: 'all',
   from: '',
   to: '',
+  sinceHours: '',
+  olderThanHours: '',
   minAmount: '',
   maxAmount: '',
   sort: 'newest',
@@ -35,6 +37,8 @@ const PARAM: Record<keyof LedgerFilters, string> = {
   status: 'status',
   from: 'from',
   to: 'to',
+  sinceHours: 'since',
+  olderThanHours: 'older',
   minAmount: 'min',
   maxAmount: 'max',
   sort: 'sort',
@@ -83,8 +87,31 @@ export function partyLabel(p: LedgerParty) {
   return p.handle ? `${p.name} (@${p.handle})` : p.name;
 }
 
+/** Plain name of an entry: "Staff grant", "Top-up", "Marketplace sale", "Platform fee"… */
 export function entryTitle(e: LedgerEntry) {
-  return e.isAdjustment ? 'Staff adjustment' : e.type;
+  if (e.isAdjustment) {
+    const delta = e.adjustment?.delta;
+    return delta == null ? 'Staff adjustment' : delta > 0 ? 'Staff grant' : 'Staff deduction';
+  }
+  if (e.referenceTable === 'payments') return 'Top-up';
+  return typeLabel(e.type);
+}
+
+/** One short line under the title that says something the title does not. */
+export function entrySubtitle(e: LedgerEntry) {
+  if (e.isAdjustment) return e.adjustment?.reason || 'No reason recorded';
+  if (e.feeFor) return `Taken from a ${typeLabel(e.feeFor.type).toLowerCase()}`;
+  if (e.relatedDisputeId) return 'Dispute';
+  if (e.referenceTable && e.referenceTable !== 'payments' && e.referenceTable !== 'cashouts') return referenceLabel(e.referenceTable);
+  return e.category;
+}
+
+/** "24 hours", "7 days", "30 days". */
+export function formatHours(value: string | number) {
+  const h = Number(value);
+  if (!Number.isFinite(h) || h <= 0) return '';
+  if (h % 24 === 0) return `${h / 24} day${h === 24 ? '' : 's'}`;
+  return `${h} hour${h === 1 ? '' : 's'}`;
 }
 
 export function exportLedger(entries: LedgerEntry[], filename = `credit-ledger-${new Date().toISOString().slice(0, 10)}.csv`) {
@@ -128,18 +155,21 @@ export function exportLedger(entries: LedgerEntry[], filename = `credit-ledger-$
 const CHIP =
   'inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-zinc-300 transition hover:border-white/20 hover:text-white';
 
-/** Small buttons on a row for its links: fee, fee-for, reverses, reversed by, cashout state. */
+/**
+ * One small button per link on a row, each a short word (the row title already names it):
+ * "Fee 50" (the fee taken), "Source" (what a fee was taken from), "Original", "Reversal".
+ */
 export function LedgerLinkChips({ entry: e, onOpenTransaction }: { entry: LedgerEntry; onOpenTransaction?: (id: string) => void }) {
   const chips: { key: string; label: string; id?: string; title: string; tone?: string }[] = [];
-  if (e.fee) chips.push({ key: 'fee', label: `Fee ${formatCredits(e.fee.amount)}`, id: e.fee.id, title: 'Open the platform fee taken on this movement' });
+  if (e.fee) chips.push({ key: 'fee', label: `Fee ${formatCredits(e.fee.amount)}`, id: e.fee.id, title: 'Open the platform fee taken from this' });
   if (e.feeFor) {
-    chips.push({ key: 'feeFor', label: `Fee on ${e.feeFor.type || 'entry'}`, id: e.feeFor.id, title: 'Open the movement this fee was charged on' });
+    chips.push({ key: 'feeFor', label: 'Source', id: e.feeFor.id, title: `Open the ${typeLabel(e.feeFor.type).toLowerCase()} this fee was taken from` });
   }
-  if (e.reverses) chips.push({ key: 'rev', label: `Reverses ${e.reverses.type || 'entry'}`, id: e.reverses.id, title: 'Open the original entry' });
+  if (e.reverses) chips.push({ key: 'rev', label: 'Original', id: e.reverses.id, title: 'Open the entry this one reverses' });
   if (e.reversedBy) {
     chips.push({
       key: 'revBy',
-      label: e.reversedBy.status && e.reversedBy.status !== 'Completed' ? `Reversal ${e.reversedBy.status.toLowerCase()}` : 'Reversed by',
+      label: e.reversedBy.status && e.reversedBy.status !== 'Completed' ? `Reversal ${e.reversedBy.status.toLowerCase()}` : 'Reversal',
       id: e.reversedBy.id,
       title: 'Open the entry that reversed this one',
       tone: 'text-violet-200',
@@ -214,18 +244,18 @@ export function relatedScopes(e: LedgerEntry, currentWalletId?: string | null) {
     if (!p.walletId || p.walletId === currentWalletId || seen.has(p.walletId)) continue;
     seen.add(p.walletId);
     const who = p.walletType === 'Platform' ? 'Platform wallet' : p.walletType === 'Escrow' ? 'This escrow wallet' : p.name;
-    scopes.push({ key: `w-${p.walletId}`, label: `${who}: every entry`, filters: { walletId: p.walletId } });
+    scopes.push({ key: `w-${p.walletId}`, label: who, filters: { walletId: p.walletId } });
   }
   const contractId = e.source.contractId || e.destination.contractId;
-  if (contractId) scopes.push({ key: 'contract', label: 'Whole contract (escrow in and out)', filters: { contractId, sort: 'oldest' } });
+  if (contractId) scopes.push({ key: 'contract', label: 'This contract', filters: { contractId, sort: 'oldest' } });
   if (e.referenceId && e.referenceId !== contractId) {
     scopes.push({
       key: 'ref',
-      label: `Same ${referenceLabel(e.referenceTable).toLowerCase()}`,
+      label: `This ${referenceLabel(e.referenceTable).toLowerCase()}`,
       filters: { referenceId: e.referenceId, referenceTable: e.referenceTable || '', sort: 'oldest' },
     });
   }
-  if (e.relatedDisputeId) scopes.push({ key: 'dispute', label: 'Same dispute', filters: { disputeId: e.relatedDisputeId, sort: 'oldest' } });
+  if (e.relatedDisputeId) scopes.push({ key: 'dispute', label: 'This dispute', filters: { disputeId: e.relatedDisputeId, sort: 'oldest' } });
   return scopes;
 }
 
@@ -240,7 +270,8 @@ export function LedgerEntryDetail({
   onShowInLedger,
   currentWalletId,
   showOpenEntry = true,
-}: LedgerNav & { entry: LedgerEntry; currentWalletId?: string | null; showOpenEntry?: boolean }) {
+  showLinks = true,
+}: LedgerNav & { entry: LedgerEntry; currentWalletId?: string | null; showOpenEntry?: boolean; showLinks?: boolean }) {
   const walletValue = (p: LedgerParty) => {
     if (!p.walletId) return null;
     const canOpen = p.walletType === 'Account' && onOpenWallet && p.walletId !== currentWalletId;
@@ -264,46 +295,46 @@ export function LedgerEntryDetail({
 
   const open = onOpenTransaction;
   const links: ReactNode[] = [];
-  if (e.fee) {
+  if (showLinks && e.fee) {
     links.push(
       <LinkCard
         key="fee"
         icon={<Receipt className="h-3.5 w-3.5" />}
-        title="Platform fee on this movement"
-        detail={`${formatCredits(e.fee.amount)} credits${e.fee.status && e.fee.status !== 'Completed' ? ` · ${e.fee.status}` : ''} · ${shortId(e.fee.id)}`}
+        title="Platform fee taken"
+        detail={`${formatCredits(e.fee.amount)} credits${e.fee.status && e.fee.status !== 'Completed' ? ` · ${e.fee.status}` : ''}`}
         onClick={open ? () => open(e.fee!.id) : undefined}
       />
     );
   }
-  if (e.feeFor) {
+  if (showLinks && e.feeFor) {
     links.push(
       <LinkCard
         key="feeFor"
         icon={<Receipt className="h-3.5 w-3.5" />}
-        title="Fee charged on"
-        detail={`${e.feeFor.type || 'Entry'} · ${formatCredits(e.feeFor.amount)} credits · ${shortId(e.feeFor.id)}`}
+        title="Taken from"
+        detail={`${typeLabel(e.feeFor.type)} · ${formatCredits(e.feeFor.amount)} credits`}
         onClick={open ? () => open(e.feeFor!.id) : undefined}
       />
     );
   }
-  if (e.reverses) {
+  if (showLinks && e.reverses) {
     links.push(
       <LinkCard
         key="rev"
         icon={<Undo2 className="h-3.5 w-3.5" />}
         title="Reverses"
-        detail={`${e.reverses.type || 'Entry'}${e.reverses.status ? ` · now ${e.reverses.status}` : ''} · ${shortId(e.reverses.id)}`}
+        detail={`${typeLabel(e.reverses.type)}${e.reverses.status ? ` · now ${e.reverses.status}` : ''}`}
         onClick={open ? () => open(e.reverses!.id) : undefined}
       />
     );
   }
-  if (e.reversedBy) {
+  if (showLinks && e.reversedBy) {
     links.push(
       <LinkCard
         key="revBy"
         icon={<Undo2 className="h-3.5 w-3.5" />}
         title="Reversed by"
-        detail={`${e.reversedBy.status || 'Entry'} · ${shortId(e.reversedBy.id)}`}
+        detail={`Reversing entry · ${e.reversedBy.status || 'Completed'}`}
         onClick={open ? () => open(e.reversedBy!.id) : undefined}
       />
     );
@@ -343,7 +374,7 @@ export function LedgerEntryDetail({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <DetailFact label="Transaction ID" value={<CopyId value={e.id} className="text-xs text-zinc-200" />} />
-        <DetailFact label="Type / category" value={`${e.type} · ${e.category}`} />
+        <DetailFact label="What" value={`${entryTitle(e)} · ${e.category}`} />
         <DetailFact label="From wallet" value={walletValue(e.source)} />
         <DetailFact label="To wallet" value={e.isAdjustment ? 'Same wallet' : walletValue(e.destination)} />
         <DetailFact
@@ -373,10 +404,10 @@ export function LedgerEntryDetail({
               onClick={() => open(e.id)}
               className="inline-flex items-center gap-1 rounded-lg border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-white/[0.08]"
             >
-              Open entry & everything linked <ArrowUpRight className="h-3 w-3" />
+              Open full entry <ArrowUpRight className="h-3 w-3" />
             </button>
           )}
-          {scopes.length > 0 && <span className="ml-1 text-[10px] uppercase tracking-wide text-zinc-600">Show in ledger</span>}
+          {scopes.length > 0 && <span className="ml-1 text-[10px] uppercase tracking-wide text-zinc-600">All entries for</span>}
           {scopes.map((s) => (
             <button
               key={s.key}

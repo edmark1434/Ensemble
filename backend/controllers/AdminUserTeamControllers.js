@@ -195,6 +195,7 @@ async function postAdminAccountCreditFreeze(req, res) {
     }
     const data = await freezeAccountCredits(accountId, freeze, staffIdFromSession(req.session), {
       reason: req.body?.reason,
+      amount: req.body?.amount,
       days: req.body?.days,
       endsAt: req.body?.endsAt,
     });

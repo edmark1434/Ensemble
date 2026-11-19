@@ -7,6 +7,12 @@ const {
   fetchActivityForAccounts,
 } = require('./AccountActivityRepositories');
 const { fetchLastActivityForAccounts } = require('./AdminAccountProfileRepositories');
+const {
+  staffLedgerNoteJoins,
+  STAFF_LEDGER_NOTE_COLUMNS,
+  staffAdjustmentOf,
+  staffHoldOf,
+} = require('../lib/StaffLedgerNotes');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -101,13 +107,61 @@ function mapUserRow(row) {
   };
 }
 
+const CREDIT_ACTIVITY_PER_ACCOUNT = 8;
+
+/** How one ledger row reads on the staff credit feed, from the account's side. */
+function describeCreditActivity(row) {
+  const amount = Math.abs(Number(row.amount_credits || 0));
+  const adjustment = staffAdjustmentOf(row);
+  if (adjustment) {
+    const sign = Math.sign(adjustment.delta || 0);
+    return {
+      type: sign > 0 ? 'Staff grant' : sign < 0 ? 'Staff deduction' : 'Staff adjustment (no recorded direction)',
+      amount: sign < 0 ? -amount : amount,
+      positive: sign > 0,
+      tone: sign > 0 ? 'positive' : sign < 0 ? 'negative' : 'neutral',
+      detail: adjustment.reason,
+      holdUntil: null,
+    };
+  }
+  const hold = staffHoldOf(row);
+  if (hold) {
+    // Spendable goes down by the held amount and back up on release; nothing leaves the wallet.
+    return {
+      type: hold.held
+        ? 'Credits frozen by staff'
+        : hold.source === 'hold_expired'
+          ? 'Credit hold ended'
+          : 'Credit hold released',
+      amount: hold.held ? -amount : amount,
+      positive: !hold.held,
+      tone: 'hold',
+      detail: hold.reason,
+      holdUntil: hold.held ? hold.until : null,
+    };
+  }
+  const isCredit = String(row.destination_wallet_id) === String(row.account_wallet_id);
+  return {
+    type: row.type || 'Credit transaction',
+    amount: isCredit ? amount : -amount,
+    positive: isCredit,
+    tone: isCredit ? 'positive' : 'negative',
+    detail: null,
+    holdUntil: null,
+  };
+}
+
+/**
+ * The latest ledger rows of each account for the staff user / team desks. The limit is per
+ * account (a shared limit left quieter accounts with an empty feed).
+ */
 async function fetchCreditActivityForAccounts(accountIds) {
   if (!accountIds.length) return new Map();
 
   const result = await pool.query(
     `
     SELECT
-      aw.account_id,
+      acc.account_id,
       ct.credit_transaction_id,
       ct.type,
       ct.amount_credits,
@@ -115,30 +169,43 @@ async function fetchCreditActivityForAccounts(accountIds) {
       ct.created_at,
       ct.source_wallet_id,
       ct.destination_wallet_id,
-      aw.wallet_id AS account_wallet_id
-    FROM credit_transactions ct
-    INNER JOIN account_wallets aw
-      ON aw.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
-    WHERE aw.account_id = ANY($1::uuid[])
+      ct.reference_table,
+      ct.account_wallet_id,
+      ${STAFF_LEDGER_NOTE_COLUMNS}
+    FROM unnest($1::uuid[]) AS acc(account_id)
+    CROSS JOIN LATERAL (
+      SELECT
+        t.credit_transaction_id,
+        t.type,
+        t.amount_credits,
+        t.status,
+        t.created_at,
+        t.source_wallet_id,
+        t.destination_wallet_id,
+        t.reference_table,
+        aw.wallet_id AS account_wallet_id
+      FROM account_wallets aw
+      INNER JOIN credit_transactions t
+        ON aw.wallet_id IN (t.source_wallet_id, t.destination_wallet_id)
+      WHERE aw.account_id = acc.account_id
+      ORDER BY t.created_at DESC, t.credit_transaction_id DESC
+      LIMIT $2
+    ) ct
+    ${staffLedgerNoteJoins({ ledger: 'ct', accountId: 'acc.account_id' })}
     ORDER BY ct.created_at DESC
-    LIMIT 500
     `,
-    [accountIds]
+    [accountIds, CREDIT_ACTIVITY_PER_ACCOUNT]
   );
 
   const map = new Map();
   for (const row of result.rows) {
     const list = map.get(row.account_id) || [];
-    if (list.length >= 8) continue;
-    const isCredit = String(row.destination_wallet_id) === String(row.account_wallet_id);
-    const amount = Number(row.amount_credits || 0);
     list.push({
       id: row.credit_transaction_id,
-      type: row.type || 'Credit transaction',
-      amount: isCredit ? Math.abs(amount) : -Math.abs(amount),
+      ...describeCreditActivity(row),
       label: row.status || 'Completed',
       timeAgo: formatRelativeTime(row.created_at),
-      positive: isCredit,
+      createdAt: row.created_at,
     });
     map.set(row.account_id, list);
   }

@@ -54,10 +54,18 @@ export type PlatformTeam = {
 export type CreditActivityItem = {
   id: string;
   type: string;
+  /** Signed from the account's side: a deduction or a hold is negative. */
   amount: number;
   label: string;
   timeAgo: string;
   positive: boolean;
+  /** `hold` = credits moved to or from a staff hold; `neutral` = an old adjustment with no recorded sign. */
+  tone?: 'positive' | 'negative' | 'neutral' | 'hold';
+  /** Staff adjustment or hold reason. */
+  detail?: string | null;
+  /** When a hold was set to be released (at the time it was placed). */
+  holdUntil?: string | null;
+  createdAt?: string | null;
 };
 
 export type VerificationDetail = {

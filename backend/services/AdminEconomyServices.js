@@ -29,8 +29,27 @@ const LEDGER_KINDS = [
   'dispute',
   'refunds',
   'reversal',
+  'platform',
+  'escrow_open',
+  // The overview's credit-flow figures (same predicates as `fetchFlow`).
+  'flow_volume',
+  'flow_topups',
+  'flow_platform_refunds',
+  'flow_platform_payouts',
+  'flow_fees',
+  'flow_cashouts',
+  'flow_other_collected',
+  'flow_escrow_funded',
+  'flow_escrow_released',
+  'flow_escrow_refunded',
+  'flow_transfers',
+  'flow_sales',
+  'flow_sale_refunds',
 ];
+/** `settled` = Completed or Reversed: credits that actually moved, as the overview counts. */
+const LEDGER_STATUSES = [...CREDIT_TRANSACTION_STATUSES, 'settled'];
 const LEDGER_SORTS = ['newest', 'oldest', 'amount_desc', 'amount_asc'];
+const MAX_WINDOW_HOURS = 24 * 3660;
 const WALLET_SORTS = ['balance_desc', 'balance_asc', 'held_desc', 'hold_ending', 'name', 'newest'];
 const WALLET_HOLDS = ['held', 'not_held', 'overdue', 'expiring', 'indefinite'];
 const WALLET_BALANCES = ['empty', 'positive', 'negative'];
@@ -118,11 +137,6 @@ function pickReferenceTable(value) {
   return text;
 }
 
-/** YYYY-MM-DD for `days` days ago (UTC), for alert links that cover a recent window. */
-function daysAgo(days) {
-  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
-
 function parseLedgerQuery(query = {}) {
   const from = pickDate(query.from, 'From date');
   const to = pickDate(query.to, 'To date');
@@ -137,7 +151,7 @@ function parseLedgerQuery(query = {}) {
   return {
     search: pickSearch(query.search),
     type: pickEnum(query.type, CREDIT_TRANSACTION_TYPES, 'transaction type'),
-    status: pickEnum(query.status, CREDIT_TRANSACTION_STATUSES, 'transaction status'),
+    status: pickEnum(query.status, LEDGER_STATUSES, 'transaction status'),
     kind: pickEnum(query.kind, LEDGER_KINDS, 'ledger category'),
     // In / out is relative to one wallet; without one it has no meaning.
     direction: walletId ? pickEnum(query.direction, ['in', 'out'], 'direction') : null,
@@ -151,6 +165,9 @@ function parseLedgerQuery(query = {}) {
     to,
     // The viewer's UTC offset, so From / To are the viewer's calendar days.
     tzOffset: pickInt(query.tzOffset, { min: -840, max: 840, fallback: null, label: 'Time zone offset' }),
+    // Rolling windows ("last 24 hours", "older than 24 hours"), on the overview's clock.
+    sinceHours: pickInt(query.sinceHours, { min: 1, max: MAX_WINDOW_HOURS, fallback: null, label: 'Window' }),
+    olderThanHours: pickInt(query.olderThanHours, { min: 1, max: MAX_WINDOW_HOURS, fallback: null, label: 'Age' }),
     minAmount,
     maxAmount,
     sort: pickEnum(query.sort, LEDGER_SORTS, 'sort') || 'newest',
@@ -216,7 +233,7 @@ function buildAlerts({ supply, flow, inFlight, recentAdjustments }) {
       severity: 'warning',
       title: `${inFlight.pendingLedger.stale} ledger entr${inFlight.pendingLedger.stale === 1 ? 'y has' : 'ies have'} been Pending for over 24 hours`,
       detail: `${inFlight.pendingLedger.credits.toLocaleString()} credits pending in total.`,
-      action: { tab: 'ledger', filters: { status: 'Pending', sort: 'oldest' } },
+      action: { tab: 'ledger', filters: { status: 'Pending', olderThanHours: '24', sort: 'oldest' } },
     });
   }
   if (inFlight.pendingLedger.failedThisWeek > 0) {
@@ -225,7 +242,7 @@ function buildAlerts({ supply, flow, inFlight, recentAdjustments }) {
       severity: 'warning',
       title: `${inFlight.pendingLedger.failedThisWeek} failed transaction${inFlight.pendingLedger.failedThisWeek === 1 ? '' : 's'} in the last 7 days`,
       detail: 'Check whether members were charged or need a manual correction.',
-      action: { tab: 'ledger', filters: { status: 'Failed', from: daysAgo(7) } },
+      action: { tab: 'ledger', filters: { status: 'Failed', sinceHours: '168' } },
     });
   }
   if (inFlight.cashouts.stale > 0) {
@@ -234,7 +251,7 @@ function buildAlerts({ supply, flow, inFlight, recentAdjustments }) {
       severity: 'warning',
       title: `${inFlight.cashouts.stale} cashout${inFlight.cashouts.stale === 1 ? '' : 's'} unpaid after 24 hours`,
       detail: 'The payout provider has not confirmed them yet.',
-      action: { tab: 'ledger', filters: { kind: 'cashout_open', sort: 'oldest' } },
+      action: { tab: 'ledger', filters: { kind: 'cashout_open', olderThanHours: '24', sort: 'oldest' } },
     });
   }
   const large = recentAdjustments.filter((a) => Math.abs(a.delta) >= LARGE_ADJUSTMENT);
@@ -246,7 +263,7 @@ function buildAlerts({ supply, flow, inFlight, recentAdjustments }) {
       detail: 'Large manual changes should match a ticket or a documented reason.',
       action: {
         tab: 'ledger',
-        filters: { kind: 'adjustment', minAmount: String(LARGE_ADJUSTMENT), from: daysAgo(1), sort: 'amount_desc' },
+        filters: { kind: 'adjustment', minAmount: String(LARGE_ADJUSTMENT), sinceHours: '24', sort: 'amount_desc' },
       },
     });
   }
@@ -272,9 +289,9 @@ function buildAlerts({ supply, flow, inFlight, recentAdjustments }) {
     push({
       id: 'unsigned-adjustments',
       severity: 'info',
-      title: `${flow.adjustments.unsigned} adjustment${flow.adjustments.unsigned === 1 ? '' : 's'} this month have no recorded direction`,
+      title: `${flow.adjustments.unsigned} adjustment${flow.adjustments.unsigned === 1 ? '' : 's'} in the last ${FLOW_DAYS} days ${flow.adjustments.unsigned === 1 ? 'has' : 'have'} no recorded direction`,
       detail: 'Written before adjustments were audited, so it is unknown whether they granted or deducted credits.',
-      action: { tab: 'ledger', filters: { kind: 'adjustment_unrecorded', from: daysAgo(FLOW_DAYS) } },
+      action: { tab: 'ledger', filters: { kind: 'adjustment_unrecorded', status: 'settled', sinceHours: String(FLOW_DAYS * 24) } },
     });
   }
   if (supply.circulating > 0 && supply.topTenShare >= 0.5 && supply.walletCount > 20) {
@@ -304,8 +321,8 @@ async function getEconomyOverview(session) {
   const [supply, flow, inFlight, leaders, adjustments, recentAdjustments, recentLedger, statuses, settings] =
     await Promise.all([
       repo.fetchSupply({ includeStaff }),
-      repo.fetchFlow({ days: FLOW_DAYS }),
-      repo.fetchInFlight(),
+      repo.fetchFlow({ days: FLOW_DAYS, includeStaff }),
+      repo.fetchInFlight({ includeStaff }),
       repo.fetchLeaders({ days: FLOW_DAYS, includeStaff }),
       repo.listAdjustments({ limit: 8, includeStaff }),
       repo.listAdjustments({ limit: 50, includeStaff, sinceHours: 24 }),
