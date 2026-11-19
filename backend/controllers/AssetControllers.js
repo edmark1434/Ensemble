@@ -7,6 +7,8 @@ const {
   createAssetServices,
   updateAssetServices,
   deleteAssetServices,
+  getSellerAssetMetricsServices,
+  restoreAssetServices,
   getAssetDownloadServices,
   getAssetOriginalPreviewServices,
   purchaseAssetServices,
@@ -81,8 +83,16 @@ async function updateAssetController(req, res) {
 
 async function deleteAssetController(req, res) {
   try {
-    await deleteAssetServices(req.params.assetId, req.user.account_id);
-    return res.json({ success: true });
+    const permanent = req.query.permanent === 'true';
+    await deleteAssetServices(req.params.assetId, req.user.account_id, { permanent });
+    return res.json({ success: true, message: permanent ? 'Asset permanently deleted.' : 'Asset moved to trash.' });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function restoreAssetController(req, res) {
+  try {
+    await restoreAssetServices(req.params.assetId, req.user.account_id);
+    return res.json({ success: true, message: 'Asset restored.' });
   } catch (error) { return handleAssetError(res, error); }
 }
 
@@ -294,7 +304,16 @@ async function editorAssetActionController(req, res) {
   } catch (error) { return handleAssetError(res, error); }
 }
 
+
+async function getSellerAssetMetricsController(req, res) {
+  try {
+    const metrics = await getSellerAssetMetricsServices(req.user.account_id);
+    return res.json({ success: true, metrics });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
 module.exports = {
+  getSellerAssetMetricsController,
   listAssetLicensesController,
   assignAssetLicenseController,
   reportAssetController,
@@ -306,6 +325,7 @@ module.exports = {
   createAdminAssetController,
   updateAssetController,
   deleteAssetController,
+  restoreAssetController,
   getAssetDownloadController,
   getAssetOriginalPreviewController,
   purchaseAssetController,

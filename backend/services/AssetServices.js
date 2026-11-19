@@ -5,6 +5,8 @@ const {
   createAssetRepository,
   updateAssetRepository,
   deleteAssetRepository,
+  getSellerAssetMetricsRepository,
+  restoreAssetRepository,
   getAssetDownloadRepository,
   purchaseAssetRepository,
   getEditorAssetPurchaseContextRepository,
@@ -39,7 +41,7 @@ const { getMarketplaceTransactionFeePercent } = require('../lib/PlatformFeeSetti
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSET_TYPES = new Set(['image', 'video', 'audio', 'template']);
 const ASSET_STATUSES = new Set(['draft', 'published']);
-const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved', 'liked']);
+const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved', 'liked', 'trash']);
 const MAX_CONTENT_FILES = 20;
 const MAX_UPLOAD_FILE_BYTES = 1024 * 1024 * 1024;
 const MAX_SHOWCASE_TOTAL_BYTES = 200 * 1024 * 1024;
@@ -750,10 +752,10 @@ async function updateAssetServices(assetId, accountId, payload) {
   }
 }
 
-async function deleteAssetServices(assetId, accountId) {
+async function deleteAssetServices(assetId, accountId, options = {}) {
   requireUuid(assetId);
   try {
-    if (!await deleteAssetRepository(assetId, accountId)) {
+    if (!await deleteAssetRepository(assetId, accountId, options)) {
       throw new AssetError('Asset not found or you cannot delete it.', 404, 'ASSET_NOT_FOUND');
     }
   } catch (error) {
@@ -765,6 +767,13 @@ async function deleteAssetServices(assetId, accountId) {
       );
     }
     throw error;
+  }
+}
+
+async function restoreAssetServices(assetId, accountId) {
+  requireUuid(assetId);
+  if (!await restoreAssetRepository(assetId, accountId)) {
+    throw new AssetError('Asset not found or you cannot restore it.', 404, 'ASSET_NOT_FOUND');
   }
 }
 
@@ -965,7 +974,13 @@ async function deleteAssetReviewServices(assetId, reviewId, accountId) {
   }
 }
 
+
+async function getSellerAssetMetricsServices(accountId) {
+  return getSellerAssetMetricsRepository(accountId);
+}
+
 module.exports = {
+  getSellerAssetMetricsServices,
   listAssetLicensesServices,
   assignAssetLicenseServices,
   AssetError,
@@ -977,6 +992,7 @@ module.exports = {
   createAssetServices,
   updateAssetServices,
   deleteAssetServices,
+  restoreAssetServices,
   getAssetDownloadServices,
   getAssetOriginalPreviewServices,
   purchaseAssetServices,

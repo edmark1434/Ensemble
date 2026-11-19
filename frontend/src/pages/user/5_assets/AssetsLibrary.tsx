@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, TrendingUp, Zap } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -15,6 +15,7 @@ import TemplateAssetModal from "./TemplateAssetModal";
 import AssetMedia from "./AssetMedia";
 import { AssetCard } from "./AssetCard";
 import PendingAssetCard from "./PendingAssetCard";
+import AssetSellerDashboard from "./AssetSellerDashboard";
 import { useAssetUploadStore } from "./assetUploadStore";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 import { mediaUrl } from "./assetTypes";
@@ -25,7 +26,7 @@ import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import AssetLimitModal from "./AssetLimitModal";
 
 type FilterType = "all" | AssetType;
-type AssetView = "discover" | "mine" | "purchased" | "saved" | "liked";
+type AssetView = "discover" | "mine" | "seller" | "purchased" | "saved" | "liked" | "trash";
 type MineStatus = "all" | "uploaded" | "in_review" | "rejected" | "draft";
 
 const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
@@ -86,9 +87,11 @@ export default function AssetsLibrary() {
   const getTabFromPath = (): AssetView => {
     const path = location.pathname;
     if (path.includes('/owned')) return 'mine';
+    if (path.includes('/seller')) return 'seller';
     if (path.includes('/purchased')) return 'purchased';
     if (path.includes('/saved')) return 'saved';
     if (path.includes('/liked')) return 'liked';
+    if (path.includes('/trash')) return 'trash';
     return 'discover';
   };
   const view: AssetView = getTabFromPath();
@@ -151,7 +154,7 @@ export default function AssetsLibrary() {
   });
   const availableViews: AssetView[] = isGuestView
     ? ["discover"]
-    : ["discover", "mine", "purchased", "liked", "saved"];
+    : ["discover", "mine", "seller", "purchased", "liked", "saved", "trash"];
 
   useEffect(() => {
     if (isGuestView && view !== "discover") {
@@ -169,6 +172,10 @@ export default function AssetsLibrary() {
   }, [search]);
 
   const loadAssets = useCallback(async (signal?: AbortSignal) => {
+    if (view === "seller") {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError("");
     try {
@@ -416,6 +423,8 @@ export default function AssetsLibrary() {
     ? (eligibility.unlimited ? eligibility.used : Math.min(eligibility.limit ?? (eligibility.used + activeUploadsCount), eligibility.used + activeUploadsCount))
     : 0;
 
+  const [restoringAssetId, setRestoringAssetId] = useState<string | null>(null);
+
   const confirmDelete = async () => {
     if (!deletingAsset || deleting) return;
     setDeleting(true);
@@ -425,13 +434,29 @@ export default function AssetsLibrary() {
         .forEach((upload) => removeUpload(upload.id));
       setAssets((current) => current.filter((item) => item.market_asset_id !== deletingAsset.market_asset_id));
       setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1) }));
-      showSuccessToast("Asset deleted.");
+      showSuccessToast("Asset moved to Trash.");
       setDeletingAsset(null);
       void fetchEligibility();
     } catch (error) {
       showErrorToast(requestError(error));
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRestore = async (asset: AssetRecord) => {
+    if (restoringAssetId) return;
+    setRestoringAssetId(asset.market_asset_id);
+    try {
+      await api.post(`/api/assets/${asset.market_asset_id}/restore`);
+      setAssets((current) => current.filter((item) => item.market_asset_id !== asset.market_asset_id));
+      setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1) }));
+      showSuccessToast("Asset restored.");
+      void fetchEligibility();
+    } catch (error) {
+      showErrorToast(requestError(error));
+    } finally {
+      setRestoringAssetId(null);
     }
   };
 
@@ -523,10 +548,12 @@ export default function AssetsLibrary() {
                   <span className="relative z-10 flex items-center gap-2 capitalize">
                     {tab === "discover" && <Compass className="h-4 w-4" />}
                     {tab === "mine" && <Folder className="h-4 w-4" />}
+                    {tab === "seller" && <TrendingUp className="h-4 w-4" />}
                     {tab === "purchased" && <ShoppingBag className="h-4 w-4" />}
                     {tab === "saved" && <Bookmark className="h-4 w-4" />}
                     {tab === "liked" && <Heart className="h-4 w-4" />}
-                    {tab === "mine" ? "My Assets" : tab}
+                    {tab === "trash" && <Trash2 className="h-4 w-4" />}
+                    {tab === "mine" ? "My Assets" : tab === "seller" ? "Seller Dashboard" : tab === "trash" ? "Trash" : tab}
                   </span>
 
                   {isActive && (
@@ -548,159 +575,172 @@ export default function AssetsLibrary() {
             })}
             </div>
   
-            <div className="flex flex-wrap items-center justify-end gap-4 pb-2">
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-white/15 dark:bg-white/5" role="tablist" aria-label="Media types">
-                {FILTERS.map(({ value, label, icon: Icon }) => (
+            {view !== "seller" && (
+              <div className="flex flex-wrap items-center justify-end gap-4 pb-2">
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-white/15 dark:bg-white/5" role="tablist" aria-label="Media types">
+                  {FILTERS.map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="tab"
+                      aria-selected={filter === value}
+                      onClick={() => { setPage(1); setFilter(value); }}
+                      className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                        filter === value
+                          ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
+                          : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {Icon && <Icon className="h-3.5 w-3.5" />} {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+        </div>
+
+        {view === "seller" ? (
+          <AssetSellerDashboard />
+        ) : (
+          <>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-semibold">{view === "mine" ? "Your uploaded assets" : view === "purchased" ? "Your purchased assets" : view === "liked" ? "Your liked assets" : view === "saved" ? "Your saved assets" : view === "trash" ? "Your trashed assets" : "Community assets"}</p>
+                {view === "mine" && eligibility && (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-500/10 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20">
+                      {eligibility.unlimited ? "Unlimited uploads" : `${displayUsed} / ${eligibility.limit} Uploaded`}
+                    </span>
+                    {!eligibility.unlimited && (
+                      <button 
+                        onClick={() => setLimitModalOpen(true)}
+                        className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+                      >
+                        <div 
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/20 to-transparent z-10"
+                          style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
+                        />
+                        <Zap className="relative z-20 h-3 w-3 fill-amber-500/70 text-amber-500 dark:fill-amber-500/70 dark:text-amber-500 group-hover:dark:text-amber-400 group-hover:dark:fill-amber-400/70 transition-colors" />
+                        <span className="relative z-20">Upgrade</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
+            </div>
+
+            {/* My assets tab content */}
+            {view === "mine" && (
+              <div className="mt-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="My asset status">
+                {MINE_STATUS_OPTIONS.map((statusTab) => (
                   <button
-                    key={value}
+                    key={statusTab.id}
                     type="button"
                     role="tab"
-                    aria-selected={filter === value}
-                    onClick={() => { setPage(1); setFilter(value); }}
-                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                      filter === value
+                    aria-selected={mineStatus === statusTab.id}
+                    onClick={() => { setPage(1); setMineStatus(statusTab.id); }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                      mineStatus === statusTab.id
                         ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
                         : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
                     }`}
                   >
-                    {Icon && <Icon className="h-3.5 w-3.5" />} {label}
+                    {statusTab.label}
                   </button>
                 ))}
               </div>
-            </div>
-        </div>
+            )}
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <p className="text-sm font-semibold">{view === "mine" ? "Your uploaded assets" : view === "purchased" ? "Your purchased assets" : view === "liked" ? "Your liked assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
-            {view === "mine" && eligibility && (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-500/10 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20">
-                  {eligibility.unlimited ? "Unlimited uploads" : `${displayUsed} / ${eligibility.limit} Uploaded`}
-                </span>
-                {!eligibility.unlimited && (
-                  <button 
-                    onClick={() => setLimitModalOpen(true)}
-                    className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
-                  >
-                    <div 
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/20 to-transparent z-10"
-                      style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
-                    />
-                    <Zap className="relative z-20 h-3 w-3 fill-amber-500/70 text-amber-500 dark:fill-amber-500/70 dark:text-amber-500 group-hover:dark:text-amber-400 group-hover:dark:fill-amber-400/70 transition-colors" />
-                    <span className="relative z-20">Upgrade</span>
-                  </button>
-                )}
+            {loading && pendingUploads.length === 0 ? (
+              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <AssetSkeleton key={index} />)}</div>
+            ) : loadError && pendingUploads.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/5 p-10 text-center">
+                <p className="text-sm text-red-600 dark:text-red-300">{loadError}</p>
+                <button type="button" onClick={() => void loadAssets()} className="mt-4 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-500/10 dark:text-red-300">Try again</button>
+              </div>
+            ) : assets.length === 0 && pendingUploads.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-dark-surface">
+                <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
+                <h2 className="mt-4 font-semibold">
+                  {view === "mine"
+                    ? (mineStatus === "all"
+                        ? "You haven't uploaded any assets yet."
+                        : mineStatus === "uploaded"
+                          ? "You don't have any published assets."
+                          : mineStatus === "in_review"
+                            ? "No assets are currently under review."
+                            : mineStatus === "rejected"
+                              ? "No assets have been rejected."
+                              : "You don't have any draft assets.")
+                    : view === "purchased"
+                      ? "You haven't purchased any assets yet."
+                      : view === "liked"
+                        ? "You haven't liked any assets yet."
+                        : view === "saved"
+                          ? "You haven't saved any assets yet."
+                          : view === "trash"
+                            ? "Trash is empty."
+                            : "No assets found."}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
+                  {search
+                    ? "Try a different search or filter."
+                    : view === "mine"
+                      ? (mineStatus === "all"
+                          ? "Assets you create and submit will appear here."
+                          : mineStatus === "uploaded"
+                            ? "Assets that have been approved by moderators will appear here."
+                            : mineStatus === "in_review"
+                              ? "Assets currently in the moderation review queue will appear here."
+                              : mineStatus === "rejected"
+                                ? "Assets rejected by moderators will appear here for revision."
+                                : "Assets saved as drafts will appear here.")
+                      : view === "purchased"
+                        ? "Assets you purchase will appear here."
+                        : view === "liked"
+                          ? "Like assets to find them here later."
+                          : view === "saved"
+                            ? "Save assets to find them here later."
+                            : view === "trash"
+                              ? "Soft-deleted assets will appear here. You can restore them at any time."
+                              : "Uploaded media will appear here."}
+                </p>
+                {view === "mine" && <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{checkingPostEligibility ? "Checking..." : "Upload your first asset"}</button>}
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {pendingUploads.map((upload) => {
+                  const saved = assets.find((item) => item.market_asset_id === upload.asset?.market_asset_id) || upload.asset;
+                  return saved?.processing_status === "ready"
+                    ? <AssetCard key={upload.id} asset={saved} view="mine" onEdit={openEdit} onDelete={setDeletingAsset} />
+                    : <PendingAssetCard key={upload.id} upload={upload} asset={saved}
+                        onDismiss={() => saved ? setDeletingAsset(saved) : removeUpload(upload.id)} />;
+                })}
+                {visibleAssets.map((asset) => (
+                  <AssetCard
+                    key={asset.market_asset_id}
+                    asset={asset}
+                    view={view}
+                    engagementPending={engagementPending}
+                    onUpdateEngagement={(a, kind) => void updateEngagement(a, kind)}
+                    onEdit={openEdit}
+                    onDelete={setDeletingAsset}
+                    onRestore={handleRestore}
+                  />
+                ))}
               </div>
             )}
-          </div>
-          {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
-        </div>
 
-        {/* My assets tab content */}
-        {view === "mine" && (
-          <div className="mt-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="My asset status">
-            {MINE_STATUS_OPTIONS.map((statusTab) => (
-              <button
-                key={statusTab.id}
-                type="button"
-                role="tab"
-                aria-selected={mineStatus === statusTab.id}
-                onClick={() => { setPage(1); setMineStatus(statusTab.id); }}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
-                  mineStatus === statusTab.id
-                    ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
-                    : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
-                }`}
-              >
-                {statusTab.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {loading && pendingUploads.length === 0 ? (
-          <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <AssetSkeleton key={index} />)}</div>
-        ) : loadError && pendingUploads.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/5 p-10 text-center">
-            <p className="text-sm text-red-600 dark:text-red-300">{loadError}</p>
-            <button type="button" onClick={() => void loadAssets()} className="mt-4 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-500/10 dark:text-red-300">Try again</button>
-          </div>
-        ) : assets.length === 0 && pendingUploads.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-dark-surface">
-            <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
-            <h2 className="mt-4 font-semibold">
-              {view === "mine"
-                ? (mineStatus === "all"
-                    ? "You haven't uploaded any assets yet."
-                    : mineStatus === "uploaded"
-                      ? "You don't have any published assets."
-                      : mineStatus === "in_review"
-                        ? "No assets are currently under review."
-                        : mineStatus === "rejected"
-                          ? "No assets have been rejected."
-                          : "You don't have any draft assets.")
-                : view === "purchased"
-                  ? "You haven't purchased any assets yet."
-                  : view === "liked"
-                    ? "You haven't liked any assets yet."
-                    : view === "saved"
-                      ? "You haven't saved any assets yet."
-                      : "No assets found."}
-            </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
-              {search
-                ? "Try a different search or filter."
-                : view === "mine"
-                  ? (mineStatus === "all"
-                      ? "Assets you create and submit will appear here."
-                      : mineStatus === "uploaded"
-                        ? "Assets that have been approved by moderators will appear here."
-                        : mineStatus === "in_review"
-                          ? "Assets currently in the moderation review queue will appear here."
-                          : mineStatus === "rejected"
-                            ? "Assets rejected by moderators will appear here for revision."
-                            : "Assets saved as drafts will appear here.")
-                  : view === "purchased"
-                    ? "Assets you purchase will appear here."
-                    : view === "liked"
-                      ? "Like assets to find them here later."
-                      : view === "saved"
-                        ? "Save assets to find them here later."
-                        : "Uploaded media will appear here."}
-            </p>
-            {view === "mine" && <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{checkingPostEligibility ? "Checking..." : "Upload your first asset"}</button>}
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {pendingUploads.map((upload) => {
-              const saved = assets.find((item) => item.market_asset_id === upload.asset?.market_asset_id) || upload.asset;
-              return saved?.processing_status === "ready"
-                ? <AssetCard key={upload.id} asset={saved} view="mine" onEdit={openEdit} onDelete={setDeletingAsset} />
-                : <PendingAssetCard key={upload.id} upload={upload} asset={saved}
-                    onDismiss={() => saved ? setDeletingAsset(saved) : removeUpload(upload.id)} />;
-            })}
-            {visibleAssets.map((asset) => (
-              <AssetCard
-                key={asset.market_asset_id}
-                asset={asset}
-                view={view}
-                engagementPending={engagementPending}
-                onUpdateEngagement={(a, kind) => void updateEngagement(a, kind)}
-                onEdit={openEdit}
-                onDelete={setDeletingAsset}
-              />
-            ))}
-          </div>
-        )}
-
-        {!loading && !loadError && pagination.totalPages > 1 && (
-          <nav className="mt-8 flex items-center justify-center gap-3" aria-label="Asset pages">
-            <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"><ChevronLeft className="h-4 w-4" /> Previous</button>
-            <span className="px-2 text-sm text-gray-500 dark:text-zinc-400">Page {pagination.page} of {pagination.totalPages}</span>
-            <button type="button" onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} disabled={page >= pagination.totalPages} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5">Next <ChevronRight className="h-4 w-4" /></button>
-          </nav>
+            {!loading && !loadError && pagination.totalPages > 1 && (
+              <nav className="mt-8 flex items-center justify-center gap-3" aria-label="Asset pages">
+                <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"><ChevronLeft className="h-4 w-4" /> Previous</button>
+                <span className="px-2 text-sm text-gray-500 dark:text-zinc-400">Page {pagination.page} of {pagination.totalPages}</span>
+                <button type="button" onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} disabled={page >= pagination.totalPages} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5">Next <ChevronRight className="h-4 w-4" /></button>
+              </nav>
+            )}
+          </>
         )}
       </main>
 
@@ -728,7 +768,15 @@ export default function AssetsLibrary() {
         standalone={true}
         onConfirm={handleUploadSuccessDismiss}
       />
-      <ConfirmationModal isOpen={Boolean(deletingAsset)} title="Delete asset?" message={`Delete “${deletingAsset?.name || "this asset"}”? This removes it from the library.`} confirmText={deleting ? "Deleting..." : "Delete asset"} cancelText="Keep asset" onConfirm={() => void confirmDelete()} onCancel={() => !deleting && setDeletingAsset(null)} />
+      <ConfirmationModal
+        isOpen={Boolean(deletingAsset)}
+        title="Move asset to Trash?"
+        message={`Move “${deletingAsset?.name || "this asset"}” to Trash? You can restore it later from the Trash tab.`}
+        confirmText={deleting ? "Moving..." : "Move to Trash"}
+        cancelText="Cancel"
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => !deleting && setDeletingAsset(null)}
+      />
       {deleting && <span className="sr-only"><Loader2 className="animate-spin" /> Deleting asset</span>}
     </div>
   );

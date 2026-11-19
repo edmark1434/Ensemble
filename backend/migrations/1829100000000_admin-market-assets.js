@@ -13,7 +13,7 @@ exports.shorthands = undefined;
 exports.up = (pgm) => {
   pgm.addColumn('market_assets', {
     is_admin_asset: { type: 'boolean', notNull: true, default: false },
-  });
+  }, { ifNotExists: true });
 
   pgm.alterColumn('media_assets', 'owner_user_id', {
     notNull: false,
