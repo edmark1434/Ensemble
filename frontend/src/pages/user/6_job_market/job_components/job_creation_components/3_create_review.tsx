@@ -1828,8 +1828,9 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                       <span className="font-medium">Insufficient balance (requires {postingFeeCredits} Credits)</span>
                     </div>
                     <Link
-                      to="/credits/shop"
+                      to="/credits"
                       target="_blank"
+                      rel="noopener noreferrer"
                       className="text-xs font-bold text-red-700 dark:text-red-300 hover:underline shrink-0"
                     >
                       Buy Credits

@@ -4,6 +4,14 @@ const {
     getAccountWalletSummaryByAccountId,
 } = require('../repositories/TransactionRepositories');
 const { formatPayoutDate } = require('../lib/DisputeResolutions');
+const { staffAdjustmentOf, staffHoldOf } = require('../lib/StaffLedgerNotes');
+
+/** Ends free text with a full stop so a following sentence reads cleanly. */
+function sentence(text) {
+    const value = String(text || '').trim();
+    if (!value) return '';
+    return /[.!?]$/.test(value) ? value : `${value}.`;
+}
 
 function getDirection(row) {
     if (row.source_owned && row.destination_owned) return 'internal';
@@ -59,7 +67,7 @@ function formatActorLabel(name, handle, walletType, isOwned) {
     return formatWalletTypeLabel(walletType, false);
 }
 
-function buildHumanReadableMeta(row, type, isCreditPurchase, direction) {
+function buildHumanReadableMeta(row, type, isCreditPurchase, direction, { adjustment = null, hold = null } = {}) {
     const refTable = String(row.reference_table || '').trim().toLowerCase();
     const rawType = String(row.type || '').trim();
     const sourceLabel = formatActorLabel(
@@ -75,6 +83,36 @@ function buildHumanReadableMeta(row, type, isCreditPurchase, direction) {
         row.destination_owned
     );
     const walletFlow = `${sourceLabel} → ${destLabel}`;
+
+    // Staff grant or deduction: the ledger row is a self-transfer, the sign is on its audit row.
+    if (adjustment) {
+        const reason = adjustment.reason ? ` Reason: ${sentence(adjustment.reason)}` : '';
+        if (adjustment.delta > 0) {
+            return {
+                category: 'Staff Adjustment',
+                title: 'Credits Added by Staff',
+                summary: `Staff added these credits to your Account Wallet.${reason}`,
+                counterparty: 'Ensemble Staff',
+                walletFlow: 'Ensemble Staff → Your Account Wallet',
+            };
+        }
+        if (adjustment.delta < 0) {
+            return {
+                category: 'Staff Adjustment',
+                title: 'Credits Removed by Staff',
+                summary: `Staff removed these credits from your Account Wallet.${reason} If you think this is a mistake, contact support.`,
+                counterparty: 'Ensemble Staff',
+                walletFlow: 'Your Account Wallet → Ensemble Staff',
+            };
+        }
+        return {
+            category: 'Staff Adjustment',
+            title: 'Balance Adjusted by Staff',
+            summary: 'Staff changed the balance of your Account Wallet.',
+            counterparty: 'Ensemble Staff',
+            walletFlow,
+        };
+    }
 
     const counterparty =
         direction === 'internal'
@@ -148,14 +186,19 @@ function buildHumanReadableMeta(row, type, isCreditPurchase, direction) {
     // Staff credit hold: the credits stay in the Account Wallet, just not spendable.
     if (refTable === 'wallets' && (type === 'Escrow Hold' || type === 'Escrow Release')) {
         const held = type === 'Escrow Hold';
+        // Only the hold's reason was written for the member; a release note is staff-only.
+        const reason = held && hold?.reason ? ` Reason: ${sentence(hold.reason)}` : '';
+        const releasedByStaff = hold?.source === 'staff' || hold?.source === 'reversal';
         return {
             category: held ? 'Credits on Hold' : 'Hold Released',
             title: held ? 'Credits Placed on Hold by Staff' : 'Credit Hold Released',
             summary: held
-                ? 'Staff put a hold on these credits. They stay yours and come back when the hold ends or an appeal is accepted.'
-                : 'The hold ended and these credits are spendable in your Account Wallet again.',
+                ? `Staff put a hold on these credits.${reason} They stay yours and come back when the hold ends or an appeal is accepted.`
+                : releasedByStaff
+                  ? 'Staff released the hold. These credits are spendable in your Account Wallet again.'
+                  : 'The hold ended and these credits are spendable in your Account Wallet again.',
             counterparty: 'Your Account Wallet',
-            walletFlow,
+            walletFlow: held ? 'Your Account Wallet → On hold' : 'On hold → Your Account Wallet',
         };
     }
 
@@ -269,6 +312,16 @@ function buildHumanReadableMeta(row, type, isCreditPurchase, direction) {
     }
 
     // Default / Fund Transfer variations
+    if (refTable === 'dev_credit_injection') {
+        return {
+            category: 'Fund Transfer',
+            title: 'Dev Credit Injection (Inserted)',
+            summary: 'Credits inserted via Dev Mode (Alt + I) into your Account Wallet.',
+            counterparty: 'Dev Mode (Inserted)',
+            walletFlow,
+        };
+    }
+
     if (refTable === 'teams') {
         return {
             category: 'Fund Transfer',
@@ -327,13 +380,18 @@ function mapTransaction(row) {
         : normalizedType;
     const sourceIsPlatform = String(row.source_wallet_type).toLowerCase() === 'platform wallets';
     const destinationIsPlatform = String(row.destination_wallet_type).toLowerCase() === 'platform wallets';
-    const direction = getDirection(row);
+    const adjustment = staffAdjustmentOf(row);
+    const hold = staffHoldOf(row);
+    // A staff grant adds to the wallet and a deduction takes from it, though both are self-transfers.
+    const direction = adjustment?.delta
+        ? (adjustment.delta > 0 ? 'incoming' : 'outgoing')
+        : getDirection(row);
     const isCreditPurchase =
         type === 'Fund Transfer' &&
         sourceIsPlatform &&
         Boolean(row.destination_owned);
 
-    const meta = buildHumanReadableMeta(row, type, isCreditPurchase, direction);
+    const meta = buildHumanReadableMeta(row, type, isCreditPurchase, direction, { adjustment, hold });
 
     return {
         id: row.credit_transaction_id,
@@ -355,6 +413,14 @@ function mapTransaction(row) {
         feeTransactionId: row.fee_transaction_id,
         referenceTable: row.reference_table,
         referenceId: row.reference_id,
+        // Reasons written for the member: an adjustment's and a hold's (never a release note).
+        staffReason: adjustment?.reason || (hold?.held ? hold.reason : null) || null,
+        holdUntil: hold?.held ? hold.until : null,
+        staffAction: adjustment
+            ? (adjustment.delta > 0 ? 'grant' : adjustment.delta < 0 ? 'deduction' : 'adjustment')
+            : hold
+              ? (hold.held ? 'hold' : 'release')
+              : null,
     };
 }
 

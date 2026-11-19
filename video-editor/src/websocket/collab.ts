@@ -10,14 +10,13 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
-import { loadLatestProjectState, compactProject } from "@/lib/collab/persistence-store";
-import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
+import { loadLatestProjectState, compactProjectAndScenes } from "@/lib/collab/persistence-store";
 import { CollabTarget } from "@/features/editor/collab/collab-target";
-import { compactBlock, loadLatestBlockState, withBlockSnapshotLock } from "@/lib/collab/block-persistence-store";
+import { loadLatestBlockState } from "@/lib/collab/block-persistence-store";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { isProjectFrozen } from "@/lib/db/projects";
-import { liveRooms } from "@/lib/collab/live-rooms";
+import { liveRooms, liveDocuments } from "@/lib/collab/live-rooms";
 import { markProjectDirty, onProjectRoomEmpty } from "@/lib/collab/thumbnail-service";
 import { canApplyCompositionUpdate } from "@/lib/collab/composition-size-policy";
 
@@ -93,7 +92,7 @@ function roomKey(target: CollabTarget): string {
   return `${target.kind}:${target.id}`;
 }
 
-async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
+async function getOrCreateRoom(target: CollabTarget, projectId: string): Promise<Room> {
   const key = roomKey(target);
   const existing = rooms.get(key);
   if (existing) {
@@ -101,9 +100,9 @@ async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
     if (room.emptyTimeout) {
       clearTimeout(room.emptyTimeout);
       room.emptyTimeout = null;
-      if (!room.snapshotInterval) {
-        room.snapshotInterval = setInterval(room.snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
-      }
+    }
+    if (!room.snapshotInterval) {
+      room.snapshotInterval = setInterval(room.snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
     }
     return existing;
   }
@@ -156,23 +155,23 @@ async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
       broadcast(room, encoding.toUint8Array(encoder), origin);
     });
 
+    let checkpoint: Promise<void> | undefined;
     room.snapshotIfDirty = async () => {
+      if (checkpoint) return checkpoint;
       if (!room.dirty) return;
       room.dirty = false;
-      try {
-        const roomState = Y.encodeStateAsUpdate(doc);
-        if (target.kind === "project") {
-          await withProjectSnapshotLock(target.id, () => compactProject(target.id, roomState));
-        } else {
-          await withBlockSnapshotLock(target.id, () => compactBlock(target.id, Buffer.from(roomState)));
-        }
-      } catch (err) {
-        console.error(`collab: periodic snapshot failed for ${key}`, err);
-        room.dirty = true;
-      }
+      checkpoint = compactProjectAndScenes(projectId)
+        .then(() => {})
+        .catch(err => {
+          console.error(`collab: checkpoint failed for ${key}`, err);
+          room.dirty = true;
+        })
+        .finally(() => { checkpoint = undefined; });
+      return checkpoint;
     };
 
     room.snapshotInterval = setInterval(room.snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
+    liveDocuments.set(key, doc);
     return room;
   })();
 
@@ -282,7 +281,7 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
   const canWrite = access.canWrite;
 
-  const room = await getOrCreateRoom(target);
+  const room = await getOrCreateRoom(target, membershipProjectId);
 
   ws.off("message", bufferDuringSetup);
   ws.off("close", markClosedDuringSetup);
@@ -404,31 +403,23 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
         room.snapshotInterval = null;
       }
 
-      room.emptyTimeout = setTimeout(() => {
+      room.emptyTimeout = setTimeout(function closeEmptyRoom() {
         if (room.clients.size !== 0) return;
         room.emptyTimeout = null;
 
-        const finalSnapshot = !room.dirty
-          ? Promise.resolve()
-          : target.kind === "project"
-            ? withProjectSnapshotLock(target.id, () =>
-              compactProject(target.id, Y.encodeStateAsUpdate(room.doc)),
-            )
-            : withBlockSnapshotLock(target.id, () =>
-              compactBlock(target.id, Buffer.from(Y.encodeStateAsUpdate(room.doc))),
-            );
-
-        finalSnapshot
-          .catch((err) => {
-            console.error(`collab: final snapshot failed for ${roomKey(target)}`, err);
-          })
-          .finally(() => {
-            if (target.kind === "project") {
-              onProjectRoomEmpty(target.id, Y.encodeStateAsUpdate(room.doc));
-            }
-            room.doc.destroy();
-            rooms.delete(roomKey(target));
-          });
+        void room.snapshotIfDirty().finally(() => {
+          if (room.clients.size || room.emptyTimeout) return;
+          if (room.dirty) {
+            room.emptyTimeout = setTimeout(closeEmptyRoom, ROOM_EMPTY_GRACE_MS);
+            return;
+          }
+          if (target.kind === "project") {
+            onProjectRoomEmpty(target.id, Y.encodeStateAsUpdate(room.doc));
+          }
+          liveDocuments.delete(roomKey(target));
+          rooms.delete(roomKey(target));
+          room.doc.destroy();
+        });
       }, ROOM_EMPTY_GRACE_MS);
     }
   });

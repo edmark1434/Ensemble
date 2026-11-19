@@ -249,7 +249,8 @@ function writeDismissed(value: string) {
 }
 
 /**
- * Site-wide status bar: suspension, Frozen access, credits on hold, forum timeout. Shows the
+ * Site-wide status bar: suspension, automatic merit punishments (Limited / Restricted / Frozen
+ * access, Mute), credits on hold, forum timeout. Shows the
  * most serious one with a live countdown; Details explains all of them and how to recover.
  * A suspension cannot be dismissed; the others can be hidden until something changes.
  */
@@ -276,8 +277,8 @@ function StandingStatusBar({
   const when = remaining == null
     ? primary.id === 'credit_hold'
       ? 'until staff review'
-      : primary.id === 'frozen_access'
-        ? 'until warnings expire'
+      : primary.id === 'merit_limits' || primary.id === 'muted'
+        ? 'on its own clock'
         : 'no end date yet'
     : remaining > 0
       ? `ends in ${formatCountdown(remaining)}`
@@ -298,6 +299,7 @@ function StandingStatusBar({
         <span className="shrink-0 text-xs font-bold text-zinc-900 dark:text-white">{primary.label}</span>
         <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
           {primary.id === 'credit_hold' ? `${primary.title} · ` : ''}
+          {primary.id === 'suspended' ? 'read-only, actions are off · ' : ''}
           {when}
           {others > 0 ? ` · +${others} more` : ''}
         </span>
@@ -467,6 +469,12 @@ export function AccountRestrictionHost() {
     socket.emit('joinRoom', accountId);
 
     const handleRestricted = (payload: any) => {
+      // A Platform Merit band change (warning issued, expired, rescinded or lifted) carries
+      // `band` and no lock of its own: refetch the standing instead of treating it as a lock.
+      if (payload && typeof payload === 'object' && 'band' in payload && !payload.code && !payload.status && !payload.restriction) {
+        refreshCurrentUser();
+        return;
+      }
       const code = String(payload?.code || payload?.restriction?.code || '');
       const status = String(payload?.status || payload?.restriction?.status || '').toLowerCase();
       if (

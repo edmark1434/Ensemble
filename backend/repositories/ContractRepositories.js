@@ -903,7 +903,7 @@ async function getContractsByUserId(accountIds) {
     }));
 }
 
-async function createContractDispute(accountIds, contractId, { reason, details }) {
+async function createContractDispute(accountIds, contractId, { reason, details, attachments = [] }) {
     const contractQ = await pool.query(`
         SELECT
             c.contract_id,
@@ -1080,6 +1080,19 @@ async function createContractDispute(accountIds, contractId, { reason, details }
     } catch (err) {
         console.warn('Dispute filing summary skipped:', err.message);
     }
+    // Files from the form go in as the filer's first reply. The case stands even if this fails;
+    // the filer is told to add them again by replying.
+    const evidence = { sent: Array.isArray(attachments) ? attachments.length : 0, posted: 0, failed: false };
+    if (evidence.sent) {
+        try {
+            const { postDisputeFiledEvidence } = require('./DisputeChatRepositories');
+            const message = await postDisputeFiledEvidence(createdDispute, attachments);
+            evidence.posted = message?.attachments?.length || 0;
+        } catch (err) {
+            console.warn('Dispute filing attachments skipped:', err.message);
+        }
+        evidence.failed = evidence.posted === 0;
+    }
     await require('../services/CaseServices').notifyCaseOpened({
         accountId: userAccId,
         kind: 'dispute',
@@ -1090,7 +1103,7 @@ async function createContractDispute(accountIds, contractId, { reason, details }
     const { applyDisputeAutomations } = require('../lib/ModerationPolicy');
     const enrichedDispute = await applyDisputeAutomations(createdDispute);
 
-    return enrichedDispute || createdDispute;
+    return { ...(enrichedDispute || createdDispute), evidence };
 }
 
 async function getContractWithParties(contractId) {

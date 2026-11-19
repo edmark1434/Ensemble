@@ -50,6 +50,7 @@ interface ITimelineStore {
   setViewTimeline: (viewTimeline: boolean) => void;
 
   timelineHeight: number;
+  timelineMaximized: boolean;
   setTimelineHeight: (height: number) => void;
   timelineContainerRef: React.RefObject<HTMLDivElement> | null;
   setTimelineContainerRef: (ref: React.RefObject<HTMLDivElement>) => void;
@@ -164,28 +165,12 @@ const useStore = create<ITimelineStore>((set, get) => ({
   setSceneMoveableRef: (ref) => set({ sceneMoveableRef: ref }),
 
   timelineHeight: typeof window !== "undefined" ? window.innerHeight * 0.45 : 0,
+  timelineMaximized: false,
   timelineContainerRef: null,
-  setTimelineHeight: (height: number) => set({ timelineHeight: height }),
+  setTimelineHeight: (height: number) => set({ timelineHeight: height, timelineMaximized: false }),
   setTimelineContainerRef: (ref: React.RefObject<HTMLDivElement>) =>
     set({ timelineContainerRef: ref }),
-  toggleTimelineFullHeight: () => {
-    const { timelineHeight, timelineContainerRef, timeline } = get();
-    const FULL_HEIGHT = window.innerHeight;
-    const DEFAULT_HEIGHT = window.innerHeight * 0.45;
-    const isFull = timelineHeight >= FULL_HEIGHT;
-    const newHeight = isFull ? DEFAULT_HEIGHT : FULL_HEIGHT;
-
-    if (timelineContainerRef?.current) {
-      timelineContainerRef.current.style.height = `${newHeight}px`;
-    }
-
-    const containerHeight =
-      (document.getElementById("playhead")?.clientHeight || 0) -
-      (document.getElementById("playhead-handle")?.clientHeight || 0);
-    timeline?.resize({ height: containerHeight });
-
-    set({ timelineHeight: newHeight });
-  },
+  toggleTimelineFullHeight: () => set(state => ({ timelineMaximized: !state.timelineMaximized })),
 
   isShortcutsModalOpen: false,
   setShortcutsModalOpen: (open) => set({ isShortcutsModalOpen: open }),

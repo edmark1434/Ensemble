@@ -19,15 +19,19 @@ function SaveUnavailable({ message, action }: { message: string; action?: { href
   </main>;
 }
 
-export default async function SavePreviewPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SavePreviewPage({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ preview?: string | string[] }>;
+}) {
   const { id } = await params;
-  if (!SAVE_UUID.test(id)) return <SaveUnavailable message="This save link is invalid." />;
+  const { preview } = await searchParams;
+  if (!SAVE_UUID.test(id) || typeof preview !== "string" || !preview) return <SaveUnavailable message="Open this save from the project's Saves panel." />;
   const token = (await cookies()).get(EDITOR_SESSION_COOKIE)?.value;
   const session = token ? await verifyEditorSession(token) : null;
   if (!session) return <SaveUnavailable message="Your editor session has ended. Open the project again, then preview the save from the Saves panel." />;
-  let preview;
+  let result;
   try {
-    preview = await getProjectSavePreview(id, session.userId);
+    result = await getProjectSavePreview(id, session.userId, preview);
   } catch (error) {
     if (error instanceof ProjectSaveError && error.code === "PLAN_REQUIRED") {
       return <SaveUnavailable message="Saves are available on the Premium and Business plans." action={{ href: savesUpgradeUrl(), label: "Upgrade plan" }} />;
@@ -35,6 +39,6 @@ export default async function SavePreviewPage({ params }: { params: Promise<{ id
     if (error instanceof ProjectSaveError) return <SaveUnavailable message={error.message} />;
     throw error;
   }
-  if (!preview) return <SaveUnavailable message="This save is no longer available." />;
-  return <SnapshotPreview {...preview} />;
+  if (!result) return <SaveUnavailable message="This save is no longer available." />;
+  return <SnapshotPreview {...result} />;
 }

@@ -9,40 +9,16 @@ const getFallbackHeight = () => Math.round(window.innerHeight * 0.4);
 // "min" = just the header row (plus the 1px top border)
 const getMinHeight = () => (document.getElementById("timeline-header")?.offsetHeight || 50) + 1;
 
-const getHeightMode = (height: number) => {
-  if (height <= getMinHeight()) return "min";
-  if (height >= window.innerHeight) return "max";
-  return "default";
-};
-
-const applyTimelineHeight = (height: number) => {
-  const container = document.getElementById("timeline-container");
-  if (!container) return;
-
-  container.style.height = `${height}px`;
-  const containerHeight = Math.max(
-    0,
-    (document.getElementById("playhead")?.clientHeight || 0) -
-    (document.getElementById("playhead-handle")?.clientHeight || 0) - 26
-  );
-
-  const { timeline, setTimelineHeight } = useStore.getState();
-  timeline?.resize({ height: containerHeight }, { force: true });
-  setTimelineHeight(height);
-};
-
-// backtick + header button: max -> default -> min (header only) -> max
+// Backtick and the header button cycle through max, default and header-only.
 export const cycleTimelineHeight = () => {
-  const { timelineHeight } = useStore.getState();
-  const mode = getHeightMode(timelineHeight);
-
-  if (mode === "max") {
-    applyTimelineHeight(defaultHeight || getFallbackHeight());
-  } else if (mode === "default") {
-    defaultHeight = timelineHeight;
-    applyTimelineHeight(getMinHeight());
+  const { timelineHeight, timelineMaximized, setTimelineHeight, toggleTimelineFullHeight } = useStore.getState();
+  if (timelineMaximized) {
+    setTimelineHeight(defaultHeight || getFallbackHeight());
+  } else if (timelineHeight <= getMinHeight()) {
+    toggleTimelineFullHeight();
   } else {
-    applyTimelineHeight(window.innerHeight);
+    defaultHeight = timelineHeight;
+    setTimelineHeight(getMinHeight());
   }
 };
 
@@ -50,7 +26,6 @@ export const useResizbleTimeline = () => {
   const [isResizing, setIsResizing] = React.useState(false);
   const timelineContainerRef = React.useRef<HTMLDivElement>(null);
   const {
-    timeline,
     timelineHeight,
     setTimelineHeight,
     setTimelineContainerRef
@@ -77,15 +52,6 @@ export const useResizbleTimeline = () => {
         ev.preventDefault();
         return;
       }
-      timelineContainerRef.current!.style.height = `${currentHeight}px`;
-      timelineContainerRef.current!.style.borderTopColor = "#2B64EB";
-      timelineContainerRef.current!.style.cursor = "row-resize";
-      const containerHeight =
-        (document.getElementById("playhead")?.clientHeight || 0) -
-        (document.getElementById("playhead-handle")?.clientHeight || 0);
-      timeline?.resize({
-        height: containerHeight
-      });
       setTimelineHeight(currentHeight);
     };
     const onMouseUp = () => {

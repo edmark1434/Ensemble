@@ -17,6 +17,11 @@ const {
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
   postAdminRescindWarning,
+  getAdminWarningLiftPreview,
+  postAdminLiftWarningPoints,
+  getAdminAccountMeritPenalties,
+  postAdminEndMeritPenalty,
+  postAdminUnfreezeAccount,
   postAdminAccountPardon,
   getAdminAccountActivity,
   getAdminAccountProfileDetails,
@@ -36,6 +41,7 @@ const {
   getAdminEconomyOverview,
   getAdminEconomyWallets,
   getAdminEconomyLedger,
+  getAdminLedgerEntry,
   getAdminWalletDetail,
 } = require('../controllers/AdminEconomyControllers');
 /** Credits & Economy desk: Admin, and Support Moderator (no staff wallets; enforced in the service). */
@@ -117,6 +123,15 @@ router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTea
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
 router.post('/accounts/:accountId/warnings/:violationId/rescind', [checkSession, requireUserTeamAccess], postAdminRescindWarning);
+// Lifting points can clear several warnings at once, so it sits with pardon (Admin/Support).
+router.get('/accounts/:accountId/warnings/lift-preview', [checkSession, requireUserTeamFullWrite], getAdminWarningLiftPreview);
+router.post('/accounts/:accountId/warnings/lift', [checkSession, requireUserTeamFullWrite], postAdminLiftWarningPoints);
+// Automatic merit punishments: every User & Team desk can see them; ending one early sits with
+// pardon and lift (Admin / Support).
+router.get('/accounts/:accountId/merit-penalties', [checkSession, requireUserTeamAccess], getAdminAccountMeritPenalties);
+// Unfreeze: end several (default: all) running automatic bands and mutes at once.
+router.post('/accounts/:accountId/merit-penalties/end', [checkSession, requireUserTeamFullWrite], postAdminUnfreezeAccount);
+router.post('/accounts/:accountId/merit-penalties/:penaltyId/end', [checkSession, requireUserTeamFullWrite], postAdminEndMeritPenalty);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/accounts/:accountId/profile', [checkSession, requireUserTeamAccess], getAdminAccountProfileDetails);
@@ -124,6 +139,7 @@ router.get('/economy-overview', [checkSession, requireEconomyAccess], getAdminEc
 router.get('/economy/wallets', [checkSession, requireEconomyAccess], getAdminEconomyWallets);
 router.get('/economy/wallets/:walletId', [checkSession, requireEconomyAccess], getAdminWalletDetail);
 router.get('/economy/ledger', [checkSession, requireEconomyAccess], getAdminEconomyLedger);
+router.get('/economy/ledger/:transactionId', [checkSession, requireEconomyAccess], getAdminLedgerEntry);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/moderation/videos', [checkSession, requireAdmin], getAdminVideos);
 router.get('/moderation/videos/:projectId', [checkSession, requireAdmin], getAdminVideo);

@@ -3,7 +3,7 @@ import {
   Bell, Users, MessageSquare, Briefcase, FileText, Star, AlertCircle, UserPlus,
   Wallet, BadgeCheck, Ticket, RefreshCw, Heart, BookOpen, AtSign, Calendar,
   Clock, XCircle, CheckCircle2, ArrowRightLeft, Package, Layers, ShoppingBag,
-  Send, Shield, Award,
+  Send, Shield, Award, Snowflake, TrendingDown, TrendingUp,
 } from "lucide-react";
 
 export type NotificationIconDef = { icon: React.ReactNode; bg: string; text: string; border: string };
@@ -126,6 +126,12 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   ACCOUNT_BANNED:             tone("rose", i(XCircle)),
   ACCOUNT_LOCKED:             tone("rose", i(XCircle)),
   RESTORE:                    tone("green", i(CheckCircle2)),
+  // Platform Merit and its automatic punishments
+  ACCOUNT_UNFROZEN:           tone("green", i(Snowflake)),
+  MERIT_LIMIT_ENDED:          tone("green", i(CheckCircle2)),
+  MERIT_LIMIT_STARTED:        tone("amber", i(AlertCircle)),
+  WARNING_UP:                 tone("green", i(TrendingUp)),
+  WARNING_DOWN:               tone("amber", i(TrendingDown)),
   // Tickets
   TICKET_RECEIVED:            tone("indigo", i(Ticket)),
   TICKET_ASSIGNED:            tone("indigo", i(Ticket)),
@@ -183,6 +189,8 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   WARNING: "Account Warning", ACCOUNT_WARNING: "Account Warning",
   ACCOUNT_BANNED: "Account Banned", ACCOUNT_LOCKED: "Account Locked",
   RESTORE: "Standing Restored",
+  ACCOUNT_UNFROZEN: "You're Unfrozen", MERIT_LIMIT_ENDED: "Limit Ended",
+  MERIT_LIMIT_STARTED: "Automatic Limit", WARNING_UP: "Merit Recovered", WARNING_DOWN: "Merit Dropped",
   TICKET_ASSIGNED: "Ticket Assigned", TICKET_RESOLVED: "Ticket Resolved",
   TICKET_CLOSED: "Ticket Closed",
   TICKET_CLOSE_SCHEDULED: "Ticket Closing Soon",

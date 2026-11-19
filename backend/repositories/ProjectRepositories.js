@@ -197,11 +197,12 @@ function normalizeProjectPortfolioMetadata(row) {
     };
 }
 
-async function getProjectsForUser(userId, trash = false) {
+async function getProjectsForUser(userId, trash = false, portfolio = false) {
     try {
         const query = `
             ${PROJECT_PORTFOLIO_DETAILS_SQL}
             WHERE p.deleted_at IS NULL
+              AND (NOT $3::boolean OR pm.user_id IS NOT NULL)
               AND (($2::boolean = false AND p.trashed_at IS NULL)
                 OR ($2::boolean = true AND p.trashed_at IS NOT NULL
                     AND p.trashed_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
@@ -219,7 +220,7 @@ async function getProjectsForUser(userId, trash = false) {
               )
             ORDER BY CASE WHEN $2::boolean THEN p.trashed_at ELSE p.updated_at END DESC, p.project_id
         `;
-        const result = await pool.query(query, [userId, trash]);
+        const result = await pool.query(query, [userId, trash, portfolio]);
         return result.rows.map(normalizeProjectPortfolioMetadata);
     } catch (err) {
         console.error("Error fetching projects for user:", err);
@@ -235,8 +236,10 @@ async function getProjectForPortfolioByAccount(accountId, projectId) {
     const userId = userRes.rows[0]?.user_id;
     if (!userId) return null;
 
-    const projects = await getProjectsForUser(userId);
-    return projects.find((p) => String(p.id) === String(projectId)) || null;
+    const result = await pool.query(`${PROJECT_PORTFOLIO_DETAILS_SQL}
+      WHERE p.project_id=$2 AND p.deleted_at IS NULL AND p.trashed_at IS NULL AND pm.user_id IS NOT NULL`,
+    [userId, projectId]);
+    return result.rows.length ? normalizeProjectPortfolioMetadata(result.rows[0]) : null;
 }
 
 async function withLockedProject(projectId, userId, work) {

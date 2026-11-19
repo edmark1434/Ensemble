@@ -3,8 +3,11 @@ import type * as Y from "yjs";
 // Shared between the ws server (collab.ts) and Next route handlers, which
 // get separate module instances, so it has to live on globalThis.
 const g = globalThis as unknown as {
+  collabDocuments?: Map<string, Y.Doc>;
   collabRooms?: Map<string, Promise<{ doc: Y.Doc }>>;
 };
+// Hydrated documents can be captured together without awaiting room initialization.
+export const liveDocuments = (g.collabDocuments ??= new Map<string, Y.Doc>());
 export const liveRooms = (g.collabRooms ??= new Map());
 
 export async function setProjectNameInLiveRoom(projectId: string, name: string): Promise<void> {

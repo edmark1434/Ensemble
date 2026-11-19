@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { isProjectMember } from "@/lib/db/block-members";
-import { compactProject, compactProjectAndScenes } from "@/lib/collab/persistence-store";
-import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
+import { compactProjectAndScenes } from "@/lib/collab/persistence-store";
 
 export async function POST(
   request: NextRequest,

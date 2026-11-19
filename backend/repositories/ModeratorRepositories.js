@@ -60,6 +60,7 @@ function mapViolationRow(row) {
     type: row.type || 'warning',
     reason: row.reason,
     points: row.points,
+    originalPoints: row.points_original == null ? null : Number(row.points_original),
     status: !active && pastExpiry ? 'expired' : row.status,
     issuedBy: row.issued_by_name || 'System',
     createdAt: row.created_at,
@@ -143,7 +144,33 @@ async function getViolationsAndRestrictions() {
     violations: result.rows.map(mapViolationRow),
     restrictedAccounts: restrictedResult.rows.map(mapDeskAccount),
     recentActivity,
+    // Running automatic merit punishments, so every desk sees what is already auto-locked.
+    meritPenalties: await listRunningMeritPenaltiesSafe(),
   };
+}
+
+async function listRunningMeritPenaltiesSafe() {
+  try {
+    const { meritPenaltiesReady } = require('../lib/SchemaFeatures');
+    if (!(await meritPenaltiesReady())) return [];
+    const { listRunningMeritPenalties } = require('./MeritPenaltyRepositories');
+    const { effectLabel } = require('../lib/WarningBands');
+    const rows = await listRunningMeritPenalties({ limit: 300 });
+    return rows.map((row) => ({
+      id: row.id,
+      accountId: row.accountId,
+      effect: row.effect,
+      label: effectLabel(row.effect),
+      ruleLabel: row.label,
+      triggerMerit: row.triggerMerit,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      violationNumber: row.violationNumber,
+    }));
+  } catch (err) {
+    console.warn('Could not load running merit punishments:', err.message);
+    return [];
+  }
 }
 
 async function searchRestrictionAccounts(query) {
@@ -246,8 +273,12 @@ async function issueViolation(accountId, { warningId, type, reason, points, expi
     },
   });
 
-  const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
-  const autoSuspend = await maybeAutoSuspendAfterWarning(accountId, staffId);
+  // Every merit level this warning crossed starts its timed punishment (merit is unchanged).
+  const { applyMeritPunishmentsForWarning } = require('../services/MeritPenaltyServices');
+  const autoSuspend = await applyMeritPunishmentsForWarning(accountId, {
+    violationId: inserted.rows[0]?.violation_id || null,
+    staffId,
+  });
 
   try {
     const { notifyAccountWarned } = require('../services/AccountStandingServices');

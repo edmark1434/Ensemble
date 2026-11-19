@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
+import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import type { EconomyVariant, LedgerEntry, LedgerParty, Page } from './creditEconomyTypes';
 
@@ -8,7 +9,44 @@ export const ECONOMY_API = {
   wallets: '/api/admin/economy/wallets',
   wallet: (walletId: string) => `/api/admin/economy/wallets/${walletId}`,
   ledger: '/api/admin/economy/ledger',
+  ledgerEntry: (transactionId: string) => `/api/admin/economy/ledger/${transactionId}`,
 };
+
+/** YYYY-MM-DD of a date in the viewer's own time zone (date inputs and ledger From / To). */
+export function localDate(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function localDateDaysAgo(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return localDate(d);
+}
+
+/** Copyable id: the full value, a copy icon, and a check once copied. */
+export function CopyId({ value, label, className = '' }: { value: string; label?: string; className?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void navigator.clipboard?.writeText(value).then(() => {
+          setDone(true);
+          window.setTimeout(() => setDone(false), 1200);
+        });
+      }}
+      className={`inline-flex min-w-0 items-center gap-1 font-mono text-[10px] text-zinc-500 hover:text-zinc-200 ${className}`}
+      title={`Copy ${value}`}
+    >
+      <span className="truncate">{label ?? value}</span>
+      {done ? <Check className="h-3 w-3 shrink-0 text-emerald-400" /> : <Copy className="h-3 w-3 shrink-0" />}
+    </button>
+  );
+}
 
 /** Per-console accent, mirroring the admin (rose) and Support Moderator (sky) themes. */
 export const ECONOMY_ACCENT: Record<
@@ -324,6 +362,32 @@ export function usePagedList<T>(url: string, params: Params, refreshToken = 0) {
   }, [load, refreshToken]);
 
   return { page, loading, error, reload: load };
+}
+
+/**
+ * Every row of a server-paged list for a CSV export (100 per request, up to `max`).
+ * Uncached: an export is a one-off read.
+ */
+export async function fetchAllPages<T>(
+  url: string,
+  params: Params,
+  { max = 5000, onProgress }: { max?: number; onProgress?: (done: number, total: number) => void } = {}
+) {
+  const clean = cleanParams(params);
+  delete clean.limit;
+  delete clean.offset;
+  const items: T[] = [];
+  let total = 0;
+  for (let offset = 0; offset < max; offset += 100) {
+    const res = await api.get(url, { params: { ...clean, limit: 100, offset } });
+    if (!res.data?.success) throw new Error(res.data?.message || 'Export failed');
+    const page = res.data.data as Page<T>;
+    total = page.total;
+    items.push(...page.items);
+    onProgress?.(items.length, Math.min(total, max));
+    if (page.items.length < 100 || items.length >= total) break;
+  }
+  return { items: items.slice(0, max), total, truncated: total > max };
 }
 
 /** Debounced copy of a value, for search boxes that hit the server. */

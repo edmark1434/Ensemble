@@ -115,25 +115,77 @@ function devOnly(_req, res, next) {
 // Credit injection is intentionally allowed in production (owner request), so it skips devOnly.
 // WARNING: any signed-in member can top up their own wallet through this endpoint.
 router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
+    const { pool } = require('../lib/Database');
+    const { getIo } = require('../lib/WebSocket');
+    const client = await pool.connect();
     try {
-        const { pool } = require('../lib/Database');
         const accountId = req.user.account_id;
         const amount = Number(req.body?.amount);
         if (!Number.isInteger(amount) || amount <= 0 || amount > 1000000) {
             return res.status(400).json({ success: false, message: 'Amount must be a whole number from 1 to 1,000,000' });
         }
-        
-        await pool.query(`
-            UPDATE wallets 
-            SET balance_credits = balance_credits + $1 
-            WHERE type = 'account wallets'
-            AND wallet_id IN (SELECT wallet_id FROM account_wallets WHERE account_id = $2)
+
+        await client.query('BEGIN');
+
+        const walletRes = await client.query(`
+            UPDATE wallets
+               SET balance_credits = balance_credits + $1
+             WHERE type = 'account wallets'
+               AND wallet_id IN (SELECT wallet_id FROM account_wallets WHERE account_id = $2)
+            RETURNING wallet_id, balance_credits
         `, [amount, accountId]);
-        
-        res.json({ success: true, message: `Successfully added ${amount} credits` });
+
+        const destWallet = walletRes.rows[0];
+        if (!destWallet) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: 'Account wallet not found' });
+        }
+
+        const platformWalletRes = await client.query(`
+            SELECT wallet_id
+              FROM wallets
+             WHERE type = 'platform wallets' AND status = 'active'
+             ORDER BY created_at ASC
+             LIMIT 1
+        `);
+        const sourceWalletId = platformWalletRes.rows[0]?.wallet_id || destWallet.wallet_id;
+
+        await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status,
+                source_wallet_id, destination_wallet_id,
+                reference_table, reference_id
+            ) VALUES (
+                'Fund Transfer', $1, 'Completed',
+                $2, $3,
+                'dev_credit_injection', $4
+            )
+        `, [amount, sourceWalletId, destWallet.wallet_id, accountId]);
+
+        await client.query('COMMIT');
+
+        try {
+            const io = getIo();
+            if (io) {
+                io.to(String(accountId)).emit('walletBalanceUpdated', {
+                    type: 'DEV_CREDIT_INSERTED',
+                    amount,
+                    balance_credits: Number(destWallet.balance_credits),
+                });
+            }
+        } catch (_) {}
+
+        res.json({
+            success: true,
+            message: `Successfully added ${amount} credits`,
+            balance_credits: Number(destWallet.balance_credits),
+        });
     } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
         console.error("DEV ADD CREDITS ERR:", err);
         res.status(500).json({ error: "Failed to add credits", details: err.message });
+    } finally {
+        client.release();
     }
 });
 

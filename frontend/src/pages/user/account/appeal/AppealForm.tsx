@@ -1,8 +1,9 @@
 import { FormEvent, useState } from 'react';
-import { Send } from 'lucide-react';
+import { ArrowLeft, Send } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
-import { APPEAL_LIMITS, APPEAL_TICKET_TYPE, errorMessage } from './appealShared';
+import { formatStandingWhen } from '@/lib/standing';
+import { APPEAL_LIMITS, APPEAL_TICKET_TYPE, type AppealablePenalty, appealCopyFor, errorMessage } from './appealShared';
 import { ATTACHMENT_HINT, AttachButton, PendingFileList, uploadPendingFiles, usePendingFiles } from './appealAttachments';
 
 const inputClass =
@@ -14,19 +15,22 @@ function fieldBorder(hasError: boolean) {
 
 type Errors = Partial<Record<'description', string>>;
 
+/**
+ * The appeal for one penalty. Each penalty has its own appeal: the ticket names it, and the
+ * decision only changes that penalty.
+ */
 export default function AppealForm({
-  title,
-  subjectPlaceholder,
-  outcome,
+  penalty,
+  onCancel,
   onSubmitted,
 }: {
-  title: string;
-  subjectPlaceholder: string;
-  outcome: string;
+  penalty: AppealablePenalty;
+  /** Back to the list of penalties (hidden when this is the only one). */
+  onCancel?: () => void;
   onSubmitted: (ticketId: string | null) => void | Promise<void>;
 }) {
+  const copy = appealCopyFor(penalty.type);
   const [subject, setSubject] = useState('');
-  const [caseId, setCaseId] = useState('');
   const [description, setDescription] = useState('');
   const [evidence, setEvidence] = useState('');
   const [errors, setErrors] = useState<Errors>({});
@@ -54,19 +58,19 @@ export default function AppealForm({
     try {
       const attachments = await uploadPendingFiles(evidenceFiles.files, 'ticket-attachments');
       const res = await api.post('/api/users/tickets', {
-        subject: subject.trim() || subjectPlaceholder,
+        subject: subject.trim() || `${copy.subjectPlaceholder} · ${penalty.label}`.slice(0, APPEAL_LIMITS.subject),
         description: why,
         type: APPEAL_TICKET_TYPE,
         category: APPEAL_TICKET_TYPE,
+        // The one penalty this appeal is about; the server checks it is active and appealable.
+        appealTarget: { type: penalty.type, id: penalty.id },
         fields: {
-          case_id: caseId.trim() || 'Not provided',
           why_reverse: why,
           evidence: evidence.trim(),
         },
         ...(attachments.length ? { attachments } : {}),
       });
       setSubject('');
-      setCaseId('');
       setDescription('');
       setEvidence('');
       evidenceFiles.clear();
@@ -84,8 +88,41 @@ export default function AppealForm({
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">{outcome}</p>
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-gray-900 disabled:opacity-60 dark:text-zinc-400 dark:hover:text-white"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> All penalties
+          </button>
+        ) : null}
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{copy.formTitle}</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">{copy.outcome}</p>
+      </div>
+
+      {/* The penalty this appeal is about. */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">You are appealing</p>
+        <p className="mt-0.5 font-semibold text-gray-900 dark:text-white">
+          {penalty.label}
+          {penalty.number ? <span className="font-normal text-gray-500 dark:text-zinc-400"> · {penalty.number}</span> : null}
+        </p>
+        {penalty.detail ? <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-400">{penalty.detail}</p> : null}
+        {penalty.reason ? (
+          <p className="mt-1 text-xs text-gray-600 dark:text-zinc-300">
+            <span className="font-semibold">Reason given:</span> {penalty.reason}
+          </p>
+        ) : null}
+        <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+          {[
+            penalty.startedAt ? `Since ${formatStandingWhen(penalty.startedAt)}` : null,
+            penalty.endsAt ? `ends ${formatStandingWhen(penalty.endsAt)}` : 'no end date',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
       </div>
 
       <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300">
@@ -94,18 +131,7 @@ export default function AppealForm({
           value={subject}
           onChange={(event) => setSubject(event.target.value)}
           maxLength={APPEAL_LIMITS.subject}
-          placeholder={subjectPlaceholder}
-          className={`${inputClass} ${fieldBorder(false)}`}
-        />
-      </label>
-
-      <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300">
-        Case ID <span className="font-normal text-gray-400 dark:text-zinc-500">(optional)</span>
-        <input
-          value={caseId}
-          onChange={(event) => setCaseId(event.target.value)}
-          maxLength={APPEAL_LIMITS.caseId}
-          placeholder="e.g. the number on a warning in your account record"
+          placeholder={copy.subjectPlaceholder}
           className={`${inputClass} ${fieldBorder(false)}`}
         />
       </label>
@@ -179,7 +205,8 @@ export default function AppealForm({
         {submitting ? 'Submitting…' : 'Submit appeal'}
       </button>
       <p className="text-xs text-gray-400 dark:text-zinc-500">
-        You can have one open appeal at a time. If it is denied, you can appeal again after 12 months, or sooner if a new penalty is issued.
+        This appeal is about this {copy.noun} only. Each penalty on your account has its own appeal, and a decision on one does not
+        change the others. If this one is denied, you can appeal it again after 12 months.
       </p>
     </form>
   );

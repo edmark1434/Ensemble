@@ -4,35 +4,15 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import * as Y from "yjs";
-import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { isProjectMember } from "@/lib/db/block-members";
-import { loadLatestProjectState } from "@/lib/collab/persistence-store";
+import { loadLatestProjectState, compactProjectAndScenes } from "@/lib/collab/persistence-store";
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const ab = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(ab).set(bytes);
   return ab;
-}
-
-async function createBlankSnapshot(projectId: string): Promise<Buffer> {
-  const doc = new Y.Doc({ gc: false });
-  const bytes = Buffer.from(Y.encodeStateAsUpdate(doc));
-  doc.destroy();
-
-  const newSnapshot = await db
-    .insertInto("yjs_snapshots")
-    .values({ document: bytes })
-    .returning(["yjs_snapshot_id"])
-    .executeTakeFirstOrThrow();
-
-  await db
-    .insertInto("project_yjs_snapshots")
-    .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, project_id: projectId })
-    .execute();
-
-  return bytes;
 }
 
 export async function GET(
@@ -55,7 +35,7 @@ export async function GET(
 
     let documentBytes: Buffer;
     if (!snapshot && updates.length === 0) {
-      documentBytes = await createBlankSnapshot(projectId);
+      documentBytes = (await compactProjectAndScenes(projectId)).document;
     } else if (updates.length === 0) {
       documentBytes = snapshot!;
     } else {

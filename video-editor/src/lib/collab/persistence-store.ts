@@ -1,96 +1,43 @@
-// lib/collab/persistence-store.ts
-
-// Server-side only. Distinct from src/features/editor/collab/persistence.ts,
-// which is the client-side fetch helper — this one talks to Kysely directly
-// and is shared by the Next API routes and the websocket server (same
-// process, see server.ts).
-
-import { db } from "@/lib/db";
+import { sql, type RawBuilder } from "kysely";
 import * as Y from "yjs";
-import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
-import { compactBlockFromStorage, withBlockSnapshotLock } from "@/lib/collab/block-persistence-store";
+import { db } from "@/lib/db";
+import type { CollabTarget } from "@/features/editor/collab/collab-target";
+import { liveDocuments } from "./live-rooms";
+import { withProjectSnapshotLock } from "./snapshot-lock";
 
-export async function compactProject(projectId: string, extraUpdate?: Uint8Array): Promise<string | undefined> {
-  const snapshotRow = await db
-    .selectFrom("project_yjs_snapshots")
-    .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")
-    .where("project_yjs_snapshots.project_id", "=", projectId)
-    .orderBy("yjs_snapshots.created_at", "desc")
-    .select(["yjs_snapshots.document"])
-    .executeTakeFirst();
+interface StoredDocument {
+  kind: CollabTarget["kind"];
+  id: string;
+  snapshot_id: number | null;
+  snapshot_at: Date | null;
+  document: Buffer | null;
+  update_ids: number[];
+  updates: Buffer[];
+}
 
-  const updateRows = await db
-    .selectFrom("project_yjs_updates")
-    .innerJoin("yjs_updates", "yjs_updates.yjs_update_id", "project_yjs_updates.yjs_update_id")
-    .where("project_yjs_updates.project_id", "=", projectId)
-    .orderBy("yjs_updates.created_at", "asc")
-    .select(["yjs_updates.update", "project_yjs_updates.yjs_update_id"])
-    .execute();
-
-  if (!snapshotRow && updateRows.length === 0 && !extraUpdate) return;
-
-  const doc = new Y.Doc({ gc: false });
-  if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
-  for (const row of updateRows) Y.applyUpdate(doc, row.update);
-  if (extraUpdate) Y.applyUpdate(doc, extraUpdate);
-
-  const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
-
-  // meta.duration is written in ms (see mirror-out.ts / ydoc-schema.ts);
-  // projects.duration_seconds wants seconds. projectName maps to
-  // projects.name; width/height come out of meta.size, not separate keys.
-  const meta = doc.getMap("meta");
-  const durationMs = meta.get("duration") as number | undefined;
-  const durationSeconds =
-    typeof durationMs === "number" ? Math.floor(durationMs / 1000) : undefined;
-  const name = meta.get("projectName") as string | undefined;
-  const size = meta.get("size") as { width?: number; height?: number } | undefined;
-  const width = size?.width;
-  const height = size?.height;
-
-  doc.destroy();
-
-  return db.transaction().execute(async (trx) => {
-    const newSnapshot = await trx
-      .insertInto("yjs_snapshots")
-      .values({ document: compacted })
-      .returning(["yjs_snapshot_id"])
-      .executeTakeFirstOrThrow();
-
-    await trx
-      .insertInto("project_yjs_snapshots")
-      .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, project_id: projectId })
-      .execute();
-
-    type ProjectSync = Partial<{
-      name: string;
-      width: number;
-      height: number;
-      duration_seconds: number;
-      updated_at: Date;
-    }>;
-
-    const projectUpdate: ProjectSync = {};
-    if (typeof name === "string") projectUpdate.name = name;
-    if (typeof width === "number") projectUpdate.width = width;
-    if (typeof height === "number") projectUpdate.height = height;
-    if (durationSeconds !== undefined) projectUpdate.duration_seconds = durationSeconds;
-
-    if (Object.keys(projectUpdate).length > 0) {
-      await trx
-        .updateTable("projects")
-        .set({ ...projectUpdate, updated_at: new Date() })
-        .where("project_id", "=", projectId)
-        .execute();
-    }
-
-    const idsToTrim = updateRows.map((r) => r.yjs_update_id);
-    if (idsToTrim.length) {
-      await trx.deleteFrom("project_yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
-      await trx.deleteFrom("yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
-    }
-    return String(newSnapshot.yjs_snapshot_id);
-  });
+// A single statement reads the latest snapshot and every still-pending update.
+// Only updates actually captured by a compaction are removed.
+function documentQuery(kind: CollabTarget["kind"], documents: RawBuilder<unknown>) {
+  const key = sql.ref(`link.${kind}_id`);
+  return sql<StoredDocument>`
+    SELECT ${kind}::text AS kind, docs.id, snapshot.snapshot_id, snapshot.snapshot_at, snapshot.document,
+           pending.update_ids, pending.updates
+    FROM (${documents}) docs
+    LEFT JOIN LATERAL (
+      SELECT s.yjs_snapshot_id AS snapshot_id, s.created_at AS snapshot_at, s.document
+      FROM ${sql.table(`${kind}_yjs_snapshots`)} link
+      JOIN yjs_snapshots s ON s.yjs_snapshot_id = link.yjs_snapshot_id
+      WHERE ${key} = docs.id
+      ORDER BY s.created_at DESC, s.yjs_snapshot_id DESC LIMIT 1
+    ) snapshot ON true
+    CROSS JOIN LATERAL (
+      SELECT COALESCE(array_agg(u.yjs_update_id ORDER BY u.yjs_update_id), '{}') AS update_ids,
+             COALESCE(array_agg(u.update ORDER BY u.yjs_update_id), '{}') AS updates
+      FROM ${sql.table(`${kind}_yjs_updates`)} link
+      JOIN yjs_updates u ON u.yjs_update_id = link.yjs_update_id
+      WHERE ${key} = docs.id
+    ) pending
+  `;
 }
 
 export interface PersistedState {
@@ -98,49 +45,124 @@ export interface PersistedState {
   updates: Buffer[];
 }
 
-// compactProject always deletes exactly what it
-// merges, in the same transaction that writes the new snapshot row, so
-// no row it has processed is ever left behind. The periodic room-doc
-// checkpoint (websocket/collab.ts) is a second snapshot writer that
-// never deletes from yjs_updates at all — its snapshots can already
-// include content some still-present update row also carries. Either
-// way, "current state" is: newest snapshot + everything still on the
-// table, safely re-applied — Yjs updates are idempotent, so replaying
-// an update already folded into the snapshot is a no-op, not corruption.
-// No timestamp filtering needed.
-export async function loadLatestProjectState(projectId: string): Promise<PersistedState> {
-  const snapshotRow = await db
-    .selectFrom("project_yjs_snapshots")
-    .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")
-    .where("project_yjs_snapshots.project_id", "=", projectId)
-    .orderBy("yjs_snapshots.created_at", "desc")
-    .select(["yjs_snapshots.document"])
-    .executeTakeFirst();
-
-  const updateRows = await db
-    .selectFrom("project_yjs_updates")
-    .innerJoin("yjs_updates", "yjs_updates.yjs_update_id", "project_yjs_updates.yjs_update_id")
-    .where("project_yjs_updates.project_id", "=", projectId)
-    .orderBy("yjs_updates.created_at", "asc")
-    .select(["yjs_updates.update"])
-    .execute();
-
-  return {
-    snapshot: snapshotRow?.document ?? null,
-    updates: updateRows.map((r) => r.update),
-  };
+async function loadDocument(kind: CollabTarget["kind"], id: string): Promise<PersistedState> {
+  const { rows: [state] } = await documentQuery(kind, sql`SELECT ${id}::uuid AS id`).execute(db);
+  return { snapshot: state.document, updates: state.updates };
 }
 
-export async function compactProjectAndScenes(projectId: string): Promise<void> {
-  await withProjectSnapshotLock(projectId, () => compactProject(projectId));
+export const loadLatestProjectState = (id: string) => loadDocument("project", id);
+export const loadLatestBlockState = (id: string) => loadDocument("block", id);
 
-  const blocks = await db
-    .selectFrom("blocks")
-    .where("project_id", "=", projectId)
-    .select(["block_id"])
-    .execute();
+function compactDocument(state: StoredDocument, live: Uint8Array | undefined, extra?: Uint8Array) {
+  if (state.document && !state.updates.length && !live && !extra) return state.document;
+  const doc = new Y.Doc({ gc: false });
+  try {
+    if (state.document) Y.applyUpdate(doc, state.document);
+    for (const update of state.updates) Y.applyUpdate(doc, update);
+    if (live) Y.applyUpdate(doc, live);
+    if (extra) Y.applyUpdate(doc, extra);
+    return Buffer.from(Y.encodeStateAsUpdate(doc));
+  } finally {
+    doc.destroy();
+  }
+}
 
-  await Promise.all(
-    blocks.map((b) => withBlockSnapshotLock(b.block_id, () => compactBlockFromStorage(b.block_id))),
-  );
+function projectMetadata(document: Buffer) {
+  const doc = new Y.Doc({ gc: false });
+  try {
+    Y.applyUpdate(doc, document);
+    const meta = doc.getMap("meta");
+    const name = meta.get("projectName");
+    const size = meta.get("size") as { width?: number; height?: number } | undefined;
+    const duration = meta.get("duration");
+    return {
+      name: typeof name === "string" ? name : undefined,
+      width: typeof size?.width === "number" ? size.width : undefined,
+      height: typeof size?.height === "number" ? size.height : undefined,
+      duration_seconds: typeof duration === "number" ? Math.floor(duration / 1000) : undefined,
+    };
+  } finally {
+    doc.destroy();
+  }
+}
+
+export async function checkpointAfterUpdates(projectId: string, target: CollabTarget) {
+  const countRows = db.fn.countAll().as("count");
+  const query = target.kind === "project"
+    ? db.selectFrom("project_yjs_updates").where("project_id", "=", target.id).select(countRows)
+    : db.selectFrom("block_yjs_updates").where("block_id", "=", target.id).select(countRows);
+  const { count } = await query.executeTakeFirstOrThrow();
+  if (Number(count) >= 200) await compactProjectAndScenes(projectId);
+}
+
+interface CaptureOptions {
+  supplied?: { target: CollabTarget; update: Uint8Array };
+}
+
+export function compactProjectAndScenes(projectId: string, { supplied }: CaptureOptions = {}) {
+  return withProjectSnapshotLock(projectId, () => db.transaction().execute(async trx => {
+    await sql`SELECT pg_advisory_xact_lock(hashtext(${`project-save:${projectId}`}))`.execute(trx);
+    const project = documentQuery("project", sql`SELECT ${projectId}::uuid AS id`);
+    const blocks = documentQuery("block", sql`
+      SELECT block_id AS id FROM blocks WHERE project_id = ${projectId} AND deleted_at IS NULL
+    `);
+    // Keep the cutoff in Postgres precision. It must advance even if two
+    // checkpoints occur in one millisecond or the wall clock moves backwards.
+    const { rows } = await sql<StoredDocument & { capture_at: string; newer_than_root: boolean }>`
+      SELECT docs.*,
+             greatest(statement_timestamp()::timestamp, max(snapshot_at) OVER () + interval '1 microsecond')::text AS capture_at,
+             snapshot_at > max(snapshot_at) FILTER (WHERE kind = 'project') OVER () AS newer_than_root
+      FROM (
+        SELECT * FROM (${project}) project_state
+        UNION ALL
+        SELECT * FROM (${blocks}) block_states
+      ) docs
+    `.execute(trx);
+    if (supplied && !rows.some(row => row.kind === supplied.target.kind && row.id === supplied.target.id)) {
+      throw new Error("The current document does not belong to this project");
+    }
+    // Capture all hydrated rooms in one event-loop turn, before any DB writes.
+    const captured = rows.map(state => {
+      const live = liveDocuments.get(`${state.kind}:${state.id}`);
+      const extra = supplied?.target.kind === state.kind && supplied.target.id === state.id ? supplied.update : undefined;
+      const document = compactDocument(state, live && Y.encodeStateAsUpdate(live), extra);
+      return { state, document, unchanged: state.document?.equals(document) === true };
+    });
+    const root = captured.find(({ state }) => state.kind === "project")!;
+    let sceneChanged = false;
+    const writeSnapshot = (document: Buffer) =>
+      trx.insertInto("yjs_snapshots")
+        .values(eb => ({ document, created_at: eb.cast<Date>(eb.val(root.state.capture_at), "timestamp") }))
+        .returning(["yjs_snapshot_id", "created_at"]).executeTakeFirstOrThrow();
+
+    for (const { state, document, unchanged } of captured) {
+      if (state.update_ids.length) {
+        if (state.kind === "project") {
+          await trx.deleteFrom("project_yjs_updates").where("yjs_update_id", "in", state.update_ids).execute();
+        } else {
+          await trx.deleteFrom("block_yjs_updates").where("yjs_update_id", "in", state.update_ids).execute();
+        }
+        await trx.deleteFrom("yjs_updates").where("yjs_update_id", "in", state.update_ids).execute();
+      }
+      if (state.kind === "project") continue;
+      if (state.newer_than_root) sceneChanged = true;
+      if (unchanged) continue;
+      const snapshot = await writeSnapshot(document);
+      await trx.insertInto("block_yjs_snapshots")
+        .values({ block_id: state.id, yjs_snapshot_id: snapshot.yjs_snapshot_id }).execute();
+      sceneChanged = true;
+    }
+
+    if (root.unchanged && !sceneChanged && root.state.snapshot_id !== null && root.state.snapshot_at) {
+      return { snapshotId: root.state.snapshot_id, createdAt: root.state.snapshot_at, created: false, document: root.document };
+    }
+
+    const snapshot = await writeSnapshot(root.document);
+    const snapshotId = snapshot.yjs_snapshot_id;
+    await trx.insertInto("project_yjs_snapshots")
+      .values({ project_id: projectId, yjs_snapshot_id: snapshotId }).execute();
+    await trx.updateTable("projects").set({ ...projectMetadata(root.document), updated_at: new Date() })
+      .where("project_id", "=", projectId).execute();
+    return { snapshotId, createdAt: snapshot.created_at, created: true, document: root.document };
+  }));
 }

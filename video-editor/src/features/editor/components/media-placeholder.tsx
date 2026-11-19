@@ -1,6 +1,47 @@
 import { Loader2 } from "lucide-react";
 import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
 import { useCurrentScale } from "remotion";
+import { useQuery } from "@tanstack/react-query";
+import type { IImage, IVideo } from "@designcombo/types";
+import { useObjectUrl, useVideoPoster } from "../hooks/use-media-poster";
+import useUploadStore from "../store/use-upload-store";
+
+type VisualMedia = IImage | IVideo;
+
+function LoadingThumbnail({ item }: { item: VisualMedia }) {
+  const metadata = item.metadata;
+  const assetId = metadata?.market_asset_id;
+  const mediaId = metadata?.media_asset_id;
+  const market = !!(metadata?.market || assetId);
+  const [failedUrls, setFailedUrls] = useState<ReadonlySet<string>>(() => new Set());
+  const candidates = [metadata?.previewUrl, item.preview];
+  const thumbnail = candidates.find((url): url is string => typeof url === "string" && !!url && !failedUrls.has(url) &&
+    (!market || /\/assets\/thumbnails\//.test(url)));
+  const { data: resolvedThumbnail } = useQuery({
+    queryKey: ["market-thumbnail", assetId, mediaId, item.type],
+    enabled: !thumbnail && !!assetId && !!mediaId,
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({ mediaAssetId: String(mediaId), type: item.type });
+      const response = await fetch(`/api/market-assets/${encodeURIComponent(String(assetId))}/thumbnail?${params}`, { signal });
+      if (!response.ok) return null;
+      const { url } = await response.json();
+      return typeof url === "string" ? url : null;
+    },
+  });
+
+  const pendingId = item.details.src.startsWith("pending-upload:") ? item.details.src.slice("pending-upload:".length) : null;
+  const file = useUploadStore(state => pendingId
+    ? (state.activeUploads.find(upload => upload.id === pendingId) ?? state.pendingUploads.find(upload => upload.id === pendingId))?.file
+    : undefined);
+  const localUrl = useObjectUrl(file);
+  const src = thumbnail || resolvedThumbnail || localUrl;
+  const videoPreview = item.type === "video" && (src === localUrl || /\.mp4(?:[?#]|$)/i.test(src || ""));
+  const poster = useVideoPoster(videoPreview ? src : undefined);
+  const image = videoPreview ? poster : src;
+  if (!image || failedUrls.has(image)) return null;
+  return <img src={image} alt="" draggable={false} onError={() => setFailedUrls(previous => new Set(previous).add(image))}
+    className="absolute inset-0 size-full object-cover opacity-50" />;
+}
 
 export const CanvasPreviewZoomContext = createContext(1);
 
@@ -8,7 +49,8 @@ const SCENE_PATTERN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns=
 export function MediaPlaceholder({
   missing = false,
   failed = false,
-}: { missing?: boolean; failed?: boolean }) {
+  item,
+}: { missing?: boolean; failed?: boolean; item?: VisualMedia }) {
   const loading = !missing && !failed;
   const ref = useRef<HTMLOutputElement>(null);
   const [scale, setScale] = useState(1);
@@ -41,27 +83,31 @@ export function MediaPlaceholder({
   return (
     <output
       ref={ref}
-      className={loading ? "opacity-50" : undefined}
       style={{
         position: "absolute",
         inset: 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8 / scale,
-        backgroundColor: loading ? "var(--primary)" : "#27272a",
+        backgroundColor: loading ? "transparent" : "#27272a",
         backgroundImage: loading ? "none" : SCENE_PATTERN,
         backgroundSize: `${12 / scale}px ${12 / scale}px`,
         boxShadow: loading ? "none" : "inset 0 0 0 99999px rgba(0,0,0,0.25)",
-        color: loading ? "var(--primary-foreground)" : "#d4d4d8",
+        color: loading ? "white" : "#d4d4d8",
         fontFamily: "var(--font-plus-jakarta-sans), sans-serif",
         fontSize: 14 / scale,
         fontWeight: 500,
         pointerEvents: "none",
       }}
     >
-      {loading && <Loader2 className="animate-spin" size={16 / scale} style={{ flexShrink: 0 }} />}
-      {missing ? "Missing media" : failed ? "Unable to load media" : "Loading media…"}
+      {loading && item && <LoadingThumbnail item={item} />}
+      <span className="relative inline-flex items-center" style={{
+        gap: 8 / scale,
+        filter: loading ? `drop-shadow(0 0 ${2 / scale}px black)` : undefined,
+      }}>
+        {loading && <Loader2 className="shrink-0 animate-spin" size={16 / scale} />}
+        {missing ? "Missing media" : failed ? "Unable to load media" : "Loading media…"}
+      </span>
     </output>
   );
 }

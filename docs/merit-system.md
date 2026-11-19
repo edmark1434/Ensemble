@@ -16,7 +16,9 @@ Platform Merit = clamp(100 − active warning points, 0, 100)
 
 Active warning points are the same sum the backend already uses: unrescinded `violations` rows whose `expires_at` is still in the future (or has no expiry yet). Expired, rescinded, pardoned, and deleted rows do not deduct merit.
 
-When a warning expires or is rescinded, merit comes back by itself. Completions, reviews, verification, credits, and subscriptions never change merit.
+When a warning expires or is rescinded, merit comes back by itself. Admin and Support can also **lift points** (a number of points, or up to a target merit) without deleting the warnings; the Record shows how much was lifted. Completions, reviews, verification, credits, and subscriptions never change merit.
+
+**Merit triggers punishments; punishments do not follow merit.** When a warning takes merit down to a threshold level, that level's punishment starts and runs a fixed number of days (seeded: 60 Limited 1d, 55 Mute 1d, 50 Mute 2d, 45 Restricted 2d, 40 Frozen access 3d, 30 suspend 3d, 20 suspend 7d; nothing automatic above 60). It runs its full time even if merit recovers, and it never changes merit. Lower levels carry harsher punishments, so they add up as merit keeps dropping. See [warning-system.md](warning-system.md) §8.
 
 ---
 
@@ -30,17 +32,17 @@ When a warning expires or is rescinded, merit comes back by itself. Completions,
 | Public chips | Banned / Suspended / Locked / Timeout / Under dispute. Not the merit band name, not warning text. |
 | Staff desks | Warning points, catalog, thresholds. Not this display name. |
 
-Display bands (from remaining merit):
+Display tiers (from remaining merit), cut at the seeded punishment levels. They describe the number only and never name a punishment, because punishments run on their own clocks:
 
-| Merit | Label |
-|---|---|
-| **100** | Trusted |
-| **98–99** | Record |
-| **93–97** | Limited |
-| **85–92** | Restricted |
-| **84 and below** | Frozen |
+| Merit | Label | Seeded levels inside it |
+|---|---|---|
+| **100** | Trusted | — |
+| **80–99** | Good | none |
+| **61–79** | Fair | none |
+| **41–60** | Low | Limited (60), Mute (55, 50), Restricted (45) |
+| **40 and below** | Very low | Frozen access (40), suspensions (30, 20) |
 
-Product locks still follow backend warning-point thresholds. The ring is the user-facing number for those same points.
+What is actually paused comes from the running automatic punishments. The owner sees them under their merit ring and on the Record ("Running now: Mute until …", or "No limits running"); staff see them next to merit on every desk. Visitors see the tier only.
 
 ---
 
@@ -59,4 +61,5 @@ Product locks still follow backend warning-point thresholds. The ring is the use
 - Display helper: `frontend/src/lib/merit.ts`
 - Derived on standing: `getPublicAccountStanding` / `getOwnAccountRecord` in `backend/lib/AccountRestriction.js`
 - Source points: `sumActiveWarningPoints` in `backend/repositories/WarningBandRepositories.js`
+- Punishments merit triggers: `backend/services/MeritPenaltyServices.js` (`merit_penalties`)
 - Engine and staff contract: [warning-system.md](warning-system.md)

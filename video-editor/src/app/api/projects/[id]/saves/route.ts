@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
-import { createProjectSave, listProjectSaves, ProjectSaveError, SAVE_UUID, savesUpgradeUrl } from "@/lib/project-saves";
+import { createProjectSave, listProjectSaves, ProjectSaveError, SAVE_UUID, isSaveId, savesUpgradeUrl } from "@/lib/project-saves";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: "Sign in to view saves." }, { status: 401, headers });
   const { id } = await params;
   const before = request.nextUrl.searchParams.get("before");
-  if (!SAVE_UUID.test(id) || (before !== null && !SAVE_UUID.test(before))) {
+  if (!SAVE_UUID.test(id) || (before !== null && !isSaveId(before))) {
     return NextResponse.json({ error: "Invalid project or save." }, { status: 400, headers });
   }
   try {

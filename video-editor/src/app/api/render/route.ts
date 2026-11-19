@@ -1,17 +1,7 @@
-import { renderServerHeaders } from "@/lib/render-server";
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
-import { MARKET_UUID, marketAssetBackend } from "@/lib/market-asset-backend";
-import { collectMarketExportItems } from "@/features/editor/utils/market-export-assets";
-import { getVideoExportBitrateError } from "@/lib/export-bitrate";
-import { missingUploadSources } from "@/lib/db/upload-usage";
-import { mediaSources } from "@/features/editor/utils/media-sources";
-import { getVideoUploadPolicy } from "@/lib/upload-policy";
-import { getExportPlanError } from "@/lib/export-plan-policy";
-import { PlanConfigurationError } from "@/lib/plan-feature-values";
-
-const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL || "http://localhost:3001";
+import { submitRender } from "@/lib/submit-render";
 
 export async function POST(request: NextRequest) {
   if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
@@ -20,53 +10,9 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ message: "Sign in to export." }, { status: 401 });
   try {
     const body = await request.json();
-    if (!Array.isArray(body?.trackItemIds) || !body?.trackItemsMap) return NextResponse.json({ message: "Invalid export." }, { status: 400 });
-    const policy = await getVideoUploadPolicy(session.userId);
-    const planError = getExportPlanError(body, policy);
-    if (planError) return NextResponse.json({ message: planError.message }, { status: planError.status });
-    // The exporting user's current subscription is authoritative, never a
-    // collaborator's tier or a saved/client-provided watermark flag.
-    body.ensembleWatermark = body.type !== "audio" &&
-      (!policy.canRemoveEnsembleWatermark || body.ensembleWatermark !== false);
-    const renderHeaders = await renderServerHeaders(session.userId, true);
-    if (body.type !== "audio") {
-      // Older renderers either strip the overlay or enforce hardcoded tiers.
-      const capabilityResponse = await fetch(`${RENDER_SERVER_URL}/renders/capabilities`, {
-        headers: renderHeaders, cache: "no-store",
-      });
-      const capabilities = capabilityResponse.ok ? await capabilityResponse.json() : null;
-      if (capabilities?.ensembleWatermark !== true || capabilities?.ensembleWatermarkPlanFeatures !== true) return NextResponse.json({
-        message: "Watermark settings are temporarily unavailable. Please try again later.",
-      }, { status: 503 });
-    }
-    const bitrateError = getVideoExportBitrateError(body);
-    if ((await missingUploadSources(mediaSources(body, 0, false))).length) return NextResponse.json({ message: "This export contains missing media. Replace or remove the deleted uploads before exporting." }, { status: 422 });
-    if (bitrateError) return NextResponse.json({ message: bitrateError }, { status: 400 });
-    const items = collectMarketExportItems(body);
-    if (items.length && (!MARKET_UUID.test(body.projectId || "") || typeof body.marketDraft !== "boolean")) return NextResponse.json({ message: "Project and export mode are required." }, { status: 400 });
-    const sources = new Map<string, string>();
-    for (const item of items) {
-      const metadata = item.metadata as { market_asset_id: string; media_asset_id: string };
-      if (!MARKET_UUID.test(metadata.market_asset_id) || !MARKET_UUID.test(metadata.media_asset_id || "")) return NextResponse.json({ message: "Invalid marketplace asset." }, { status: 400 });
-      const key = `${metadata.market_asset_id}:${metadata.media_asset_id}`;
-      if (!sources.has(key)) {
-        const result = await marketAssetBackend(request, metadata.market_asset_id, {
-          action: "render-source", projectId: body.projectId, mediaAssetId: metadata.media_asset_id, draft: body.marketDraft,
-        });
-        if (result.status !== 200 || !result.data.sourceUrl) return NextResponse.json({ message: result.data.error || "Unable to prepare marketplace media." }, { status: result.status === 200 ? 502 : result.status });
-        sources.set(key, result.data.sourceUrl);
-      }
-      // Only this job copy changes; protected URLs never enter project history.
-      item.details.src = sources.get(key)!;
-    }
-    const response = await fetch(`${RENDER_SERVER_URL}/renders`, {
-      method: "POST", headers: { "Content-Type": "application/json", ...renderHeaders },
-      body: JSON.stringify(body),
-    });
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status, headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
-    if (error instanceof PlanConfigurationError) return NextResponse.json({ message: error.message }, { status: 503 });
-    return NextResponse.json({ message: "Unable to prepare the export. Please try again." }, { status: 500 });
+    delete body.portfolioFrameRange;
+    return submitRender(request, session.userId, body);
+  } catch {
+    return NextResponse.json({ message: "Invalid export." }, { status: 400 });
   }
 }

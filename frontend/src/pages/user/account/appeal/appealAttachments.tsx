@@ -145,7 +145,7 @@ export function releasePendingFiles(files: PendingFile[]) {
 export function SendingAttachments({ files }: { files: PendingFile[] }) {
   if (!files.length) return null;
   return (
-    <div className="mt-1.5 flex flex-wrap justify-end gap-2">
+    <div className="mt-2 flex flex-wrap gap-2">
       {files.map((item) =>
         item.previewUrl ? (
           <img

@@ -204,7 +204,7 @@ export function UserSettingsWallet() {
   const navigate = useNavigate();
   const restriction = useGlobalState((state) => state.user?.restriction);
   const holdConditions = useMemo(
-    () => standingConditions(restriction).filter((condition) => condition.id === "credit_hold" || condition.id === "frozen_access" || condition.id === "suspended"),
+    () => standingConditions(restriction).filter((condition) => condition.id === "credit_hold" || (condition.id === "merit_limits" && condition.band === "frozen") || condition.id === "suspended"),
     [restriction]
   );
 

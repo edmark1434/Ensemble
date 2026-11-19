@@ -566,11 +566,14 @@ async function getListingSellerContext(accountId) {
   ]);
   const row = accountResult.rows[0];
   if (!row) return null;
+  const { runningPunishmentsFor } = require('../services/MeritPenaltyServices');
+  const meritPenalties = await runningPunishmentsFor(accountId).catch(() => []);
   return {
     accountId: row.account_id,
     status: row.status || 'active',
     joinedAt: row.created_at || null,
     merit: meritFromWarningPoints(warningPoints),
+    meritPenalties,
     listings: {
       total: Number(row.total || 0),
       approved: Number(row.approved || 0),
@@ -746,6 +749,8 @@ async function getSellerMarketplaceListings(accountId) {
     delisted: listings.filter((l) => l.status === 'delisted').length,
   };
 
+  const { runningPunishmentsFor } = require('../services/MeritPenaltyServices');
+  const meritPenalties = await runningPunishmentsFor(account.account_id).catch(() => []);
   return {
     account: {
       accountId: account.account_id,
@@ -753,6 +758,7 @@ async function getSellerMarketplaceListings(accountId) {
       handle: account.handle || '—',
       status: account.status || 'active',
       merit: meritFromWarningPoints(warningPoints),
+      meritPenalties,
     },
     counts,
     listings,

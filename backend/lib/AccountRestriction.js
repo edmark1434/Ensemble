@@ -2,8 +2,10 @@ const { pool } = require('./Database');
 const redisClient = require('./Redis');
 
 const {
-  ACTION_MESSAGES,
+  NO_BAND,
   actionAllowed,
+  bandActionMessage,
+  muteActionMessage,
   warningDurationDays,
   clampDurationDays,
   bandForPoints,
@@ -17,6 +19,7 @@ const BLOCKING_CODES = {
   locked: 'ACCOUNT_LOCKED',
   deleted: 'ACCOUNT_DELETED',
   forumTimeout: 'FORUM_TIMEOUT',
+  muted: 'WARNING_MUTED',
   warningFrozen: 'WARNING_FROZEN',
 };
 
@@ -221,6 +224,8 @@ const EXPIRED_STANDING_SQL = `
  * @returns {Promise<{ accountId: string, previousStatus: string }[]>}
  */
 async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
+  const { clearAutoSuspendSql } = require('./SchemaFeatures');
+  const clearAutoSuspend = await clearAutoSuspendSql();
   const result = await pool.query(
     `
     WITH expired AS (
@@ -237,6 +242,7 @@ async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
         suspension_ends_at = NULL,
         ban_ends_at = NULL,
         lock_ends_at = NULL
+        ${clearAutoSuspend}
     FROM expired e
     WHERE a.account_id = e.account_id
     RETURNING a.account_id, e.status AS previous_status, a.status AS next_status
@@ -290,8 +296,9 @@ async function liftExpiredSuspension(accountId) {
 }
 
 /**
- * Background sweep: lift expired bans, locks and suspensions, and expire lapsed warnings so
- * warning bands drop on time instead of on the member's next request.
+ * Background sweep: lift expired bans, locks and suspensions, expire lapsed warnings (merit
+ * recovers on time instead of on the member's next request), and close automatic punishments
+ * whose clock ran out.
  */
 async function reconcileExpiredStandings({ limit = 100 } = {}) {
   const lifted = await liftExpiredStandings({ limit });
@@ -325,6 +332,14 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
       console.warn('Warning band refresh skipped:', err.message)
     );
   }
+  // Automatic punishments end on their own clock, never because merit recovered.
+  let meritPenaltiesEnded = 0;
+  try {
+    const { sweepElapsedMeritPenalties } = require('../services/MeritPenaltyServices');
+    meritPenaltiesEnded = await sweepElapsedMeritPenalties({ limit: limit * 2 });
+  } catch (err) {
+    console.warn('Merit punishment sweep skipped:', err.message);
+  }
   // Credit holds with an end date (including ones an accepted appeal shortened to 24 hours).
   let creditHoldsReleased = 0;
   try {
@@ -333,7 +348,12 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
   } catch (err) {
     console.warn('Credit hold release skipped:', err.message);
   }
-  return { lifted: lifted.length, warningsExpired: lapsed.rowCount || 0, creditHoldsReleased };
+  return {
+    lifted: lifted.length,
+    warningsExpired: lapsed.rowCount || 0,
+    meritPenaltiesEnded,
+    creditHoldsReleased,
+  };
 }
 
 function warningExpiry({ durationDays, points } = {}) {
@@ -361,44 +381,6 @@ async function activeForumTimeout(accountId) {
   return result.rows[0]?.ends_at || (result.rows.length ? null : undefined);
 }
 
-/** Each active warning's weight and expiry, to work out when the current band lifts. */
-async function activeWarningClock(accountId) {
-  const result = await pool.query(
-    `
-    SELECT ${WARNING_POINTS_SQL} AS points, expires_at
-    FROM violations
-    WHERE account_id = $1
-      AND deleted_at IS NULL
-      AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
-      AND (expires_at IS NULL OR expires_at > NOW())
-    `,
-    [accountId]
-  );
-  return result.rows.map((row) => ({
-    points: Number(row.points || 0),
-    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
-  }));
-}
-
-/**
- * When points drop below the floor of the current band, assuming no new warnings. Null when
- * there is no band, or a warning with no expiry keeps the account in it.
- */
-function warningBandLiftsAt(rows, band) {
-  if (!band || !band.id || band.id === 'none') return null;
-  const floor = Number(band.min) || 0;
-  let points = rows.reduce((sum, row) => sum + row.points, 0);
-  if (points < floor) return null;
-  const permanent = rows.filter((row) => !row.expiresAt).reduce((sum, row) => sum + row.points, 0);
-  if (permanent >= floor) return null;
-  const timed = rows.filter((row) => row.expiresAt).sort((a, b) => a.expiresAt - b.expiresAt);
-  for (const row of timed) {
-    points -= row.points;
-    if (points < floor) return row.expiresAt;
-  }
-  return null;
-}
-
 async function loadCreditHold(accountId) {
   try {
     const { getAccountCreditHold } = require('../repositories/CreditHoldRepositories');
@@ -411,9 +393,14 @@ async function loadCreditHold(accountId) {
 
 function frozenAccessMessage(endsAt) {
   const when = formatWhen(endsAt);
-  return `Frozen access: your Platform Merit is low, so proposals, new messages, cash out, new jobs, gigs, listings and forum posts are paused${
-    when ? ` until ${when}, when the warnings behind it expire` : ' until the warnings behind it expire'
-  }. Live contracts and existing threads stay open.`;
+  return `Frozen access: your Platform Merit dropped low, so proposals, new messages, cash out, new jobs, gigs, listings and forum posts are paused${
+    when ? ` until ${when}` : ''
+  }. It runs its full time, even if your merit recovers. Live contracts and existing threads stay open.`;
+}
+
+function muteMessage(endsAt) {
+  const when = formatWhen(endsAt);
+  return `You are muted${when ? ` until ${when}` : ''} because your Platform Merit dropped: forum posts, marketplace comments and new conversations are paused. Existing job, gig and contract threads stay open.`;
 }
 
 function emptyAccess() {
@@ -428,10 +415,13 @@ function emptyAccess() {
     reactivationAvailableAt: null,
     reactivationReady: true,
     forumTimeout: false,
+    muted: false,
+    mutedUntil: null,
     warningFrozen: false,
     warningPoints: 0,
     warningBand: 'none',
     merit: meritFromWarningPoints(0),
+    meritPenalties: [],
     suspensionEndsAt: null,
     banEndsAt: null,
     lockEndsAt: null,
@@ -510,18 +500,28 @@ async function getAccountAccess(accountId) {
   } catch (err) {
     console.warn('Could not load warning points:', err.message);
   }
-  const warningBand = bandForPoints(member ? warningPoints : 0);
-  const warningFrozen = member && warningBand.id === 'frozen' && normalized === 'active';
-  const [creditHold, warningRows] = await Promise.all([
+  // Bands and mutes are timed punishments with their own clocks (merit_penalties). Before that
+  // migration runs, the band still follows points live and has no end date.
+  const { EMPTY_PUNISHMENTS, getActiveMeritPunishments } = require('../services/MeritPenaltyServices');
+  const [creditHold, punishments] = await Promise.all([
     loadCreditHold(accountId),
-    member && warningBand.id !== 'none'
-      ? activeWarningClock(accountId).catch((err) => {
-          console.warn('Could not load warning expiries:', err.message);
-          return [];
+    member
+      ? getActiveMeritPunishments(accountId).catch((err) => {
+          console.warn('Could not load merit punishments:', err.message);
+          return { ...EMPTY_PUNISHMENTS };
         })
-      : [],
+      : { ...EMPTY_PUNISHMENTS },
   ]);
-  const warningBandEndsAt = warningBandLiftsAt(warningRows, warningBand);
+  const warningBand = !member
+    ? { ...NO_BAND }
+    : punishments.ready
+      ? punishments.band
+      : bandForPoints(warningPoints);
+  const warningFrozen = member && warningBand.id === 'frozen' && normalized === 'active';
+  const warningBandEndsAt = warningBand.endsAt || null;
+  const mute = member ? punishments.mute : null;
+  const muted = Boolean(mute);
+  const mutedUntil = mute?.endsAt || null;
   const deactivated = normalized === 'deactivated' && member;
   const reactivationAvailableAt = row.reactivation_available_at || null;
   const reactivationReady = !deactivated
@@ -541,9 +541,11 @@ async function getAccountAccess(accountId) {
           ? BLOCKING_CODES.suspended
           : forumTimeout
             ? BLOCKING_CODES.forumTimeout
-            : warningFrozen
-              ? BLOCKING_CODES.warningFrozen
-              : null;
+            : muted
+              ? BLOCKING_CODES.muted
+              : warningFrozen
+                ? BLOCKING_CODES.warningFrozen
+                : null;
 
   return {
     status: displayStatus(normalized),
@@ -556,10 +558,14 @@ async function getAccountAccess(accountId) {
     reactivationAvailableAt: deactivated ? reactivationAvailableAt : null,
     reactivationReady,
     forumTimeout,
+    muted,
+    mutedUntil,
     warningFrozen,
     warningPoints,
     warningBand: warningBand.id,
     merit: meritFromWarningPoints(warningPoints),
+    // Every automatic punishment running now, strictest first, each with its own end.
+    meritPenalties: member ? punishments.list : [],
     suspensionEndsAt: row.suspension_ends_at || null,
     banEndsAt: banned ? row.ban_ends_at || null : null,
     lockEndsAt: locked ? row.lock_ends_at || null : null,
@@ -578,9 +584,11 @@ async function getAccountAccess(accountId) {
       ? blockMessage(normalized, { member, suspensionEndsAt: row.suspension_ends_at })
       : forumTimeout
         ? forumTimeoutMessage(forumTimeoutEndsAt)
-        : warningFrozen
-          ? frozenAccessMessage(warningBandEndsAt)
-          : null,
+        : muted
+          ? muteMessage(mutedUntil)
+          : warningFrozen
+            ? frozenAccessMessage(warningBandEndsAt)
+            : null,
     violations,
   };
 }
@@ -723,12 +731,42 @@ async function getPublicAccountStanding(accountId) {
   };
 }
 
+async function loadPunishmentHistory(accountId) {
+  try {
+    const { meritPenaltiesReady } = require('./SchemaFeatures');
+    if (!(await meritPenaltiesReady())) return [];
+    const { listMeritPenaltyHistory } = require('../repositories/MeritPenaltyRepositories');
+    const rows = await listMeritPenaltyHistory(accountId, { limit: 20 });
+    const { effectLabel } = require('./WarningBands');
+    return rows.map((row) => ({
+      id: row.id,
+      effect: row.effect,
+      label: effectLabel(row.effect),
+      durationDays: row.durationDays,
+      triggerMerit: row.triggerMerit,
+      meritAtStart: row.meritAtStart,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      endedAt: row.endedAt,
+      // Staff notes and names are never shown; only why it ended.
+      endReason: row.endReason,
+      running: !row.endedAt && new Date(row.endsAt).getTime() > Date.now(),
+    }));
+  } catch (err) {
+    console.warn('Could not load automatic punishments:', err.message);
+    return [];
+  }
+}
+
 async function getOwnAccountRecord(accountId) {
   const standing = await getPublicAccountStanding(accountId);
-  const [warnings, restrictions, activity] = await Promise.all([
+  const [warnings, restrictions, activity, punishments] = await Promise.all([
     pool.query(
       `
-      SELECT violation_id, violation_number, type, reason, points, status, created_at, expires_at
+      SELECT violation_id, violation_number, type, reason, points,
+             -- Read through jsonb so this works before the warning-lift migration too.
+             (to_jsonb(violations) ->> 'points_original')::int AS points_original,
+             status, created_at, expires_at
       FROM violations
       WHERE account_id = $1 AND deleted_at IS NULL
       ORDER BY created_at DESC
@@ -760,6 +798,9 @@ async function getOwnAccountRecord(accountId) {
             'VIOLATION_ISSUED',
             'WARNING_ISSUED',
             'WARNING_RESCINDED',
+            'WARNING_POINTS_LIFTED',
+            'MERIT_PENALTY_STARTED',
+            'MERIT_PENALTY_ENDED',
             'ACCOUNT_PARDONED',
             'APPEAL_DECISION'
           )
@@ -771,16 +812,19 @@ async function getOwnAccountRecord(accountId) {
       `,
       [accountId]
     ),
+    loadPunishmentHistory(accountId),
   ]);
 
   return {
     ...(standing || { status: 'Active', endsAt: null, forumTimeout: false, forumTimeoutEndsAt: null, merit: meritFromWarningPoints(0) }),
+    punishments,
     warnings: warnings.rows.map((row) => ({
       id: row.violation_id,
       number: row.violation_number,
       type: row.type,
       reason: row.reason,
       points: row.points,
+      originalPoints: row.points_original == null ? null : Number(row.points_original),
       status: row.status,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
@@ -815,6 +859,8 @@ const BANNED_READ_ALLOWLIST = [
   /^\/api\/users\/disputes$/,
   /^\/api\/users\/disputes\/[^/]+$/,
   /^\/api\/users\/cases\/summary$/,
+  // Each active penalty and its own appeal (per-penalty appeals).
+  /^\/api\/users\/appeals$/,
   /^\/api\/accounts\/disputes\/[^/]+$/,
 ];
 
@@ -943,6 +989,17 @@ const SUSPENDED_WRITE_ALLOWLIST = [
   /\/api\/users\/refresh-token(?:\?|$)/,
   /\/api\/notifications\/read-all(?:\?|$)/,
   /\/api\/notifications\/[^/]+\/read(?:\?|$)/,
+  // Reads that use POST: author names on forum and job pages, and chat read receipts.
+  // Refusing them broke browsing for suspended members (missing names, error toasts).
+  /\/api\/users\/list-of-details(?:\?|$)/,
+  /\/api\/inbox\/conversation\/[^/]+\/read(?:\?|$)/,
+  // Background housekeeping the inbox runs on open (group size sync); not a member action.
+  /\/api\/inbox\/[^/]+\/limit(?:\?|$)/,
+  // Leaving, ending or syncing a call that was already running when the suspension started.
+  /\/api\/google-meet\/meetings\/[^/]+\/(?:leave|end|sync)(?:\?|$)/,
+  // Securing the account and stopping charges are never blocked by a suspension.
+  /\/api\/users\/2fa\/(?:setup|enable|disable|regenerate-recovery-codes)(?:\?|$)/,
+  /\/api\/payment\/cancel-subscription(?:\?|$)/,
   // A suspended member may appeal. The ticket controller limits these two to the appeal
   // ticket type, exactly as it does for banned and locked members.
   /^\/api\/users\/tickets(?:\?|$)/,
@@ -992,20 +1049,35 @@ function rejectForumTimeout(req, res) {
     res.status(403).json({
       success: false,
       code: BLOCKING_CODES.forumTimeout,
-      message: req.accountAccess.message || FORUM_TIMEOUT_MESSAGE,
+      message: forumTimeoutMessage(req.accountAccess.forumTimeoutEndsAt),
       restriction: req.accountAccess,
     });
     return true;
   }
-  // Reporting is not posting: a Restricted or Frozen member can still report forum content.
-  // Only a staff timeout (above) blocks forum reports.
+  // Reporting is not posting: a muted, Restricted or Frozen member can still report forum
+  // content. Only a staff timeout (above) blocks forum reports.
   if (/^\/api\/forum\/reports(?:\/|$)/.test(requestPath(req))) return false;
+  if (req.accountAccess?.muted) {
+    res.status(403).json({
+      success: false,
+      // Same code as every other merit refusal, so the client explains it once and refreshes.
+      code: 'WARNING_RESTRICTED',
+      message: muteActionMessage('forum_write', { endsAt: req.accountAccess.mutedUntil }),
+      restriction: req.accountAccess,
+    });
+    return true;
+  }
   const warningBand = req.accountAccess?.warningBand;
   if (warningBand && !actionAllowed('forum_write', warningBand)) {
     res.status(403).json({
       success: false,
-      code: BLOCKING_CODES.warningFrozen,
-      message: ACTION_MESSAGES.forum_write,
+      // Same code as every other merit-band refusal (WarningBandServices); this fires for
+      // Restricted as well as Frozen access, so WARNING_FROZEN was misleading.
+      code: 'WARNING_RESTRICTED',
+      message: bandActionMessage('forum_write', {
+        id: warningBand,
+        endsAt: req.accountAccess?.warningBandEndsAt || null,
+      }),
       restriction: req.accountAccess,
     });
     return true;

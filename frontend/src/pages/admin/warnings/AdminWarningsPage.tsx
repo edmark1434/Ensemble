@@ -53,9 +53,9 @@ export const WARNING_POLICY_SECTIONS: {
   },
   {
     id: 'thresholds',
-    label: 'Point thresholds',
-    title: 'Auto-suspend thresholds',
-    description: 'Active warning-point bands that trigger automatic suspension.',
+    label: 'Merit punishments',
+    title: 'Automatic merit punishments',
+    description: 'When Platform Merit drops to a level, a punishment runs for a fixed number of days, even if merit recovers.',
   },
 ];
 

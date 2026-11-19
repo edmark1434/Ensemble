@@ -514,12 +514,22 @@ async function reverseModerationActivity(activityId, staffSession = null) {
         ends[restoreTo] = endsAt;
       }
     }
+    const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+    const clearAutoSuspend = await clearAutoSuspendSql();
     await pool.query(
       `UPDATE accounts
        SET status = $1, suspension_ends_at = $2, ban_ends_at = $3, lock_ends_at = $4
+           ${clearAutoSuspend}
        WHERE account_id = $5`,
       [restoreTo, ends.Suspended || null, ends.Banned || null, ends.Locked || null, accountId]
     );
+    // Staff now own the standing: the engine's suspension record closes.
+    try {
+      const { closeAutoSuspensionRecords } = require('../services/MeritPenaltyServices');
+      await closeAutoSuspensionRecords(accountId, { staffId });
+    } catch (err) {
+      console.warn('Closing the automatic suspension record failed:', err.message);
+    }
     try {
       const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
       await notifyAccountStatusChanged(accountId, {
@@ -531,6 +541,7 @@ async function reverseModerationActivity(activityId, staffSession = null) {
     } catch (_e) {}
   } else if (code === 'ACCOUNT_WARNED' || code === 'VIOLATION_ISSUED') {
     const violationId = activity.referenceId;
+    let reversedId = null;
     if (violationId) {
       const updated = await pool.query(
         `
@@ -541,8 +552,9 @@ async function reverseModerationActivity(activityId, staffSession = null) {
         `,
         [String(violationId)]
       );
+      reversedId = updated.rows[0]?.violation_id || null;
       if (!updated.rows.length) {
-        await pool.query(
+        const fallback = await pool.query(
           `
           UPDATE violations
           SET status = 'reversed', deleted_at = COALESCE(deleted_at, NOW())
@@ -554,9 +566,20 @@ async function reverseModerationActivity(activityId, staffSession = null) {
             ORDER BY created_at DESC
             LIMIT 1
           )
+          RETURNING violation_id
           `,
           [accountId]
         );
+        reversedId = fallback.rows[0]?.violation_id || null;
+      }
+    }
+    // Punishments this warning started end with it (and an automatic suspension it caused).
+    if (reversedId) {
+      try {
+        const { endMeritPenaltiesForWarning } = require('../services/MeritPenaltyServices');
+        await endMeritPenaltiesForWarning(accountId, reversedId, { reason: 'reversed', staffId });
+      } catch (err) {
+        console.warn('Ending punishments after a reversed warning failed:', err.message);
       }
     }
   } else if (code === 'RESTRICTION_ISSUED') {
@@ -735,7 +758,7 @@ async function getModerationOverview(staffSession = null) {
         SELECT COUNT(*)::int AS active_violations
         FROM violations
         WHERE deleted_at IS NULL
-          AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved', 'expired')
+          AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
           AND (expires_at IS NULL OR expires_at > NOW())
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),

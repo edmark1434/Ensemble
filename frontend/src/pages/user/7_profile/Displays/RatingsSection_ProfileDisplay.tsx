@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AccountRecordSection } from "./AccountStanding";
 import { Star, ShieldCheck, Trophy, Briefcase, Package, AlertCircle, X, ShieldAlert, User, Users } from "lucide-react";
 import { DEFAULT_MERIT, meritBandLabel, meritColor } from "@/lib/merit";
+import { OwnMeritStatus } from "@/components/account/MeritStatus";
 import { RoleChip, StatusPill } from "@/pages/user/disputes/disputeUi";
 
 
@@ -173,8 +174,16 @@ export const RatingsSection_ProfileDisplay: React.FC<RatingsSectionProps> = ({
                 Platform Merit
               </span>
               <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed font-normal">
-                Reliability score. {meritBand} band. Star ratings stay separate.
+                Reliability score: {meritBand}. Star ratings stay separate.
               </p>
+              {isOwner ? (
+                <div className="pt-1">
+                  <OwnMeritStatus />
+                  <p className="mt-1 text-[10px] text-gray-500 dark:text-zinc-500">
+                    Automatic limits start when merit drops to set levels and run their full time.
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="relative inline-flex items-center justify-center shrink-0 w-[84px] h-[84px] select-none">

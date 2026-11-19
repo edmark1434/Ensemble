@@ -46,7 +46,7 @@ const SUPPORT_GROUPS = Object.freeze([
     types: Object.freeze([
       ['Report a user', 'Harassment, impersonation, or scams outside the forum, marketplace, or jobs sections.'],
       ['Copyright claim', 'Someone is using or selling the member\'s work without permission anywhere on Ensemble.'],
-      ['Appeal an account penalty', 'Appeals for account warnings, suspensions, bans, or payout holds.'],
+      ['Appeal an account penalty', 'One appeal per penalty: a ban, lock, suspension, forum timeout, warning, automatic punishment, or credit hold. Filed from the account standing page.'],
     ]),
   },
   {
@@ -264,7 +264,7 @@ const SPECIFIC_REPLIES = Object.freeze({
   'Editor problems': 'Tell us the project name, the browser, and what you clicked just before it failed. A screenshot on this ticket is enough for the first look.',
   'Export and rendering': 'Tell us the export format and how far the render got. If it finished but the file is wrong, describe what you expected to see.',
   'Copyright claim': 'Name the work, where it appears on Ensemble, and whether you are the owner or you received a notice. Do not post private legal documents in the public reply.',
-  'Appeal an account penalty': 'Say which restriction you are appealing and what happened in your own words. We read the violation record on the account before changing the standing.',
+  'Appeal an account penalty': 'This appeal is about one penalty, shown at the top of the ticket. Tell us what happened in your own words. We read the record before deciding, and the decision only changes that penalty.',
   'Inbox, chat, and calls': 'Name the other person and whether this is a message or a call. Tell us the time it failed and what you saw on screen.',
   'Posts and replies': 'Paste the forum link and say whether the post or the reply is missing, hidden, or wrong. We can remove, restore, lock, or pin from the forum desk.',
   'Report a post or member': 'This ticket records your report. Include the link and what rule you believe was broken. A report is not the same as a ban.',

@@ -1,3 +1,7 @@
+import type { AppealDecisionCardData, AppealTarget, AppealTargetType } from '@/pages/user/account/appeal/appealShared';
+
+export type { AppealDecisionCardData, AppealTarget, AppealTargetType };
+
 export type TicketPerson = {
   accountId?: number | string;
   userId?: number | string | null;
@@ -40,6 +44,8 @@ export type SupportTicket = {
   updatedAt: string;
   closedAt: string | null;
   resolvedAt?: string | null;
+  /** "Appeal an account penalty": the one penalty this appeal is about (null on older appeals). */
+  appealTarget?: AppealTarget | null;
 };
 
 export type TicketAttachment = {
@@ -112,6 +118,8 @@ export type TicketMessage = {
   isEdited?: boolean;
   isUnsent?: boolean;
   messageType?: string;
+  /** Appeal decision card (`messageType: 'appeal_decision'`). */
+  decision?: AppealDecisionCardData | null;
   replyToId?: string | null;
   audience?: 'staff' | 'author_and_staff' | 'disputer' | 'disputee' | 'parties' | 'public' | string;
   publishedAt?: string | null;
@@ -358,7 +366,7 @@ export const TICKET_TYPE_DESCRIPTIONS: Record<string, string> = {
   'Notifications and email': 'Missing, duplicated, or incorrectly delivered alerts and emails.',
   'Report a user': 'Harassment, impersonation, or scams outside the forum, marketplace, or jobs sections.',
   'Copyright claim': "Someone is using or selling the member's work without permission anywhere on Ensemble.",
-  'Appeal an account penalty': 'Appeals for account warnings, suspensions, bans, or payout holds.',
+  'Appeal an account penalty': 'One appeal per penalty: a ban, lock, suspension, forum timeout, warning, automatic punishment, or credit hold.',
   Other: 'Any issue that does not fit the available types.',
   'Posts and replies': 'Missing discussions, posts, or replies, or content displaying incorrectly.',
   'Forum groups': 'Problems with groups, memberships, or settings.',
@@ -520,6 +528,15 @@ export type TicketDetail = {
   scheduledCloseAt?: string | null;
   appealDecision?: 'accepted' | 'denied' | 'denied_permanent' | null;
   appealDecidedAt?: string | null;
+  /** What the decision did: how it was lifted, the new end, and any follow-up action. */
+  appealOutcome?: {
+    remedy?: 'lift_24h' | 'lift_now' | 'shorten' | 'rescind' | null;
+    state?: string | null;
+    endsAt?: string | null;
+    followUp?: { action: 'suspend' | 'ban'; applied: boolean; label?: string | null; endsAt?: string | null; reason?: string; error?: string } | null;
+  } | null;
+  /** The note the member was given with the decision. */
+  appealDecisionNote?: string | null;
   /** Only present when loaded with `?include=case`; null when it failed to build. */
   caseContext?: TicketCaseContext | null;
 };
@@ -540,6 +557,20 @@ export type CaseAccountSummary = {
   warningPoints: number;
   warningBandLabel: string | null;
   warningBandEndsAt: string | null;
+  /** Running automatic merit punishments, each on its own clock (timed-merit punishments). */
+  meritPenalties?: {
+    id: string;
+    effect: string;
+    label: string;
+    ruleLabel: string;
+    startsAt: string;
+    endsAt: string;
+    durationDays: number;
+    triggerMerit: number;
+    meritAtStart: number;
+  }[];
+  muted?: boolean;
+  mutedUntil?: string | null;
   forumTimeout: boolean;
   forumTimeoutEndsAt: string | null;
   creditsFrozen: boolean;
@@ -571,11 +602,47 @@ export type CaseReportRef = {
   createdAt: string;
 };
 
+/** The penalty a per-penalty appeal is about, as staff need it to decide (`describeAppealTarget`). */
+export type CaseAppealTarget = {
+  type: AppealTargetType;
+  id: string;
+  label: string;
+  startedAt: string | null;
+  /** `changed`: the account is under a newer penalty of the same kind, not this one. */
+  state: 'active' | 'ended' | 'changed';
+  note: string | null;
+  current: {
+    endsAt: string | null;
+    reason: string | null;
+    detail: string | null;
+    number: string | null;
+    points: number | null;
+    credits: number | null;
+  } | null;
+  /** How accepting may lift it; empty when there is nothing left to lift. */
+  remedies: ('lift_24h' | 'lift_now' | 'shorten' | 'rescind')[];
+  acceptEffect: string;
+  denyEffect: string;
+  denyPermanentEffect: string;
+  history: { id: string; number: string | null; status: string | null; decision: string | null; decidedAt: string | null; createdAt: string | null }[];
+  otherPenalties: {
+    type: AppealTargetType;
+    id: string;
+    label: string;
+    number: string | null;
+    endsAt: string | null;
+    appealState: string;
+    appealTicketNumber: string | null;
+  }[];
+};
+
 export type CaseAppeal = {
   area: 'account' | 'forum' | 'marketplace' | 'jobs';
   decidable: boolean;
   decision: 'accepted' | 'denied' | 'denied_permanent' | null;
   decidedAt: string | null;
+  /** The one penalty this appeal is about; null on account-wide appeals filed before the change. */
+  target?: CaseAppealTarget | null;
   reasonGiven: string | null;
   evidence: string | null;
   referencedCase:
@@ -638,6 +705,8 @@ export type CaseAppeal = {
       decision: 'accepted' | 'denied' | 'denied_permanent' | null;
       decidedAt: string | null;
       createdAt: string;
+      targetType?: AppealTargetType | null;
+      targetLabel?: string | null;
     }[];
     hold: {
       decision: string;

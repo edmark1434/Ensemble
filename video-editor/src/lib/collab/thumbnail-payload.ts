@@ -99,6 +99,7 @@ export async function buildThumbnailJob(
     const hash = createHash("sha1")
       .update(
         stableStringify({
+          renderVersion: 2, // Media fills the resized layer in the render composition.
           timeMs,
           size: snap.size,
           background,

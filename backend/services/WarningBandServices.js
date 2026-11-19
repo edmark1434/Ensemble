@@ -2,80 +2,110 @@ const { getWarningBandAccount, sumActiveWarningPoints, countProposalsToday } = r
 const {
   RESTRICTED_PROPOSAL_DAILY_CAP,
   ACTION_MESSAGES,
+  MUTE_ACTIONS,
+  NO_BAND,
   bandForPoints,
+  bandActionMessage,
+  muteActionMessage,
   actionAllowed,
   warningBandError,
   meritFromWarningPoints,
   refreshLiveThresholds,
 } = require('../lib/WarningBands');
 
+/**
+ * Points and the punishments running for a member. The band comes from timed punishments
+ * (`merit_penalties`), not from points: a band keeps running when merit recovers. Before the
+ * timed-punishment migration the band still follows points live.
+ */
 async function getWarningBand(accountId) {
   const account = accountId ? await getWarningBandAccount(accountId) : null;
   await refreshLiveThresholds();
+  const { EMPTY_PUNISHMENTS, getActiveMeritPunishments } = require('./MeritPenaltyServices');
   if (!account || String(account.type || '').toLowerCase() !== 'user') {
-    return { points: 0, band: bandForPoints(0), account };
+    return { points: 0, band: { ...NO_BAND }, account, punishments: { ...EMPTY_PUNISHMENTS } };
   }
-  const points = await sumActiveWarningPoints(accountId);
-  return { points, band: bandForPoints(points), account };
+  const [points, punishments] = await Promise.all([
+    sumActiveWarningPoints(accountId),
+    getActiveMeritPunishments(accountId).catch((err) => {
+      console.warn('Could not load merit punishments:', err.message);
+      return { ...EMPTY_PUNISHMENTS };
+    }),
+  ]);
+  const band = punishments.ready ? punishments.band : bandForPoints(points);
+  return { points, band, account, punishments };
 }
 
-async function notifyWarningBandChange(accountId, previousBand, nextBand, points) {
-  if (!previousBand || !nextBand || previousBand.id === nextBand.id) return;
+/** Merit went up (warnings expired). Running punishments keep their own end dates. */
+async function notifyMeritRecovered(accountId, { points, punishments }) {
   const merit = meritFromWarningPoints(points);
-  const dropped = nextBand.min > previousBand.min;
-  const message = dropped
-    ? `Your Platform Merit is now ${merit}. Some actions are limited until it recovers.`
-    : `Your Platform Merit recovered to ${merit}.`;
+  const running = punishments?.ready && punishments.list?.length;
+  const message = running
+    ? `A warning expired and your Platform Merit recovered to ${merit}. Automatic punishments already running keep their end dates.`
+    : `A warning expired and your Platform Merit recovered to ${merit}.`;
   try {
     const { createNotificationServices } = require('./NotificationServices');
     const notification = await createNotificationServices({
       message,
       is_read: false,
       reference_table: 'accounts',
-      reference_prefix: dropped ? 'WARNING_DOWN' : 'WARNING_UP',
+      reference_prefix: 'WARNING_UP',
       reference_path: '/profile',
       reference_id: accountId,
       account_id: accountId,
     });
     const { getIo } = require('../lib/WebSocket');
     const io = getIo();
-    io.to(String(accountId)).emit('notification', notification);
+    if (!io) return;
+    if (notification) io.to(String(accountId)).emit('notification', notification);
+    // Refetch signal only (no code / status / restriction), so the client re-reads its standing.
     io.to(String(accountId)).emit('account:restricted', {
-      band: nextBand.id,
-      label: nextBand.label,
+      band: punishments?.band?.id || 'none',
+      label: punishments?.band?.label || null,
       points,
-      previousBand: previousBand.id,
     });
   } catch (err) {
-    console.warn('Warning band notification failed:', err.message);
+    console.warn('Merit recovery notification failed:', err.message);
   }
 }
 
+/**
+ * Re-read the member's points after they changed. When `previousPoints` is given (warnings
+ * expired) and merit went up, the member is told. Punishments are not touched: they run on
+ * their own clocks.
+ */
 async function refreshWarningBand(accountId, previousPoints = null) {
   if (!accountId) return null;
   const next = await getWarningBand(accountId);
-  if (previousPoints != null) {
-    await notifyWarningBandChange(accountId, bandForPoints(previousPoints), next.band, next.points);
+  if (previousPoints != null && next.points < Number(previousPoints)) {
+    await notifyMeritRecovered(accountId, next);
   }
   return next;
 }
 
 async function assertWarningAllows(accountId, action, extras = {}) {
-  const { points, band, account } = await getWarningBand(accountId);
+  const { points, band, account, punishments } = await getWarningBand(accountId);
   if (!account || String(account.type || '').toLowerCase() !== 'user') return { points, band };
+
+  if (MUTE_ACTIONS.has(action) && punishments?.mute) {
+    throw warningBandError(muteActionMessage(action, punishments.mute), 'WARNING_RESTRICTED');
+  }
 
   if (action === 'proposal' && band.id === 'restricted') {
     const used = extras.proposalsToday != null
       ? Number(extras.proposalsToday)
       : await countProposalsToday(accountId);
     if (used >= RESTRICTED_PROPOSAL_DAILY_CAP) {
-      throw warningBandError(ACTION_MESSAGES.proposal_cap, 'WARNING_PROPOSAL_CAP');
+      throw warningBandError(bandActionMessage('proposal_cap', band), 'WARNING_PROPOSAL_CAP');
     }
     return { points, band };
   }
 
   if (!actionAllowed(action, band.id)) {
-    throw warningBandError(ACTION_MESSAGES[action] || 'Your Platform Merit does not allow this action.', 'WARNING_RESTRICTED');
+    throw warningBandError(
+      ACTION_MESSAGES[action] ? bandActionMessage(action, band) : 'An automatic merit punishment does not allow this action.',
+      'WARNING_RESTRICTED'
+    );
   }
   return { points, band };
 }

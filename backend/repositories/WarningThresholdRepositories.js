@@ -2,14 +2,18 @@ const { pool } = require('../lib/Database');
 
 function mapRow(row) {
   if (!row) return null;
+  const durationDays = row.duration_days == null ? null : Number(row.duration_days);
+  const minPoints = Number(row.min_points);
   return {
     warning_threshold_id: row.warning_threshold_id,
-    minPoints: Number(row.min_points),
-    min_points: Number(row.min_points),
+    minPoints,
+    min_points: minPoints,
+    /** Platform Merit at or below which this row starts (100 − minPoints). */
+    triggerMerit: Math.max(0, 100 - minPoints),
     effect: row.effect,
     label: row.label,
-    suspendDays: row.suspend_days == null ? null : Number(row.suspend_days),
-    suspend_days: row.suspend_days == null ? null : Number(row.suspend_days),
+    durationDays,
+    duration_days: durationDays,
     note: row.note || '',
     is_system: Boolean(row.is_system),
     sort_order: Number(row.sort_order || 0),
@@ -18,10 +22,19 @@ function mapRow(row) {
   };
 }
 
+// The length is read through jsonb so thresholds still load before the timed-punishment
+// migration (when only auto-suspend rows had a length, in `suspend_days`).
 const COLUMNS = `
-  warning_threshold_id, min_points, effect, label, suspend_days, note,
-  is_system, sort_order, created_at, updated_at
+  warning_threshold_id, min_points, effect, label,
+  COALESCE(
+    (to_jsonb(warning_thresholds) ->> 'duration_days')::int,
+    (to_jsonb(warning_thresholds) ->> 'suspend_days')::int
+  ) AS duration_days,
+  note, is_system, sort_order, created_at, updated_at
 `;
+
+/** Retired display rows (`none`, `record`) lock nothing and are not punishments. */
+const PUNISHING = `effect NOT IN ('none', 'record')`;
 
 async function listWarningThresholds({ includeDeleted = false } = {}) {
   const { rows } = await pool.query(
@@ -29,6 +42,7 @@ async function listWarningThresholds({ includeDeleted = false } = {}) {
     SELECT ${COLUMNS}
     FROM warning_thresholds
     WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
+      AND ${PUNISHING}
     ORDER BY min_points ASC, sort_order ASC, label ASC
     `,
     [includeDeleted]
@@ -41,23 +55,24 @@ async function getWarningThresholdById(thresholdId) {
     `
     SELECT ${COLUMNS}
     FROM warning_thresholds
-    WHERE warning_threshold_id = $1 AND deleted_at IS NULL
+    WHERE warning_threshold_id::text = $1 AND deleted_at IS NULL
     LIMIT 1
     `,
-    [thresholdId]
+    [String(thresholdId)]
   );
   return mapRow(rows[0]);
 }
 
-async function getWarningThresholdByMinPoints(minPoints) {
+/** The row with this trigger and punishment, if any (one per merit level and kind). */
+async function getWarningThresholdByTrigger(minPoints, effect) {
   const { rows } = await pool.query(
     `
     SELECT ${COLUMNS}
     FROM warning_thresholds
-    WHERE min_points = $1 AND deleted_at IS NULL
+    WHERE min_points = $1 AND effect = $2 AND deleted_at IS NULL
     LIMIT 1
     `,
-    [minPoints]
+    [minPoints, effect]
   );
   return mapRow(rows[0]);
 }
@@ -66,18 +81,18 @@ async function createWarningThreshold({
   minPoints,
   effect,
   label,
-  suspendDays,
+  durationDays,
   note,
   isSystem = false,
   sortOrder = 0,
 }) {
   const { rows } = await pool.query(
     `
-    INSERT INTO warning_thresholds (min_points, effect, label, suspend_days, note, is_system, sort_order)
+    INSERT INTO warning_thresholds (min_points, effect, label, duration_days, note, is_system, sort_order)
     VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING ${COLUMNS}
     `,
-    [minPoints, effect, label, suspendDays, note || null, isSystem, sortOrder]
+    [minPoints, effect, label, durationDays, note || null, isSystem, sortOrder]
   );
   return mapRow(rows[0]);
 }
@@ -86,7 +101,7 @@ async function updateWarningThreshold(thresholdId, {
   minPoints,
   effect,
   label,
-  suspendDays,
+  durationDays,
   note,
   sortOrder,
 }) {
@@ -96,23 +111,19 @@ async function updateWarningThreshold(thresholdId, {
     SET min_points = COALESCE($2, min_points),
         effect = COALESCE($3, effect),
         label = COALESCE($4, label),
-        suspend_days = CASE
-          WHEN $5::boolean THEN $6
-          ELSE suspend_days
-        END,
-        note = COALESCE($7, note),
-        sort_order = COALESCE($8, sort_order),
+        duration_days = COALESCE($5::smallint, duration_days),
+        note = COALESCE($6, note),
+        sort_order = COALESCE($7, sort_order),
         updated_at = NOW()
-    WHERE warning_threshold_id = $1 AND deleted_at IS NULL
+    WHERE warning_threshold_id::text = $1 AND deleted_at IS NULL
     RETURNING ${COLUMNS}
     `,
     [
-      thresholdId,
+      String(thresholdId),
       minPoints == null ? null : minPoints,
       effect || null,
       label || null,
-      suspendDays !== undefined,
-      suspendDays === undefined ? null : suspendDays,
+      durationDays == null ? null : durationDays,
       note == null ? null : note,
       sortOrder == null ? null : sortOrder,
     ]
@@ -125,10 +136,10 @@ async function softDeleteWarningThreshold(thresholdId) {
     `
     UPDATE warning_thresholds
     SET deleted_at = NOW(), updated_at = NOW()
-    WHERE warning_threshold_id = $1 AND deleted_at IS NULL
+    WHERE warning_threshold_id::text = $1 AND deleted_at IS NULL
     RETURNING warning_threshold_id
     `,
-    [thresholdId]
+    [String(thresholdId)]
   );
   return Boolean(rows[0]);
 }
@@ -136,7 +147,7 @@ async function softDeleteWarningThreshold(thresholdId) {
 module.exports = {
   listWarningThresholds,
   getWarningThresholdById,
-  getWarningThresholdByMinPoints,
+  getWarningThresholdByTrigger,
   createWarningThreshold,
   updateWarningThreshold,
   softDeleteWarningThreshold,

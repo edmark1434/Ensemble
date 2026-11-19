@@ -595,6 +595,38 @@ async function postDisputeFiledSummary(row, context = {}) {
 }
 
 /**
+ * Files the filer attached on the dispute form, posted as their first reply under the summary.
+ * Private to the filer and staff, like any party reply. Null when nothing valid was attached.
+ * @param {object} row the inserted dispute row
+ * @param {Array<object>} attachments staged uploads (see `normalizeDisputeAttachments`)
+ */
+async function postDisputeFiledEvidence(row, attachments) {
+  const files = normalizeDisputeAttachments(attachments);
+  if (!row?.dispute_id || !row.by_account_id || !files.length) return null;
+  const chatId = await ensureDisputeChat(row.dispute_id, row);
+  const account = await pool.query(
+    `SELECT display_name, handle FROM accounts WHERE account_id = $1`,
+    [row.by_account_id]
+  );
+  const profile = account.rows[0] || {};
+  return createDisputeMessage({
+    chatId,
+    body: '',
+    senderId: row.by_account_id,
+    authorName: profile.display_name || profile.handle || 'Member',
+    authorType: 'user',
+    authorRole: 'disputer',
+    audience: 'author_and_staff',
+    audiences: ['author_and_staff'],
+    isInternal: true,
+    notifyAccountIds: [],
+    disputeId: row.dispute_id,
+    attachments: files,
+    mentionAccountIds: [row.by_account_id, row.for_account_id],
+  });
+}
+
+/**
  * When staff make a dispute public, invite the disputee (by @handle) to give their side.
  * Posted publicly so the open discussion starts with the question.
  */
@@ -1344,9 +1376,14 @@ async function getAccountDispute(disputeId, accountId) {
   };
 }
 
-function caseParty(accountId, name, handle) {
+function caseParty(accountId, name, handle, avatars = new Map()) {
   if (!accountId) return null;
-  return { accountId: String(accountId), name: name || handle || 'Member', handle: handle || null };
+  return {
+    accountId: String(accountId),
+    name: name || handle || 'Member',
+    handle: handle || null,
+    avatar: avatars.get(String(accountId)) || null,
+  };
 }
 
 /**
@@ -1381,6 +1418,7 @@ async function loadDisputeCaseDetails(disputeId) {
     const r = result.rows[0];
     if (!r) return null;
     const { disputeResolutionLabel } = require('../lib/DisputeResolutions');
+    const avatars = await loadAccountAvatarPaths([r.by_account_id, r.for_account_id]).catch(() => new Map());
     const outcomeKey = r.resolution_outcome || null;
     const closed = String(r.status || '').toLowerCase() === 'closed';
     return {
@@ -1390,8 +1428,8 @@ async function loadDisputeCaseDetails(disputeId) {
       priority: r.priority || null,
       filedAt: r.created_at || null,
       openedAt: r.opened_at || null,
-      disputer: caseParty(r.by_account_id, r.initiator_name, r.initiator_handle),
-      disputee: caseParty(r.for_account_id, r.respondent_name, r.respondent_handle),
+      disputer: caseParty(r.by_account_id, r.initiator_name, r.initiator_handle, avatars),
+      disputee: caseParty(r.for_account_id, r.respondent_name, r.respondent_handle, avatars),
       contract: r.contract_id
         ? {
             id: String(r.contract_id),
@@ -1649,6 +1687,7 @@ module.exports = {
   notifyDisputeAccount,
   postDisputeSystemMessage,
   postDisputeFiledSummary,
+  postDisputeFiledEvidence,
   postDisputePublicInvite,
   getDisputeSettlementForParty,
   emitDisputeState,

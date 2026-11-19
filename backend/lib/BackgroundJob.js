@@ -315,8 +315,16 @@ let isMilestoneReminderJobRunning = false;
 
 function startPaymentReconciliationJob() {
 
-    // Normal backend startup also drains the durable preview queue. Deployments
-    // using a separate `media:worker` process can disable this lane explicitly.
+    let portfolioClipRunning = false;
+    cron.schedule("*/3 * * * * *", async () => {
+        if (portfolioClipRunning) return;
+        portfolioClipRunning = true;
+        try { await require('../jobs/PortfolioClipJob').processNextPortfolioClip(); }
+        catch (error) { console.error('Portfolio clip queue unavailable:', error.message); }
+        finally { portfolioClipRunning = false; }
+    });
+
+    // Deployments using a separate media:worker can disable embedded market previews.
     if (process.env.MEDIA_WORKER_EMBEDDED !== 'false') {
         let mediaJobRunning = false;
         cron.schedule("*/3 * * * * *", async () => {

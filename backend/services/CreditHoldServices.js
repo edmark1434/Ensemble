@@ -50,6 +50,20 @@ function resolveHoldEnd({ days, endsAt } = {}) {
   return new Date(Date.now() + parsed * 86400000);
 }
 
+/**
+ * How many credits to hold. Empty means every spendable credit; the wallet check (not more
+ * than is spendable) happens under the row lock.
+ * @returns {number|null}
+ */
+function resolveHoldAmount(amount) {
+  if (amount == null || amount === '' || amount === 'all') return null;
+  const parsed = Number(amount);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw holdError('Hold amount must be a whole number of credits, at least 1');
+  }
+  return parsed;
+}
+
 async function assertHoldTarget(accountId, staffId) {
   const result = await pool.query(
     `SELECT account_id FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
@@ -102,9 +116,11 @@ async function announceHoldChange(accountId, { message, walletId, held }) {
 }
 
 /**
- * Staff hold the member's available credits.
+ * Staff hold some or all of the member's available credits.
  * @param {string} accountId
- * @param {{ reason?: string, days?: number|string|null, endsAt?: string|null }} options
+ * @param {{ reason?: string, amount?: number|string|null, days?: number|string|null, endsAt?: string|null }} options
+ *   `amount` empty = every spendable credit. `endsAt` (exact date and time) wins over `days`;
+ *   neither = until staff review it.
  * @param {string|null} staffId
  */
 async function freezeAccountCredits(accountId, options = {}, staffId = null) {
@@ -113,8 +129,9 @@ async function freezeAccountCredits(accountId, options = {}, staffId = null) {
   if (reason.length < MIN_REASON_LENGTH) {
     throw holdError('Write the reason the member will see (at least 5 characters)');
   }
+  const amount = resolveHoldAmount(options.amount);
   const frozenUntil = resolveHoldEnd(options);
-  const hold = await placeCreditHold({ accountId, reason, frozenUntil, staffId });
+  const hold = await placeCreditHold({ accountId, reason, frozenUntil, staffId, amount });
 
   await recordAccountActivity({
     accountId,
@@ -127,26 +144,32 @@ async function freezeAccountCredits(accountId, options = {}, staffId = null) {
     metadata: {
       amount: hold.moved,
       frozenTotal: hold.frozenBalanceCredits,
+      spendableAfter: hold.balanceCredits,
+      partial: amount != null,
       frozen: true,
       frozenUntil: hold.frozenUntil,
       endsAt: hold.frozenUntil,
       reason,
+      // Lets the ledger row and the member's transaction history find this reason.
+      creditTransactionId: hold.creditTransactionId,
     },
   });
 
   const until = formatWhen(hold.frozenUntil);
+  const total = hold.frozenBalanceCredits > hold.moved ? ` ${credits(hold.frozenBalanceCredits)} are on hold in total.` : '';
   await announceHoldChange(accountId, {
     held: true,
     walletId: hold.walletId,
-    message: `${credits(hold.frozenBalanceCredits)} in your Account Wallet are on hold${
+    message: `Staff put ${credits(hold.moved)} in your Account Wallet on hold${
       until ? ` until ${until}` : ' until staff review your account'
-    }. Reason: ${reason} They are not taken from you. If you think this is a mistake, file an appeal.`,
+    }.${total} Reason: ${reason} They are not taken from you. If you think this is a mistake, file an appeal.`,
   });
 
   return {
     accountId,
     walletId: hold.walletId,
-    balanceCredits: 0,
+    heldCredits: hold.moved,
+    balanceCredits: hold.balanceCredits,
     frozenBalanceCredits: hold.frozenBalanceCredits,
     frozenUntil: hold.frozenUntil,
     reason,
@@ -176,7 +199,13 @@ async function unfreezeAccountCredits(accountId, { staffId = null, reason = null
     referencePrefix: 'WAL',
     referenceId: released.walletId,
     actorStaffId: staffId,
-    metadata: { amount: released.released, frozen: false, source, reason: note || null },
+    metadata: {
+      amount: released.released,
+      frozen: false,
+      source,
+      reason: note || null,
+      creditTransactionId: released.creditTransactionId,
+    },
   });
   await announceHoldChange(accountId, {
     held: false,
@@ -208,6 +237,7 @@ async function releaseDueCreditHolds({ limit = 50 } = {}) {
 module.exports = {
   MAX_HOLD_DAYS,
   resolveHoldEnd,
+  resolveHoldAmount,
   getAccountCreditHold,
   freezeAccountCredits,
   unfreezeAccountCredits,

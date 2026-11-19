@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { PortfolioRangeFields, usePortfolioPicker } from "./portfolio/portfolio-picker";
+import { PortfolioClipModal } from "./modals/portfolio-clip-modal";
 import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
 import { HISTORY_UNDO, HISTORY_REDO, DESIGN_RESIZE } from "@designcombo/state";
@@ -9,6 +11,7 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import {
+  ArrowLeft,
   ArrowUpRight,
   Keyboard,
   ProportionsIcon,
@@ -80,6 +83,7 @@ export default function Navbar({
 }) {
   const isViewOnly = useViewOnly();
   const preview = useSnapshotPreview();
+  const portfolio = usePortfolioPicker();
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
   const isSmallScreen = useIsSmallScreen();
@@ -177,17 +181,22 @@ export default function Navbar({
 
   return (
     <div
-      style={{
+      style={portfolio ? undefined : {
         display: "grid",
         gridTemplateColumns: isLargeScreen ? "320px 1fr 320px" : "1fr 1fr 1fr"
       }}
-      className="bg-primary/12 pointer-events-none flex h-16 shrink-0 items-center border-b border-border/80 px-2"
+      className={cn("bg-primary/12 pointer-events-none shrink-0 items-center border-b border-border/80 px-2", portfolio ? "grid grid-cols-[1fr_auto] gap-2 py-2 lg:h-16 lg:grid-cols-[1fr_auto_1fr]" : "flex h-16")}
     >
       {!preview && <CommentsSync />}
       {!preview && <DownloadProgressModal />}
 
-      <div className="flex items-center gap-2">
-        <DropdownMenu>
+      <div className="flex min-w-0 items-center gap-2">
+        {portfolio ? <>
+          <Button asChild variant="ghost" size="icon" className="pointer-events-auto shrink-0">
+            <a href={portfolio.profileUrl} aria-label="Back to portfolio" title="Back to portfolio"><ArrowLeft /></a>
+          </Button>
+          <span className="truncate text-sm font-semibold">{projectName}</span>
+        </> : <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <div
               className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-md invert dark:invert-0 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
@@ -202,7 +211,7 @@ export default function Navbar({
               </a>
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
 
         <div className=" pointer-events-auto flex h-10 items-center px-1.5">
           {!viewOnly && (
@@ -297,8 +306,9 @@ export default function Navbar({
         </div>
       </div>
 
-      <div className="flex h-13 items-center justify-center gap-2">
-        {!isSmallScreen && (
+      <div className={portfolio ? "col-span-2 row-start-2 lg:col-span-1 lg:col-start-2 lg:row-start-1" : "flex h-13 items-center justify-center gap-2"}>
+        {portfolio && <PortfolioRangeFields />}
+        {!portfolio && !isSmallScreen && (
           <div className=" pointer-events-auto flex h-8 items-center gap-2 rounded-md px-2.5">
             {isViewOnly ? (
               <span
@@ -352,6 +362,7 @@ export default function Navbar({
           {isLargeScreen && canComment && <CommentsButton />}
           {isLargeScreen && !preview && !isViewOnly && canEditWithRole(projectRole) && projectId && <WorkspaceButton />}
           {canUseSaves && <SavesButton />}
+          {portfolio && <PortfolioClipModal />}
           {!preview && <DownloadPopover stateManager={stateManager} />}
 
           {canShare && (

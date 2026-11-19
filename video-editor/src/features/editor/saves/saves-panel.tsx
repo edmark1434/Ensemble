@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Avatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import useStore from "../store/use-store";
 import { useEditorPlan } from "../hooks/use-editor-plan";
@@ -77,24 +76,27 @@ function PanelAction({ label, onClick, disabled, children }: {
 function SaveItem({ save, latest, now, onApply }: {
   save: ProjectSaveSummary; latest: boolean; now: number; onApply: () => void;
 }) {
-  const author = save.createdBy?.name ?? "Former member";
-  const age = formatAge(save.createdAt, now);
+  const subtitle = [save.isInitial ? "Starting snapshot" : null, formatAge(save.createdAt, now)].filter(Boolean).join(" \u00b7 ");
   return (
-    <div className="space-y-3 rounded-md border border-border/80 p-3">
-      <div className="flex gap-3">
-        <Avatar name={author} avatarUrl={save.createdBy?.avatarUrl} />
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium">{formatSavedAt(save.createdAt)}</p>
-            {latest && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">Latest</span>}
-          </div>
-          <p className="truncate text-xs text-muted-foreground">{age ? `${author} · ${age}` : author}</p>
+    <div className="flex items-center gap-2 rounded-md border border-border/80 p-3">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <p className="text-sm font-medium">{formatSavedAt(save.createdAt)}</p>
+          {latest && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">Latest</span>}
         </div>
+        {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
       </div>
-      <div className="flex items-center justify-end gap-2">
-        <Button asChild variant="outline" size="sm" className="gap-2">
-          <a href={`/saves/${encodeURIComponent(save.id)}`} target="_blank" rel="noopener noreferrer"><Eye className="size-4" />Preview</a>
-        </Button>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button asChild variant="outline" size="icon" className="size-8">
+              <a href={save.previewUrl} target="_blank" rel="noopener noreferrer" aria-label={`Preview save from ${formatSavedAt(save.createdAt)}`}>
+                <Eye className="size-4" />
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Preview save</TooltipContent>
+        </Tooltip>
         <Button variant="default" size="sm" className="gap-2" onClick={onApply}><RotateCcw className="size-4" />Apply</Button>
       </div>
     </div>
@@ -220,7 +222,7 @@ function SavesHistory() {
           {data && data.saves.length === 0 && <div className="flex min-h-[30vh] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
             <History size={24} />
             <p className="text-sm">No saves yet.</p>
-            <p className="max-w-64 text-xs leading-relaxed">Click the save button in the top bar to save the project and its scenes as a version you can come back to.</p>
+            <p className="max-w-64 text-xs leading-relaxed">Project snapshots appear here as they are created.</p>
           </div>}
           {data && data.saves.length > 0 && <section className="space-y-2" aria-label="Saves">
             {data.saves.map((save, index) => <SaveItem key={save.id} save={save} latest={index === 0} now={now}

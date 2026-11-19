@@ -22,6 +22,7 @@ async function proxyOutput(request: NextRequest, params: Promise<{ id: string }>
       headers: renderHeaders,
     });
     const statusData = await statusResponse.json().catch(() => null);
+    if (statusData?.data?.portfolioFrameRange) return NextResponse.json({ message: "Open the saved clip in your portfolio." }, { status: 404 });
     if (!statusResponse.ok || statusData?.status !== "completed" || typeof statusData?.videoUrl !== "string") {
       console.warn("[render-download] job not downloadable", {
         statusCode: statusResponse.status, jobStatus: statusData?.status ?? null, hasVideoUrl: typeof statusData?.videoUrl === "string",

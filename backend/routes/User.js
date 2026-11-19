@@ -44,6 +44,7 @@ const {
     getTicketTeamSearch,
     createMyTechnicalReport,
 } = require('../controllers/AdminTicketsControllers');
+const { getMyAppealOptions } = require('../controllers/PenaltyAppealControllers');
 
 router.get('/', [checkSession, requireAuth], getAllUsers);
 
@@ -79,6 +80,8 @@ router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
 router.get('/disputes', [checkSession, requireAuth], listMyDisputes);
 router.get('/disputes/:id', [checkSession, requireAuth], getMyDispute);
 router.get('/cases/summary', [checkSession, requireAuth], getMyCaseSummary);
+// Active penalties, each with its own appeal (banned and locked members may read it).
+router.get('/appeals', [checkSession, requireAuth], getMyAppealOptions);
 router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
 router.post('/tickets/:id/invite', [checkSession, requireAuth], postMyTicketInvite);
 router.post('/tickets/:id/satisfaction', [checkSession, requireAuth], postMyTicketSatisfaction);

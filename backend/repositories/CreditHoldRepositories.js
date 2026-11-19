@@ -2,9 +2,9 @@ const { pool } = require('../lib/Database');
 const { CREDIT_TRANSACTION_TYPE } = require('../lib/CreditTransactionEnums');
 
 /**
- * Staff credit holds ("freeze credits"). A hold moves the member's available Account Wallet
- * balance into frozen_balance_credits, where it cannot be spent, transferred or cashed out,
- * and records why, by whom and until when. Releasing moves every held credit back.
+ * Staff credit holds ("freeze credits"). A hold moves some or all of the member's available
+ * Account Wallet balance into frozen_balance_credits, where it cannot be spent, transferred or
+ * cashed out, and records why, by whom and until when. Releasing moves every held credit back.
  *
  * Both directions lock the wallet row and update relatively, so a purchase or payout landing
  * at the same moment is never lost or double counted. Each move writes one ledger row that
@@ -84,38 +84,52 @@ async function getAccountCreditHold(accountId) {
 }
 
 /**
- * Hold everything currently available in the account wallet. A second hold adds to the first
- * and its reason and end date replace the old ones: the latest staff decision governs.
+ * Hold `amount` credits of the available balance, or all of it when no amount is given. A
+ * second hold adds to the first and its reason and end date replace the old ones: the latest
+ * staff decision governs.
  */
-async function placeCreditHold({ accountId, reason, frozenUntil = null, staffId = null }) {
+async function placeCreditHold({ accountId, reason, frozenUntil = null, staffId = null, amount = null }) {
   return withTransaction(async (client) => {
     const wallet = await lockAccountWallet(client, accountId);
     if (!wallet) throw holdError('No account wallet found for this account', 404);
-    const moved = Number(wallet.balance_credits || 0);
-    if (moved <= 0) throw holdError('No available credits to freeze', 409);
+    const available = Number(wallet.balance_credits || 0);
+    if (available <= 0) throw holdError('No available credits to freeze', 409);
+    const moved = amount == null ? available : Number(amount);
+    if (moved > available) {
+      throw holdError(
+        `Only ${available.toLocaleString()} spendable credits can be held. Credits already on hold do not count.`,
+        409
+      );
+    }
 
+    // The row is locked, so the balance read above is current; the guard is a second check.
     const updated = await client.query(
       `UPDATE wallets
-       SET frozen_balance_credits = frozen_balance_credits + balance_credits,
-           balance_credits = 0,
+       SET frozen_balance_credits = frozen_balance_credits + $5,
+           balance_credits = balance_credits - $5,
            frozen_at = NOW(),
            frozen_until = $2,
            frozen_reason = $3,
            frozen_by_staff_id = $4
        WHERE wallet_id = $1
-       RETURNING frozen_balance_credits, frozen_at, frozen_until`,
-      [wallet.wallet_id, frozenUntil, reason, staffId]
+         AND balance_credits >= $5
+       RETURNING balance_credits, frozen_balance_credits, frozen_at, frozen_until`,
+      [wallet.wallet_id, frozenUntil, reason, staffId, moved]
     );
-    await client.query(
+    if (!updated.rows.length) throw holdError('No available credits to freeze', 409);
+    const ledger = await client.query(
       `INSERT INTO credit_transactions (
          type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
-       ) VALUES ($1, $2, 'Completed', $3, $3, 'wallets', $3)`,
+       ) VALUES ($1, $2, 'Completed', $3, $3, 'wallets', $3)
+       RETURNING credit_transaction_id`,
       [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, moved, wallet.wallet_id]
     );
     const row = updated.rows[0];
     return {
       walletId: wallet.wallet_id,
+      creditTransactionId: ledger.rows[0]?.credit_transaction_id || null,
       moved,
+      balanceCredits: Number(row.balance_credits || 0),
       frozenBalanceCredits: Number(row.frozen_balance_credits || 0),
       frozenAt: row.frozen_at,
       frozenUntil: row.frozen_until || null,
@@ -151,14 +165,16 @@ async function releaseCreditHold({ accountId, onlyIfDue = false }) {
        RETURNING balance_credits`,
       [wallet.wallet_id]
     );
-    await client.query(
+    const ledger = await client.query(
       `INSERT INTO credit_transactions (
          type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
-       ) VALUES ($1, $2, 'Completed', $3, $3, 'wallets', $3)`,
+       ) VALUES ($1, $2, 'Completed', $3, $3, 'wallets', $3)
+       RETURNING credit_transaction_id`,
       [CREDIT_TRANSACTION_TYPE.ESCROW_RELEASE, released, wallet.wallet_id]
     );
     return {
       walletId: wallet.wallet_id,
+      creditTransactionId: ledger.rows[0]?.credit_transaction_id || null,
       released,
       balanceCredits: Number(updated.rows[0]?.balance_credits || 0),
       reason: wallet.frozen_reason || null,

@@ -5,8 +5,8 @@ function projectError(message, statusCode) {
 }
 
 async function listProjects(userId, scope = 'active') {
-    if (scope !== 'active' && scope !== 'trash') throw projectError('Invalid project list', 400);
-    return projects.getProjectsForUser(userId, scope === 'trash');
+    if (!['active', 'trash', 'portfolio'].includes(scope)) throw projectError('Invalid project list', 400);
+    return projects.getProjectsForUser(userId, scope === 'trash', scope === 'portfolio');
 }
 
 async function notifyProjectAccessChanged(projectId) {

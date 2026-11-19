@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+import { checkpointAfterUpdates } from "@/lib/collab/persistence-store";
 import { getBlockProjectId } from "@/lib/db/blocks";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
@@ -62,5 +63,6 @@ export async function POST(
       .execute();
   });
 
+  await checkpointAfterUpdates(projectId, { kind: "block", id: blockId });
   return new NextResponse(null, { status: 204 });
 }

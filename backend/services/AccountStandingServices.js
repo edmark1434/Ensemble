@@ -52,7 +52,7 @@ async function notifyAccountWarned(accountId, warningData = {}) {
     console.warn('Warning realtime socket broadcast failed:', err.message);
   }
 
-  // An auto-suspension is announced once, by maybeAutoSuspendAfterWarning, which applied it.
+  // An auto-suspension is announced once, by applyMeritPunishmentsForWarning, which applied it.
 
   return notification;
 }
@@ -85,6 +85,14 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       locked: nextStatus === 'Locked',
       suspended: nextStatus === 'Suspended',
     };
+  }
+
+  // Open sockets act on the new standing right away (a lifted suspension can send again).
+  try {
+    const { refreshSocketStanding } = require('../lib/WebSocket');
+    refreshSocketStanding(accountId, access);
+  } catch (err) {
+    console.warn('Socket standing refresh skipped:', err.message);
   }
 
   let notification = null;

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(statusData, { status: 200 });
+    return NextResponse.json(statusData?.data?.portfolioFrameRange ? { jobId: null } : statusData, { status: 200 });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

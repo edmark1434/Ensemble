@@ -26,15 +26,6 @@ export function warningDurationDays(points: number) {
   return DURATION_DAYS[clampWarningPoints(points) - 1];
 }
 
-export function warningBandForPoints(points: number) {
-  const n = Math.max(0, Number(points) || 0);
-  if (n <= 0) return 'Clear';
-  if (n <= 2) return 'Record only';
-  if (n <= 7) return 'Limited';
-  if (n <= 15) return 'Restricted';
-  return 'Frozen access';
-}
-
 export const WARNING_POINT_LADDER = Array.from({ length: MAX_WARNING_POINTS }, (_, index) => {
   const points = index + 1;
   return {

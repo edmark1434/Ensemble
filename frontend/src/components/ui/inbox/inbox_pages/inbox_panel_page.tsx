@@ -7,6 +7,8 @@ import { InboxPanelChatbox } from "../inbox_components/inbox_panel_chatbox";
 import { InboxPinnedBanner } from "../inbox_functions/inbox_pin_message";
 import { InboxSideDetails } from "../inbox_components/inbox_side_detail";
 import { MarketplaceContextCard } from "../inbox_components/marketplace_context_card";
+import { useSuspension } from "@/lib/useSuspension";
+import { SuspendedComposerNotice } from "@/components/account/SuspendedNotices";
 
 export const InboxPanelPage = ({
   selectedConversation,
@@ -56,6 +58,9 @@ onUpdateGroupName,
   onPreviewAttachment,
   deleteConversation,
 }: any) => {
+
+  // Read-only while suspended: the conversation stays readable, the composer is replaced.
+  const { suspended: accountSuspended } = useSuspension();
 
   if (!selectedConversation) {
     return (
@@ -162,6 +167,8 @@ onUpdateGroupName,
             <div className="border-t border-gray-200 dark:border-white/[0.08] bg-white dark:bg-dark-base p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               This dispute is not public yet. Only the person who filed it can add information for staff.
             </div>
+          ) : accountSuspended ? (
+            <SuspendedComposerNotice className="px-4 py-3" />
           ) : isContractCompleted ? (
             <div className="border-t border-gray-200 dark:border-white/[0.08] bg-gray-50/80 dark:bg-white/[0.02] p-4 text-center text-sm text-gray-500 dark:text-zinc-400 flex items-center justify-center gap-2">
               <Lock className="w-4 h-4 text-gray-400 dark:text-zinc-500 shrink-0" />

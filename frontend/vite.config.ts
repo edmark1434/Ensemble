@@ -47,6 +47,12 @@ export default defineConfig({
   preview: {
     allowedHosts: ['.trycloudflare.com', '.localhost'],
   },
+  build: {
+    // Build output must not live in /assets: that is the marketplace page. With a real
+    // `assets/` folder in dist, a full page load of ensemble.software/assets hits the folder
+    // on the host (Vercel/nginx) instead of the app and fails (500).
+    assetsDir: 'static',
+  },
   plugins: [
     marketplaceSpaFallback(),
     react(),

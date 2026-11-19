@@ -204,6 +204,11 @@ function mapTicketListRow(row, access) {
     closedAt: row.resolved_at,
     resolvedAt: row.resolved_at,
     chatId: row.chat_id || null,
+    // Appeals: the one penalty this ticket is about, and the decision on it.
+    appealTarget: row.appeal_target_type
+      ? { type: row.appeal_target_type, id: row.appeal_target_id || null, label: row.appeal_target_label || null }
+      : null,
+    appealDecision: row.appeal_decision || null,
     access,
   };
 }
@@ -242,6 +247,9 @@ async function getMemberTicket(ticketId, accountId, accountAccess) {
   delete data.payments;
   delete data.articles;
   delete data.canAdjustCredits;
+  // Staff record of what a decision did (a failed follow-up's error included); the member reads
+  // the decision card in the conversation instead.
+  delete data.appealOutcome;
   const t = data.ticket;
   data.access = buildTicketAccess(
     {

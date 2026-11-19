@@ -1,5 +1,7 @@
 const { pool } = require('../lib/Database');
+const { staffLedgerNoteJoins, STAFF_LEDGER_NOTE_COLUMNS } = require('../lib/StaffLedgerNotes');
 
+/** Every ledger row touching the account's wallets, with the staff note for adjustments and holds. */
 async function getCreditTransactionsByAccountId(accountId) {
     const query = `
         WITH account_transaction_wallets AS (
@@ -35,7 +37,8 @@ async function getCreditTransactionsByAccountId(accountId) {
                 SELECT 1
                 FROM account_transaction_wallets atw
                 WHERE atw.wallet_id = ct.destination_wallet_id
-            ) AS destination_owned
+            ) AS destination_owned,
+            ${STAFF_LEDGER_NOTE_COLUMNS}
         FROM credit_transactions ct
         INNER JOIN wallets source_wallet
             ON source_wallet.wallet_id = ct.source_wallet_id
@@ -55,6 +58,7 @@ async function getCreditTransactionsByAccountId(accountId) {
             WHERE aw.wallet_id = ct.destination_wallet_id
             LIMIT 1
         ) destination_owner ON TRUE
+        ${staffLedgerNoteJoins({ ledger: 'ct', accountId: '$1' })}
         WHERE EXISTS (
             SELECT 1
             FROM account_transaction_wallets atw

@@ -67,6 +67,43 @@ const STAFF_SOCKET_EVENTS = new Set([
   'markAllNotificationsAsRead',
 ]);
 
+/**
+ * Events a suspended member may still send. A suspension is read-only: joining rooms to see
+ * live updates, presence, and read receipts stay on; sending, editing, reacting, typing, calls
+ * and group changes are refused like their HTTP routes.
+ */
+const SUSPENDED_SOCKET_EVENTS = new Set([
+  ...STAFF_SOCKET_EVENTS,
+  'markConversationRead',
+  'disconnect',
+  'disconnecting',
+]);
+
+/** How long a socket trusts its cached standing before re-reading it on a write event. */
+const SOCKET_STANDING_TTL_MS = 30 * 1000;
+
+function applySocketStanding(socket, access) {
+  socket.data.suspended = Boolean(access?.suspended);
+  socket.data.banned = Boolean(access?.banned);
+  socket.data.locked = Boolean(access?.locked);
+  socket.data.forumTimeout = Boolean(access?.forumTimeout);
+  // An automatic mute (Platform Merit) also stops forum writes over the socket.
+  socket.data.muted = Boolean(access?.muted);
+  socket.data.standingCheckedAt = Date.now();
+}
+
+/**
+ * Push a new standing onto the account's open sockets on this server, so a suspension that
+ * starts or ends (expiry, appeal, automatic merit punishment, staff action) applies without a reconnect.
+ */
+function refreshSocketStanding(accountId, access) {
+  if (!io || !accountId || !access) return;
+  const id = String(accountId);
+  for (const socket of io.of('/').sockets.values()) {
+    if (String(socket.user?.account_id || '') === id) applySocketStanding(socket, access);
+  }
+}
+
 function rejectEvent(socket, eventName, callback, error, context = {}) {
   const payload = { ...context, message: error.message };
   socket.emit(`${eventName}Failed`, payload);
@@ -147,10 +184,7 @@ async function initSocket(httpServer) {
         return next(new Error(access.message));
       }
       socket.user = decoded;
-      socket.data.suspended = Boolean(access.suspended);
-      socket.data.banned = Boolean(access.banned);
-      socket.data.locked = Boolean(access.locked);
-      socket.data.forumTimeout = Boolean(access.forumTimeout);
+      applySocketStanding(socket, access);
       return next();
     } catch (_error) {
       return next(new Error('Authentication error: Invalid or expired token.'));
@@ -161,10 +195,23 @@ async function initSocket(httpServer) {
     const accountId = String(socket.user.account_id);
     const isStaffSocket = socket.user.type === 'Staff';
 
-    // Suspended accounts stay connected for notices, but client actions are dropped.
-    // Later, allow specific events here instead of blocking every action.
-    socket.use((packet, next) => {
+    // Suspended accounts stay connected and can read (join rooms, presence, read receipts);
+    // actions are refused. Standing is re-read on write events once the cache is stale, so a
+    // suspension that ends (or starts) mid-session applies without a reconnect.
+    socket.use(async (packet, next) => {
       const eventName = String(packet[0] || '');
+      if (
+        !isStaffSocket
+        && !SUSPENDED_SOCKET_EVENTS.has(eventName)
+        && Date.now() - Number(socket.data.standingCheckedAt || 0) > SOCKET_STANDING_TTL_MS
+      ) {
+        try {
+          const { getAccountAccess } = require('./AccountRestriction');
+          applySocketStanding(socket, await getAccountAccess(accountId));
+        } catch (err) {
+          console.warn('Socket standing refresh skipped:', err.message);
+        }
+      }
       if (isStaffSocket) {
         if (STAFF_SOCKET_EVENTS.has(eventName)) return next();
         const ack = packet[packet.length - 1];
@@ -187,22 +234,28 @@ async function initSocket(httpServer) {
         }
         return;
       }
-      if (socket.data.forumTimeout && /forum/i.test(eventName)) {
+      // A forum timeout or mute still reads the forums live: joining and leaving forum rooms stays on.
+      if ((socket.data.forumTimeout || socket.data.muted) && /forum/i.test(eventName) && !SUSPENDED_SOCKET_EVENTS.has(eventName)) {
         const ack = packet[packet.length - 1];
         if (typeof ack === 'function') {
-          ack({
-            success: false,
-            code: 'FORUM_TIMEOUT',
-            message: 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.',
-          });
+          ack(
+            socket.data.forumTimeout
+              ? {
+                  success: false,
+                  code: 'FORUM_TIMEOUT',
+                  message: 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.',
+                }
+              : {
+                  success: false,
+                  code: 'WARNING_RESTRICTED',
+                  message: 'You are muted, so forum posting is paused. You can still read.',
+                }
+          );
         }
         return;
       }
       if (!socket.data.suspended) return next();
-      // Viewing and acknowledging their own notifications stays available.
-      if (eventName === 'disconnect' || eventName === 'markMessageAsRead' || eventName === 'markAllNotificationsAsRead') {
-        return next();
-      }
+      if (SUSPENDED_SOCKET_EVENTS.has(eventName)) return next();
       const ack = packet[packet.length - 1];
       if (typeof ack === 'function') {
         ack({
@@ -830,4 +883,5 @@ module.exports = {
   getIo,
   emitForumEvent,
   emitConversationMessage,
+  refreshSocketStanding,
 };

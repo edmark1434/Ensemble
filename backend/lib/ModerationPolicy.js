@@ -3,12 +3,6 @@ const { DEFAULT_SETTINGS } = require('./PlatformConfiguration');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
 const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
 const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
-const {
-  autoSuspendDaysForPoints,
-  AUTO_SUSPEND_POINTS,
-  AUTO_SUSPEND_DAYS,
-  refreshLiveThresholds,
-} = require('./WarningBands');
 
 async function getModerationSettings() {
   // Automod toggles were removed from System Settings.
@@ -197,81 +191,6 @@ function reconcileUnassignedDisputesThrottled() {
 }
 
 /**
- * After a warning is issued, suspend when warning thresholds say so
- * (managed under /admin/warnings). Already-suspended accounts are not stacked.
- */
-async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
-  if (!accountId) return null;
-  const activeCount = await sumActiveWarningPoints(accountId);
-  await refreshLiveThresholds();
-  const days = autoSuspendDaysForPoints(activeCount);
-  if (!days) {
-    return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
-  }
-
-  const previous = await pool.query(
-    `SELECT status FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
-    [accountId]
-  );
-  if (!previous.rows.length) return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
-  const previousStatus = previous.rows[0].status;
-  const current = String(previousStatus).toLowerCase();
-  if (current === 'suspended') {
-    return { suspended: false, alreadySuspended: true, activeCount, max: AUTO_SUSPEND_POINTS };
-  }
-  // A ban or lock is stricter than a suspension. Writing Suspended over it would turn a
-  // permanent ban into a 7-day suspension that then lifts to Active.
-  if (current === 'banned' || current === 'locked') {
-    return { suspended: false, stricterStanding: current, activeCount, max: AUTO_SUSPEND_POINTS };
-  }
-
-  // Guarded again in SQL, in case a ban landed between the read and this write.
-  const applied = await pool.query(
-    `UPDATE accounts
-     SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day')
-     WHERE account_id = $1
-       AND LOWER(COALESCE(status, 'active')) NOT IN ('banned', 'locked', 'suspended')`,
-    [accountId, days]
-  );
-  if (!applied.rowCount) {
-    return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
-  }
-  await recordAccountActivity({
-    accountId,
-    action: `Auto-suspended ${days} day(s) after ${activeCount} active warning point(s)`,
-    eventCode: 'ACCOUNT_STATUS_CHANGED',
-    referenceTable: 'accounts',
-    referencePrefix: 'ACC',
-    referenceId: accountId,
-    actorStaffId: staffId,
-    metadata: {
-      previousStatus,
-      status: 'Suspended',
-      action: 'auto_suspend',
-      activeWarnings: activeCount,
-      maxWarningsBeforeSuspend: AUTO_SUSPEND_POINTS,
-      suspensionDays: days,
-      source: 'warning_thresholds',
-    },
-  });
-
-  // The one suspension notice for this crossing. notifyAccountWarned does not send another.
-  try {
-    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
-    await notifyAccountStatusChanged(accountId, {
-      status: 'Suspended',
-      previousStatus,
-      action: 'auto_suspend',
-      reason: 'Auto-suspended after exceeding active warning threshold',
-    });
-  } catch (notifyErr) {
-    console.error('Failed to notify auto-suspended account:', notifyErr);
-  }
-
-  return { suspended: true, activeCount, max: AUTO_SUSPEND_POINTS, days, previousStatus };
-}
-
-/**
  * Apply report automations after a report is created.
  * Auto-escalate and auto-ticket creation were removed from Automod settings.
  */
@@ -384,6 +303,5 @@ module.exports = {
   reconcileUnassignedDisputesThrottled,
   countActiveWarnings: sumActiveWarningPoints,
   sumActiveWarningPoints,
-  maybeAutoSuspendAfterWarning,
   applyReportAutomations,
 };

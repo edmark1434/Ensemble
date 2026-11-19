@@ -50,6 +50,8 @@ import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal.tsx"
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal.tsx";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import useGlobalState from "@/lib/global_state";
+import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
+import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
 import {
   buildForumCommentTree,
   uploadForumCommentImage,
@@ -355,6 +357,7 @@ const ReplyInput = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { locked: forumTimedOut } = useForumTimeout();
 
   const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
@@ -399,6 +402,14 @@ const ReplyInput = ({
       textarea.setSelectionRange(newCursorPos, newCursorPos + (selectedText?.length || 0));
     }, 0);
   };
+
+  if (forumTimedOut) {
+    return (
+      <div className="mt-4">
+        <ForumTimeoutComposerLock />
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4" data-staff-composer>
@@ -585,6 +596,7 @@ const CommentItem = ({
 }) => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const [showChildren, setShowChildren] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
@@ -672,7 +684,9 @@ const CommentItem = ({
               <div className="relative">
                 <button
                   onClick={() => setShowCommentMenu(!showCommentMenu)}
-                  className="rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10"
+                  disabled={forumTimedOut}
+                  title={forumTimedOut ? forumTimeoutMessage : undefined}
+                  className={`rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                 >
                   <MoreVertical className="h-3 w-3" />
                 </button>
@@ -740,16 +754,20 @@ const CommentItem = ({
             <div className="mt-2 flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => onLike(postId, comment.comment_id)}
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
                 className={`inline-flex items-center gap-1 text-xs transition ${
                   isLiked ? "text-red-400" : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
-                }`}
+                } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
               >
                 <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
                 <span>{comment.likes?.length || 0}</span>
               </button>
               <button
                 onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
+                disabled={forumTimedOut}
+                title={forumTimedOut ? forumTimeoutMessage : undefined}
+                className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
               >
                 <Reply className="h-3 w-3" />
                 <span>Reply</span>
@@ -850,6 +868,7 @@ const SelectedGroup = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
   const [memberRoleFilter, setMemberRoleFilter] = useState<"All" | "Admin" | "Member">("All");
@@ -1224,7 +1243,8 @@ const SelectedGroup = () => {
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
-      showErrorToast("Failed to post reply. Please try again.");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
       return;
     }
   };
@@ -1276,7 +1296,8 @@ const SelectedGroup = () => {
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
-      showErrorToast("Failed to post reply. Please try again.");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
       return;
     }
   };
@@ -1556,8 +1577,10 @@ const SelectedGroup = () => {
       }
     }catch(error: any) {
       console.error("Error creating post:", error);
-      const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
-      showErrorToast(errorMessage);
+      if (!isRestrictionErrorHandled(error)) {
+        const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
+        showErrorToast(errorMessage);
+      }
       throw error;
     }
   };
@@ -1935,12 +1958,14 @@ const SelectedGroup = () => {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              disabled={forumTimedOut}
+              title={forumTimedOut ? forumTimeoutMessage : undefined}
+              className={`rounded-lg p-2 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
             >
               <MoreVertical className="h-5 w-5" />
             </button>
 
-            {isForumAuthenticated && showMenu && (
+            {isForumAuthenticated && showMenu && !forumTimedOut && (
               <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                 <div className="p-2">
                   {canEditGroup && (
@@ -2025,7 +2050,7 @@ const SelectedGroup = () => {
                 <h1 className="text-3xl font-bold text-white">{group.group_name}</h1>
                 <p className="mt-2 text-zinc-200 max-w-2xl">{group.description}</p>
                 {!isActiveMember && (
-                  <button type="button" onClick={() => void handleJoinGroup()} disabled={joiningGroup} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="button" onClick={() => void handleJoinGroup()} disabled={forumTimedOut || joiningGroup} title={forumTimedOut ? forumTimeoutMessage : undefined} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
                     {joiningGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     {joiningGroup ? "Joining..." : "Join Group"}
                   </button>
@@ -2090,7 +2115,9 @@ const SelectedGroup = () => {
                 {isActiveMember && (
                   <button
                     onClick={() => setIsNewDiscussionOpen(true)}
-                    className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap"
+                    disabled={forumTimedOut}
+                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                    className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                   >
                     <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
                     <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -2223,11 +2250,13 @@ const SelectedGroup = () => {
                                 <div className="relative">
                                   <button
                                     onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                                    className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+                                    disabled={forumTimedOut}
+                                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                                    className={`rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                                   >
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
-                                  {postMenuOpen === post.id && (
+                                  {postMenuOpen === post.id && !forumTimedOut && (
                                     <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl overflow-hidden z-20">
                                       <button
                                         onClick={() => {
@@ -2255,7 +2284,9 @@ const SelectedGroup = () => {
                               ) : (
                                 <button
                                   onClick={() => setReportingPost(post)}
-                                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400"
+                                  disabled={reportLocked}
+                                  title={reportLocked ? forumTimeoutMessage : undefined}
+                                  className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
                                 >
                                   <Flag className="h-3.5 w-3.5" />
                                   Report
@@ -2291,11 +2322,13 @@ const SelectedGroup = () => {
 
                               <button
                                 onClick={() => handleLikePost(post.id)}
+                                disabled={forumTimedOut}
+                                title={forumTimedOut ? forumTimeoutMessage : undefined}
                                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
-                                  post.isLiked 
-                                    ? "text-red-400 hover:text-red-300" 
+                                  post.isLiked
+                                    ? "text-red-400 hover:text-red-300"
                                     : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
-                                }`}
+                                } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                                 type="button"
                               >
                                 <Heart className={`h-3.5 w-3.5 transition-all ${post.isLiked ? "fill-red-400" : ""}`} />
@@ -2304,16 +2337,19 @@ const SelectedGroup = () => {
 
                               <button
                                 onClick={() => handleSavePost(post.id)}
+                                disabled={forumTimedOut}
+                                title={forumTimedOut ? forumTimeoutMessage : undefined}
                                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
-                                  post.isSaved 
-                                    ? "text-yellow-400 hover:text-yellow-300" 
+                                  post.isSaved
+                                    ? "text-yellow-400 hover:text-yellow-300"
                                     : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
-                                }`}
+                                } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                                 type="button"
                               >
                                 <Bookmark className={`h-3.5 w-3.5 transition-all ${post.isSaved ? "fill-yellow-400" : ""}`} />
                                 <span>{post.isSaved ? "Saved" : "Save"}</span>
                               </button>
+                              <ForumTimeoutPill />
                             </div>
 
                             {expandedPostId === post.id && (
@@ -2457,11 +2493,13 @@ const SelectedGroup = () => {
                     <div className="relative">
                       <button
                         onClick={() => setShowMemberMenu(showMemberMenu === member.userId ? null : member.userId)}
-                        className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+                        disabled={forumTimedOut}
+                        title={forumTimedOut ? forumTimeoutMessage : undefined}
+                        className={`rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
-                      {showMemberMenu === member.userId && (
+                      {showMemberMenu === member.userId && !forumTimedOut && (
                         <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                           <div className="p-2">
                             <button
