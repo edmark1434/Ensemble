@@ -23,6 +23,7 @@ import ListingFileInspector, {
   type InspectorTarget,
 } from './ListingFileInspector';
 import ListingThumb from './ListingThumb';
+import { StaffPunishmentChips } from '@/components/account/MeritStatus';
 import {
   LISTING_ACTIONS,
   ListingReasonDialog,
@@ -222,6 +223,7 @@ export function SellerListingsModal({
                     <span className="capitalize text-zinc-300">{history.account.status}</span>
                     {' · '}Merit {history.account.merit ?? 100}
                   </p>
+                  <StaffPunishmentChips penalties={history.account.meritPenalties} className="mt-1" />
                 </div>
               </div>
 
@@ -772,7 +774,15 @@ export default function ListingDetailModal({
                   {seller && (
                     <div className="mt-3">
                       <DetailRow label="Account status" value={<span className="capitalize">{seller.status}</span>} />
-                      <DetailRow label="Platform Merit" value={seller.merit} />
+                      <DetailRow
+                        label="Platform Merit"
+                        value={
+                          <span className="inline-flex flex-col items-end gap-1">
+                            {seller.merit}
+                            <StaffPunishmentChips penalties={seller.meritPenalties} showNone />
+                          </span>
+                        }
+                      />
                       <DetailRow label="Joined" value={formatDate(seller.joinedAt)} />
                       <DetailRow
                         label="Listings"

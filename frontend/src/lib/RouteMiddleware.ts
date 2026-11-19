@@ -2,8 +2,8 @@ import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "./global_state";
 import api from "./axios";
-import { getStaffHomePath, getStaffPlatformViewPath, isAdminAccount } from "./staffRoutes";
-import { isAdminConsoleHost } from "./consoleHosts";
+import { consoleIdForAccount, getStaffHomePath, getStaffPlatformViewPath } from "./staffRoutes";
+import { consoleIdFromHostname } from "./consoleHosts";
 import { ONBOARDING_COMPLETED_EVENT, ONBOARDING_STEP_CHANGED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
 import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -191,7 +191,9 @@ export default function RouteMiddleware() {
                 if (!cancelled && result.status === 200) {
                     const responseData = result.data as { user?: unknown } | undefined;
                     const currentUser = responseData?.user ?? result.data;
-                    if (isAdminAccount(currentUser as { type?: string; role?: string }) && !isAdminConsoleHost()) {
+                    // Admin and staff sessions belong to their console host only.
+                    const accountConsole = consoleIdForAccount(currentUser as { type?: string; role?: string });
+                    if (accountConsole && consoleIdFromHostname(window.location.hostname) !== accountConsole) {
                         void api.post('/api/users/logout').catch(() => {});
                         setResolvedUser(null);
                         return;
@@ -315,7 +317,7 @@ export default function RouteMiddleware() {
 
     // The landing page and member auth screens must stay reachable while a staff
     // cookie is present so someone leaving staff.ensemble.software can switch to
-    // a user account. Signing in as a member replaces the shared session.
+    // a user account. The staff host keeps its own session, so this never signs staff out.
     const isMemberAuthEntryPath =
         location.pathname === '/' ||
         location.pathname === '/login' ||

@@ -87,12 +87,14 @@ function applySocketStanding(socket, access) {
   socket.data.banned = Boolean(access?.banned);
   socket.data.locked = Boolean(access?.locked);
   socket.data.forumTimeout = Boolean(access?.forumTimeout);
+  // An automatic mute (Platform Merit) also stops forum writes over the socket.
+  socket.data.muted = Boolean(access?.muted);
   socket.data.standingCheckedAt = Date.now();
 }
 
 /**
  * Push a new standing onto the account's open sockets on this server, so a suspension that
- * starts or ends (expiry, appeal, merit recovery, staff action) applies without a reconnect.
+ * starts or ends (expiry, appeal, automatic merit punishment, staff action) applies without a reconnect.
  */
 function refreshSocketStanding(accountId, access) {
   if (!io || !accountId || !access) return;
@@ -232,15 +234,23 @@ async function initSocket(httpServer) {
         }
         return;
       }
-      // A forum timeout still reads the forums live: joining and leaving forum rooms stays on.
-      if (socket.data.forumTimeout && /forum/i.test(eventName) && !SUSPENDED_SOCKET_EVENTS.has(eventName)) {
+      // A forum timeout or mute still reads the forums live: joining and leaving forum rooms stays on.
+      if ((socket.data.forumTimeout || socket.data.muted) && /forum/i.test(eventName) && !SUSPENDED_SOCKET_EVENTS.has(eventName)) {
         const ack = packet[packet.length - 1];
         if (typeof ack === 'function') {
-          ack({
-            success: false,
-            code: 'FORUM_TIMEOUT',
-            message: 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.',
-          });
+          ack(
+            socket.data.forumTimeout
+              ? {
+                  success: false,
+                  code: 'FORUM_TIMEOUT',
+                  message: 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.',
+                }
+              : {
+                  success: false,
+                  code: 'WARNING_RESTRICTED',
+                  message: 'You are muted, so forum posting is paused. You can still read.',
+                }
+          );
         }
         return;
       }

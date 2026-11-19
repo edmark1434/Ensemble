@@ -652,7 +652,15 @@ export type GigPostingDetail = {
 export type JobsGigsPostingDetail = JobPostingDetail | GigPostingDetail;
 
 export type UserJobsHistory = {
-  account: { accountId: string; name: string; handle: string; status: string; merit?: number };
+  account: {
+    accountId: string;
+    name: string;
+    handle: string;
+    status: string;
+    merit?: number;
+    /** Automatic merit punishments running now (timed). */
+    meritPenalties?: { id: string; effect: string; label: string; ruleLabel?: string | null; endsAt: string | null; triggerMerit?: number | null; meritAtStart?: number | null }[];
+  };
   jobs: {
     id: string;
     title: string;

@@ -10,6 +10,7 @@ export type StatusActionId =
   | 'unlock'
   | 'timeout'
   | 'clear_timeout'
+  | 'unfreeze'
   | 'warn';
 
 /** Normalize account status for comparisons. */
@@ -31,7 +32,13 @@ function allowAction(id: string, caps?: UserTeamCapabilities) {
  */
 export function getManageActionsForStatus(
   status?: string | null,
-  options?: { hasViolations?: boolean; forumTimeout?: boolean; capabilities?: UserTeamCapabilities }
+  options?: {
+    hasViolations?: boolean;
+    forumTimeout?: boolean;
+    /** Running automatic bands / mutes (not suspensions). Admin and Support can end them. */
+    automaticPunishments?: number;
+    capabilities?: UserTeamCapabilities;
+  }
 ): MenuItem[] {
   const s = normalizeAccountStatus(status);
   const caps = options?.capabilities;
@@ -63,6 +70,11 @@ export function getManageActionsForStatus(
     items.push({ id: 'timeout', label: 'Timeout', section: 'manage' });
   }
 
+  // Unfreeze ends automatic merit punishments early; it sits with pardon (Admin / Support).
+  if ((options?.automaticPunishments || 0) > 0 && (!caps || caps.canPardon)) {
+    items.push({ id: 'unfreeze', label: 'Unfreeze (end automatic limits)', section: 'manage' });
+  }
+
   if (allowAction('warn', caps)) items.push({ id: 'warn', label: 'Issue warning', section: 'manage' });
 
   return items;
@@ -82,7 +94,12 @@ export function getPrimaryRowActions(capabilities?: UserTeamCapabilities): MenuI
 
 export function buildRowActionItems(
   status?: string | null,
-  options?: { hasViolations?: boolean; forumTimeout?: boolean; capabilities?: UserTeamCapabilities }
+  options?: {
+    hasViolations?: boolean;
+    forumTimeout?: boolean;
+    automaticPunishments?: number;
+    capabilities?: UserTeamCapabilities;
+  }
 ): MenuItem[] {
   return [
     ...getPrimaryRowActions(options?.capabilities),

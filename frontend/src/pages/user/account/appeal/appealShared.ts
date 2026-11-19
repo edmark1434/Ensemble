@@ -1,4 +1,3 @@
-import type { StandingConditionId } from '@/lib/standing';
 import type { CaseAccess } from '@/lib/cases';
 import type { ThreadAttachment } from './appealAttachments';
 
@@ -15,6 +14,65 @@ export const APPEAL_LIMITS = {
   disputeReply: 2000,
 } as const;
 
+/** Must match `TARGET_TYPES` in `backend/services/PenaltyAppealServices.js`. */
+export type AppealTargetType =
+  | 'ban'
+  | 'lock'
+  | 'suspension'
+  | 'forum_timeout'
+  | 'warning'
+  | 'credit_hold'
+  | 'merit_penalty';
+
+/** The one penalty an appeal ticket is about. Null on account-wide appeals filed before the change. */
+export type AppealTarget = {
+  type: AppealTargetType;
+  id: string | null;
+  label: string | null;
+  startedAt?: string | null;
+};
+
+export type AppealState =
+  | 'available'
+  | 'open'
+  | 'legacy_open'
+  | 'accepted'
+  | 'denied'
+  | 'denied_permanent';
+
+/** One active penalty and whether it can be appealed now (`GET /api/users/appeals`). */
+export type AppealablePenalty = {
+  key: string;
+  type: AppealTargetType;
+  id: string;
+  label: string;
+  detail: string | null;
+  reason: string | null;
+  number: string | null;
+  points: number | null;
+  credits: number | null;
+  startedAt: string | null;
+  endsAt: string | null;
+  appeal: {
+    state: AppealState;
+    canAppeal: boolean;
+    ticketId: string | null;
+    ticketNumber: string | null;
+    status: string | null;
+    decidedAt: string | null;
+    availableAt: string | null;
+    legacy?: boolean;
+    message: string | null;
+  };
+};
+
+export type AppealOptions = {
+  /** False before the per-penalty migration: appeals are still account-wide. */
+  perPenalty: boolean;
+  legacyOpenAppeal: { ticketId: string | null; ticketNumber: string | null; status: string | null } | null;
+  penalties: AppealablePenalty[];
+};
+
 export type TicketRow = {
   id: string;
   number?: string;
@@ -26,6 +84,9 @@ export type TicketRow = {
   lastMessageAt?: string | null;
   /** The ticket's chat, so old `?conversation=` links find their case. */
   chatId?: string | null;
+  /** Appeals: the one penalty this ticket is about, and the decision on it. */
+  appealTarget?: AppealTarget | null;
+  appealDecision?: AppealDecision;
   /** What the member may do on it, from the server. */
   access?: CaseAccess;
 };
@@ -65,9 +126,40 @@ export type ThreadMessage = {
   authorAvatar?: string | null;
   /** Dispute messages: a community reply still waiting for staff. */
   pendingReview?: boolean;
+  /** Ticket messages: the appeal decision card (`messageType: 'appeal_decision'`). */
+  decision?: AppealDecisionCardData | null;
 };
 
 export type AppealDecision = 'accepted' | 'denied' | 'denied_permanent' | null;
+
+/**
+ * An appeal decision posted in the ticket chat (`messageType: 'appeal_decision'`). Built by
+ * `buildDecision` in `backend/services/PenaltyAppealServices.js`.
+ */
+export type AppealDecisionCardData = {
+  version: number;
+  decision: Exclude<AppealDecision, null>;
+  headline: string;
+  ticketNumber: string | null;
+  target: { type: AppealTargetType; label: string } | null;
+  outcomeLabel: string;
+  outcome: string;
+  paragraphs: string[];
+  note: string | null;
+  followUp: { action: 'suspend' | 'ban'; title: string; detail: string | null; label: string | null; reason: string | null } | null;
+  reappeal: string | null;
+  closing: string | null;
+  decidedAt: string | null;
+};
+
+/** The card on a ticket message, from the API (`decision`) or a raw socket message (`appeal_decision`). */
+export function decisionCardOf(message: unknown): AppealDecisionCardData | null {
+  const m = message as { messageType?: string; message_type?: string; decision?: unknown; appeal_decision?: unknown } | null;
+  const type = String(m?.messageType || m?.message_type || '').toLowerCase();
+  if (type !== 'appeal_decision') return null;
+  const card = (m?.decision || m?.appeal_decision) as AppealDecisionCardData | undefined;
+  return card && typeof card === 'object' && card.decision ? card : null;
+}
 
 export type CaseSelection = { kind: 'ticket' | 'dispute'; id: string };
 
@@ -101,39 +193,57 @@ type PenaltyCopy = {
   subjectPlaceholder: string;
   /** What an accepted appeal does, in plain words. */
   outcome: string;
+  /** "your suspension", for sentences. */
+  noun: string;
 };
 
-/** Per-penalty copy. Accepted appeals end bans, locks, suspensions, timeouts and holds; warnings are rescinded instead. */
-export const PENALTY_COPY: Record<StandingConditionId, PenaltyCopy> = {
-  banned: {
+/**
+ * Per-penalty copy. Each penalty is appealed on its own and a decision changes only that one:
+ * accepted bans, locks, suspensions, timeouts, automatic punishments and holds end within 24
+ * hours; an accepted warning is rescinded at once.
+ */
+export const APPEAL_TARGET_COPY: Record<AppealTargetType, PenaltyCopy> = {
+  ban: {
     formTitle: 'Appeal this ban',
     subjectPlaceholder: 'Appeal: account ban',
-    outcome: 'If staff accept your appeal, the ban ends within 24 hours.',
+    outcome: 'If staff accept this appeal, the ban ends within 24 hours.',
+    noun: 'ban',
   },
-  locked: {
+  lock: {
     formTitle: 'Ask to unlock this account',
     subjectPlaceholder: 'Request: unlock my account',
-    outcome: 'If staff accept your appeal, the lock ends within 24 hours.',
+    outcome: 'If staff accept this appeal, the lock ends within 24 hours.',
+    noun: 'lock',
   },
-  suspended: {
+  suspension: {
     formTitle: 'Appeal this suspension',
     subjectPlaceholder: 'Appeal: account suspension',
-    outcome: 'If staff accept your appeal, the suspension ends within 24 hours.',
+    outcome: 'If staff accept this appeal, the suspension ends within 24 hours.',
+    noun: 'suspension',
   },
-  frozen_access: {
-    formTitle: 'Appeal a warning',
+  warning: {
+    formTitle: 'Appeal this warning',
     subjectPlaceholder: 'Appeal: warning on my account',
-    outcome: 'If a warning was issued by mistake, staff remove it and your Platform Merit recovers.',
+    outcome: 'If staff accept this appeal, the warning is rescinded right away and its points stop counting against your Platform Merit.',
+    noun: 'warning',
+  },
+  merit_penalty: {
+    formTitle: 'Appeal this automatic punishment',
+    subjectPlaceholder: 'Appeal: automatic punishment',
+    outcome: 'If staff accept this appeal, this automatic punishment ends within 24 hours. The warnings behind it stay unless you appeal them too.',
+    noun: 'automatic punishment',
   },
   credit_hold: {
     formTitle: 'Ask for your credits back',
     subjectPlaceholder: 'Request: release my held credits',
-    outcome: 'If staff accept your appeal, the credits return to your Account Wallet within 24 hours.',
+    outcome: 'If staff accept this appeal, the credits return to your Account Wallet within 24 hours.',
+    noun: 'credit hold',
   },
   forum_timeout: {
     formTitle: 'Appeal this forum timeout',
     subjectPlaceholder: 'Appeal: forum timeout',
-    outcome: 'If staff accept your appeal, the timeout ends within 24 hours.',
+    outcome: 'If staff accept this appeal, this timeout ends within 24 hours.',
+    noun: 'forum timeout',
   },
 };
 
@@ -141,4 +251,9 @@ export const DEFAULT_PENALTY_COPY: PenaltyCopy = {
   formTitle: 'Appeal an account penalty',
   subjectPlaceholder: 'Appeal: account penalty',
   outcome: 'If staff accept your appeal, the penalty ends within 24 hours.',
+  noun: 'penalty',
 };
+
+export function appealCopyFor(type?: AppealTargetType | null): PenaltyCopy {
+  return (type && APPEAL_TARGET_COPY[type]) || DEFAULT_PENALTY_COPY;
+}

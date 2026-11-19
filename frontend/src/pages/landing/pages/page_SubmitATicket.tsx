@@ -6,8 +6,12 @@ import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import useGlobalState from "@/lib/global_state";
 import { CASES_PATH, casePath } from "@/lib/cases";
+import { APPEAL_PATH } from "@/lib/appealAccess";
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+/** Must match `APPEAL_TICKET_TYPE` in `backend/lib/AccountRestriction.js`. */
+const APPEAL_TICKET_TYPE = "Appeal an account penalty";
 
 interface TicketField {
   key: string;
@@ -363,6 +367,11 @@ const PageSubmitATicket: React.FC = () => {
       navigate(`/login?redirect=${encodeURIComponent("/support/ticket")}`);
       return;
     }
+    // Appeals name one penalty, which is picked on the standing page.
+    if (ticketType === APPEAL_TICKET_TYPE) {
+      navigate(APPEAL_PATH);
+      return;
+    }
     const tooLarge = screenshots.find((file) => file.size > MAX_ATTACHMENT_BYTES);
     if (tooLarge) {
       setError("Each attachment must be 8 MB or smaller.");
@@ -424,6 +433,8 @@ const PageSubmitATicket: React.FC = () => {
     (item) => item.group === group && (group !== "Support" || item.subgroup === subgroup)
   );
   const selected = catalog.find((item) => item.label === ticketType) || null;
+  // Each penalty is appealed on its own from the standing page, where the member picks it.
+  const appealType = ticketType === APPEAL_TICKET_TYPE;
 
   const chooseGroup = (nextGroup: string) => {
     const inGroup = catalog.filter((item) => item.group === nextGroup);
@@ -652,7 +663,24 @@ const PageSubmitATicket: React.FC = () => {
                 </p>
               </div>
             )}
-            {(selected?.fields || []).filter(fieldShown).map((field) => {
+            {appealType ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Appeals are filed per penalty</p>
+                <p className="mt-1 text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
+                  Each penalty on your account (a suspension, a forum timeout, a warning, a credit hold…) has its own appeal.
+                  Open your account standing page, pick the penalty, and appeal it there. A decision on one does not change the
+                  others.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(APPEAL_PATH)}
+                  className="mt-3 inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-zinc-200"
+                >
+                  Go to my penalties and appeals
+                </button>
+              </div>
+            ) : null}
+            {(appealType ? [] : selected?.fields || []).filter(fieldShown).map((field) => {
               const pickerKey = field.picker === "project" ? "projects"
                 : field.picker === "order" ? "orders"
                 : field.picker === "listing" ? "listings"
@@ -752,6 +780,8 @@ const PageSubmitATicket: React.FC = () => {
                 </div>
               );
             })}
+            {!appealType ? (
+            <>
             <div>
               <label style={labelStyle}>Issue subject *</label>
               <input
@@ -801,6 +831,8 @@ const PageSubmitATicket: React.FC = () => {
             >
               {submitting ? "Submitting..." : "Submit Ticket"}
             </button>
+            </>
+            ) : null}
           </form>
         )}
       </div>

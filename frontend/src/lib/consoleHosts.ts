@@ -1,12 +1,14 @@
 /**
- * Admin and staff consoles are moving off the main site onto their own hosts.
+ * Admin and staff consoles live on their own hosts, off the main site.
  * Route modules still use /admin and /staff. On a console host the browser
  * shows the path without that prefix, and the router maps it back.
  *
  * Local:  http://admin.localhost:5173  and  http://staff.localhost:5173
  * Prod:   https://admin.ensemble.software  and  https://staff.ensemble.software
  *
- * Moderator desks stay on the main site for now.
+ * Moderator desks (/moderator/*) live on the staff host and keep their full
+ * path there (staff.ensemble.software/moderator/support), because /support
+ * and /jobs are also member pages.
  *
  * Platform view frames member pages from the console host itself, so the
  * preview keeps the staff session and same-origin messaging. Inside that
@@ -32,7 +34,12 @@ const ADMIN_SECTIONS = new Set([
   'platform-view',
 ]);
 
-const STAFF_SECTIONS = new Set(['dashboard', 'platform-view']);
+const STAFF_SECTIONS = new Set(['dashboard', 'platform-view', 'moderator']);
+
+/** Staff-host paths the router uses as is, without the /staff prefix. */
+function isModeratorPath(pathname: string): boolean {
+  return pathname === '/moderator' || pathname.startsWith('/moderator/');
+}
 
 type LocationLike = {
   protocol: string;
@@ -103,16 +110,14 @@ export function isAdminConsoleHost(hostname: string = window.location.hostname):
 }
 
 /**
- * Hosts that call /api on their own origin, so their session cookie is separate.
- * The admin console never shares the member site's session. The staff portal does
- * in production because moderator desks live on the main site; locally it cannot,
- * since staff.localhost and localhost are different sites for cookies.
+ * Console hosts call /api and /socket.io on their own origin, so each keeps its
+ * own session cookie: signing in on the member site never replaces the admin or
+ * staff session, and console cookies never reach the member site. The production
+ * proxy must forward both paths on admin.ensemble.software and staff.ensemble.software.
  */
 export function consoleApiOrigin(): string | null {
   if (typeof window === 'undefined') return null;
-  const host = bareHost(window.location.hostname);
-  if (isAdminConsoleHost(host) || host === 'staff.localhost') return window.location.origin;
-  return null;
+  return consoleIdFromHostname(window.location.hostname) ? window.location.origin : null;
 }
 
 export function stripConsolePrefix(pathname: string, id: ConsoleId): string | null {
@@ -125,6 +130,7 @@ export function stripConsolePrefix(pathname: string, id: ConsoleId): string | nu
 export function routerPathFromPublic(pathname: string, id: ConsoleId): string {
   const prefix = `/${id}`;
   if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return pathname;
+  if (id === 'staff' && isModeratorPath(pathname)) return pathname;
   if (pathname === '/') return prefix;
   return `${prefix}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
 }
@@ -151,18 +157,19 @@ export function joinUrl(origin: string, pathname: string, search = '', hash = ''
   return `${origin}${path}${query}${fragment}`;
 }
 
-/** Old /admin and /staff URLs on the main site, sent to the console host. */
+/** /admin, /staff and /moderator URLs on the main site, sent to the console host. */
 export function legacyConsoleRedirect(loc: LocationLike): string | null {
   if (consoleIdFromHostname(loc.hostname) || !isApexHost(loc.hostname)) return null;
+  const moderator = isModeratorPath(loc.pathname);
   const id = loc.pathname === '/admin' || loc.pathname.startsWith('/admin/')
     ? 'admin'
-    : loc.pathname === '/staff' || loc.pathname.startsWith('/staff/')
+    : moderator || loc.pathname === '/staff' || loc.pathname.startsWith('/staff/')
       ? 'staff'
       : null;
   if (!id) return null;
   const origin = consoleOrigin(id, loc);
   if (!origin) return null;
-  const pathname = stripConsolePrefix(loc.pathname, id) ?? '/';
+  const pathname = moderator ? loc.pathname : stripConsolePrefix(loc.pathname, id) ?? '/';
   return joinUrl(origin, pathname, loc.search, loc.hash);
 }
 

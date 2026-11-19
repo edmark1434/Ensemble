@@ -24,7 +24,8 @@ import {
   Trash2,
   LayoutTemplate,
   User,
-  ArrowRight
+  ArrowRight,
+  RotateCcw
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
@@ -426,8 +427,8 @@ export default function AssetDetails() {
         showSuccessToast("Comment deleted.");
       } else if (assetToDelete) {
         await api.delete(`/api/assets/${assetId}`);
-        showSuccessToast("Asset deleted.");
-        navigate("/assets", { replace: true });
+        showSuccessToast("Asset moved to Trash.");
+        navigate("/assets/trash", { replace: true });
       }
     } catch (error) {
       showErrorToast(errorMessage(error, "Unable to delete this item.").message);
@@ -468,10 +469,27 @@ export default function AssetDetails() {
     setPurchaseOpen(true);
   };
 
+  const [restoring, setRestoring] = useState(false);
+  const restoreAsset = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      await api.post(`/api/assets/${assetId}/restore`);
+      showSuccessToast("Asset restored.");
+      setAsset((current) => current ? { ...current, trashed_at: null } : current);
+    } catch (error) {
+      showErrorToast(errorMessage(error, "Unable to restore this asset.").message);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const deleteDialogOpen = assetToDelete || Boolean(commentToDelete) || Boolean(replyToDelete) || Boolean(reviewToDelete);
-  const deleteDialogTitle = assetToDelete ? "Delete asset?" : reviewToDelete ? "Delete review?" : replyToDelete ? "Delete reply?" : "Delete comment?";
+  const deleteDialogTitle = assetToDelete
+    ? "Move asset to Trash?"
+    : reviewToDelete ? "Delete review?" : replyToDelete ? "Delete reply?" : "Delete comment?";
   const deleteDialogMessage = assetToDelete
-    ? "This asset will be removed from the library."
+    ? `Move “${asset?.name || "this asset"}” to Trash? You can restore it later from the Trash tab.`
     : reviewToDelete
       ? "Your review will be removed from this asset."
     : replyToDelete
@@ -520,6 +538,28 @@ export default function AssetDetails() {
       <main className="mx-auto w-full max-w-6xl p-5 md:p-8">
         <button type="button" onClick={() => navigate("/assets")} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to Assets</button>
 
+        {asset.trashed_at && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-600 dark:text-red-300">
+            <div className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 shrink-0" />
+              <span className="text-sm font-semibold">This asset is currently in your Trash.</span>
+            </div>
+            {asset.is_owner && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void restoreAsset()}
+                  disabled={restoring}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm transition hover:bg-gray-100 disabled:opacity-50 dark:bg-dark-surface dark:text-white dark:hover:bg-white/10"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> {restoring ? "Restoring..." : "Restore asset"}
+                </button>
+
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-6 mb-7">
           <section className="lg:w-[45%] shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
             <AssetThumbnailCarousel asset={asset} />
@@ -556,10 +596,25 @@ export default function AssetDetails() {
                   </div>
                   <h1 className="mt-3 break-words text-2xl font-bold md:text-3xl">{asset.name}</h1>
                 </div>
-                {asset.is_owner && <div className="flex shrink-0 items-center gap-2">
-                  <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button>
-                  <button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button>
-                </div>}
+                {asset.is_owner && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    {asset.trashed_at ? (
+                      <button
+                        type="button"
+                        onClick={() => void restoreAsset()}
+                        disabled={restoring}
+                        className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
+                      >
+                        <RotateCcw className="h-4 w-4" /> {restoring ? "Restoring..." : "Restore"}
+                      </button>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button>
+                        <button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-gray-700 dark:text-zinc-300 flex-1">{asset.description}</p>
@@ -894,7 +949,7 @@ export default function AssetDetails() {
         standalone={true}
         onConfirm={() => setIsEditSuccessOpen(false)}
       />
-      <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : "Delete"} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); setReviewToDelete(null); } }} />
+      <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : (assetToDelete && !asset?.trashed_at ? "Move to Trash" : "Delete")} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); setReviewToDelete(null); } }} />
     </div>
   );
 }

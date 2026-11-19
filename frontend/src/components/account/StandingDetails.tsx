@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Coins, Lock, MessageSquareOff, ShieldAlert, Snowflake, X } from 'lucide-react';
+import { Clock, Coins, Lock, MessageSquareOff, ShieldAlert, Snowflake, VolumeX, X } from 'lucide-react';
 import {
   APPEAL_PATH,
   type StandingCondition,
@@ -42,7 +42,8 @@ const TONE = {
 
 export function conditionIcon(id: StandingCondition['id']) {
   if (id === 'credit_hold') return Coins;
-  if (id === 'frozen_access') return Snowflake;
+  if (id === 'merit_limits') return Snowflake;
+  if (id === 'muted') return VolumeX;
   if (id === 'forum_timeout') return MessageSquareOff;
   if (id === 'locked' || id === 'banned') return Lock;
   return ShieldAlert;

@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import { CreditIcon } from "@/components/ui/credit-icon";
 
@@ -25,6 +26,9 @@ const TRANSACTION_CATEGORIES = [
   "Cashout",
   "Cashout Refund",
   "Fee",
+  "Staff Adjustment",
+  "Credits on Hold",
+  "Hold Released",
 ] as const;
 
 const TYPE_DISPLAY_LABELS: Record<string, string> = {
@@ -38,6 +42,9 @@ const TYPE_DISPLAY_LABELS: Record<string, string> = {
   Cashout: "Cashout Payout",
   "Cashout Refund": "Cashout Refund",
   Fee: "Platform Fee",
+  "Staff Adjustment": "Staff Adjustment",
+  "Credits on Hold": "Held by Staff",
+  "Hold Released": "Hold Released",
 };
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
@@ -51,9 +58,14 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   Cashout: "Credits withdrawn from your Account Wallet to an external payout method.",
   "Cashout Refund": "Credits restored to your Account Wallet when a cashout fails or is reversed.",
   Fee: "Platform commission on milestone payouts or asset sales, or listing/posting fees.",
+  "Staff Adjustment": "Credits staff added to or removed from your Account Wallet, with the reason they gave.",
+  "Credits on Hold": "Credits staff put on hold. They stay yours and come back when the hold ends or an appeal is accepted.",
+  "Hold Released": "Held credits returned to your spendable balance when a hold ended or was released.",
 };
 
 const REFERENCE_TABLE_LABELS: Record<string, string> = {
+  tickets: "Support Ticket",
+  wallets: "Staff Credit Hold",
   payments: "Credit Top-Up Checkout",
   contracts: "Work Contract",
   contract_milestones: "Contract Milestone",
@@ -73,7 +85,15 @@ type DirectionFilter = "all" | Direction;
 type RowLimit = 10 | 25 | 50;
 type MainTab = "All" | "Credits" | "Assets" | "Transfers" | "Fee" | "Summary";
 
-const CREDITS_ESCROW_TYPES = ["Credit Purchase", "Escrow Hold", "Escrow Release", "Escrow Refund"];
+const CREDITS_ESCROW_TYPES = [
+  "Credit Purchase",
+  "Escrow Hold",
+  "Escrow Release",
+  "Escrow Refund",
+  "Staff Adjustment",
+  "Credits on Hold",
+  "Hold Released",
+];
 const ASSET_TYPES = ["Asset Purchase", "Asset Refund"];
 const TRANSFER_CASHOUT_TYPES = ["Fund Transfer", "Cashout", "Cashout Refund"];
 const FEE_TYPES = ["Fee"];
@@ -125,6 +145,12 @@ interface CreditTransaction {
   referenceTable: string | null;
   referenceId: string | null;
   isCreditPurchase: boolean;
+  /** Set on staff grants, deductions, holds and releases. */
+  staffAction?: "grant" | "deduction" | "adjustment" | "hold" | "release" | null;
+  /** The reason staff wrote for the member (adjustments and holds). */
+  staffReason?: string | null;
+  /** When a hold was set to be released, at the time it was placed. Null = until staff review. */
+  holdUntil?: string | null;
   /** Set on credits that are on their way but not paid yet (e.g. a dispute payout). */
   pending?: {
     kind: "dispute_payout";
@@ -178,6 +204,11 @@ function transactionCategory(transaction: CreditTransaction): string {
 
 function displayType(type: string) {
   return TYPE_DISPLAY_LABELS[type] || type || "Unknown";
+}
+
+function transactionContext(transaction: CreditTransaction) {
+  if (!transaction.referenceTable && transaction.staffAction) return "Staff Adjustment";
+  return formatReferenceTable(transaction.referenceTable);
 }
 
 function formatReferenceTable(referenceTable: string | null) {
@@ -498,6 +529,18 @@ export const TransactionHistoryMain = () => {
 
   useEffect(() => {
     void loadTransactions();
+  }, [loadTransactions]);
+
+  // Staff grants, deductions and holds land while the page is open: reload so the row appears.
+  // Holds arrive as `ensemble:wallet-changed` (AccountStanding relays the socket event).
+  useEffect(() => {
+    const reload = () => void loadTransactions();
+    socket.on("account:credits_adjusted", reload);
+    window.addEventListener("ensemble:wallet-changed", reload);
+    return () => {
+      socket.off("account:credits_adjusted", reload);
+      window.removeEventListener("ensemble:wallet-changed", reload);
+    };
   }, [loadTransactions]);
 
   const types = useMemo(() => {
@@ -1672,8 +1715,24 @@ export const TransactionHistoryMain = () => {
                 />
                 <DetailItem
                   label="Context"
-                  value={formatReferenceTable(selectedTransaction.referenceTable)}
+                  value={transactionContext(selectedTransaction)}
                 />
+                {selectedTransaction.staffReason && (
+                  <div className="sm:col-span-2">
+                    <DetailItem label="Reason from staff" value={selectedTransaction.staffReason} />
+                  </div>
+                )}
+                {selectedTransaction.staffAction === "hold" && (
+                  <DetailItem
+                    label="Hold set to end"
+                    value={
+                      selectedTransaction.holdUntil &&
+                      Number.isFinite(new Date(selectedTransaction.holdUntil).getTime())
+                        ? new Date(selectedTransaction.holdUntil).toLocaleString()
+                        : "When staff review your account"
+                    }
+                  />
+                )}
                 <DetailItem
                   label="Source Wallet"
                   value={selectedTransaction.sourceWalletId}

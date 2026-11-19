@@ -3,6 +3,7 @@ import { Check, Edit2, HelpCircle, ShieldCheck, Star, Trash2, Trophy, X, Briefca
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { getRatingTierTag } from "./RatingsSection_ProfileDisplay";
 import { DEFAULT_MERIT, meritBandLabel, meritColor } from "@/lib/merit";
+import { OwnMeritStatus } from "@/components/account/MeritStatus";
 
 const MAX_BUDGET_CREDITS = 100000000;
 
@@ -99,7 +100,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-white dark:border-r-[#070913]" />
               <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[5px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
               <p className="text-[10px] text-gray-600 dark:text-zinc-300 leading-relaxed font-medium">
-                Platform Merit starts at {DEFAULT_MERIT} and drops only while warnings are still active. Total Rating averages every review this user has received, while Freelance Rating averages reviews from work delivered on gigs and jobs. Budget is the planned credits budget for hiring or projects.
+                Platform Merit starts at {DEFAULT_MERIT} and drops only while warnings are still active. When it drops to certain levels, an automatic limit runs for a few days, even if merit recovers sooner. Total Rating averages every review this user has received, while Freelance Rating averages reviews from work delivered on gigs and jobs. Budget is the planned credits budget for hiring or projects.
               </p>
             </div>
           </div>
@@ -152,6 +153,8 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
               {meritBand}
             </span>
           </div>
+          {/* Only the member sees what is paused; visitors see the tier and public chips. */}
+          {isOwner ? <OwnMeritStatus className="pt-0.5" /> : null}
         </div>
       </div>
 

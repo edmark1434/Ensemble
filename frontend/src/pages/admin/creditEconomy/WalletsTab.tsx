@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Loader2, Lock, Search, Unlock } from 'lucide-react';
 import BulkActionsMenu from '../userTeam/components/BulkActionsMenu';
 import { HoldCreditsDialog, ReleaseHoldDialog } from './CreditActionDialogs';
@@ -45,6 +46,46 @@ const WALLET_DEFAULTS: Filters = {
 
 const HOLD_DEFAULTS: Filters = { ...WALLET_DEFAULTS, hold: 'held', sort: 'hold_ending' };
 
+/**
+ * Wallets and Holds keep their filters in the URL like the Ledger, so a link from the
+ * overview ("Negative balances", "Holds releasing within 7 days") can be copied as is.
+ */
+const WALLET_PARAM: Record<keyof Filters, string> = {
+  search: 'q',
+  accountType: 'accountType',
+  hold: 'hold',
+  balance: 'balance',
+  accountStatus: 'accountStatus',
+  sort: 'sort',
+};
+export const WALLET_PARAM_KEYS = Object.values(WALLET_PARAM);
+
+function defaultsFor(mode: Mode) {
+  return mode === 'holds' ? HOLD_DEFAULTS : WALLET_DEFAULTS;
+}
+
+function readWalletFilters(params: URLSearchParams, mode: Mode): Filters {
+  const out = { ...defaultsFor(mode) };
+  for (const key of Object.keys(WALLET_PARAM) as (keyof Filters)[]) {
+    const value = params.get(WALLET_PARAM[key]);
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
+/** Writes wallet filters into `params` (values equal to the mode's defaults are removed). */
+export function writeWalletFilters(params: URLSearchParams, patch: Record<string, string>, mode: Mode) {
+  const defaults = defaultsFor(mode);
+  for (const key of Object.keys(patch) as (keyof Filters)[]) {
+    const name = WALLET_PARAM[key];
+    if (!name) continue;
+    const value = patch[key];
+    if (!value || value === defaults[key]) params.delete(name);
+    else params.set(name, value);
+  }
+  return params;
+}
+
 const HOLD_VIEWS = [
   { value: 'held', label: 'All holds' },
   { value: 'overdue', label: 'Overdue' },
@@ -63,7 +104,6 @@ type WalletsTabProps = {
   variant: EconomyVariant;
   viewer: EconomyViewer;
   mode: Mode;
-  preset?: Partial<Filters>;
   statuses: string[];
   refreshToken: number;
   onView: (wallet: EconomyWallet) => void;
@@ -95,31 +135,44 @@ export default function WalletsTab({
   variant,
   viewer,
   mode,
-  preset,
   statuses,
   refreshToken,
   onView,
   onChanged,
 }: WalletsTabProps) {
   const accent = ECONOMY_ACCENT[variant];
-  const defaults = mode === 'holds' ? HOLD_DEFAULTS : WALLET_DEFAULTS;
-  const [filters, setFilters] = useState<Filters>({ ...defaults, ...preset });
-  const [offset, setOffset] = useState(0);
+  const defaults = defaultsFor(mode);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => readWalletFilters(searchParams, mode), [searchParams, mode]);
   const [selected, setSelected] = useState<Map<string, EconomyWallet>>(new Map());
   const [dialog, setDialog] = useState<{ kind: 'hold' | 'release'; wallets: EconomyWallet[] } | null>(null);
-  const search = useDebounced(filters.search);
 
-  // An alert link re-applies its filters even when this tab is already open.
-  const presetKey = JSON.stringify(preset || {});
+  const update = useCallback(
+    (patch: Partial<Filters>) => {
+      setSearchParams((prev) => writeWalletFilters(new URLSearchParams(prev), patch as Record<string, string>, mode), { replace: true });
+    },
+    [setSearchParams, mode]
+  );
+
+  // The search box keeps what is typed; the URL gets it after a pause.
+  const [searchText, setSearchText] = useState(filters.search);
+  useEffect(() => setSearchText(filters.search), [filters.search]);
+  const search = useDebounced(searchText);
   useEffect(() => {
-    setFilters({ ...defaults, ...preset });
-    setOffset(0);
+    const v = search.trim();
+    if (v !== filters.search) update({ search: v });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetKey, mode]);
+  }, [search]);
+
+  // Page 1 whenever the filters change (opening a wallet modal does not count).
+  const filterKey = JSON.stringify(filters);
+  const [paging, setPaging] = useState({ key: filterKey, offset: 0 });
+  const offset = paging.key === filterKey ? paging.offset : 0;
+  const setOffset = (next: number) => setPaging({ key: filterKey, offset: next });
 
   const params = useMemo(
     () => ({
-      search,
+      search: filters.search,
       accountType: filters.accountType,
       hold: filters.hold,
       balance: filters.balance,
@@ -128,16 +181,17 @@ export default function WalletsTab({
       limit: PAGE_SIZE,
       offset,
     }),
-    [search, filters.accountType, filters.hold, filters.balance, filters.accountStatus, filters.sort, offset]
+    [filters.search, filters.accountType, filters.hold, filters.balance, filters.accountStatus, filters.sort, offset]
   );
   const { page, loading, error, reload } = usePagedList<EconomyWallet>(ECONOMY_API.wallets, params, refreshToken);
   const items = page?.items || [];
   const total = page?.total || 0;
 
-  const update = (patch: Partial<Filters>) => {
-    setFilters((prev) => ({ ...prev, ...patch }));
-    setOffset(0);
-  };
+  // A page past the end (after a release or a filter change elsewhere) has no total: back to page 1.
+  useEffect(() => {
+    if (!loading && page && page.items.length === 0 && offset > 0) setOffset(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, page, offset]);
 
   const pageIds = items.map((w) => w.walletId);
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
@@ -206,8 +260,8 @@ export default function WalletsTab({
           <div className="relative min-w-[220px] flex-1 lg:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
             <input
-              value={filters.search}
-              onChange={(e) => update({ search: e.target.value })}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder={mode === 'holds' ? 'Search name, username, hold reason…' : 'Search name, username, email, wallet or account ID…'}
               className={`${INPUT} pl-9 ${accent.ring}`}
             />
@@ -254,7 +308,10 @@ export default function WalletsTab({
               <option value="newest">Newest accounts</option>
             </select>
             {hasFilters && (
-              <button type="button" onClick={() => update({ ...defaults })} className="px-2 text-xs text-zinc-400 hover:text-white">
+              <button type="button" onClick={() => {
+                  setSearchText('');
+                  update({ ...defaults });
+                }} className="px-2 text-xs text-zinc-400 hover:text-white">
                 Reset
               </button>
             )}

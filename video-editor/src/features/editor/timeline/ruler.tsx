@@ -88,7 +88,9 @@ const Ruler = (props: RulerProps) => {
     setCanvasContext(context);
 
     const tryDraw = async () => {
-      await document.fonts.load(`${SMALL_FONT_SIZE}px ${getUIFont()}`);
+      // A font file that fails to download rejects with NetworkError; draw with
+      // the fallback font instead of leaving the ruler blank.
+      await document.fonts.load(`${SMALL_FONT_SIZE}px ${getUIFont()}`).catch(() => undefined);
       resize(canvas, context, scrollLeft);
     };
 

@@ -7,6 +7,12 @@ const {
   fetchActivityForAccounts,
 } = require('./AccountActivityRepositories');
 const { fetchLastActivityForAccounts } = require('./AdminAccountProfileRepositories');
+const {
+  staffLedgerNoteJoins,
+  STAFF_LEDGER_NOTE_COLUMNS,
+  staffAdjustmentOf,
+  staffHoldOf,
+} = require('../lib/StaffLedgerNotes');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -101,13 +107,61 @@ function mapUserRow(row) {
   };
 }
 
+const CREDIT_ACTIVITY_PER_ACCOUNT = 8;
+
+/** How one ledger row reads on the staff credit feed, from the account's side. */
+function describeCreditActivity(row) {
+  const amount = Math.abs(Number(row.amount_credits || 0));
+  const adjustment = staffAdjustmentOf(row);
+  if (adjustment) {
+    const sign = Math.sign(adjustment.delta || 0);
+    return {
+      type: sign > 0 ? 'Staff grant' : sign < 0 ? 'Staff deduction' : 'Staff adjustment (no recorded direction)',
+      amount: sign < 0 ? -amount : amount,
+      positive: sign > 0,
+      tone: sign > 0 ? 'positive' : sign < 0 ? 'negative' : 'neutral',
+      detail: adjustment.reason,
+      holdUntil: null,
+    };
+  }
+  const hold = staffHoldOf(row);
+  if (hold) {
+    // Spendable goes down by the held amount and back up on release; nothing leaves the wallet.
+    return {
+      type: hold.held
+        ? 'Credits frozen by staff'
+        : hold.source === 'hold_expired'
+          ? 'Credit hold ended'
+          : 'Credit hold released',
+      amount: hold.held ? -amount : amount,
+      positive: !hold.held,
+      tone: 'hold',
+      detail: hold.reason,
+      holdUntil: hold.held ? hold.until : null,
+    };
+  }
+  const isCredit = String(row.destination_wallet_id) === String(row.account_wallet_id);
+  return {
+    type: row.type || 'Credit transaction',
+    amount: isCredit ? amount : -amount,
+    positive: isCredit,
+    tone: isCredit ? 'positive' : 'negative',
+    detail: null,
+    holdUntil: null,
+  };
+}
+
+/**
+ * The latest ledger rows of each account for the staff user / team desks. The limit is per
+ * account (a shared limit left quieter accounts with an empty feed).
+ */
 async function fetchCreditActivityForAccounts(accountIds) {
   if (!accountIds.length) return new Map();
 
   const result = await pool.query(
     `
     SELECT
-      aw.account_id,
+      acc.account_id,
       ct.credit_transaction_id,
       ct.type,
       ct.amount_credits,
@@ -115,30 +169,43 @@ async function fetchCreditActivityForAccounts(accountIds) {
       ct.created_at,
       ct.source_wallet_id,
       ct.destination_wallet_id,
-      aw.wallet_id AS account_wallet_id
-    FROM credit_transactions ct
-    INNER JOIN account_wallets aw
-      ON aw.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
-    WHERE aw.account_id = ANY($1::uuid[])
+      ct.reference_table,
+      ct.account_wallet_id,
+      ${STAFF_LEDGER_NOTE_COLUMNS}
+    FROM unnest($1::uuid[]) AS acc(account_id)
+    CROSS JOIN LATERAL (
+      SELECT
+        t.credit_transaction_id,
+        t.type,
+        t.amount_credits,
+        t.status,
+        t.created_at,
+        t.source_wallet_id,
+        t.destination_wallet_id,
+        t.reference_table,
+        aw.wallet_id AS account_wallet_id
+      FROM account_wallets aw
+      INNER JOIN credit_transactions t
+        ON aw.wallet_id IN (t.source_wallet_id, t.destination_wallet_id)
+      WHERE aw.account_id = acc.account_id
+      ORDER BY t.created_at DESC, t.credit_transaction_id DESC
+      LIMIT $2
+    ) ct
+    ${staffLedgerNoteJoins({ ledger: 'ct', accountId: 'acc.account_id' })}
     ORDER BY ct.created_at DESC
-    LIMIT 500
     `,
-    [accountIds]
+    [accountIds, CREDIT_ACTIVITY_PER_ACCOUNT]
   );
 
   const map = new Map();
   for (const row of result.rows) {
     const list = map.get(row.account_id) || [];
-    if (list.length >= 8) continue;
-    const isCredit = String(row.destination_wallet_id) === String(row.account_wallet_id);
-    const amount = Number(row.amount_credits || 0);
     list.push({
       id: row.credit_transaction_id,
-      type: row.type || 'Credit transaction',
-      amount: isCredit ? Math.abs(amount) : -Math.abs(amount),
+      ...describeCreditActivity(row),
       label: row.status || 'Completed',
       timeAgo: formatRelativeTime(row.created_at),
-      positive: isCredit,
+      createdAt: row.created_at,
     });
     map.set(row.account_id, list);
   }
@@ -977,7 +1044,8 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const [creditMap, historyMap, activityMap, assetStats, membershipsMap, lastActivityMap] = await Promise.all([
+  const { runningPunishmentsByAccount } = require('../services/MeritPenaltyServices');
+  const [creditMap, historyMap, activityMap, assetStats, membershipsMap, lastActivityMap, punishmentMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
     fetchActivityForAccounts(accountIds),
@@ -994,6 +1062,10 @@ async function getUsersManagement() {
       : { rows: [] },
     fetchTeamMembershipsForUsers(userIds),
     fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
+    runningPunishmentsByAccount(accountIds).catch((err) => {
+      console.warn('Could not load running merit punishments:', err.message);
+      return new Map();
+    }),
   ]);
   const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
 
@@ -1015,6 +1087,8 @@ async function getUsersManagement() {
       ),
       history,
       merit: history.merit,
+      // Automatic merit punishments running now (timed; merit recovering does not end them).
+      meritPenalties: punishmentMap.get(String(u.accountId)) || [],
       stats: {
         totalAssets: Number(assetsByAccount.get(u.accountId) || 0),
         totalCredits: walletBalance,
@@ -1350,7 +1424,8 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const banEndsAt = status === 'Banned' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const lockEndsAt = status === 'Locked' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const { restingStatusSql } = require('../lib/AccountRestriction');
-  // A staff decision replaces any automatic suspension, so merit recovery no longer ends it.
+  // A staff decision replaces any automatic suspension: the engine marker is cleared and its
+  // punishment record closes below.
   const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
   const clearAutoSuspend = await clearAutoSuspendSql();
   // Lifting a penalty returns a member who had deactivated the account to Deactivated.
@@ -1369,6 +1444,14 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   );
   const savedStatus = saved.rows[0]?.status || status;
   const backToDeactivated = savedStatus !== status;
+
+  // The engine's suspension record (if any) closes: staff now own this account's standing.
+  try {
+    const { closeAutoSuspensionRecords } = require('../services/MeritPenaltyServices');
+    await closeAutoSuspensionRecords(accountId, { staffId });
+  } catch (err) {
+    console.warn('Closing the automatic suspension record failed:', err.message);
+  }
 
   await recordAccountActivity({
     accountId,
@@ -1793,8 +1876,12 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
     },
   });
 
-  const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
-  const autoSuspend = await maybeAutoSuspendAfterWarning(accountId, staffId);
+  // Every merit level this warning crossed starts its timed punishment (merit is unchanged).
+  const { applyMeritPunishmentsForWarning } = require('../services/MeritPenaltyServices');
+  const autoSuspend = await applyMeritPunishmentsForWarning(accountId, {
+    violationId: inserted.rows[0]?.violation_id || null,
+    staffId,
+  });
 
   try {
     const { notifyAccountWarned } = require('../services/AccountStandingServices');
@@ -1829,6 +1916,7 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
     expiresAt: expiry,
     autoSuspended: Boolean(autoSuspend?.suspended),
     activeWarnings: autoSuspend?.activeCount ?? null,
+    punishmentsStarted: autoSuspend?.started || [],
   };
 }
 
@@ -1876,6 +1964,10 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       [accountId]
     ).catch(() => null);
 
+    // Automatic merit punishments end with the pardon, whatever their clock said.
+    const { endAllMeritPenalties } = require('../services/MeritPenaltyServices');
+    const punishmentsEnded = await endAllMeritPenalties(client, accountId, { staffId, note: note || null });
+
     const previousStatus = account.status;
     const { restingStatusSql } = require('../lib/AccountRestriction');
     const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
@@ -1908,6 +2000,7 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
         previousStatus,
         status: nextStatus,
         violationsCleared: clearedViolations.rowCount || 0,
+        punishmentsEnded: punishmentsEnded.length,
         note: note || null,
       },
       client,
@@ -1934,6 +2027,12 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
     try {
       const { refreshWarningBand } = require('../services/WarningBandServices');
       await refreshWarningBand(accountId, 0);
+      if (punishmentsEnded.length) {
+        // The member hears that the pardon ended their automatic limits ("You're unfrozen").
+        const { broadcastPunishmentChange, notifyPunishmentsEnded } = require('../services/MeritPenaltyServices');
+        await notifyPunishmentsEnded(accountId, punishmentsEnded, { cause: 'pardoned' });
+        await broadcastPunishmentChange(accountId);
+      }
     } catch (err) {
       console.warn('Warning band refresh after pardon failed:', err.message);
     }
@@ -1953,6 +2052,68 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * After a warning was set to `rescinded` (Users desk, or an accepted appeal on that warning):
+ * record it, end the automatic punishments it started, refresh the band and tell the member
+ * their merit came back. Never throws past the activity row.
+ * @param {{ accountId: string, warning: { violation_id: string, violation_number?: string, type?: string },
+ *   staffId?: string|null, source?: 'staff'|'appeal', ticketNumber?: string|null }} input
+ * @returns {Promise<{ punishmentsEnded: object[] }>}
+ */
+async function announceWarningRescinded({ accountId, warning, staffId = null, source = 'staff', ticketNumber = null }) {
+  const label = warning.type || 'warning';
+  await recordAccountActivity({
+    accountId,
+    action: source === 'appeal'
+      ? `Warning rescinded after an accepted appeal${ticketNumber ? ` (ticket #${ticketNumber})` : ''}: ${label}`
+      : `Warning rescinded: ${label}`,
+    eventCode: 'WARNING_RESCINDED',
+    referenceTable: 'violations',
+    referencePrefix: 'VIO',
+    referenceId: warning.violation_id,
+    actorStaffId: staffId,
+    metadata: {
+      violationId: warning.violation_id,
+      violationNumber: warning.violation_number,
+      status: 'rescinded',
+      ...(source === 'appeal' ? { source: 'appeal', ticketNumber } : {}),
+    },
+  });
+
+  // Punishments this warning started end with it (other warnings' punishments keep running).
+  let punishmentsEnded = [];
+  try {
+    const { endMeritPenaltiesForWarning } = require('../services/MeritPenaltyServices');
+    punishmentsEnded = await endMeritPenaltiesForWarning(accountId, warning.violation_id, { reason: 'rescinded', staffId });
+  } catch (err) {
+    console.warn('Ending punishments after rescind failed:', err.message);
+  }
+
+  // The member is told their merit came back; otherwise a rescind is invisible to them.
+  try {
+    const { refreshWarningBand } = require('../services/WarningBandServices');
+    const next = await refreshWarningBand(accountId);
+    const { createNotificationServices } = require('../services/NotificationServices');
+    const notification = await createNotificationServices({
+      account_id: accountId,
+      message: `A warning on your account (${label}) was rescinded${
+        source === 'appeal' ? ' after your appeal' : ''
+      }. Your Platform Merit is now ${meritFromWarningPoints(next?.points ?? 0)}.`,
+      is_read: false,
+      reference_table: 'violations',
+      reference_prefix: 'WARNING_UP',
+      reference_path: '/profile',
+      reference_id: warning.violation_id,
+    });
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+  } catch (err) {
+    console.warn('Warning band refresh after rescind failed:', err.message);
+  }
+  return { punishmentsEnded: punishmentsEnded || [] };
 }
 
 async function rescindWarning(accountId, violationId, staffId) {
@@ -1977,46 +2138,13 @@ async function rescindWarning(accountId, violationId, staffId) {
   if (!updated.rows.length) throw new Error('Active warning not found');
 
   const row = updated.rows[0];
-  await recordAccountActivity({
-    accountId,
-    action: `Warning rescinded: ${row.type || 'warning'}`,
-    eventCode: 'WARNING_RESCINDED',
-    referenceTable: 'violations',
-    referencePrefix: 'VIO',
-    referenceId: row.violation_id,
-    actorStaffId: staffId,
-    metadata: {
-      violationId: row.violation_id,
-      violationNumber: row.violation_number,
-      status: 'rescinded',
-    },
-  });
-
-  // The member is told their merit came back; otherwise a rescind is invisible to them.
-  try {
-    const { refreshWarningBand } = require('../services/WarningBandServices');
-    const next = await refreshWarningBand(accountId);
-    const { createNotificationServices } = require('../services/NotificationServices');
-    const notification = await createNotificationServices({
-      account_id: accountId,
-      message: `A warning on your account (${row.type || 'warning'}) was rescinded. Your Platform Merit is now ${meritFromWarningPoints(next?.points ?? 0)}.`,
-      is_read: false,
-      reference_table: 'violations',
-      reference_prefix: 'WARNING_UP',
-      reference_path: '/profile',
-      reference_id: row.violation_id,
-    });
-    const { getIo } = require('../lib/WebSocket');
-    const io = getIo();
-    if (io && notification) io.to(String(accountId)).emit('notification', notification);
-  } catch (err) {
-    console.warn('Warning band refresh after rescind failed:', err.message);
-  }
+  const { punishmentsEnded } = await announceWarningRescinded({ accountId, warning: row, staffId });
 
   return {
     accountId,
     violationId: row.violation_id,
     violationNumber: row.violation_number,
+    punishmentsEnded,
     status: 'rescinded',
   };
 }
@@ -2031,6 +2159,7 @@ module.exports = {
   freezeAccountCredits,
   warnAccount,
   rescindWarning,
+  announceWarningRescinded,
   pardonAccount,
   getUserVerificationRecord,
   updateUserVerificationExpiry,

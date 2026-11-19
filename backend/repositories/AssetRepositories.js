@@ -427,6 +427,7 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
          )
          AND ($2::uuid IS NULL OR ma.market_asset_id <> $2::uuid)
          AND ma.deleted_at IS NULL
+         AND ma.trashed_at IS NULL
      )
      SELECT identity.user_id, identity.is_verified,
             entitlement.value AS feature_value, usage.posted_count,
@@ -449,6 +450,7 @@ async function ensureAdminMarketAssetSchema() {
   if (!adminMarketAssetSchemaPromise) {
     adminMarketAssetSchemaPromise = (async () => {
       await pool.query(`ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS is_admin_asset BOOLEAN NOT NULL DEFAULT FALSE`);
+      await pool.query(`ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS trashed_at TIMESTAMP WITHOUT TIME ZONE`);
       await pool.query(`ALTER TABLE media_assets ALTER COLUMN owner_user_id DROP NOT NULL`);
       await pool.query(`ALTER TABLE media_assets ALTER COLUMN proxy_file_id DROP NOT NULL`);
       await pool.query(`ALTER TABLE media_assets ALTER COLUMN thumbnail_file_id DROP NOT NULL`);
@@ -462,6 +464,7 @@ async function ensureAdminMarketAssetSchema() {
 
 const ASSET_SELECT = `
   SELECT ma.market_asset_id, ma.name, ma.description, ma.price_credits, ma.status,
+         ma.trashed_at,
          (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AS is_admin_asset,
          ma.created_at, ma.updated_at,
          latest_listing.status AS review_status,
@@ -768,26 +771,28 @@ async function syncAssetTags(client, marketAssetId, tagNames) {
 async function listAssetsRepository({ accountId, search, type, status, view, creatorAccountId, limit, offset }) {
   await ensureAdminMarketAssetSchema(pool);
   const visibility = view === 'mine'
-    ? 'owner.account_id = $1'
-    : view === 'creator'
-      ? `owner.account_id = $7 AND ma.status = 'published'`
-      : view === 'purchased'
-        ? 'purchase_access.is_purchased AND owner.account_id <> $1'
-        : view === 'saved'
-          ? `ma.status = 'published' AND EXISTS (
-              SELECT 1 FROM asset_saves saved_asset
-              WHERE saved_asset.market_asset_id = ma.market_asset_id
-                AND saved_asset.account_id = $1
-                AND saved_asset.deleted_at IS NULL
-            )`
-        : view === 'liked'
-          ? `ma.status = 'published' AND EXISTS (
-              SELECT 1 FROM asset_likes liked_asset
-              WHERE liked_asset.market_asset_id = ma.market_asset_id
-                AND liked_asset.account_id = $1
-                AND liked_asset.deleted_at IS NULL
-            )`
-        : `ma.status = 'published'`;
+    ? 'owner.account_id = $1 AND ma.trashed_at IS NULL'
+    : view === 'trash'
+      ? 'owner.account_id = $1 AND ma.trashed_at IS NOT NULL'
+      : view === 'creator'
+        ? `owner.account_id = $7 AND ma.status = 'published' AND ma.trashed_at IS NULL`
+        : view === 'purchased'
+          ? 'purchase_access.is_purchased AND owner.account_id <> $1'
+          : view === 'saved'
+            ? `ma.status = 'published' AND ma.trashed_at IS NULL AND EXISTS (
+                SELECT 1 FROM asset_saves saved_asset
+                WHERE saved_asset.market_asset_id = ma.market_asset_id
+                  AND saved_asset.account_id = $1
+                  AND saved_asset.deleted_at IS NULL
+              )`
+          : view === 'liked'
+            ? `ma.status = 'published' AND ma.trashed_at IS NULL AND EXISTS (
+                SELECT 1 FROM asset_likes liked_asset
+                WHERE liked_asset.market_asset_id = ma.market_asset_id
+                  AND liked_asset.account_id = $1
+                  AND liked_asset.deleted_at IS NULL
+              )`
+          : `ma.status = 'published' AND ma.trashed_at IS NULL`;
   const { rows } = await pool.query(
     `${ASSET_SELECT_WITH_TOTAL}
      WHERE ma.deleted_at IS NULL
@@ -817,7 +822,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
          OR (ma.status = $4)
        )
        AND ($7::text IS NULL OR $7::text IS NOT NULL)
-     ORDER BY ma.created_at DESC, ma.market_asset_id DESC
+     ORDER BY ${view === 'trash' ? 'ma.trashed_at DESC NULLS LAST' : 'ma.created_at DESC'}, ma.market_asset_id DESC
      LIMIT $5 OFFSET $6`,
     [accountId, search, type, status, limit, offset, creatorAccountId || null]
   );
@@ -831,7 +836,7 @@ async function getAssetRepository(assetId, accountId) {
      WHERE ma.market_asset_id = $2
        AND ma.deleted_at IS NULL
        AND owner.deleted_at IS NULL
-       AND (ma.status = 'published' OR owner.account_id = $1 OR purchase_access.is_purchased)`,
+       AND ((ma.status = 'published' AND ma.trashed_at IS NULL) OR owner.account_id = $1 OR purchase_access.is_purchased)`,
     [accountId, assetId]
   );
   return rows[0] || null;
@@ -1647,7 +1652,7 @@ async function updateAssetRepository(assetId, accountId, data, derivatives = new
        ) content ON TRUE
        JOIN users u ON u.account_id = listing_owner.account_id
        WHERE ma.market_asset_id = $1 AND u.account_id = $2
-         AND ma.deleted_at IS NULL
+         AND ma.deleted_at IS NULL AND ma.trashed_at IS NULL
        FOR UPDATE OF ma`,
       [assetId, accountId]
     );
@@ -1722,12 +1727,12 @@ async function updateAssetRepository(assetId, accountId, data, derivatives = new
   }
 }
 
-async function deleteAssetRepository(assetId, accountId) {
+async function deleteAssetRepository(assetId, accountId, { permanent = false } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const owned = await client.query(
-      `SELECT ma.market_asset_id
+      `SELECT ma.market_asset_id, ma.trashed_at
        FROM market_assets ma
        JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
@@ -1753,22 +1758,85 @@ async function deleteAssetRepository(assetId, accountId) {
       [assetId]
     );
     if (purchases.rowCount) throw repoError('ASSET_HAS_PURCHASES');
+
+    if (permanent) {
+      await client.query(
+        `UPDATE market_assets SET deleted_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP WHERE market_asset_id = $1`,
+        [assetId]
+      );
+      await client.query(
+        `UPDATE media_assets SET deleted_at = CURRENT_TIMESTAMP, is_marketed = FALSE
+         WHERE media_asset_id IN (
+           SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
+           UNION
+           SELECT media_asset_id FROM market_asset_thumbnails WHERE market_asset_id = $1
+         )`,
+        [assetId]
+      );
+      await client.query(
+        `DELETE FROM marketplace_listings WHERE market_asset_id = $1`,
+        [assetId]
+      );
+    } else {
+      await client.query(
+        `UPDATE market_assets SET trashed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP WHERE market_asset_id = $1`,
+        [assetId]
+      );
+      await client.query(
+        `UPDATE media_assets SET trashed_at = CURRENT_TIMESTAMP
+         WHERE media_asset_id IN (
+           SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
+           UNION
+           SELECT media_asset_id FROM market_asset_thumbnails WHERE market_asset_id = $1
+         )`,
+        [assetId]
+      );
+    }
+    await client.query('COMMIT');
+    return true;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function restoreAssetRepository(assetId, accountId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const owned = await client.query(
+      `SELECT ma.market_asset_id
+       FROM market_assets ma
+       JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+         FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+         ORDER BY market_asset_id, created_at DESC, listing_id DESC) asset_owner ON asset_owner.market_asset_id = ma.market_asset_id
+       JOIN users u ON u.account_id = asset_owner.account_id
+       WHERE ma.market_asset_id = $1 AND u.account_id = $2
+         AND ma.deleted_at IS NULL AND ma.trashed_at IS NOT NULL
+       LIMIT 1
+       FOR UPDATE OF ma`,
+      [assetId, accountId]
+    );
+    if (!owned.rowCount) {
+      await client.query('ROLLBACK');
+      return false;
+    }
     await client.query(
-      `UPDATE market_assets SET deleted_at = CURRENT_TIMESTAMP,
+      `UPDATE market_assets SET trashed_at = NULL,
           updated_at = CURRENT_TIMESTAMP WHERE market_asset_id = $1`,
       [assetId]
     );
     await client.query(
-      `UPDATE media_assets SET deleted_at = CURRENT_TIMESTAMP, is_marketed = FALSE
+      `UPDATE media_assets SET trashed_at = NULL
        WHERE media_asset_id IN (
          SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
          UNION
          SELECT media_asset_id FROM market_asset_thumbnails WHERE market_asset_id = $1
        )`,
-      [assetId]
-    );
-    await client.query(
-      `DELETE FROM marketplace_listings WHERE market_asset_id = $1`,
       [assetId]
     );
     await client.query('COMMIT');
@@ -2136,7 +2204,133 @@ async function validateAssetRefundEligibility(marketAssetId, buyerAccountId, lic
   };
 }
 
+
+async function getSellerAssetMetricsRepository(accountId) {
+  const summaryRes = await pool.query(`
+    SELECT
+      COALESCE(SUM(
+        CASE
+          WHEN ma.is_admin_asset THEN ct.amount_credits
+          ELSE (ct.amount_credits - COALESCE(fee_tx.amount_credits, 0))
+        END
+      ), 0)::int AS total_revenue,
+      COUNT(DISTINCT mal.market_asset_license_id)::int AS total_sales,
+      COUNT(DISTINCT mal.buyer_user_id)::int AS total_buyers,
+      COUNT(DISTINCT CASE WHEN ma.status = 'published' AND ma.trashed_at IS NULL AND ma.deleted_at IS NULL THEN ma.market_asset_id END)::int AS active_assets_count
+    FROM market_assets ma
+    JOIN (
+      SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+      FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+      ORDER BY market_asset_id, created_at DESC, listing_id DESC
+    ) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+    LEFT JOIN market_asset_licenses mal ON mal.market_asset_id = ma.market_asset_id
+      AND mal.status = 'active' AND mal.deleted_at IS NULL
+    LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = mal.credit_transaction_id
+      AND ct.status = 'Completed'
+    LEFT JOIN credit_transactions fee_tx ON fee_tx.credit_transaction_id = ct.fee_transaction_id
+    WHERE listing_owner.account_id = $1
+  `, [accountId]);
+
+  const assetsRes = await pool.query(`
+    SELECT
+      ma.market_asset_id,
+      ma.name,
+      ma.price_credits,
+      ma.status,
+      ma.created_at,
+      COALESCE(
+        (SELECT typed_media.type FROM market_media_assets typed_link
+         JOIN media_assets typed_media ON typed_media.media_asset_id = typed_link.media_asset_id
+         WHERE typed_link.market_asset_id = ma.market_asset_id
+         ORDER BY typed_link.position, typed_media.media_asset_id LIMIT 1),
+        CASE WHEN EXISTS (SELECT 1 FROM market_ydoc_assets typed_snapshot
+          WHERE typed_snapshot.market_asset_id = ma.market_asset_id) THEN 'template' END,
+        'image'
+      ) AS type,
+      COALESCE(
+        (SELECT f.path FROM market_asset_thumbnails t
+         JOIN media_assets m ON m.media_asset_id = t.media_asset_id
+         JOIN files f ON f.file_id = m.thumbnail_file_id
+         WHERE t.market_asset_id = ma.market_asset_id AND m.deleted_at IS NULL AND f.deleted_at IS NULL
+         ORDER BY t.position LIMIT 1),
+        (SELECT f.path FROM market_media_assets mma
+         JOIN media_assets m ON m.media_asset_id = mma.media_asset_id
+         JOIN files f ON f.file_id = m.thumbnail_file_id
+         WHERE mma.market_asset_id = ma.market_asset_id AND m.deleted_at IS NULL AND f.deleted_at IS NULL
+         ORDER BY mma.position LIMIT 1)
+      ) AS thumbnail_path,
+      COUNT(mal.market_asset_license_id)::int AS sales_count,
+      COUNT(DISTINCT mal.buyer_user_id)::int AS unique_buyers,
+      COALESCE(SUM(
+        CASE
+          WHEN ma.is_admin_asset THEN ct.amount_credits
+          ELSE (ct.amount_credits - COALESCE(fee_tx.amount_credits, 0))
+        END
+      ), 0)::int AS revenue_credits
+    FROM market_assets ma
+    JOIN (
+      SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+      FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+      ORDER BY market_asset_id, created_at DESC, listing_id DESC
+    ) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+    LEFT JOIN market_asset_licenses mal ON mal.market_asset_id = ma.market_asset_id
+      AND mal.status = 'active' AND mal.deleted_at IS NULL
+    LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = mal.credit_transaction_id
+      AND ct.status = 'Completed'
+    LEFT JOIN credit_transactions fee_tx ON fee_tx.credit_transaction_id = ct.fee_transaction_id
+    WHERE listing_owner.account_id = $1
+      AND ma.deleted_at IS NULL
+    GROUP BY ma.market_asset_id, ma.name, ma.price_credits, ma.status, ma.created_at, ma.is_admin_asset
+    ORDER BY revenue_credits DESC, sales_count DESC, ma.created_at DESC
+  `, [accountId]);
+
+  const salesRes = await pool.query(`
+    SELECT
+      mal.market_asset_license_id,
+      mal.purchased_at,
+      mal.price_credits,
+      ma.market_asset_id,
+      ma.name AS asset_name,
+      buyer.display_name AS buyer_name,
+      buyer.handle AS buyer_handle,
+      buyer_avatar.path AS buyer_avatar_path,
+      CASE
+        WHEN ma.is_admin_asset THEN ct.amount_credits
+        ELSE (ct.amount_credits - COALESCE(fee_tx.amount_credits, 0))
+      END AS net_credits
+    FROM market_asset_licenses mal
+    JOIN market_assets ma ON ma.market_asset_id = mal.market_asset_id
+    JOIN (
+      SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+      FROM marketplace_listings WHERE market_asset_id IS NOT NULL
+      ORDER BY market_asset_id, created_at DESC, listing_id DESC
+    ) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
+    JOIN users buyer_user ON buyer_user.user_id = mal.buyer_user_id
+    JOIN accounts buyer ON buyer.account_id = buyer_user.account_id
+    LEFT JOIN files buyer_avatar ON buyer_avatar.file_id = buyer.avatar_file_id
+    LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = mal.credit_transaction_id
+    LEFT JOIN credit_transactions fee_tx ON fee_tx.credit_transaction_id = ct.fee_transaction_id
+    WHERE listing_owner.account_id = $1
+      AND mal.status = 'active'
+      AND mal.deleted_at IS NULL
+    ORDER BY mal.purchased_at DESC
+    LIMIT 20
+  `, [accountId]);
+
+  return {
+    summary: summaryRes.rows[0] || {
+      total_revenue: 0,
+      total_sales: 0,
+      total_buyers: 0,
+      active_assets_count: 0,
+    },
+    assets: assetsRes.rows,
+    recent_sales: salesRes.rows,
+  };
+}
+
 module.exports = {
+  getSellerAssetMetricsRepository,
   getEditorAssetPurchaseContextRepository,
   listAssetLicensesRepository,
   assignAssetLicenseRepository,
@@ -2146,6 +2340,7 @@ module.exports = {
   createAssetRepository,
   updateAssetRepository,
   deleteAssetRepository,
+  restoreAssetRepository,
   getAssetDownloadRepository,
   purchaseAssetRepository,
   listCommentsRepository,

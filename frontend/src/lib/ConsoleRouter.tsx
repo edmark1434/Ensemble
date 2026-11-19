@@ -5,6 +5,7 @@ import {
   createPath,
   parsePath,
   unstable_HistoryRouter as HistoryRouter,
+  useLocation,
   type History,
   type To,
 } from 'react-router-dom';
@@ -80,12 +81,17 @@ function createConsoleHistory(id: ConsoleId): History {
   };
 }
 
+/**
+ * Runs on every main-site navigation, not only on page load: the member login
+ * and RouteMiddleware send staff to /moderator/* with an in-app navigate.
+ */
 function LegacyConsoleRedirect() {
+  const location = useLocation();
   useLayoutEffect(() => {
     if (window.self !== window.top) return;
     const target = legacyConsoleRedirect(window.location);
     if (target) window.location.replace(target);
-  });
+  }, [location.key, location.pathname]);
   return null;
 }
 

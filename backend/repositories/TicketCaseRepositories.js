@@ -187,6 +187,10 @@ async function accountSummary(accountId) {
     warningPoints: num(access.warningPoints),
     warningBandLabel: access.warningBandLabel || null,
     warningBandEndsAt: access.warningBandEndsAt || null,
+    // Running automatic merit punishments, each on its own clock (timed-merit punishments).
+    meritPenalties: Array.isArray(access.meritPenalties) ? access.meritPenalties : [],
+    muted: Boolean(access.muted),
+    mutedUntil: access.mutedUntil || null,
     forumTimeout: Boolean(access.forumTimeout),
     forumTimeoutEndsAt: access.forumTimeoutEndsAt || null,
     creditsFrozen: Boolean(access.creditsFrozen),
@@ -384,7 +388,9 @@ async function appealHistory(accountId, ticketId) {
   const [tickets, hold] = await Promise.all([
     pool.query(
       `
-      SELECT t.ticket_id, t.ticket_number, t.type, t.status, t.appeal_decision, t.appeal_decided_at, t.created_at
+      SELECT t.ticket_id, t.ticket_number, t.type, t.status, t.appeal_decision, t.appeal_decided_at, t.created_at,
+             to_jsonb(t) ->> 'appeal_target_type' AS appeal_target_type,
+             to_jsonb(t) ->> 'appeal_target_label' AS appeal_target_label
       FROM tickets t
       WHERE t.account_id = $1 AND t.deleted_at IS NULL AND t.ticket_id <> $2
         AND (t.type = $3 OR t.type::text LIKE 'Appeal a %')
@@ -409,7 +415,11 @@ async function appealHistory(accountId, ticketId) {
       decision: row.appeal_decision || null,
       decidedAt: row.appeal_decided_at || null,
       createdAt: row.created_at,
+      // Null for account-wide appeals filed before appeals were per penalty.
+      targetType: row.appeal_target_type || null,
+      targetLabel: row.appeal_target_label || null,
     })),
+    // Account-wide denial from before appeals were per penalty; it only covers older penalties.
     hold: holdRow
       ? {
           decision: holdRow.decision,
@@ -566,12 +576,17 @@ async function appealContext(row, form, notes) {
   const accountId = row.account_id;
   const area = AREA_APPEALS[row.type] || null;
   const caseAnswer = answerOf(form, 'case_id');
-  const [record, appeals, caseRef, actions, reports] = await Promise.all([
+  const { describeAppealTarget } = require('../services/PenaltyAppealServices');
+  const [record, appeals, caseRef, actions, reports, target] = await Promise.all([
     section(notes, 'Punishment record', () => punishmentRecord(accountId)),
     section(notes, 'Appeal history', () => appealHistory(accountId, row.ticket_id)),
     section(notes, 'Referenced case', () => referencedCase(caseAnswer.value, accountId)),
     area ? section(notes, 'Area actions', () => areaActions(area, accountId)) : Promise.resolve(null),
     section(notes, 'Reports against the member', () => reportsList('r.for_account_id = $1', [accountId], 10)),
+    // `row` is `tickets.*`, so the target columns are there once the per-penalty migration ran.
+    row.appeal_target_type
+      ? section(notes, 'Appealed penalty', () => describeAppealTarget(row))
+      : Promise.resolve(null),
   ]);
   return {
     area: area || 'account',
@@ -579,6 +594,8 @@ async function appealContext(row, form, notes) {
     decidable: row.type === APPEAL_TICKET_TYPE,
     decision: row.appeal_decision || null,
     decidedAt: row.appeal_decided_at || null,
+    // The one penalty this appeal is about (null: an account-wide appeal from before the change).
+    target,
     reasonGiven: answerOf(form, 'why_reverse', 'explanation').value || null,
     evidence: answerOf(form, 'evidence').value || null,
     referencedCase: caseRef,

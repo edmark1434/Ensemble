@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Coins, Landmark, Lock, ShieldCheck, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, Coins, Landmark, Lock, ShieldCheck, Users } from 'lucide-react';
 import { LineChart } from '@/pages/admin/analytics/components/AnalyticsCharts';
 import {
   formatCredits,
@@ -9,10 +9,10 @@ import {
   formatSigned,
   LedgerAmount,
   Panel,
-  PartyCell,
   StatTile,
   StatusPill,
 } from './economyUi';
+import { entrySubtitle, entryTitle } from './ledgerShared';
 import type { AccountTotal, EconomyOverview, EconomyTab, EconomyVariant } from './creditEconomyTypes';
 
 type OverviewTabProps = {
@@ -20,32 +20,65 @@ type OverviewTabProps = {
   variant: EconomyVariant;
   onOpenTab: (tab: EconomyTab, filters?: Record<string, string>) => void;
   onOpenWallet: (walletId: string) => void;
+  onOpenTransaction: (transactionId: string) => void;
 };
 
-function FlowRow({ label, value, tone = 'text-zinc-200', hint }: { label: string; value: number; tone?: string; hint?: string }) {
-  return (
-    <li className="flex items-center justify-between gap-3 py-1.5 text-sm">
-      <span className="text-zinc-400">
-        {label}
-        {hint && <span className="ml-1 text-[10px] text-zinc-600">{hint}</span>}
+/**
+ * A figure that opens the rows it was counted from. Every link below uses the same filter
+ * the server counted with, so the ledger shows the same number of entries and credits.
+ */
+function LinkRow({
+  label,
+  value,
+  hint,
+  tone = 'text-zinc-100',
+  onClick,
+  credits = true,
+}: {
+  label: ReactNode;
+  value: number;
+  hint?: ReactNode;
+  tone?: string;
+  onClick?: () => void;
+  credits?: boolean;
+}) {
+  const body = (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm text-zinc-300">{label}</span>
+        {hint && <span className="block text-[11px] text-zinc-500">{hint}</span>}
       </span>
-      <span className={`font-semibold tabular-nums ${tone}`}>{formatCredits(value)}</span>
+      <span className={`shrink-0 font-semibold tabular-nums ${value ? tone : 'text-zinc-600'}`}>
+        {credits ? formatCredits(value) : value.toLocaleString()}
+      </span>
+      {onClick && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-600 transition group-hover:text-zinc-300" />}
+    </>
+  );
+  const base = 'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left';
+  return (
+    <li>
+      {onClick ? (
+        <button type="button" onClick={onClick} className={`group ${base} hover:bg-white/[0.04]`}>
+          {body}
+        </button>
+      ) : (
+        <div className={base}>{body}</div>
+      )}
     </li>
   );
 }
 
-function InFlightRow({ label, count, credits, note, warn }: { label: string; count: number; credits: number; note?: ReactNode; warn?: boolean }) {
+function FlowColumn({ icon, title, total, tone, children }: { icon: ReactNode; title: string; total: number; tone: string; children: ReactNode }) {
   return (
-    <li className="flex items-start justify-between gap-3 py-2">
-      <div className="min-w-0">
-        <p className="text-sm text-zinc-200">{label}</p>
-        {note && <p className={`text-[11px] ${warn ? 'text-amber-300' : 'text-zinc-500'}`}>{note}</p>}
+    <div className="min-w-0">
+      <div className="mb-1 flex items-baseline justify-between gap-2 px-2">
+        <p className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${tone}`}>
+          {icon} {title}
+        </p>
+        <p className={`text-sm font-bold tabular-nums ${tone}`}>{formatCredits(total)}</p>
       </div>
-      <div className="text-right">
-        <p className="font-semibold tabular-nums text-white">{formatCredits(credits)}</p>
-        <p className="text-[10px] text-zinc-600">{count.toLocaleString()} item{count === 1 ? '' : 's'}</p>
-      </div>
-    </li>
+      <ul>{children}</ul>
+    </div>
   );
 }
 
@@ -83,11 +116,9 @@ function Leaderboard({ leaders, onOpenWallet }: { leaders: EconomyOverview['lead
               disabled={!r.walletId}
               onClick={() => r.walletId && onOpenWallet(r.walletId)}
               className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.03] disabled:cursor-default"
+              title="Open this wallet"
             >
               <span className="w-5 text-right text-xs tabular-nums text-zinc-600">{i + 1}</span>
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-xs font-bold text-zinc-200">
-                {(r.name || '?').charAt(0).toUpperCase()}
-              </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-white">{r.name}</span>
                 <span className="block truncate text-[10px] text-zinc-600">
@@ -105,7 +136,7 @@ function Leaderboard({ leaders, onOpenWallet }: { leaders: EconomyOverview['lead
   );
 }
 
-export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewTabProps) {
+export default function OverviewTab({ data, onOpenTab, onOpenWallet, onOpenTransaction }: OverviewTabProps) {
   const { supply, flow, inFlight, creditValuePhp } = data;
   const php = (n: number) => formatPhp(n, creditValuePhp);
   const labels = flow.series.map((p) => {
@@ -113,11 +144,19 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   });
 
+  // Same window, status and category the server counted with.
+  const since = String(flow.hours);
+  const flowLink = (kind: string) => () => onOpenTab('ledger', { kind, status: 'settled', sinceHours: since });
+  const statusLink = (status: string, extra: Record<string, string> = {}) => () =>
+    onOpenTab('ledger', { status, sinceHours: since, ...extra });
+  const b = flow.between;
+  const betweenTotal = b.escrowFunded + b.escrowReleased + b.escrowRefunded + b.sales + b.saleRefunds + b.transfers;
+
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Credits held by members"
+          label="Credits in wallets"
           value={formatCredits(supply.circulating)}
           icon={<Coins className="h-5 w-5 text-emerald-400" />}
           hint={
@@ -126,17 +165,17 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
               {php(supply.circulating) && <span className="block text-zinc-600">{php(supply.circulating)}</span>}
             </>
           }
-          onClick={() => onOpenTab('wallets')}
+          onClick={() => onOpenTab('wallets', { sort: 'balance_desc' })}
         />
         <StatTile
           label="Locked in escrow"
           value={formatCredits(supply.escrow)}
           icon={<Landmark className="h-5 w-5 text-sky-400" />}
-          hint={`${supply.fundedEscrowWallets.toLocaleString()} funded contract wallet${supply.fundedEscrowWallets === 1 ? '' : 's'}`}
-          onClick={() => onOpenTab('ledger', { kind: 'escrow' })}
+          hint={`${supply.fundedEscrowWallets.toLocaleString()} contract${supply.fundedEscrowWallets === 1 ? '' : 's'} still funded · open their escrow history`}
+          onClick={() => onOpenTab('ledger', { kind: 'escrow_open' })}
         />
         <StatTile
-          label="On hold"
+          label="On hold by staff"
           value={formatCredits(supply.holds.credits)}
           tone={supply.holds.overdue ? 'text-red-300' : supply.holds.wallets ? 'text-amber-300' : 'text-white'}
           icon={<Lock className="h-5 w-5 text-amber-400" />}
@@ -147,82 +186,97 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
           label="Platform wallet"
           value={formatCredits(supply.platform)}
           icon={<ShieldCheck className="h-5 w-5 text-violet-400" />}
-          hint="Fees and cashouts collected, top-ups issued"
+          hint="Fees and cashouts come in, top-ups go out · open its entries"
+          onClick={() => onOpenTab('ledger', { kind: 'platform' })}
         />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         <div className="space-y-6">
           <Panel
-            title={`Credit flow · last ${flow.days} days`}
-            subtitle="Issued: platform → members, plus staff grants. Collected: members → platform, plus staff deductions."
+            title={`Money movement · last ${flow.days} days`}
+            subtitle="Click any figure to see the exact entries behind it. Only settled entries count (completed or reversed)."
           >
             <LineChart
               labels={labels}
-              height={220}
+              height={200}
               series={[
-                { label: 'Issued', color: '#34d399', values: flow.series.map((p) => p.issued) },
-                { label: 'Collected', color: '#f87171', values: flow.series.map((p) => p.collected) },
-                { label: 'Member volume', color: '#a1a1aa', values: flow.series.map((p) => p.volume) },
+                { label: 'Issued to members', color: '#34d399', values: flow.series.map((p) => p.issued) },
+                { label: 'Collected by platform', color: '#f87171', values: flow.series.map((p) => p.collected) },
+                { label: 'All movement', color: '#a1a1aa', values: flow.series.map((p) => p.volume) },
               ]}
             />
             <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <div>
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/80">
-                  <ArrowDownLeft className="h-3 w-3" /> Issued {formatCredits(flow.issued.total)}
-                </p>
-                <ul className="mt-1 divide-y divide-white/[0.04]">
-                  <FlowRow label="Top-ups" value={flow.issued.topups} />
-                  <FlowRow label="Other platform payouts" value={flow.issued.platformPayouts} />
-                  <FlowRow label="Staff grants" value={flow.issued.staffGrants} />
-                </ul>
-              </div>
-              <div>
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-300/80">
-                  <ArrowUpRight className="h-3 w-3" /> Collected {formatCredits(flow.collected.total)}
-                </p>
-                <ul className="mt-1 divide-y divide-white/[0.04]">
-                  <FlowRow label="Fees" value={flow.collected.fees} />
-                  <FlowRow label="Cashouts" value={flow.collected.cashouts} />
-                  <FlowRow label="Other" value={flow.collected.other} />
-                  <FlowRow label="Staff deductions" value={flow.collected.staffDeductions} />
-                </ul>
-              </div>
-              <div>
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                  <Wallet className="h-3 w-3" /> Between members
-                </p>
-                <ul className="mt-1 divide-y divide-white/[0.04]">
-                  <FlowRow label="Escrow funded" value={flow.escrowFunded} />
-                  <FlowRow label="Escrow paid out" value={flow.escrowPaidOut} />
-                  <FlowRow label="Marketplace sales" value={flow.marketplace} />
-                  <FlowRow label="Refunds" value={flow.refunds} />
-                </ul>
-              </div>
+              <FlowColumn
+                icon={<ArrowDownLeft className="h-3 w-3" />}
+                title="Issued to members"
+                total={flow.issued.total}
+                tone="text-emerald-300"
+              >
+                <LinkRow label="Top-ups" value={flow.issued.topups} onClick={flowLink('flow_topups')} />
+                <LinkRow
+                  label="Returned by platform"
+                  hint="Refunded fees and cashouts"
+                  value={flow.issued.platformRefunds}
+                  onClick={flowLink('flow_platform_refunds')}
+                />
+                <LinkRow label="Other platform payouts" value={flow.issued.platformPayouts} onClick={flowLink('flow_platform_payouts')} />
+                <LinkRow label="Staff grants" value={flow.issued.staffGrants} onClick={flowLink('grant')} />
+              </FlowColumn>
+              <FlowColumn
+                icon={<ArrowUpRight className="h-3 w-3" />}
+                title="Collected by platform"
+                total={flow.collected.total}
+                tone="text-red-300"
+              >
+                <LinkRow
+                  label="Platform fees"
+                  hint="Sales, escrow, job posts, proposals, gigs"
+                  value={flow.collected.fees}
+                  onClick={flowLink('flow_fees')}
+                />
+                <LinkRow label="Cashouts" value={flow.collected.cashouts} onClick={flowLink('flow_cashouts')} />
+                <LinkRow label="Other" value={flow.collected.other} onClick={flowLink('flow_other_collected')} />
+                <LinkRow label="Staff deductions" value={flow.collected.staffDeductions} onClick={flowLink('deduction')} />
+              </FlowColumn>
+              <FlowColumn
+                icon={<Users className="h-3 w-3" />}
+                title="Between members"
+                total={betweenTotal}
+                tone="text-zinc-200"
+              >
+                <LinkRow label="Escrow funded" value={flow.between.escrowFunded} onClick={flowLink('flow_escrow_funded')} />
+                <LinkRow label="Escrow released" value={flow.between.escrowReleased} onClick={flowLink('flow_escrow_released')} />
+                <LinkRow label="Escrow refunded" value={flow.between.escrowRefunded} onClick={flowLink('flow_escrow_refunded')} />
+                <LinkRow label="Marketplace sales" value={flow.between.sales} onClick={flowLink('flow_sales')} />
+                <LinkRow label="Marketplace refunds" value={flow.between.saleRefunds} onClick={flowLink('flow_sale_refunds')} />
+                <LinkRow label="Transfers" value={flow.between.transfers} onClick={flowLink('flow_transfers')} />
+              </FlowColumn>
             </div>
-            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs">
-              <span className="text-zinc-400">
-                Net supply change{' '}
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs">
+              <span className="text-zinc-400" title="Issued minus collected: how much the credits outside the platform wallet (member wallets plus escrow) grew or shrank">
+                Net change{' '}
                 <span className={`font-semibold tabular-nums ${flow.net >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{formatSigned(flow.net)}</span>
               </span>
-              <span className="text-zinc-400">
-                Ledger rows <span className="font-semibold text-white">{flow.rows.total.toLocaleString()}</span>
-              </span>
-              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Pending' })} className="text-zinc-400 hover:text-white">
+              <span className="hidden h-4 w-px bg-white/[0.08] sm:block" />
+              <span className="text-zinc-500">Entries:</span>
+              <button type="button" onClick={() => onOpenTab('ledger', { sinceHours: since })} className="text-zinc-400 hover:text-white">
+                All <span className="font-semibold text-white">{flow.rows.total.toLocaleString()}</span>
+              </button>
+              <button type="button" onClick={statusLink('Pending', { sort: 'oldest' })} className="text-zinc-400 hover:text-white">
                 Pending <span className="font-semibold text-amber-300">{flow.rows.pending.toLocaleString()}</span>
               </button>
-              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Failed' })} className="text-zinc-400 hover:text-white">
+              <button type="button" onClick={statusLink('Failed')} className="text-zinc-400 hover:text-white">
                 Failed <span className="font-semibold text-red-300">{flow.rows.failed.toLocaleString()}</span>
               </button>
-              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Reversed' })} className="text-zinc-400 hover:text-white">
+              <button type="button" onClick={statusLink('Reversed')} className="text-zinc-400 hover:text-white">
                 Reversed <span className="font-semibold text-violet-300">{flow.rows.reversed.toLocaleString()}</span>
               </button>
             </div>
           </Panel>
 
           <Panel
-            title="Latest ledger entries"
-            subtitle="Every credit movement, both parties shown"
+            title="Latest entries"
             padded={false}
             action={
               <button type="button" onClick={() => onOpenTab('ledger')} className="text-xs text-zinc-400 hover:text-white">
@@ -230,145 +284,112 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
               </button>
             }
           >
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase tracking-wide text-zinc-500">
-                    <th className="px-4 py-2.5">When</th>
-                    <th className="px-4 py-2.5">What</th>
-                    <th className="px-4 py-2.5">From</th>
-                    <th className="px-4 py-2.5">To</th>
-                    <th className="px-4 py-2.5 text-right">Amount</th>
-                    <th className="px-4 py-2.5">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentLedger.map((e) => (
-                    <tr
-                      key={e.id}
-                      onClick={() => {
-                        const id = e.destination.walletType === 'Account' ? e.destination.walletId : e.source.walletId;
-                        if (id) onOpenWallet(id);
-                      }}
-                      className="cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02]"
-                    >
-                      <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500" title={formatDateTime(e.createdAt)}>
+            <ul className="divide-y divide-white/[0.04]">
+              {data.recentLedger.map((e) => (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenTransaction(e.id)}
+                    title="Open this entry and everything linked to it"
+                    className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.02]"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-white">{entryTitle(e)}</span>
+                      <span className="block truncate text-[11px] text-zinc-500">
+                        {e.isAdjustment ? entrySubtitle(e) : `${e.source.name} → ${e.destination.name}`}
+                      </span>
+                    </span>
+                    {e.status !== 'Completed' && <StatusPill status={e.status} />}
+                    <span className="w-24 text-right">
+                      <LedgerAmount entry={e} />
+                      <span className="block text-[10px] text-zinc-600" title={formatDateTime(e.createdAt)}>
                         {formatRelative(e.createdAt)}
-                      </td>
-                      <td className="px-4 py-2.5 text-zinc-200">{e.isAdjustment ? 'Staff adjustment' : e.type}</td>
-                      <td className="max-w-[180px] px-4 py-2.5"><PartyCell party={e.source} /></td>
-                      <td className="max-w-[180px] px-4 py-2.5">
-                        {e.isAdjustment ? <span className="text-xs text-zinc-500">Same wallet</span> : <PartyCell party={e.destination} />}
-                      </td>
-                      <td className="px-4 py-2.5 text-right"><LedgerAmount entry={e} /></td>
-                      <td className="px-4 py-2.5"><StatusPill status={e.status} /></td>
-                    </tr>
-                  ))}
-                  {!data.recentLedger.length && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-500">No credit movements yet.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      </span>
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-600 group-hover:text-zinc-300" />
+                  </button>
+                </li>
+              ))}
+              {!data.recentLedger.length && <li className="px-4 py-10 text-center text-sm text-zinc-500">No credit movements yet.</li>}
+            </ul>
           </Panel>
         </div>
 
         <div className="space-y-6">
-          <Panel title="Not settled yet" subtitle="Credits that are on their way somewhere">
-            <ul className="divide-y divide-white/[0.04]">
-              <InFlightRow
-                label="Pending ledger entries"
-                count={inFlight.pendingLedger.count}
-                credits={inFlight.pendingLedger.credits}
-                warn={inFlight.pendingLedger.stale > 0}
-                note={
+          <Panel title="Waiting to settle" subtitle="Credits on their way somewhere">
+            <ul>
+              <LinkRow
+                label="Pending entries"
+                hint={
                   inFlight.pendingLedger.stale
                     ? `${inFlight.pendingLedger.stale} older than 24 hours`
                     : inFlight.pendingLedger.oldestAt
-                      ? `Oldest ${formatRelative(inFlight.pendingLedger.oldestAt)}`
+                      ? `${inFlight.pendingLedger.count.toLocaleString()} · oldest ${formatRelative(inFlight.pendingLedger.oldestAt)}`
                       : 'None'
                 }
+                value={inFlight.pendingLedger.credits}
+                tone={inFlight.pendingLedger.stale ? 'text-amber-300' : 'text-zinc-100'}
+                onClick={() => onOpenTab('ledger', { status: 'Pending', sort: 'oldest' })}
               />
-              <InFlightRow
-                label="Cashouts in progress"
-                count={inFlight.cashouts.count}
-                credits={inFlight.cashouts.credits}
-                warn={inFlight.cashouts.stale > 0}
-                note={
+              <LinkRow
+                label="Cashouts not paid yet"
+                hint={
                   inFlight.cashouts.stale
                     ? `${inFlight.cashouts.stale} unpaid after 24 hours`
-                    : inFlight.cashouts.failedThisWeek
-                      ? `${inFlight.cashouts.failedThisWeek} failed this week`
-                      : 'Waiting on the payout provider'
+                    : `${inFlight.cashouts.count.toLocaleString()} waiting on the payout provider`
                 }
+                value={inFlight.cashouts.credits}
+                tone={inFlight.cashouts.stale ? 'text-amber-300' : 'text-zinc-100'}
+                onClick={() => onOpenTab('ledger', { kind: 'cashout_open', sort: 'oldest' })}
               />
-              <InFlightRow
+              <LinkRow
                 label="Dispute payouts scheduled"
-                count={inFlight.disputePayouts.scheduled}
-                credits={inFlight.disputePayouts.scheduledCredits}
-                warn={inFlight.disputePayouts.failed > 0}
-                note={
+                hint={
                   inFlight.disputePayouts.failed
-                    ? `${inFlight.disputePayouts.failed} failed (${formatCredits(inFlight.disputePayouts.failedCredits)} credits)`
+                    ? `${inFlight.disputePayouts.failed} failed · retry on the dispute desk`
                     : inFlight.disputePayouts.nextReleaseAt
-                      ? `Next release ${formatRelative(inFlight.disputePayouts.nextReleaseAt)}`
+                      ? `${inFlight.disputePayouts.scheduled} · next ${formatRelative(inFlight.disputePayouts.nextReleaseAt)} · dispute desk`
                       : 'None scheduled'
                 }
+                value={inFlight.disputePayouts.scheduledCredits}
+                tone={inFlight.disputePayouts.failed ? 'text-red-300' : 'text-zinc-100'}
               />
             </ul>
           </Panel>
 
           <Panel title="Wallet health">
-            <ul className="space-y-2 text-sm">
-              <li className="flex justify-between text-zinc-400">
-                <span>Account wallets</span>
-                <span className="font-semibold text-white">{supply.walletCount.toLocaleString()}</span>
-              </li>
-              <li className="flex justify-between text-[11px] text-zinc-500">
-                <span>
-                  {supply.userWallets.toLocaleString()} users · {supply.teamWallets.toLocaleString()} teams
-                  {data.viewer.canSeeStaffWallets ? ` · ${supply.staffWallets.toLocaleString()} staff` : ''}
-                </span>
-              </li>
-              <li className="flex justify-between text-zinc-400">
-                <span>Average / median balance</span>
-                <span className="font-semibold tabular-nums text-white">
-                  {formatCredits(supply.averageBalance)} / {formatCredits(supply.medianBalance)}
-                </span>
-              </li>
-              <li className="flex justify-between text-zinc-400">
-                <span>Top 10 wallets hold</span>
-                <span className="font-semibold tabular-nums text-white">{Math.round(supply.topTenShare * 100)}%</span>
-              </li>
-              <li>
-                <button type="button" onClick={() => onOpenTab('wallets', { balance: 'empty' })} className="flex w-full justify-between text-zinc-400 hover:text-white">
-                  <span>Empty wallets</span>
-                  <span className="font-semibold tabular-nums text-white">{supply.emptyWallets.toLocaleString()}</span>
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => onOpenTab('wallets', { balance: 'negative' })} className="flex w-full justify-between text-zinc-400 hover:text-white">
-                  <span>Negative balances</span>
-                  <span className={`font-semibold tabular-nums ${supply.negativeWallets ? 'text-red-300' : 'text-white'}`}>
-                    {supply.negativeWallets.toLocaleString()}
-                  </span>
-                </button>
-              </li>
-              <li className="border-t border-white/[0.06] pt-2">
-                <button type="button" onClick={() => onOpenTab('holds', { hold: 'expiring' })} className="flex w-full justify-between text-zinc-400 hover:text-white">
-                  <span>Holds releasing ≤ 7 days</span>
-                  <span className="font-semibold tabular-nums text-white">{supply.holds.expiringSoon}</span>
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => onOpenTab('holds', { hold: 'indefinite' })} className="flex w-full justify-between text-zinc-400 hover:text-white">
-                  <span>Holds until review</span>
-                  <span className="font-semibold tabular-nums text-white">{supply.holds.indefinite}</span>
-                </button>
-              </li>
+            <ul>
+              <LinkRow label="Account wallets" value={supply.walletCount} credits={false} onClick={() => onOpenTab('wallets')} />
+              <LinkRow label="Users" value={supply.userWallets} credits={false} onClick={() => onOpenTab('wallets', { accountType: 'user' })} />
+              <LinkRow label="Teams" value={supply.teamWallets} credits={false} onClick={() => onOpenTab('wallets', { accountType: 'team' })} />
+              {data.viewer.canSeeStaffWallets && (
+                <LinkRow label="Staff" value={supply.staffWallets} credits={false} onClick={() => onOpenTab('wallets', { accountType: 'staff' })} />
+              )}
+              <LinkRow label="Empty wallets" value={supply.emptyWallets} credits={false} onClick={() => onOpenTab('wallets', { balance: 'empty' })} />
+              <LinkRow
+                label="Negative balances"
+                value={supply.negativeWallets}
+                credits={false}
+                tone="text-red-300"
+                onClick={() => onOpenTab('wallets', { balance: 'negative' })}
+              />
+              <LinkRow
+                label="Holds releasing within 7 days"
+                value={supply.holds.expiringSoon}
+                credits={false}
+                onClick={() => onOpenTab('holds', { hold: 'expiring' })}
+              />
+              <LinkRow
+                label="Holds waiting for review"
+                value={supply.holds.indefinite}
+                credits={false}
+                onClick={() => onOpenTab('holds', { hold: 'indefinite' })}
+              />
             </ul>
+            <p className="mt-2 border-t border-white/[0.06] px-2 pt-2 text-[11px] text-zinc-500">
+              Average {formatCredits(supply.averageBalance)} · median {formatCredits(supply.medianBalance)} · top 10 hold{' '}
+              {Math.round(supply.topTenShare * 100)}%
+            </p>
           </Panel>
 
           <Leaderboard leaders={data.leaders} onOpenWallet={onOpenWallet} />
@@ -381,13 +402,14 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
               </button>
             }
           >
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               {data.recentAdjustments.map((a) => (
                 <li key={a.id}>
                   <button
                     type="button"
-                    disabled={!a.walletId}
-                    onClick={() => a.walletId && onOpenWallet(a.walletId)}
+                    disabled={!a.creditTransactionId && !a.walletId}
+                    onClick={() => (a.creditTransactionId ? onOpenTransaction(a.creditTransactionId) : a.walletId && onOpenWallet(a.walletId))}
+                    title={a.creditTransactionId ? 'Open this adjustment' : 'Open this wallet'}
                     className="flex w-full items-start justify-between gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.03]"
                   >
                     <span className="min-w-0">

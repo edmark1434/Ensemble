@@ -34,12 +34,19 @@ export function meritFromWarnings(warnings: MeritWarning[] | null | undefined): 
   return meritFromWarningPoints(points);
 }
 
+/**
+ * Plain tier for the merit number itself, cut at the seeded punishment levels. Nothing
+ * automatic happens above 60 (Good, Fair); Low covers Limited, the mutes and Restricted
+ * (60–41); Very low covers Frozen access and suspensions (40 and below). Punishments are timed
+ * and run separately from merit (they do not end when merit recovers), so what is actually
+ * paused comes from the running punishments, shown next to this tier for the owner and staff.
+ */
 export function meritBandLabel(merit: number): string {
   if (merit >= 100) return "Trusted";
-  if (merit >= 98) return "Record";
-  if (merit >= 93) return "Limited";
-  if (merit >= 85) return "Restricted";
-  return "Frozen";
+  if (merit >= 80) return "Good";
+  if (merit >= 61) return "Fair";
+  if (merit >= 41) return "Low";
+  return "Very low";
 }
 
 export function meritColor(merit: number): string {

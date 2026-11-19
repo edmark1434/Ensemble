@@ -37,7 +37,7 @@ async function hasColumn(table, column) {
   return false;
 }
 
-/** `accounts.suspension_source` / `auto_suspend_lift_merit` (warning-lift migration). */
+/** `accounts.suspension_source`: marks suspensions the merit engine applied. */
 function autoSuspendColumnsReady() {
   return hasColumn('accounts', 'suspension_source');
 }
@@ -48,18 +48,30 @@ function warningLiftColumnsReady() {
 }
 
 /**
+ * `merit_penalties` and `warning_thresholds.duration_days` (timed-merit-punishments migration).
+ * Before it runs there is nowhere to keep a punishment's clock, so bands follow points live.
+ */
+function meritPenaltiesReady() {
+  return hasColumn('merit_penalties', 'merit_penalty_id');
+}
+
+function thresholdDurationReady() {
+  return hasColumn('warning_thresholds', 'duration_days');
+}
+
+/**
  * SET fragment that clears the automatic-suspension marker, or '' before the migration.
  * Prefixed with a comma so it can follow other assignments.
  */
 async function clearAutoSuspendSql() {
-  return (await autoSuspendColumnsReady())
-    ? ', suspension_source = NULL, auto_suspend_lift_merit = NULL'
-    : '';
+  return (await autoSuspendColumnsReady()) ? ', suspension_source = NULL' : '';
 }
 
 module.exports = {
   hasColumn,
   autoSuspendColumnsReady,
   warningLiftColumnsReady,
+  meritPenaltiesReady,
+  thresholdDurationReady,
   clearAutoSuspendSql,
 };

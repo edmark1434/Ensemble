@@ -18,6 +18,11 @@ const {
 } = require('../services/AdminVerificationServices');
 const { getAdminAccountProfile } = require('../services/AdminAccountProfileServices');
 const { getWarningLiftPreview, liftWarningPoints } = require('../services/WarningLiftServices');
+const {
+  listAccountMeritPenalties,
+  endMeritPenaltyEarly,
+  endMeritPenaltiesEarly,
+} = require('../services/MeritPenaltyServices');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -190,6 +195,7 @@ async function postAdminAccountCreditFreeze(req, res) {
     }
     const data = await freezeAccountCredits(accountId, freeze, staffIdFromSession(req.session), {
       reason: req.body?.reason,
+      amount: req.body?.amount,
       days: req.body?.days,
       endsAt: req.body?.endsAt,
     });
@@ -276,12 +282,13 @@ async function postAdminLiftWarningPoints(req, res) {
       violationId: req.body?.violationId || null,
       reason: req.body?.reason,
     });
-    const ended = data.bandBefore !== data.bandAfter ? ' The automatic limits moved with it.' : '';
-    const suspension = data.autoSuspensionLifted ? ' The automatic suspension ended.' : '';
+    const running = data.punishmentsStillRunning?.length
+      ? ' Automatic punishments already running keep their end dates; end them early from the punishment list if needed.'
+      : '';
     res.status(200).json({
       success: true,
       data,
-      message: `Lifted ${data.lifted} warning point(s). Platform Merit is now ${data.meritAfter}.${ended}${suspension}`,
+      message: `Lifted ${data.lifted} warning point(s). Platform Merit is now ${data.meritAfter}.${running}`,
     });
   } catch (err) {
     if (!err.statusCode) console.error('Error lifting warning points:', err);
@@ -289,6 +296,63 @@ async function postAdminLiftWarningPoints(req, res) {
       success: false,
       code: err.code || null,
       message: err.message || 'Failed to lift warning points',
+    });
+  }
+}
+
+async function getAdminAccountMeritPenalties(req, res) {
+  try {
+    const data = await listAccountMeritPenalties(req.params.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (!err.statusCode) console.error('Error loading automatic punishments:', err);
+    res.status(liftErrorStatus(err)).json({
+      success: false,
+      code: err.code || null,
+      message: err.message || 'Failed to load automatic punishments',
+    });
+  }
+}
+
+/** Unfreeze: end several (default: every) running automatic band and mute at once. */
+async function postAdminUnfreezeAccount(req, res) {
+  try {
+    const data = await endMeritPenaltiesEarly(req.params.accountId, staffIdFromSession(req.session), {
+      reason: req.body?.reason,
+      penaltyIds: Array.isArray(req.body?.penaltyIds) ? req.body.penaltyIds : null,
+      effects: Array.isArray(req.body?.effects) ? req.body.effects : null,
+    });
+    const names = [...new Set(data.ended.map((p) => p.label))].join(', ');
+    res.status(200).json({
+      success: true,
+      data,
+      message: `Ended ${names}. The member was told.${data.running.length ? ' Some automatic punishments are still running.' : ''}`,
+    });
+  } catch (err) {
+    if (!err.statusCode) console.error('Error unfreezing account:', err);
+    res.status(liftErrorStatus(err)).json({
+      success: false,
+      code: err.code || null,
+      message: err.message || 'Failed to end the automatic punishments',
+    });
+  }
+}
+
+async function postAdminEndMeritPenalty(req, res) {
+  try {
+    const data = await endMeritPenaltyEarly(
+      req.params.accountId,
+      req.params.penaltyId,
+      staffIdFromSession(req.session),
+      { reason: req.body?.reason }
+    );
+    res.status(200).json({ success: true, data, message: 'Automatic punishment ended early. The member was told.' });
+  } catch (err) {
+    if (!err.statusCode) console.error('Error ending automatic punishment:', err);
+    res.status(liftErrorStatus(err)).json({
+      success: false,
+      code: err.code || null,
+      message: err.message || 'Failed to end the automatic punishment',
     });
   }
 }
@@ -366,5 +430,8 @@ module.exports = {
   postAdminRescindWarning,
   getAdminWarningLiftPreview,
   postAdminLiftWarningPoints,
+  getAdminAccountMeritPenalties,
+  postAdminEndMeritPenalty,
+  postAdminUnfreezeAccount,
   postAdminAccountPardon,
 };

@@ -9,6 +9,8 @@ const {
   createAssetController,
   updateAssetController,
   deleteAssetController,
+  getSellerAssetMetricsController,
+  restoreAssetController,
   getAssetDownloadController,
   getAssetOriginalPreviewController,
   purchaseAssetController,
@@ -45,6 +47,8 @@ router.get('/:assetId/comments', optionalAuth, listCommentsController);
 
 router.use(checkSession, requireAuth);
 
+router.get('/seller/metrics', getSellerAssetMetricsController);
+
 router.get('/:assetId/template-use', getTemplateUseController);
 router.post('/:assetId/template-use', useTemplateController);
 
@@ -66,6 +70,7 @@ router.get('/:assetId/original-preview', getAssetOriginalPreviewController);
 router.get('/:assetId/download', getAssetDownloadController);
 router.patch('/:assetId', updateAssetController);
 router.delete('/:assetId', deleteAssetController);
+router.post('/:assetId/restore', restoreAssetController);
 router.post('/:assetId/comments', createCommentController);
 router.patch('/:assetId/comments/:commentId', updateCommentController);
 router.delete('/:assetId/comments/:commentId', deleteCommentController);

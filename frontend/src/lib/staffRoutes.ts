@@ -1,4 +1,5 @@
 import { isStaffConsolePath } from "./staffPlatformView";
+import type { ConsoleId } from "./consoleHosts";
 
 export const STAFF_PORTAL_DASHBOARD = '/staff/dashboard';
 export const ADMIN_DASHBOARD = '/admin/dashboard';
@@ -26,6 +27,12 @@ export const STAFF_HOME_BY_ROLE: Record<string, string> = {
 
 export function isAdminAccount(user: { type?: string | null; role?: string | null } | null | undefined): boolean {
   return user?.type === 'Staff' && user.role === 'Admin';
+}
+
+/** Console host a staff account signs in on: Admin on the admin host, every other staff role on the staff host. */
+export function consoleIdForAccount(user: { type?: string | null; role?: string | null } | null | undefined): ConsoleId | null {
+  if (user?.type !== 'Staff') return null;
+  return user.role === 'Admin' ? 'admin' : 'staff';
 }
 
 export function getStaffHomePath(role?: string | null): string {

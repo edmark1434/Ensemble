@@ -11,6 +11,7 @@ import {
   TICKET_TYPE_GROUPS,
   escalateTypesForRole,
 } from './ticketTypes';
+import { APPEAL_TICKET_TYPE, type AppealablePenalty } from '@/pages/user/account/appeal/appealShared';
 
 type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 
@@ -86,6 +87,38 @@ export default function CreateTicketForUserModal({
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
+  // "Appeal an account penalty" is about one of the member's penalties; staff pick which.
+  const isAppealType = ticketType === APPEAL_TICKET_TYPE;
+  const [penalties, setPenalties] = useState<AppealablePenalty[]>([]);
+  const [penaltiesLoading, setPenaltiesLoading] = useState(false);
+  const [penaltyKey, setPenaltyKey] = useState('');
+
+  useEffect(() => {
+    if (!isAppealType || !requester?.accountId) {
+      setPenalties([]);
+      setPenaltyKey('');
+      return;
+    }
+    let cancelled = false;
+    setPenaltiesLoading(true);
+    api
+      .get(`/api/staff/tickets/appeal-options/${requester.accountId}`)
+      .then((response) => {
+        if (cancelled) return;
+        const rows = (response.data?.data?.penalties || []) as AppealablePenalty[];
+        setPenalties(rows);
+        setPenaltyKey((current) => (rows.some((row) => row.key === current && row.appeal.canAppeal) ? current : rows.find((row) => row.appeal.canAppeal)?.key || ''));
+      })
+      .catch(() => {
+        if (!cancelled) setPenalties([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPenaltiesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAppealType, requester?.accountId]);
 
   const handleableTypes = useMemo(() => {
     const fromRole = escalateTypesForRole(staffRole);
@@ -162,6 +195,7 @@ export default function CreateTicketForUserModal({
     if (!subject.trim()) next.subject = 'Subject is required.';
     else if (subject.trim().length > 200) next.subject = 'Subject must be 200 characters or less.';
     if (!ticketType) next.type = 'Pick a ticket type.';
+    if (isAppealType && requester?.accountId && !penaltyKey) next.penalty = 'Pick the penalty this appeal is about.';
     if (!description.trim()) next.description = 'Description is required.';
     else if (description.trim().length < 10) next.description = 'Description must be at least 10 characters.';
     else if (description.trim().length > 5000) next.description = 'Description must be 5,000 characters or less.';
@@ -175,6 +209,7 @@ export default function CreateTicketForUserModal({
     if (!validate() || submitting) return;
     setSubmitting(true);
     try {
+      const penalty = isAppealType ? penalties.find((row) => row.key === penaltyKey) : null;
       const response = await api.post('/api/staff/tickets', {
         requesterAccountId: requester?.accountId,
         subject: subject.trim(),
@@ -182,6 +217,7 @@ export default function CreateTicketForUserModal({
         priority,
         description: description.trim(),
         assignToMe: canAssignToMe && assignToMe,
+        ...(penalty ? { appealTarget: { type: penalty.type, id: penalty.id } } : {}),
       });
       if (!response.data?.success) {
         setFormError(response.data?.message || 'Failed to create ticket');
@@ -351,6 +387,38 @@ export default function CreateTicketForUserModal({
               <p className="mt-1 text-[11px] text-zinc-600">Goes to the {queueRole} queue.</p>
               {errors.type && <p className="mt-1 text-[11px] text-rose-300">{errors.type}</p>}
             </div>
+            {isAppealType ? (
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] text-zinc-500" htmlFor="staff-ticket-penalty">
+                  Penalty under appeal
+                </label>
+                {!requester ? (
+                  <p className="mt-1.5 text-[11px] text-zinc-500">Choose the member first.</p>
+                ) : penaltiesLoading ? (
+                  <p className="mt-1.5 text-[11px] text-zinc-500">Loading their penalties…</p>
+                ) : penalties.length === 0 ? (
+                  <p className="mt-1.5 text-[11px] text-amber-200">This member has no active penalty to appeal.</p>
+                ) : (
+                  <select
+                    id="staff-ticket-penalty"
+                    value={penaltyKey}
+                    onChange={(event) => setPenaltyKey(event.target.value)}
+                    className={`mt-1.5 ${fieldClass(accent)}`}
+                  >
+                    <option value="">Choose one</option>
+                    {penalties.map((penalty) => (
+                      <option key={penalty.key} value={penalty.key} disabled={!penalty.appeal.canAppeal}>
+                        {penalty.label}
+                        {penalty.number ? ` · ${penalty.number}` : ''}
+                        {penalty.appeal.canAppeal ? '' : ` — ${penalty.appeal.state === 'open' ? 'appeal already open' : 'cannot be appealed now'}`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="mt-1 text-[11px] text-zinc-600">Each penalty has its own appeal; the decision only changes this one.</p>
+                {errors.penalty && <p className="mt-1 text-[11px] text-rose-300">{errors.penalty}</p>}
+              </div>
+            ) : null}
             <div>
               <label className="block text-[11px] text-zinc-500" htmlFor="staff-ticket-priority">
                 Priority

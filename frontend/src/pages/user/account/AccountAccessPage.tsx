@@ -12,11 +12,12 @@ import { formatStandingWhen, nextStandingChange, standingConditions } from '@/li
 import { isAppealLimitedMember } from '@/lib/appealAccess';
 import AppealForm from './appeal/AppealForm';
 import CaseInbox from './appeal/CaseInbox';
+import PenaltyAppealList from './appeal/PenaltyAppealList';
 import { useCaseLists } from './appeal/useCaseLists';
+import { useAppealOptions } from './appeal/useAppealOptions';
 import {
+  type AppealablePenalty,
   type CaseSelection,
-  DEFAULT_PENALTY_COPY,
-  PENALTY_COPY,
   isAppealTicket,
   isClosedStatus,
 } from './appeal/appealShared';
@@ -24,9 +25,15 @@ import {
 const FONT = { fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
 const STEPS = [
-  { title: 'File one appeal', body: 'Explain what happened. You can keep one appeal open at a time.' },
-  { title: 'Staff review it', body: 'Support reads your account record and may ask questions on the ticket.' },
-  { title: 'You get a decision', body: 'Accepted appeals take effect within 24 hours. A denial starts a 12-month wait.' },
+  {
+    title: 'Pick the penalty',
+    body: 'Each penalty on your account (a suspension, a timeout, a warning, a credit hold…) has its own appeal.',
+  },
+  { title: 'Staff review it', body: 'Support reads your account record and may ask questions on that appeal’s ticket.' },
+  {
+    title: 'You get a decision on that penalty',
+    body: 'An accepted appeal lifts it (usually within 24 hours). A denial means that penalty waits 12 months before another appeal. Other penalties are not affected.',
+  },
 ];
 
 function refreshCurrentUser() {
@@ -83,13 +90,24 @@ export default function AccountAccessPage() {
   const appealOnly =
     isAppealLimitedMember(user) || conditions.some((c) => c.id === 'banned' || c.id === 'locked');
   const canLeave = !appealOnly;
-  const hasPenalty = conditions.length > 0 || appealOnly;
-  const copy = primary ? PENALTY_COPY[primary.id] : DEFAULT_PENALTY_COPY;
 
   // What each case allows (appeal-only replies, read-only disputes) comes from the server and
   // is re-read whenever the standing changes, so this page can never drift from the rules.
-  const standingKey = `${user?.status || ''}|${restriction?.code || ''}|${conditions.map((c) => c.id).join(',')}`;
+  const standingKey = `${user?.status || ''}|${restriction?.code || ''}|${conditions.map((c) => c.id).join(',')}|${
+    restriction?.warningPoints ?? ''
+  }`;
   const { tickets, disputes, listsLoading, listsError, loadLists } = useCaseLists(standingKey);
+  // Every active penalty, each with its own appeal (warnings below a band show up here too).
+  const { options: appealOptions, loading: optionsLoading, error: optionsError, reload: reloadOptions } =
+    useAppealOptions(standingKey);
+  const penalties = appealOptions.penalties;
+  const hasPenalty = conditions.length > 0 || appealOnly || penalties.length > 0;
+
+  // The penalty whose appeal form is open. With a single appealable penalty the form opens by itself.
+  const [appealingKey, setAppealingKey] = useState<string | null>(null);
+  const onlyPenalty = penalties.length === 1 && penalties[0].appeal.canAppeal ? penalties[0] : null;
+  const appealing: AppealablePenalty | null =
+    penalties.find((penalty) => penalty.key === appealingKey && penalty.appeal.canAppeal) || onlyPenalty;
 
   // A link straight to a case (notification, case bar) lands on the conversation, not the hero.
   const linkedOnArrival = useRef(Boolean(selection));
@@ -123,10 +141,19 @@ export default function AccountAccessPage() {
     void refreshCurrentUser();
   }, []);
 
-  const openAppeal =
-    tickets.find(
-      (ticket) => isAppealTicket(ticket) && !(ticket.access ? ticket.access.closed : isClosedStatus(ticket.status))
-    ) || null;
+  // A decision changes what can still be appealed.
+  const handleDecision = useCallback(
+    (ticketId: string) => {
+      handleAppealDecision(ticketId);
+      void reloadOptions();
+    },
+    [handleAppealDecision, reloadOptions]
+  );
+
+  // One appeal per penalty, so several can be open at once.
+  const openAppeals = tickets.filter(
+    (ticket) => isAppealTicket(ticket) && !(ticket.access ? ticket.access.closed : isClosedStatus(ticket.status))
+  );
 
   function openCase(next: CaseSelection) {
     setSelection(next);
@@ -134,7 +161,8 @@ export default function AccountAccessPage() {
   }
 
   async function handleSubmitted(ticketId: string | null) {
-    await loadLists().catch(() => undefined);
+    setAppealingKey(null);
+    await Promise.all([loadLists().catch(() => undefined), reloadOptions()]);
     if (ticketId) openCase({ kind: 'ticket', id: ticketId });
   }
 
@@ -231,15 +259,18 @@ export default function AccountAccessPage() {
                     <Clock className="h-3.5 w-3.5" /> {heroEnds}
                   </span>
                 ) : null}
-                {openAppeal ? (
+                {openAppeals.map((ticket) => (
                   <button
+                    key={ticket.id}
                     type="button"
-                    onClick={() => openCase({ kind: 'ticket', id: openAppeal.id })}
+                    onClick={() => openCase({ kind: 'ticket', id: ticket.id })}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 font-medium text-blue-700 transition hover:bg-blue-500/15 dark:text-blue-300"
                   >
-                    <Gavel className="h-3.5 w-3.5" /> Appeal {openAppeal.number || ''} · {openAppeal.status || 'Open'}
+                    <Gavel className="h-3.5 w-3.5" />
+                    {ticket.appealTarget?.label ? `${ticket.appealTarget.label} appeal` : 'Appeal'} {ticket.number || ''} ·{' '}
+                    {ticket.status || 'Open'}
                   </button>
-                ) : null}
+                ))}
               </div>
             </div>
           </div>
@@ -286,49 +317,51 @@ export default function AccountAccessPage() {
           {/* Appeal panel */}
           <aside className="flex flex-col gap-6 lg:sticky lg:top-24">
             <Card className="p-5">
-              {listsLoading ? (
+              {optionsLoading ? (
                 <div className="space-y-3">
                   <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
                   <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
                   <div className="h-24 animate-pulse rounded-xl bg-gray-100 dark:bg-white/5" />
                 </div>
-              ) : openAppeal ? (
-                <div className="flex flex-col gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-                    <Gavel className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">Your appeal is with staff</h2>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
-                      {openAppeal.number ? `${openAppeal.number} · ` : ''}
-                      {openAppeal.status || 'Open'}
-                      {openAppeal.updatedAt ? ` · updated ${formatStandingWhen(openAppeal.updatedAt)}` : ''}
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-zinc-300">
-                    You can have one open appeal at a time. Add anything new as a reply on that ticket.
-                  </p>
+              ) : optionsError ? (
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">Could not load your penalties</h2>
+                  <p className="text-sm text-gray-500 dark:text-zinc-400">Check your connection and try again.</p>
                   <button
                     type="button"
-                    onClick={() => openCase({ kind: 'ticket', id: openAppeal.id })}
-                    className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                    onClick={() => void reloadOptions()}
+                    className="self-start rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"
                   >
-                    Open the conversation
+                    Try again
                   </button>
                 </div>
-              ) : hasPenalty ? (
+              ) : appealing ? (
                 <AppealForm
-                  title={copy.formTitle}
-                  subjectPlaceholder={copy.subjectPlaceholder}
-                  outcome={copy.outcome}
+                  key={appealing.key}
+                  penalty={appealing}
+                  onCancel={penalties.length > 1 ? () => setAppealingKey(null) : undefined}
                   onSubmitted={handleSubmitted}
+                />
+              ) : penalties.length ? (
+                <PenaltyAppealList
+                  options={appealOptions}
+                  onAppeal={(penalty) => setAppealingKey(penalty.key)}
+                  onOpenTicket={(ticketId) => openCase({ kind: 'ticket', id: ticketId })}
                 />
               ) : (
                 <div className="flex flex-col gap-2">
                   <h2 className="text-base font-semibold text-gray-900 dark:text-white">Nothing to appeal</h2>
                   <p className="text-sm text-gray-500 dark:text-zinc-400">
-                    Appeals are for active penalties. Your past tickets and disputes are still below.
+                    {hasPenalty
+                      ? 'The penalty on your account has just changed. Refresh in a moment to see what can be appealed.'
+                      : 'Appeals are for active penalties. Your past tickets and disputes are still below.'}
                   </p>
+                  {openAppeals.length ? (
+                    <p className="text-sm text-gray-500 dark:text-zinc-400">
+                      {openAppeals.length === 1 ? 'Your open appeal is' : `Your ${openAppeals.length} open appeals are`} in the
+                      cases below.
+                    </p>
+                  ) : null}
                 </div>
               )}
             </Card>
@@ -364,7 +397,7 @@ export default function AccountAccessPage() {
             onSelect={setSelection}
             onRefreshLists={loadLists}
             accountId={accountId}
-            onAppealDecision={handleAppealDecision}
+            onAppealDecision={handleDecision}
           />
         </div>
       </main>

@@ -6,6 +6,23 @@
  * The backend stays the authority: these are explanations, not checks.
  */
 
+/** One automatic merit punishment that is running (from `getAccountAccess().meritPenalties`). */
+export type MeritPenalty = {
+  id: string;
+  effect: 'limited' | 'restricted' | 'frozen' | 'mute' | 'auto_suspend' | string;
+  /** Plain name: Limited, Restricted, Frozen access, Mute, Suspension. */
+  label: string;
+  /** The admin's row name, e.g. "Mute 3 days". */
+  ruleLabel?: string | null;
+  startsAt?: string | null;
+  endsAt: string | null;
+  durationDays?: number | null;
+  /** The merit level the rule sits at. */
+  triggerMerit?: number | null;
+  /** The member's merit when it started. */
+  meritAtStart?: number | null;
+};
+
 export type StandingRestriction = {
   status?: string | null;
   code?: string | null;
@@ -16,6 +33,11 @@ export type StandingRestriction = {
   suspended?: boolean;
   deactivated?: boolean;
   forumTimeout?: boolean;
+  /** Automatic mute from Platform Merit: no forum posts, marketplace comments or new conversations. */
+  muted?: boolean;
+  mutedUntil?: string | null;
+  /** Every automatic merit punishment running now, strictest first. */
+  meritPenalties?: MeritPenalty[] | null;
   warningFrozen?: boolean;
   warningBand?: string | null;
   warningBandLabel?: string | null;
@@ -37,7 +59,8 @@ export type StandingConditionId =
   | 'banned'
   | 'locked'
   | 'suspended'
-  | 'frozen_access'
+  | 'merit_limits'
+  | 'muted'
   | 'credit_hold'
   | 'forum_timeout';
 
@@ -55,6 +78,8 @@ export type StandingCondition = {
   recover: string[];
   canAppeal: boolean;
   tone: 'rose' | 'amber' | 'sky';
+  /** For `merit_limits`: which band is in force (the strictest one running). */
+  band?: 'limited' | 'restricted' | 'frozen';
 };
 
 export const APPEAL_PATH = '/account/appeal';
@@ -94,6 +119,30 @@ function endsLine(endsAt: string | null | undefined, openEnded: string) {
   const when = formatStandingWhen(endsAt);
   return when ? `It ends by itself on ${when}. You do not need to do anything.` : openEnded;
 }
+
+const BAND_NAMES = {
+  limited: 'Limited access',
+  restricted: 'Restricted access',
+  frozen: 'Frozen access',
+} as const;
+
+/** What each automatic band pauses. Mirrors `ACTION_ALLOW` in `backend/lib/WarningBands.js`. */
+const BAND_PAUSES: Record<'limited' | 'restricted' | 'frozen', string[]> = {
+  limited: ['Urgent job posts', 'New marketplace listings go to review before they publish'],
+  restricted: [
+    'Posting new jobs, gigs and listings',
+    'Forum posts, comments, reactions and new groups (reporting stays open)',
+    'Marketplace comments, new teams, joining teams and new shared projects',
+    `Proposals are limited to 3 per day`,
+  ],
+  frozen: [
+    'Sending proposals',
+    'Starting new messages (existing job, gig and contract threads stay open)',
+    'Cashing out (your balance stays yours)',
+    'Posting new jobs, gigs and listings',
+    'Forum posts, new teams and new shared projects',
+  ],
+};
 
 const APPEAL_STEP =
   'If you think this is a mistake, file an appeal and explain what happened. If staff accept it, it ends within 24 hours.';
@@ -171,31 +220,68 @@ export function standingConditions(restriction?: StandingRestriction | null): St
     });
   }
 
-  if (r.warningFrozen || (r.warningBand === 'frozen' && status === 'active')) {
+  const merit = Number(r.merit);
+  const meritText = Number.isFinite(merit) ? `Platform Merit dropped to ${merit}` : 'Platform Merit dropped';
+  const penalties = (r.meritPenalties || []).filter((p) => p && p.effect !== 'auto_suspend');
+  const bands = penalties.filter((p) => p.effect in BAND_PAUSES);
+  const band = String(r.warningBand || 'none') as keyof typeof BAND_PAUSES | 'none';
+
+  if (band in BAND_PAUSES && status === 'active') {
+    const id = band as keyof typeof BAND_PAUSES;
+    const current = bands.find((p) => p.effect === id);
+    const endsAt = r.warningBandEndsAt || current?.endsAt || null;
+    // A milder band that outlasts this one takes over when it ends.
+    const after = bands
+      .filter((p) => p.effect !== id && p.endsAt && endsAt && new Date(p.endsAt) > new Date(endsAt))
+      .map((p) => `${p.label} until ${formatStandingWhen(p.endsAt)}`);
     list.push({
-      id: 'frozen_access',
-      label: r.warningBandLabel || 'Frozen access',
-      title: 'Frozen access',
-      summary: 'Your Platform Merit is low because of active warnings, so some actions are paused. Nothing is taken from you.',
-      reason: null,
-      paused: [
-        'Sending proposals',
-        'Starting new messages (existing job, gig and contract threads stay open)',
-        'Cashing out (your balance stays yours)',
-        'Posting new jobs, gigs and listings',
-        'Forum posts, new teams and new shared projects',
-      ],
-      endsAt: r.warningBandEndsAt || null,
-      openEnded: 'It lifts as the warnings behind it expire.',
+      id: 'merit_limits',
+      band: id,
+      label: BAND_NAMES[id],
+      title: BAND_NAMES[id],
+      summary: `Your ${meritText}, so an automatic punishment pauses some actions for a set time. Nothing is taken from you.`,
+      reason: current?.triggerMerit != null ? `Started when your merit reached ${current.triggerMerit} or lower.` : null,
+      paused: [...BAND_PAUSES[id]],
+      endsAt,
+      openEnded: 'It ends on its own clock.',
       recover: [
-        r.warningBandEndsAt
-          ? `It lifts by itself on ${formatStandingWhen(r.warningBandEndsAt)}, when enough warnings expire. New warnings push that date back.`
-          : 'It lifts as the warnings behind it expire. New warnings push that date back.',
+        endsAt
+          ? `It ends by itself on ${formatStandingWhen(endsAt)}. Warnings expiring or merit recovering do not end it sooner, and do not make it longer.`
+          : 'It ends on its own clock. Warnings expiring or merit recovering do not change it.',
+        ...(after.length ? [`After that, still running: ${after.join('; ')}.`] : []),
+        'New warnings that take your merit lower can start a harsher punishment.',
         'You can still finish live contracts and gig orders.',
-        'If a warning was issued by mistake, file an appeal about it.',
+        'If the warning behind it was a mistake, file an appeal about it.',
       ],
       canAppeal: true,
       tone: 'sky',
+    });
+  }
+
+  if (r.muted && status === 'active') {
+    const mute = penalties.find((p) => p.effect === 'mute');
+    const endsAt = r.mutedUntil || mute?.endsAt || null;
+    list.push({
+      id: 'muted',
+      label: 'Muted',
+      title: 'You are muted',
+      summary: `Your ${meritText}, so you are muted for a set time. You can still read everything and keep working on live jobs.`,
+      reason: mute?.triggerMerit != null ? `Started when your merit reached ${mute.triggerMerit} or lower.` : null,
+      paused: [
+        'Forum posts, comments, reactions and new groups (reporting stays open)',
+        'Commenting on marketplace listings',
+        'Starting new conversations (existing job, gig and contract threads stay open)',
+      ],
+      endsAt,
+      openEnded: 'It ends on its own clock.',
+      recover: [
+        endsAt
+          ? `It ends by itself on ${formatStandingWhen(endsAt)}, even if your merit recovers sooner.`
+          : 'It ends on its own clock, even if your merit recovers sooner.',
+        'If the warning behind it was a mistake, file an appeal about it.',
+      ],
+      canAppeal: true,
+      tone: 'amber',
     });
   }
 

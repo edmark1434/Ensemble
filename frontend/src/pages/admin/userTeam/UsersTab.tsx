@@ -15,6 +15,7 @@ import {
   ConfirmStatusModal,
   CreditActivityModal,
   HistoryModal,
+  UnfreezeAccountModal,
   UserOverviewModal,
   VerificationModal,
   WarnAccountModal,
@@ -25,6 +26,7 @@ import {
   setAccountStatus,
 } from './accountActions';
 import { buildRowActionItems, exportAccountJson } from './statusActions';
+import { runningAutomaticPunishments, StaffPunishmentChips } from '@/components/account/MeritStatus';
 import { canSuspendTarget } from './suspendRules';
 import { formatDateTime } from './formatDateTime';
 import type { PlatformUserAccount, UserManagementData } from './userTeamTypes';
@@ -60,6 +62,7 @@ type ModalKind =
   | 'unlock'
   | 'timeout'
   | 'clear_timeout'
+  | 'unfreeze'
   | null;
 
 type BulkPending = {
@@ -291,7 +294,8 @@ export default function UsersTab({
     const isPrimary = capabilities.primaryActions.has(actionId);
     const isStatus =
       capabilities.statusActions.has(actionId) ||
-      (actionId === 'warn' && capabilities.canWarn);
+      (actionId === 'warn' && capabilities.canWarn) ||
+      (actionId === 'unfreeze' && capabilities.canPardon);
     if (!isPrimary && !isStatus) return;
 
     switch (actionId) {
@@ -309,6 +313,9 @@ export default function UsersTab({
         break;
       case 'warn':
         open(user, 'warn');
+        break;
+      case 'unfreeze':
+        open(user, 'unfreeze');
         break;
       case 'export':
         exportAccountJson(`user-${user.username || user.accountId}.json`, user);
@@ -490,7 +497,10 @@ export default function UsersTab({
                     <td className="px-4 py-3">{user.email}</td>
                     <td className="px-4 py-3">@{user.username}</td>
                     <td className="px-4 py-3">{user.verificationStatus}</td>
-                    <td className="px-4 py-3">{user.merit ?? user.history?.merit ?? 100}</td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-white">{user.merit ?? user.history?.merit ?? 100}</span>
+                      <StaffPunishmentChips penalties={user.meritPenalties} className="mt-1 max-w-[220px]" />
+                    </td>
                     <td className="px-4 py-3">{user.status}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.lastSeenAt)}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.joinedAt)}</td>
@@ -500,6 +510,7 @@ export default function UsersTab({
                         items={buildRowActionItems(user.status, {
                           hasViolations: (user.history?.totalViolations ?? 0) > 0,
                           forumTimeout: user.forumTimeout,
+                          automaticPunishments: runningAutomaticPunishments(user.meritPenalties).length,
                           capabilities,
                         }).filter(
                           (item) =>
@@ -571,10 +582,20 @@ export default function UsersTab({
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
           canLiftPoints={capabilities.canPardon}
+          showPunishments
+          meritPenalties={selected.meritPenalties}
         />
       )}
       {selected && modal === 'warn' && capabilities.canWarn && (
         <WarnAccountModal
+          entityName={selected.name}
+          accountId={selected.accountId}
+          onClose={closeModal}
+          onChanged={() => void refreshAfterChange()}
+        />
+      )}
+      {selected && modal === 'unfreeze' && capabilities.canPardon && (
+        <UnfreezeAccountModal
           entityName={selected.name}
           accountId={selected.accountId}
           onClose={closeModal}

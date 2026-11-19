@@ -86,7 +86,19 @@ const EVENT_CATALOG = {
     label: 'Warning points lifted',
     targetType: 'Account',
     severity: 'info',
-    impact: 'Lifted some active warning points; the warnings stay on the record and merit recovered.',
+    impact: 'Lifted some active warning points; the warnings stay on the record and merit recovered. Running automatic punishments keep their clocks.',
+  },
+  MERIT_PENALTY_STARTED: {
+    label: 'Automatic punishment started',
+    targetType: 'Account',
+    severity: 'high',
+    impact: 'Platform Merit dropped to a threshold, so its punishment started for a fixed number of days.',
+  },
+  MERIT_PENALTY_ENDED: {
+    label: 'Automatic punishment ended',
+    targetType: 'Account',
+    severity: 'info',
+    impact: 'An automatic merit punishment ended (its time ran out, staff ended it early, pardon, appeal, or its warning was withdrawn).',
   },
   RESTRICTION_ISSUED: {
     label: 'Restriction applied',
@@ -110,7 +122,7 @@ const EVENT_CATALOG = {
     label: 'Credits frozen',
     targetType: 'Wallet',
     severity: 'critical',
-    impact: 'Moved the wallet balance into a frozen balance the member cannot spend.',
+    impact: 'Moved some or all of the spendable balance into a frozen balance the member cannot spend.',
   },
   CREDITS_ADJUSTED: {
     label: 'Credits adjusted by staff',

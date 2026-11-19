@@ -437,8 +437,10 @@ async function createPublicTicket(req, res) {
       }
       ticketType = APPEAL_TICKET_TYPE;
     }
+    // Each penalty is appealed on its own: the body names it as `appealTarget: { type, id }`.
+    let appealTarget = null;
     if (ticketType === APPEAL_TICKET_TYPE) {
-      await assertCanFileAppeal(requesterAccountId);
+      appealTarget = await assertCanFileAppeal(requesterAccountId, req.body?.appealTarget);
     }
     const subjectOrReason = (reason || subject || '').trim();
     if (!subjectOrReason) {
@@ -462,13 +464,15 @@ async function createPublicTicket(req, res) {
         priority: priority || 'Medium',
         description: description.trim(),
         attachments: req.body?.attachments,
-        fields: appealOnly
+        // Appeals always store the same three answers; "Case ID" is the penalty they name.
+        fields: ticketType === APPEAL_TICKET_TYPE
           ? {
-              case_id: req.body?.fields?.case_id || 'Not provided',
+              case_id: appealTarget?.reference || String(req.body?.fields?.case_id || '').trim() || 'Not provided',
               why_reverse: req.body?.fields?.why_reverse || description.trim(),
               evidence: req.body?.fields?.evidence || '',
             }
           : (req.body?.fields ?? {}),
+        ...(appealTarget ? { appealTarget } : {}),
         context: {
           ...(req.body?.context || {}),
           ...(requesterEmail ? { email: requesterEmail } : {}),
@@ -502,14 +506,29 @@ async function createPublicTicket(req, res) {
 
 async function postTicketAppealDecision(req, res) {
   try {
-    const data = await decideTicketAppeal(req.params.id, req.body?.decision, req.session);
+    // Body: { decision, remedy?, endsAt?, note?, followUp? } — see decideTicketAppeal.
+    const data = await decideTicketAppeal(req.params.id, req.body?.decision, req.session, req.body || {});
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     const decision = data.appealDecision;
+    const summary = data.appealOutcomeSummary || {};
+    const lifted = {
+      ended_now: 'The penalty is lifted now.',
+      ends_soon: 'The penalty ends within 24 hours.',
+      shortened: 'The penalty now ends on the date you chose.',
+      rescinded: 'The warning is rescinded.',
+      ended: 'The penalty had already ended, so nothing changed.',
+      changed: 'The penalty had been replaced by a newer one, so nothing changed.',
+    }[summary.outcome] || 'The penalty ends in 24 hours.';
+    const followUp = summary.followUp
+      ? summary.followUp.applied
+        ? ` The ${summary.followUp.action === 'ban' ? 'ban' : 'suspension'} was issued.`
+        : ` The ${summary.followUp.action === 'ban' ? 'ban' : 'suspension'} could not be issued: ${summary.followUp.error || 'unknown error'}. Issue it from User & Team.`
+      : '';
     const message = decision === 'accepted'
-      ? 'Appeal accepted. The penalty ends in 24 hours and the ticket is closed.'
+      ? `Appeal accepted. ${lifted} The ticket is closed.`
       : decision === 'denied_permanent'
-        ? 'Appeal denied permanently. The ticket is closed.'
-        : 'Appeal denied. The ticket is closed. They can appeal again in 12 months.';
+        ? `Appeal denied permanently. The ticket is closed.${followUp}`
+        : `Appeal denied. The ticket is closed.${followUp}`;
     res.status(200).json({ success: true, data, message });
   } catch (err) {
     console.error('Error deciding appeal:', err);

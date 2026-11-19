@@ -6,12 +6,12 @@ import {
   freezeAccountCredits,
   handleAccountActionError,
 } from '../userTeam/accountActions';
-import { formatCredits, formatDate, INPUT } from './economyUi';
+import { formatCredits, INPUT } from './economyUi';
+import { CreditHoldFields, useCreditHoldForm } from './CreditHoldFields';
 import type { EconomyWallet } from './creditEconomyTypes';
 
 const MAX_ADJUSTMENT = 1_000_000;
 const LARGE_ADJUSTMENT = 10_000;
-const MAX_HOLD_DAYS = 365;
 
 function DialogShell({
   title,
@@ -216,7 +216,7 @@ export function AdjustCreditsDialog({
   );
 }
 
-/** Hold the spendable balance, with a reason and an optional release date. */
+/** Hold all or part of the spendable balance, with a reason and an optional release time. */
 export function HoldCreditsDialog({
   wallets,
   onClose,
@@ -226,31 +226,33 @@ export function HoldCreditsDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [reason, setReason] = useState('');
-  const [days, setDays] = useState('');
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState(false);
   const single = wallets.length === 1 ? wallets[0] : null;
-  const holdable = wallets.reduce((s, w) => s + w.spendableCredits, 0);
-
-  const reasonError = reason.trim().length < 5 ? 'At least 5 characters' : '';
-  const dayValue = days === '' ? null : Number(days);
-  const daysError =
-    dayValue !== null && (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > MAX_HOLD_DAYS)
-      ? 'Whole days from 1 to 365'
-      : '';
-  const releaseOn = dayValue && !daysError ? new Date(Date.now() + dayValue * 86400000).toISOString() : null;
+  const form = useCreditHoldForm(single ? single.spendableCredits : null);
+  const { reason, setReason, reasonError } = form;
+  const holdable = wallets.reduce(
+    (s, w) =>
+      s +
+      (form.amountMode === 'amount' && form.amountValue && !form.amountError
+        ? w.spendableCredits >= form.amountValue
+          ? form.amountValue
+          : 0
+        : w.spendableCredits),
+    0
+  );
 
   const submit = async () => {
     setTouched(true);
-    if (reasonError || daysError) return;
+    if (form.hasError) return;
     setSaving(true);
     let ok = 0;
     let failed = 0;
     let lastError: unknown = null;
+    const hold = form.input();
     for (const wallet of wallets) {
       try {
-        await freezeAccountCredits(wallet.accountId, true, { silent: wallets.length > 1 }, { reason: reason.trim(), days: dayValue });
+        await freezeAccountCredits(wallet.accountId, true, { silent: wallets.length > 1 }, hold);
         ok += 1;
       } catch (err) {
         failed += 1;
@@ -279,7 +281,7 @@ export function HoldCreditsDialog({
           </button>
           <button
             type="button"
-            disabled={saving || (touched && Boolean(reasonError || daysError))}
+            disabled={saving || (touched && form.hasError)}
             onClick={() => void submit()}
             className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 disabled:opacity-50"
           >
@@ -290,12 +292,15 @@ export function HoldCreditsDialog({
       }
     >
       <p className="text-xs text-zinc-400">
-        Moves the spendable balance into a hold the member cannot spend. Credits are not taken away. The member is
-        notified with this reason and the release date, and can appeal. Credits that arrive later are not held unless
-        you hold again.
+        Moves all or part of the spendable balance into a hold the member cannot spend. Credits are not taken away.
+        The member is notified with this reason and the release time, and can appeal. Credits that arrive later are not
+        held unless you hold again.
       </p>
       <div className="space-y-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
         <BalanceLine label="Will be held now" value={formatCredits(holdable)} tone="text-amber-300" />
+        {single && (
+          <BalanceLine label="Spendable after" value={formatCredits(single.spendableCredits - holdable)} />
+        )}
         {single?.hold && (
           <BalanceLine label="Already on hold" value={formatCredits(single.heldCredits)} tone="text-amber-300" />
         )}
@@ -317,23 +322,7 @@ export function HoldCreditsDialog({
         />
         <FieldError>{touched || reason ? reasonError : ''}</FieldError>
       </label>
-      <label className="block text-xs font-medium text-zinc-300">
-        Release after (days)
-        <input
-          type="number"
-          min={1}
-          max={MAX_HOLD_DAYS}
-          step={1}
-          value={days}
-          onChange={(e) => setDays(e.target.value)}
-          placeholder="Empty = until staff review it"
-          className={`mt-1 ${INPUT} focus:ring-amber-500/20`}
-        />
-        <FieldError>{daysError}</FieldError>
-        <span className="mt-1 block text-[10px] text-zinc-600">
-          {releaseOn ? `Released automatically on ${formatDate(releaseOn)}.` : 'Stays until someone releases it.'}
-        </span>
-      </label>
+      <CreditHoldFields form={form} touched={touched} />
     </DialogShell>
   );
 }

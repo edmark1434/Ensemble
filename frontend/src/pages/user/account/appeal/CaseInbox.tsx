@@ -48,14 +48,18 @@ import {
 } from '@/pages/user/disputes/publicDisputeParts';
 import {
   type AppealDecision,
+  type AppealTarget,
   type CaseSelection,
   type DisputeRow,
   type ThreadMessage,
   type TicketRow,
   APPEAL_LIMITS,
+  appealCopyFor,
+  decisionCardOf,
   errorMessage,
   isAppealTicket,
 } from './appealShared';
+import AppealDecisionCard from './AppealDecisionCard';
 import {
   AttachButton,
   PendingFileList,
@@ -112,6 +116,8 @@ type ThreadState = {
   /** What the member may do here, from the server. */
   access: CaseAccess | null;
   appealDecision?: AppealDecision;
+  /** Appeals: the one penalty this ticket is about (null on older account-wide appeals). */
+  appealTarget?: AppealTarget | null;
   mentions?: MentionMap;
   ticket?: TicketCaseInfo;
   dispute?: DisputeInfo;
@@ -186,13 +192,20 @@ function ListHeading({ label, count }: { label: string; count: number }) {
   );
 }
 
-function DecisionNotice({ decision }: { decision: AppealDecision }) {
+/** The short banner above the thread; the full decision is the card in the conversation. */
+function DecisionNotice({ decision, target }: { decision: AppealDecision; target?: AppealTarget | null }) {
   if (!decision) return null;
+  const noun = target ? appealCopyFor(target.type).noun : 'penalty';
+  const named = target?.label ? ` (${target.label})` : '';
   if (decision === 'accepted') {
     return (
       <div className="flex items-start gap-2 border-b border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>Appeal accepted. The penalty ends within 24 hours, and this page updates when it does.</span>
+        <span>
+          {target
+            ? `Appeal accepted for this ${noun}${named}. The decision below says how it was lifted.`
+            : 'Appeal accepted. The penalty ends within 24 hours, and this page updates when it does.'}
+        </span>
       </div>
     );
   }
@@ -200,9 +213,13 @@ function DecisionNotice({ decision }: { decision: AppealDecision }) {
     <div className="flex items-start gap-2 border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
       <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <span>
-        {decision === 'denied_permanent'
-          ? 'Appeal denied permanently. This account cannot file another appeal.'
-          : 'Appeal denied. You can appeal again in 12 months, or sooner if a new penalty is issued.'}
+        {target
+          ? decision === 'denied_permanent'
+            ? `Appeal denied permanently. This ${noun}${named} cannot be appealed again. Other penalties can still be appealed.`
+            : `Appeal denied. You can appeal this ${noun}${named} again in 12 months. Other penalties can still be appealed.`
+          : decision === 'denied_permanent'
+            ? 'Appeal denied permanently. This account cannot file another appeal.'
+            : 'Appeal denied. You can appeal again in 12 months, or sooner if a new penalty is issued.'}
       </span>
     </div>
   );
@@ -335,6 +352,7 @@ export default function CaseInbox({
         messages: data.messages || [],
         access: data.access || null,
         appealDecision,
+        appealTarget: target.kind === 'ticket' ? data.ticket?.appealTarget ?? null : null,
         mentions: target.kind === 'dispute' ? data.mentions || {} : undefined,
         details: target.kind === 'dispute' ? data.details || null : undefined,
         dispute:
@@ -740,6 +758,16 @@ export default function CaseInbox({
         previous = null;
         continue;
       }
+      const decisionCard = isDispute ? null : decisionCardOf(message);
+      if (decisionCard) {
+        threadRows.push(
+          <div key={message.id} className="my-3 px-3 sm:px-4">
+            <AppealDecisionCard card={decisionCard} when={formatStandingWhen(message.createdAt)} />
+          </div>
+        );
+        previous = null;
+        continue;
+      }
       if (isSystemMessage(message)) {
         threadRows.push(
           <div key={message.id} className="my-3 flex justify-center px-3">
@@ -845,7 +873,12 @@ export default function CaseInbox({
                     <CaseRow
                       key={ticket.id}
                       title={ticket.subject || ticket.number || 'Ticket'}
-                      meta={[ticket.number ? `#${ticket.number}` : null, formatStandingWhen(ticket.lastMessageAt || ticket.updatedAt)]
+                      meta={[
+                        // Each appeal is about one penalty; name it so several appeals are told apart.
+                        ticket.appealTarget?.label || null,
+                        ticket.number ? `#${ticket.number}` : null,
+                        formatStandingWhen(ticket.lastMessageAt || ticket.updatedAt),
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                       access={ticket.access}
@@ -937,7 +970,9 @@ export default function CaseInbox({
                 ) : null}
               </div>
 
-              {selectedTicket ? <DecisionNotice decision={thread.appealDecision ?? null} /> : null}
+              {selectedTicket ? (
+                <DecisionNotice decision={thread.appealDecision ?? null} target={thread.appealTarget ?? null} />
+              ) : null}
               {access?.attention && !access.closed ? (
                 <div className="flex items-start gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-900 dark:text-amber-100">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

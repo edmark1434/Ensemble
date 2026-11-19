@@ -2,6 +2,7 @@ const {
   getEconomyOverview,
   listEconomyWallets,
   listEconomyLedger,
+  getEconomyLedgerEntry,
   getEconomyWalletDetail,
 } = require('../services/AdminEconomyServices');
 
@@ -41,6 +42,15 @@ async function getAdminEconomyLedger(req, res) {
   }
 }
 
+async function getAdminLedgerEntry(req, res) {
+  try {
+    const data = await getEconomyLedgerEntry(req.session, req.params.transactionId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    sendError(res, err, 'Failed to load the ledger entry');
+  }
+}
+
 async function getAdminWalletDetail(req, res) {
   try {
     const data = await getEconomyWalletDetail(req.session, req.params.walletId);
@@ -54,5 +64,6 @@ module.exports = {
   getAdminEconomyOverview,
   getAdminEconomyWallets,
   getAdminEconomyLedger,
+  getAdminLedgerEntry,
   getAdminWalletDetail,
 };

@@ -332,34 +332,56 @@ async function createSupportTicket(input, session = null) {
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
   const status = handledBy ? 'In Progress' : 'Open';
+  // An account-penalty appeal names the one penalty it is about (checked by assertCanFileAppeal).
+  const appealTarget = type === APPEAL_TICKET_TYPE && input?.appealTarget?.type ? input.appealTarget : null;
+  const params = [
+    ticketNumber,
+    reason,
+    type,
+    priority,
+    status,
+    requesterAccountId,
+    handledBy,
+    JSON.stringify(formAnswers),
+    JSON.stringify(submissionContext),
+  ];
+  if (appealTarget) {
+    params.push(
+      appealTarget.type,
+      String(appealTarget.id),
+      appealTarget.label ? String(appealTarget.label).slice(0, 200) : null,
+      appealTarget.startedAt || null
+    );
+  }
 
-  const insert = await pool.query(
-    `
-    INSERT INTO tickets (
-      ticket_number, reason, type, priority, status,
-      account_id, handled_by_staff_id,
-      message_count, last_message_at,
-      form_answers, submission_context
-    ) VALUES (
-      $1, $2, $3, $4, $5,
-      $6, $7,
-      0, NULL,
-      $8::jsonb, $9::jsonb
-    )
-    RETURNING ticket_id
-    `,
-    [
-      ticketNumber,
-      reason,
-      type,
-      priority,
-      status,
-      requesterAccountId,
-      handledBy,
-      JSON.stringify(formAnswers),
-      JSON.stringify(submissionContext),
-    ]
-  );
+  let insert;
+  try {
+    insert = await pool.query(
+      `
+      INSERT INTO tickets (
+        ticket_number, reason, type, priority, status,
+        account_id, handled_by_staff_id,
+        message_count, last_message_at,
+        form_answers, submission_context
+        ${appealTarget ? ', appeal_target_type, appeal_target_id, appeal_target_label, appeal_target_started_at' : ''}
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7,
+        0, NULL,
+        $8::jsonb, $9::jsonb
+        ${appealTarget ? ', $10, $11, $12, $13::timestamptz' : ''}
+      )
+      RETURNING ticket_id
+      `,
+      params
+    );
+  } catch (err) {
+    // Two submits for the same penalty at once: the partial unique index keeps one.
+    if (err?.code === '23505' && String(err.constraint || '').includes('penalty_appeal')) {
+      throw ticketError('This penalty already has an open appeal. Reply on that ticket instead.', 409);
+    }
+    throw err;
+  }
 
   const ticketId = insert.rows[0].ticket_id;
 
@@ -429,9 +451,10 @@ async function createStaffTicketForAccount(input, session) {
   if (!isValidTicketType(rawType)) throw ticketError('Pick a ticket type', 400);
   const type = normalizeTicketType(rawType);
 
-  if (type === 'Appeal an account penalty') {
-    await assertCanFileAppeal(requesterAccountId);
-  }
+  // Staff opening an appeal for a member pick which of the member's penalties it is about.
+  const appealTarget = type === APPEAL_TICKET_TYPE
+    ? await assertCanFileAppeal(requesterAccountId, input?.appealTarget)
+    : null;
 
   const staff = await resolveDisputeStaffId(session);
   if (!staff?.staff_id) throw ticketError('Staff profile not found', 403);
@@ -473,6 +496,7 @@ async function createStaffTicketForAccount(input, session) {
       description: openingMessage,
       requesterAccountId,
       handledByStaffId: handledBy,
+      ...(appealTarget ? { appealTarget } : {}),
     },
     session
   );
@@ -1129,10 +1153,15 @@ async function ensureTicketChat(ticketId, ticketRow) {
 function mapMongoTicketMessage(m, senderNames = new Map()) {
   const messageType = String(m.message_type || 'text').toLowerCase();
   const unsent = Boolean(m.is_deleted || m.deleted_at || m.is_unsent);
+  const platform = messageType === 'system' || messageType === 'appeal_decision';
   return {
     id: String(m._id),
     senderId: m.sender_id ? String(m.sender_id) : null,
-    authorType: messageType === 'system' ? 'system' : (m.author_type || (m.is_internal ? 'staff' : 'user')),
+    authorType: platform ? 'system' : (m.author_type || (m.is_internal ? 'staff' : 'user')),
+    // Appeal decisions render as a decision card (see `PenaltyAppealServices.buildDecision`).
+    decision: messageType === 'appeal_decision' && m.appeal_decision && typeof m.appeal_decision === 'object'
+      ? m.appeal_decision
+      : null,
     authorName: m.author_name || senderNames.get(String(m.sender_id)) || 'Unknown',
     body: m.message_content || m.body || '',
     attachments: Array.isArray(m.attachments) ? m.attachments : [],
@@ -1217,13 +1246,18 @@ async function upsertTicketMember(chatId, accountId, role, status) {
   );
 }
 
-async function writeTicketMembershipNote(chatId, staffSession, body) {
+/**
+ * @param {{ messageType?: 'appeal_decision', card?: object }} [extra] a structured platform
+ *   message instead of a plain note (the appeal decision card).
+ */
+async function writeTicketMembershipNote(chatId, staffSession, body, extra = {}) {
   const now = new Date();
   const accountId = sessionAccountId(staffSession);
   const insertedMessageId = await createMessageRepositories({
     conversation_id: String(chatId),
     sender_id: accountId,
-    message_type: 'system',
+    message_type: extra?.messageType || 'system',
+    ...(extra?.card ? { appeal_decision: extra.card } : {}),
     message_content: body,
     message_id_reply: null,
     attachments: [],
@@ -1589,6 +1623,9 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     scheduledCloseAt: row.scheduled_close_at || null,
     appealDecision: row.appeal_decision || null,
     appealDecidedAt: row.appeal_decided_at || null,
+    // What the decision did (lift mode, new end, follow-up) and the note the member was given.
+    appealOutcome: row.appeal_outcome && typeof row.appeal_outcome === 'object' ? row.appeal_outcome : null,
+    appealDecisionNote: row.appeal_decision_note || null,
   };
 }
 
@@ -1886,9 +1923,13 @@ function ticketAutoClosesAt(ticket) {
   return new Date(new Date(last).getTime() + TICKET_AUTO_CLOSE_MS).toISOString();
 }
 
-async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, reason, staffSession }) {
+/**
+ * @param {{ body?: string, message?: string }|null} [copy] wording for a per-penalty appeal
+ *   decision (`PenaltyAppealServices.buildDecision`: body, message and the decision `card`).
+ */
+async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, reason, staffSession, copy = null }) {
   const chatId = await getTicketChatId(ticketId);
-  const appealCopy = {
+  const appealCopy = (copy?.body && copy?.message && reason.startsWith('appeal_') ? copy : null) || {
     appeal_accepted: {
       body: 'This appeal is accepted. The penalty ends in 24 hours, and this ticket is now closed.',
       message: `Your appeal on ticket #${ticketNumber} was accepted. The penalty ends in 24 hours.`,
@@ -1909,7 +1950,14 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
         ? 'This ticket is now closed at the time staff scheduled. A transcript was saved.'
         : 'This ticket was closed. A transcript was saved.');
   if (chatId) {
-    await writeTicketMembershipNote(chatId, staffSession || {}, body);
+    // An appeal decision is posted as a decision card (like a dispute ruling), with the plain
+    // text kept for previews and older clients.
+    await writeTicketMembershipNote(
+      chatId,
+      staffSession || {},
+      body,
+      appealCopy?.card ? { messageType: 'appeal_decision', card: appealCopy.card } : undefined
+    );
   }
   const inbox = chatId ? await loadTicketInbox(chatId) : null;
   const recipients = new Set();
@@ -2863,6 +2911,17 @@ async function updateTicket(ticketId, patch, staffSession) {
     !isClosedStatus(currentStatus)
   ) {
     throw ticketError('Decide this appeal (accept or deny) to close it.', 409);
+  }
+  // A decided appeal is final. Reopening it would show an open appeal whose decision (and any
+  // lift or follow-up action) has already happened, and the member could reply as if it were
+  // still under review. The staff form used to send its stale "In Progress" back on save.
+  if (
+    currentTicket.type === APPEAL_TICKET_TYPE &&
+    currentTicket.appeal_decision &&
+    patch.status !== undefined &&
+    !isClosedStatus(patch.status)
+  ) {
+    throw ticketError('This appeal has a decision, so its ticket stays closed. Open a new ticket if anything else is needed.', 409);
   }
 
   if (patch.assigned_role) {
@@ -6131,7 +6190,19 @@ const APPEAL_DECISIONS = {
   permanent: 'denied_permanent',
 };
 
-async function assertCanFileAppeal(accountId) {
+/**
+ * Checks a new "Appeal an account penalty" ticket and returns the penalty it is about
+ * (`services/PenaltyAppealServices.js`: one appeal per penalty). Before the per-penalty
+ * migration it returns null and the account-wide rules below apply.
+ * @param {{ type?: string, id?: string }} [appealTarget]
+ */
+async function assertCanFileAppeal(accountId, appealTarget) {
+  const { prepareAppealFiling } = require('../services/PenaltyAppealServices');
+  return prepareAppealFiling(accountId, appealTarget);
+}
+
+/** Account-wide appeal rules, used only before the per-penalty migration is applied. */
+async function assertCanFileLegacyAppeal(accountId) {
   const hold = await pool.query(
     `SELECT h.permanently_denied, h.blocked_until,
             -- A penalty issued after the denied appeal is a new case, and may be appealed.
@@ -6216,19 +6287,31 @@ async function assertCanFileAppeal(accountId) {
 
 const APPEAL_DECIDER_ROLES = new Set(['admin', 'administrator', 'support moderator']);
 
-async function decideTicketAppeal(ticketId, decision, staffSession) {
+/**
+ * Accept or deny an appeal. `body` carries what staff chose besides the decision (see
+ * `PenaltyAppealServices.normalizeDecisionOptions`): how an accepted penalty is lifted, a
+ * suspension or ban to issue with a denial, and the note the member reads.
+ */
+async function decideTicketAppeal(ticketId, decision, staffSession, body = {}) {
   if (!isStaffSession(staffSession)) throw ticketError('Only staff can decide an appeal', 403);
   const normalized = APPEAL_DECISIONS[String(decision || '').toLowerCase()];
   if (!normalized) throw ticketError('Choose accept, deny, or deny permanently', 400);
 
+  // Target columns are read through jsonb so this works before the per-penalty migration too.
   const current = await pool.query(
-    `SELECT ticket_id, ticket_number, type, account_id, appeal_decision, handled_by_staff_id
-     FROM tickets
-     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT t.ticket_id, t.ticket_number, t.type, t.account_id, t.appeal_decision, t.handled_by_staff_id,
+            to_jsonb(t) ->> 'appeal_target_type' AS appeal_target_type,
+            to_jsonb(t) ->> 'appeal_target_id' AS appeal_target_id,
+            to_jsonb(t) ->> 'appeal_target_label' AS appeal_target_label
+     FROM tickets t
+     WHERE t.ticket_id = $1 AND t.deleted_at IS NULL`,
     [ticketId]
   );
   if (!current.rows.length) return null;
   const ticket = current.rows[0];
+  // One appeal per penalty: the decision touches only the penalty this ticket names. Appeals
+  // filed before that change name none and keep the account-wide decision.
+  const targeted = Boolean(ticket.appeal_target_type);
   if (ticket.type !== APPEAL_TICKET_TYPE) throw ticketError('This ticket is not an account appeal', 400);
   if (ticket.appeal_decision) throw ticketError('This appeal already has a decision', 409);
   if (!ticket.account_id) throw ticketError('This appeal has no account to update', 400);
@@ -6249,6 +6332,13 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
     throw ticketError('You cannot decide an appeal on your own account.', 403);
   }
 
+  const penaltyAppeals = require('../services/PenaltyAppealServices');
+  // Checked before anything is written, so a bad option or a follow-up that cannot run
+  // (a suspension over a ban, a staff target) leaves the appeal undecided.
+  const options = penaltyAppeals.normalizeDecisionOptions(ticket, normalized, body);
+  await penaltyAppeals.assertFollowUpAllowed(ticket, options.followUp, staffId);
+  const outcomeColumns = await penaltyAppeals.appealTargetsReady();
+  let outcome = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -6259,7 +6349,10 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
     );
     if (!locked.rows.length) throw ticketError('Ticket not found', 404);
     if (locked.rows[0].appeal_decision) throw ticketError('This appeal already has a decision', 409);
-    if (normalized === 'accepted') {
+    if (targeted) {
+      // Accept changes only this penalty; a denial is held by this decided ticket alone.
+      if (normalized === 'accepted') outcome = await penaltyAppeals.applyAcceptedAppeal(client, ticket, options);
+    } else if (normalized === 'accepted') {
       // The penalty ends within 24 hours — never later than it was already going to end.
       await client.query(
         `UPDATE accounts
@@ -6288,11 +6381,22 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
       // Held credits come back on the same clock; the one-minute job returns them.
       const { endCreditHoldWithin24Hours } = require('./CreditHoldRepositories');
       await endCreditHoldWithin24Hours(client, ticket.account_id);
+      // So do running automatic merit punishments (timed-merit punishments).
+      try {
+        const { shortenMeritPenaltiesForAppeal } = require('../services/MeritPenaltyServices');
+        if (typeof shortenMeritPenaltiesForAppeal === 'function') {
+          await shortenMeritPenaltiesForAppeal(client, ticket.account_id);
+        }
+      } catch (err) {
+        if (err?.code !== 'MODULE_NOT_FOUND') throw err;
+      }
     }
     const hold = normalized === 'denied_permanent'
       ? { decision: 'denied_permanent', permanent: true }
       : { decision: 'accepted', permanent: false };
-    if (normalized === 'denied') {
+    if (targeted) {
+      // No account-wide hold: other penalties stay appealable.
+    } else if (normalized === 'denied') {
       await client.query(
         `INSERT INTO account_appeal_holds (
            account_id, decision, blocked_until, permanently_denied, ticket_id, staff_id, decided_at
@@ -6321,6 +6425,12 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
         [ticket.account_id, hold.decision, hold.permanent, ticket.ticket_id, staffId]
       );
     }
+    const outcomeRecord = {
+      remedy: options.remedy,
+      state: outcome?.state || null,
+      endsAt: outcome?.endsAt ? new Date(outcome.endsAt).toISOString() : null,
+      followUp: null,
+    };
     await client.query(
       `UPDATE tickets
        SET status = 'Closed',
@@ -6329,8 +6439,11 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
            scheduled_close_at = NULL,
            appeal_decision = $2,
            appeal_decided_at = NOW()
+           ${outcomeColumns ? ', appeal_outcome = $3::jsonb, appeal_decision_note = $4' : ''}
        WHERE ticket_id = $1`,
-      [ticket.ticket_id, normalized]
+      outcomeColumns
+        ? [ticket.ticket_id, normalized, JSON.stringify(outcomeRecord), options.note]
+        : [ticket.ticket_id, normalized]
     );
     await client.query('COMMIT');
   } catch (error) {
@@ -6340,16 +6453,39 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
     client.release();
   }
 
+  // Further action with a denial (a suspension or ban) runs through the Users desk path once the
+  // decision is saved. A failure is reported to staff and never undoes the decision.
+  const followUp = await penaltyAppeals.runFollowUp(ticket, options.followUp, staffId);
+  if (followUp) {
+    // The decision covers what it just did: a ban re-issued on a ban under appeal must not read
+    // as a newer penalty that can be appealed again.
+    await pool
+      .query(
+        `UPDATE tickets
+         SET appeal_decided_at = NOW()
+             ${outcomeColumns ? `, appeal_outcome = COALESCE(appeal_outcome, '{}'::jsonb) || jsonb_build_object('followUp', $2::jsonb)` : ''}
+         WHERE ticket_id = $1`,
+        outcomeColumns ? [ticket.ticket_id, JSON.stringify(followUp)] : [ticket.ticket_id]
+      )
+      .catch((error) => console.error('Appeal follow-up record failed:', error.message));
+    if (!targeted) {
+      // Same for the account-wide hold an older appeal writes.
+      await pool
+        .query(`UPDATE account_appeal_holds SET decided_at = NOW() WHERE account_id = $1 AND ticket_id = $2`, [
+          ticket.account_id,
+          ticket.ticket_id,
+        ])
+        .catch((error) => console.error('Appeal hold follow-up record failed:', error.message));
+    }
+  }
+
   const reason = normalized === 'accepted'
     ? 'appeal_accepted'
     : normalized === 'denied'
       ? 'appeal_denied'
       : 'appeal_denied_permanent';
-  const action = normalized === 'accepted'
-    ? 'Appeal accepted. Penalty (and any credit hold) ends in 24 hours.'
-    : normalized === 'denied'
-      ? 'Appeal denied. Next appeal is available in 12 months.'
-      : 'Appeal denied permanently.';
+  const copy = penaltyAppeals.buildDecision(ticket, normalized, outcome, { note: options.note, followUp });
+  const action = copy.action;
   await recordTicketEvent({
     ticketId: ticket.ticket_id,
     eventType: 'status',
@@ -6366,7 +6502,19 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
     referencePrefix: 'TICKET',
     referenceId: ticket.ticket_id,
     actorStaffId: staffId,
-    metadata: { decision: normalized, ticketNumber: ticket.ticket_number },
+    metadata: {
+      decision: normalized,
+      ticketNumber: ticket.ticket_number,
+      ...(targeted
+        ? {
+            targetType: ticket.appeal_target_type,
+            targetId: ticket.appeal_target_id,
+            targetLabel: ticket.appeal_target_label || null,
+            // ends_soon / rescinded, or ended / changed when the penalty was no longer this one.
+            outcome: outcome?.state || null,
+          }
+        : {}),
+    },
   });
   await saveTicketCloseTranscript(ticket.ticket_id, {
     reason,
@@ -6381,11 +6529,16 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
     requesterAccountId: ticket.account_id,
     reason,
     staffSession,
+    copy,
   }).catch((error) => {
     console.error('Appeal close notice failed:', error.message);
   });
 
-  if (normalized === 'accepted') {
+  if (targeted) {
+    if (normalized === 'accepted') {
+      await penaltyAppeals.announceAcceptedAppeal(ticket, outcome, { staffId, copy });
+    }
+  } else if (normalized === 'accepted') {
     try {
       const { getAccountAccess } = require('../lib/AccountRestriction');
       const restriction = await getAccountAccess(ticket.account_id);
@@ -6405,7 +6558,9 @@ async function decideTicketAppeal(ticketId, decision, staffSession) {
     }
   }
 
-  return getTicketDetail(ticketId, staffSession);
+  const detail = await getTicketDetail(ticketId, staffSession);
+  // Tell the deciding staff member exactly what happened (the follow-up may have failed).
+  return detail ? { ...detail, appealOutcomeSummary: { outcome: outcome?.state || null, followUp } } : detail;
 }
 
 module.exports = {
@@ -6432,6 +6587,7 @@ module.exports = {
   closeScheduledTickets,
   generateTicketTranscript,
   assertCanFileAppeal,
+  assertCanFileLegacyAppeal,
   decideTicketAppeal,
   addTicketMessage,
   updateTicketMessage,

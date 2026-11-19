@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star, Pencil, Trash2, CheckCircle2, BadgeCheck, Bookmark, Clock, Image, Clapperboard, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle, PackageOpen } from "lucide-react";
+import { Heart, Star, Pencil, Trash2, CheckCircle2, BadgeCheck, Bookmark, Clock, Image, Clapperboard, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle, PackageOpen, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -23,11 +23,12 @@ function getTypeIcon(type: string) {
 
 export interface AssetCardProps {
   asset: AssetRecord;
-  view?: "discover" | "mine" | "purchased" | "saved" | "liked";
+  view?: "discover" | "mine" | "purchased" | "saved" | "liked" | "trash";
   engagementPending?: Set<string>;
   onUpdateEngagement?: (asset: AssetRecord, kind: "like" | "save") => void;
   onEdit?: (asset: AssetRecord) => void;
   onDelete?: (asset: AssetRecord) => void;
+  onRestore?: (asset: AssetRecord) => void;
   hideActions?: boolean;
 }
 
@@ -38,6 +39,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
   onUpdateEngagement,
   onEdit,
   onDelete,
+  onRestore,
   hideActions = false,
 }) => {
   const navigate = useNavigate();
@@ -77,6 +79,11 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           {view === "purchased" && asset.is_purchased && !asset.is_owner && asset.available_license_count === 0 && asset.used_license_count > 0 && (
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-700 text-[10px] font-semibold uppercase text-white shadow-sm border border-sky-600">
               <BadgeCheck className="h-3 w-3" /> License used
+            </span>
+          )}
+          {view === "trash" && (
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-red-600 border-red-500">
+              <Trash2 className="h-3 w-3" /> Trashed
             </span>
           )}
           {view === "mine" && asset.is_owner && (
@@ -247,6 +254,17 @@ export const AssetCard: React.FC<AssetCardProps> = ({
         </div>
         
         {/* Action Buttons */}
+        {!hideActions && view === "trash" && asset.is_owner && onRestore && (
+          <div className="mt-1 flex gap-2" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => onRestore(asset)}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 dark:text-zinc-300"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Restore
+            </button>
+          </div>
+        )}
         {!hideActions && view === "mine" && asset.is_owner && onEdit && onDelete && (
           <div className="mt-1 flex gap-2" onClick={(event) => event.stopPropagation()}>
             <button

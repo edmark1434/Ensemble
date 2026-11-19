@@ -308,9 +308,11 @@ function App() {
           <Route path='/discovery/:tab' element={<DiscoveryPage />} />
           <Route path='/assets' element={<AssetsLibrary />} />
           <Route path='/assets/owned' element={<AssetsLibrary />} />
+          <Route path='/assets/seller' element={<AssetsLibrary />} />
           <Route path='/assets/purchased' element={<AssetsLibrary />} />
           <Route path='/assets/saved' element={<AssetsLibrary />} />
           <Route path='/assets/liked' element={<AssetsLibrary />} />
+          <Route path='/assets/trash' element={<AssetsLibrary />} />
           <Route path='/assets/:assetId' element={<AssetDetails />} />
 
           {/* Reworked Job Market Sub-Routes */}

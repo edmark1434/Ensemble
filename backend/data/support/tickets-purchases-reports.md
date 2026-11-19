@@ -17,7 +17,7 @@ The ticket form groups issues by area so your request reaches the right speciali
   - *Billing:* Subscriptions and plans, Credits and balance, Payouts and withdrawals, Charges and receipts.
   - *Video Editing Platform:* Editor problems, Export and rendering, Uploads and storage, Project files, Sharing and collaboration.
   - *Messaging:* Inbox, chat, and calls; Notifications and email.
-  - *Safety and appeals:* Report a user, Copyright claim, Appeal an account penalty.
+  - *Safety and appeals:* Report a user, Copyright claim, Appeal an account penalty (this one opens `/account/appeal`, where you pick which penalty to appeal; each penalty has its own appeal).
   - *General:* Other.
 - **Forum:** Posts and replies, Forum groups, Report a post or member, Appeal a forum action.
 - **Marketplace:** Seller verification, Listing review, Asset purchase and download, File is wrong or broken, Marketplace refunds, Report a listing or seller, Asset reviews, Appeal a marketplace action.

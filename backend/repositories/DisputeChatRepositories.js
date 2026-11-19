@@ -595,6 +595,38 @@ async function postDisputeFiledSummary(row, context = {}) {
 }
 
 /**
+ * Files the filer attached on the dispute form, posted as their first reply under the summary.
+ * Private to the filer and staff, like any party reply. Null when nothing valid was attached.
+ * @param {object} row the inserted dispute row
+ * @param {Array<object>} attachments staged uploads (see `normalizeDisputeAttachments`)
+ */
+async function postDisputeFiledEvidence(row, attachments) {
+  const files = normalizeDisputeAttachments(attachments);
+  if (!row?.dispute_id || !row.by_account_id || !files.length) return null;
+  const chatId = await ensureDisputeChat(row.dispute_id, row);
+  const account = await pool.query(
+    `SELECT display_name, handle FROM accounts WHERE account_id = $1`,
+    [row.by_account_id]
+  );
+  const profile = account.rows[0] || {};
+  return createDisputeMessage({
+    chatId,
+    body: '',
+    senderId: row.by_account_id,
+    authorName: profile.display_name || profile.handle || 'Member',
+    authorType: 'user',
+    authorRole: 'disputer',
+    audience: 'author_and_staff',
+    audiences: ['author_and_staff'],
+    isInternal: true,
+    notifyAccountIds: [],
+    disputeId: row.dispute_id,
+    attachments: files,
+    mentionAccountIds: [row.by_account_id, row.for_account_id],
+  });
+}
+
+/**
  * When staff make a dispute public, invite the disputee (by @handle) to give their side.
  * Posted publicly so the open discussion starts with the question.
  */
@@ -1655,6 +1687,7 @@ module.exports = {
   notifyDisputeAccount,
   postDisputeSystemMessage,
   postDisputeFiledSummary,
+  postDisputeFiledEvidence,
   postDisputePublicInvite,
   getDisputeSettlementForParty,
   emitDisputeState,

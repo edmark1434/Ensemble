@@ -321,6 +321,8 @@ async function createContractDisputeController(req, res) {
         const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
         const { contractId } = req.params;
         const { reason, details } = req.body;
+        // Staged uploads only; the repository keeps valid staging keys and at most four files.
+        const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
 
         if (!contractId) {
             return res.status(400).json({ success: false, message: 'Contract ID is required' });
@@ -329,7 +331,7 @@ async function createContractDisputeController(req, res) {
             return res.status(400).json({ success: false, message: 'Dispute reason and details are required' });
         }
 
-        const dispute = await ContractRepositories.createContractDispute(actorIds, contractId, { reason, details });
+        const dispute = await ContractRepositories.createContractDispute(actorIds, contractId, { reason, details, attachments });
         return res.status(201).json({
             success: true,
             message: 'Dispute submitted successfully',
