@@ -130,10 +130,20 @@ export function StandingSection({ profile }: { profile: AdminAccountProfile }) {
   if (s.forumTimeout) {
     rows.push({ label: 'Forum timeout', value: s.forumTimeoutEndsAt ? `until ${formatDateTime(s.forumTimeoutEndsAt)}` : 'until lifted', tone: 'text-amber-300' });
   }
-  if (s.warningBandLabel) {
+  // Automatic merit punishments: each runs a fixed time, whatever merit does afterwards.
+  const automatic = (s.meritPenalties || []).filter((p) => p.effect !== 'auto_suspend');
+  for (const p of automatic) {
+    rows.push({
+      label: `Automatic: ${p.label}`,
+      value: `${p.endsAt ? `until ${formatDateTime(p.endsAt)}` : 'running'}${p.triggerMerit != null ? ` · rule at merit ${p.triggerMerit}` : ''}${p.meritAtStart != null ? ` · started at merit ${p.meritAtStart}` : ''}`,
+      tone: 'text-amber-300',
+    });
+  }
+  if (!automatic.length && s.warningBandLabel) {
+    // Before the timed-punishment migration the band still follows points.
     rows.push({
       label: `Warning band: ${s.warningBandLabel}`,
-      value: `${s.warningPoints} active point${s.warningPoints === 1 ? '' : 's'}${s.warningBandEndsAt ? ` · lifts ${formatDateTime(s.warningBandEndsAt)}` : ''}`,
+      value: `${s.warningPoints} active point${s.warningPoints === 1 ? '' : 's'}`,
       tone: 'text-amber-300',
     });
   }

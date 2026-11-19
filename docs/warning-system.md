@@ -2,7 +2,7 @@
 
 This is the contract for conduct. **Stars** answer “was the work good?” **Warnings** answer “did they break the rules?” **Standing** (timeout / suspend / lock / ban) is the staff override for serious cases.
 
-Automatic product limits follow **active warning points**. Stars stay for quality.
+Automatic punishments start when **active warning points** take Platform Merit down to a threshold, and then run a **fixed number of days**. Stars stay for quality.
 
 Users never see “warning points.” They see **Platform Merit** = `100 − active warning points`, derived and not stored. User-facing contract: [merit-system.md](merit-system.md).
 
@@ -40,25 +40,25 @@ Staff pick a named warning. Points and duration are locked to that row. Case not
 
 That warning is always temporary. How long it lasts is set when admin creates the warning.
 
-Active points = sum of unexpired, unrescinded warning points.
+Active points = sum of unexpired, unrescinded warning points. Merit = 100 − active points.
 
-Those points pick an automatic threshold (admin CRUD, seeded as):
-  1–2   Record only
-  3–7   Limited
-  8–15  Restricted
-  16–19 Frozen access
-  20–29 Auto-suspend 7 days (once per crossing)
-  30+   Auto-suspend 14 days (once per crossing)
+When a new warning takes merit down to a rule's level, that rule's punishment starts and runs
+for its own number of days (admin CRUD, seeded as):
+  merit 97 or lower   Limited         3 days
+  merit 92 or lower   Restricted      5 days
+  merit 90 or lower   Mute            3 days
+  merit 85 or lower   Mute            5 days
+  merit 84 or lower   Frozen access   7 days
+  merit 80 or lower   Auto-suspend    7 days
+  merit 70 or lower   Auto-suspend   14 days
+
+It runs its full time. A warning expiring, staff lifting points, or merit recovering does NOT
+end it, and the punishment never changes merit. Dropping further crosses harsher rules, so
+punishments add up. Each rule starts once per drop past it.
 
 Staff can still timeout / suspend / lock / ban on top.
 The engine never auto-bans, never seizes the wallet, never cancels live work.
-
-When the warning expires or is rescinded, points drop and the band lifts by itself.
 ```
-
-Stars never lock products. A 5-star seller can still be Restricted if they have 8 active warning points.
-
----
 
 ## 2. What is live vs next
 
@@ -68,11 +68,11 @@ Stars never lock products. A 5-star seller can still be Restricted if they have 
 - Catalog in `warning_defs` (admin CRUD at `/admin/warnings`). Seed/fallback in `backend/lib/WarningCatalog.js`.
 - Points 1–10. Duration 1–365 days is set on the catalog row. Always expires. Staff cannot change the clock when issuing.
 - Issued row is a `violations` record. Catalog edits do not rewrite old cases.
-- Active points stack and pick the automatic threshold in §8 (`warning_thresholds`, admin CRUD on the same page).
-- Seeded auto-suspend: **20+ → 7 days**, **30+ → 14 days**. Already-suspended accounts are not stacked. Admin can change those rows.
-- Lapsed warnings marked `expired` on the next account-access pass; the band lifts by itself.
-- Rescind one row. Pardon clears all. Appeal is standing (ban/lock/suspend), not a warning editor.
-- Product limits are warning-point bands, not a 0–100 score.
+- Active points stack into Platform Merit. Crossing a rule in §8 (`warning_thresholds`, admin CRUD on the same page) starts a **timed punishment** (`merit_penalties`).
+- Seeded auto-suspend: **merit 80 → 7 days**, **merit 70 → 14 days**. A suspension already running is extended when the new one ends later, never shortened. Bans and locks are never overwritten.
+- Lapsed warnings are marked `expired` on the next account-access pass and by the one-minute sweep: merit recovers, punishments keep running.
+- Rescind one row (ends the punishments that warning started). Pardon clears all warnings and ends every punishment. Appeal is per penalty.
+- Product limits come from the strictest running band punishment, not from the live point total.
 
 ---
 
@@ -188,33 +188,37 @@ Rescinded, expired, pardoned, reversed, and deleted rows do not count.
 
 Points **stack**. Two 5-point warnings = **10** until the first one expires.
 
-The band is recalculated from leftover points after expire, rescind, or pardon. It is not a wallet.
+Merit is recalculated from leftover points after expire, rescind, lift, or pardon. Running punishments are not: they keep their own clock (§8).
 
 ---
 
 ## 8. Automatic punishment ladder
 
-Product limits and auto-suspend follow `warning_thresholds`. Admin CRUD is at `/admin/warnings` → Point thresholds. Highest matching `min_points` wins. Seeded rows:
+Admin CRUD is at `/admin/warnings` → Merit punishments. Each row: **when Platform Merit drops to this level (or lower), apply this punishment for N days.** Seeded rows:
 
-| Active points | Auto punishment | How long | Notes |
+| Merit drops to | Active points | Punishment | How long |
 |---|---|---|---|
-| **0** | None | — | Full access |
-| **1–2** | Record only | Until those rows expire | Toast + private Record. Site fully usable. |
-| **3–7** | **Limited** | Until points drop below 3 | Minor. A single 5-point warning lands here. |
-| **8–15** | **Restricted** | Until points drop below 8 | Timeout-like across products. One 8-point warning, or two 5s. |
-| **16–19** | **Frozen access** | Until points drop below 16 | Not a standing. Not a ban. |
-| **20–29** | **Auto-suspend 7 days** | 7-day standing, **once per crossing** | Then leftover-point band. Live today. |
-| **30+** | **Auto-suspend 14 days** | 14-day standing, **once per crossing** | Repeat pile-up. Still no auto-ban. |
+| **97** | 3+ | **Limited** | 3 days |
+| **92** | 8+ | **Restricted** | 5 days |
+| **90** | 10+ | **Mute** | 3 days |
+| **85** | 15+ | **Mute** | 5 days |
+| **84** | 16+ | **Frozen access** | 7 days |
+| **80** | 20+ | **Auto-suspend** | 7 days |
+| **70** | 30+ | **Auto-suspend** | 14 days |
 
-**Once per crossing** means: hitting 20 suspends them. After 7 days the suspend lifts even if they still have 20 points. They then live in Frozen/Restricted until points expire. A **new** warning that puts them at 20+ (or 30+) again starts a new cooldown. Already-Suspended accounts are not stacked with another auto-suspend.
+**When it starts.** A rule starts when a new warning takes the member from above its level to at or below it ("once per drop"). The engine works this out from the warning's own place in time (active points from warnings issued before it, plus its weight), so two warnings issued together cannot hide a crossing. One warning can cross several rules; per punishment type the longest one starts. A member who recovers above a level and drops past it again gets that punishment again.
 
-**Bands end by themselves.** Limited, Restricted and Frozen access are worked out live from active points, so each one ends the moment merit climbs back past its floor (Frozen access, from 16 points, ends at merit 85). Points drop when warnings expire, or when staff rescind a warning or lift points (§12).
+**How long it lasts.** A fixed clock from the moment it starts (`merit_penalties.ends_at`). Warnings expiring, staff lifting points, or merit recovering do **not** end it early, and nothing about it changes merit. Rule edits only affect punishments that start afterwards, the same way a warning keeps its catalog clock.
 
-**Early lift of an auto-suspension.** Each auto-suspend row has `lift_at_merit` (1–100, or empty for "run the full clock"). It must be above the merit the row starts at. Seeded rows use **81** (back under 20 points). When the engine suspends someone it copies that value onto the account (`accounts.suspension_source = 'auto'`, `auto_suspend_lift_merit`), the same way a warning copies its catalog clock, so later edits only affect new suspensions. Once merit reaches it (expiry, rescind, lift), the suspension ends straight away, is recorded (`ACCOUNT_STATUS_CHANGED`, action `auto_suspend_lifted`) and the member is told. Staff suspensions are never ended this way: any staff status change, pardon, or expiry clears the marker.
+**How they add up.** Different punishments run side by side (a Restricted band and a Mute can both be running). Of the same type, the one that ends last decides when that type ends: a new one never shortens a longer one already running. Product checks use the **strictest running band** (Frozen > Restricted > Limited); when it ends, a milder band still running takes over.
+
+**Mute** pauses forum posts, comments, reactions and new groups (reporting stays open), marketplace comments, and new conversations. Existing job, gig and contract threads stay open.
+
+**Auto-suspend** sets the account to Suspended for the rule's days (`accounts.suspension_source = 'auto'`). A suspension already running is extended when the new one ends later and left alone otherwise; bans and locks are never overwritten. It ends on its clock (standing sweep), or when staff unsuspend / change the standing (which also closes its record).
+
+**What ends a punishment early:** staff **End early** (Admin / Support, staff-only reason, member notified), a pardon (all of them), an accepted appeal on it (within 24 hours, now, or an earlier date), or rescinding / reversing the warning that started it (only that warning's punishments, including an automatic suspension it caused). Expired punishments are closed by the one-minute sweep, which tells the member and what is still running.
 
 Lock and ban stay **staff-only**.
-
----
 
 ## 9. What each auto band locks
 
@@ -222,35 +226,37 @@ Standing (timeout / suspend / lock / ban) is checked first. If standing already 
 
 Legend: **OK** = allowed. **NO** = blocked.
 
-| Action | Limited 3–7 | Restricted 8–15 | Frozen 16–19 |
-|---|---|---|---|
-| Browse the site | OK | OK | OK |
-| Post a normal job | OK | **NO** | **NO** |
-| Post an urgent job | **NO** | **NO** | **NO** |
-| Create a gig | OK | **NO** | **NO** |
-| Send a proposal | OK | 3 per UTC day | **NO** |
-| Publish a marketplace listing | Review queue | **NO** | **NO** |
-| Comment on an asset | OK | **NO** | **NO** |
-| Write forums (post / comment / react / new group) | OK | **NO** | **NO** |
-| Read forums | OK | OK | OK |
-| New DM / new inbox group | OK | OK | **NO** |
-| Message existing job / gig / contract thread | OK | OK | OK |
-| Create a team | OK | **NO** | **NO** |
-| Accept a new team invite | OK | **NO** | **NO** |
-| Existing team membership | OK | OK | OK |
-| New shared / team editor project | OK | **NO** | **NO** |
-| Personal editor projects | OK | OK | OK |
-| Cash out | OK | OK | **NO** (balance not seized) |
-| Buy credits / subscribe | OK | OK | OK |
-| Finish a live contract or gig order | OK | OK | OK |
-| Tickets / appeals / disputes on existing work | OK | OK | OK |
-| Discovery ranking | Buried (specified) | Hidden from featured (specified) | Removed (specified) |
+Each column is a running punishment (seeded at merit 97 / 92 / 84), not a point range. Mute is its own column.
 
-Forum writes at Restricted or Frozen are refused by `rejectForumTimeout` with `403 WARNING_RESTRICTED` (reports stay open). The forum pages read `user.restriction.warningBand` through `useForumTimeout` and switch their write controls off up front with a "Low merit" lock, the same way they do for a timeout or suspension.
+| Action | Limited | Restricted | Frozen access | Mute |
+|---|---|---|---|---|
+| Browse the site | OK | OK | OK | OK |
+| Post a normal job | OK | **NO** | **NO** | OK |
+| Post an urgent job | **NO** | **NO** | **NO** | OK |
+| Create a gig | OK | **NO** | **NO** | OK |
+| Send a proposal | OK | 3 per UTC day | **NO** | OK |
+| Publish a marketplace listing | Review queue | **NO** | **NO** | OK |
+| Comment on an asset | OK | **NO** | **NO** | **NO** |
+| Write forums (post / comment / react / new group) | OK | **NO** | **NO** | **NO** |
+| Read forums | OK | OK | OK | OK |
+| New DM / new inbox group | OK | OK | **NO** | **NO** |
+| Message existing job / gig / contract thread | OK | OK | OK | OK |
+| Create a team | OK | **NO** | **NO** | OK |
+| Accept a new team invite | OK | **NO** | **NO** | OK |
+| Existing team membership | OK | OK | OK | OK |
+| New shared / team editor project | OK | **NO** | **NO** | OK |
+| Personal editor projects | OK | OK | OK | OK |
+| Cash out | OK | OK | **NO** (balance not seized) | OK |
+| Buy credits / subscribe | OK | OK | OK | OK |
+| Finish a live contract or gig order | OK | OK | OK | OK |
+| Tickets / appeals / disputes on existing work | OK | OK | OK | OK |
+| Discovery ranking | Buried (specified) | Hidden from featured (specified) | Removed (specified) | — |
+
+Forum writes during Restricted, Frozen access or a Mute are refused by `rejectForumTimeout` with `403 WARNING_RESTRICTED` (reports stay open); mute also stops forum socket writes. Marketplace comments and new conversations during a Mute are refused by `assertWarningAllows`. The forum pages read `user.restriction.warningBand` / `muted` through `useForumTimeout` and switch their write controls off up front ("Muted" or "Low merit" lock), with the date posting comes back.
 
 Existing open jobs, gigs, and listings are **not** auto-deleted.
 
-During **auto-suspend**, treat them as Suspended: reads only. After it ends, fall back to this table.
+During **auto-suspend**, treat them as Suspended: reads only. After it ends, any band or mute still running applies.
 
 ---
 
@@ -293,20 +299,20 @@ A Restricted user who is also suspended still cannot write. A Frozen-access user
 
 ## 12. Rescind, expire, pardon, appeal
 
-| Action | Who | Points | Access |
+| Action | Who | Points / merit | Automatic punishments |
 |---|---|---|---|
-| Warning expires | System | that row drops out of the sum | Band recalculated |
-| Rescind one warning | Staff who can warn | that row no longer counts; stays on the Record as rescinded | Band recalculated |
-| Lift points | Admin / Support | N points (or up to a target merit) come off active warnings, longest-lasting first, or off one chosen warning; a row lifted to 0 becomes `lifted`; rows stay on the Record | Band recalculated; auto-suspension ends if its recovery merit is reached |
-| Pardon | Admin / Support | all warning hits cleared | Active, 0 points |
-| Appeal accepted | Support | standing lift in 24h; leftover warnings still count | Ban/lock/suspend end in 24h, then band from leftover points |
-| Appeal denied | Support | unchanged | optional 12-month appeal block |
+| Warning expires | System | that row drops out of the sum; merit recovers | **keep running** to their end |
+| Rescind one warning | Staff who can warn | that row no longer counts; stays on the Record as rescinded | the ones **this warning started** end now (an automatic suspension it caused ends too); others keep running |
+| Reverse a warning (Admin Moderation) | Admin | as rescind | as rescind |
+| Lift points | Admin / Support | N points (or up to a target merit) come off active warnings, longest-lasting first, or off one chosen warning; a row lifted to 0 becomes `lifted`; rows stay on the Record | **keep running**; a later drop past a level starts it again |
+| End early | Admin / Support | unchanged | that one punishment ends now (staff-only reason; suspensions are ended with Unsuspend instead) |
+| Pardon | Admin / Support | all warning hits cleared | **all** end |
+| Appeal accepted on a punishment | Support / Admin | unchanged | it ends within 24 hours (or now / an earlier date) |
+| Appeal denied | Support | unchanged | unchanged; 12-month hold on that penalty |
 
-Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`) and by the one-minute `reconcileExpiredStandings` sweep. They do not wait for staff. When an expiry moves the band, the member is notified ("Your Platform Merit recovered to …"). A rescind always notifies the member with their new merit.
+Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`) and by the one-minute `reconcileExpiredStandings` sweep. The member is told their merit recovered and that running punishments keep their end dates. The same sweep closes punishments whose clock ran out (`sweepElapsedMeritPenalties`) and tells the member what ended and what is still running. A rescind always notifies the member with their new merit.
 
-A lift lowers `violations.points` (what still counts) and keeps the issued value in `violations.points_original`, so the Record shows "3 of 8 lifted". Staff must write a reason (staff-only; the member never sees it). Activity `WARNING_POINTS_LIFTED`. The member is notified with their new merit and, when a band ended, which one. Nobody lifts on their own account; only Admin lifts on a staff account. The desks offer quick lifts per band ("End Frozen access · lift 3 → merit 85").
-
----
+A lift lowers `violations.points` (what still counts) and keeps the issued value in `violations.points_original`, so the Record shows "3 of 8 lifted". Staff must write a reason (staff-only; the member never sees it). Activity `WARNING_POINTS_LIFTED`. The member is notified with their new merit. Nobody lifts on their own account; only Admin lifts on a staff account. The desks offer quick lifts per level ("Back above merit 85 · lift 3 → merit 86") and say plainly that running punishments are not ended by a lift.
 
 ## 13. Who can warn
 
@@ -326,7 +332,7 @@ Admin and Support see every catalog row. Other desks only see rows whose `desks`
 
 **Public** profile / job / gig / asset chips: Banned, Suspended, Locked, Timeout, Under dispute, plus the Platform Merit ring. **Not** warning text, warning points, or the Limited/Restricted/Frozen-access band name.
 
-**Owner Record:** Platform Merit, standing, each warning (type, merit taken, expiry, status), what is auto-locked.
+**Owner Record:** Platform Merit, standing, each warning (type, merit taken, expiry, status), and each automatic punishment (what, started at which merit, when it ends or why it ended).
 
 **Never public:** case notes, staff names, case IDs, rescinded rows as if they were active.
 
@@ -351,45 +357,44 @@ When points or standing change, do not strand the other party or their credits.
 
 ---
 
-## 16. Worked examples
+## 16. Worked examples (seeded ladder)
 
 **Off-topic flood (1 pt)**  
-Record only, 3 days. Can still post jobs and write forums.
+Merit 99. No rule crossed. Record only.
 
 **Harassment (5 pt)**  
-Limited, 14 days. No urgent jobs. Listings go to review. Can still propose, write forums, cash out.
+Merit 95: crosses 97 → **Limited 3 days**. No urgent jobs, listings go to review. The warning lasts 14 days; Limited still ends after 3.
 
-**Hate speech (8 pt)**  
-Restricted, 45 days. No new jobs/gigs/listings/forum writes/new teams/shared editor. 3 proposals/day. Live contract stays.
+**Hate speech (8 pt) on a clean account**  
+Merit 92: crosses 97 and 92 → **Limited 3 days** and **Restricted 5 days** run side by side. After 5 days everything opens again, even though merit stays 92 until the warning expires.
 
-**Two harassment warnings still active (5+5 = 10)**  
-Restricted until the first one expires, then Limited if 5 remain.
+**A 10 on a clean account**  
+Merit 90: crosses 97, 92, 90 → Limited 3d, Restricted 5d, **Mute 3d**.
 
-**Threats (10 pt)**  
-Restricted 90 days **and staff should suspend or ban**. Engine does not auto-ban.
+**Then a 5 two days later**  
+Merit 85: from 90 to 85 crosses 85 → **Mute 5 days** from now. The first mute is covered by the longer one. Restricted keeps its original end.
 
-**Harassment + hate (5+8 = 13)**  
-Restricted.
+**Then the first warning expires**  
+Merit back to 95. Nothing ends early: the 5-day mute keeps running. Drop to 85 again later and a new 5-day mute starts.
 
-**10 + 8 still active (18)**  
-Frozen access: no proposals, no new DMs, no cashout.
+**10 + 8 (18)**  
+Merit 82: crosses 84 → **Frozen access 7 days** (plus the milder rules it passed on the way).
 
 **Two 10s (20)**  
-7-day auto-suspend. After 7 days, Frozen access until points drop. Not suspended again unless a new warning crosses 20.
+Merit 80: **7-day auto-suspend**. When it ends, any band or mute still running applies. Not suspended again unless merit recovers above 80 and drops past it again (or past 70).
 
 **Three 10s (30)**  
-14-day auto-suspend. Then Frozen access. Staff look at ban.
-
----
+Merit 70: **14-day auto-suspend** (extends a 7-day one still running). Staff look at ban.
 
 ## 17. Data, APIs, files
 
 ### Tables
 
 - `warning_defs` — named library: slug, label, category, points 1–10, duration_days 1–365, desks jsonb, note, is_system, sort_order, deleted_at. Migration `1826400000000_warning-defs` plus `1826600000000_warning-duration-and-thresholds`.
-- `warning_thresholds` — min_points, effect (`none` / `record` / `limited` / `restricted` / `frozen` / `auto_suspend`), label, suspend_days, lift_at_merit (auto-suspend only), is_system, deleted_at.
+- `warning_thresholds` — the punishment ladder: min_points (merit = 100 − min_points), effect (`limited` / `restricted` / `frozen` / `mute` / `auto_suspend`), label, duration_days 1–365, note, is_system, deleted_at. One active row per (min_points, effect). Migration `1829300000000_timed-merit-punishments` added duration_days and `mute`, retired the `none` / `record` rows and dropped `suspend_days` / `lift_at_merit`.
+- `merit_penalties` — punishments the engine started: account_id, warning_threshold_id, violation_id (the warning that crossed it), effect, label, min_points, points_at_start, duration_days, starts_at, ends_at, ended_at, end_reason (`expired` / `staff` / `pardoned` / `appeal` / `rescinded` / `reversed`), ended_by_staff_id, end_note. Running = `ended_at IS NULL AND ends_at > NOW()`. Unique per (violation_id, effect, min_points).
 - `violations` — issued cases: type (label), reason, points (what still counts), points_original (set on the first lift), status (`active` … `rescinded` / `lifted` / `expired` / `pardoned`), staff_id, expires_at.
-- `accounts.suspension_source` (`auto` for engine suspensions) and `accounts.auto_suspend_lift_merit`. Migration `1829200000000_warning-lift-and-auto-suspend-recovery`.
+- `accounts.suspension_source` (`auto` for engine suspensions). `accounts.auto_suspend_lift_merit` was dropped with early recovery lifts.
 - `punishment_defs` — named ban / suspend / timeout library. See [punishment-system.md](punishment-system.md) and [database.md](database.md).
 
 ### APIs
@@ -397,11 +402,14 @@ Frozen access: no proposals, no new DMs, no cashout.
 - `GET /api/admin/warning-catalog?desk=` and `GET /api/moderator/warning-catalog?desk=`
 - `GET /api/admin/punishment-catalog?desk=&kind=` and `GET /api/moderator/punishment-catalog`
 - `GET/POST /api/admin/warning-defs`, `PATCH/DELETE /api/admin/warning-defs/:warningDefId` `{ label, category, points, durationDays, desks, note }`
-- `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId` `{ minPoints, effect, label, suspendDays, liftAtMerit, note }` (Admin only)
+- `GET/POST /api/admin/warning-thresholds`, `PATCH/DELETE /api/admin/warning-thresholds/:thresholdId` `{ minPoints | triggerMerit, effect, label, durationDays, note }` (Admin only)
 - `POST /api/admin/accounts/:accountId/warn` `{ warningId, reason }`
 - `POST /api/admin/accounts/:accountId/warnings/:violationId/rescind`
-- `GET /api/admin/accounts/:accountId/warnings/lift-preview` → points, merit, band, band floors, quick-lift options (Admin / Support)
+- `GET /api/admin/accounts/:accountId/warnings/lift-preview` → points, merit, running punishments, quick-lift options per level, the ladder (Admin / Support)
 - `POST /api/admin/accounts/:accountId/warnings/lift` `{ points | targetMerit, violationId?, reason }` (Admin / Support)
+- `GET /api/admin/accounts/:accountId/merit-penalties` → `{ ready, active, history }` (every User & Team desk)
+- `POST /api/admin/accounts/:accountId/merit-penalties/:penaltyId/end` `{ reason }` (Admin / Support; not for auto-suspend)
+- Moderator Restrictions desks get `meritPenalties` (running, all accounts) with `GET .../restrictions`; `getAccountAccess` returns `muted`, `mutedUntil`, `meritPenalties`, and `warningBand` / `warningBandEndsAt` from the strictest running band
 - Moderator restriction desks: `POST .../restrictions/violations` with the same `{ warningId, reason }`
 
 ### Code
@@ -410,12 +418,13 @@ Frozen access: no proposals, no new DMs, no cashout.
 - Resolve + admin CRUD: `WarningDefServices` / `WarningDefRepositories` / `WarningDefControllers`
 - Issue: `warnAccount`, `issueViolation`
 - Duration: catalog `duration_days` via `warningExpiry` in `AccountRestriction.js` (staff-sent clocks ignored)
-- Thresholds: `WarningThresholdServices` / `WarningThresholdRepositories`; live cache in `WarningBands.js`
-- Active sum + auto-suspend: `sumActiveWarningPoints`, `maybeAutoSuspendAfterWarning` in `ModerationPolicy.js`
-- Early auto-suspension lift: `liftRecoveredAutoSuspensions` in `ModerationPolicy.js` (called from `refreshWarningBand`, `getAccountAccess`, and `reconcileExpiredStandings`)
-- Lift points: `WarningLiftServices` / `WarningLiftRepositories`; UI `LiftWarningPointsPanel` (Admin User & Team history, moderator Restrictions desk)
+- Thresholds: `WarningThresholdServices` / `WarningThresholdRepositories`; ladder rules, `rulesCrossed`, `bandFromPenalties` and live cache in `WarningBands.js`
+- Engine: `MeritPenaltyServices` / `MeritPenaltyRepositories` — `applyMeritPunishmentsForWarning` (both warn paths), `endMeritPenaltyEarly`, `endMeritPenaltiesForWarning` (rescind / reverse), `endAllMeritPenalties` (pardon), `closeAutoSuspensionRecords` (staff status change), `shortenMeritPenaltiesForAppeal`, `sweepElapsedMeritPenalties` (one-minute job)
+- Active sum: `sumActiveWarningPoints` in `WarningBandRepositories.js`
+- Lift points: `WarningLiftServices` / `WarningLiftRepositories`; UI `LiftWarningPointsPanel` and `MeritPenaltiesPanel` (Admin User & Team history, moderator Restrictions desk)
+- Works before `1829300000000` is applied (`SchemaFeatures.meritPenaltiesReady`): bands then follow points live and rule edits explain they need the migration.
 - Admin UI: `/admin/warnings`, warn picker `WarningPresetFields`
-- Product limits: `backend/lib/WarningBands.js` `ACTION_ALLOW`, enforced by `WarningBandServices.assertWarningAllows`
+- Product limits: `backend/lib/WarningBands.js` `ACTION_ALLOW` and `MUTE_ACTIONS`, enforced by `WarningBandServices.assertWarningAllows` (and `rejectForumTimeout` for forum writes)
 
 ---
 
@@ -425,10 +434,11 @@ Frozen access: no proposals, no new DMs, no cashout.
 2. **5 points is the minor slap.** Limited, 14 days.
 3. **8 points is the first real lockdown.** Restricted.
 4. Auto-suspend is a **cooldown**, not a loop.
-5. Live work is sacred. Restricted and Frozen access never cancel an open contract, gig order, or existing team project.
-6. No death spiral. Being Frozen or suspended does not add points.
-7. Staff always win. Manual timeout / suspend / lock / ban overrides the auto band.
-8. Severe rows are “warn for the record, then staff lock/ban.” The engine never auto-bans.
-9. Stars never throttle. Warning points never change a star rating.
+5. **Punishments are timed.** They start on a drop past a level and run their full days. Merit recovering never ends them; a deeper drop starts a harsher one.
+6. Live work is sacred. Restricted and Frozen access never cancel an open contract, gig order, or existing team project.
+7. No death spiral. Being Frozen, muted or suspended does not add points.
+8. Staff always win. Manual timeout / suspend / lock / ban overrides the auto band, and staff can end an automatic punishment early.
+9. Severe rows are “warn for the record, then staff lock/ban.” The engine never auto-bans.
+10. Stars never throttle. Warning points never change a star rating.
 
 When this file and the code disagree, fix the code or update this file in the same change.

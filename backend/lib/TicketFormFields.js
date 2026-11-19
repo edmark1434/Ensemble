@@ -159,8 +159,9 @@ const TICKET_FORM_FIELDS = Object.freeze({
     check('accuracy', 'The information in this claim is accurate'),
     text('signature', 'Type your full name as a signature'),
   ],
+  // Filed per penalty from /account/appeal; the server fills "Case ID" with the penalty named.
   'Appeal an account penalty': [
-    text('case_id', 'Case ID'),
+    optionalText('case_id', 'Penalty or case ID'),
     area('why_reverse', 'Why it should be reversed'),
     area('evidence', 'Supporting evidence', { required: false }),
   ],

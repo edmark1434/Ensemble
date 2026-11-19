@@ -2,7 +2,7 @@
 
 This is the operating contract for standing locks. One ladder, wired into every Ensemble product: jobs, proposals, gigs, orders, contracts, dashboard, disputes, asset marketplace, discovery, forums, teams, projects/editor, inbox/calls, credits/wallets/cashout/subscriptions, profile/verification, tickets/reports, notifications, and all staff desks.
 
-If someone is **warned**, warning points apply and may auto-limit products. Timeout, suspend, lock, and ban lock access immediately. Backend enforces every lock in this file. Users see those points as **Platform Merit** ([merit-system.md](merit-system.md)).
+If someone is **warned**, warning points apply. When they take Platform Merit down to a threshold, a **timed automatic punishment** starts (Limited, Restricted, Frozen access, Mute, or Suspension) and runs its full number of days. Timeout, suspend, lock, and ban lock access immediately. Backend enforces every lock in this file. Users see those points as **Platform Merit** ([merit-system.md](merit-system.md)).
 
 Punishment answers “what is locked right now?” Warnings answer “did they break the rules?” ([warning-system.md](warning-system.md)). Stars answer “was the work good?” Badges answer “what have they earned?” ([badges-system.md](badges-system.md)). Merit answers “can we trust this account?”
 
@@ -40,17 +40,18 @@ event on any Ensemble product
              (see warning-system.md for active points)
                     │
                     ▼
-         warning points cross a band
+         merit drops to a threshold level
                     │
                     ▼
-         extra AUTOMATIC LIMITS apply
-         Those limits are not a second punishment.
-         They do not add more warning points.
+         a TIMED AUTOMATIC PUNISHMENT starts
+         (fixed days; it does not end when the
+          warning expires or merit recovers)
+         It never adds or removes warning points.
 ```
 
 **Yes: warnings add points.** Points 1–10, always temporary (3 days at 1pt, 14 days at 5pt, 90 days at 10pt). Timeout, suspend, lock, ban, notice, and lost disputes do **not** add extra points. Prefer issuing a warning on the same action if staff want the auto band to move.
 
-**No death spiral.** Automatic warning bands never create a new warning, never auto-ban, and never add more points.
+**No death spiral.** Automatic punishments never create a new warning, never auto-ban, and never add or remove points. Dropping further crosses harsher rules, so punishments escalate; each rule starts once per drop past it.
 
 Staff may skip rungs for severe harm (threats, theft, impersonation, CSAM, payment fraud). Skipping does not add extra warning points. Points only move if a warning is issued.
 
@@ -106,7 +107,7 @@ Seeded catalog durations by points (admin can set 1–365 independently):
 - Whole site still usable unless a warning band or another punishment says otherwise.
 - Private Record shows it.
 - Toast tells them a warning was issued.
-- **20+** active warning points → auto-suspend 7 days. The suspend lock is standing only; it does **not** add extra points.
+- Merit dropping to a threshold starts a timed punishment ([warning-system.md](warning-system.md) §8). Seeded: merit 97 Limited 3d, 92 Restricted 5d, 90 Mute 3d, 85 Mute 5d, 84 Frozen access 7d, **80 auto-suspend 7d**, 70 auto-suspend 14d. None of them add points, and none end when the warning expires.
 
 Staff pick a **named warning** from `warning_defs`. Points are locked to that row. Admin can create or edit rows at `/admin/warnings`. Case notes are free text. Seeded list: [warning-system.md](warning-system.md) §6.1.
 
@@ -128,9 +129,9 @@ Still allowed while suspended (`SUSPENDED_WRITE_ALLOWLIST` in `AccountRestrictio
 
 Staff pick a **named suspension** from `punishment_defs` (`kind = suspend`). Duration is the catalog default unless they set a custom clock. Auto-suspend from warning points does not use this catalog.
 
-Warning points: leftover active points still apply the auto band.
+Auto-suspend runs its own fixed clock. A suspension already running is extended when the new one would end later, never shortened. Unsuspending (or any staff standing change) closes the automatic-suspension record.
 
-After it ends, leftover warning points still apply Restricted/Frozen access. The suspend lock itself is gone. Bands: [warning-system.md](warning-system.md).
+After it ends, any automatic band or mute still running applies. The suspend lock itself is gone. Punishments: [warning-system.md](warning-system.md).
 
 ### 4.5 Lock
 
@@ -138,7 +139,7 @@ Investigation / compromised account. Users: appeal-only (`/account/appeal`, tick
 
 ### 4.6 Ban
 
-Temp or permanent. Dispute conviction = permanent ban of `for_account_id`. Sign in only to appeal and view tickets/disputes. Listings/gigs/jobs stop being actionable; staff hide or close them. Badges hidden on public profile. Appeal accept → lift in **24 hours**, then recompute. Reopening a dispute does not unban.
+Temp or permanent. Dispute conviction = permanent ban of `for_account_id`. Sign in only to appeal and view tickets/disputes. Listings/gigs/jobs stop being actionable; staff hide or close them. Badges hidden on public profile. Appeal accept → lift in **24 hours** by default (staff may lift now or shorten), then recompute. The ban is its own appeal, separate from any warning or timeout. Reopening a dispute does not unban.
 
 Staff pick a **named ban** from `punishment_defs` (`kind = ban`). Duration is the catalog default (days or permanent) unless they set a custom clock. Only Admin and Support can ban. Admin CRUD is `/admin/warnings` → Ban, suspend, timeout.
 
@@ -148,11 +149,12 @@ Warning points stay on leftover unexpired rows. After appeal lift, the auto band
 
 | Action | Who | Warning points | Access |
 |---|---|---|---|
-| Rescind one warning | Staff who can warn | that row no longer counts | Unchanged, except remaining band/suspend |
-| Lift points | Admin / Support Moderator | N points (or up to a target merit) stop counting; warnings stay on the Record | Band follows the new merit; an auto-suspension ends once its recovery merit is reached ([warning-system.md](warning-system.md) §8, §12) |
-| Pardon | Admin / Support Moderator | all warning hits cleared | Active |
-| Appeal accepted | Support via “Appeal an account penalty” | recompute after 24h lift | ban/lock/suspend end in 24h |
-| Appeal denied | Support | unchanged | optional 12-month appeal block |
+| Rescind one warning | Staff who can warn | that row no longer counts | The automatic punishments **that warning started** end (including an automatic suspension it caused); others keep running |
+| Lift points | Admin / Support Moderator | N points (or up to a target merit) stop counting; warnings stay on the Record | Unchanged: running automatic punishments keep their clocks ([warning-system.md](warning-system.md) §8, §12) |
+| End early | Admin / Support Moderator | unchanged | One automatic punishment ends now (staff-only reason; member notified) |
+| Pardon | Admin / Support Moderator | all warning hits cleared | Active; every automatic punishment ends |
+| Appeal accepted | Support via “Appeal an account penalty” (one appeal per penalty) | an accepted **warning** appeal rescinds that warning | only the appealed penalty: ends in 24h (default), now, or at an earlier time staff pick |
+| Appeal denied | Support | unchanged | that penalty: 12-month appeal block, or permanent; optional suspend/ban in the same step |
 
 ### 4.8 Who can punish
 
@@ -171,9 +173,11 @@ Specialist mods act from their report desks. Conviction bans go through the disp
 
 **If they are punished, are warning points added too?** Only if it is a **warning**. Timeout, suspend, lock, ban, notice, and disputes do not add points.
 
-**If warning points are high, what happens?** Automatic product locks in [warning-system.md](warning-system.md). Not an auto-ban. Auto-suspend is **20+ active warning points** (7-day cooldown), or 14 days at 30+.
+**If warning points are high, what happens?** Each threshold merit drops past starts a timed punishment ([warning-system.md](warning-system.md) §8). Not an auto-ban. Auto-suspend is seeded at **merit 80** (7 days) and **merit 70** (14 days).
 
-**Do punishments stack?** Standing locks stack (timeout + warnings, then auto-suspend at 3 warnings). Only **warning points** stack. A timeout or suspend on the same action does not add extra points. For each feature take the stricter of standing vs band; ban/lock always wins.
+**When does an automatic punishment end?** When its days run out. Not when the warning expires, not when staff lift points, not when merit recovers. Staff can end one early; pardon, an accepted appeal, or rescinding the warning that started it also end it.
+
+**Do punishments stack?** Yes. Warning points stack into merit, and each deeper drop starts a harsher automatic punishment; different kinds run side by side, and of the same kind the one that ends last wins. A staff timeout or suspend on the same action does not add points. For each feature take the stricter of standing vs the strictest running band; ban/lock always wins.
 
 **Can they buy their way out of a punishment?** No. Not with credits, not with Premium/Business.
 
@@ -190,16 +194,16 @@ Evaluate in this order. First match that blocks, wins.
 3. Banned or locked → appeal allowlist only.
 4. Suspended → reads only.
 5. Forum timeout → blocks forum writes only.
-6. Warning-point band → product limits in [warning-system.md](warning-system.md).
+6. Automatic punishments running (strictest band, mute) → product limits in [warning-system.md](warning-system.md) §9.
 7. Otherwise allow.
 
-A user with 0 warning points who is suspended still cannot write. A Frozen-access user who is Active can still finish a live contract.
+A user with 0 warning points who is suspended still cannot write. A member whose warnings have expired can still be in a running Restricted band. A Frozen-access user who is Active can still finish a live contract.
 
 ---
 
 ## 7. Standing matrix
 
-Legend: **OK** = allowed. **NO** = blocked. Limited / Restricted / Frozen-access columns live in [warning-system.md](warning-system.md) and are checked only after this table.
+Legend: **OK** = allowed. **NO** = blocked. Automatic punishment columns (Limited / Restricted / Frozen access / Mute) live in [warning-system.md](warning-system.md) §9 and are checked only after this table.
 
 | Action | Route / surface | Timeout | Suspended | Ban / Lock |
 |---|---|---|---|---|
@@ -339,7 +343,7 @@ Listing fees: charge only when the listing is actually accepted into pending/pub
 **Punish:** Forum Moderator. Timeout is forum-only. Conduct/spam warnings still add global points and can push bands that then lock jobs/gigs/assets.
 
 - Timeout: read OK, write `/api/forum*` NO (including forum reports).
-- Restricted/Frozen-access warning bands also block forum writes. A staff timeout still wins if it is active.
+- Automatic Restricted / Frozen access and Mute also block forum writes (reports stay open). A staff timeout still wins if it is active.
 - Creating groups: Timeout/Suspend/Ban NO.
 
 **Staff:** `/moderator/forum` (discussion, reports, restrictions, disputes).
@@ -433,11 +437,12 @@ Team / profile / inbox report ──► Support ──► full ladder except tre
 Each report stores a snapshot of the reported item. Staff get a platform-view link when the item still exists; otherwise the desk shows the snapshot (inbox messages are never linked).
 Ticket / appeal / identity / billing ──► Support ──► full ladder + pardon
 Dispute conviction ──► Support/Admin dispute decision ──► permanent ban (warn separately if points should apply)
-20+ active warning points ──► system ──► 7-day suspend (no extra points beyond the warnings)
-16+ active warning points ──► system ──► Frozen-access locks + moderation alert (no ban)
+Merit drops to 80 ──► system ──► 7-day suspend (fixed clock, no extra points)
+Merit drops to 84 ──► system ──► Frozen access 7 days (no ban)
+Merit drops to 90 / 85 ──► system ──► Mute 3 / 5 days
 ```
 
-Frozen access is a warning-point band, not a standing. It is on this map so staff do not confuse it with a ban.
+Frozen access and Mute are timed automatic punishments, not standings. They are on this map so staff do not confuse them with a ban. Every desk lists the running ones; Admin / Support can end one early.
 
 ---
 
@@ -445,11 +450,11 @@ Frozen access is a warning-point band, not a standing. It is on this map so staf
 
 **Public** (`/profile/:id`, job/gig/asset author chips): chips for Banned / Suspended / Locked / Timeout / Under dispute. Star ratings and badge pins are the other systems. Badges hidden if Banned or Locked.
 
-**Owner:** Record modal — standing, warnings, timeouts, recent activity. Warning points and auto band live in the same modal.
+**Owner:** Record modal — standing, warnings, timeouts, automatic punishments (running and past), recent activity. Platform Merit lives in the same modal.
 
 **Suspended members are stopped before they start.** The backend refuses every write, and the client also switches writes off up front so nobody fills in a form for nothing. `SuspensionGuard` (`frontend/src/components/account/SuspensionGuard.tsx`, rules in `frontend/src/lib/suspensionGuard.ts`) locks write controls site-wide. Locked controls are faded, show a not-allowed cursor and an amber dashed ring on hover, have a tooltip, and give one heads-up toast on click; typing, uploads and form submits are blocked too. Reading, navigation, search, filters, logout, the appeal page and support tickets stay open. `SuspendedRouteGate` shows a "paused" page instead of write-only pages (job/gig create and edit, proposals, gig orders, checkout, new project, dispute form, team invite/join, business verification). Forum controls treat a suspension like a timeout. A control that must stay usable while suspended goes inside `data-suspension-keep`.
 
-**Owner status bar:** while signed in, a bar under the header shows Suspended, Frozen access, Credits on hold, or Forum timeout with a live countdown. "How to fix" opens a sheet listing, for each one, what is paused, when it ends (`suspensionEndsAt`, `warningBandEndsAt`, `creditsFrozenUntil`, `forumTimeoutEndsAt` from `getAccountAccess`) and how to get back to normal (wait, or appeal). The appeal page and the wallet show the same list. Copy lives in `frontend/src/lib/standing.ts`. Frozen access and credit holds can be hidden until they change; a suspension cannot.
+**Owner status bar:** while signed in, a bar under the header shows Suspended, an automatic band (Limited / Restricted / Frozen access), Muted, Credits on hold, or Forum timeout with a live countdown. "How to fix" opens a sheet listing, for each one, what is paused, when it ends (`suspensionEndsAt`, `warningBandEndsAt`, `mutedUntil`, `creditsFrozenUntil`, `forumTimeoutEndsAt`, `meritPenalties` from `getAccountAccess`) and how to get back to normal (wait, or appeal). Automatic punishments say they run their full time even if merit recovers. The appeal page and the wallet show the same list. Copy lives in `frontend/src/lib/standing.ts`. Automatic punishments and credit holds can be hidden until they change; a suspension cannot.
 
 **Never public:** warning text, points, staff names, case IDs, pardoned rows as active.
 
@@ -464,10 +469,10 @@ Frozen access is a warning-point band, not a standing. It is on this map so staf
 ```
 Forum mod warns (conduct, 5pt)
   → standing: Active (timeout optional)
-  → 5 active points → Limited for 14 days
+  → merit 95: crosses 97 → Limited for 3 days
   → cannot post urgent jobs, listings go to review
   → can still take gig orders, write proposals, and post in forums
-warning ends → 50 Established again
+3 days later Limited ends; merit stays 95 until the warning expires (14 days)
 ```
 
 ### Jobs no-show
@@ -475,9 +480,18 @@ warning ends → 50 Established again
 ```
 Jobs mod issues work warning 8pt for a no-show
   → standing still Active
-  → 8 active points → Restricted for 45 days
+  → merit 92: Limited 3 days + Restricted 5 days
   → forums unwritable, cannot post jobs or create gigs, 3 proposals/day
   → live contract still deliverable
+after 5 days everything opens again, even though the warning runs 45 days
+```
+
+### Escalation
+
+```
+merit 92 → 90 (new warning) → Mute 3 days
+merit 90 → 85 (another)     → Mute 5 days from now (covers the first)
+first warning expires        → merit 95, the mute keeps running
 ```
 
 ### Dispute conviction
@@ -491,20 +505,20 @@ escrow handled by staff, not by the band engine
 ### Three warnings
 
 ```
-active warning points reach 20
-  → auto-suspend 7 days (standing cooldown, no extra points)
+merit drops to 80
+  → auto-suspend 7 days (fixed clock, no extra points)
   → after 7 days the suspend lock lifts
-  → leftover warning hits may still leave them Restricted or Frozen
+  → any band or mute still running applies until its own end
 ```
 
 ---
 
 ## 13. Anti-abuse and implementation
 
-- Staff cannot invent a custom point value. They warn, rescind, lift points, or pardon. Lifting only ever lowers points. Active points are summed from `violations`.
+- Staff cannot invent a custom point value. They warn, rescind, lift points, or pardon. Lifting only ever lowers points and never ends a running automatic punishment. Active points are summed from `violations`; automatic punishments live in `merit_penalties`.
 - Nobody can suspend their own account. Moderators cannot suspend a moderator or an admin. Only Admin can suspend those staff accounts. Auto-suspend from warning points is unchanged.
 - Only warnings add points. Timeout, suspend, lock, ban, and disputes never add a second hit.
-- Expired suspend/ban/lock and expired warnings lift in a **background job**, not only on next page load.
+- Expired suspend/ban/lock, expired warnings and finished automatic punishments are closed in a **background job**, not only on next page load.
 - Proposal and listing fees are not charged on a rejected action.
 - `CheckSession` already enforces ban/lock/suspend/timeout. Keep that as the standing gate. Warning-point bands are additional guards in [warning-system.md](warning-system.md).
 - Record activity must include `ACCOUNT_WARNED`, `VIOLATION_ISSUED`, `WARNING_ISSUED`, `ACCOUNT_PARDONED`.
@@ -513,7 +527,7 @@ Implementation rules (enforced in code):
 
 - Every standing action — warn, timeout, suspend, lock, ban, restore, pardon, rescind, credit adjustment — refuses to act on the actor's own account, and only an Admin may act on another staff account (`assertCanSanctionTarget` in `backend/lib/SuspendGuards.js`).
 - Status changes must match the current standing: unsuspend only lifts a suspension, unlock a lock, unban a ban. A banned account can only be changed by Admin or Support, so a specialist moderator cannot lift a ban through unsuspend/unlock or a suspension.
-- The 20-point auto-suspend never writes Suspended over a ban or lock.
+- The automatic suspension never writes Suspended over a ban or lock, and never shortens a suspension already running.
 - Every ban (Users desk, dispute conviction, report sanction) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. Lifting the ban does not reopen anything — the member reposts, or reopens a closed gig. Locks and suspensions do not run it.
 - Report decisions follow the same role rules: specialist moderators may warn or suspend from a report, only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice.
 - A report warning uses the named warning staff pick (desk-checked like any warning); **Staff follow-up warning** is only the default. A report that names no other account (technical problems, whose account columns point at the reporter) cannot be sanctioned — close or deny it.
@@ -522,8 +536,10 @@ Implementation rules (enforced in code):
 - When a ban, lock or suspension ends (expiry, unban/unsuspend/unlock/restore, pardon, accepted appeal) on a member who had deactivated the account, it returns to **Deactivated**, not Active; the member reactivates it themselves.
 - Expired bans, locks, suspensions and warnings lift in a one-minute background job (`reconcileExpiredStandings`), which records the lift and notifies the member, as well as on the member's own next request.
 - Suspended members may open and answer an **appeal ticket** (and nothing else on tickets), the same as banned and locked members. Their banner links to `/account/appeal`; so does the forum-timeout banner. To attach evidence, banned, locked and suspended members may also call `POST /api/files/upload-url` and `/api/files/finalize`, but `generateUploadUrlController` accepts only the `ticket-attachments` folder from them.
-- Appeals: filing needs an active penalty (standing, forum timeout, or active warning). Only Admin or the assigned Support Moderator decides, under a row lock, never on their own account. Accepting ends a ban/lock/suspension and any forum timeout within 24 hours, never later than it would have ended anyway. Warnings are not lifted by an accepted appeal; rescind them. A 12-month denial hold does not block appealing a penalty issued after that denial.
-- Undecided appeal tickets cannot be closed by a status change, a scheduled close, or the inactivity auto-close; they end only with a decision. Inactivity auto-close only applies when staff replied last.
+- Appeals are **per penalty** (`services/PenaltyAppealServices.js`, migration `1829400000000_per-penalty-appeals`). Each active penalty is its own appeal target: the ban / lock / suspension (identified by the `ACCOUNT_STATUS_CHANGED` row that moved the account into that status, so an extension stays the same penalty), each forum timeout (`restrictions`), each warning (`violations`), each automatic merit punishment (`merit_penalties`; the automatic suspension is appealed as the suspension) and each credit hold (`<wallet_id>@<frozen_at>`; a second hold is a new penalty). `GET /api/users/appeals` lists them with their appeal state; the member picks one on `/account/appeal`, and the ticket stores `appeal_target_*`.
+- Filing needs that penalty to be active. It is refused when that penalty already has an undecided appeal (partial unique index), was accepted, was denied less than 12 months ago, or was denied permanently. A decision covers the penalty as it was when decided: an extension or re-issue after it can be appealed again. Other penalties are never blocked by it. An undecided account-wide appeal from before the change blocks new appeals until it is decided; old `account_appeal_holds` rows still cover the penalties that existed when they were decided.
+- Only Admin or the assigned Support Moderator decides, under a row lock, never on their own account. Accepting changes only the appealed penalty: ban / lock / suspension / timeout / automatic punishment / credit hold end within 24 hours (default), now, or at an earlier time staff pick — never later than planned; a warning is rescinded at once (its automatic punishments end, the band refreshes). A penalty that already ended or was replaced is left alone and the decision is still recorded. Denying holds that penalty for 12 months or permanently, and may also suspend or ban the account in the same step (a named catalog punishment through the Users desk path; checked before the decision is saved, and a suspension never replaces a ban or lock). Staff may add a note for the member. The decision is posted in the ticket chat as a decision card (`messageType: 'appeal_decision'`) and stored in `appeal_outcome` / `appeal_decision_note`. Account-wide appeals filed before the change keep the old decision (everything ends in 24 hours, account-wide hold).
+- Undecided appeal tickets cannot be closed by a status change, a scheduled close, or the inactivity auto-close; they end only with a decision. A decided appeal cannot be reopened (409); the staff form no longer sends its status. Inactivity auto-close only applies when staff replied last.
 
 Build order (punishment slice):
 

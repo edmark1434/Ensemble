@@ -15,7 +15,12 @@ async function listAccountTickets(accountId, participantTicketIds = []) {
     `
     SELECT t.ticket_id, t.ticket_number, t.reason, t.type, t.priority, t.status, t.account_id,
            t.message_count, t.last_message_at, t.last_message_author_type, t.satisfaction_score,
-           t.created_at, t.updated_at, t.resolved_at, tc.chat_id
+           t.created_at, t.updated_at, t.resolved_at, tc.chat_id,
+           t.appeal_decision,
+           -- The penalty an appeal names; read through jsonb so this works before its migration.
+           to_jsonb(t) ->> 'appeal_target_type' AS appeal_target_type,
+           to_jsonb(t) ->> 'appeal_target_id' AS appeal_target_id,
+           to_jsonb(t) ->> 'appeal_target_label' AS appeal_target_label
     FROM tickets t
     LEFT JOIN ticket_chats tc ON tc.ticket_id = t.ticket_id AND tc.deleted_at IS NULL
     WHERE t.deleted_at IS NULL

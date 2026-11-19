@@ -52,7 +52,7 @@ async function notifyAccountWarned(accountId, warningData = {}) {
     console.warn('Warning realtime socket broadcast failed:', err.message);
   }
 
-  // An auto-suspension is announced once, by maybeAutoSuspendAfterWarning, which applied it.
+  // An auto-suspension is announced once, by applyMeritPunishmentsForWarning, which applied it.
 
   return notification;
 }

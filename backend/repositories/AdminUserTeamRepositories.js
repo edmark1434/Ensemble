@@ -1350,7 +1350,8 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const banEndsAt = status === 'Banned' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const lockEndsAt = status === 'Locked' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const { restingStatusSql } = require('../lib/AccountRestriction');
-  // A staff decision replaces any automatic suspension, so merit recovery no longer ends it.
+  // A staff decision replaces any automatic suspension: the engine marker is cleared and its
+  // punishment record closes below.
   const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
   const clearAutoSuspend = await clearAutoSuspendSql();
   // Lifting a penalty returns a member who had deactivated the account to Deactivated.
@@ -1369,6 +1370,14 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   );
   const savedStatus = saved.rows[0]?.status || status;
   const backToDeactivated = savedStatus !== status;
+
+  // The engine's suspension record (if any) closes: staff now own this account's standing.
+  try {
+    const { closeAutoSuspensionRecords } = require('../services/MeritPenaltyServices');
+    await closeAutoSuspensionRecords(accountId, { staffId });
+  } catch (err) {
+    console.warn('Closing the automatic suspension record failed:', err.message);
+  }
 
   await recordAccountActivity({
     accountId,
@@ -1793,8 +1802,12 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
     },
   });
 
-  const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
-  const autoSuspend = await maybeAutoSuspendAfterWarning(accountId, staffId);
+  // Every merit level this warning crossed starts its timed punishment (merit is unchanged).
+  const { applyMeritPunishmentsForWarning } = require('../services/MeritPenaltyServices');
+  const autoSuspend = await applyMeritPunishmentsForWarning(accountId, {
+    violationId: inserted.rows[0]?.violation_id || null,
+    staffId,
+  });
 
   try {
     const { notifyAccountWarned } = require('../services/AccountStandingServices');
@@ -1829,6 +1842,7 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
     expiresAt: expiry,
     autoSuspended: Boolean(autoSuspend?.suspended),
     activeWarnings: autoSuspend?.activeCount ?? null,
+    punishmentsStarted: autoSuspend?.started || [],
   };
 }
 
@@ -1876,6 +1890,10 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       [accountId]
     ).catch(() => null);
 
+    // Automatic merit punishments end with the pardon, whatever their clock said.
+    const { endAllMeritPenalties } = require('../services/MeritPenaltyServices');
+    const punishmentsEnded = await endAllMeritPenalties(client, accountId, { staffId, note: note || null });
+
     const previousStatus = account.status;
     const { restingStatusSql } = require('../lib/AccountRestriction');
     const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
@@ -1908,6 +1926,7 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
         previousStatus,
         status: nextStatus,
         violationsCleared: clearedViolations.rowCount || 0,
+        punishmentsEnded: punishmentsEnded.length,
         note: note || null,
       },
       client,
@@ -1934,6 +1953,10 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
     try {
       const { refreshWarningBand } = require('../services/WarningBandServices');
       await refreshWarningBand(accountId, 0);
+      if (punishmentsEnded.length) {
+        const { broadcastPunishmentChange } = require('../services/MeritPenaltyServices');
+        await broadcastPunishmentChange(accountId);
+      }
     } catch (err) {
       console.warn('Warning band refresh after pardon failed:', err.message);
     }
@@ -1953,6 +1976,68 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * After a warning was set to `rescinded` (Users desk, or an accepted appeal on that warning):
+ * record it, end the automatic punishments it started, refresh the band and tell the member
+ * their merit came back. Never throws past the activity row.
+ * @param {{ accountId: string, warning: { violation_id: string, violation_number?: string, type?: string },
+ *   staffId?: string|null, source?: 'staff'|'appeal', ticketNumber?: string|null }} input
+ * @returns {Promise<{ punishmentsEnded: object[] }>}
+ */
+async function announceWarningRescinded({ accountId, warning, staffId = null, source = 'staff', ticketNumber = null }) {
+  const label = warning.type || 'warning';
+  await recordAccountActivity({
+    accountId,
+    action: source === 'appeal'
+      ? `Warning rescinded after an accepted appeal${ticketNumber ? ` (ticket #${ticketNumber})` : ''}: ${label}`
+      : `Warning rescinded: ${label}`,
+    eventCode: 'WARNING_RESCINDED',
+    referenceTable: 'violations',
+    referencePrefix: 'VIO',
+    referenceId: warning.violation_id,
+    actorStaffId: staffId,
+    metadata: {
+      violationId: warning.violation_id,
+      violationNumber: warning.violation_number,
+      status: 'rescinded',
+      ...(source === 'appeal' ? { source: 'appeal', ticketNumber } : {}),
+    },
+  });
+
+  // Punishments this warning started end with it (other warnings' punishments keep running).
+  let punishmentsEnded = [];
+  try {
+    const { endMeritPenaltiesForWarning } = require('../services/MeritPenaltyServices');
+    punishmentsEnded = await endMeritPenaltiesForWarning(accountId, warning.violation_id, { reason: 'rescinded', staffId });
+  } catch (err) {
+    console.warn('Ending punishments after rescind failed:', err.message);
+  }
+
+  // The member is told their merit came back; otherwise a rescind is invisible to them.
+  try {
+    const { refreshWarningBand } = require('../services/WarningBandServices');
+    const next = await refreshWarningBand(accountId);
+    const { createNotificationServices } = require('../services/NotificationServices');
+    const notification = await createNotificationServices({
+      account_id: accountId,
+      message: `A warning on your account (${label}) was rescinded${
+        source === 'appeal' ? ' after your appeal' : ''
+      }. Your Platform Merit is now ${meritFromWarningPoints(next?.points ?? 0)}.`,
+      is_read: false,
+      reference_table: 'violations',
+      reference_prefix: 'WARNING_UP',
+      reference_path: '/profile',
+      reference_id: warning.violation_id,
+    });
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+  } catch (err) {
+    console.warn('Warning band refresh after rescind failed:', err.message);
+  }
+  return { punishmentsEnded: punishmentsEnded || [] };
 }
 
 async function rescindWarning(accountId, violationId, staffId) {
@@ -1977,46 +2062,13 @@ async function rescindWarning(accountId, violationId, staffId) {
   if (!updated.rows.length) throw new Error('Active warning not found');
 
   const row = updated.rows[0];
-  await recordAccountActivity({
-    accountId,
-    action: `Warning rescinded: ${row.type || 'warning'}`,
-    eventCode: 'WARNING_RESCINDED',
-    referenceTable: 'violations',
-    referencePrefix: 'VIO',
-    referenceId: row.violation_id,
-    actorStaffId: staffId,
-    metadata: {
-      violationId: row.violation_id,
-      violationNumber: row.violation_number,
-      status: 'rescinded',
-    },
-  });
-
-  // The member is told their merit came back; otherwise a rescind is invisible to them.
-  try {
-    const { refreshWarningBand } = require('../services/WarningBandServices');
-    const next = await refreshWarningBand(accountId);
-    const { createNotificationServices } = require('../services/NotificationServices');
-    const notification = await createNotificationServices({
-      account_id: accountId,
-      message: `A warning on your account (${row.type || 'warning'}) was rescinded. Your Platform Merit is now ${meritFromWarningPoints(next?.points ?? 0)}.`,
-      is_read: false,
-      reference_table: 'violations',
-      reference_prefix: 'WARNING_UP',
-      reference_path: '/profile',
-      reference_id: row.violation_id,
-    });
-    const { getIo } = require('../lib/WebSocket');
-    const io = getIo();
-    if (io && notification) io.to(String(accountId)).emit('notification', notification);
-  } catch (err) {
-    console.warn('Warning band refresh after rescind failed:', err.message);
-  }
+  const { punishmentsEnded } = await announceWarningRescinded({ accountId, warning: row, staffId });
 
   return {
     accountId,
     violationId: row.violation_id,
     violationNumber: row.violation_number,
+    punishmentsEnded,
     status: 'rescinded',
   };
 }
@@ -2031,6 +2083,7 @@ module.exports = {
   freezeAccountCredits,
   warnAccount,
   rescindWarning,
+  announceWarningRescinded,
   pardonAccount,
   getUserVerificationRecord,
   updateUserVerificationExpiry,

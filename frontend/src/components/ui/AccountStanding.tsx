@@ -249,7 +249,8 @@ function writeDismissed(value: string) {
 }
 
 /**
- * Site-wide status bar: suspension, Frozen access, credits on hold, forum timeout. Shows the
+ * Site-wide status bar: suspension, automatic merit punishments (Limited / Restricted / Frozen
+ * access, Mute), credits on hold, forum timeout. Shows the
  * most serious one with a live countdown; Details explains all of them and how to recover.
  * A suspension cannot be dismissed; the others can be hidden until something changes.
  */
@@ -276,8 +277,8 @@ function StandingStatusBar({
   const when = remaining == null
     ? primary.id === 'credit_hold'
       ? 'until staff review'
-      : primary.id === 'frozen_access'
-        ? 'until warnings expire'
+      : primary.id === 'merit_limits' || primary.id === 'muted'
+        ? 'on its own clock'
         : 'no end date yet'
     : remaining > 0
       ? `ends in ${formatCountdown(remaining)}`

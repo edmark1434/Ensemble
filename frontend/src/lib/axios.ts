@@ -153,16 +153,21 @@ api.interceptors.response.use(
             (restrictionCode === "WARNING_RESTRICTED" || restrictionCode === "WARNING_FROZEN") &&
             String(originalRequest?.url || "").includes("api/forum")
         ) {
-            // Platform Merit is in a band that pauses forum posting (Restricted or Frozen).
-            // Keep the standing current so the forum switches its write controls off, even
-            // when the band changed after this page loaded, and explain it once.
+            // An automatic merit punishment pauses forum posting (mute, Restricted or Frozen
+            // access). Keep the standing current so the forum switches its write controls off,
+            // even when it started after this page loaded, and explain it once.
             const restriction = err.response?.data?.restriction;
             const current = useGlobalState.getState().user;
-            if (current && restriction && current.restriction?.warningBand !== restriction.warningBand) {
+            if (
+                current &&
+                restriction &&
+                (current.restriction?.warningBand !== restriction.warningBand ||
+                    Boolean(current.restriction?.muted) !== Boolean(restriction.muted))
+            ) {
                 useGlobalState.getState().setUser({ ...current, restriction });
             }
             showErrorToast(
-                err.response?.data?.message || "Your Platform Merit is too low to post in the forums. You can still read.",
+                err.response?.data?.message || "An automatic merit punishment pauses forum posting right now. You can still read.",
                 { id: "forum-merit" },
             );
             return Promise.reject(err);

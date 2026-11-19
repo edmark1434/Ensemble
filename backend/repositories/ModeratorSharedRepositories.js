@@ -33,6 +33,17 @@ function isTicketOverdue(row, closed) {
   return ageHours >= 72;
 }
 
+/** The one penalty an "Appeal an account penalty" ticket is about; null for other tickets and older appeals. */
+function mapAppealTarget(row) {
+  if (!row?.appeal_target_type) return null;
+  return {
+    type: row.appeal_target_type,
+    id: row.appeal_target_id ? String(row.appeal_target_id) : null,
+    label: row.appeal_target_label || null,
+    startedAt: row.appeal_target_started_at || null,
+  };
+}
+
 function mapTicketRow(row) {
   const status = normalizeTicketStatus(row.status);
   const closed = isClosedStatus(status);
@@ -83,6 +94,7 @@ function mapTicketRow(row) {
     updatedAt: row.updated_at,
     closedAt: row.resolved_at || row.closed_at || null,
     resolvedAt: row.resolved_at || null,
+    appealTarget: mapAppealTarget(row),
   };
 }
 

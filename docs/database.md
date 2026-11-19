@@ -90,7 +90,8 @@
 
 - `warning_defs` is the named warning catalog: slug, label, category, points (1–10), duration_days (1–365), desks, note, `is_system`, and `deleted_at`.
 - Staff issue warnings by picking a live row. Points and `expires_at` on the issued `violations` row are copied at issue time; later catalog edits do not rewrite old cases.
-- `warning_thresholds` maps stacked active points to an automatic effect (`none`, `record`, `limited`, `restricted`, `frozen`, `auto_suspend`). Highest matching `min_points` wins. Auto-suspend rows also store `suspend_days`.
+- `warning_thresholds` is the automatic punishment ladder: when Platform Merit drops to `100 − min_points`, `effect` (`limited`, `restricted`, `frozen`, `mute`, `auto_suspend`) runs for `duration_days`. One active row per (`min_points`, `effect`). Retired `none` / `record` rows stay soft-deleted.
+- `merit_penalties` holds each automatic punishment the engine started, with its own `starts_at` / `ends_at` (running = `ended_at IS NULL AND ends_at > NOW()`), the warning that crossed the level (`violation_id`), and why it ended (`end_reason`). Merit recovering never ends a row; the one-minute sweep stamps `ended_at` when the clock runs out. Migration `1829300000000_timed-merit-punishments`.
 - Migration `1826400000000_warning-defs` seeds the original hardcoded catalog. `1826600000000_warning-duration-and-thresholds` adds duration and seeds the default point ladder. Soft-delete hides a row from desks without touching issued warnings.
 
 ## Member reports
@@ -103,6 +104,14 @@
 - `tickets.form_answers` is a JSON array of the questions that ticket type asked: `{ key, label, value, id? }`. `id` is set when the member picked one of their own projects, listings, orders, contracts, or jobs. The label is the wording shown at submit time.
 - `tickets.submission_context` is a JSON object recorded with the ticket: `accountId`, `username`, `email`, `plan`, `submittedAt`, `browser`, `device`, `page`. It is a snapshot, so later account changes do not rewrite it.
 - Migration `1827600000000_ticket-form-answers-json` copies `ticket_form_values` into those columns and drops the table. Do not edit `1822800000000_ticket-form-values`.
+
+## Per-penalty appeals
+
+- Migration `1829400000000_per-penalty-appeals` adds to `tickets`: `appeal_target_type` (`ban`, `lock`, `suspension`, `forum_timeout`, `warning`, `credit_hold`, `merit_penalty`; CHECK) and `appeal_target_id` (set together, CHECK), `appeal_target_label` / `appeal_target_started_at` (what the member saw when filing), `appeal_outcome` (JSON: `remedy`, `state`, `endsAt`, `followUp`) and `appeal_decision_note`.
+- Target ids: warning = `violations.violation_id`; timeout = `restrictions.restriction_id`; ban / lock / suspension = the `account_activity` row (`ACCOUNT_STATUS_CHANGED`, `previousStatus` different) that moved the account into that status; credit hold = `<wallet_id>@<frozen_at ISO>`; automatic punishment = `merit_penalties.merit_penalty_id`.
+- `uq_tickets_open_penalty_appeal` allows one undecided appeal per `(account_id, appeal_target_type, appeal_target_id)`; `idx_tickets_penalty_appeal_history` serves the hold lookup. A denial hold is read from the latest decided ticket for that target, not from a table.
+- `account_appeal_holds` (account-wide) is no longer written for per-penalty appeals; existing rows still cover penalties that started before they were decided. Older appeal tickets keep NULL targets.
+- Code reads the new columns through `to_jsonb(t) ->> '…'` or checks `appealTargetsReady()`, so it runs before the migration (appeals are then account-wide, as before).
 
 ## Dispute enums
 

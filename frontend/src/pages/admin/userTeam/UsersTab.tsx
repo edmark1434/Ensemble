@@ -571,6 +571,7 @@ export default function UsersTab({
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
           canLiftPoints={capabilities.canPardon}
+          showPunishments
         />
       )}
       {selected && modal === 'warn' && capabilities.canWarn && (

@@ -21,6 +21,7 @@ import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule'
 import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } from '@/lib/merit';
 import { WarningPresetFields } from './WarningPresetFields';
 import { LiftWarningPointsPanel } from './LiftWarningPointsPanel';
+import { MeritPenaltiesPanel } from './MeritPenaltiesPanel';
 import { PunishmentPresetFields } from './PunishmentPresetFields';
 import { punishmentDurationLabel, type PunishmentKind, type PunishmentPreset } from '@/lib/punishmentCatalog';
 import {
@@ -1434,6 +1435,7 @@ export function HistoryModal({
   onClose,
   onChanged,
   canLiftPoints = false,
+  showPunishments = false,
 }: {
   entityName: string;
   accountId?: string;
@@ -1442,6 +1444,8 @@ export function HistoryModal({
   onChanged?: () => void | Promise<void>;
   /** Admin and Support may lift warning points (members only; teams have no merit). */
   canLiftPoints?: boolean;
+  /** Members only: list automatic merit punishments (Admin and Support can end one early). */
+  showPunishments?: boolean;
 }) {
   const [rescindingId, setRescindingId] = useState<string | null>(null);
   const liftableWarnings = history.violations
@@ -1516,6 +1520,10 @@ export function HistoryModal({
           </ul>
         )}
       </div>
+
+      {showPunishments && accountId ? (
+        <MeritPenaltiesPanel accountId={accountId} canEnd={canLiftPoints} refreshKey={history} onChanged={onChanged} />
+      ) : null}
 
       {canLiftPoints && accountId && liftableWarnings.length > 0 ? (
         <LiftWarningPointsPanel accountId={accountId} activeWarnings={liftableWarnings} onLifted={onChanged} />

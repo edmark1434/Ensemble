@@ -22,18 +22,20 @@ Your private Account Record on `/profile` and `/account/appeal` shows your full 
 
 ## How to appeal a restriction or warning
 
-If your account is restricted, suspended, locked, or banned, you can appeal in two ways:
+Each penalty on your account has its own appeal. A ban, a lock, a suspension, each forum timeout, each warning, each automatic punishment, and each credit hold is appealed separately, and a decision on one never changes the others.
 
-1. **Banned or Locked accounts:** Sign in and you will be routed to `/account/appeal`, where you can review your Account Record, submit an appeal directly, reply to your open appeal tickets, and view or reply to existing disputes.
-2. **Active, Timed-out, or Suspended accounts:** Go to `/support/ticket` and select **Safety and appeals** then **Appeal an account penalty** (or the area-specific appeal option for Forum, Marketplace, or Jobs and Gigs).
+1. Open `/account/appeal` (banned and locked members are taken there when they sign in; everyone else can open it from the standing bar or **Cases**). It lists every active penalty.
+2. Pick the penalty and choose **Appeal this**. Explain what happened in your own words and add any evidence.
+3. Staff reply on that appeal's ticket in **Cases**. You can have an open appeal for each penalty at the same time.
 
-Explain clearly which restriction or warning you are appealing and what happened in your own words.
+The **Appeal an account penalty** option on `/support/ticket` sends you to `/account/appeal`, where you pick the penalty. The area-specific appeal options for Forum, Marketplace, or Jobs and Gigs are for removed posts, listings, or jobs, not account penalties.
 
 ## Appeal outcomes and recovery
 
-- **Appeal accepted:** If an appeal for a ban, lock, or suspension is accepted, the standing restriction lifts within 24 hours. Any unexpired warnings still on the account continue to determine your Platform Merit band until they expire.
+- **Appeal accepted:** Only the appealed penalty changes. A ban, lock, suspension, forum timeout, automatic punishment, or credit hold usually lifts within 24 hours; staff may lift it right away or shorten it to an earlier end date instead. An accepted warning appeal rescinds that warning at once, so its points stop counting against your Platform Merit.
 - **Warning rescinded or pardoned:** If a warning is rescinded after review, its merit deduction ends immediately. A full pardon clears all active warning deductions and restores Active standing.
-- **Appeal denied:** The standing remains in place. You cannot bypass any restriction, warning, or ban by purchasing credits or upgrading to Premium or Business.
+- **Appeal denied:** That penalty stays in place, and it can be appealed again after 12 months (or never, if it was denied permanently). Your other penalties can still be appealed. If an appeal was abusive, staff may also suspend or ban the account when they deny it. You cannot bypass any restriction, warning, or ban by purchasing credits or upgrading to Premium or Business.
+- **The decision** is posted on the appeal ticket as a decision card: which penalty, what changes, any note from staff, and when it can be appealed again.
 
 ## Deactivating your account is not a punishment
 

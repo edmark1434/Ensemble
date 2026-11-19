@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Briefcase, ClipboardList, Copy, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
 import TicketCasePanel, { AppealStandingBrief, CASE_TAB_LABEL } from './TicketCasePanel';
-import type { TicketCaseContext } from './ticketTypes';
+import type { AppealDecisionCardData, TicketCaseContext } from './ticketTypes';
+import AppealDecisionDialog, { type AppealChoice, type AppealDecisionPayload } from './AppealDecisionDialog';
+import AppealDecisionCard from '@/pages/user/account/appeal/AppealDecisionCard';
+import { decisionCardOf } from '@/pages/user/account/appeal/appealShared';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
@@ -142,6 +145,8 @@ function fromSocketMessage(raw: {
   replyToId?: string | null;
   created_at?: string;
   createdAt?: string;
+  appeal_decision?: unknown;
+  decision?: unknown;
 } | null): TicketMessage | null {
   if (!raw) return null;
   const id = raw._id || raw.id;
@@ -150,9 +155,10 @@ function fromSocketMessage(raw: {
   return {
     id: String(id),
     senderId: raw.sender_id || raw.senderId ? String(raw.sender_id || raw.senderId) : null,
-    authorType: messageType === 'system'
+    authorType: messageType === 'system' || messageType === 'appeal_decision'
       ? 'system'
       : String(raw.author_type || raw.authorType || (raw.is_internal ? 'staff' : 'user')),
+    decision: decisionCardOf(raw),
     authorName: String(raw.author_name || raw.authorName || 'Unknown'),
     body: String(raw.message_content || raw.body || ''),
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
@@ -542,7 +548,7 @@ export default function TicketDetailModalShell({
   const [scheduleChoice, setScheduleChoice] = useState('24');
   const [customCloseAt, setCustomCloseAt] = useState('');
   const [schedulingClose, setSchedulingClose] = useState(false);
-  const [appealChoice, setAppealChoice] = useState<'accept' | 'deny' | 'deny_permanent' | null>(null);
+  const [appealChoice, setAppealChoice] = useState<AppealChoice | null>(null);
   const [decidingAppeal, setDecidingAppeal] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
@@ -886,10 +892,9 @@ export default function TicketDetailModalShell({
   const saveChanges = async () => {
     setSaving(true);
     try {
-      const payload: Record<string, unknown> = {
-        status,
-        priority,
-      };
+      const payload: Record<string, unknown> = { priority };
+      // Never send a status for a decided appeal: a stale form value would reopen it.
+      if (!appealDecided) payload.status = status;
       // Only set handler while unlocked (or Admin override via canAssignOthers).
       if (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin) {
         payload.handled_by_staff_id = assigneeId ? assigneeId : null;
@@ -1163,14 +1168,17 @@ export default function TicketDetailModalShell({
     }
   };
 
-  const decideAppeal = async () => {
+  const decideAppeal = async (payload: AppealDecisionPayload = {}) => {
     if (!appealChoice) return;
     setDecidingAppeal(true);
     try {
-      const response = await api.post(`/api/staff/tickets/${ticketId}/appeal-decision`, { decision: appealChoice });
-      if (response.data?.data) setDetail(response.data.data as TicketDetail);
+      const response = await api.post(`/api/staff/tickets/${ticketId}/appeal-decision`, { decision: appealChoice, ...payload });
+      // Reset the form fields too: keeping the old "In Progress" here made "Save changes" reopen it.
+      if (response.data?.data) applyLoadedTicket(response.data.data as TicketDetail, true);
       setAppealChoice(null);
-      showSuccessToast(response.data?.message || 'Appeal decision saved');
+      const followUpFailed = response.data?.data?.appealOutcomeSummary?.followUp?.applied === false;
+      if (followUpFailed) showErrorToast(response.data?.message || 'The decision was saved, but the further action failed.');
+      else showSuccessToast(response.data?.message || 'Appeal decision saved');
       // The decision changes the member's standing and appeal hold shown in the case file.
       void loadCase();
       onUpdated();
@@ -1292,13 +1300,15 @@ export default function TicketDetailModalShell({
   const contextEntries = submissionContextEntries(detail?.submissionContext);
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
   const canChangeAssignee = !assigneeLocked || Boolean(perms?.canAssignOthers || isAdmin);
+  const isAppeal = Boolean(t && ticketTypeOf(t) === 'Appeal an account penalty');
+  // A decided appeal is final: its ticket stays closed (the server refuses a reopen too).
+  const appealDecided = Boolean(isAppeal && detail?.appealDecision);
   const ticketDirty = Boolean(
     t &&
-      (status !== t.status ||
+      ((!appealDecided && status !== t.status) ||
         priority !== t.priority ||
         (canChangeAssignee && assigneeId !== (t.assignee?.staffId?.toString() || '')))
   );
-  const isAppeal = Boolean(t && ticketTypeOf(t) === 'Appeal an account penalty');
   const peopleCount = involvedGroups.staff.length + involvedGroups.users.length;
   const assignableOptions = (() => {
     const options = (detail?.assignableStaff || []).filter((s) => {
@@ -1436,7 +1446,12 @@ export default function TicketDetailModalShell({
                       </div>
                     )}
                     {detail.messages.map((m) =>
-                      String(m.authorType).toLowerCase() === 'system' ? (
+                      decisionCardOf(m) ? (
+                        // An appeal decision is a verdict panel, the same treatment as a dispute ruling.
+                        <div key={m.id} className="py-2">
+                          <AppealDecisionCard card={decisionCardOf(m) as AppealDecisionCardData} when={formatDateTime(m.createdAt)} dark />
+                        </div>
+                      ) : String(m.authorType).toLowerCase() === 'system' ? (
                         <div key={m.id} className="flex items-center gap-3 py-1">
                           <span className="h-px flex-1 bg-white/[0.06]" />
                           <span className="max-w-[80%] text-center text-[11px] text-zinc-500">
@@ -1830,7 +1845,11 @@ export default function TicketDetailModalShell({
                 <SidebarSection title="Ticket">
                   <div>
                     <FieldLabel>Status</FieldLabel>
-                    {statusControl === 'buttons' ? (
+                    {appealDecided ? (
+                      <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-300">
+                        Closed · appeal decided. A decided appeal cannot be reopened.
+                      </p>
+                    ) : statusControl === 'buttons' ? (
                       <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Ticket status">
                         {statusOptions.map((s) => {
                           const active = status.toLowerCase().replace(/_/g, ' ') === s.toLowerCase().replace(/_/g, ' ');
@@ -1902,20 +1921,44 @@ export default function TicketDetailModalShell({
                 {isAppeal && (
                   <SidebarSection title="Appeal decision">
                     <p className="text-[11px] leading-relaxed text-zinc-500">
-                      Accepting ends the penalty in 24 hours. Denying lets them appeal again in 12 months. Deny permanently blocks every future appeal. Each choice closes the ticket.
+                      {t?.appealTarget
+                        ? `This appeal is about one penalty (${t.appealTarget.label || 'see the case file'}). Accepting lifts only that penalty: within 24 hours, now, or on an earlier date. Denying holds only that penalty for 12 months (or for good) and can also suspend or ban the account. Each choice closes the ticket.`
+                        : 'This appeal covers the whole account (filed before appeals were per penalty). Accepting ends its penalties in 24 hours. Denying lets them appeal again in 12 months. Deny permanently blocks every future appeal. Each choice closes the ticket.'}
                     </p>
                     {!detail.appealDecision ? <AppealStandingBrief context={caseContext} /> : null}
                     <button type="button" onClick={() => setTab('case')} className="text-left text-[11px] font-medium text-sky-300 hover:underline">
                       Review record, punishments and past appeals →
                     </button>
                     {detail.appealDecision ? (
-                      <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-200">
-                        {detail.appealDecision === 'accepted'
-                          ? 'Accepted. The penalty ends 24 hours after this decision.'
-                          : detail.appealDecision === 'denied_permanent'
-                            ? 'Denied permanently. This account cannot appeal again.'
-                            : 'Denied. They can submit another appeal in 12 months.'}
-                      </p>
+                      <div className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-200">
+                        <p>
+                          {detail.appealDecision === 'accepted'
+                            ? {
+                                ended_now: 'Accepted. The penalty was lifted right away.',
+                                shortened: `Accepted. The penalty was shortened${detail.appealOutcome?.endsAt ? ` to end ${formatDateTime(detail.appealOutcome.endsAt)}` : ''}.`,
+                                rescinded: 'Accepted. The warning was rescinded.',
+                                ended: 'Accepted. The penalty had already ended, so nothing changed.',
+                                changed: 'Accepted. The penalty had been replaced by a newer one, so nothing changed.',
+                              }[String(detail.appealOutcome?.state || '')] || 'Accepted. The penalty ends 24 hours after this decision.'
+                            : detail.appealDecision === 'denied_permanent'
+                              ? t?.appealTarget
+                                ? 'Denied permanently. This penalty cannot be appealed again.'
+                                : 'Denied permanently. This account cannot appeal again.'
+                              : t?.appealTarget
+                                ? 'Denied. This penalty can be appealed again in 12 months.'
+                                : 'Denied. They can submit another appeal in 12 months.'}
+                        </p>
+                        {detail.appealOutcome?.followUp ? (
+                          <p className={detail.appealOutcome.followUp.applied ? 'text-rose-200' : 'text-amber-200'}>
+                            {detail.appealOutcome.followUp.applied
+                              ? `Further action: account ${detail.appealOutcome.followUp.action === 'ban' ? 'banned' : 'suspended'}${
+                                  detail.appealOutcome.followUp.endsAt ? ` until ${formatDateTime(detail.appealOutcome.followUp.endsAt)}` : ''
+                                }.`
+                              : `Further action failed: ${detail.appealOutcome.followUp.error || 'unknown error'}. Issue it from User & Team.`}
+                          </p>
+                        ) : null}
+                        {detail.appealDecisionNote ? <p className="text-zinc-400">Note to member: {detail.appealDecisionNote}</p> : null}
+                      </div>
                     ) : !(
                         perms?.isAdmin ||
                         (perms?.isAssignee && String(perms?.role || '').toLowerCase() === 'support moderator')
@@ -2556,30 +2599,14 @@ export default function TicketDetailModalShell({
         )}
 
         {appealChoice && (
-          <ConfirmDialog
-            title={
-              appealChoice === 'accept'
-                ? 'Accept this appeal?'
-                : appealChoice === 'deny_permanent'
-                  ? 'Deny this appeal permanently?'
-                  : 'Deny this appeal?'
-            }
-            description={
-              appealChoice === 'accept'
-                ? 'The penalty ends in 24 hours and the ticket closes.'
-                : appealChoice === 'deny_permanent'
-                  ? 'The ticket closes and this account can never appeal again.'
-                  : 'The ticket closes. They can appeal again in 12 months.'
-            }
-            confirmLabel="Confirm"
-            busyLabel="Saving…"
+          <AppealDecisionDialog
+            choice={appealChoice}
+            context={caseContext}
+            targeted={Boolean(t?.appealTarget)}
             busy={decidingAppeal}
-            confirmClassName={appealChoice === 'accept' ? BTN.success : appealChoice === 'deny' ? BTN.warn : BTN.danger}
             onCancel={() => setAppealChoice(null)}
-            onConfirm={() => void decideAppeal()}
-          >
-            <AppealStandingBrief context={caseContext} />
-          </ConfirmDialog>
+            onConfirm={(payload) => void decideAppeal(payload)}
+          />
         )}
       </div>
     </div>

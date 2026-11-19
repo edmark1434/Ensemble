@@ -19,6 +19,8 @@ const {
   postAdminRescindWarning,
   getAdminWarningLiftPreview,
   postAdminLiftWarningPoints,
+  getAdminAccountMeritPenalties,
+  postAdminEndMeritPenalty,
   postAdminAccountPardon,
   getAdminAccountActivity,
   getAdminAccountProfileDetails,
@@ -122,6 +124,10 @@ router.post('/accounts/:accountId/warnings/:violationId/rescind', [checkSession,
 // Lifting points can clear several warnings at once, so it sits with pardon (Admin/Support).
 router.get('/accounts/:accountId/warnings/lift-preview', [checkSession, requireUserTeamFullWrite], getAdminWarningLiftPreview);
 router.post('/accounts/:accountId/warnings/lift', [checkSession, requireUserTeamFullWrite], postAdminLiftWarningPoints);
+// Automatic merit punishments: every User & Team desk can see them; ending one early sits with
+// pardon and lift (Admin / Support).
+router.get('/accounts/:accountId/merit-penalties', [checkSession, requireUserTeamAccess], getAdminAccountMeritPenalties);
+router.post('/accounts/:accountId/merit-penalties/:penaltyId/end', [checkSession, requireUserTeamFullWrite], postAdminEndMeritPenalty);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/accounts/:accountId/profile', [checkSession, requireUserTeamAccess], getAdminAccountProfileDetails);

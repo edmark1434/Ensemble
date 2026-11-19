@@ -11,6 +11,7 @@ import {
 import type {
   CaseAccountSummary,
   CaseAppeal,
+  CaseAppealTarget,
   CaseBilling,
   CaseContract,
   CaseForum,
@@ -153,8 +154,48 @@ function acceptEffects(requester: CaseAccountSummary | null): string[] {
   return effects;
 }
 
+const TARGET_STATE_LABEL: Record<CaseAppealTarget['state'], string> = {
+  active: 'Still active',
+  ended: 'Already ended',
+  changed: 'Replaced by a newer penalty',
+};
+
+const APPEAL_STATE_LABEL: Record<string, string> = {
+  available: 'Can appeal',
+  open: 'Appeal open',
+  legacy_open: 'Account-wide appeal open',
+  accepted: 'Appeal accepted',
+  denied: 'Denied (12-month wait)',
+  denied_permanent: 'Denied permanently',
+};
+
+/** The one penalty a per-penalty appeal is about, and what each decision does to it. */
+function AppealTargetBrief({ target }: { target: CaseAppealTarget }) {
+  return (
+    <div className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+      <p className="font-medium text-zinc-200">
+        Appealing: {target.label}
+        {target.current?.number ? ` · ${target.current.number}` : ''}
+      </p>
+      <p className={target.state === 'active' ? 'text-zinc-400' : 'text-amber-200'}>
+        {TARGET_STATE_LABEL[target.state]}
+        {target.current?.endsAt ? ` · ends ${caseWhen(target.current.endsAt)}` : target.state === 'active' ? ' · no end date' : ''}
+      </p>
+      <p>Accept → {target.acceptEffect}</p>
+      <p className="text-zinc-400">Deny → {target.denyEffect}</p>
+      {target.otherPenalties.length ? (
+        <p className="text-zinc-500">
+          {target.otherPenalties.length} other penalt{target.otherPenalties.length === 1 ? 'y is' : 'ies are'} not part of this appeal.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** What is active on the member right now, for the decision sidebar and its confirm dialog. */
 export function AppealStandingBrief({ context }: { context: TicketCaseContext | null | undefined }) {
+  const target = context?.appeal?.target;
+  if (target) return <AppealTargetBrief target={target} />;
   const requester = context?.requester;
   if (!requester) return null;
   const effects = acceptEffects(requester);
@@ -190,12 +231,51 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
   const effects = acceptEffects(requester);
   const hold = appeal.appeals?.hold;
   const ref = appeal.referencedCase;
+  const target = appeal.target || null;
 
   return (
     <>
+      {target ? (
+        <PanelSection title="Penalty under appeal">
+          <Card tone={target.state === 'active' ? 'info' : 'warn'}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">
+                  {target.label}
+                  {target.current?.number ? <span className="font-normal text-zinc-400"> · {target.current.number}</span> : null}
+                </p>
+                <p className="mt-0.5 text-[11px] text-zinc-400">
+                  {[
+                    target.startedAt ? `Since ${caseWhen(target.startedAt)}` : null,
+                    target.current ? (target.current.endsAt ? `ends ${caseWhen(target.current.endsAt)}` : 'no end date') : null,
+                    target.current?.detail,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              </div>
+              <Pill
+                className={
+                  target.state === 'active'
+                    ? 'border-sky-500/30 bg-sky-500/10 text-sky-200'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                }
+              >
+                {TARGET_STATE_LABEL[target.state]}
+              </Pill>
+            </div>
+            {target.current?.reason ? <p className="mt-2 text-xs text-zinc-300">Reason on record: {target.current.reason}</p> : null}
+            {target.note ? <p className="mt-2 text-xs text-amber-100">{target.note}</p> : null}
+            <p className="mt-2 text-[11px] text-zinc-500">
+              This appeal is about this penalty only. A decision does not change any other penalty on the account.
+            </p>
+          </Card>
+        </PanelSection>
+      ) : null}
+
       <PanelSection title="Appeal">
         <dl className="grid gap-2 sm:grid-cols-3">
-          <Fact label="Appealing" value={AREA_LABEL[appeal.area]} />
+          <Fact label="Appealing" value={target ? target.label : `${AREA_LABEL[appeal.area]} (whole account)`} />
           <Fact
             label="Decision"
             value={
@@ -242,7 +322,70 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
         ) : null}
       </PanelSection>
 
-      {appeal.decidable && !appeal.decision ? (
+      {appeal.decidable && !appeal.decision && target ? (
+        <PanelSection title="What each decision does">
+          <Card tone="info">
+            <ul className="space-y-1.5 text-sm text-zinc-200">
+              <li>
+                <span className="font-semibold text-emerald-200">Accept:</span> {target.acceptEffect}
+                {target.remedies.includes('lift_now') ? (
+                  <span className="text-zinc-400"> You can also lift it right away or pick an earlier end date.</span>
+                ) : null}
+              </li>
+              <li>
+                <span className="font-semibold text-amber-200">Deny:</span> {target.denyEffect}
+              </li>
+              <li>
+                <span className="font-semibold text-red-200">Deny permanently:</span> {target.denyPermanentEffect}
+              </li>
+            </ul>
+            <p className="mt-2 text-xs text-zinc-400">
+              When denying, you can also suspend or ban the account in the same step (for example after appeal abuse).
+            </p>
+          </Card>
+        </PanelSection>
+      ) : null}
+
+      {target ? (
+        <PanelSection title="Earlier appeals on this penalty" count={target.history.length}>
+          <List
+            items={target.history}
+            empty="This is the first appeal on this penalty."
+            render={(h) => (
+              <Row
+                key={h.id}
+                title={h.number ? `#${h.number}` : 'Appeal'}
+                meta={`Filed ${caseDay(h.createdAt)}${h.decidedAt ? ` · decided ${caseDay(h.decidedAt)}` : ''}`}
+                right={<StatusPill status={h.decision || h.status} />}
+              />
+            )}
+          />
+        </PanelSection>
+      ) : null}
+
+      {target ? (
+        <PanelSection title="Other penalties on the account" count={target.otherPenalties.length}>
+          <List
+            items={target.otherPenalties}
+            empty="No other active penalties."
+            render={(p) => (
+              <Row
+                key={`${p.type}-${p.id}`}
+                title={`${p.label}${p.number ? ` · ${p.number}` : ''}`}
+                meta={p.endsAt ? `Ends ${caseWhen(p.endsAt)}` : 'No end date'}
+                right={
+                  <Pill className="border-white/15 text-zinc-300">
+                    {APPEAL_STATE_LABEL[p.appealState] || caseLabel(p.appealState)}
+                    {p.appealTicketNumber ? ` · #${p.appealTicketNumber}` : ''}
+                  </Pill>
+                }
+              />
+            )}
+          />
+        </PanelSection>
+      ) : null}
+
+      {appeal.decidable && !appeal.decision && !target ? (
         <PanelSection title="If you accept">
           <Card tone="info">
             {effects.length ? (
@@ -269,11 +412,12 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
           <p className="flex items-center gap-2 text-sm text-red-100">
             <Gavel className="h-4 w-4" />
             {hold.permanentlyDenied
-              ? 'A previous appeal was denied permanently.'
-              : `A previous denial blocks new appeals until ${caseDay(hold.blockedUntil)}.`}
+              ? 'An earlier account-wide appeal was denied permanently.'
+              : `An earlier account-wide denial holds back appeals until ${caseDay(hold.blockedUntil)}.`}
           </p>
           <p className="mt-1 text-[11px] text-red-200/70">
-            Decided {caseWhen(hold.decidedAt)}. A penalty issued after that decision can still be appealed.
+            Decided {caseWhen(hold.decidedAt)}, before appeals were per penalty. It covers only penalties that already existed then;
+            anything issued after can still be appealed.
           </p>
         </Card>
       ) : null}
@@ -374,7 +518,7 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
           render={(p) => (
             <Row
               key={p.id}
-              title={`${p.number} · ${p.type}`}
+              title={`${p.number} · ${p.targetLabel || (p.type === 'Appeal an account penalty' ? 'Whole account' : p.type)}`}
               meta={`Filed ${caseDay(p.createdAt)}${p.decidedAt ? ` · decided ${caseDay(p.decidedAt)}` : ''}`}
               right={<StatusPill status={p.decision || p.status} />}
             />

@@ -1,9 +1,9 @@
-import { MessageSquareOff, ShieldAlert, TrendingDown } from "lucide-react";
+import { MessageSquareOff, ShieldAlert, TrendingDown, VolumeX } from "lucide-react";
 import { useForumTimeout, type ForumLockReason } from "@/pages/user/4_forums/useForumTimeout";
 
 /**
  * Shared look for forum controls that are switched off by a forum timeout, a suspension, or
- * low Platform Merit. It uses the same amber tone as the site-wide standing banner so members
+ * an automatic merit punishment (mute, Restricted or Frozen access). It uses the same amber tone as the site-wide standing banner so members
  * connect the two.
  */
 
@@ -13,6 +13,7 @@ export const FORUM_LOCKED_CLASS = "!cursor-not-allowed opacity-40";
 const LOCK_LOOK: Record<Exclude<ForumLockReason, null>, { Icon: typeof ShieldAlert; pill: string }> = {
   suspended: { Icon: ShieldAlert, pill: "Suspended" },
   timeout: { Icon: MessageSquareOff, pill: "Timed out" },
+  muted: { Icon: VolumeX, pill: "Muted" },
   merit: { Icon: TrendingDown, pill: "Low merit" },
 };
 

@@ -34,12 +34,16 @@ export function meritFromWarnings(warnings: MeritWarning[] | null | undefined): 
   return meritFromWarningPoints(points);
 }
 
+/**
+ * Plain tier for the merit number itself. Punishments are timed and run separately from merit
+ * (they do not end when merit recovers), so these names never say what is locked.
+ */
 export function meritBandLabel(merit: number): string {
   if (merit >= 100) return "Trusted";
-  if (merit >= 98) return "Record";
-  if (merit >= 93) return "Limited";
-  if (merit >= 85) return "Restricted";
-  return "Frozen";
+  if (merit >= 95) return "Good";
+  if (merit >= 85) return "Fair";
+  if (merit >= 70) return "Low";
+  return "Very low";
 }
 
 export function meritColor(merit: number): string {

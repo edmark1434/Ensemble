@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BadgeCheck, Clock, Coins, MessageSquareOff, ShieldAlert } from 'lucide-react';
+import { BadgeCheck, Clock, Coins, MessageSquareOff, ShieldAlert, VolumeX } from 'lucide-react';
 import type { CaseAccountSummary } from '@/pages/admin/ticketManagement/ticketTypes';
 import { Pill } from './staffCaseUi';
 
@@ -83,7 +83,20 @@ export function StaffStandingSummary({
       </Flag>
     );
   }
-  if (account.warningBandLabel) {
+  // Automatic merit punishments, each on its own fixed clock (merit recovering does not end them).
+  const automatic = (account.meritPenalties || []).filter((p) => p.effect !== 'auto_suspend');
+  for (const penalty of automatic) {
+    flags.push(
+      <Flag
+        key={`auto-${penalty.id}`}
+        icon={penalty.effect === 'mute' ? <VolumeX className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+        tone="border-sky-500/30 bg-sky-500/10 text-sky-200"
+      >
+        {penalty.label} (auto){penalty.endsAt ? ` until ${caseWhen(penalty.endsAt)}` : ''}
+      </Flag>
+    );
+  }
+  if (!automatic.length && account.warningBandLabel) {
     flags.push(
       <Flag key="band" icon={<ShieldAlert className="h-3 w-3" />} tone="border-sky-500/30 bg-sky-500/10 text-sky-200">
         {account.warningBandLabel}

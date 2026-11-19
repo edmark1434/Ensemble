@@ -315,7 +315,23 @@ export type AccountStanding = {
   warningPoints: number;
   warningBand: string;
   warningBandLabel: string | null;
+  /** When the strictest running band's fixed clock ends (not when warnings expire). */
   warningBandEndsAt: string | null;
+  /** Automatic mute from Platform Merit. */
+  muted?: boolean;
+  mutedUntil?: string | null;
+  /** Every automatic merit punishment running now, strictest first. */
+  meritPenalties?: {
+    id: string;
+    effect: string;
+    label: string;
+    ruleLabel?: string | null;
+    startsAt?: string | null;
+    endsAt: string | null;
+    durationDays?: number | null;
+    triggerMerit?: number | null;
+    meritAtStart?: number | null;
+  }[];
   merit: number;
   creditsFrozen: boolean;
   frozenCredits: number;

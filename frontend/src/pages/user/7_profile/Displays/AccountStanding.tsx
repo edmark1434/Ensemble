@@ -45,10 +45,35 @@ type ActivityRow = {
   endsAt?: string | null;
 };
 
+/** An automatic punishment Platform Merit started (timed; it does not follow merit). */
+type PunishmentRow = {
+  id: string;
+  effect: string;
+  label: string;
+  durationDays?: number;
+  triggerMerit?: number;
+  meritAtStart?: number;
+  startsAt?: string;
+  endsAt?: string;
+  endedAt?: string | null;
+  endReason?: string | null;
+  running?: boolean;
+};
+
 type OwnRecord = PublicStanding & {
   warnings: WarningRow[];
   restrictions: RestrictionRow[];
   activity: ActivityRow[];
+  punishments?: PunishmentRow[];
+};
+
+const PUNISHMENT_END: Record<string, string> = {
+  expired: 'ran its full time',
+  staff: 'ended early by staff',
+  pardoned: 'ended by a pardon',
+  appeal: 'ended after your appeal',
+  rescinded: 'ended: the warning behind it was withdrawn',
+  reversed: 'ended: the warning behind it was withdrawn',
 };
 
 function formatWhen(value?: string | null) {
@@ -175,7 +200,8 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
               <span className="text-gray-500 dark:text-zinc-500"> · {meritBandLabel(displayedMerit)}</span>
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              Starts at {DEFAULT_MERIT}. Only unexpired warnings lower it.
+              Starts at {DEFAULT_MERIT}. Only unexpired warnings lower it. When it drops to certain levels an
+              automatic punishment starts for a set number of days; it runs its full time even after merit recovers.
             </p>
           </div>
           <div>
@@ -223,6 +249,44 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
                         : ''}
                       {formatWhen(warning.createdAt)}
                       {warning.expiresAt ? ` · expires ${formatWhen(warning.expiresAt)}` : ' · stays until rescinded'}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Automatic punishments</p>
+            {!record.punishments?.length ? (
+              <p className="mt-2 text-sm text-gray-500">No automatic punishments on this account.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {record.punishments.map((item) => (
+                  <li key={item.id} className="rounded-xl border border-gray-200 px-3 py-2 dark:border-white/10">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {item.label}
+                        {item.durationDays ? ` · ${item.durationDays} day${item.durationDays === 1 ? '' : 's'}` : ''}
+                      </p>
+                      <span
+                        className={`text-[10px] uppercase tracking-wide ${
+                          item.running ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500'
+                        }`}
+                      >
+                        {item.running ? 'running' : 'ended'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {item.meritAtStart != null ? `Started at merit ${item.meritAtStart}` : 'Started'}
+                      {item.startsAt ? ` on ${formatWhen(item.startsAt)}` : ''}
+                      {item.running
+                        ? item.endsAt
+                          ? ` · ends ${formatWhen(item.endsAt)}`
+                          : ''
+                        : ` · ${PUNISHMENT_END[item.endReason || 'expired'] || 'ended'}${
+                            item.endedAt ? ` ${formatWhen(item.endedAt)}` : ''
+                          }`}
                     </p>
                   </li>
                 ))}

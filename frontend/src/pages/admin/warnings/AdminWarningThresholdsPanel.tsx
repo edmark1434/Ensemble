@@ -3,55 +3,70 @@ import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
-import { DURATION_OPTIONS } from '@/lib/warningLadder';
 
 const fieldClass =
   'w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20';
 
-type ThresholdEffect = 'none' | 'record' | 'limited' | 'restricted' | 'frozen' | 'auto_suspend';
+type PunishmentEffect = 'limited' | 'restricted' | 'frozen' | 'mute' | 'auto_suspend';
 
+/**
+ * One rung of the automatic punishment ladder: when Platform Merit drops to `100 − minPoints`
+ * or lower, `effect` runs for `durationDays`. It runs its full time even if merit recovers.
+ */
 type Threshold = {
   warning_threshold_id: string;
   minPoints: number;
-  effect: ThresholdEffect;
+  effect: PunishmentEffect;
   label: string;
-  suspendDays: number | null;
-  /** Auto-suspend only: Platform Merit at which the suspension ends early. Null = full clock. */
-  liftAtMerit: number | null;
+  durationDays: number;
   note: string;
   is_system?: boolean;
 };
 
 type ThresholdForm = {
-  minPoints: number;
-  effect: ThresholdEffect;
+  /** The merit level (0–99) the row starts at. */
+  merit: number;
+  effect: PunishmentEffect;
   label: string;
-  suspendDays: number;
-  /** Empty string = no early lift. */
-  liftAtMerit: string;
+  durationDays: number;
   note: string;
 };
 
-/** Platform Merit a member must climb back to before a band starting at `minPoints` ends. */
-function meritThatEnds(minPoints: number) {
-  return Math.min(100, Math.max(1, 101 - minPoints));
-}
-
-const EFFECTS: { id: ThresholdEffect; label: string; hint: string }[] = [
-  { id: 'none', label: 'Clear', hint: 'Full access' },
-  { id: 'record', label: 'Record only', hint: 'Toast + private record. Site still usable.' },
-  { id: 'limited', label: 'Limited', hint: 'No urgent jobs. Marketplace listings go to review.' },
-  { id: 'restricted', label: 'Restricted', hint: 'No new jobs, gigs, listings, forum writes, or teams. 3 proposals/day.' },
-  { id: 'frozen', label: 'Frozen access', hint: 'No proposals, new DMs, or cashout. Live work stays.' },
-  { id: 'auto_suspend', label: 'Auto-suspend', hint: 'Standing cooldown once they cross this total. Not a loop.' },
+const EFFECTS: { id: PunishmentEffect; label: string; hint: string; days: number }[] = [
+  { id: 'limited', label: 'Limited', hint: 'No urgent jobs. New marketplace listings go to review.', days: 3 },
+  {
+    id: 'restricted',
+    label: 'Restricted',
+    hint: 'No new jobs, gigs, listings, forum posts, marketplace comments or teams. 3 proposals a day.',
+    days: 5,
+  },
+  {
+    id: 'mute',
+    label: 'Mute',
+    hint: 'No forum posts, marketplace comments or new conversations. Existing job, gig and contract threads stay open.',
+    days: 3,
+  },
+  {
+    id: 'frozen',
+    label: 'Frozen access',
+    hint: 'Everything Restricted pauses, plus proposals, new conversations and cashout. Live work stays.',
+    days: 7,
+  },
+  {
+    id: 'auto_suspend',
+    label: 'Suspension',
+    hint: 'Read-only account for the whole time. A longer suspension already running is never shortened.',
+    days: 7,
+  },
 ];
 
+const DAY_CHIPS = [1, 3, 5, 7, 10, 14, 21, 30];
+
 const emptyForm = (): ThresholdForm => ({
-  minPoints: 5,
-  effect: 'limited',
+  merit: 90,
+  effect: 'mute',
   label: '',
-  suspendDays: 7,
-  liftAtMerit: '',
+  durationDays: 3,
   note: '',
 });
 
@@ -60,8 +75,19 @@ function errorMessage(err: unknown, fallback: string) {
   return response || fallback;
 }
 
-function effectLabel(effect: string) {
-  return EFFECTS.find((item) => item.id === effect)?.label || effect;
+function effectInfo(effect: string) {
+  return EFFECTS.find((item) => item.id === effect);
+}
+
+function defaultLabel(effect: PunishmentEffect, days: number) {
+  const name = effect === 'auto_suspend' ? 'Auto-suspend' : effectInfo(effect)?.label || effect;
+  return `${name} ${days} day${days === 1 ? '' : 's'}`;
+}
+
+function clampMerit(value: number) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(99, n));
 }
 
 const THRESHOLDS_URL = '/api/admin/warning-thresholds';
@@ -69,15 +95,16 @@ const THRESHOLDS_URL = '/api/admin/warning-thresholds';
 function thresholdRows(data: unknown): Threshold[] {
   return ((data || []) as (Threshold & {
     min_points?: number;
-    suspend_days?: number | null;
-    lift_at_merit?: number | null;
-  })[]).map((row) => ({
-    ...row,
-    minPoints: Number(row.minPoints ?? row.min_points ?? 0),
-    suspendDays: row.suspendDays ?? row.suspend_days ?? null,
-    liftAtMerit: row.liftAtMerit ?? row.lift_at_merit ?? null,
-    note: row.note || '',
-  }));
+    duration_days?: number | null;
+  })[])
+    .map((row) => ({
+      ...row,
+      minPoints: Number(row.minPoints ?? row.min_points ?? 0),
+      durationDays: Number(row.durationDays ?? row.duration_days ?? 0) || 0,
+      note: row.note || '',
+    }))
+    .filter((row) => effectInfo(row.effect))
+    .sort((a, b) => a.minPoints - b.minPoints || a.effect.localeCompare(b.effect));
 }
 
 export default function AdminWarningThresholdsPanel() {
@@ -107,11 +134,10 @@ export default function AdminWarningThresholdsPanel() {
 
   const openEdit = (row: Threshold) => {
     setForm({
-      minPoints: row.minPoints,
+      merit: clampMerit(100 - row.minPoints),
       effect: row.effect,
       label: row.label,
-      suspendDays: row.suspendDays || 7,
-      liftAtMerit: row.liftAtMerit == null ? '' : String(row.liftAtMerit),
+      durationDays: row.durationDays || effectInfo(row.effect)?.days || 7,
       note: row.note || '',
     });
     setFormError('');
@@ -122,38 +148,43 @@ export default function AdminWarningThresholdsPanel() {
     setSaving(true);
     setFormError('');
     const payload = {
-      minPoints: Number(form.minPoints),
+      minPoints: 100 - clampMerit(form.merit),
       effect: form.effect,
       label: form.label.trim(),
-      suspendDays: form.effect === 'auto_suspend' ? Number(form.suspendDays) : null,
-      liftAtMerit: form.effect === 'auto_suspend' && form.liftAtMerit.trim() !== '' ? Number(form.liftAtMerit) : null,
+      durationDays: Number(form.durationDays),
       note: form.note.trim(),
     };
     try {
       if (editor === 'create') {
-        await api.post('/api/admin/warning-thresholds', payload);
-        showSuccessToast('Threshold created');
+        await api.post(THRESHOLDS_URL, payload);
+        showSuccessToast('Punishment rule created');
       } else if (editor) {
-        await api.patch(`/api/admin/warning-thresholds/${editor.warning_threshold_id}`, payload);
-        showSuccessToast('Threshold updated');
+        await api.patch(`${THRESHOLDS_URL}/${editor.warning_threshold_id}`, payload);
+        showSuccessToast('Punishment rule updated');
       }
       await load();
       setEditor(null);
     } catch (err) {
-      setFormError(errorMessage(err, 'Unable to save threshold'));
+      setFormError(errorMessage(err, 'Unable to save the rule'));
     } finally {
       setSaving(false);
     }
   };
 
   const remove = async (row: Threshold) => {
-    if (!window.confirm(`Remove the ${row.minPoints}+ point threshold (${row.label})?`)) return;
+    if (
+      !window.confirm(
+        `Remove "${row.label}" at merit ${100 - row.minPoints}? Punishments it already started keep running until they end.`
+      )
+    ) {
+      return;
+    }
     try {
-      await api.delete(`/api/admin/warning-thresholds/${row.warning_threshold_id}`);
-      showSuccessToast('Threshold removed');
+      await api.delete(`${THRESHOLDS_URL}/${row.warning_threshold_id}`);
+      showSuccessToast('Punishment rule removed');
       await load();
     } catch (err) {
-      showErrorToast(errorMessage(err, 'Unable to remove threshold'));
+      showErrorToast(errorMessage(err, 'Unable to remove the rule'));
     }
   };
 
@@ -165,15 +196,18 @@ export default function AdminWarningThresholdsPanel() {
     );
   }
 
+  const selectedEffect = effectInfo(form.effect);
+  const formPoints = 100 - clampMerit(form.merit);
+
   return (
     <>
       <div className="mb-4 flex items-start justify-between gap-3">
         <p className="max-w-2xl text-xs leading-relaxed text-zinc-500">
-          When a user&apos;s <span className="text-zinc-300">active warning points</span> reach a row,
-          that punishment applies until points drop below it, so it ends by itself once their Platform
-          Merit climbs back to the level shown (warnings expire, or staff rescind or lift points).
-          Auto-suspend is a standing cooldown and does not stack if they are already suspended; it can
-          also end early once merit recovers.
+          When a warning takes a member&apos;s <span className="text-zinc-300">Platform Merit</span> down to a
+          row&apos;s level (or lower), that punishment starts and runs for its number of days. It runs its full
+          time: warnings expiring, points being lifted or merit recovering do not end it, and the punishment never
+          changes merit. Lower levels can carry harsher punishments, so they add up as merit keeps dropping. A row
+          starts once per drop past it. Edits only affect punishments that start afterwards.
         </p>
         <button
           type="button"
@@ -181,7 +215,7 @@ export default function AdminWarningThresholdsPanel() {
           className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-400"
         >
           <Plus className="h-4 w-4" />
-          New threshold
+          New rule
         </button>
       </div>
 
@@ -190,7 +224,7 @@ export default function AdminWarningThresholdsPanel() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-white/[0.06] text-[11px] uppercase tracking-wider text-zinc-500">
               <tr>
-                <th className="px-4 py-3 font-medium">From points</th>
+                <th className="px-4 py-3 font-medium">When merit drops to</th>
                 <th className="px-4 py-3 font-medium">Punishment</th>
                 <th className="px-4 py-3 font-medium">How long</th>
                 <th className="px-4 py-3 font-medium">Note</th>
@@ -204,31 +238,19 @@ export default function AdminWarningThresholdsPanel() {
                   onClick={() => openEdit(row)}
                   className="cursor-pointer hover:bg-white/[0.02]"
                 >
-                  <td className="px-4 py-3 font-medium text-white">{row.minPoints}+</td>
-                  <td className="px-4 py-3 text-rose-300">
-                    {row.label || effectLabel(row.effect)}
-                    <span className="mt-0.5 block text-[11px] text-zinc-500">{effectLabel(row.effect)}</span>
+                  <td className="px-4 py-3 font-medium text-white">
+                    {100 - row.minPoints} or lower
+                    <span className="mt-0.5 block text-[11px] font-normal text-zinc-500">
+                      {row.minPoints}+ active warning point{row.minPoints === 1 ? '' : 's'}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {row.effect === 'auto_suspend' ? (
-                      <>
-                        {`${row.suspendDays || 7} day cooldown`}
-                        <span className="mt-0.5 block text-[11px] text-emerald-300/80">
-                          {row.liftAtMerit != null
-                            ? `Ends early at merit ${row.liftAtMerit}`
-                            : 'Runs the full clock'}
-                        </span>
-                      </>
-                    ) : row.effect === 'none' ? (
-                      'Full access'
-                    ) : (
-                      <>
-                        Until points drop below this row
-                        <span className="mt-0.5 block text-[11px] text-emerald-300/80">
-                          Ends by itself at merit {meritThatEnds(row.minPoints)}
-                        </span>
-                      </>
-                    )}
+                  <td className="px-4 py-3 text-rose-300">
+                    {row.label}
+                    <span className="mt-0.5 block text-[11px] text-zinc-500">{effectInfo(row.effect)?.label}</span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-300">
+                    {row.durationDays} day{row.durationDays === 1 ? '' : 's'}
+                    <span className="mt-0.5 block text-[11px] text-amber-200/80">Runs its full time</span>
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-zinc-500">{row.note || '—'}</td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -254,7 +276,7 @@ export default function AdminWarningThresholdsPanel() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
-                    No thresholds yet. Create one to start automatic limits.
+                    No rules yet, so merit drops never start an automatic punishment. Create one to start.
                   </td>
                 </tr>
               )}
@@ -269,10 +291,10 @@ export default function AdminWarningThresholdsPanel() {
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-white">
-                  {editor === 'create' ? 'New threshold' : 'Edit threshold'}
+                  {editor === 'create' ? 'New punishment rule' : 'Edit punishment rule'}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Highest matching row wins. Example: 8 = Restricted, 16 = Frozen, 20 = auto-suspend.
+                  Example: merit 90 → Mute 3 days, merit 85 → Mute 5 days. One rule per punishment type at each level.
                 </p>
               </div>
               <button
@@ -287,16 +309,20 @@ export default function AdminWarningThresholdsPanel() {
             <div className="grid gap-3">
               <label>
                 <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                  When active points reach
+                  When Platform Merit drops to
                 </span>
                 <input
                   type="number"
                   min={0}
-                  max={9999}
-                  value={form.minPoints}
-                  onChange={(event) => setForm((current) => ({ ...current, minPoints: Number(event.target.value) }))}
+                  max={99}
+                  value={form.merit}
+                  onChange={(event) => setForm((current) => ({ ...current, merit: Number(event.target.value) }))}
                   className={fieldClass}
                 />
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Or lower · {formPoints} active warning point{formPoints === 1 ? '' : 's'}. It starts when a new
+                  warning takes the member from above this level to it or below.
+                </p>
               </label>
               <label>
                 <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
@@ -304,7 +330,14 @@ export default function AdminWarningThresholdsPanel() {
                 </span>
                 <select
                   value={form.effect}
-                  onChange={(event) => setForm((current) => ({ ...current, effect: event.target.value as ThresholdEffect }))}
+                  onChange={(event) => {
+                    const effect = event.target.value as PunishmentEffect;
+                    setForm((current) => ({
+                      ...current,
+                      effect,
+                      durationDays: editor === 'create' ? effectInfo(effect)?.days || current.durationDays : current.durationDays,
+                    }));
+                  }}
                   className={fieldClass}
                 >
                   {EFFECTS.map((effect) => (
@@ -313,8 +346,39 @@ export default function AdminWarningThresholdsPanel() {
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-[11px] text-zinc-500">{selectedEffect?.hint}</p>
+              </label>
+              <label>
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  Lasts (days)
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={form.durationDays}
+                  onChange={(event) => setForm((current) => ({ ...current, durationDays: Number(event.target.value) }))}
+                  className={fieldClass}
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {DAY_CHIPS.map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, durationDays: days }))}
+                      className={`rounded-lg border px-2 py-1 text-[11px] ${
+                        form.durationDays === days
+                          ? 'border-rose-400/40 bg-rose-500/10 text-white'
+                          : 'border-white/10 text-zinc-400'
+                      }`}
+                    >
+                      {days}d
+                    </button>
+                  ))}
+                </div>
                 <p className="mt-1 text-[11px] text-zinc-500">
-                  {EFFECTS.find((item) => item.id === form.effect)?.hint}
+                  Fixed clock from the moment it starts. If the same punishment is already running longer, the
+                  longer one decides when it ends.
                 </p>
               </label>
               <label>
@@ -326,83 +390,9 @@ export default function AdminWarningThresholdsPanel() {
                   onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))}
                   className={fieldClass}
                   maxLength={80}
-                  placeholder={effectLabel(form.effect)}
+                  placeholder={defaultLabel(form.effect, Number(form.durationDays) || 1)}
                 />
               </label>
-              {form.effect === 'auto_suspend' ? (
-                <label>
-                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                    Suspend for (days)
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={365}
-                    value={form.suspendDays}
-                    onChange={(event) => setForm((current) => ({ ...current, suspendDays: Number(event.target.value) }))}
-                    className={fieldClass}
-                  />
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {DURATION_OPTIONS.filter((days) => days <= 90).map((days) => (
-                      <button
-                        key={days}
-                        type="button"
-                        onClick={() => setForm((current) => ({ ...current, suspendDays: days }))}
-                        className={`rounded-lg border px-2 py-1 text-[11px] ${
-                          form.suspendDays === days
-                            ? 'border-rose-400/40 bg-rose-500/10 text-white'
-                            : 'border-white/10 text-zinc-400'
-                        }`}
-                      >
-                        {days}d
-                      </button>
-                    ))}
-                  </div>
-                </label>
-              ) : null}
-              {form.effect === 'auto_suspend' ? (
-                <label>
-                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                    End early when Platform Merit recovers to
-                  </span>
-                  <input
-                    type="number"
-                    min={meritThatEnds(Number(form.minPoints) || 0)}
-                    max={100}
-                    value={form.liftAtMerit}
-                    placeholder="Empty = run the full suspension"
-                    onChange={(event) => setForm((current) => ({ ...current, liftAtMerit: event.target.value }))}
-                    className={fieldClass}
-                  />
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    This suspension starts at merit {Math.max(0, 100 - (Number(form.minPoints) || 0))}. Once warnings
-                    expire or staff rescind or lift points and merit reaches this number, the suspension ends right
-                    away and the member is told. Staff suspensions are never ended this way. Changes apply to new
-                    auto-suspensions.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setForm((current) => ({
-                          ...current,
-                          liftAtMerit: String(meritThatEnds(Number(current.minPoints) || 0)),
-                        }))
-                      }
-                      className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:text-white"
-                    >
-                      As soon as they drop under this row ({meritThatEnds(Number(form.minPoints) || 0)})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm((current) => ({ ...current, liftAtMerit: '' }))}
-                      className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:text-white"
-                    >
-                      Never, run the full clock
-                    </button>
-                  </div>
-                </label>
-              ) : null}
               <label>
                 <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                   Admin note
@@ -430,7 +420,7 @@ export default function AdminWarningThresholdsPanel() {
                   disabled={saving}
                   className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400 disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : editor === 'create' ? 'Create threshold' : 'Save changes'}
+                  {saving ? 'Saving…' : editor === 'create' ? 'Create rule' : 'Save changes'}
                 </button>
               </div>
             </div>

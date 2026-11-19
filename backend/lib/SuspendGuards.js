@@ -78,6 +78,7 @@ const ACTION_WORDS = {
   pardon: 'pardon',
   rescind: 'rescind a warning on',
   lift: 'lift warning points on',
+  end_punishment: 'end an automatic punishment on',
   restore: 'change the standing of',
   credits: 'change the credits of',
 };

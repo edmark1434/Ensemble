@@ -12,16 +12,16 @@ type Mode = 'points' | 'merit';
 
 const REASON_MIN = 5;
 
-function bandLabelFor(points: number, bands: WarningLiftPreview['bands']) {
-  const match = [...bands].reverse().find((band) => points >= band.minPoints);
-  return match ? match.label : 'Clear';
+/** Threshold rows a lift from `before` to `after` points takes the member back above. */
+function levelsCleared(before: number, after: number, ladder: WarningLiftPreview['ladder']) {
+  return ladder.filter((row) => row.minPoints <= before && row.minPoints > after);
 }
 
 /**
  * Staff tool to lift warning points: Platform Merit comes back without deleting the warnings.
- * The merit bands (Limited / Restricted / Frozen access) follow live, so a lift past a band's
- * floor ends that band immediately; an automatic suspension ends once its recovery merit is
- * reached. Admin and Support only (same as pardon).
+ * A lift only changes merit. Automatic punishments already running keep their fixed end
+ * (staff end those from the Automatic punishments list). Back above a threshold's merit, a
+ * later drop past it starts that punishment again. Admin and Support only (same as pardon).
  */
 export function LiftWarningPointsPanel({
   accountId,
@@ -74,14 +74,11 @@ export function LiftWarningPointsPanel({
       return { error: `Only ${available} point${available === 1 ? '' : 's'} can be lifted${scoped ? ' from this warning' : ''}.` };
     }
     const after = preview.points - lift;
-    const autoEnds = preview.autoSuspension?.liftAtMerit != null && 100 - after >= preview.autoSuspension.liftAtMerit;
     return {
       lift,
       after,
       merit: 100 - after,
-      band: bandLabelFor(after, preview.bands),
-      bandChanged: bandLabelFor(after, preview.bands) !== bandLabelFor(preview.points, preview.bands),
-      autoEnds,
+      cleared: levelsCleared(preview.points, after, preview.ladder),
     };
   }, [amount, mode, preview, available, scoped]);
 
@@ -139,16 +136,20 @@ export function LiftWarningPointsPanel({
                 Platform Merit <span className="font-semibold text-white">{preview.merit}</span>
                 {' · '}
                 {preview.points} active point{preview.points === 1 ? '' : 's'}
-                {preview.bandLabel ? (
-                  <>
+                {preview.punishments.length ? (
+                  <span className="text-amber-200">
                     {' · '}
-                    <span className="text-amber-200">{preview.bandLabel}</span>
-                  </>
-                ) : null}
-                {preview.autoSuspension ? (
-                  <span className="text-rose-200"> · automatic suspension running</span>
+                    {preview.punishments.length} automatic punishment{preview.punishments.length === 1 ? '' : 's'} running
+                  </span>
                 ) : null}
               </p>
+              {preview.punishments.length ? (
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-100/90">
+                  Lifting points does not end{' '}
+                  {preview.punishments.map((p) => p.label).join(', ')}. Each runs its full time; end one early from
+                  Automatic punishments if it should stop now.
+                </p>
+              ) : null}
 
               {preview.options.length > 0 ? (
                 <div>
@@ -167,7 +168,8 @@ export function LiftWarningPointsPanel({
                       >
                         <span className="font-semibold text-white">{option.label}</span>
                         <span className="text-zinc-400">
-                          {' '}· lift {option.liftPoints} → merit {option.targetMerit} ({option.resultingBand})
+                          {' '}· lift {option.liftPoints} → merit {option.targetMerit}
+                          {option.clears.length ? ` (${option.clears.join(', ')} can start again on a new drop)` : ''}
                         </span>
                       </button>
                     ))}
@@ -251,9 +253,11 @@ export function LiftWarningPointsPanel({
                 ) : (
                   <p className="rounded-lg bg-black/20 px-3 py-2 text-xs text-zinc-300">
                     Lifts <span className="font-semibold text-white">{plan.lift}</span> point{plan.lift === 1 ? '' : 's'} → Platform
-                    Merit <span className="font-semibold text-emerald-300">{plan.merit}</span> ({plan.band}).
-                    {plan.bandChanged ? ` ${preview.bandLabel || 'The current band'} ends right away.` : ' Same band as now.'}
-                    {plan.autoEnds ? ' The automatic suspension ends too.' : ''}
+                    Merit <span className="font-semibold text-emerald-300">{plan.merit}</span>.
+                    {plan.cleared.length
+                      ? ` Back above ${plan.cleared.map((row) => `${row.label} (merit ${row.triggerMerit})`).join(', ')}: a later drop past ${plan.cleared.length === 1 ? 'it' : 'them'} starts the punishment again.`
+                      : ''}
+                    {preview.punishments.length ? ' Running punishments keep their end dates.' : ''}
                     {' '}The warnings stay on the record.
                   </p>
                 )

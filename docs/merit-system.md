@@ -18,7 +18,7 @@ Active warning points are the same sum the backend already uses: unrescinded `vi
 
 When a warning expires or is rescinded, merit comes back by itself. Admin and Support can also **lift points** (a number of points, or up to a target merit) without deleting the warnings; the Record shows how much was lifted. Completions, reviews, verification, credits, and subscriptions never change merit.
 
-The automatic limits (Limited / Restricted / Frozen access) follow merit live, so each one ends as soon as merit climbs back past it (Frozen access ends at 85). An automatic suspension ends early at the recovery merit set on its threshold (seeded: 81).
+**Merit triggers punishments; punishments do not follow merit.** When a warning takes merit down to a threshold level, that level's punishment starts and runs a fixed number of days (seeded: 97 Limited 3d, 92 Restricted 5d, 90 Mute 3d, 85 Mute 5d, 84 Frozen access 7d, 80 suspend 7d, 70 suspend 14d). It runs its full time even if merit recovers, and it never changes merit. Lower levels carry harsher punishments, so they add up as merit keeps dropping. See [warning-system.md](warning-system.md) §8.
 
 ---
 
@@ -32,17 +32,17 @@ The automatic limits (Limited / Restricted / Frozen access) follow merit live, s
 | Public chips | Banned / Suspended / Locked / Timeout / Under dispute. Not the merit band name, not warning text. |
 | Staff desks | Warning points, catalog, thresholds. Not this display name. |
 
-Display bands (from remaining merit):
+Display tiers (from remaining merit). They describe the number only and never name a punishment, because punishments run on their own clocks:
 
 | Merit | Label |
 |---|---|
 | **100** | Trusted |
-| **98–99** | Record |
-| **93–97** | Limited |
-| **85–92** | Restricted |
-| **84 and below** | Frozen |
+| **95–99** | Good |
+| **85–94** | Fair |
+| **70–84** | Low |
+| **69 and below** | Very low |
 
-Product locks still follow backend warning-point thresholds. The ring is the user-facing number for those same points.
+What is actually paused comes from the running automatic punishments (status bar, Record), not from the ring.
 
 ---
 
@@ -61,4 +61,5 @@ Product locks still follow backend warning-point thresholds. The ring is the use
 - Display helper: `frontend/src/lib/merit.ts`
 - Derived on standing: `getPublicAccountStanding` / `getOwnAccountRecord` in `backend/lib/AccountRestriction.js`
 - Source points: `sumActiveWarningPoints` in `backend/repositories/WarningBandRepositories.js`
+- Punishments merit triggers: `backend/services/MeritPenaltyServices.js` (`merit_penalties`)
 - Engine and staff contract: [warning-system.md](warning-system.md)

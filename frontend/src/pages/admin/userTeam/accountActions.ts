@@ -109,24 +109,49 @@ export async function rescindWarning(accountId: string, violationId: string) {
 
 export type WarningLiftOption = {
   id: string;
-  kind: 'band' | 'auto_suspension';
-  endsBand: string | null;
+  kind: 'level' | 'full';
   label: string;
+  /** Threshold rows this lift takes the member back above (they can start again on a new drop). */
+  clears: string[];
   liftPoints: number;
   targetMerit: number;
-  resultingBand: string;
+};
+
+/** One row of the automatic punishment ladder, as the desks show it. */
+export type PunishmentLadderRow = {
+  minPoints: number;
+  triggerMerit: number;
+  effect: string;
+  effectLabel: string;
+  label: string;
+  durationDays: number;
+};
+
+/** An automatic merit punishment (running or past). */
+export type MeritPenaltyRow = {
+  id: string;
+  effect: string;
+  label: string;
+  ruleLabel?: string | null;
+  violationNumber?: string | null;
+  triggerMerit: number;
+  meritAtStart: number;
+  durationDays: number;
+  startsAt: string;
+  endsAt: string;
+  endedAt?: string | null;
+  endReason?: string | null;
+  endNote?: string | null;
 };
 
 export type WarningLiftPreview = {
   accountId: string;
   points: number;
   merit: number;
-  band: string;
-  bandLabel: string | null;
-  autoSuspension: { endsAt: string | null; liftAtMerit: number | null } | null;
+  /** Automatic punishments running now. A lift does not end them. */
+  punishments: MeritPenaltyRow[];
   options: WarningLiftOption[];
-  /** Product band floors, lowest first. Points at or above `minPoints` are in that band. */
-  bands: { id: string; label: string; minPoints: number }[];
+  ladder: PunishmentLadderRow[];
 };
 
 export type WarningLiftInput = {
@@ -150,6 +175,27 @@ export async function liftWarningPoints(accountId: string, input: WarningLiftInp
   const res = await api.post(`/api/admin/accounts/${accountId}/warnings/lift`, input);
   if (!res.data?.success) throw new Error(res.data?.message || 'Could not lift warning points');
   showSuccessToast(res.data.message || 'Warning points lifted');
+  return res.data.data;
+}
+
+export type AccountMeritPenalties = {
+  /** False before the timed-punishment migration has run. */
+  ready: boolean;
+  active: MeritPenaltyRow[];
+  history: MeritPenaltyRow[];
+};
+
+export async function getAccountMeritPenalties(accountId: string): Promise<AccountMeritPenalties> {
+  const res = await api.get(`/api/admin/accounts/${accountId}/merit-penalties`);
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not load automatic punishments');
+  return res.data.data;
+}
+
+/** Admin / Support: end one automatic punishment before its clock runs out. */
+export async function endMeritPenaltyEarly(accountId: string, penaltyId: string, reason: string) {
+  const res = await api.post(`/api/admin/accounts/${accountId}/merit-penalties/${penaltyId}/end`, { reason });
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not end the punishment');
+  showSuccessToast(res.data.message || 'Automatic punishment ended');
   return res.data.data;
 }
 

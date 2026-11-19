@@ -14,7 +14,7 @@ Ensemble offers self-service guides, an AI support assistant, interactive walkth
 
 Route: `/support/ticket` (old links to `/landing/SubmitATicket` redirect here)
 
-When you need human investigation-such as missing credits, payout questions, verification issues, account compromise, bug reports tied to your account, or appealing an account penalty-submit a ticket on `/support/ticket`.
+When you need human investigation-such as missing credits, payout questions, verification issues, account compromise, or bug reports tied to your account-submit a ticket on `/support/ticket`. To appeal an account penalty, open `/account/appeal`: each penalty there has its own appeal.
 
 You must be signed in to submit a ticket so support can tie the request to your account. If you are signed out, you will be prompted to log in first. Banned or locked member accounts can still sign in and submit appeals or view tickets on `/account/appeal`.
 
