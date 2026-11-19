@@ -17,14 +17,17 @@ import {
   RotateCcw,
   Lock,
   ArrowRight,
-  Info
+  Info,
+  Zap,
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { ThreeWayWorkflowModal } from "@/components/ui/ThreeWayWorkflowModal";
 
 type GuideCategory = "all" | "roles" | "types" | "contract-status" | "milestone-status" | "escrow";
 
 export const ContractsTerminologyGuide: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<GuideCategory>("all");
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
 
   const categories = [
     { id: "all" as GuideCategory, label: "All Terms & Topics", icon: HelpCircle },
@@ -39,17 +42,28 @@ export const ContractsTerminologyGuide: React.FC = () => {
     <div className="space-y-8 font-['Plus_Jakarta_Sans'] animate-fade-in">
       {/* Hero Banner */}
       <div className="rounded-2xl border border-blue-200/80 dark:border-blue-900/40 bg-gradient-to-r from-blue-50/80 via-white to-indigo-50/80 dark:from-blue-950/20 dark:via-dark-surface dark:to-indigo-950/20 p-6 md:p-8 shadow-xs space-y-4">
-        <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-            <Info className="w-3.5 h-3.5" />
-            Contract Knowledge Base
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              <Info className="w-3.5 h-3.5" />
+              Contract Knowledge Base
+            </div>
+            <h2 className="text-xl md:text-2xl font-extrabold text-zinc-900 dark:text-white">
+              Understanding Contract Terms, Roles & Lifecycles
+            </h2>
+            <p className="text-xs md:text-sm text-zinc-600 dark:text-zinc-300 max-w-2xl leading-relaxed">
+              Every contract on Ensemble is backed by our secure Escrow Guarantee, milestone-based delivery, and clear legal agreements. Use this guide to understand the roles, contract types, and statuses.
+            </p>
           </div>
-          <h2 className="text-xl md:text-2xl font-extrabold text-zinc-900 dark:text-white">
-            Understanding Contract Terms, Roles & Lifecycles
-          </h2>
-          <p className="text-xs md:text-sm text-zinc-600 dark:text-zinc-300 max-w-2xl leading-relaxed">
-            Every contract on Ensemble is backed by our secure Escrow Guarantee, milestone-based delivery, and clear legal agreements. Use this guide to understand the roles, contract types, and statuses.
-          </p>
+
+          <button
+            type="button"
+            onClick={() => setIsWorkflowModalOpen(true)}
+            className="shrink-0 self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>How Contracts Flow</span>
+          </button>
         </div>
 
         {/* Quick Category Filter Pills */}
@@ -566,6 +580,12 @@ export const ContractsTerminologyGuide: React.FC = () => {
           </div>
         </section>
       )}
+
+      <ThreeWayWorkflowModal
+        isOpen={isWorkflowModalOpen}
+        mode="contracts"
+        onClose={() => setIsWorkflowModalOpen(false)}
+      />
     </div>
   );
 };

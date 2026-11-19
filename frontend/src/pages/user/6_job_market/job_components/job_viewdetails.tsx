@@ -687,6 +687,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               {selectedJob.isOwnPost && !selectedJob.isManageablePost ? (
                 <div className="flex items-center gap-2">
                   <button
+                    data-tour="job-detail-view-full"
                     onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
                     className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                   >
@@ -701,12 +702,14 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <button
+                        data-tour="job-detail-view-full"
                         onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
                         className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                       >
                         View Full
                       </button>
                       <button
+                        data-tour="job-detail-send-proposal"
                         onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
                         className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
                       >
@@ -782,6 +785,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               ) : (
                 <div className="flex items-center gap-2">
                   <button
+                    data-tour="job-detail-view-full"
                     onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
                     className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                   >
@@ -794,6 +798,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     <Edit2 className="h-3.5 w-3.5" /> Edit Job Post
                   </button>
                   <button
+                    data-tour="job-detail-send-proposal"
                     onClick={() => navigate(`/jobs/proposals/incoming/${selectedJob.id}`)}
                     className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
                   >

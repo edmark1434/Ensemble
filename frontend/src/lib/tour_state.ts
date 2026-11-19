@@ -19,6 +19,8 @@ export interface WalkthroughStep {
   section?: string;
   /** Target user roles for role-filtered tours. If omitted or empty, step appears in all tours. */
   roles?: UserPlatformRole[];
+  /** Optional 3-way workflow modal shown instead of the spotlight card on this step. */
+  workflowModal?: 'jobs' | 'gigs' | 'contracts';
 }
 
 export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
@@ -493,6 +495,18 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     section: 'Job Market',
     roles: ['freelancer', 'client', 'explorer'],
   },
+  {
+    id: 'jobs_workflow_modal',
+    route: '/jobs/postings',
+    selector: 'body',
+    tabHint: 'Jobs 3-Way Flow',
+    targetName: 'Jobs 3-Way Workflow',
+    text: 'See how a job proposal turns into an active escrow-protected contract.',
+    actionType: 'next',
+    section: 'Job Market',
+    roles: ['freelancer', 'client', 'explorer'],
+    workflowModal: 'jobs',
+  },
 
   // --- SECTION 10: GIGS & VIDEO SERVICES FLOW ---
   {
@@ -617,6 +631,18 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     section: 'Gigs & Services',
     roles: ['freelancer', 'client', 'explorer'],
   },
+  {
+    id: 'gigs_workflow_modal',
+    route: '/gigs/services',
+    selector: 'body',
+    tabHint: 'Gigs 3-Way Flow',
+    targetName: 'Gigs 3-Way Workflow',
+    text: 'See how a service order turns into an active escrow-protected contract.',
+    actionType: 'next',
+    section: 'Gigs & Services',
+    roles: ['freelancer', 'client', 'explorer'],
+    workflowModal: 'gigs',
+  },
 
   // --- SECTION 11: ACTIVITY TABS (SIDEBAR BUTTONS ONLY - NO VERIFICATION WALL) ---
   {
@@ -653,6 +679,30 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     actionType: 'next',
     section: 'Deliveries & Contracts',
     roles: ['freelancer', 'client', 'explorer'],
+  },
+  {
+    id: 'contracts_overview',
+    route: '/contracts',
+    selector: '[data-tour="contracts-header"]',
+    tabHint: 'My Contracts',
+    targetName: 'My Contracts & Agreements',
+    text: 'Track all your **Active**, **Waitlist**, and **Archived** contracts, milestone progress, and escrow balances here.',
+    preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Deliveries & Contracts',
+    roles: ['freelancer', 'client', 'explorer'],
+  },
+  {
+    id: 'contracts_workflow_modal',
+    route: '/contracts',
+    selector: 'body',
+    tabHint: 'Contract Lifecycle',
+    targetName: 'Contract Execution Flow',
+    text: 'See how active contracts progress from Workspace delivery to Escrow Release and Rate & Review.',
+    actionType: 'next',
+    section: 'Deliveries & Contracts',
+    roles: ['freelancer', 'client', 'explorer'],
+    workflowModal: 'contracts',
   },
 
   // --- SECTION 12: LEDGER & INBOX ---
@@ -887,6 +937,7 @@ export const FREELANCER_STEP_IDS = [
   'jobs_detail_send_proposal',
   'jobs_detail_exit',
   'jobs_proposals',
+  'jobs_workflow_modal',
   'sidenav_gigs',
   'gigs_create',
   'gigs_tabs',
@@ -894,6 +945,9 @@ export const FREELANCER_STEP_IDS = [
   'gigs_detail_view_full',
   'gigs_detail_exit',
   'gigs_orders',
+  'gigs_workflow_modal',
+  'contracts_overview',
+  'contracts_workflow_modal',
   'header_credits',
   'credits_balance',
   'credits_topup',
@@ -928,6 +982,7 @@ export const CLIENT_STEP_IDS = [
   'jobs_detail_view_full',
   'jobs_detail_exit',
   'jobs_proposals',
+  'jobs_workflow_modal',
   'sidenav_gigs',
   'gigs_search',
   'gigs_tabs',
@@ -936,6 +991,9 @@ export const CLIENT_STEP_IDS = [
   'gigs_detail_order',
   'gigs_detail_exit',
   'gigs_orders',
+  'gigs_workflow_modal',
+  'contracts_overview',
+  'contracts_workflow_modal',
   'header_credits',
   'credits_balance',
   'credits_topup',

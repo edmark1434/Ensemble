@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import { NewListingBadge } from "./NewListingBadge";
+import { ThreeWayWorkflowModal } from "@/components/ui/ThreeWayWorkflowModal";
 
 interface GigServicesInfoGuideProps {
   onBrowseServices?: () => void;
@@ -200,6 +201,7 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
   onPostService,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<FactorCategory>("all");
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
 
   const filteredFactors =
     selectedCategory === "all"
@@ -212,27 +214,38 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
           HEADER BOX: ARCHITECTURE OVERVIEW & 3-STEP PIPELINE
          ========================================================================= */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 shadow-sm">
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 text-gray-800 dark:bg-white/10 dark:text-zinc-200 text-xs font-bold border border-gray-200 dark:border-white/10">
-            <Award className="h-3.5 w-3.5 text-amber-500" />
-            <span>Fair Service Discovery &amp; Queue-Aware Ranking Engine</span>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="max-w-3xl space-y-3">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 text-gray-800 dark:bg-white/10 dark:text-zinc-200 text-xs font-bold border border-gray-200 dark:border-white/10">
+              <Award className="h-3.5 w-3.5 text-amber-500" />
+              <span>Fair Service Discovery &amp; Queue-Aware Ranking Engine</span>
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white leading-snug">
+              How Ensemble Ranks &amp; Recommends Services
+            </h2>
+
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
+              Every active service is evaluated on a transparent{" "}
+              <strong className="text-gray-900 dark:text-white">100-Point Base Scale</strong> across{" "}
+              <strong className="text-gray-900 dark:text-white">13 Algorithmic Factors</strong> (plus optional{" "}
+              <strong className="text-gray-900 dark:text-white">Subscription Visibility Boosts</strong> and{" "}
+              <strong className="text-gray-900 dark:text-white">Buyer Skill Match Bonuses</strong>). The engine balances{" "}
+              <strong className="text-gray-900 dark:text-white">Service Package Quality (25 pts)</strong>,{" "}
+              <strong className="text-gray-900 dark:text-white">Creator Reputation &amp; Standing (35 pts)</strong>, and{" "}
+              <strong className="text-gray-900 dark:text-white">Live Market &amp; Queue Availability (40 pts)</strong> so
+              talented newcomers and established studios compete on equal footing.
+            </p>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white leading-snug">
-            How Ensemble Ranks &amp; Recommends Services
-          </h2>
-
-          <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
-            Every active service is evaluated on a transparent{" "}
-            <strong className="text-gray-900 dark:text-white">100-Point Base Scale</strong> across{" "}
-            <strong className="text-gray-900 dark:text-white">13 Algorithmic Factors</strong> (plus optional{" "}
-            <strong className="text-gray-900 dark:text-white">Subscription Visibility Boosts</strong> and{" "}
-            <strong className="text-gray-900 dark:text-white">Buyer Skill Match Bonuses</strong>). The engine balances{" "}
-            <strong className="text-gray-900 dark:text-white">Service Package Quality (25 pts)</strong>,{" "}
-            <strong className="text-gray-900 dark:text-white">Creator Reputation &amp; Standing (35 pts)</strong>, and{" "}
-            <strong className="text-gray-900 dark:text-white">Live Market &amp; Queue Availability (40 pts)</strong> so
-            talented newcomers and established studios compete on equal footing.
-          </p>
+          <button
+            type="button"
+            onClick={() => setIsWorkflowModalOpen(true)}
+            className="shrink-0 self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>How the 3-Way Works</span>
+          </button>
         </div>
 
         {/* 3-Step Pipeline Summary Strip */}
@@ -709,6 +722,11 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
           )}
         </div>
       </div>
+      <ThreeWayWorkflowModal
+        isOpen={isWorkflowModalOpen}
+        mode="gigs"
+        onClose={() => setIsWorkflowModalOpen(false)}
+      />
     </div>
   );
 };

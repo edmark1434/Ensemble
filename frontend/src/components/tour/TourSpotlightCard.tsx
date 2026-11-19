@@ -157,31 +157,35 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
     }
 
     // Auto-open detail drawers if step targets inside a detail modal/drawer
-    if (currentStep?.id === 'gigs_detail_view_full' || currentStep?.id === 'gigs_detail_order') {
+    if (
+      currentStep?.id === 'gigs_detail_view_full' ||
+      currentStep?.id === 'gigs_detail_order' ||
+      currentStep?.id === 'gigs_detail_exit'
+    ) {
       if (!document.querySelector(currentStep.selector)) {
         const firstGig = document.querySelector('[data-tour="gig-card-first"]') as HTMLElement | null;
         if (firstGig) firstGig.click();
       }
     }
-    if (currentStep?.id === 'jobs_detail_view_full' || currentStep?.id === 'jobs_detail_send_proposal') {
+    if (
+      currentStep?.id === 'jobs_detail_view_full' ||
+      currentStep?.id === 'jobs_detail_send_proposal' ||
+      currentStep?.id === 'jobs_detail_exit'
+    ) {
       if (!document.querySelector(currentStep.selector)) {
         const firstJob = document.querySelector('[data-tour="job-card-first"]') as HTMLElement | null;
         if (firstJob) firstJob.click();
       }
     }
 
-    // Auto-close detail drawers if step has moved past the drawer view
-    if (
-      (currentStep?.id === 'gigs_orders' || currentStep?.section !== 'Gigs & Services') &&
-      document.querySelector('[data-tour="gig-detail-exit-pill"]')
-    ) {
+    // Auto-close detail drawers if step is not inside a detail drawer
+    const isGigDrawerStep = ['gigs_detail_view_full', 'gigs_detail_order', 'gigs_detail_exit'].includes(currentStep?.id || '');
+    if (!isGigDrawerStep && document.querySelector('[data-tour="gig-detail-exit-pill"]')) {
       const exitPill = document.querySelector('[data-tour="gig-detail-exit-pill"]') as HTMLElement | null;
       if (exitPill) exitPill.click();
     }
-    if (
-      (currentStep?.id === 'jobs_proposals' || currentStep?.section !== 'Job Market') &&
-      document.querySelector('[data-tour="job-detail-exit-pill"]')
-    ) {
+    const isJobDrawerStep = ['jobs_detail_view_full', 'jobs_detail_send_proposal', 'jobs_detail_exit'].includes(currentStep?.id || '');
+    if (!isJobDrawerStep && document.querySelector('[data-tour="job-detail-exit-pill"]')) {
       const exitPill = document.querySelector('[data-tour="job-detail-exit-pill"]') as HTMLElement | null;
       if (exitPill) exitPill.click();
     }
@@ -459,7 +463,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({
       )}
 
       {/* 3. Floating Walkthrough Popover Card */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {!isElementFound && !showFallbackCard ? (
           <motion.div
             key="waiting-target"

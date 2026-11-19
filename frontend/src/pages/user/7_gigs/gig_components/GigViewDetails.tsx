@@ -702,6 +702,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               {selectedGig.canManageGig ? (
                 <div className="flex items-center gap-2">
                   <button
+                    data-tour="gig-detail-view-full"
                     onClick={() => {
                       navigate(`/gigs/services/${selectedGig.id}/page`);
                     }}
@@ -717,6 +718,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
+                    data-tour="gig-detail-order-button"
                     onClick={() => navigate('/gigs/orders')}
                     className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
                   >
