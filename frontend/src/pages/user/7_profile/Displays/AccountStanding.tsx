@@ -22,6 +22,8 @@ type WarningRow = {
   type?: string;
   reason?: string | null;
   points?: number;
+  /** Merit it took when issued, if staff have since lifted some or all of it. */
+  originalPoints?: number | null;
   status?: string;
   createdAt?: string;
   expiresAt?: string | null;
@@ -204,7 +206,9 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
                   <li key={warning.id} className="rounded-xl border border-gray-200 px-3 py-2 dark:border-white/10">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{warning.type || 'Warning'}</p>
-                      <span className="text-[10px] uppercase tracking-wide text-gray-500">{warning.status}</span>
+                      <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                        {String(warning.status || '').toLowerCase() === 'lifted' ? 'lifted' : warning.status}
+                      </span>
                     </div>
                     {warning.reason ? <p className="mt-1 text-sm text-gray-700 dark:text-zinc-300">{warning.reason}</p> : null}
                     <p className="mt-1 text-xs text-gray-500">
@@ -213,6 +217,9 @@ export function AccountRecordSection({ hideHeader = false }: { hideHeader?: bool
                         ? isActiveWarning(warning)
                           ? `−${warning.points} merit · `
                           : `no longer deducts merit · `
+                        : ''}
+                      {isActiveWarning(warning) && warning.originalPoints != null && Number(warning.originalPoints) > Number(warning.points)
+                        ? `staff gave back ${Number(warning.originalPoints) - Number(warning.points)} of ${warning.originalPoints} merit · `
                         : ''}
                       {formatWhen(warning.createdAt)}
                       {warning.expiresAt ? ` · expires ${formatWhen(warning.expiresAt)}` : ' · stays until rescinded'}

@@ -107,6 +107,52 @@ export async function rescindWarning(accountId: string, violationId: string) {
   return res.data.data;
 }
 
+export type WarningLiftOption = {
+  id: string;
+  kind: 'band' | 'auto_suspension';
+  endsBand: string | null;
+  label: string;
+  liftPoints: number;
+  targetMerit: number;
+  resultingBand: string;
+};
+
+export type WarningLiftPreview = {
+  accountId: string;
+  points: number;
+  merit: number;
+  band: string;
+  bandLabel: string | null;
+  autoSuspension: { endsAt: string | null; liftAtMerit: number | null } | null;
+  options: WarningLiftOption[];
+  /** Product band floors, lowest first. Points at or above `minPoints` are in that band. */
+  bands: { id: string; label: string; minPoints: number }[];
+};
+
+export type WarningLiftInput = {
+  /** Points to lift. Send this or `targetMerit`. */
+  points?: number;
+  /** Platform Merit to restore the member to. */
+  targetMerit?: number;
+  /** Lift only from this warning (violation id or number). */
+  violationId?: string | null;
+  /** Staff-only note; the member does not see it. */
+  reason: string;
+};
+
+export async function getWarningLiftPreview(accountId: string): Promise<WarningLiftPreview> {
+  const res = await api.get(`/api/admin/accounts/${accountId}/warnings/lift-preview`);
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not load warning points');
+  return res.data.data;
+}
+
+export async function liftWarningPoints(accountId: string, input: WarningLiftInput) {
+  const res = await api.post(`/api/admin/accounts/${accountId}/warnings/lift`, input);
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not lift warning points');
+  showSuccessToast(res.data.message || 'Warning points lifted');
+  return res.data.data;
+}
+
 export async function pardonAccount(accountId: string, note?: string) {
   const res = await api.post(`/api/admin/accounts/${accountId}/pardon`, { note });
   if (!res.data?.success) throw new Error(res.data?.message || 'Pardon failed');

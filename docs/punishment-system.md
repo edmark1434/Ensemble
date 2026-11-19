@@ -124,6 +124,8 @@ Staff pick a **named timeout** from `punishment_defs` (`kind = timeout`). Durati
 
 Read the whole platform. Writes blocked except logout, token refresh, mark notifications read. Cannot complete contract actions, chat-send, list, cash out, or ticket-create. Public Suspended chip. Auto-suspend is always 7 days. Manual 1–30 typical.
 
+Still allowed while suspended (`SUSPENDED_WRITE_ALLOWLIST` in `AccountRestriction.js`): reads that use POST (`/api/users/list-of-details`), chat read receipts and the inbox group-size sync, leaving/ending/syncing a call already running, the appeal ticket and its evidence uploads, two-factor setup/changes, and cancelling a subscription (stopping charges is never blocked). Over Socket.IO a suspended member may join and leave rooms (conversations, forums, disputes), read presence and active calls, and send read receipts (`SUSPENDED_SOCKET_EVENTS` in `WebSocket.js`); everything else is refused. Socket standing refreshes on every status change and at most every 30 seconds on a write event, so a suspension that starts or ends applies without a reconnect.
+
 Staff pick a **named suspension** from `punishment_defs` (`kind = suspend`). Duration is the catalog default unless they set a custom clock. Auto-suspend from warning points does not use this catalog.
 
 Warning points: leftover active points still apply the auto band.
@@ -147,6 +149,7 @@ Warning points stay on leftover unexpired rows. After appeal lift, the auto band
 | Action | Who | Warning points | Access |
 |---|---|---|---|
 | Rescind one warning | Staff who can warn | that row no longer counts | Unchanged, except remaining band/suspend |
+| Lift points | Admin / Support Moderator | N points (or up to a target merit) stop counting; warnings stay on the Record | Band follows the new merit; an auto-suspension ends once its recovery merit is reached ([warning-system.md](warning-system.md) §8, §12) |
 | Pardon | Admin / Support Moderator | all warning hits cleared | Active |
 | Appeal accepted | Support via “Appeal an account penalty” | recompute after 24h lift | ban/lock/suspend end in 24h |
 | Appeal denied | Support | unchanged | optional 12-month appeal block |
@@ -444,6 +447,8 @@ Frozen access is a warning-point band, not a standing. It is on this map so staf
 
 **Owner:** Record modal — standing, warnings, timeouts, recent activity. Warning points and auto band live in the same modal.
 
+**Suspended members are stopped before they start.** The backend refuses every write, and the client also switches writes off up front so nobody fills in a form for nothing. `SuspensionGuard` (`frontend/src/components/account/SuspensionGuard.tsx`, rules in `frontend/src/lib/suspensionGuard.ts`) locks write controls site-wide. Locked controls are faded, show a not-allowed cursor and an amber dashed ring on hover, have a tooltip, and give one heads-up toast on click; typing, uploads and form submits are blocked too. Reading, navigation, search, filters, logout, the appeal page and support tickets stay open. `SuspendedRouteGate` shows a "paused" page instead of write-only pages (job/gig create and edit, proposals, gig orders, checkout, new project, dispute form, team invite/join, business verification). Forum controls treat a suspension like a timeout. A control that must stay usable while suspended goes inside `data-suspension-keep`.
+
 **Owner status bar:** while signed in, a bar under the header shows Suspended, Frozen access, Credits on hold, or Forum timeout with a live countdown. "How to fix" opens a sheet listing, for each one, what is paused, when it ends (`suspensionEndsAt`, `warningBandEndsAt`, `creditsFrozenUntil`, `forumTimeoutEndsAt` from `getAccountAccess`) and how to get back to normal (wait, or appeal). The appeal page and the wallet show the same list. Copy lives in `frontend/src/lib/standing.ts`. Frozen access and credit holds can be hidden until they change; a suspension cannot.
 
 **Never public:** warning text, points, staff names, case IDs, pardoned rows as active.
@@ -496,7 +501,7 @@ active warning points reach 20
 
 ## 13. Anti-abuse and implementation
 
-- Staff cannot invent a custom point value. They warn, rescind, or pardon. Active points are summed from `violations`.
+- Staff cannot invent a custom point value. They warn, rescind, lift points, or pardon. Lifting only ever lowers points. Active points are summed from `violations`.
 - Nobody can suspend their own account. Moderators cannot suspend a moderator or an admin. Only Admin can suspend those staff accounts. Auto-suspend from warning points is unchanged.
 - Only warnings add points. Timeout, suspend, lock, ban, and disputes never add a second hit.
 - Expired suspend/ban/lock and expired warnings lift in a **background job**, not only on next page load.

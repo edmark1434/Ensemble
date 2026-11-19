@@ -60,6 +60,7 @@ function mapViolationRow(row) {
     type: row.type || 'warning',
     reason: row.reason,
     points: row.points,
+    originalPoints: row.points_original == null ? null : Number(row.points_original),
     status: !active && pastExpiry ? 'expired' : row.status,
     issuedBy: row.issued_by_name || 'System',
     createdAt: row.created_at,

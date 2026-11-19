@@ -31,7 +31,7 @@ import {
 } from "@/pages/user/4_forums/forumCommentUtils";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
-import { useForumTimeout } from "@/pages/user/4_forums/useForumTimeout";
+import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
 
 type UserId = string | number;
@@ -88,7 +88,7 @@ const ReplyComposer = ({
   const [attachments, setAttachments] = useState<{ key: string; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { timedOut: forumTimedOut } = useForumTimeout();
+  const { locked: forumTimedOut } = useForumTimeout();
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -213,7 +213,7 @@ const CommentNode = ({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
   const [showChildren, setShowChildren] = useState(false);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   const lockedTitle = forumTimedOut ? forumTimeoutMessage : undefined;
   const lockedClass = forumTimedOut ? FORUM_LOCKED_CLASS : "";
   const isAuthor = sameUser(comment.user_id, currentUserId);
@@ -390,7 +390,7 @@ const ExpandDiscussion = () => {
   const { postId } = useParams();
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const currentUserId = user?.user_id || user?.userId || "";
   const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
@@ -486,7 +486,8 @@ const ExpandDiscussion = () => {
       showSuccessToast(parentId ? "Reply posted" : "Comment posted");
     } catch (error) {
       console.error("Error posting comment:", error);
-      showErrorToast("Failed to post comment");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post comment");
       throw error;
     }
   };
@@ -741,9 +742,9 @@ const ExpandDiscussion = () => {
             ) : (
               <button
                 onClick={() => setReportingPost(true)}
-                disabled={forumTimedOut}
-                title={forumTimedOut ? forumTimeoutMessage : undefined}
-                className={`text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                disabled={reportLocked}
+                title={reportLocked ? forumTimeoutMessage : undefined}
+                className={`text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
               >
                 Report discussion
               </button>

@@ -221,6 +221,8 @@ const EXPIRED_STANDING_SQL = `
  * @returns {Promise<{ accountId: string, previousStatus: string }[]>}
  */
 async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
+  const { clearAutoSuspendSql } = require('./SchemaFeatures');
+  const clearAutoSuspend = await clearAutoSuspendSql();
   const result = await pool.query(
     `
     WITH expired AS (
@@ -237,6 +239,7 @@ async function liftExpiredStandings({ accountId = null, limit = 100 } = {}) {
         suspension_ends_at = NULL,
         ban_ends_at = NULL,
         lock_ends_at = NULL
+        ${clearAutoSuspend}
     FROM expired e
     WHERE a.account_id = e.account_id
     RETURNING a.account_id, e.status AS previous_status, a.status AS next_status
@@ -325,6 +328,14 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
       console.warn('Warning band refresh skipped:', err.message)
     );
   }
+  // Automatic suspensions whose member has climbed back to the recovery merit.
+  let autoSuspensionsLifted = 0;
+  try {
+    const { liftRecoveredAutoSuspensions } = require('./ModerationPolicy');
+    autoSuspensionsLifted = (await liftRecoveredAutoSuspensions({ limit })).length;
+  } catch (err) {
+    console.warn('Auto-suspension recovery sweep skipped:', err.message);
+  }
   // Credit holds with an end date (including ones an accepted appeal shortened to 24 hours).
   let creditHoldsReleased = 0;
   try {
@@ -333,7 +344,12 @@ async function reconcileExpiredStandings({ limit = 100 } = {}) {
   } catch (err) {
     console.warn('Credit hold release skipped:', err.message);
   }
-  return { lifted: lifted.length, warningsExpired: lapsed.rowCount || 0, creditHoldsReleased };
+  return {
+    lifted: lifted.length,
+    warningsExpired: lapsed.rowCount || 0,
+    autoSuspensionsLifted,
+    creditHoldsReleased,
+  };
 }
 
 function warningExpiry({ durationDays, points } = {}) {
@@ -466,6 +482,9 @@ async function getAccountAccess(accountId) {
       expireElapsedWarnings(accountId),
     ]);
     await refreshBandAfterLapse(accountId, lapsedPoints);
+    // Catches recoveries the refresh above did not see (e.g. a lift level set before it ran).
+    const { liftRecoveredAutoSuspensions } = require('./ModerationPolicy');
+    await liftRecoveredAutoSuspensions({ accountId, limit: 1 });
   } catch (err) {
     console.warn('Could not lift an expired suspension or warning:', err.message);
   }
@@ -728,7 +747,10 @@ async function getOwnAccountRecord(accountId) {
   const [warnings, restrictions, activity] = await Promise.all([
     pool.query(
       `
-      SELECT violation_id, violation_number, type, reason, points, status, created_at, expires_at
+      SELECT violation_id, violation_number, type, reason, points,
+             -- Read through jsonb so this works before the warning-lift migration too.
+             (to_jsonb(violations) ->> 'points_original')::int AS points_original,
+             status, created_at, expires_at
       FROM violations
       WHERE account_id = $1 AND deleted_at IS NULL
       ORDER BY created_at DESC
@@ -760,6 +782,7 @@ async function getOwnAccountRecord(accountId) {
             'VIOLATION_ISSUED',
             'WARNING_ISSUED',
             'WARNING_RESCINDED',
+            'WARNING_POINTS_LIFTED',
             'ACCOUNT_PARDONED',
             'APPEAL_DECISION'
           )
@@ -781,6 +804,7 @@ async function getOwnAccountRecord(accountId) {
       type: row.type,
       reason: row.reason,
       points: row.points,
+      originalPoints: row.points_original == null ? null : Number(row.points_original),
       status: row.status,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
@@ -943,6 +967,17 @@ const SUSPENDED_WRITE_ALLOWLIST = [
   /\/api\/users\/refresh-token(?:\?|$)/,
   /\/api\/notifications\/read-all(?:\?|$)/,
   /\/api\/notifications\/[^/]+\/read(?:\?|$)/,
+  // Reads that use POST: author names on forum and job pages, and chat read receipts.
+  // Refusing them broke browsing for suspended members (missing names, error toasts).
+  /\/api\/users\/list-of-details(?:\?|$)/,
+  /\/api\/inbox\/conversation\/[^/]+\/read(?:\?|$)/,
+  // Background housekeeping the inbox runs on open (group size sync); not a member action.
+  /\/api\/inbox\/[^/]+\/limit(?:\?|$)/,
+  // Leaving, ending or syncing a call that was already running when the suspension started.
+  /\/api\/google-meet\/meetings\/[^/]+\/(?:leave|end|sync)(?:\?|$)/,
+  // Securing the account and stopping charges are never blocked by a suspension.
+  /\/api\/users\/2fa\/(?:setup|enable|disable|regenerate-recovery-codes)(?:\?|$)/,
+  /\/api\/payment\/cancel-subscription(?:\?|$)/,
   // A suspended member may appeal. The ticket controller limits these two to the appeal
   // ticket type, exactly as it does for banned and locked members.
   /^\/api\/users\/tickets(?:\?|$)/,
@@ -1004,7 +1039,9 @@ function rejectForumTimeout(req, res) {
   if (warningBand && !actionAllowed('forum_write', warningBand)) {
     res.status(403).json({
       success: false,
-      code: BLOCKING_CODES.warningFrozen,
+      // Same code as every other merit-band refusal (WarningBandServices); this fires for
+      // Restricted as well as Frozen access, so WARNING_FROZEN was misleading.
+      code: 'WARNING_RESTRICTED',
       message: ACTION_MESSAGES.forum_write,
       restriction: req.accountAccess,
     });

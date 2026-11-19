@@ -33,6 +33,8 @@ import { InboxEmojiPicker } from "@/components/ui/inbox/inbox_functions/inbox_em
 import { InboxUnsentMessage } from "@/components/ui/inbox/inbox_functions/inbox_unsend_message";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 import LiveGoogleMeetingBanner from "./LiveGoogleMeetingBanner";
+import { useSuspension } from "@/lib/useSuspension";
+import { SuspendedComposerNotice } from "@/components/account/SuspendedNotices";
 import { MarketplaceContextCard } from "@/components/ui/inbox/inbox_components/marketplace_context_card";
 import { TeamInviteCard, parseTeamInviteMessage } from "@/components/ui/inbox/inbox_components/TeamInviteCard";
 
@@ -161,6 +163,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const disputeClosed =
     isDisputeThread && String(disputeDetails?.status || "").toLowerCase() === "closed";
   const disputeReplyBlocked = isDisputeThread && !disputePublic && !isDisputeFiler;
+  // Read-only while suspended: the conversation stays readable, the composer is replaced.
+  const { suspended: accountSuspended } = useSuspension();
   const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
     String(conversation?.conversation_type || "").toLowerCase()
   );
@@ -1057,6 +1061,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             ? "This dispute is closed. You cannot reply."
             : "This dispute is not public yet. Only the person who filed it can add information for staff."}
         </div>
+      ) : accountSuspended ? (
+        <SuspendedComposerNotice />
       ) : (
       <div className="flex items-center gap-2 border-t border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900 p-2.5">
         <input

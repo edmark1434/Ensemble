@@ -87,6 +87,14 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
     };
   }
 
+  // Open sockets act on the new standing right away (a lifted suspension can send again).
+  try {
+    const { refreshSocketStanding } = require('../lib/WebSocket');
+    refreshSocketStanding(accountId, access);
+  } catch (err) {
+    console.warn('Socket standing refresh skipped:', err.message);
+  }
+
   let notification = null;
 
   if (nextStatus === 'Banned' || nextStatus === 'Locked') {

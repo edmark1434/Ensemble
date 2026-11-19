@@ -16,7 +16,9 @@ Platform Merit = clamp(100 − active warning points, 0, 100)
 
 Active warning points are the same sum the backend already uses: unrescinded `violations` rows whose `expires_at` is still in the future (or has no expiry yet). Expired, rescinded, pardoned, and deleted rows do not deduct merit.
 
-When a warning expires or is rescinded, merit comes back by itself. Completions, reviews, verification, credits, and subscriptions never change merit.
+When a warning expires or is rescinded, merit comes back by itself. Admin and Support can also **lift points** (a number of points, or up to a target merit) without deleting the warnings; the Record shows how much was lifted. Completions, reviews, verification, credits, and subscriptions never change merit.
+
+The automatic limits (Limited / Restricted / Frozen access) follow merit live, so each one ends as soon as merit climbs back past it (Frozen access ends at 85). An automatic suspension ends early at the recovery merit set on its threshold (seeded: 81).
 
 ---
 

@@ -514,9 +514,12 @@ async function reverseModerationActivity(activityId, staffSession = null) {
         ends[restoreTo] = endsAt;
       }
     }
+    const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+    const clearAutoSuspend = await clearAutoSuspendSql();
     await pool.query(
       `UPDATE accounts
        SET status = $1, suspension_ends_at = $2, ban_ends_at = $3, lock_ends_at = $4
+           ${clearAutoSuspend}
        WHERE account_id = $5`,
       [restoreTo, ends.Suspended || null, ends.Banned || null, ends.Locked || null, accountId]
     );
@@ -735,7 +738,7 @@ async function getModerationOverview(staffSession = null) {
         SELECT COUNT(*)::int AS active_violations
         FROM violations
         WHERE deleted_at IS NULL
-          AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved', 'expired')
+          AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
           AND (expires_at IS NULL OR expires_at > NOW())
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),

@@ -57,6 +57,14 @@ async function refreshWarningBand(accountId, previousPoints = null) {
   if (previousPoints != null) {
     await notifyWarningBandChange(accountId, bandForPoints(previousPoints), next.band, next.points);
   }
+  // Merit only goes up on a refresh (expiry, rescind, lift, pardon): end an automatic
+  // suspension whose recovery level has now been reached.
+  try {
+    const { liftRecoveredAutoSuspensions } = require('../lib/ModerationPolicy');
+    await liftRecoveredAutoSuspensions({ accountId, limit: 1 });
+  } catch (err) {
+    console.warn('Auto-suspension recovery check skipped:', err.message);
+  }
   return next;
 }
 

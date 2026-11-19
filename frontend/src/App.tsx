@@ -80,6 +80,7 @@ import ContractDetailsPage from '@/pages/user/contracts/ContractDetailsPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
+import { SuspendedRouteGate, SuspensionGuard } from '@/components/account/SuspensionGuard'
 import { CaseConversationRedirect } from '@/components/cases/CaseConversationRedirect'
 import AccountAccessPage from '@/pages/user/account/AccountAccessPage'
 import PublicDisputePage from '@/pages/user/disputes/PublicDisputePage'
@@ -198,6 +199,7 @@ function App() {
       <ToastTestingWidget />
       <DevModeWidget />
       <AccountRestrictionHost />
+      <SuspensionGuard />
       <CaseConversationRedirect />
       <StaffPreviewFrameBridge />
       <PlatformTour />
@@ -245,7 +247,10 @@ function App() {
         </Route>
 
         {/* Handoff page: no sidebar, but still behind RouteMiddleware */}
-        <Route path="/projects/open/:projectId" element={<OpenInEditor />} />
+        {/* The editor saves as it goes; a suspended member would lose that work, so stop here. */}
+        <Route element={<SuspendedRouteGate />}>
+          <Route path="/projects/open/:projectId" element={<OpenInEditor />} />
+        </Route>
 
         {/* Banned and locked members. No sidebar, chat, or platform tabs. */}
         <Route path="/account/appeal" element={<AccountAccessPage />} />
@@ -258,7 +263,9 @@ function App() {
           <Route path='/support/cases' element={<CasesPage />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />
-            <Route path='/credits/checkout' element={<Checkout />} />
+            <Route element={<SuspendedRouteGate />}>
+              <Route path='/credits/checkout' element={<Checkout />} />
+            </Route>
             <Route path='/profile' element={<Profile />} />
             <Route path='/profile/:id' element={<ProfileRoute />} />
             <Route path='/disputes/:id' element={<PublicDisputePage />} />
@@ -270,7 +277,9 @@ function App() {
           <Route path='/projects/shared' element={<Projects />} />
           <Route path='/projects/trash' element={<Projects />} />
           <Route path='/projects/team' element={<Projects />} />
-          <Route path='/projects/select' element={<Projects_Selection />} />
+          <Route element={<SuspendedRouteGate />}>
+            <Route path='/projects/select' element={<Projects_Selection />} />
+          </Route>
 
           <Route path='/forums'>
             <Route index element={<Forums />} />
@@ -283,9 +292,11 @@ function App() {
 
           <Route path='/teams'>
             <Route index element={<Teams />} />
-            <Route path='join/:joinCode' element={<TeamInvitePage />} />
-            <Route path='invite/:joinCode' element={<TeamInvitePage />} />
-            <Route path=':id/business-verification' element={<BusinessVerification />} />
+            <Route element={<SuspendedRouteGate />}>
+              <Route path='join/:joinCode' element={<TeamInvitePage />} />
+              <Route path='invite/:joinCode' element={<TeamInvitePage />} />
+              <Route path=':id/business-verification' element={<BusinessVerification />} />
+            </Route>
             <Route path=':id/tasks/:contractId' element={<TeamTaskWorkspace />} />
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
@@ -327,13 +338,20 @@ function App() {
           </Route>
 
           {/* Standalone Creation, Edit & View Details Pages */}
-          <Route path='/jobs/create' element={<JobCreatePostPage />} />
-          <Route path='/jobs/create/team' element={<JobCreatePostPage />} />
-          <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
+          {/* Write-only pages: a suspended member gets a "paused" page instead of the form. */}
+          <Route element={<SuspendedRouteGate />}>
+            <Route path='/jobs/create' element={<JobCreatePostPage />} />
+            <Route path='/jobs/create/team' element={<JobCreatePostPage />} />
+            <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
+            <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
+            <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
+            <Route path='/gigs/create' element={<GigCreatePage />} />
+            <Route path='/gigs/edit/:id' element={<GigEditPage />} />
+            <Route path='/gigs/services/:id/order' element={<GigOrderPage />} />
+            <Route path='/contracts/dispute-form' element={<DisputeFormPage />} />
+          </Route>
           <Route path='/jobs/postings/:id/page' element={<JobFullPage />} />
           <Route path='/jobs/:id/page' element={<JobFullPage />} />
-          <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
-          <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
           <Route path='/jobs/proposals/received/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
           <Route path='/jobs/proposals/incoming/details/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
           <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
@@ -361,16 +379,12 @@ function App() {
           </Route>
           <Route path='/gigs/orders/incoming/:gigId/order/:orderId' element={<IncomingOrderDetail />} />
           <Route path='/gigs/orders/sent/:orderId' element={<SentOrderDetail />} />
-          <Route path='/gigs/create' element={<GigCreatePage />} />
-          <Route path='/gigs/edit/:id' element={<GigEditPage />} />
           <Route path='/gigs/services/:id/page' element={<GigFullPage />} />
-          <Route path='/gigs/services/:id/order' element={<GigOrderPage />} />
           <Route path='/orders' element={<SectionPlaceholder title='INCOMING ORDERS' />} />
           <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
           <Route path='/contract' element={<Navigate to="/contracts" replace />} />
-          <Route path='/contracts/dispute-form' element={<DisputeFormPage />} />
           <Route path='/contracts/disputes' element={<MyTransactionDisputesPage />} />
           <Route path='/contracts/:id' element={<ContractDetailsPage />} />
           <Route path='/dashboard' element={<DashboardMain />} />

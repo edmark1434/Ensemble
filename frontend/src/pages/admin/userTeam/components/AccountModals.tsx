@@ -20,6 +20,7 @@ import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVe
 import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule';
 import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } from '@/lib/merit';
 import { WarningPresetFields } from './WarningPresetFields';
+import { LiftWarningPointsPanel } from './LiftWarningPointsPanel';
 import { PunishmentPresetFields } from './PunishmentPresetFields';
 import { punishmentDurationLabel, type PunishmentKind, type PunishmentPreset } from '@/lib/punishmentCatalog';
 import {
@@ -1432,14 +1433,20 @@ export function HistoryModal({
   history,
   onClose,
   onChanged,
+  canLiftPoints = false,
 }: {
   entityName: string;
   accountId?: string;
   history: PlatformTeam['history'];
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
+  /** Admin and Support may lift warning points (members only; teams have no merit). */
+  canLiftPoints?: boolean;
 }) {
   const [rescindingId, setRescindingId] = useState<string | null>(null);
+  const liftableWarnings = history.violations
+    .filter((v) => v.violationId && isActiveWarning(v))
+    .map((v) => ({ violationId: v.violationId as string, label: `${v.type} (${v.id})`, points: Number(v.points) || 0 }));
   const activeDisputes =
     history.activeDisputes?.length
       ? history.activeDisputes
@@ -1510,6 +1517,10 @@ export function HistoryModal({
         )}
       </div>
 
+      {canLiftPoints && accountId && liftableWarnings.length > 0 ? (
+        <LiftWarningPointsPanel accountId={accountId} activeWarnings={liftableWarnings} onLifted={onChanged} />
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h3 className="mb-3 text-sm font-semibold text-white">Violation history</h3>
@@ -1523,6 +1534,9 @@ export function HistoryModal({
                 <p className="mt-1 text-zinc-500">{v.reason}</p>
                 <p className="mt-2 text-xs text-zinc-600">
                   By: {v.by} · {v.points} warning points
+                  {v.originalPoints != null && Number(v.originalPoints) > Number(v.points) && String(v.status || '').toLowerCase() !== 'lifted'
+                    ? ` (${Number(v.originalPoints) - Number(v.points)} of ${v.originalPoints} lifted)`
+                    : ''}
                   {Number(v.points) > 0
                     ? isActiveWarning(v)
                       ? ` · currently −${v.points} merit`
@@ -1530,9 +1544,13 @@ export function HistoryModal({
                     : ''}
                   {' · '}{v.id} · {v.timeAgo}
                   {v.expiresAt ? ` · expires ${new Date(v.expiresAt).toLocaleDateString()}` : ''}
-                  {String(v.status || '').toLowerCase() === 'rescinded' ? ' · rescinded' : v.active === false ? ' · inactive' : ''}
+                  {String(v.status || '').toLowerCase() === 'rescinded'
+                    ? ' · rescinded'
+                    : String(v.status || '').toLowerCase() === 'lifted'
+                      ? ' · points lifted'
+                      : v.active === false ? ' · inactive' : ''}
                 </p>
-                {accountId && v.violationId && v.active !== false && String(v.status || 'active').toLowerCase() !== 'rescinded' ? (
+                {accountId && v.violationId && isActiveWarning(v) ? (
                   <button
                     type="button"
                     disabled={rescindingId === v.violationId}

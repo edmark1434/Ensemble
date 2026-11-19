@@ -160,6 +160,8 @@ async function fetchHistoryForAccounts(accountIds) {
         v.type,
         v.reason,
         v.points,
+        -- Read through jsonb so this works before the warning-lift migration too.
+        (to_jsonb(v) ->> 'points_original')::int AS points_original,
         v.status,
         v.created_at,
         v.expires_at,
@@ -216,6 +218,8 @@ async function fetchHistoryForAccounts(accountIds) {
       type: row.type || 'Violation',
       reason: row.reason || '—',
       points: Number(row.points || 0),
+      // Issued points when staff lifted some (or all) of them; null when never lifted.
+      originalPoints: row.points_original == null ? null : Number(row.points_original),
       by: row.issued_by,
       timeAgo: formatRelativeTime(row.created_at),
       expiresAt: row.expires_at || null,
@@ -1346,6 +1350,9 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const banEndsAt = status === 'Banned' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const lockEndsAt = status === 'Locked' ? sanctionEndsAt(resolvedOptions, 'permanent') : null;
   const { restingStatusSql } = require('../lib/AccountRestriction');
+  // A staff decision replaces any automatic suspension, so merit recovery no longer ends it.
+  const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+  const clearAutoSuspend = await clearAutoSuspendSql();
   // Lifting a penalty returns a member who had deactivated the account to Deactivated.
   const saved = await pool.query(
     `
@@ -1354,6 +1361,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
         suspension_ends_at = $2,
         ban_ends_at = $3,
         lock_ends_at = $4
+        ${clearAutoSuspend}
     WHERE account_id = $5
     RETURNING status
     `,
@@ -1870,6 +1878,8 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
 
     const previousStatus = account.status;
     const { restingStatusSql } = require('../lib/AccountRestriction');
+    const { clearAutoSuspendSql } = require('../lib/SchemaFeatures');
+    const clearAutoSuspend = await clearAutoSuspendSql();
     // A member who had deactivated the account goes back to Deactivated, not Active.
     const restored = await client.query(
       `
@@ -1878,6 +1888,7 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
           suspension_ends_at = NULL,
           ban_ends_at = NULL,
           lock_ends_at = NULL
+          ${clearAutoSuspend}
       WHERE account_id = $1
       RETURNING status
       `,

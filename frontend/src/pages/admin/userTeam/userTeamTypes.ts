@@ -197,6 +197,8 @@ export type TeamHistory = {
     type: string;
     reason: string;
     points: number;
+    /** Points it was issued with, when staff lifted some or all of them. */
+    originalPoints?: number | null;
     by: string;
     timeAgo: string;
     expiresAt?: string | null;

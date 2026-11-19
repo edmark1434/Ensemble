@@ -4,9 +4,11 @@ const { getSectionValue } = require('../repositories/AdminSettingsRepositories')
 const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
 const { sumActiveWarningPoints } = require('../repositories/WarningBandRepositories');
 const {
-  autoSuspendDaysForPoints,
+  autoSuspendRowForPoints,
   AUTO_SUSPEND_POINTS,
   AUTO_SUSPEND_DAYS,
+  DEFAULT_MERIT,
+  meritFromWarningPoints,
   refreshLiveThresholds,
 } = require('./WarningBands');
 
@@ -204,10 +206,14 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
   if (!accountId) return null;
   const activeCount = await sumActiveWarningPoints(accountId);
   await refreshLiveThresholds();
-  const days = autoSuspendDaysForPoints(activeCount);
+  const rule = autoSuspendRowForPoints(activeCount);
+  const days = rule?.suspendDays || 0;
   if (!days) {
     return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
   }
+  // Copied onto the account like a warning copies its catalog clock: later threshold edits
+  // do not change a suspension already running.
+  const liftAtMerit = rule.liftAtMerit ?? null;
 
   const previous = await pool.query(
     `SELECT status FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
@@ -225,13 +231,18 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     return { suspended: false, stricterStanding: current, activeCount, max: AUTO_SUSPEND_POINTS };
   }
 
-  // Guarded again in SQL, in case a ban landed between the read and this write.
+  // Guarded again in SQL, in case a ban landed between the read and this write. The engine
+  // marker is only written once the warning-lift migration has added its columns.
+  const { autoSuspendColumnsReady } = require('./SchemaFeatures');
+  const markAuto = await autoSuspendColumnsReady();
   const applied = await pool.query(
     `UPDATE accounts
-     SET status = 'Suspended', suspension_ends_at = NOW() + ($2 * INTERVAL '1 day')
+     SET status = 'Suspended',
+         suspension_ends_at = NOW() + ($2 * INTERVAL '1 day')
+         ${markAuto ? ", suspension_source = 'auto', auto_suspend_lift_merit = $3" : ''}
      WHERE account_id = $1
        AND LOWER(COALESCE(status, 'active')) NOT IN ('banned', 'locked', 'suspended')`,
-    [accountId, days]
+    markAuto ? [accountId, days, liftAtMerit] : [accountId, days]
   );
   if (!applied.rowCount) {
     return { suspended: false, activeCount, max: AUTO_SUSPEND_POINTS };
@@ -251,6 +262,7 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
       activeWarnings: activeCount,
       maxWarningsBeforeSuspend: AUTO_SUSPEND_POINTS,
       suspensionDays: days,
+      liftAtMerit,
       source: 'warning_thresholds',
     },
   });
@@ -268,7 +280,104 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     console.error('Failed to notify auto-suspended account:', notifyErr);
   }
 
-  return { suspended: true, activeCount, max: AUTO_SUSPEND_POINTS, days, previousStatus };
+  return { suspended: true, activeCount, max: AUTO_SUSPEND_POINTS, days, liftAtMerit, previousStatus };
+}
+
+/** Same per-row weight as sumActiveWarningPoints. */
+const ACTIVE_POINTS_SQL = `
+  COALESCE((
+    SELECT SUM(LEAST(GREATEST(COALESCE(v.points, 1), 1), 10))
+    FROM violations v
+    WHERE v.account_id = a.account_id
+      AND v.deleted_at IS NULL
+      AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open', 'pending')
+      AND (v.expires_at IS NULL OR v.expires_at > NOW())
+  ), 0)
+`;
+
+/**
+ * End warning-engine suspensions early once the member's Platform Merit has recovered to the
+ * level copied from the auto-suspend threshold (warnings expired, rescinded or lifted).
+ * Staff suspensions are never touched: only rows with `suspension_source = 'auto'` qualify,
+ * and every staff status change clears that marker.
+ * @param {{ accountId?: string|null, limit?: number }} [options]
+ * @returns {Promise<{ accountId: string, merit: number, nextStatus: string }[]>}
+ */
+async function liftRecoveredAutoSuspensions({ accountId = null, limit = 100 } = {}) {
+  const { autoSuspendColumnsReady } = require('./SchemaFeatures');
+  if (!(await autoSuspendColumnsReady())) return [];
+  const result = await pool.query(
+    `
+    WITH recovered AS (
+      SELECT a.account_id, a.status, ${ACTIVE_POINTS_SQL} AS points
+      FROM accounts a
+      WHERE a.deleted_at IS NULL
+        AND ($1::uuid IS NULL OR a.account_id = $1::uuid)
+        AND LOWER(COALESCE(a.status, '')) = 'suspended'
+        AND a.suspension_source = 'auto'
+        AND a.auto_suspend_lift_merit IS NOT NULL
+        AND GREATEST(0, $3::int - ${ACTIVE_POINTS_SQL}) >= a.auto_suspend_lift_merit
+      LIMIT $2
+      FOR UPDATE OF a SKIP LOCKED
+    )
+    UPDATE accounts a
+    SET status = CASE WHEN a.deactivated_at IS NOT NULL AND LOWER(COALESCE(a.type, '')) = 'user'
+          THEN 'Deactivated' ELSE 'Active' END,
+        suspension_ends_at = NULL,
+        suspension_source = NULL,
+        auto_suspend_lift_merit = NULL
+    FROM recovered r
+    WHERE a.account_id = r.account_id
+      AND LOWER(COALESCE(a.status, '')) = 'suspended'
+      AND a.suspension_source = 'auto'
+    RETURNING a.account_id, r.points, a.status AS next_status
+    `,
+    [accountId || null, limit, DEFAULT_MERIT]
+  );
+
+  const lifted = result.rows.map((row) => ({
+    accountId: String(row.account_id),
+    merit: meritFromWarningPoints(Number(row.points || 0)),
+    nextStatus: row.next_status || 'Active',
+  }));
+
+  for (const item of lifted) {
+    // Best effort: the lift is already committed.
+    announceAutoSuspensionLift(item).catch((err) =>
+      console.warn('Auto-suspension lift notice skipped:', err.message)
+    );
+  }
+  return lifted;
+}
+
+async function announceAutoSuspensionLift({ accountId, merit, nextStatus }) {
+  const deactivated = String(nextStatus).toLowerCase() === 'deactivated';
+  await recordAccountActivity({
+    accountId,
+    action: deactivated
+      ? `Auto-suspension lifted early — Platform Merit recovered to ${merit}; the account is back to deactivated`
+      : `Auto-suspension lifted early — Platform Merit recovered to ${merit}`,
+    eventCode: 'ACCOUNT_STATUS_CHANGED',
+    referenceTable: 'accounts',
+    referencePrefix: 'ACC',
+    referenceId: accountId,
+    metadata: {
+      previousStatus: 'Suspended',
+      status: nextStatus,
+      action: 'auto_suspend_lifted',
+      merit,
+      source: 'merit_recovery',
+    },
+  });
+  // A member who had turned the account off is not told it is "active"; they reactivate it.
+  if (deactivated) return;
+  const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+  await notifyAccountStatusChanged(accountId, {
+    status: 'Active',
+    previousStatus: 'Suspended',
+    action: 'auto_suspend_lifted',
+    reason: `Your Platform Merit recovered to ${merit}, so your automatic suspension has ended early.`,
+  });
 }
 
 /**
@@ -385,5 +494,6 @@ module.exports = {
   countActiveWarnings: sumActiveWarningPoints,
   sumActiveWarningPoints,
   maybeAutoSuspendAfterWarning,
+  liftRecoveredAutoSuspensions,
   applyReportAutomations,
 };

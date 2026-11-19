@@ -82,6 +82,12 @@ const EVENT_CATALOG = {
     severity: 'info',
     impact: 'Removed warning points previously applied to the account.',
   },
+  WARNING_POINTS_LIFTED: {
+    label: 'Warning points lifted',
+    targetType: 'Account',
+    severity: 'info',
+    impact: 'Lifted some active warning points; the warnings stay on the record and merit recovered.',
+  },
   RESTRICTION_ISSUED: {
     label: 'Restriction applied',
     targetType: 'Account',

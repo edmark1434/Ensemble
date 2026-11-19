@@ -242,7 +242,8 @@ const PageAskOurChatbot: React.FC = () => {
   };
 
   return (
-    <main className="ensemble-chat-page">
+    // Help chat stays open during a suspension (it only answers questions).
+    <main className="ensemble-chat-page" data-suspension-keep>
       {/* Interactive WebGL2 Prism Background - Running at full viewport scale behind loading */}
       <div
         className={`ensemble-chat-prism-bg ${

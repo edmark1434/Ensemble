@@ -298,6 +298,7 @@ function StandingStatusBar({
         <span className="shrink-0 text-xs font-bold text-zinc-900 dark:text-white">{primary.label}</span>
         <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
           {primary.id === 'credit_hold' ? `${primary.title} · ` : ''}
+          {primary.id === 'suspended' ? 'read-only, actions are off · ' : ''}
           {when}
           {others > 0 ? ` · +${others} more` : ''}
         </span>
@@ -467,6 +468,12 @@ export function AccountRestrictionHost() {
     socket.emit('joinRoom', accountId);
 
     const handleRestricted = (payload: any) => {
+      // A Platform Merit band change (warning issued, expired, rescinded or lifted) carries
+      // `band` and no lock of its own: refetch the standing instead of treating it as a lock.
+      if (payload && typeof payload === 'object' && 'band' in payload && !payload.code && !payload.status && !payload.restriction) {
+        refreshCurrentUser();
+        return;
+      }
       const code = String(payload?.code || payload?.restriction?.code || '');
       const status = String(payload?.status || payload?.restriction?.status || '').toLowerCase();
       if (

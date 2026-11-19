@@ -17,6 +17,7 @@ const {
   applyAdminDiditVerificationAction,
 } = require('../services/AdminVerificationServices');
 const { getAdminAccountProfile } = require('../services/AdminAccountProfileServices');
+const { getWarningLiftPreview, liftWarningPoints } = require('../services/WarningLiftServices');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -249,6 +250,49 @@ async function postAdminRescindWarning(req, res) {
   }
 }
 
+function liftErrorStatus(err) {
+  return err.statusCode && err.statusCode < 500 ? err.statusCode : 400;
+}
+
+async function getAdminWarningLiftPreview(req, res) {
+  try {
+    const data = await getWarningLiftPreview(req.params.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (!err.statusCode) console.error('Error loading warning lift preview:', err);
+    res.status(liftErrorStatus(err)).json({
+      success: false,
+      code: err.code || null,
+      message: err.message || 'Failed to load warning points',
+    });
+  }
+}
+
+async function postAdminLiftWarningPoints(req, res) {
+  try {
+    const data = await liftWarningPoints(req.params.accountId, staffIdFromSession(req.session), {
+      points: req.body?.points,
+      targetMerit: req.body?.targetMerit,
+      violationId: req.body?.violationId || null,
+      reason: req.body?.reason,
+    });
+    const ended = data.bandBefore !== data.bandAfter ? ' The automatic limits moved with it.' : '';
+    const suspension = data.autoSuspensionLifted ? ' The automatic suspension ended.' : '';
+    res.status(200).json({
+      success: true,
+      data,
+      message: `Lifted ${data.lifted} warning point(s). Platform Merit is now ${data.meritAfter}.${ended}${suspension}`,
+    });
+  } catch (err) {
+    if (!err.statusCode) console.error('Error lifting warning points:', err);
+    res.status(liftErrorStatus(err)).json({
+      success: false,
+      code: err.code || null,
+      message: err.message || 'Failed to lift warning points',
+    });
+  }
+}
+
 async function postAdminAccountPardon(req, res) {
   try {
     const { accountId } = req.params;
@@ -320,5 +364,7 @@ module.exports = {
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
   postAdminRescindWarning,
+  getAdminWarningLiftPreview,
+  postAdminLiftWarningPoints,
   postAdminAccountPardon,
 };

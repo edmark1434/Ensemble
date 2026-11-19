@@ -356,7 +356,7 @@ const ReplyInput = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { timedOut: forumTimedOut } = useForumTimeout();
+  const { locked: forumTimedOut } = useForumTimeout();
 
   const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
@@ -603,7 +603,7 @@ const CommentItem = ({
 }) => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
   // Initialize showChildren based on isCollapsed - collapsed by default
   const [showChildren, setShowChildren] = useState(!isCollapsed);
   const [isEditing, setIsEditing] = useState(false);
@@ -1218,7 +1218,7 @@ const Forums = () => {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
-  const { timedOut: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
@@ -1678,7 +1678,8 @@ const Forums = () => {
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
-      showErrorToast("Failed to post reply. Please try again.");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
       return;
     }
   };
@@ -1726,7 +1727,8 @@ const Forums = () => {
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
-      showErrorToast("Failed to post reply. Please try again.");
+      // A timeout, suspension or low-merit refusal already got its own toast.
+      if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
       return;
     }
   };
@@ -2255,9 +2257,9 @@ const Forums = () => {
               ) : (
                 <button
                   onClick={() => setReportingPost(post)}
-                  disabled={forumTimedOut}
-                  title={forumTimedOut ? forumTimeoutMessage : undefined}
-                  className={`text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                  disabled={reportLocked}
+                  title={reportLocked ? forumTimeoutMessage : undefined}
+                  className={`text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
                 >
                   Report
                 </button>

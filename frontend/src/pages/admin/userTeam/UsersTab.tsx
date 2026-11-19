@@ -570,6 +570,7 @@ export default function UsersTab({
           history={selected.history}
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
+          canLiftPoints={capabilities.canPardon}
         />
       )}
       {selected && modal === 'warn' && capabilities.canWarn && (
