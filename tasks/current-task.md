@@ -34,3 +34,16 @@ Automatic punishments no longer follow Platform Merit live. When a warning takes
 - Member UI: status bar / How to fix show `merit_limits` (strictest band) and `muted` with fixed end dates and "runs its full time"; forum locks show "Muted" / "Low merit" with when posting returns; Record lists automatic punishments; merit ring tiers are neutral (Trusted / Good / Fair / Low / Very low).
 - Runs before the migration too: bands then follow points live and rule edits say the migration is needed.
 - User preference: do not run automated build or verification commands.
+
+---
+
+# Task (parallel): Editor ChunkLoadError after deploys
+
+## Implementation Objective
+`editor.ensemble.software` crashed with "Application error: a client-side exception" (ChunkLoadError, `/_next/static/chunks/*.js` 404). The chunk was briefly missing during a deploy, and because Next's static 404 has no Cache-Control, Cloudflare cached the 404 at the edge and gave browsers `max-age=14400`, so the editor stayed broken after the file was back.
+
+## Acceptance Criteria
+- `video-editor/server.ts`: any 4xx/5xx response under `/_next/` is sent with `Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate`; successful asset responses are unchanged.
+- `video-editor/src/app/global-error.tsx`: a ChunkLoadError reloads the page once (30 s sessionStorage guard, no auto-reload without storage); other errors show a Reload card in the existing theme instead of the bare Next error screen.
+- Ops (outside the repo): purge Cloudflare's cache for `/_next/static/` once after deploying this, and avoid running `next build` in the live `.next` directory while the server is serving from it.
+- User preference: do not run automated build or verification commands.
