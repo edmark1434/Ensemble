@@ -1,13 +1,13 @@
-# Task: Dispute filing blocked by a pending payout
+# Task: Contracts during and after a dispute
 
 ## Implementation Objective
-A contract whose earlier dispute (by either side) has a ruled payout still `scheduled` or `failed` cannot get a new dispute. The dispute form must say so before the member fills it in, not only after Submit, and error toasts must show their full message.
+A disputed contract pauses instead of running on, and a ruling decides what happens to it: a settlement ends it at once, anything else resumes it with deadlines moved forward by the time spent on hold. The dispute form also says up front when a pending payout blocks a new dispute.
 
 ## Acceptance Criteria
-- `disputeFilingBlock` reports `DISPUTE_PAYOUT_PENDING` after the permanent blocks (`DISPUTE_ALREADY_FILED`, `DISPUTE_WINDOW_CLOSED`); filing and `GET /api/contracts` (`dispute_filing`) use the same rule.
-- The message differs for a failed payout and names the dispute number only when the viewer may open that case.
-- `dispute_filing.pendingPayout` carries the case (id/number null when hidden), `payoutStatus` and `releaseAt`.
-- `POST /api/contracts/:id/dispute` returns `code` with filing-block errors.
-- Dispute form: the contract is tagged "Dispute payout pending", the banner explains it (with the scheduled payout date when in the future), Submit is disabled, and a block returned at submit time updates the banner instead of only toasting.
-- Contract details actions menu links to the blocking dispute when the viewer can open it.
-- Error toasts are not cut off at two lines and stay up long enough to read.
+- On hold while a dispute is open or a ruling's payout is waiting: escrow frozen (including revision purchases), and the overdue / stalled / abandoned / auto-approve / reminder / cancellation auto-approve jobs skip the contract.
+- `contracts.dispute_hold_since` is set in the filing transaction and synced from `emitDisputeState` before each broadcast; a 5-minute job reconciles the rest.
+- Resuming moves contract and milestone deadlines, `overdue_at`, review windows (`review_paused_for`) and cancellation auto-cancel times forward by the time each spent on hold, and notifies both parties.
+- `settle_escrow` ends the contract when ruled (Closed / Cancelled, milestones and gig order cancelled, workspaces archived), snapshotting the change in `contracts.dispute_settlement_end`; `cancel_payouts` restores it exactly. Live contracts with a standing settlement are ended by the job.
+- Abandoned-milestone job refunds before marking, so a failed refund retries instead of stranding escrow.
+- `GET /api/contracts` returns `dispute_hold`; the contract list and page show On hold / Settled by dispute, the countdown pauses or shows the contract ended.
+- Dispute form shows `DISPUTE_PAYOUT_PENDING` up front; error toasts are not cut off.

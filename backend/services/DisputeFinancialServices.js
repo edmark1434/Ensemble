@@ -180,15 +180,19 @@ async function announceSettlement(row, result, notes) {
   const number = row.dispute_number || 'your dispute';
   const totals = sumByRecipient(result.payouts);
   const recipients = new Set([row.by_account_id, row.for_account_id, clientId, freelancerId].filter(Boolean).map(String));
+  // The settlement ends the contract when it is ruled (see endContractAfterSettlement).
+  const ended = result.contractEnd && !result.contractEnd.alreadyEnded
+    ? ' The contract has ended and its unfinished milestones were cancelled.'
+    : '';
   for (const accountId of recipients) {
     const amount = totals.get(accountId) || 0;
-    const message = amount
+    const message = (amount
       ? result.immediate
         ? `Dispute ${number} is settled. ${amountLabel(amount)} have been paid to your Account Wallet.`
         : `Dispute ${number} is settled. ${amountLabel(amount)} will be paid to your Account Wallet on ${formatPayoutDate(releaseAt)}.`
       : `Dispute ${number} is settled. The escrow on the contract goes to the other party${
           result.immediate ? '.' : ` on ${formatPayoutDate(releaseAt)}.`
-        }`;
+        }`) + ended;
     await notifyDisputeAccount(accountId, row.dispute_id, { message, path: memberPath(row, accountId) });
   }
 }
@@ -287,9 +291,12 @@ async function announceCancelled(row, result, notes) {
       .filter(Boolean)
       .map(String)
   );
+  const restored = result.contractRestore?.restored
+    ? ' The contract is restored and stays on hold until the case is decided again.'
+    : '';
   for (const accountId of recipients) {
     await notifyDisputeAccount(accountId, row.dispute_id, {
-      message: `Staff withdrew the payout ruling on dispute ${number}. No credits were paid, and the case is being reviewed again.`,
+      message: `Staff withdrew the payout ruling on dispute ${number}. No credits were paid, and the case is being reviewed again.${restored}`,
       path: memberPath(row, accountId, { rulingStands: false }),
     });
   }

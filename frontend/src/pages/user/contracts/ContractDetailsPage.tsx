@@ -55,6 +55,8 @@ import {
   contractDisputeBlockingDispute,
   contractDisputeDetail,
   contractDisputePath,
+  contractHoldDetail,
+  contractHoldState,
 } from "./contractDispute";
 
 export interface ContractTeamMember {
@@ -867,6 +869,7 @@ export const ContractDetailsPage: React.FC = () => {
         milestones: mappedMilestones,
         activeDispute: foundRaw.active_dispute || null,
         disputeFiling: foundRaw.dispute_filing || null,
+        disputeHold: foundRaw.dispute_hold || null,
       };
 
       setContract(mapped);
@@ -1394,7 +1397,7 @@ export const ContractDetailsPage: React.FC = () => {
                       </span>
                     </button>
 
-                    {contract.status === "Active" && !activeCancellation && !contract.activeDispute && (
+                    {contract.status === "Active" && !activeCancellation && contractHoldState(contract).kind === "none" && (
                       <button
                         onClick={() => {
                           setActionsMenuOpen(false);
@@ -1594,7 +1597,7 @@ export const ContractDetailsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAcceptCancellation}
-                        disabled={actionLoading || Boolean(contract.activeDispute)}
+                        disabled={actionLoading || contractHoldState(contract).kind !== "none"}
                         className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm disabled:opacity-50"
                       >
                         {actionLoading ? "Processing..." : "Accept Cancellation & Refund Escrow"}
@@ -1612,7 +1615,7 @@ export const ContractDetailsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-bold text-rose-900 dark:text-rose-100">This contract is under dispute</p>
                     <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
-                      Remaining escrow is frozen. Credits cannot be released or refunded until staff close the case.{" "}
+                      {contractHoldDetail(contractHoldState(contract))}{" "}
                       {contractDisputeDetail(contract.activeDispute)}
                     </p>
                   </div>
@@ -1630,7 +1633,58 @@ export const ContractDetailsPage: React.FC = () => {
                   </button>
                 ) : null}
               </div>
-            ) : null}
+            ) : (() => {
+              // A ruling's payout still holding the contract, or a settlement that ended it.
+              const hold = contractHoldState(contract);
+              if (hold.kind !== "payout" && hold.kind !== "settled") return null;
+              const holdDispute = hold.kind === "payout" ? hold.payout : hold.settlement;
+              const holdPath = contractDisputePath(holdDispute);
+              const isPayoutHold = hold.kind === "payout";
+              return (
+                <div
+                  className={`flex flex-col gap-3 rounded-2xl border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+                    isPayoutHold
+                      ? "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10"
+                      : "border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-white/5"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${
+                        isPayoutHold ? "text-amber-600 dark:text-amber-300" : "text-zinc-500 dark:text-zinc-400"
+                      }`}
+                    />
+                    <div>
+                      <p
+                        className={`text-sm font-bold ${
+                          isPayoutHold ? "text-amber-900 dark:text-amber-100" : "text-zinc-900 dark:text-white"
+                        }`}
+                      >
+                        {isPayoutHold ? "On hold until the ruling is paid" : "Ended by a dispute ruling"}
+                      </p>
+                      <p
+                        className={`mt-1 text-xs ${
+                          isPayoutHold ? "text-amber-800 dark:text-amber-200" : "text-zinc-600 dark:text-zinc-400"
+                        }`}
+                      >
+                        {contractHoldDetail(hold)}
+                      </p>
+                    </div>
+                  </div>
+                  {holdPath ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(holdPath)}
+                      className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold text-white ${
+                        isPayoutHold ? "bg-amber-600 hover:bg-amber-700" : "bg-zinc-700 hover:bg-zinc-800 dark:bg-zinc-600 dark:hover:bg-zinc-500"
+                      }`}
+                    >
+                      View dispute
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             {/* Contract Hero Header & Financial Summary */}
             <div className={`rounded-2xl border bg-white dark:bg-dark-surface p-6 sm:p-8 shadow-sm space-y-6 ${
@@ -1643,7 +1697,15 @@ export const ContractDetailsPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     {contract.activeDispute ? (
                       <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-500/40">
-                        Under dispute
+                        Under dispute · On hold
+                      </span>
+                    ) : contractHoldState(contract).kind === "payout" ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40">
+                        On hold
+                      </span>
+                    ) : contractHoldState(contract).kind === "settled" ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-zinc-50 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/15">
+                        Settled by dispute
                       </span>
                     ) : null}
                     {getStatusBadge(contract.status)}
@@ -2267,6 +2329,13 @@ export const ContractDetailsPage: React.FC = () => {
                   contractDueDate={contract.dueDate}
                   isClient={isClient}
                   isFreelancer={isFreelancer}
+                  {...(() => {
+                    // On dispute hold the clock is stopped; it shows the time left when the hold began.
+                    const hold = contractHoldState(contract);
+                    return hold.kind === "dispute" || hold.kind === "payout"
+                      ? { paused: true, pausedSince: hold.since }
+                      : { paused: false, pausedSince: null };
+                  })()}
                 />
 
                 {/* WORKFLOW & OPERATIONAL TERMS CARD */}

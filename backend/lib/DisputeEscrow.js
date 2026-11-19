@@ -40,6 +40,29 @@ const PENDING_PAYOUT_DISPUTES_SQL = `
   ORDER BY d.contract_id, d.created_at DESC
 `;
 
+/**
+ * SQL boolean: the contract is on dispute hold. A dispute on it is open, or a ruling's payout on
+ * it is still waiting. Meanwhile its escrow is frozen and its clock is stopped: deadline,
+ * auto-approve, reminder and auto-cancel jobs skip it. When the hold lifts,
+ * `syncContractDisputeHold` moves its deadlines forward by the time spent on hold.
+ * `contractIdExpr` is a trusted column reference such as `c.contract_id`, never user input.
+ */
+function contractOnDisputeHoldSql(contractIdExpr) {
+  return `EXISTS (
+    SELECT 1 FROM disputes hold_d
+    WHERE hold_d.contract_id = ${contractIdExpr}
+      AND hold_d.deleted_at IS NULL
+      AND (
+        hold_d.status <> 'closed'
+        OR EXISTS (
+          SELECT 1 FROM dispute_payouts hold_p
+          WHERE hold_p.dispute_id = hold_d.dispute_id
+            AND hold_p.status IN ('scheduled', 'failed')
+        )
+      )
+  )`;
+}
+
 function frozenEscrowError(dispute, { pendingPayout = false } = {}) {
   const number = dispute?.dispute_number ? ` ${dispute.dispute_number}` : '';
   const error = new Error(
@@ -351,6 +374,7 @@ module.exports = {
   getPendingPayoutContractDispute,
   getPendingPayoutDisputesForContracts,
   pendingPayoutDisputeVisible,
+  contractOnDisputeHoldSql,
   assertNoOpenContractDispute,
   freezeContractEscrowForDispute,
   remainingContractEscrowCredits,

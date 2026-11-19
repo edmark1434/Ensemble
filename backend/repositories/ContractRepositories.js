@@ -12,6 +12,10 @@ const {
 } = require('../lib/DisputeEscrow');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
+const {
+    syncContractDisputeHold,
+    disputeHoldForContracts,
+} = require('./ContractDisputeHoldRepositories');
 
 async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, customMilestones = null) {
     const client = await pool.connect();
@@ -913,14 +917,16 @@ async function getContractsByUserId(accountIds) {
     const res = await pool.query(query, [accountIds]);
     const rows = res.rows;
     const contractIds = rows.map((row) => row.contract_id);
-    const [disputes, filing] = await Promise.all([
+    const [disputes, filing, holds] = await Promise.all([
         openDisputesForContracts(contractIds, accountIds),
         disputeFilingForContracts(contractIds, accountIds),
+        disputeHoldForContracts(contractIds, accountIds),
     ]);
     return rows.map((row) => ({
         ...row,
         active_dispute: disputes.get(String(row.contract_id)) || null,
         dispute_filing: filing.get(String(row.contract_id)) || null,
+        dispute_hold: holds.get(String(row.contract_id)) || null,
     }));
 }
 
@@ -1072,6 +1078,16 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
             disputeId: disputeRes.rows[0].dispute_id,
             contractId,
         });
+        // The contract goes on hold with the filing: its clock stops until the case is decided.
+        // A savepoint keeps a missing column (migration not run yet) from failing the filing.
+        await client.query('SAVEPOINT dispute_hold_start');
+        try {
+            await syncContractDisputeHold(contractId, { db: client });
+            await client.query('RELEASE SAVEPOINT dispute_hold_start');
+        } catch (holdErr) {
+            await client.query('ROLLBACK TO SAVEPOINT dispute_hold_start');
+            if (holdErr.code !== '42703') throw holdErr;
+        }
         await client.query('COMMIT');
         createdDispute = { ...disputeRes.rows[0], ...frozen };
     } catch (err) {

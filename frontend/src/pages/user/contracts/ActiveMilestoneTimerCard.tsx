@@ -10,6 +10,10 @@ interface ActiveMilestoneTimerCardProps {
   isClient?: boolean;
   isFreelancer?: boolean;
   className?: string;
+  /** The contract is on dispute hold: the clock is stopped at the time left when the hold began. */
+  paused?: boolean;
+  /** When the hold began (server time); when unknown, the clock stops where it is now. */
+  pausedSince?: string | null;
 }
 
 export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> = ({
@@ -20,6 +24,8 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
   isClient = false,
   isFreelancer = false,
   className = "",
+  paused = false,
+  pausedSince = null,
 }) => {
   if (!milestones || milestones.length === 0) return null;
 
@@ -37,6 +43,9 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
   const isWaiting =
     contractStatus === "Waiting" || contractStatus === "Pending Signature";
   const isActive = contractStatus === "Active";
+  // Cancelled or closed with work left unfinished (e.g. ended by a dispute settlement).
+  const isEnded = !isCompleted && (contractStatus === "Cancelled" || contractStatus === "Closed");
+  const pausedAtMs = paused && pausedSince ? new Date(pausedSince).getTime() : NaN;
 
   // Calculate target deadline timestamp
   const getTargetDate = (): Date | null => {
@@ -91,7 +100,7 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
   });
 
   useEffect(() => {
-    if (!targetDate || isCompleted || isWaiting) {
+    if (!targetDate || isCompleted || isWaiting || isEnded) {
       setTimeLeft({
         days: "00",
         hours: "00",
@@ -104,7 +113,9 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
     }
 
     const calcTime = () => {
-      const diffMs = targetDate.getTime() - Date.now();
+      // On hold the clock reads from when the hold began, so it does not move.
+      const nowMs = paused ? (Number.isFinite(pausedAtMs) ? pausedAtMs : Date.now()) : Date.now();
+      const diffMs = targetDate.getTime() - nowMs;
 
       if (diffMs <= 0) {
         setTimeLeft({
@@ -137,12 +148,16 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
     };
 
     calcTime();
+    if (paused) return;
     const interval = setInterval(calcTime, 1000);
     return () => clearInterval(interval);
   }, [
     targetDate?.getTime(),
     isCompleted,
     isWaiting,
+    isEnded,
+    paused,
+    pausedAtMs,
     activeMilestone.started_at,
     contractDateStarted,
   ]);
@@ -178,6 +193,14 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
         ) : isWaiting ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800">
             <span>Awaiting Signature</span>
+          </span>
+        ) : isEnded ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-300 dark:bg-white/5 dark:text-zinc-300 dark:border-white/15">
+            <span>Contract Ended</span>
+          </span>
+        ) : paused ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800">
+            <span>Paused · On hold</span>
           </span>
         ) : timeLeft.isExpired ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800">
@@ -227,6 +250,14 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
           <p className="text-[11px] text-sky-700 dark:text-sky-300 leading-relaxed">
             Allocated delivery window:{" "}
             <strong>{activeMilestone.deadline || "Standard"}</strong>. Clock initiates as soon as terms are accepted.
+          </p>
+        </div>
+      ) : isEnded ? (
+        <div className="p-4 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50/80 dark:bg-white/[0.03] text-center space-y-1">
+          <Clock className="w-5 h-5 text-zinc-500 dark:text-zinc-400 mx-auto" />
+          <p className="text-xs font-bold text-zinc-900 dark:text-white">No Clock Running</p>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            This contract has ended, so its unfinished milestones have no deadline.
           </p>
         </div>
       ) : (
@@ -295,7 +326,13 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
           </span>
         </div>
 
-        {isActive && !isCompleted && (
+        {isActive && !isCompleted && paused && (
+          <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-normal pt-1">
+            The clock is stopped while this contract is on dispute hold. When the hold lifts, this deadline
+            moves forward by the time spent on hold.
+          </p>
+        )}
+        {isActive && !isCompleted && !paused && (
           <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-normal pt-1">
             {isFreelancer
               ? "Submit milestone files before this timer elapses to maintain an optimal Delivery Reliability score."
