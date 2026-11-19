@@ -15,12 +15,14 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import LedgerEntryModal from './LedgerEntryModal';
 import LedgerTab from './LedgerTab';
 import OverviewTab from './OverviewTab';
 import WalletDetailModal from './WalletDetailModal';
 import WalletsTab from './WalletsTab';
 import { ECONOMY_ACCENT, ECONOMY_API, formatRelative } from './economyUi';
-import type { EconomyAlert, EconomyOverview, EconomyTab, EconomyVariant } from './creditEconomyTypes';
+import { LEDGER_DEFAULTS, LEDGER_PARAM_KEYS, writeLedgerFilters } from './ledgerShared';
+import type { EconomyAlert, EconomyOverview, EconomyTab, EconomyVariant, LedgerFilters } from './creditEconomyTypes';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 
 const TABS: { id: EconomyTab; label: string; icon: typeof LayoutGrid }[] = [
@@ -70,6 +72,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = readTab(searchParams.get('tab'));
   const openWalletId = searchParams.get('wallet');
+  const openTxId = searchParams.get('tx');
 
   const [data, setData] = useState<EconomyOverview | null>(() => {
     const cached = peekStaffGet(ECONOMY_API.overview);
@@ -112,16 +115,55 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
     }
   }, [searchParams, setSearchParams, navigate, variant]);
 
-  const setParam = (key: string, value: string | null) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setSearchParams(next, { replace: true });
+  /** `push` adds a history step, so Back returns to the view the jump came from. */
+  const patchParams = (patch: Record<string, string | null>, push = false) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(patch)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
+        return next;
+      },
+      { replace: !push }
+    );
+  };
+  const setParam = (key: string, value: string | null) => patchParams({ [key]: value });
+
+  /**
+   * Wallets and Holds take alert filters as presets; the Ledger keeps its filters in the URL
+   * (shareable, survive reload and Back), so they are written there and dropped on leaving.
+   */
+  const switchTab = (id: EconomyTab, filters?: Record<string, string>) => {
+    if (id !== 'ledger') setPresets((prev) => ({ ...prev, [id]: filters ? { ...filters } : prev[id] }));
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id !== 'ledger' || filters) LEDGER_PARAM_KEYS.forEach((k) => next.delete(k));
+        if (id === 'ledger' && filters) writeLedgerFilters(next, filters as Partial<LedgerFilters>);
+        if (id === 'overview') next.delete('tab');
+        else next.set('tab', id);
+        return next;
+      },
+      { replace: true }
+    );
   };
 
-  const switchTab = (id: EconomyTab, filters?: Record<string, string>) => {
-    setPresets((prev) => ({ ...prev, [id]: filters ? { ...filters } : prev[id] }));
-    setParam('tab', id === 'overview' ? null : id);
+  /** Ledger with exactly these filters, from a modal; closes the modals. */
+  const openLedger = (filters: Partial<LedgerFilters>) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        LEDGER_PARAM_KEYS.forEach((k) => next.delete(k));
+        next.delete('wallet');
+        next.delete('tx');
+        next.set('tab', 'ledger');
+        writeLedgerFilters(next, { ...LEDGER_DEFAULTS, ...filters });
+        return next;
+      },
+      { replace: false }
+    );
   };
 
   const refreshAll = () => {
@@ -129,7 +171,8 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
     setRefreshToken((n) => n + 1);
   };
 
-  const openWallet = (walletId: string) => setParam('wallet', walletId);
+  const openWallet = (walletId: string) => patchParams({ wallet: walletId, tx: null }, Boolean(openTxId));
+  const openTransaction = (transactionId: string) => patchParams({ tx: transactionId }, !openTxId);
 
   if (loading && !data) {
     return (
@@ -259,7 +302,13 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
         )}
 
         {tab === 'overview' && (
-          <OverviewTab data={data} variant={variant} onOpenTab={switchTab} onOpenWallet={openWallet} />
+          <OverviewTab
+            data={data}
+            variant={variant}
+            onOpenTab={switchTab}
+            onOpenWallet={openWallet}
+            onOpenTransaction={openTransaction}
+          />
         )}
         {(tab === 'wallets' || tab === 'holds') && (
           <WalletsTab
@@ -275,7 +324,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
           />
         )}
         {tab === 'ledger' && (
-          <LedgerTab variant={variant} preset={presets.ledger} refreshToken={refreshToken} onOpenWallet={openWallet} />
+          <LedgerTab variant={variant} refreshToken={refreshToken} onOpenWallet={openWallet} onOpenTransaction={openTransaction} />
         )}
       </div>
 
@@ -287,6 +336,19 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
           onClose={() => setParam('wallet', null)}
           onChanged={refreshAll}
           onOpenWallet={openWallet}
+          onOpenTransaction={openTransaction}
+          onShowInLedger={openLedger}
+          escapeDisabled={Boolean(openTxId)}
+        />
+      )}
+      {openTxId && (
+        <LedgerEntryModal
+          transactionId={openTxId}
+          variant={variant}
+          onClose={() => setParam('tx', null)}
+          onNavigate={(id) => setParam('tx', id)}
+          onOpenWallet={openWallet}
+          onShowInLedger={openLedger}
         />
       )}
     </main>

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
+  ArrowUpRight,
   Check,
-  Copy,
   Download,
   ExternalLink,
+  Filter,
   Loader2,
   Lock,
   PlusCircle,
@@ -16,8 +17,9 @@ import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import { TeamOverviewModal, UserOverviewModal } from '../userTeam/components/AccountModals';
 import type { PlatformTeam, PlatformUserAccount } from '../userTeam/userTeamTypes';
 import { AdjustCreditsDialog, HoldCreditsDialog, ReleaseHoldDialog } from './CreditActionDialogs';
-import { exportLedger, LedgerEntryDetail } from './LedgerTab';
+import { exportLedger, LedgerEntryDetail, LedgerLinkChips } from './ledgerShared';
 import {
+  CopyId,
   ECONOMY_ACCENT,
   ECONOMY_API,
   formatCredits,
@@ -32,7 +34,7 @@ import {
   StatusPill,
   usePagedList,
 } from './economyUi';
-import type { EconomyVariant, LedgerEntry, WalletDetail } from './creditEconomyTypes';
+import type { EconomyVariant, LedgerEntry, LedgerFilters, WalletDetail } from './creditEconomyTypes';
 
 const TX_PAGE = 25;
 
@@ -45,27 +47,13 @@ type WalletDetailModalProps = {
   onChanged: () => void;
   /** Open another wallet (a counterparty) in place. */
   onOpenWallet: (walletId: string) => void;
+  /** Open one ledger entry with its linked rows (on top of this modal). */
+  onOpenTransaction: (transactionId: string) => void;
+  /** Leave the modal for the Ledger tab with these filters. */
+  onShowInLedger: (filters: Partial<LedgerFilters>) => void;
+  /** True while a dialog stacked above this one owns the Escape key. */
+  escapeDisabled?: boolean;
 };
-
-function CopyId({ value }: { value: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        void navigator.clipboard?.writeText(value).then(() => {
-          setDone(true);
-          window.setTimeout(() => setDone(false), 1200);
-        });
-      }}
-      className="inline-flex items-center gap-1 font-mono text-[10px] text-zinc-600 hover:text-zinc-300"
-      title="Copy"
-    >
-      {value}
-      {done ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-    </button>
-  );
-}
 
 function Tile({ label, value, hint, tone = 'text-white' }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string }) {
   return (
@@ -77,7 +65,16 @@ function Tile({ label, value, hint, tone = 'text-white' }: { label: string; valu
   );
 }
 
-export default function WalletDetailModal({ walletId, variant, onClose, onChanged, onOpenWallet }: WalletDetailModalProps) {
+export default function WalletDetailModal({
+  walletId,
+  variant,
+  onClose,
+  onChanged,
+  onOpenWallet,
+  onOpenTransaction,
+  onShowInLedger,
+  escapeDisabled = false,
+}: WalletDetailModalProps) {
   const accent = ECONOMY_ACCENT[variant];
   const url = ECONOMY_API.wallet(walletId);
   const cached = peekStaffGet(url)?.data;
@@ -121,11 +118,11 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !dialog) onClose();
+      if (e.key === 'Escape' && !dialog && !escapeDisabled) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialog, onClose]);
+  }, [dialog, onClose, escapeDisabled]);
 
   const txParams = useMemo(
     () => ({ walletId, direction, limit: TX_PAGE, offset: txOffset, sort: 'newest' }),
@@ -403,9 +400,17 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
                         {tx.loading && <Loader2 className={`h-3.5 w-3.5 animate-spin ${accent.spinner}`} />}
                         <button
                           type="button"
+                          onClick={() => onShowInLedger({ walletId: wallet.walletId, direction })}
+                          className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-300 hover:text-white"
+                          title="Search, filter by date, type or amount, and export every entry of this wallet"
+                        >
+                          <Filter className="h-3 w-3" /> Filter & export in the ledger
+                        </button>
+                        <button
+                          type="button"
                           disabled={!tx.page?.items.length}
                           onClick={() => exportLedger(tx.page?.items || [], `wallet-${wallet.walletId.slice(0, 8)}-ledger.csv`)}
-                          className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white disabled:opacity-40"
+                          className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white disabled:opacity-40"
                         >
                           <Download className="h-3 w-3" /> Export page
                         </button>
@@ -417,10 +422,20 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
                           const open = expanded === e.id;
                           return (
                             <li key={e.id}>
-                              <button
-                                type="button"
+                              {/* A div, not a button: the link chips inside are buttons. */}
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                aria-expanded={open}
                                 onClick={() => setExpanded(open ? null : e.id)}
-                                className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02]"
+                                onKeyDown={(ev) => {
+                                  if (ev.target !== ev.currentTarget) return;
+                                  if (ev.key === 'Enter' || ev.key === ' ') {
+                                    ev.preventDefault();
+                                    setExpanded(open ? null : e.id);
+                                  }
+                                }}
+                                className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02]"
                               >
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm text-white">{e.isAdjustment ? 'Staff adjustment' : e.type}</p>
@@ -428,10 +443,11 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
                                     {formatDateTime(e.createdAt)} ·{' '}
                                     {e.isAdjustment ? e.adjustment?.reason || 'No reason recorded' : `${e.direction === 'in' ? 'from' : 'to'} ${counterparty.name}`}
                                   </p>
+                                  <LedgerLinkChips entry={e} onOpenTransaction={onOpenTransaction} />
                                 </div>
                                 {e.status !== 'Completed' && <StatusPill status={e.status} />}
                                 <LedgerAmount entry={e} />
-                              </button>
+                              </div>
                               {open && (
                                 <div className="border-t border-white/[0.04] bg-[#0f1016] px-3 py-3">
                                   {!e.isAdjustment && (
@@ -442,9 +458,12 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
                                   )}
                                   <LedgerEntryDetail
                                     entry={e}
+                                    currentWalletId={walletId}
                                     onOpenWallet={(id) => {
                                       if (id !== walletId) onOpenWallet(id);
                                     }}
+                                    onOpenTransaction={onOpenTransaction}
+                                    onShowInLedger={onShowInLedger}
                                   />
                                 </div>
                               )}
@@ -462,19 +481,30 @@ export default function WalletDetailModal({ walletId, variant, onClose, onChange
                   {section === 'adjustments' && (
                     <ul className="space-y-2">
                       {detail.adjustments.map((a) => (
-                        <li key={a.id} className="flex items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                          <div className="min-w-0">
-                            <p className="text-sm text-white">{a.reason || 'No reason'}</p>
-                            <p className="text-[11px] text-zinc-500">
-                              {a.actorName}
-                              {a.actorRole ? ` · ${a.actorRole}` : ''} · {formatDateTime(a.createdAt)}
-                              {a.sourceTable === 'tickets' ? ' · from a support ticket' : ''}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className={`font-semibold tabular-nums ${a.delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatSigned(a.delta)}</p>
-                            {a.balanceAfter != null && <p className="text-[10px] text-zinc-600">after: {formatCredits(a.balanceAfter)}</p>}
-                          </div>
+                        <li key={a.id}>
+                          <button
+                            type="button"
+                            disabled={!a.creditTransactionId}
+                            onClick={() => a.creditTransactionId && onOpenTransaction(a.creditTransactionId)}
+                            title={a.creditTransactionId ? 'Open the ledger entry' : undefined}
+                            className="flex w-full items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left transition enabled:hover:border-white/20 disabled:cursor-default"
+                          >
+                            <span className="min-w-0">
+                              <span className="block text-sm text-white">{a.reason || 'No reason'}</span>
+                              <span className="block text-[11px] text-zinc-500">
+                                {a.actorName}
+                                {a.actorRole ? ` · ${a.actorRole}` : ''} · {formatDateTime(a.createdAt)}
+                                {a.sourceTable === 'tickets' ? ' · from a support ticket' : ''}
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-start gap-2 text-right">
+                              <span>
+                                <span className={`block font-semibold tabular-nums ${a.delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatSigned(a.delta)}</span>
+                                {a.balanceAfter != null && <span className="block text-[10px] text-zinc-600">after: {formatCredits(a.balanceAfter)}</span>}
+                              </span>
+                              {a.creditTransactionId && <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 text-zinc-600" />}
+                            </span>
+                          </button>
                         </li>
                       ))}
                       {!detail.adjustments.length && <p className="py-8 text-center text-sm text-zinc-500">No audited staff adjustments.</p>}

@@ -11,6 +11,13 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import {
+  ATTACHMENT_HINT,
+  AttachButton,
+  PendingFileList,
+  uploadPendingFiles,
+  usePendingFiles,
+} from "@/pages/user/account/appeal/appealAttachments";
+import {
   type ContractActiveDispute,
   type ContractDisputeFiling,
   contractDisputeBlockLabel,
@@ -66,6 +73,7 @@ export const DisputeFormPage: React.FC = () => {
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  const evidenceFiles = usePendingFiles();
 
   useEffect(() => {
     const fetchContracts = async () => {
@@ -177,12 +185,20 @@ export const DisputeFormPage: React.FC = () => {
         ? `[Contested Milestone: ${contestedMilestone.name} (#${contestedMilestone.id})]\n\n${details}`
         : (paramMilestoneId ? `[Contested Milestone ID: #${paramMilestoneId}]\n\n${details}` : details);
 
+      // Same staging folder as replies in the dispute case; they are posted under the case summary.
+      const attachments = await uploadPendingFiles(evidenceFiles.files, "chat-attachments");
       const res = await api.post(`/api/contracts/${selectedContractId}/dispute`, {
         reason,
         details: formattedDetails,
+        ...(attachments.length ? { attachments } : {}),
       });
       if (res.data?.success) {
-        toast.success("Dispute filed. Staff will review it; you can add evidence here.");
+        evidenceFiles.clear();
+        if (res.data?.data?.evidence?.failed) {
+          toast.error("Dispute filed, but your files could not be attached. Add them again by replying in the case.");
+        } else {
+          toast.success("Dispute filed. Staff will review it; you can add more evidence here.");
+        }
         // Open the new case: its first message is the platform summary of what was filed.
         const disputeId = res.data?.data?.dispute_id;
         navigate(disputeId ? casePath("dispute", String(disputeId)) : "/contracts");
@@ -191,7 +207,8 @@ export const DisputeFormPage: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Dispute submission error:", err);
-      toast.error(err.response?.data?.message || "Failed to submit dispute. Please try again.");
+      // An upload failure throws a plain Error naming the file (see uploadPendingFiles).
+      toast.error(err.response?.data?.message || err?.message || "Failed to submit dispute. Please try again.");
     } finally {
       submittingRef.current = false;
       setIsSubmitting(false);
@@ -467,6 +484,26 @@ export const DisputeFormPage: React.FC = () => {
                     placeholder="Please explain the situation in detail..."
                     className="scroll-thin w-full min-h-[130px] resize-y rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-rose-500/50 focus:ring-2 focus:ring-rose-500/20 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-600"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                      Evidence{" "}
+                      <span className="font-medium normal-case tracking-normal text-gray-400 dark:text-zinc-500">(optional)</span>
+                    </span>
+                    <AttachButton
+                      onPick={evidenceFiles.add}
+                      disabled={isSubmitting}
+                      count={evidenceFiles.files.length}
+                      className="-my-1.5 -mr-1.5"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    Screenshots, delivered files, chat logs or receipts that show what happened. Only you and staff
+                    can see them while the case is private. {ATTACHMENT_HINT}
+                  </p>
+                  <PendingFileList files={evidenceFiles.files} onRemove={evidenceFiles.remove} disabled={isSubmitting} />
                 </div>
               </>
             )}

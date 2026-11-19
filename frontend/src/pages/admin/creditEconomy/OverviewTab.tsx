@@ -8,6 +8,7 @@ import {
   formatRelative,
   formatSigned,
   LedgerAmount,
+  localDateDaysAgo,
   Panel,
   PartyCell,
   StatTile,
@@ -20,6 +21,7 @@ type OverviewTabProps = {
   variant: EconomyVariant;
   onOpenTab: (tab: EconomyTab, filters?: Record<string, string>) => void;
   onOpenWallet: (walletId: string) => void;
+  onOpenTransaction: (transactionId: string) => void;
 };
 
 function FlowRow({ label, value, tone = 'text-zinc-200', hint }: { label: string; value: number; tone?: string; hint?: string }) {
@@ -105,8 +107,10 @@ function Leaderboard({ leaders, onOpenWallet }: { leaders: EconomyOverview['lead
   );
 }
 
-export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewTabProps) {
+export default function OverviewTab({ data, onOpenTab, onOpenWallet, onOpenTransaction }: OverviewTabProps) {
   const { supply, flow, inFlight, creditValuePhp } = data;
+  // The flow counts cover the last `flow.days` days; their links open the same window.
+  const flowFrom = localDateDaysAgo(flow.days - 1);
   const php = (n: number) => formatPhp(n, creditValuePhp);
   const labels = flow.series.map((p) => {
     const d = new Date(`${p.day}T00:00:00`);
@@ -205,16 +209,16 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
                 Net supply change{' '}
                 <span className={`font-semibold tabular-nums ${flow.net >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{formatSigned(flow.net)}</span>
               </span>
-              <span className="text-zinc-400">
+              <button type="button" onClick={() => onOpenTab('ledger', { from: flowFrom })} className="text-zinc-400 hover:text-white">
                 Ledger rows <span className="font-semibold text-white">{flow.rows.total.toLocaleString()}</span>
-              </span>
-              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Pending' })} className="text-zinc-400 hover:text-white">
+              </button>
+              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Pending', from: flowFrom, sort: 'oldest' })} className="text-zinc-400 hover:text-white">
                 Pending <span className="font-semibold text-amber-300">{flow.rows.pending.toLocaleString()}</span>
               </button>
-              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Failed' })} className="text-zinc-400 hover:text-white">
+              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Failed', from: flowFrom })} className="text-zinc-400 hover:text-white">
                 Failed <span className="font-semibold text-red-300">{flow.rows.failed.toLocaleString()}</span>
               </button>
-              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Reversed' })} className="text-zinc-400 hover:text-white">
+              <button type="button" onClick={() => onOpenTab('ledger', { status: 'Reversed', from: flowFrom })} className="text-zinc-400 hover:text-white">
                 Reversed <span className="font-semibold text-violet-300">{flow.rows.reversed.toLocaleString()}</span>
               </button>
             </div>
@@ -246,10 +250,8 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet }: OverviewT
                   {data.recentLedger.map((e) => (
                     <tr
                       key={e.id}
-                      onClick={() => {
-                        const id = e.destination.walletType === 'Account' ? e.destination.walletId : e.source.walletId;
-                        if (id) onOpenWallet(id);
-                      }}
+                      onClick={() => onOpenTransaction(e.id)}
+                      title="Open this entry and everything linked to it"
                       className="cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.02]"
                     >
                       <td className="whitespace-nowrap px-4 py-2.5 text-xs text-zinc-500" title={formatDateTime(e.createdAt)}>

@@ -19,6 +19,34 @@ const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositori
 const MOVED_STATUSES = `('Completed', 'Reversed')`;
 const FEE_TYPES = `('Fee', 'Job Posting Fee', 'Proposal Fee', 'Service Posting Fee')`;
 const REFUND_TYPES = `('Escrow Refund', 'Asset Refund', 'Cashout Refund', 'Job Posting Fee Refund', 'Proposal Fee Refund')`;
+/** Cashouts the payout provider has not settled yet (same set as the in-flight panel). */
+const OPEN_CASHOUT_STATUSES = `('PENDING', 'PROCESSING', 'ACCEPTED', 'REQUESTED')`;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Start of a pasted id (the desk shows ids shortened to 8 characters). */
+const ID_PREFIX_RE = /^[0-9a-f]{4}[0-9a-f-]{0,31}$/i;
+
+/** Escape LIKE wildcards so a typed `%` or `_` matches itself. */
+function escapeLike(text) {
+  return String(text).replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** Search text as staff type it: trimmed, without the `@` people put before a handle. */
+function normalizeSearch(value) {
+  return String(value || '').trim().replace(/^@+/, '').trim();
+}
+
+/**
+ * Start of a calendar day in the viewer's time zone, as a wall-clock value in the
+ * database session zone (the zone `created_at` was written in), so the index still applies.
+ * `tzOffset` is the browser's `getTimezoneOffset()` (minutes, UTC minus local). Without it
+ * the day is the database's own day.
+ */
+function dayStartSql(dateParam, offsetParam, plusDays = 0) {
+  const day = plusDays ? `(${dateParam}::date + ${plusDays})` : `${dateParam}::date`;
+  if (!offsetParam) return day;
+  return `(((${day})::timestamp + make_interval(mins => ${offsetParam}::int)) AT TIME ZONE 'UTC')::timestamp`;
+}
 
 const ADJUSTMENT_LATERAL = `
   LEFT JOIN LATERAL (
@@ -31,7 +59,7 @@ const ADJUSTMENT_LATERAL = `
   ) adj ON ct.source_wallet_id = ct.destination_wallet_id`;
 
 /** Owner of a wallet: the account it belongs to, or the contract an escrow wallet serves. */
-function partyLateral(alias, walletColumn) {
+function partyLateral(alias, walletColumn, { escrow = true } = {}) {
   return `
   LEFT JOIN LATERAL (
     SELECT
@@ -49,10 +77,14 @@ function partyLateral(alias, walletColumn) {
     INNER JOIN accounts a ON a.account_id = aw.account_id
     WHERE aw.wallet_id = ${walletColumn}
     LIMIT 1
-  ) ${alias} ON TRUE
+  ) ${alias} ON TRUE${
+    escrow
+      ? `
   LEFT JOIN LATERAL (
     SELECT ew.contract_id FROM escrow_wallets ew WHERE ew.wallet_id = ${walletColumn} LIMIT 1
-  ) ${alias}_ew ON TRUE`;
+  ) ${alias}_ew ON TRUE`
+      : ''
+  }`;
 }
 
 function walletTypeLabel(type) {
@@ -155,11 +187,25 @@ function mapLedgerRow(row, { walletId = null, accountId = null } = {}) {
     relatedDisputeId: row.related_dispute_id || null,
     reversesTransactionId: row.reverses_credit_transaction_id || null,
     feeTransactionId: row.fee_transaction_id || null,
+    // Links in both directions, so neither side has to be searched for.
+    fee: row.fee_id
+      ? { id: row.fee_id, amount: Math.abs(Number(row.fee_amount || 0)), status: row.fee_status || null }
+      : null,
+    feeFor: row.fee_for_id
+      ? { id: row.fee_for_id, type: row.fee_for_type || null, amount: Math.abs(Number(row.fee_for_amount || 0)) }
+      : null,
+    reverses: row.reverses_credit_transaction_id
+      ? { id: row.reverses_credit_transaction_id, type: row.reverses_type || null, status: row.reverses_status || null }
+      : null,
+    reversedBy: row.reversed_by_id ? { id: row.reversed_by_id, status: row.reversed_by_status || null } : null,
+    cashout: row.cashout_id
+      ? { id: row.cashout_id, reference: row.cashout_reference || null, status: row.cashout_status || null }
+      : null,
   };
 }
 
-const LEDGER_SELECT = `
-  SELECT
+/** Every column the desk shows for a ledger row; joined only for the rows being returned. */
+const LEDGER_COLUMNS = `
     ct.credit_transaction_id,
     ct.type::text AS type,
     ct.status::text AS status,
@@ -193,27 +239,73 @@ const LEDGER_SELECT = `
     adjs.first_name AS adj_staff_first,
     adjs.last_name AS adj_staff_last,
     adjs.role::text AS adj_staff_role,
-    COUNT(*) OVER() AS total_count
-  FROM credit_transactions ct
+    fee.credit_transaction_id AS fee_id,
+    fee.amount_credits AS fee_amount,
+    fee.status::text AS fee_status,
+    fee_for.credit_transaction_id AS fee_for_id,
+    fee_for.type AS fee_for_type,
+    fee_for.amount_credits AS fee_for_amount,
+    orig.type::text AS reverses_type,
+    orig.status::text AS reverses_status,
+    rev_by.credit_transaction_id AS reversed_by_id,
+    rev_by.status AS reversed_by_status,
+    co.cashout_id,
+    co.reference_id AS cashout_reference,
+    co.status AS cashout_status`;
+
+const LEDGER_JOINS = `
   LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
   LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
   ${partyLateral('src', 'ct.source_wallet_id')}
   ${partyLateral('dst', 'ct.destination_wallet_id')}
   ${ADJUSTMENT_LATERAL}
-  LEFT JOIN staff adjs ON adjs.staff_id = adj.actor_staff_id`;
+  LEFT JOIN staff adjs ON adjs.staff_id = adj.actor_staff_id
+  LEFT JOIN credit_transactions fee ON fee.credit_transaction_id = ct.fee_transaction_id
+  LEFT JOIN LATERAL (
+    SELECT p.credit_transaction_id, p.type::text AS type, p.amount_credits
+    FROM credit_transactions p
+    WHERE ct.type::text = 'Fee' AND p.fee_transaction_id = ct.credit_transaction_id
+    ORDER BY p.created_at ASC
+    LIMIT 1
+  ) fee_for ON TRUE
+  LEFT JOIN credit_transactions orig ON orig.credit_transaction_id = ct.reverses_credit_transaction_id
+  LEFT JOIN LATERAL (
+    SELECT r.credit_transaction_id, r.status::text AS status
+    FROM credit_transactions r
+    WHERE r.reverses_credit_transaction_id = ct.credit_transaction_id
+    ORDER BY (r.status::text IN ('Completed', 'Pending')) DESC, r.created_at DESC
+    LIMIT 1
+  ) rev_by ON TRUE
+  LEFT JOIN cashouts co ON ct.reference_table = 'cashouts' AND co.cashout_id = ct.reference_id`;
+
+const ADJUSTMENT_ROW = `(ct.source_wallet_id = ct.destination_wallet_id AND ct.type::text = 'Fund Transfer')`;
 
 const LEDGER_KIND_SQL = {
-  adjustment: `(ct.source_wallet_id = ct.destination_wallet_id AND ct.type::text = 'Fund Transfer')`,
+  adjustment: ADJUSTMENT_ROW,
+  grant: `(${ADJUSTMENT_ROW} AND (adj.metadata->>'delta')::numeric > 0)`,
+  deduction: `(${ADJUSTMENT_ROW} AND (adj.metadata->>'delta')::numeric < 0)`,
+  adjustment_unrecorded: `(${ADJUSTMENT_ROW} AND adj.metadata IS NULL)`,
   topup: `(ct.reference_table = 'payments')`,
   transfer: `(ct.type::text = 'Fund Transfer' AND ct.source_wallet_id <> ct.destination_wallet_id AND COALESCE(ct.reference_table, '') <> 'payments')`,
   escrow: `(ct.type::text LIKE 'Escrow%')`,
   marketplace: `(ct.type::text LIKE 'Asset%')`,
   cashout: `(ct.type::text LIKE 'Cashout%')`,
+  cashout_open: `(ct.type::text = 'Cashout' AND ct.reference_table = 'cashouts' AND EXISTS (
+    SELECT 1 FROM cashouts c WHERE c.cashout_id = ct.reference_id AND UPPER(c.status) IN ${OPEN_CASHOUT_STATUSES}
+  ))`,
   fees: `(ct.type::text IN ${FEE_TYPES})`,
   jobs: `(ct.type::text LIKE 'Job Posting%' OR ct.type::text LIKE 'Proposal%' OR ct.type::text = 'Service Posting Fee')`,
   dispute: `(ct.related_dispute_id IS NOT NULL OR ct.reference_table = 'disputes')`,
   refunds: `(ct.type::text IN ${REFUND_TYPES})`,
+  reversal: `(ct.reverses_credit_transaction_id IS NOT NULL)`,
 };
+
+/** Categories that read the adjustment audit row. */
+const ADJUSTMENT_KINDS = new Set(['grant', 'deduction', 'adjustment_unrecorded']);
+
+/** Wallets of a contract's escrow. */
+const contractWalletsSelect = (p) => `SELECT ew.wallet_id FROM escrow_wallets ew WHERE ew.contract_id = ${p}::uuid`;
+const contractWalletsSql = (p) => `(${contractWalletsSelect(p)})`;
 
 const LEDGER_SORT_SQL = {
   newest: 'ct.created_at DESC, ct.credit_transaction_id DESC',
@@ -225,6 +317,16 @@ const LEDGER_SORT_SQL = {
 /**
  * One page of the credit ledger. Filters are validated by the service; every value is
  * parameterized here.
+ *
+ * Two steps: the filter query joins only what the filters read (party, adjustment audit)
+ * and returns one page of ids with the total; the display columns are then joined for
+ * those rows alone. Before, every join ran for every matching row because of the
+ * window count.
+ *
+ * Search: a full UUID matches any id on the row exactly (transaction, wallets, account,
+ * reference, dispute, contract, fee and reversal links). Other text matches names,
+ * handles, member name and email, the adjustment reason and author, the reference type,
+ * a cashout reference, and the start of any id (the desk shows ids shortened).
  */
 async function listLedger({
   search = '',
@@ -234,8 +336,13 @@ async function listLedger({
   direction = null,
   walletId = null,
   accountId = null,
+  referenceId = null,
+  referenceTable = null,
+  disputeId = null,
+  contractId = null,
   from = null,
   to = null,
+  tzOffset = null,
   minAmount = null,
   maxAmount = null,
   sort = 'newest',
@@ -249,6 +356,12 @@ async function listLedger({
     params.push(value);
     return `$${params.length}`;
   };
+
+  const q = normalizeSearch(search);
+  const exactId = q && UUID_RE.test(q) ? q : null;
+  const textSearch = q && !exactId ? q : null;
+  const needsParties = !includeStaff || Boolean(accountId) || Boolean(textSearch);
+  const needsAdjustment = Boolean(walletId && direction) || ADJUSTMENT_KINDS.has(kind) || Boolean(textSearch);
 
   if (!includeStaff) {
     where.push('NOT COALESCE(src.is_staff, FALSE) AND NOT COALESCE(dst.is_staff, FALSE)');
@@ -266,35 +379,109 @@ async function listLedger({
     const p = add(accountId);
     where.push(`(src.account_id = ${p}::uuid OR dst.account_id = ${p}::uuid)`);
   }
+  if (referenceId) {
+    where.push(`ct.reference_id = ${add(referenceId)}::uuid`);
+    if (referenceTable) where.push(`ct.reference_table = ${add(referenceTable)}`);
+  }
+  if (disputeId) {
+    const p = add(disputeId);
+    where.push(`(ct.related_dispute_id = ${p}::uuid OR (ct.reference_table = 'disputes' AND ct.reference_id = ${p}::uuid))`);
+  }
+  if (contractId) {
+    const p = add(contractId);
+    where.push(`(
+      ct.reference_id = ${p}::uuid
+      OR ct.source_wallet_id IN ${contractWalletsSql(p)}
+      OR ct.destination_wallet_id IN ${contractWalletsSql(p)}
+    )`);
+  }
   if (type) where.push(`ct.type::text = ${add(type)}`);
   if (status) where.push(`ct.status::text = ${add(status)}`);
   if (kind && LEDGER_KIND_SQL[kind]) where.push(LEDGER_KIND_SQL[kind]);
-  if (from) where.push(`ct.created_at >= ${add(from)}::date`);
-  if (to) where.push(`ct.created_at < (${add(to)}::date + 1)`);
+  const offsetParam = (from || to) && tzOffset != null ? add(tzOffset) : null;
+  if (from) where.push(`ct.created_at >= ${dayStartSql(add(from), offsetParam)}`);
+  if (to) where.push(`ct.created_at < ${dayStartSql(add(to), offsetParam, 1)}`);
   if (minAmount != null) where.push(`ct.amount_credits >= ${add(minAmount)}`);
   if (maxAmount != null) where.push(`ct.amount_credits <= ${add(maxAmount)}`);
-  const q = String(search || '').trim();
-  if (q) {
-    const p = add(`%${q}%`);
+
+  if (exactId) {
+    const p = add(exactId);
+    const ownWallets = `(
+      SELECT aw.wallet_id FROM account_wallets aw WHERE aw.account_id = ${p}::uuid
+      UNION ALL ${contractWalletsSelect(p)}
+    )`;
+    where.push(`(
+      ct.credit_transaction_id = ${p}::uuid
+      OR ct.reference_id = ${p}::uuid
+      OR ct.source_wallet_id = ${p}::uuid
+      OR ct.destination_wallet_id = ${p}::uuid
+      OR ct.related_dispute_id = ${p}::uuid
+      OR ct.fee_transaction_id = ${p}::uuid
+      OR ct.reverses_credit_transaction_id = ${p}::uuid
+      OR ct.source_wallet_id IN ${ownWallets}
+      OR ct.destination_wallet_id IN ${ownWallets}
+    )`);
+  } else if (textSearch) {
+    const p = add(`%${escapeLike(textSearch)}%`);
+    const idMatch = ID_PREFIX_RE.test(textSearch)
+      ? (() => {
+          const ip = add(`${escapeLike(textSearch.toLowerCase())}%`);
+          return `
+      OR ct.credit_transaction_id::text LIKE ${ip}
+      OR ct.reference_id::text LIKE ${ip}
+      OR ct.source_wallet_id::text LIKE ${ip}
+      OR ct.destination_wallet_id::text LIKE ${ip}
+      OR ct.related_dispute_id::text LIKE ${ip}`;
+        })()
+      : '';
     where.push(`(
       src.handle ILIKE ${p} OR src.display_name ILIKE ${p}
       OR dst.handle ILIKE ${p} OR dst.display_name ILIKE ${p}
-      OR ct.credit_transaction_id::text ILIKE ${p}
-      OR ct.reference_id::text ILIKE ${p}
-      OR ct.source_wallet_id::text ILIKE ${p}
-      OR ct.destination_wallet_id::text ILIKE ${p}
+      OR EXISTS (
+        SELECT 1 FROM users u
+        WHERE u.account_id IN (src.account_id, dst.account_id)
+          AND (CONCAT_WS(' ', u.first_name, u.last_name) ILIKE ${p} OR u.email_address ILIKE ${p})
+      )
       OR COALESCE(adj.metadata->>'reason', '') ILIKE ${p}
+      OR EXISTS (
+        SELECT 1 FROM staff st
+        WHERE st.staff_id = adj.actor_staff_id AND CONCAT_WS(' ', st.first_name, st.last_name) ILIKE ${p}
+      )
+      OR COALESCE(ct.reference_table, '') ILIKE ${p}
+      OR (ct.reference_table = 'cashouts' AND EXISTS (
+        SELECT 1 FROM cashouts c WHERE c.cashout_id = ct.reference_id AND c.reference_id ILIKE ${p}
+      ))${idMatch}
     )`);
   }
 
   const orderBy = LEDGER_SORT_SQL[sort] || LEDGER_SORT_SQL.newest;
   const limitParam = add(limit);
-  const offsetParam = add(offset);
+  const pageOffsetParam = add(offset);
+  const filterJoins = [
+    needsParties ? partyLateral('src', 'ct.source_wallet_id', { escrow: false }) : '',
+    needsParties ? partyLateral('dst', 'ct.destination_wallet_id', { escrow: false }) : '',
+    needsAdjustment ? ADJUSTMENT_LATERAL : '',
+  ].join('\n');
+
   const result = await pool.query(
-    `${LEDGER_SELECT}
-     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY ${orderBy}
-     LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    `
+    WITH page AS (
+      SELECT
+        ct.credit_transaction_id,
+        COUNT(*) OVER() AS total_count,
+        ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS rn
+      FROM credit_transactions ct
+      ${filterJoins}
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY ${orderBy}
+      LIMIT ${limitParam} OFFSET ${pageOffsetParam}
+    )
+    SELECT ${LEDGER_COLUMNS}, page.total_count
+    FROM page
+    INNER JOIN credit_transactions ct ON ct.credit_transaction_id = page.credit_transaction_id
+    ${LEDGER_JOINS}
+    ORDER BY page.rn
+    `,
     params
   );
 
@@ -304,6 +491,23 @@ async function listLedger({
     limit,
     offset,
   };
+}
+
+/** Ledger rows by id (one entry and the entries it links to), oldest first. */
+async function fetchLedgerEntriesByIds(ids) {
+  const list = [...new Set((ids || []).filter((id) => id && UUID_RE.test(String(id))).map(String))];
+  if (!list.length) return [];
+  const result = await pool.query(
+    `
+    SELECT ${LEDGER_COLUMNS}
+    FROM credit_transactions ct
+    ${LEDGER_JOINS}
+    WHERE ct.credit_transaction_id = ANY($1::uuid[])
+    ORDER BY ct.created_at ASC, ct.credit_transaction_id ASC
+    `,
+    [list]
+  );
+  return result.rows.map((row) => mapLedgerRow(row));
 }
 
 const WALLET_BASE = `
@@ -375,6 +579,19 @@ function normalizeAccountStatus(status) {
   if (s.includes('deactiv')) return 'Deactivated';
   return status;
 }
+
+/**
+ * The same grouping as `normalizeAccountStatus`, in SQL and lower case, so the status
+ * filter matches exactly the labels the status dropdown lists.
+ */
+const NORMALIZED_ACCOUNT_STATUS_SQL = `(CASE
+  WHEN b.account_status IS NULL OR LOWER(b.account_status) = 'active' THEN 'active'
+  WHEN LOWER(b.account_status) LIKE '%suspend%' THEN 'suspended'
+  WHEN LOWER(b.account_status) LIKE '%ban%' THEN 'banned'
+  WHEN LOWER(b.account_status) LIKE '%lock%' THEN 'locked'
+  WHEN LOWER(b.account_status) LIKE '%deactiv%' THEN 'deactivated'
+  ELSE LOWER(b.account_status)
+END)`;
 
 function mapWalletRow(row) {
   const spendable = Number(row.balance_credits || 0);
@@ -464,10 +681,13 @@ async function listWallets({
   if (accountType) where.push(`LOWER(b.account_kind) = ${add(String(accountType).toLowerCase())}`);
   if (hold && WALLET_HOLD_SQL[hold]) where.push(WALLET_HOLD_SQL[hold]);
   if (balance && WALLET_BALANCE_SQL[balance]) where.push(WALLET_BALANCE_SQL[balance]);
-  if (accountStatus) where.push(`LOWER(COALESCE(b.account_status, 'active')) LIKE ${add(`${String(accountStatus).toLowerCase().slice(0, 6)}%`)}`);
-  const q = String(search || '').trim();
-  if (q) {
-    const p = add(`%${q}%`);
+  if (accountStatus) where.push(`${NORMALIZED_ACCOUNT_STATUS_SQL} = ${add(String(accountStatus).toLowerCase())}`);
+  const q = normalizeSearch(search);
+  if (q && UUID_RE.test(q)) {
+    const p = add(q);
+    where.push(`(b.wallet_id = ${p}::uuid OR b.account_id = ${p}::uuid)`);
+  } else if (q) {
+    const p = add(`%${escapeLike(q)}%`);
     where.push(`(
       b.display_name ILIKE ${p} OR b.handle ILIKE ${p}
       OR COALESCE(b.first_name, '') || ' ' || COALESCE(b.last_name, '') ILIKE ${p}
@@ -1096,6 +1316,7 @@ async function loadEconomySettings() {
 
 module.exports = {
   listLedger,
+  fetchLedgerEntriesByIds,
   listWallets,
   listWalletAccountStatuses,
   fetchSupply,

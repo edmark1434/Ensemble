@@ -41,6 +41,7 @@ const {
   getAdminEconomyOverview,
   getAdminEconomyWallets,
   getAdminEconomyLedger,
+  getAdminLedgerEntry,
   getAdminWalletDetail,
 } = require('../controllers/AdminEconomyControllers');
 /** Credits & Economy desk: Admin, and Support Moderator (no staff wallets; enforced in the service). */
@@ -138,6 +139,7 @@ router.get('/economy-overview', [checkSession, requireEconomyAccess], getAdminEc
 router.get('/economy/wallets', [checkSession, requireEconomyAccess], getAdminEconomyWallets);
 router.get('/economy/wallets/:walletId', [checkSession, requireEconomyAccess], getAdminWalletDetail);
 router.get('/economy/ledger', [checkSession, requireEconomyAccess], getAdminEconomyLedger);
+router.get('/economy/ledger/:transactionId', [checkSession, requireEconomyAccess], getAdminLedgerEntry);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/moderation/videos', [checkSession, requireAdmin], getAdminVideos);
 router.get('/moderation/videos/:projectId', [checkSession, requireAdmin], getAdminVideo);

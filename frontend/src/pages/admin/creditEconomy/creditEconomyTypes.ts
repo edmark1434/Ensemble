@@ -21,18 +21,53 @@ export const CREDIT_TRANSACTION_STATUSES = ['Pending', 'Completed', 'Failed', 'R
 export type CreditTransactionType = (typeof CREDIT_TRANSACTION_TYPES)[number];
 export type CreditTransactionStatus = (typeof CREDIT_TRANSACTION_STATUSES)[number];
 
-export const LEDGER_KINDS: { value: string; label: string }[] = [
-  { value: 'adjustment', label: 'Staff adjustments' },
-  { value: 'topup', label: 'Top-ups' },
-  { value: 'transfer', label: 'Transfers' },
-  { value: 'escrow', label: 'Escrow' },
-  { value: 'marketplace', label: 'Marketplace' },
-  { value: 'jobs', label: 'Jobs & gigs fees' },
-  { value: 'fees', label: 'Platform fees' },
-  { value: 'cashout', label: 'Cashouts' },
-  { value: 'refunds', label: 'Refunds' },
-  { value: 'dispute', label: 'Dispute-linked' },
+/** Ledger categories (`kind`), grouped for the category picker. Keep in sync with the service. */
+export const LEDGER_KINDS: { value: string; label: string; group: string }[] = [
+  { value: 'topup', label: 'Top-ups', group: 'Money in & out' },
+  { value: 'cashout', label: 'Cashouts', group: 'Money in & out' },
+  { value: 'cashout_open', label: 'Cashouts not paid yet', group: 'Money in & out' },
+  { value: 'transfer', label: 'Transfers between members', group: 'Member activity' },
+  { value: 'escrow', label: 'Escrow', group: 'Member activity' },
+  { value: 'marketplace', label: 'Marketplace', group: 'Member activity' },
+  { value: 'refunds', label: 'Refunds', group: 'Member activity' },
+  { value: 'fees', label: 'All platform fees', group: 'Fees' },
+  { value: 'jobs', label: 'Job, proposal & gig fees', group: 'Fees' },
+  { value: 'adjustment', label: 'All staff adjustments', group: 'Staff' },
+  { value: 'grant', label: 'Staff grants', group: 'Staff' },
+  { value: 'deduction', label: 'Staff deductions', group: 'Staff' },
+  { value: 'adjustment_unrecorded', label: 'Adjustments with no recorded direction', group: 'Staff' },
+  { value: 'dispute', label: 'Dispute-linked', group: 'Disputes & corrections' },
+  { value: 'reversal', label: 'Reversing entries', group: 'Disputes & corrections' },
 ];
+
+/** What a ledger row's `reference_table` points at, in staff wording. */
+export const REFERENCE_LABELS: Record<string, string> = {
+  payments: 'Top-up payment',
+  cashouts: 'Cashout',
+  contracts: 'Contract',
+  contract_milestones: 'Contract milestone',
+  contract_milestone_revisions: 'Milestone revision',
+  milestone_submits: 'Milestone submission',
+  market_assets: 'Marketplace asset',
+  marketplace_listings: 'Marketplace listing',
+  disputes: 'Dispute',
+  tickets: 'Support ticket',
+  teams: 'Team',
+  team_contract_workspaces: 'Team contract workspace',
+  team_workspace_tasks: 'Team task',
+  jobs: 'Job post',
+  proposals: 'Proposal',
+  gigs: 'Gig',
+  gig_requests: 'Gig order',
+  accounts: 'Account',
+  wallets: 'Wallet',
+  credit_transactions: 'Ledger entry',
+};
+
+export function referenceLabel(table: string | null | undefined) {
+  if (!table) return 'Reference';
+  return REFERENCE_LABELS[table] || table.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
 
 export type EconomyVariant = 'admin' | 'support';
 
@@ -114,9 +149,54 @@ export type LedgerEntry = {
   relatedDisputeId: string | null;
   reversesTransactionId: string | null;
   feeTransactionId: string | null;
+  /** The platform fee taken on this movement (a separate row). */
+  fee: { id: string; amount: number; status: string | null } | null;
+  /** On a fee row: the sale or release the fee was charged on. */
+  feeFor: { id: string; type: string | null; amount: number } | null;
+  /** The original row this compensating entry reverses. */
+  reverses: { id: string; type: string | null; status: string | null } | null;
+  /** The compensating row that reversed this one. */
+  reversedBy: { id: string; status: string | null } | null;
+  /** The payout record behind a Cashout / Cashout Refund row. */
+  cashout: { id: string; reference: string | null; status: string | null } | null;
 };
 
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number };
+
+/** Ledger filters, as the ledger tab keeps them in the URL. Empty string = not set. */
+export type LedgerFilters = {
+  search: string;
+  kind: string;
+  type: string;
+  status: string;
+  from: string;
+  to: string;
+  minAmount: string;
+  maxAmount: string;
+  sort: string;
+  walletId: string;
+  accountId: string;
+  direction: string;
+  referenceId: string;
+  referenceTable: string;
+  disputeId: string;
+  contractId: string;
+};
+
+export type LedgerLinkRelation = 'fee' | 'fee_for' | 'reverses' | 'reversed_by';
+export type LedgerGroupRelation = 'same_escrow' | 'same_reference' | 'same_dispute';
+
+export type LedgerEntryDetailResponse = {
+  entry: LedgerEntry;
+  links: { relation: LedgerLinkRelation; entry: LedgerEntry }[];
+  groups: {
+    relation: LedgerGroupRelation;
+    filters: Partial<LedgerFilters>;
+    total: number;
+    items: LedgerEntry[];
+  }[];
+  viewer: EconomyViewer;
+};
 
 export type CreditAdjustment = {
   id: string;

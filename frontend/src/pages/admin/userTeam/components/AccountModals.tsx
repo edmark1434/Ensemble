@@ -25,6 +25,7 @@ import { DEFAULT_MERIT, isActiveWarning, meritBandLabel, meritFromWarnings } fro
 import { WarningPresetFields } from './WarningPresetFields';
 import { LiftWarningPointsPanel } from './LiftWarningPointsPanel';
 import { MeritPenaltiesPanel } from './MeritPenaltiesPanel';
+import { StaffPunishmentChips, type MeritPenaltyLike } from '@/components/account/MeritStatus';
 import { PunishmentPresetFields } from './PunishmentPresetFields';
 import { punishmentDurationLabel, type PunishmentKind, type PunishmentPreset } from '@/lib/punishmentCatalog';
 import {
@@ -1585,10 +1586,13 @@ export function HistoryModal({
   onChanged,
   canLiftPoints = false,
   showPunishments = false,
+  meritPenalties,
 }: {
   entityName: string;
   accountId?: string;
   history: PlatformTeam['history'];
+  /** Running automatic punishments, shown next to merit (members only). */
+  meritPenalties?: MeritPenaltyLike[] | null;
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
   /** Admin and Support may lift warning points (members only; teams have no merit). */
@@ -1617,6 +1621,11 @@ export function HistoryModal({
           <p className="text-xs text-zinc-500">Platform Merit</p>
           <p className="text-2xl font-bold text-white">{displayedMerit}</p>
           <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{meritBandLabel(displayedMerit)}</p>
+          {showPunishments ? (
+            <div className="mt-2">
+              <StaffPunishmentChips penalties={meritPenalties} showNone />
+            </div>
+          ) : null}
         </div>
         <div className="rounded-xl bg-white/[0.03] p-4">
           <p className="text-xs text-zinc-500">Total violations</p>
@@ -1989,6 +1998,9 @@ export function UserOverviewModal({
           <dd className="text-white">
             {merit}
             <span className="ml-2 text-xs text-zinc-500">{meritBandLabel(merit)} · 100 minus active warnings</span>
+            <div className="mt-1">
+              <StaffPunishmentChips penalties={profile?.standing?.meritPenalties ?? user.meritPenalties} showNone />
+            </div>
           </dd>
         </div>
         <div>

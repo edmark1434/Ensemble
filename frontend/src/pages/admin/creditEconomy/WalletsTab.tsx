@@ -134,6 +134,11 @@ export default function WalletsTab({
   const items = page?.items || [];
   const total = page?.total || 0;
 
+  // A page past the end (after a release or a filter change elsewhere) has no total: back to page 1.
+  useEffect(() => {
+    if (!loading && page && page.items.length === 0 && offset > 0) setOffset(0);
+  }, [loading, page, offset]);
+
   const update = (patch: Partial<Filters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
     setOffset(0);

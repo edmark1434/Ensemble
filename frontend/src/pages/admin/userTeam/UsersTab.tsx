@@ -583,6 +583,7 @@ export default function UsersTab({
           onChanged={() => void refreshAfterChange()}
           canLiftPoints={capabilities.canPardon}
           showPunishments
+          meritPenalties={selected.meritPenalties}
         />
       )}
       {selected && modal === 'warn' && capabilities.canWarn && (

@@ -1,4 +1,25 @@
-# Task: One appeal per penalty
+# Task: Credits & economy ledger filters and linked entries
+
+## Implementation Objective
+The Credits & Economy desk (Admin and Support Moderator) ledger had filter gaps and one-way links: a fee row could not show what it was charged on, the parent only showed a bare fee id, and staff had to search for linked rows by hand. Every link now opens directly, filters are complete and shareable, and alert links open exactly what they count.
+
+## Acceptance Criteria
+- Each ledger row returns `fee` (amount, status), `feeFor` (the movement a fee row was charged on), `reverses`, `reversedBy` and `cashout` (payout reference and provider status). Rows show chips for them that open the linked entry.
+- `GET /api/admin/economy/ledger/:transactionId` (Admin, Support Moderator) returns the entry, its direct links and up to 25 rows of each group (contract escrow, same reference, same dispute) with totals and the ledger filter for "show all". Support gets 404 for rows touching staff wallets, and staff rows are left out of links and groups.
+- `?tx=<id>` opens `LedgerEntryModal` from any tab, the wallet modal, the overview's latest entries and a wallet's staff adjustments. Linked rows open in place with Back. Copy link opens the same entry.
+- Ledger filters live in the URL (shareable, survive reload and Back). New: max amount; wallet scope with In/Out; account, contract, reference and dispute scopes as removable chips; categories for staff grants, staff deductions, adjustments with no recorded direction, unpaid cashouts and reversing entries; quick views; date presets; reset from the empty state.
+- From / To use the viewer's calendar days (`tzOffset`), not the database's.
+- Search ignores a leading `@` and escapes `%` / `_`. A full UUID matches any id on the row exactly (transaction, wallets, the account's wallet, reference, dispute, contract escrow, fee and reversal links). Other text matches names, handles, member name and email, adjustment reason and author, reference type, cashout reference, and the start of any id.
+- Ledger paging joins display columns only for the returned page.
+- Alert and overview links carry their real window: failed in 7 days, large adjustments in 24 hours, adjustments with no recorded direction in 30 days, unpaid cashouts (not every cashout), and Pending / Failed / Reversed counts over the flow window.
+- "All (CSV)" exports every matching row (up to 5,000); the CSV has fee, reversal, contract and payout columns.
+- Wallet status filter accepts every status the dropdown lists (it was a 400 for anything outside five values). Wallet search ignores `@` and takes a full wallet or account id. Wallets, Holds and Ledger go back to page 1 when a page comes back empty.
+- Migration `1829700000000_ledger-link-indexes` adds indexes for the reverse lookups and scopes. Everything works before it is applied, only slower.
+- User preference: do not run automated build or verification commands.
+
+---
+
+# Task (parallel): One appeal per penalty
 
 ## Implementation Objective
 An "Appeal an account penalty" ticket used to cover the whole account: one open appeal at a time, accepting it ended every ban, lock, suspension, forum timeout and credit hold at once, and a denial blocked every appeal on the account for 12 months (or for good). Each punishment now gets its own appeal: the member picks the penalty, staff decide it on its own, and the decision only touches that penalty. Staff choose how an accepted penalty is lifted and may follow a denial with a suspension or ban; the decision is posted as a decision card like a dispute ruling.
@@ -50,4 +71,17 @@ Automatic punishments no longer follow Platform Merit live. When a warning takes
 - `video-editor/server.ts`: any 4xx/5xx response under `/_next/` is sent with `Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate`; successful asset responses are unchanged.
 - `video-editor/src/app/global-error.tsx`: a ChunkLoadError reloads the page once (30 s sessionStorage guard, no auto-reload without storage); other errors show a Reload card in the existing theme instead of the bare Next error screen.
 - Ops (outside the repo): purge Cloudflare's cache for `/_next/static/` once after deploying this, and avoid running `next build` in the live `.next` directory while the server is serving from it.
+- User preference: do not run automated build or verification commands.
+
+---
+
+# Task (parallel): Evidence uploads when filing a dispute
+
+## Implementation Objective
+Members can attach evidence (images, PDFs, videos) on the File a Dispute form instead of having to reply in the case afterwards.
+
+## Acceptance Criteria
+- `DisputeFormPage`: optional "Evidence" picker (shared `appealAttachments` helpers: up to 4 files; images 8 MB, PDFs 15 MB, videos 50 MB). Files upload to `chat-attachments` (the same folder dispute replies use) when the member submits, and go with `POST /api/contracts/:contractId/dispute` as `attachments`. If an upload fails, the toast names the file and nothing is filed.
+- Server: `createContractDispute` keeps only valid staging keys (`normalizeDisputeAttachments`, max 4). Once the case is committed, `postDisputeFiledEvidence` posts them as the filer's first reply under the case summary, visible only to the filer and staff (`author_and_staff`).
+- If the files cannot be posted, the dispute is still filed and the response has `evidence: { sent, posted, failed }`. The form then tells the member to add the files again by replying in the case.
 - User preference: do not run automated build or verification commands.
