@@ -1,3 +1,13 @@
+# Task: First editor walkthrough
+
+During review, repeat the interactive walkthrough and simulate the separate Workspace introduction locally. In first-open mode, track the editor and Workspace introductions separately in account activity.
+
+Advance on real editor actions, introduce panels from their opening controls, and hide the counter and skip action for the standalone Workspace introduction.
+
+Use 8 px highlight padding for Home, the timeline comment marker, Export, and Share. Allow Specific access to open the floating member picker for the local sample scene.
+
+Use local scene and comment examples for the walkthrough. Show the sample scene's padded Access controls in a stationary panel. Branch the comment sequence according to whether the timeline button was used, and retain both examples locally until the tour ends. Render the normal scene and comment components. Highlight only Add scene during “Plan your scenes”. Use a local timeline lane to demonstrate opening a scene and returning Home. Keep Shortcuts at its normal width with the guide at the top right. Center Share and place its guide beside it.
+
 # Task: Suspended members blocked up front, warning-point lifts, and merit-recovery lifts
 
 ## Implementation Objective

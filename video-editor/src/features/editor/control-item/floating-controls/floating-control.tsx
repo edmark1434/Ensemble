@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import Draggable from "react-draggable";
 import React, { useEffect, useState, useRef } from "react";
 import useLayoutStore from "../../store/use-layout-store";
+import { useActiveSceneBlockId } from "../../store/use-block-members-store";
 import AnimationCaption from "./animation-caption";
 import AnimationPicker from "./animation-picker";
 import CaptionPresetPicker from "./caption-preset-picker";
@@ -15,6 +16,7 @@ const FLOATING_CONTROL_Z_INDEX = 210;
 
 export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObject<HTMLDivElement | null> }) {
   const { floatingControl, trackItem, floatingControlIds, floatingControlAnimationType } = useLayoutStore();
+  const sceneBlockId = useActiveSceneBlockId();
   const [spawnPos, setSpawnPos] = useState<{ top: number; left: number } | null>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -22,6 +24,7 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
   const dragStartSetRef = useRef(false);
 
   const hasTarget =
+    (floatingControl === "access-picker" && !!sceneBlockId) ||
     !!trackItem ||
     (floatingControlIds && floatingControlIds.length > 0) ||
     floatingControl === "comment-thread";
@@ -75,7 +78,8 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
   return createPortal(
     <Draggable nodeRef={nodeRef as unknown as React.RefObject<HTMLElement>} handle=".handle" bounds="body"
                defaultPosition={dragStart}>
-      <div ref={nodeRef} style={{ position: "fixed", top: 0, left: 0, zIndex: FLOATING_CONTROL_Z_INDEX }}>
+      <div ref={nodeRef} data-editor-tour={floatingControl === "access-picker" ? "specific-access" : undefined}
+           style={{ position: "fixed", top: 0, left: 0, zIndex: FLOATING_CONTROL_Z_INDEX }}>
         {content}
       </div>
     </Draggable>,

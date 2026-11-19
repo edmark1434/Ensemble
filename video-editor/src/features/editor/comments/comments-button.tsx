@@ -1,3 +1,4 @@
+import { tourAction } from "@/features/editor/store/use-tour-demo";
 import { useEffect, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export function CommentsButton() {
         <TooltipTrigger asChild>
           <Button
             onClick={() => {
+              if (tourAction("comments-button")) return;
               dismissNotice();
               setHovered(false);
               setActiveRightItem(commentsOpen ? "controls" : "comments");

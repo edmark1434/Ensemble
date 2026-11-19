@@ -1,5 +1,6 @@
 "use client";
 
+import { useTourDemo } from "@/features/editor/store/use-tour-demo";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -427,9 +428,13 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
     refreshSceneAccess();
   };
 
+  const showTour = useTourDemo(s => s.surface === "share");
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="z-[300] border bg-card px-2 py-8 gap-6 sm:max-w-lg">
+    <Dialog modal={!showTour} open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        data-tour-surface={showTour ? "share" : undefined}
+        onInteractOutside={event => { if (showTour) event.preventDefault(); }}
+        className="z-[300] max-h-[calc(100dvh-2rem)] overflow-y-auto border bg-card px-2 py-8 gap-6 sm:max-w-lg">
         <DialogHeader className="px-6 -mt-0.75">
           <DialogTitle className="text-md font-semibold">Share</DialogTitle>
         </DialogHeader>

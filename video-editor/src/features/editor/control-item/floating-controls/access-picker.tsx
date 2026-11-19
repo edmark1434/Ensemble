@@ -1,3 +1,4 @@
+import { tourBlockId } from "../../store/use-tour-demo";
 import React, { useEffect, useState } from "react";
 import { X, Search, ChevronDown, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +10,8 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
-import useBlockMembersStore, {
+import {
+  useMembersForBlock,
   useActiveSceneBlockId
 } from "@/features/editor/store/use-block-members-store";
 import {
@@ -179,7 +181,7 @@ export default function AccessPicker() {
     addMember,
     changeRole,
     removeMember
-  } = useBlockMembersStore();
+  } = useMembersForBlock(blockId);
 
   const roleOptions = canGrantManager
     ? ASSIGNABLE_BLOCK_ROLES
@@ -197,6 +199,7 @@ export default function AccessPicker() {
   useEffect(() => {
     if (!blockId) return;
     void load(blockId);
+    if (blockId === tourBlockId) return;
 
     let t: ReturnType<typeof setTimeout> | null = null;
     const off = onAccessChanged(() => {

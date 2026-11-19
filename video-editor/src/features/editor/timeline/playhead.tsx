@@ -1,4 +1,5 @@
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
+import { useTourDemo } from "../store/use-tour-demo";
 import useStore from "../store/use-store";
 import {
   CSSProperties,
@@ -24,7 +25,9 @@ import {
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
   const { playerRef, fps, scale, markers, playheadSnapped } = useStore();
-  const currentFrame = useCurrentPlayerFrame(playerRef);
+  const frame = useCurrentPlayerFrame(playerRef);
+  const insideSample = useTourDemo(s => s.insideScene);
+  const currentFrame = insideSample ? 0 : frame;
   const position =
     timeMsToUnits((currentFrame / fps) * 1000, scale.zoom) - scrollLeft;
   const [isDragging, setIsDragging] = useState(false);
@@ -112,10 +115,9 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const commentMarkers = useCommentMarkers();
   const isNear = (m: { timeMs: number }) =>
     Math.abs(m.timeMs - currentTimeMs) < MARKER_SNAP_MS;
-  const nearComment =
-    commentMarkers.some(isNear) ||
-    markers.some((m) => m.type === "comment" && isNear(m));
-  const nearNormal = markers.some((m) => m.type !== "comment" && isNear(m));
+  const nearComment = !insideSample && (commentMarkers.some(isNear) ||
+    markers.some((m) => m.type === "comment" && isNear(m)));
+  const nearNormal = !insideSample && markers.some((m) => m.type !== "comment" && isNear(m));
 
   // normal markers use the primary color, comment markers are pink;
   // when both sit on the playhead, the normal marker wins

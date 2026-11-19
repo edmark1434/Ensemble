@@ -1,3 +1,4 @@
+import { useTourDemo, tourAction } from "@/features/editor/store/use-tour-demo";
 import React, { useCallback, useEffect, useState } from "react";
 import { PortfolioRangeFields, usePortfolioPicker } from "./portfolio/portfolio-picker";
 import { PortfolioClipModal } from "./modals/portfolio-clip-modal";
@@ -89,6 +90,7 @@ export default function Navbar({
   const isSmallScreen = useIsSmallScreen();
   const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName, projectId } = useStore();
   const [isShareModalOpen, setShareModalOpen] = useState(false);
+  const tourSurface = useTourDemo(s => s.surface);
   const canComment = useCanComment();
   const [title, setTitle] = useState(projectName);
 
@@ -219,6 +221,7 @@ export default function Navbar({
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
+                    data-editor-tour="edit-history"
                     onClick={handleUndo}
                     className="hover:!bg-accent/30"
                     variant="ghost"
@@ -244,6 +247,7 @@ export default function Navbar({
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
+                    data-editor-tour="edit-history"
                     onClick={handleRedo}
                     className="hover:!bg-accent/30"
                     variant="ghost"
@@ -271,6 +275,7 @@ export default function Navbar({
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
+                    data-editor-tour="edit-history"
                     onClick={!viewOnly && !compacting ? onForceSave : undefined}
                     aria-label="Save project"
                     className={cn(
@@ -339,7 +344,8 @@ export default function Navbar({
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>
                 <Button
-                  onClick={() => setShortcutsModalOpen(true)}
+                  data-editor-tour="shortcuts"
+                  onClick={() => { if (!tourAction("shortcuts")) setShortcutsModalOpen(true); }}
                   className="hover:!bg-accent/30"
                   variant="ghost"
                   size="icon"
@@ -367,7 +373,8 @@ export default function Navbar({
 
           {canShare && (
             <Button
-              onClick={() => setShareModalOpen(true)}
+              data-editor-tour="share"
+              onClick={() => { if (!tourAction("share")) setShareModalOpen(true); }}
               className="flex h-8 gap-2 border border-border"
               variant="default"
               size={isMediumScreen ? "sm" : "icon"}
@@ -380,12 +387,12 @@ export default function Navbar({
         </div>
       </div>
       <ShortcutsModal
-        open={isShortcutsModalOpen}
-        onOpenChange={setShortcutsModalOpen}
+        open={isShortcutsModalOpen || tourSurface === "shortcuts"}
+        onOpenChange={value => { if (tourSurface === "shortcuts" && !value) tourAction("close"); else setShortcutsModalOpen(value); }}
       />
       <ShareModal
-        open={isShareModalOpen}
-        onOpenChange={setShareModalOpen}
+        open={isShareModalOpen || (canShare && tourSurface === "share")}
+        onOpenChange={value => { if (tourSurface === "share" && !value) tourAction("close"); else setShareModalOpen(value); }}
         projectId={projectId}
         templateSource={templateSource}
       />

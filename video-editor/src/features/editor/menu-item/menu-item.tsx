@@ -65,7 +65,7 @@ const ActiveMenuItem = () => {
 
 export const MenuItem = () => {
   return (
-    <div className={`w-full flex-1 flex h-full min-h-0 overflow-hidden bg-card`}>
+    <div data-editor-tour="menu-panel" className={`w-full flex-1 flex h-full min-h-0 overflow-hidden bg-card`}>
       <ActiveMenuItem />
     </div>
   );

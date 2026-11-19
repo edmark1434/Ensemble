@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronDown, Info } from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
-import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
+import { useMembersForBlock } from "@/features/editor/store/use-block-members-store";
 import { GENERAL_ACCESS_LEVELS, type GeneralAccessLevel } from "@/features/editor/types/block-members";
 
 // Same popover-list pattern used by the font controls (e.g. word break,
@@ -70,14 +70,13 @@ export const Access = ({ blockId }: { blockId: string }) => {
   const {
     blockId: loadedBlockId,
     status,
-    owner,
     members,
     canManage,
     canGrantManager,
     generalAccess,
     setGeneralAccess,
     load
-  } = useBlockMembersStore();
+  } = useMembersForBlock(blockId);
 
   useEffect(() => {
     void load(blockId);
@@ -101,7 +100,7 @@ export const Access = ({ blockId }: { blockId: string }) => {
   })();
 
   return (
-    <div className="flex flex-col gap-3">
+    <div data-editor-tour="scene-access" className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Access</Label>
 
       <div className="flex gap-2 items-start text-xs text-muted-foreground -mt-1 text-pretty">

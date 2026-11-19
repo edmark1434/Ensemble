@@ -4,7 +4,9 @@
 // scene panel (summary line) and the floating access-picker (full list) never
 // disagree after an add / role change / remove.
 
-import { create } from "zustand";
+import { tourBlockId, useTourDemo } from "./use-tour-demo";
+import { create, useStore as useBoundStore } from "zustand";
+import { useCommentsStore } from "./use-comments-store";
 import useStore from "@/features/editor/store/use-store";
 import { isSceneItem, type ISceneDetails } from "@/features/editor/types/ensemble-scene";
 import {
@@ -49,135 +51,155 @@ async function request(
 
 const byName = (a: BlockPerson, b: BlockPerson) => a.name.localeCompare(b.name);
 
-let loadSeq = 0;
+function createMembersStore(local = false) {
+  let loadSeq = 0;
 
-const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
-  blockId: null,
-  status: "idle",
-  error: null,
-  owner: null,
-  members: [],
-  candidates: [],
-  canManage: false,
-  generalAccess: "Restricted",
-  viewerRole: null,
+  return create<BlockMembersState>((set, get) => ({
+    blockId: null,
+    status: "idle",
+    error: null,
+    owner: null,
+    members: [],
+    candidates: [],
+    canManage: false,
+    generalAccess: "Restricted",
+    viewerRole: null,
 
-  load: async (blockId) => {
-    if (get().blockId !== blockId) {
-      set({
-        blockId,
-        status: "loading",
+    load: async (blockId) => {
+      if (local) {
+        if (get().status === "ready") return;
+        const { userId, userName } = useStore.getState();
+        const people = useCommentsStore.getState().data?.people ?? [];
+        const candidates = people.filter(p => p.userId !== userId).map(p => ({ ...p, email: "" }));
+        set({ blockId, status: "ready", error: null, canManage: true, canGrantManager: true, viewerRole: "Owner",
+          owner: { userId, name: userName, email: "", avatarUrl: null }, members: [], candidates, generalAccess: "Anyone can edit" });
+        return;
+      }
+      if (get().blockId !== blockId) {
+        set({
+          blockId,
+          status: "loading",
+          error: null,
+          owner: null,
+          members: [],
+          candidates: [],
+          canManage: false,
+          canGrantManager: false,
+          generalAccess: "Restricted",
+          viewerRole: null,
+        });
+      }
+
+      const seq = ++loadSeq;
+      try {
+        const res = await fetch(membersUrl(blockId), { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: BlockAccess = await res.json();
+        if (get().blockId !== blockId || seq !== loadSeq) return;
+        set({ ...data, status: "ready", error: null });
+      } catch (err) {
+        if (get().blockId !== blockId || seq !== loadSeq) return;
+        console.error("Failed to load scene access", err);
+        set({ status: "error", error: "Couldn't load who has access." });
+      }
+    },
+
+    setGeneralAccess: async (generalAccess) => {
+      const { blockId } = get();
+      if (!blockId) return;
+      loadSeq++;
+
+      const previous = get().generalAccess;
+      set({ error: null, generalAccess });
+
+      if (local) return;
+      const ok = await request(membersUrl(blockId), "PATCH", { generalAccess });
+      if (!ok) {
+        set({ generalAccess: previous, error: "Couldn't change general access." });
+      }
+    },
+
+    addMember: async (person, role) => {
+      const { blockId } = get();
+      if (!blockId) return;
+      loadSeq++;
+
+      const applied = person.projectRole
+        ? minRole(role, sceneRoleCeiling(person.projectRole))
+        : role;
+      set((s) => ({
         error: null,
-        owner: null,
-        members: [],
-        candidates: [],
-        canManage: false,
-        canGrantManager: false,
-        generalAccess: "Restricted",
-        viewerRole: null,
+        members: [...s.members, { ...person, role: applied, effectiveRole: applied }],
+        candidates: s.candidates.filter((c) => c.userId !== person.userId),
+      }));
+
+      if (local) return;
+      const ok = await request(membersUrl(blockId), "POST", {
+        userId: person.userId,
+        role,
       });
-    }
+      if (!ok) {
+        await get().load(blockId); // resync to what the server actually has
+        set({ error: `Couldn't add ${person.name}.` });
+      }
+    },
 
-    const seq = ++loadSeq;
-    try {
-      const res = await fetch(membersUrl(blockId), { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: BlockAccess = await res.json();
-      if (get().blockId !== blockId || seq !== loadSeq) return;
-      set({ ...data, status: "ready", error: null });
-    } catch (err) {
-      if (get().blockId !== blockId || seq !== loadSeq) return;
-      console.error("Failed to load scene access", err);
-      set({ status: "error", error: "Couldn't load who has access." });
-    }
-  },
+    changeRole: async (userId, role) => {
+      const { blockId } = get();
+      if (!blockId) return;
+      loadSeq++;
 
-  setGeneralAccess: async (generalAccess) => {
-    const { blockId } = get();
-    if (!blockId) return;
-    loadSeq++;
+      set((s) => ({
+        error: null,
+        members: s.members.map((m) => {
+          if (m.userId !== userId) return m;
+          const applied = m.projectRole
+            ? minRole(role, sceneRoleCeiling(m.projectRole))
+            : role;
+          return { ...m, role: applied, effectiveRole: applied };
+        }),
+      }));
 
-    const previous = get().generalAccess;
-    set({ error: null, generalAccess });
+      if (local) return;
+      const ok = await request(membersUrl(blockId), "PATCH", { userId, role });
+      if (!ok) {
+        await get().load(blockId);
+        set({ error: "Couldn't change that role." });
+      }
+    },
 
-    const ok = await request(membersUrl(blockId), "PATCH", { generalAccess });
-    if (!ok) {
-      set({ generalAccess: previous, error: "Couldn't change general access." });
-    }
-  },
+    removeMember: async (userId) => {
+      const { blockId, members } = get();
+      const removed = members.find((m) => m.userId === userId);
+      if (!blockId || !removed) return;
+      loadSeq++;
 
-  addMember: async (person, role) => {
-    const { blockId } = get();
-    if (!blockId) return;
-    loadSeq++;
+      // Goes back into the suggestions, since they're still a project member.
+      const { role: _r, effectiveRole: _e, ...person } = removed;
+      set((s) => ({
+        error: null,
+        members: s.members.filter((m) => m.userId !== userId),
+        candidates: [...s.candidates, person].sort(byName),
+      }));
 
-    const applied = person.projectRole
-      ? minRole(role, sceneRoleCeiling(person.projectRole))
-      : role;
-    set((s) => ({
-      error: null,
-      members: [...s.members, { ...person, role: applied, effectiveRole: applied }],
-      candidates: s.candidates.filter((c) => c.userId !== person.userId),
-    }));
+      if (local) return;
+      const ok = await request(
+        `${membersUrl(blockId)}?userId=${encodeURIComponent(userId)}`,
+        "DELETE",
+      );
+      if (!ok) {
+        await get().load(blockId);
+        set({ error: `Couldn't remove ${removed.name}.` });
+      }
+    },
+    canGrantManager: false,
+  }));
+}
 
-    const ok = await request(membersUrl(blockId), "POST", {
-      userId: person.userId,
-      role,
-    });
-    if (!ok) {
-      await get().load(blockId); // resync to what the server actually has
-      set({ error: `Couldn't add ${person.name}.` });
-    }
-  },
-
-  changeRole: async (userId, role) => {
-    const { blockId } = get();
-    if (!blockId) return;
-    loadSeq++;
-
-    set((s) => ({
-      error: null,
-      members: s.members.map((m) => {
-        if (m.userId !== userId) return m;
-        const applied = m.projectRole
-          ? minRole(role, sceneRoleCeiling(m.projectRole))
-          : role;
-        return { ...m, role: applied, effectiveRole: applied };
-      }),
-    }));
-
-    const ok = await request(membersUrl(blockId), "PATCH", { userId, role });
-    if (!ok) {
-      await get().load(blockId);
-      set({ error: "Couldn't change that role." });
-    }
-  },
-
-  removeMember: async (userId) => {
-    const { blockId, members } = get();
-    const removed = members.find((m) => m.userId === userId);
-    if (!blockId || !removed) return;
-    loadSeq++;
-
-    // Goes back into the suggestions, since they're still a project member.
-    const { role: _r, effectiveRole: _e, ...person } = removed;
-    set((s) => ({
-      error: null,
-      members: s.members.filter((m) => m.userId !== userId),
-      candidates: [...s.candidates, person].sort(byName),
-    }));
-
-    const ok = await request(
-      `${membersUrl(blockId)}?userId=${encodeURIComponent(userId)}`,
-      "DELETE",
-    );
-    if (!ok) {
-      await get().load(blockId);
-      set({ error: `Couldn't remove ${removed.name}.` });
-    }
-  },
-  canGrantManager: false,
-}));
+const useBlockMembersStore = createMembersStore();
+export const tourMembersStore = createMembersStore(true);
+export const useMembersForBlock = (blockId: string | null) =>
+  useBoundStore(blockId === tourBlockId ? tourMembersStore : useBlockMembersStore);
 
 export default useBlockMembersStore;
 
@@ -185,10 +207,13 @@ export default useBlockMembersStore;
  * blockId of the scene currently selected on the timeline/canvas, or null.
  * The floating access-picker has no props, so it finds its scene this way.
  */
-export const useActiveSceneBlockId = (): string | null =>
-  useStore((s) => {
+export const useActiveSceneBlockId = (): string | null => {
+  const sampleSelected = useTourDemo(s => s.access);
+  const selected = useStore((s) => {
     const activeId = s.activeIds?.[0];
     const item = activeId ? s.trackItemsMap?.[activeId] : undefined;
     if (!item || !isSceneItem(item.type)) return null;
     return (item.details as unknown as ISceneDetails).blockId ?? null;
   });
+  return sampleSelected ? tourBlockId : selected;
+};

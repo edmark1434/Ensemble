@@ -1,7 +1,9 @@
 "use client";
 import { MarketAssetLicensing } from "./components/market-asset-licensing";
 import Timeline from "./timeline";
+import { EditorWalkthrough } from "./components/editor-walkthrough";
 import useStore from "./store/use-store";
+import { useTourDemo } from "./store/use-tour-demo";
 import Navbar from "./navbar";
 import { PortfolioBand, usePortfolioPicker } from "./portfolio/portfolio-picker";
 import useTimelineEvents from "./hooks/use-timeline-events";
@@ -105,6 +107,7 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
 );
 
 const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnly }: any) => {
+  const insideSample = useTourDemo(s => s.insideScene);
   const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted, activeSceneBlockId } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
@@ -195,6 +198,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
   return (
     <div
       ref={sceneContainerRef}
+      data-editor-tour="canvas"
       data-scene-container=""
       className="relative flex min-h-0 min-w-0 flex-col w-full h-full bg-card"
       onMouseMove={handleMouseMove}
@@ -206,7 +210,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
         </div>
       )}
 
-      <div className="min-h-0 flex-1 relative overflow-hidden">
+      <div className={cn("min-h-0 flex-1 relative overflow-hidden", insideSample && "[&>:not([data-tour-empty-preview])]:invisible")}>
         <CropModal />
         <MarketAssetLicensing>
         {!isLargeScreen && trackItemIds.length === 0 ? (
@@ -220,9 +224,12 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
           <Scene ref={sceneRef} stateManager={stateManager} viewOnly={viewOnly} />
         )}
         </MarketAssetLicensing>
+        {insideSample && <div data-tour-empty-preview className="absolute inset-0 flex items-center justify-center bg-card text-sm text-muted-foreground">
+          The scene is currently empty, no preview available
+        </div>}
       </div>
 
-      <div className={cn(
+      <div data-editor-tour="preview-controls" className={cn(
         "relative z-20 grid shrink-0 grid-cols-3 items-center p-2 pt-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-card transition-opacity duration-300",
         isFullscreen && " pt-2 absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm",
         isFullscreen && isLargeScreen && !showControls && "opacity-0 pointer-events-none"
@@ -233,11 +240,11 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
           id="video-current-time"
           data-current-time={currentFrame / fps}
         >
-          {frameToTimeString({ frame: currentFrame }, { fps })}
+          {frameToTimeString({ frame: insideSample ? 0 : currentFrame }, { fps })}
         </span>
           <span className="text-zinc-500">/</span>
           <span className="text-muted-foreground">
-          {timeToString({ time: duration })}
+          {timeToString({ time: insideSample ? 0 : duration })}
         </span>
         </div>
 
@@ -447,7 +454,7 @@ const Panels = ({
         <div className="flex h-full flex-1">
           {!viewOnly && (
             <>
-              <div className="flex w-[54px] h-full bg-card border-r border-border/80">
+              <div data-editor-tour="menus" className="flex w-[54px] h-full bg-card border-r border-border/80">
                 <MenuList />
               </div>
               <Separator orientation="vertical" />
@@ -497,7 +504,7 @@ const Panels = ({
         </div>
       </div>
 
-      <div className="relative max-h-full w-full shrink-0 border-t border-border/80 bg-card"
+      <div data-editor-tour="timeline" className="relative max-h-full w-full shrink-0 border-t border-border/80 bg-card"
         style={{ height: timelineMaximized ? "100%" : timelineHeight + 1 }}>
         <div className={cn("h-full", timelineLoading && "pointer-events-none opacity-60 transition-opacity")}>
           {playerRef && <Timeline key={timelineKey} stateManager={stateManager} readOnly={viewOnly} />}
@@ -536,6 +543,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   role?: EditorRole;
 }) => {
   const preview = useSnapshotPreview();
+  const portfolioPicker = usePortfolioPicker();
   const snapshotReady = useSnapshotDocument(stateManager);
   const [storeSynced, setStoreSynced] = useState(false);
   useEffect(() => {
@@ -779,6 +787,9 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
           </div>
         </div>
         <SceneRemovedModal sceneName={removedFromScene} onClose={() => setRemovedFromScene(null)} />
+        {!viewOnly && !preview && !portfolioPicker && userId && id && (
+          <EditorWalkthrough key={`${userId}:${id}`} projectId={id} userId={userId} />
+        )}
       </CanCommentProvider>
     </ViewOnlyProvider>
   );

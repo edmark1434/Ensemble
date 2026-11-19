@@ -1,5 +1,6 @@
 "use client";
 
+import { useTourDemo } from "@/features/editor/store/use-tour-demo";
 import {
   Dialog,
   DialogContent,
@@ -155,9 +156,13 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
     return columns;
   }, []);
 
+  const showTour = useTourDemo(s => s.surface === "shortcuts");
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("z-[300] w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] border bg-card px-2 py-8 gap-6 overflow-y-auto", isLargeScreen ? "max-w-7xl sm:max-w-7xl" : "max-w-md sm:max-w-md")}>
+    <Dialog modal={!showTour} open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        data-tour-surface={showTour ? "shortcuts" : undefined}
+        onInteractOutside={event => { if (showTour) event.preventDefault(); }}
+        className={cn("z-[300] w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] border bg-card px-2 py-8 gap-6 overflow-y-auto", isLargeScreen ? "max-w-7xl sm:max-w-7xl" : "max-w-md sm:max-w-md")}>
         <DialogHeader className="px-4 pr-12 lg:px-6 -mt-0.75 flex flex-wrap flex-row items-center gap-3 text-left">
           <DialogTitle className="text-md font-semibold">Keyboard shortcuts</DialogTitle>
           <KbdGroup>

@@ -1,3 +1,5 @@
+import { TourSceneLane } from "./tour-scene-lane";
+import { useTourDemo } from "@/features/editor/store/use-tour-demo";
 import { useMissingMedia } from "../store/use-missing-media";
 import { TimelineMarketPriceBadges } from "./market-price-badges";
 import { useEffect, useRef, useState, type DragEvent } from "react";
@@ -5,7 +7,7 @@ import { useFileDropUpload } from "../hooks/use-file-drop-upload";
 import { UploadDropOverlay } from "../components/upload-drop-overlay";
 import { LocalFileDrag } from "./local-file-drag";
 import Header from "./header";
-import Ruler, { RULER_HEIGHT } from "./ruler";
+import Ruler from "./ruler";
 import { PortfolioBand, usePortfolioPicker } from "../portfolio/portfolio-picker";
 import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
 import CanvasTimeline from "./items/timeline";
@@ -186,6 +188,7 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
   const canScrollRef = useRef(false);
   const [scrollLeft, setScrollLeft] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lanesRef = useRef<HTMLDivElement>(null);
   const dropAreaRef = useRef<HTMLDivElement>(null);
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<CanvasTimeline | null>(null);
@@ -306,10 +309,10 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
 
     if (!canvasEl || !timelineContainerEl) return;
 
-    const area = dropAreaRef.current;
+    const area = lanesRef.current;
     if (!area) return;
     const containerWidth = area.clientWidth;
-    const containerHeight = Math.max(0, area.clientHeight - RULER_HEIGHT);
+    const containerHeight = area.clientHeight;
     const canvas = new CanvasTimeline(canvasEl, {
       width: containerWidth,
       height: containerHeight,
@@ -406,7 +409,7 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     setTimeline(canvas);
     const observer = new ResizeObserver(() => {
       const width = area.clientWidth;
-      const height = Math.max(0, area.clientHeight - RULER_HEIGHT);
+      const height = area.clientHeight;
       if (canvas.width !== width || canvas.height !== height) {
         canvas.resize({ width, height }, { force: true });
       }
@@ -1268,6 +1271,9 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     fileDrop.handleDrop(event, placement);
   };
 
+  const sampleScene = useTourDemo(s => s.scene);
+  const insideSample = useTourDemo(s => s.insideScene);
+  const rulerOrigin = TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX;
   return (
     <div
       ref={timelineContainerRef}
@@ -1290,20 +1296,23 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
         toggleFullHeight={toggleFullHeight}
         stateManager={stateManager}
       />
-      <Playhead scrollLeft={scrollLeft} />
-      <PresencePlayheads scrollLeft={scrollLeft} width={canvasSize.width} />
-      <div ref={dropAreaRef} className="relative min-h-0 flex-1 overflow-hidden">
-        <TimelinePresenceCursors containerRef={timelineContainerRef} scrollLeft={scrollLeft} />
+      <Playhead scrollLeft={insideSample ? 0 : scrollLeft} />
+      {!insideSample && <PresencePlayheads scrollLeft={scrollLeft} width={canvasSize.width} />}
+      <div ref={dropAreaRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {!insideSample && <TimelinePresenceCursors containerRef={timelineContainerRef} scrollLeft={scrollLeft} />}
         {!readOnly && (
           <UploadDropOverlay isDragOver={fileDrop.isDragOver} error={fileDrop.dragError} className="z-50" />
         )}
         <Ruler
           onClick={onClickRuler}
-          scrollLeft={scrollLeft}
+          scrollLeft={insideSample ? 0 : scrollLeft}
           onScroll={onRulerScroll}
         />
         {preview && <PortfolioBand scrollLeft={scrollLeft} />}
-        <div className="flex">
+        {sampleScene && <TourSceneLane item={sampleScene} scale={scale} inside={insideSample}
+          width={canvasSize.width} laneWidth={insideSample ? 0 : canvasRef.current?.getObjects("Track")[0]?.width ?? 0}
+          origin={rulerOrigin - (insideSample ? 0 : scrollLeft)} />}
+        <div ref={lanesRef} inert={insideSample} style={{ visibility: insideSample ? "hidden" : undefined }} className="flex min-h-0 flex-1 overflow-hidden">
           <div
             style={{
               width: 0

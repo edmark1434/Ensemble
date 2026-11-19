@@ -1,5 +1,7 @@
+import { tourBlockId, useTourDemo } from "@/features/editor/store/use-tour-demo";
 import React, { useEffect } from "react";
 import { useWorkspaceVisible } from "./workspace/workspace-button";
+import { Access } from "./control-item/common/access";
 import { ControlItem } from "./control-item";
 import useLayoutStore from "./store/use-layout-store";
 import { CommentsPanel } from "./comments/comments-panel";
@@ -12,15 +14,16 @@ export const RightPanelContent = ({
   panelRef: React.RefObject<HTMLDivElement | null>;
 }) => {
   const { activeRightItem, setActiveRightItem } = useLayoutStore();
+  const tourAccess = useTourDemo(s => s.access);
   const workspaceVisible = useWorkspaceVisible();
   useEffect(() => {
     if (activeRightItem === "workspace" && !workspaceVisible) setActiveRightItem("controls");
   }, [activeRightItem, workspaceVisible, setActiveRightItem]);
 
   return (
-    <div ref={panelRef} className="bg-card w-full flex flex-none h-full relative">
+    <div data-editor-tour="right-panel" ref={panelRef} className="bg-card w-full flex flex-none h-full relative">
       <div className="flex w-full h-full">
-        {activeRightItem === "controls" && <ControlItem />}
+        {activeRightItem === "controls" && (tourAccess ? <div data-editor-tour="sample-access" className="h-fit w-full overflow-hidden p-4"><Access blockId={tourBlockId} /></div> : <ControlItem />)}
         {activeRightItem === "comments" && <CommentsPanel />}
         {activeRightItem === "workspace" && workspaceVisible && <WorkspacePanel />}
         {activeRightItem === "saves" && <SavesPanel />}

@@ -1,3 +1,4 @@
+import { tourThreadId, tourAction, useTourDemo } from "@/features/editor/store/use-tour-demo";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -58,6 +59,7 @@ const Ruler = (props: RulerProps) => {
     onScroll,
   } = props;
 
+  const insideSample = useTourDemo(s => s.insideScene);
   const { scale, markers, fps } = useStore();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -458,12 +460,14 @@ const Ruler = (props: RulerProps) => {
 
   const openComment = (c: { id: string; timeMs: number }) => {
     seekTimelineToFrame((c.timeMs * fps) / 1000, timelineOffsetX);
+    if (c.id === tourThreadId) tourAction("comment");
     setFocusedId(c.id);
     setActiveRightItem("comments");
   };
 
   return (
     <div
+      data-editor-tour="ruler"
       className="border-t border-border"
       style={{
         position: "relative",
@@ -487,7 +491,7 @@ const Ruler = (props: RulerProps) => {
         }}
       />
 
-      {[...markers]
+      {!insideSample && [...markers]
         .sort((a, b) => {
           if (a.type === b.type) return 0;
           return a.type === "comment" ? 1 : -1;
@@ -527,7 +531,7 @@ const Ruler = (props: RulerProps) => {
           );
         })
       }
-      {commentMarkers.map((c) => {
+      {!insideSample && commentMarkers.map((c) => {
         const x = timeMsToUnits(c.timeMs, scale.zoom) - scrollLeft + offsetX;
         if (x < 0 || x > canvasSize.width) return null;
         const preview = commentPreviews.get(c.id);
@@ -551,6 +555,7 @@ const Ruler = (props: RulerProps) => {
         const markerButton = (
           <button
             type="button"
+            data-editor-tour={c.id === tourThreadId ? "sample-marker" : undefined}
             aria-label="Open comment"
             onClick={() => openComment(c)}
             style={{

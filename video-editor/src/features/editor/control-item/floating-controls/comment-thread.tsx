@@ -1,5 +1,6 @@
 // features/editor/control-item/floating-controls/comment-thread.tsx
 
+import { tourThreadId } from "../../store/use-tour-demo";
 import { useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ export default function CommentThreadControl() {
   // Reading the list never acknowledges a thread. Opening its floating panel
   // clears that thread's notifications, including replies received while open.
   useEffect(() => {
-    if (floatingControl === "comment-thread" && scope && threadId) {
+    if (floatingControl === "comment-thread" && scope && threadId && threadId !== tourThreadId) {
       markThreadRead(scope, threadId, [threadId, ...(thread?.replies.map(reply => reply.id) ?? [])]);
     }
   }, [floatingControl, scope, threadId, thread, unreadIds, markThreadRead]);
@@ -100,6 +101,7 @@ export default function CommentThreadControl() {
       {data?.canComment && (
         <div className="px-4 pb-4 pt-4">
           <Composer
+            localAttachments={thread.id === tourThreadId}
             placeholder="Reply…"
             getTimeMs={currentMs}
             onSubmit={({ body, fileIds }) => post(body, { parentId: thread.id, fileIds })}

@@ -1,3 +1,4 @@
+import { tourAction, useTourDemo } from "@/features/editor/store/use-tour-demo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { dispatch } from "@designcombo/events";
@@ -53,13 +54,8 @@ import { seekTimelineToFrame } from "../utils/timeline-scroll";
 import { timeMsToUnits } from "@designcombo/timeline";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import {
-  makeSceneTrackItem,
-  makeSceneTrack,
-  isSceneItem,
-  SCENE_TYPE,
-  ISceneTrackItem,
-} from "../types/ensemble-scene";
+import { isSceneItem } from "../types/ensemble-scene";
+import { addScene } from "../utils/add-scene";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -138,22 +134,26 @@ const Header = ({ toggleFullHeight, stateManager }: {
     fps,
     scale,
     playerRef,
-    activeIds,
+    activeIds: projectActiveIds,
     timeline,
     trackItemsMap,
     tracks,
     markers,
     addMarker,
     removeMarker,
-    activeSceneBlockId,
-    currentBlockName,
+    activeSceneBlockId: projectSceneBlockId,
+    currentBlockName: projectBlockName,
     closeScene,
     saveStatus,
     compactStatus,
     workingInsideByItemId,
   } = useStore();
 
-  const isSaving = saveStatus === "saving" || compactStatus === "compacting";
+  const demoScene = useTourDemo(s => s.insideScene ? s.scene : null);
+  const activeSceneBlockId = demoScene?.details.blockId ?? projectSceneBlockId;
+  const currentBlockName = demoScene?.details.name ?? projectBlockName;
+  const activeIds = demoScene ? [] : projectActiveIds;
+  const isSaving = !demoScene && (saveStatus === "saving" || compactStatus === "compacting");
   const isLargeScreen = useIsLargeScreen();
   const viewOnly = useViewOnly();
   const canComment = useCanComment();
@@ -406,91 +406,10 @@ const Header = ({ toggleFullHeight, stateManager }: {
     applyPlayheadAction(stateManager, "deleteRight", getCurrentTime(), useStore.getState());
   };
 
-  const doAddScene = () => {
-    const { trackItemsMap, trackItemIds, tracks, duration, projectId, size } = useStore.getState();
-    const time = getCurrentTime();
-    const SCENE_DEFAULT_DURATION_MS = 5000;
-    const id = crypto.randomUUID();
-
-    const sceneItem: ISceneTrackItem = {
-      id,
-      type: SCENE_TYPE,
-      name: "Scene",
-      display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
-      metadata: {},
-      details: {
-        blockId: crypto.randomUUID(),
-        name: "Scene",
-        width: size.width,
-        height: size.height,
-        top: 0,
-        left: 0,
-      },
-    };
-
-    let targetTrack = tracks.find(
-      (t) =>
-        isSceneItem(t.type) &&
-        !t.static &&
-        !t.items.some((itemId) => {
-          const other = trackItemsMap[itemId];
-          return (
-            !!other &&
-            other.display.from < sceneItem.display.to &&
-            other.display.to > sceneItem.display.from
-          );
-        }),
-    );
-
-    let nextTracks = tracks;
-    if (!targetTrack) {
-      targetTrack = makeSceneTrack({
-        id: crypto.randomUUID(),
-        type: SCENE_TYPE,
-        items: [],
-        metadata: {},
-        accepts: [SCENE_TYPE],
-        index: 0,
-        magnetic: false,
-        static: false,
-      });
-      nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
-    }
-
-    const targetTrackId = targetTrack.id;
-    nextTracks = nextTracks.map((t) =>
-      t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
-    );
-
-    stateManager.updateState(
-      {
-        trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
-        trackItemIds: [...trackItemIds, id],
-        tracks: nextTracks,
-        duration: Math.max(duration, sceneItem.display.to),
-      },
-      { updateHistory: true, kind: "update" },
-    );
-
-    // Fire-and-forget: the scene is already usable locally; if this hasn't
-    // landed by the time someone double-clicks in, there's just nothing to
-    // load yet, same as any other race between a write and a fast re-read.
-    fetch("/api/blocks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        blockId: sceneItem.details.blockId,
-        projectId,
-        name: sceneItem.details.name,
-        width: size.width,
-        height: size.height,
-      }),
-    }).catch((err) => {
-      console.error("doAddScene: failed to create block record", err);
-    });
-  };
+  const doAddScene = () => addScene(stateManager, getCurrentTime());
 
   const goHome = () => {
+    if (tourAction("leave-scene")) return;
     if (isSaving) return;
     stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
     dispatch(PLAYER_PAUSE);
@@ -531,7 +450,7 @@ const Header = ({ toggleFullHeight, stateManager }: {
               <div className="flex items-center gap-1 px-2 first:pl-0 last:pr-0 h-5">
                 <Tooltip delayDuration={10}>
                   <TooltipTrigger asChild>
-                    <Button
+                    <Button data-editor-tour="scene-back" aria-label="Back to project"
                       onClick={!isSaving ? goHome : undefined}
                       variant={"ghost"}
                       size={"icon"}
@@ -868,7 +787,7 @@ const Header = ({ toggleFullHeight, stateManager }: {
                     {!activeSceneBlockId && (
                       <Tooltip delayDuration={10}>
                         <TooltipTrigger asChild>
-                          <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>
+                          <Button data-editor-tour="scenes" aria-label="Add scene" onClick={doAddScene} variant={"ghost"} size={"icon"}>
                             <Component size={16} />
                           </Button>
                         </TooltipTrigger>
@@ -907,7 +826,8 @@ const Header = ({ toggleFullHeight, stateManager }: {
                   <Tooltip delayDuration={10}>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={isCommentActive ? openActiveComment : startComment}
+                        data-editor-tour="add-comment"
+                        onClick={() => { if (!tourAction("comment")) (isCommentActive ? openActiveComment : startComment)(); }}
                         variant={"ghost"}
                         size={"icon"}
                         style={isCommentActive ? { color: "#f43f5e" } : undefined}
@@ -936,10 +856,11 @@ const Header = ({ toggleFullHeight, stateManager }: {
                       <Tooltip delayDuration={10}>
                         <TooltipTrigger asChild>
                           <BreadcrumbLink asChild>
-                            <button
+                            <button data-editor-tour="scene-home"
                               onClick={!isSaving ? goHome : undefined}
                               className={cn(
                                 "text-sm hover:text-primary",
+                                demoScene && "-m-2 p-2",
                                 isSaving && "opacity-50 cursor-default hover:text-inherit"
                               )}
                             >
@@ -1052,7 +973,7 @@ const ZoomControl = ({
   };
 
   return (
-    <div className="flex items-center justify-end">
+    <div data-editor-tour="zoom" className="flex items-center justify-end">
       <div className="flex gap-1">
         <Tooltip delayDuration={10}>
           <TooltipTrigger asChild>

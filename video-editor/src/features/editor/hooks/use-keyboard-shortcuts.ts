@@ -1,3 +1,4 @@
+import { tourAction } from "@/features/editor/store/use-tour-demo";
 import { useEffect, useRef } from "react";
 import { dispatch } from "@designcombo/events";
 import StateManager, {
@@ -24,13 +25,8 @@ import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset"
 import { TIMELINE_OFFSET_CANVAS_LEFT } from "@/features/editor/constants/constants";
 import { scrollTimelineToFrame, seekTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
-import {
-  makeSceneTrackItem,
-  makeSceneTrack,
-  isSceneItem,
-  SCENE_TYPE,
-  ISceneTrackItem,
-} from "../types/ensemble-scene";
+import { isSceneItem } from "../types/ensemble-scene";
+import { addScene } from "../utils/add-scene";
 import { PLAYER_PAUSE } from "@/features/editor/constants/events";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 import { startComment } from "@/features/editor/comments/start-comment";
@@ -492,100 +488,9 @@ export function useKeyboardShortcuts(
       // add scene
       if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyS") {
         e.preventDefault();
-        const {
-          activeIds,
-          trackItemsMap,
-          trackItemIds,
-          tracks,
-          duration,
-          activeSceneBlockId,
-          projectId,
-          size
-        } = useStore.getState();
-        if (activeSceneBlockId) return;
-        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
-        if (activeItems.some((item) => isSceneItem(item.type))) return;
-
-        const time = getCurrentTime();
-        const SCENE_DEFAULT_DURATION_MS = 5000;
-        const id = crypto.randomUUID();
-
-        const sceneItem: ISceneTrackItem = {
-          id,
-          type: SCENE_TYPE,
-          name: "Scene",
-          display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
-          metadata: {},
-          details: {
-            blockId: crypto.randomUUID(),
-            name: "Scene",
-            width: size.width,
-            height: size.height,
-            top: 0,
-            left: 0,
-          },
-        };
-
-        let targetTrack = tracks.find(
-          (t) =>
-            isSceneItem(t.type) &&
-            !t.static &&
-            !t.items.some((itemId) => {
-              const other = trackItemsMap[itemId];
-              return (
-                !!other &&
-                other.display.from < sceneItem.display.to &&
-                other.display.to > sceneItem.display.from
-              );
-            }),
-        );
-
-        let nextTracks = tracks;
-        if (!targetTrack) {
-          targetTrack = makeSceneTrack({
-            id: crypto.randomUUID(),
-            type: SCENE_TYPE,
-            items: [],
-            metadata: {},
-            accepts: [SCENE_TYPE],
-            index: 0,
-            magnetic: false,
-            static: false,
-          });
-          nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
-        }
-
-        const targetTrackId = targetTrack.id;
-        nextTracks = nextTracks.map((t) =>
-          t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
-        );
-
-        stateManager.updateState(
-          {
-            trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
-            trackItemIds: [...trackItemIds, id],
-            tracks: nextTracks,
-            duration: Math.max(duration, sceneItem.display.to),
-          },
-          { updateHistory: true, kind: "update" },
-        );
-
-        // Fire-and-forget: the scene is already usable locally; if this hasn't
-        // landed by the time someone double-clicks in, there's just nothing to
-        // load yet, same as any other race between a write and a fast re-read.
-        fetch("/api/blocks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            blockId: sceneItem.details.blockId,
-            projectId,
-            name: sceneItem.details.name,
-            width: size.width,
-            height: size.height,
-          }),
-        }).catch((err) => {
-          console.error("doAddScene: failed to create block record", err);
-        });
+        const { activeIds, trackItemsMap, activeSceneBlockId } = useStore.getState();
+        if (tourAction("scene") || activeSceneBlockId || activeIds.some(id => isSceneItem(trackItemsMap[id]?.type))) return;
+        addScene(stateManager, getCurrentTime());
       }
 
       // go back from scene (back to home)

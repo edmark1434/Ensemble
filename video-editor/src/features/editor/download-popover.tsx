@@ -1,3 +1,4 @@
+import { useTourDemo, tourAction } from "@/features/editor/store/use-tour-demo";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,7 +66,10 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   const inScene = !!activeSceneBlockId;
   const isEmpty = trackItemIds.length === 0;
 
-  const [open, setOpen] = useState(false);
+  const [userOpen, setOpen] = useState(false);
+  const tourExport = useTourDemo(s => s.surface === "export");
+  const exportIntro = useTourDemo(s => s.exportIntro);
+  const open = userOpen || tourExport;
   useEffect(() => {
     if (open) void refetchPlan();
   }, [open, refetchPlan]);
@@ -227,6 +231,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (tourExport && !nextOpen) { tourAction("close"); return; }
+    if (nextOpen && tourAction("export")) return;
     if (nextOpen && (isCompleted || isFailed)) {
       actions.setDisplayProgressModal(true);
       return;
@@ -266,11 +272,11 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
     <>
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        {isEmpty && !isCompleted && !isFailed ? (
+        {isEmpty && !exportIntro && !tourExport && !isCompleted && !isFailed ? (
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
         <span>
-          <Button
+          <Button data-editor-tour="export"
             className={cn(
               "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
               (exporting && !(isCompleted && downloadStatus === "idle") && !isFailed) && "!border-foreground hover:!border-foreground/80",
@@ -279,7 +285,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
             )}
             variant={"outline"}
             size={isMediumScreen ? "sm" : "icon"}
-            disabled={isEmpty && !isCompleted && !isFailed}
+            disabled={isEmpty && !exportIntro && !tourExport && !isCompleted && !isFailed}
           >
             <Download size={16} />{" "}
             <span className="hidden md:block">{buttonLabel}</span>
@@ -291,7 +297,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
             </TooltipContent>
           </Tooltip>
         ) : (
-          <Button
+          <Button data-editor-tour="export"
             className={cn(
               "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
               (exporting && !(isCompleted && downloadStatus === "idle") && !isFailed) && "!border-foreground hover:!border-foreground/80",
@@ -300,7 +306,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
             )}
             variant={"outline"}
             size={isMediumScreen ? "sm" : "icon"}
-            disabled={isEmpty && !isCompleted && !isFailed}
+            disabled={isEmpty && !exportIntro && !tourExport && !isCompleted && !isFailed}
           >
             <Download size={16} />{" "}
             <span className="hidden md:block">{buttonLabel}</span>
@@ -308,10 +314,12 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
         )}
       </PopoverTrigger>
       <PopoverContent
+        data-tour-surface={tourExport ? "export" : undefined}
+        onInteractOutside={event => { if (tourExport) event.preventDefault(); }}
         align="end"
         className="pointer-events-none z-[250] w-auto border-none bg-transparent p-0 shadow-none"
       >
-        <DraggablePanel title="Export" onClose={() => { setOpen(false); setAssetStepScope(null); }} onBack={showAssetStep ? () => setAssetStepScope(null) : undefined} className="w-96">
+        <DraggablePanel title="Export" onClose={() => { if (tourExport) tourAction("close"); else setOpen(false); setAssetStepScope(null); }} onBack={showAssetStep ? () => setAssetStepScope(null) : undefined} className="w-96">
           {showAssetStep ? <>
             <h3 className="text-sm font-semibold">This {inScene ? "scene" : "project"} contains paid assets</h3>
             {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : !licensesReady ? <Button disabled>Checking asset licenses…</Button> : unpaidIds.length > 0 ? <>
@@ -386,7 +394,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
                 {policy.watermarkRemovalPlan && <PlanIcon plan={policy.watermarkRemovalPlan} />} Upgrade to remove
               </Button>}
             </div>}
-            {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" className="w-full" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : <Button disabled={!licensesReady || !policy} onClick={() => { if (unpaidIds.length) setAssetStepScope(scopeKey); else handleExport(); }} className="w-full">{!policy ? "Loading your plan…" : licensesReady ? `Export ${inScene ? "scene" : "project"}` : "Checking asset licenses…"}</Button>}
+            {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" className="w-full" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : <Button disabled={isEmpty || !licensesReady || !policy} onClick={() => { if (unpaidIds.length) setAssetStepScope(scopeKey); else handleExport(); }} className="w-full">{!policy ? "Loading your plan…" : licensesReady ? `Export ${inScene ? "scene" : "project"}` : "Checking asset licenses…"}</Button>}
           </div>
           </>}
         </DraggablePanel>

@@ -1,5 +1,6 @@
 // features/editor/comments/comments-panel.tsx
 
+import { uploadTourAttachment } from "../store/use-tour-demo";
 import {
   Fragment,
   useEffect,
@@ -416,6 +417,7 @@ function mainPillRange(root: HTMLElement): Range | null {
 }
 
 export function Composer({
+  localAttachments = false,
   placeholder,
   onSubmit,
   getTimeMs,
@@ -423,6 +425,7 @@ export function Composer({
   autoFocus,
   focusKey,
 }: {
+  localAttachments?: boolean;
   placeholder: string;
   onSubmit: (p: { body: string; timeMs?: number; fileIds: string[] }) => Promise<void>;
   // Enables the "/" and "@" -> Timestamp command (any number of pills).
@@ -433,7 +436,7 @@ export function Composer({
   // bump to pull focus into the box again (C pressed while the composer is already open)
   focusKey?: number;
 }) {
-  const upload = useCommentsStore((s) => s.upload);
+  const upload = useCommentsStore((s) => localAttachments ? uploadTourAttachment : s.upload);
   const peopleData = useCommentsStore((s) => s.data?.people);
   const people = peopleData ?? NO_PEOPLE;
 
