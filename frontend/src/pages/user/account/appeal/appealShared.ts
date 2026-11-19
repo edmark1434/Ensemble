@@ -38,7 +38,8 @@ export type AppealState =
   | 'legacy_open'
   | 'accepted'
   | 'denied'
-  | 'denied_permanent';
+  | 'denied_permanent'
+  | 'window_closed';
 
 /** One active penalty and whether it can be appealed now (`GET /api/users/appeals`). */
 export type AppealablePenalty = {
@@ -61,6 +62,10 @@ export type AppealablePenalty = {
     status: string | null;
     decidedAt: string | null;
     availableAt: string | null;
+    /** Last moment this penalty can be appealed (state `available`); null when no deadline applies. */
+    closesAt?: string | null;
+    /** When the filing window closed (state `window_closed`). */
+    closedAt?: string | null;
     legacy?: boolean;
     message: string | null;
   };

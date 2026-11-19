@@ -2,7 +2,7 @@
 import toast, { Toaster, resolveValue } from 'react-hot-toast';
 import { Loader2, Info } from 'lucide-react';
 import { SwipeToast } from '@/components/ui/SwipeToast';
-import { ToastLottieIcon } from '@/components/utility/toast';
+import { ToastLottieIcon, errorToastDuration } from '@/components/utility/toast';
 
 export const ToastProvider = () => {
   return (
@@ -44,7 +44,9 @@ export const ToastProvider = () => {
         }
 
         if (t.type === 'error') {
-          const dur = typeof t.duration === 'number' && Number.isFinite(t.duration) && t.duration > 0 ? t.duration : 5000;
+          const dur = typeof t.duration === 'number' && Number.isFinite(t.duration) && t.duration > 0
+            ? t.duration
+            : errorToastDuration(message);
           return (
             <SwipeToast
               open={t.visible}
@@ -54,6 +56,7 @@ export const ToastProvider = () => {
               fuseColor="#f43f5e"
               icon={<ToastLottieIcon src="/icons/lottie/error.lottie" />}
               title={message}
+              clampTitle={false}
               className="w-[356px] max-w-[calc(100vw-32px)] border-red-200/80 dark:border-red-500/20"
             />
           );

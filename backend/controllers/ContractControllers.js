@@ -342,7 +342,10 @@ async function createContractDisputeController(req, res) {
         const status = Number(err.statusCode) || (String(err.message || '').includes('Unauthorized') ? 403 : 500);
         return res.status(status).json({
             success: false,
-            message: err.message || 'Internal server error'
+            message: err.message || 'Internal server error',
+            // Filing blocks (DISPUTE_ALREADY_FILED, DISPUTE_WINDOW_CLOSED, DISPUTE_PAYOUT_PENDING) let
+            // the form show its banner. Only our own errors carry statusCode; driver codes stay out.
+            ...(err.statusCode && err.code ? { code: err.code } : {}),
         });
     }
 }
