@@ -13,8 +13,10 @@ import {
   FileText,
   UserCheck,
   ShoppingCart,
+  CircleCheck,
 } from "lucide-react";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { NewListingBadge } from "./NewListingBadge";
 
 interface GigServicesInfoGuideProps {
   onBrowseServices?: () => void;
@@ -521,28 +523,25 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
                 {/* 6. New Listing Thumbnail Badge */}
                 <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
                   <td className="py-3.5 px-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-semibold border border-white/15 shadow-xs">
-                      <Star className="h-3 w-3 fill-gray-400 text-gray-400" />
-                      <span className="text-gray-200">New</span>
-                    </span>
+                    <NewListingBadge />
                   </td>
                   <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
-                    New Listing Badge
+                    New Listing Pill
                   </td>
                   <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400">
-                    Published within the last 7 days with 0 completed reviews yet.
+                    Published within the last 7 days (age ≤ 7 days).
                   </td>
                   <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
-                    Replaces &quot;N/A&quot; on new listings while Bayesian 4.2★ newcomer protection is active.
+                    Shining upper-right banner pill highlighting 7-day fresh services while newcomer momentum is active.
                   </td>
                 </tr>
 
                 {/* 7. Verified Service Rating Badge */}
                 <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
                   <td className="py-3.5 px-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-semibold border border-white/15 shadow-xs">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-yellow-400 font-bold">5.0 (12)</span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 text-[9px] font-semibold shadow-xs">
+                      <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
+                      <span>5.0 (12)</span>
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
@@ -552,7 +551,51 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
                     Service has 1 or more completed and rated escrow orders.
                   </td>
                   <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
-                    Displays average star rating and review count from verified buyers.
+                    Displayed beside the Tiers tag with the average star rating and review count from verified buyers.
+                  </td>
+                </tr>
+
+                {/* 8. No Rating Yet Badge */}
+                <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
+                  <td className="py-3.5 px-4">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 text-[9px] font-semibold shadow-xs">
+                      <Star className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                      <span>No Rating</span>
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
+                    No Rating Yet
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400">
+                    Service has 0 completed buyer ratings.
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
+                    Shown beside the Tiers tag until the service receives its first verified buyer review.
+                  </td>
+                </tr>
+
+                {/* 9. Orders & Completed Badges */}
+                <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
+                  <td className="py-3.5 px-4">
+                    <div className="inline-flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] font-semibold border border-white/10">
+                        <ShoppingCart className="h-3 w-3" />
+                        <span>4 Orders</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] font-semibold border border-white/10">
+                        <CircleCheck className="h-3 w-3 text-emerald-400" />
+                        <span>3 Completed</span>
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
+                    Orders &amp; Completed
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400">
+                    Displayed in the upper-left of the banner based on total requests and finished contracts.
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
+                    Shows total order inquiries sent alongside successful completed orders.
                   </td>
                 </tr>
 

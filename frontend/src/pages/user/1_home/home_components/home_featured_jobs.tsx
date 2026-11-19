@@ -22,6 +22,7 @@ import { getImageUrl } from "@/lib/utils";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
 import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
+import { ApplicationWindowTimer } from "../../6_job_market/job_components/job_utilities/ApplicationWindowTimer";
 
 function getTimeAgo(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -296,6 +297,19 @@ export const HomeFeaturedJobs: React.FC = () => {
                     {job.difficulty || "Beginner"}
                   </span>
                 </div>
+
+                {/* Bottom-right Application Window Timer */}
+                {job.applicationDeadline && (
+                  <div className="absolute bottom-2 right-2 flex items-center z-10">
+                    <ApplicationWindowTimer
+                      deadline={job.applicationDeadline}
+                      status={job.status}
+                      variant="badge"
+                      compact
+                      tone="gray"
+                    />
+                  </div>
+                )}
 
                 {/* Top-right Actions */}
                 <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">

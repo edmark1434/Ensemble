@@ -17,6 +17,12 @@
 require('dotenv').config({ quiet: true, path: require('path').resolve(__dirname, '../.env') });
 const { pool } = require('../lib/Database');
 
+const JOB_BANNER_PRESETS = [
+  '/job_banners/jb1.png',
+  '/job_banners/jb2.png',
+  '/job_banners/jb3.png',
+];
+
 const JOBS_25 = [
   // ============================================================================
   // ARCHETYPE A: RISING JOB POSTS (6 Jobs — 2 Open Bid, 2 Ranged, 2 Team Pool)
@@ -816,20 +822,20 @@ async function replaceAndSeed25Jobs() {
       );
       const jobId = jobRes.rows[0].job_id;
 
-      // Insert Thumbnail Attachment (index = 0)
-      if (item.thumbnail) {
-        const fRes = await client.query(
-          `INSERT INTO files (name, path, mime_type, size_bytes)
-           VALUES ($1, $2, 'image/jpeg', 0)
-           RETURNING file_id`,
-          [`job_${i + 1}_thumb.jpg`, item.thumbnail]
-        );
-        await client.query(
-          `INSERT INTO job_attachments (job_id, file_id, index)
-           VALUES ($1, $2, 0) ON CONFLICT DO NOTHING`,
-          [jobId, fRes.rows[0].file_id]
-        );
-      }
+      // Insert Thumbnail Attachment (index = 0) using preset job banners
+      const bannerPath = JOB_BANNER_PRESETS[i % JOB_BANNER_PRESETS.length];
+      const bannerName = bannerPath.split('/').pop();
+      const fRes = await client.query(
+        `INSERT INTO files (name, path, mime_type, size_bytes)
+         VALUES ($1, $2, 'image/png', 0)
+         RETURNING file_id`,
+        [bannerName, bannerPath]
+      );
+      await client.query(
+        `INSERT INTO job_attachments (job_id, file_id, index)
+         VALUES ($1, $2, 0) ON CONFLICT DO NOTHING`,
+        [jobId, fRes.rows[0].file_id]
+      );
 
       // Insert Skills / Tags
       for (const skill of item.skills) {

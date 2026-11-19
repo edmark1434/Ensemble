@@ -187,9 +187,8 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               <img
                 src={selectedGig.thumbnail}
                 alt=""
-                className="w-full h-full object-cover opacity-60"
+                className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
 
               <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                 <button
@@ -487,25 +486,30 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       Service Add-ons & Extras ({selectedGig.addOns.length})
                     </h4>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {selectedGig.addOns.map((addon, aIdx) => (
                       <div
                         key={addon.id || aIdx}
-                        className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-2xs hover:border-blue-400 dark:hover:border-blue-500/50 transition-colors"
+                        className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.03] transition-colors"
                       >
-                        <div className="min-w-0 pr-2">
+                        <div className="min-w-0">
                           <span className="text-xs font-semibold text-gray-900 dark:text-white block truncate">
                             {addon.title}
                           </span>
                           {addon.deliveryDays ? (
-                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 block">
-                              +{addon.deliveryDays} Day{addon.deliveryDays > 1 ? "s" : ""} Delivery
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 dark:text-zinc-400 mt-0.5">
+                              <Clock className="h-2.5 w-2.5 shrink-0" />
+                              <span>+{addon.deliveryDays} Day{addon.deliveryDays > 1 ? "s" : ""} Delivery</span>
                             </span>
-                          ) : null}
+                          ) : (
+                            <span className="text-[10px] text-gray-400 dark:text-zinc-500 block mt-0.5">
+                              Same delivery timeline
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1 text-xs font-bold text-amber-500 dark:text-amber-400 shrink-0">
-                          <CreditIcon className="h-3.5 w-3.5" />
-                          <span>+{addon.price?.toLocaleString()} Cr</span>
+                        <div className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-white shrink-0">
+                          <CreditIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span>+{addon.price?.toLocaleString()}</span>
                         </div>
                       </div>
                     ))}
@@ -739,15 +743,20 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                        <ShoppingCart className="h-3.5 w-3.5 text-gray-400" />
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-zinc-400">
+                        <ShoppingCart className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                         <span>{selectedGig.ordersCount || 0} Orders</span>
                       </div>
                       <span className="text-gray-300 dark:text-zinc-700">•</span>
-                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                        <Users className="h-3.5 w-3.5 text-gray-400" />
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-zinc-400">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        <span>{selectedGig.completedOrdersCount || 0} Completed</span>
+                      </div>
+                      <span className="text-gray-300 dark:text-zinc-700">•</span>
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-zinc-400">
+                        <Users className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                         <span>{selectedGig.slots} Slots Available</span>
                       </div>
                     </div>

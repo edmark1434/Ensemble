@@ -9,6 +9,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import useGlobalState from "@/lib/global_state";
 import { computeJobRankingBreakdown } from "../job_ranking";
+import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
 
 export interface Job {
   id: string;
@@ -310,6 +311,19 @@ const JobList: React.FC<JobListProps> = ({
                         </span>
                       </div>
 
+                      {/* Bottom-right Application Window Timer */}
+                      {job.applicationDeadline && (
+                        <div className="absolute bottom-2 right-2 flex items-center z-10">
+                          <ApplicationWindowTimer
+                            deadline={job.applicationDeadline}
+                            status={job.status}
+                            variant="badge"
+                            compact
+                            tone="gray"
+                          />
+                        </div>
+                      )}
+
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                       {!job.isOwnPost && !isGuestMode && (
                         <button
@@ -554,6 +568,19 @@ const JobList: React.FC<JobListProps> = ({
                     {job.difficulty || "Beginner"}
                   </span>
                 </div>
+
+                {/* Bottom-right Application Window Timer */}
+                {job.applicationDeadline && (
+                  <div className="absolute bottom-2 right-2 flex items-center z-10">
+                    <ApplicationWindowTimer
+                      deadline={job.applicationDeadline}
+                      status={job.status}
+                      variant="badge"
+                      compact
+                      tone="gray"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 p-5 flex flex-col justify-between min-w-0">

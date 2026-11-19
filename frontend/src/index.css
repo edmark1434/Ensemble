@@ -13,6 +13,12 @@ html,
 body,
 #root {
   min-height: 100%;
+  background: #f9fafb;
+}
+
+html.dark,
+html.dark body,
+html.dark #root {
   background: #080a12;
 }
 

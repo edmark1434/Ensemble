@@ -20,6 +20,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
 import useGlobalState from "@/lib/global_state";
 import { formatDistanceToNow } from "date-fns";
+import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
 
 interface JobsOtherPostsProps {
   currentJobId?: string;
@@ -293,6 +294,19 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                           {job.difficulty || "Beginner"}
                         </span>
                       </div>
+
+                      {/* Bottom-right Application Window Timer */}
+                      {job.applicationDeadline && (
+                        <div className="absolute bottom-2 right-2 flex items-center z-10">
+                          <ApplicationWindowTimer
+                            deadline={job.applicationDeadline}
+                            status={job.status}
+                            variant="badge"
+                            compact
+                            tone="gray"
+                          />
+                        </div>
+                      )}
 
                       {/* Top-right Actions */}
                       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">

@@ -11,6 +11,7 @@ import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { motion, AnimatePresence } from "framer-motion";
 import { computeJobRankingBreakdown } from "../job_ranking";
+import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -132,9 +133,8 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               <img
                 src={selectedJob.thumbnail}
                 alt=""
-                className="w-full h-full object-cover opacity-60"
+                className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
               <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                 <button
@@ -164,6 +164,17 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                 )}
               </div>
+
+              {selectedJob.applicationDeadline && (
+                <div className="absolute bottom-3 right-4 flex items-center z-10">
+                  <ApplicationWindowTimer
+                    deadline={selectedJob.applicationDeadline}
+                    status={selectedJob.status}
+                    variant="badge"
+                    tone="gray"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 thin-scrollbar">

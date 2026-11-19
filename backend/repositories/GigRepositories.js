@@ -776,6 +776,8 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount",
 
+            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id JOIN contracts c ON c.contract_id = gc.contract_id WHERE gt.gig_id = g.gig_id AND LOWER(c.status) IN ('done', 'completed')) as "completedOrdersCount",
+
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id AND gr.status = 'Pending') as "pendingOrdersCount",
 
             tm.team_id as "teamId",
@@ -882,6 +884,8 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
             savesCount: parseInt(row.savesCount || 0, 10),
 
             ordersCount: parseInt(row.ordersCount || 0, 10),
+
+            completedOrdersCount: parseInt(row.completedOrdersCount || 0, 10),
 
             pendingOrdersCount: parseInt(row.pendingOrdersCount || 0, 10),
 
@@ -2159,6 +2163,8 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount",
 
+            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id JOIN contracts c ON c.contract_id = gc.contract_id WHERE gt.gig_id = g.gig_id AND LOWER(c.status) IN ('done', 'completed')) as "completedOrdersCount",
+
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id AND gr.status = 'Pending') as "pendingOrdersCount",
 
             tm.team_id as "teamId",
@@ -2262,6 +2268,8 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
         savesCount: parseInt(row.savesCount || 0, 10),
 
         ordersCount: parseInt(row.ordersCount || 0, 10),
+
+        completedOrdersCount: parseInt(row.completedOrdersCount || 0, 10),
 
           pendingOrdersCount: parseInt(row.pendingOrdersCount || 0, 10),
 
