@@ -1,3 +1,10 @@
+// Prepared marketplace images use blob URLs, which have no file extension.
+const preparedImageTypes = new Map<string, string>();
+
+export function getPreparedImageType(url: string) {
+  return preparedImageTypes.get(url);
+}
+
 // Browser-only media cache, scoped to the currently open project preview.
 export function createPreparedImageCache() {
   const entries = new Map<string, { controller: AbortController; url?: string; promise: Promise<string> }>();
@@ -5,7 +12,10 @@ export function createPreparedImageCache() {
     const entry = entries.get(source);
     if (!entry) return;
     entry.controller.abort();
-    if (entry.url) URL.revokeObjectURL(entry.url);
+    if (entry.url) {
+      preparedImageTypes.delete(entry.url);
+      URL.revokeObjectURL(entry.url);
+    }
     entries.delete(source);
   }
   return {
@@ -24,6 +34,7 @@ export function createPreparedImageCache() {
         const blob = await response.blob();
         if (controller.signal.aborted) throw new Error("Aborted");
         entry.url = URL.createObjectURL(blob);
+        preparedImageTypes.set(entry.url, blob.type.split(";")[0].trim().toLowerCase());
         const image = new Image();
         image.src = entry.url;
         await image.decode();

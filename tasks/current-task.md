@@ -1,3 +1,9 @@
+# Editor GIF playback
+
+Use the timeline frame and the image item's playback rate when drawing GIFs in the editor. Scrubbing and pausing should show the corresponding GIF frame. Resolve prepared marketplace images using their downloaded media type and retain the existing image loading, missing-media and error placeholders.
+
+---
+
 # Task: Credits & economy ledger filters and linked entries
 
 ## Implementation Objective
