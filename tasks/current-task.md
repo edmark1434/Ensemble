@@ -1,18 +1,28 @@
-# Task: Admin Asset Creator Attribution (By Ensemble & Logo Profile)
+# Task: Asset Library Trash Adjustments & Seller Dashboard
 
 ## Implementation Objective
-For assets uploaded by admin/staff (`is_admin_asset = true`):
-1. Display name shown in the user platform should be `"By Ensemble"` instead of `"Admin User"` (or staff account name).
-2. Creator profile picture/avatar should display the Ensemble logo (`/ensemble_lg.svg`) with appropriate theme inversion (`invert dark:invert-0`) so it renders clearly in both light and dark modes.
-3. Creator handle for admin assets is represented as `@ensemble`.
-4. Hide or omit personal user profile navigation for platform/admin assets where appropriate.
-5. Prevent redundant prefixes like `"by By Ensemble"` in purchase dialogs.
+1. Remove "Delete permanently" functionality from the Trash tab and Asset Details view so soft-deleted assets can only be restored, preserving data integrity for any buyers or projects using them.
+2. Add a comprehensive Seller Dashboard within the Asset Library (`/assets/seller`) tracking:
+   - Total net revenue earned in credits
+   - Total sales count across all assets
+   - Overall unique buyers count
+   - Active marketplace listings count
+   - Per-asset sales, buyers, and revenue performance breakdown
+   - Recent sales transaction history
 
 ## Acceptance Criteria
-- `backend/repositories/AssetRepositories.js`: `ASSET_SELECT` returns `By Ensemble` as `creator_name`, `ensemble` as `creator_handle`, and `/ensemble_lg.svg` as `creator_avatar_path` for admin/staff assets.
-- `backend/services/AssetServices.js`: `publicAsset` ensures `creator_name: 'By Ensemble'`, `creator_handle: 'ensemble'`, and `creator_avatar_path: '/ensemble_lg.svg'` on all admin asset responses.
-- `frontend/src/pages/user/5_assets/assetTypes.ts`: `mediaUrl` preserves local assets like `/ensemble_lg.svg` without prefixing CloudFront CDN URL.
-- `frontend/src/pages/user/5_assets/AssetCard.tsx`: Displays the Ensemble logo profile avatar and `"By Ensemble"` display name.
-- `frontend/src/pages/user/5_assets/AssetDetails.tsx`: Displays the Ensemble logo profile avatar, `"By Ensemble"`, Official platform badge, and omits the user profile navigation button for admin assets.
-- `frontend/src/pages/user/5_assets/AssetPurchaseModal.tsx`: Formats `"By Ensemble"` cleanly without repeating the `"by"` prefix.
-- User preference: do not run automated build or verification commands.
+- Trash Tab:
+  - `AssetCard.tsx`: When `view === "trash"`, only display the "Restore" button; remove the "Delete permanently" button.
+  - `AssetDetails.tsx`: When `asset.trashed_at` is true, only display the "Restore" button; remove "Delete permanently".
+  - `AssetsLibrary.tsx`: Remove permanent deletion prompt in Trash view.
+- Seller Dashboard Backend:
+  - Add repository function `getSellerAssetMetricsRepository(accountId)` in `backend/repositories/AssetRepositories.js` calculating total revenue, total sales, unique buyers count, per-asset breakdown, and recent sales.
+  - Add service `getSellerAssetMetricsServices(accountId)` in `backend/services/AssetServices.js`.
+  - Add controller `getSellerAssetMetricsController(req, res)` in `backend/controllers/AssetControllers.js`.
+  - Mount route `GET /api/assets/seller/metrics` in `backend/routes/Asset.js` (protected with `[checkSession, requireAuth]`).
+- Seller Dashboard Frontend:
+  - Add `/assets/seller` route in `frontend/src/App.tsx`.
+  - Add `"seller"` view to `AssetView` in `frontend/src/pages/user/5_assets/AssetsLibrary.tsx`.
+  - Create `frontend/src/pages/user/5_assets/AssetSellerDashboard.tsx` with summary cards, per-asset breakdown table, and recent sales feed using standard theme (no gradients).
+- User Preference:
+  - Do not run builds, type checks, or lint.

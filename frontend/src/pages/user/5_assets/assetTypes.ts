@@ -37,6 +37,7 @@ export interface AssetRecord {
   status: AssetStatus;
   review_status?: AssetReviewStatus | null;
   rejection_reason?: string | null;
+  trashed_at?: string | null;
   created_at: string;
   updated_at: string;
   type: AssetType;
