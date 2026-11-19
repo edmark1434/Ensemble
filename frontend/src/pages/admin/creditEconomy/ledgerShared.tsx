@@ -97,11 +97,23 @@ export function entryTitle(e: LedgerEntry) {
   return typeLabel(e.type);
 }
 
+/** What a fee was taken from, as a noun phrase ("a marketplace sale", "an escrow release"). */
+const SOURCE_NOUN: Record<string, string> = {
+  'Asset Purchase': 'a marketplace sale',
+  'Escrow Release': 'an escrow release',
+  'Escrow Hold': 'an escrow payment',
+  'Fund Transfer': 'a transfer',
+};
+
+export function feeSourceNoun(type: string | null | undefined) {
+  return (type && SOURCE_NOUN[type]) || 'another entry';
+}
+
 /** One short line under the title that says something the title does not. */
 export function entrySubtitle(e: LedgerEntry) {
   if (e.isAdjustment) return e.adjustment?.reason || 'No reason recorded';
-  if (e.feeFor) return `Taken from a ${typeLabel(e.feeFor.type).toLowerCase()}`;
-  if (e.relatedDisputeId) return 'Dispute';
+  if (e.feeFor) return `Taken from ${feeSourceNoun(e.feeFor.type)}`;
+  if (e.relatedDisputeId) return 'Linked to a dispute';
   if (e.referenceTable && e.referenceTable !== 'payments' && e.referenceTable !== 'cashouts') return referenceLabel(e.referenceTable);
   return e.category;
 }
@@ -163,7 +175,7 @@ export function LedgerLinkChips({ entry: e, onOpenTransaction }: { entry: Ledger
   const chips: { key: string; label: string; id?: string; title: string; tone?: string }[] = [];
   if (e.fee) chips.push({ key: 'fee', label: `Fee ${formatCredits(e.fee.amount)}`, id: e.fee.id, title: 'Open the platform fee taken from this' });
   if (e.feeFor) {
-    chips.push({ key: 'feeFor', label: 'Source', id: e.feeFor.id, title: `Open the ${typeLabel(e.feeFor.type).toLowerCase()} this fee was taken from` });
+    chips.push({ key: 'feeFor', label: 'Source', id: e.feeFor.id, title: `Open ${feeSourceNoun(e.feeFor.type)} this fee was taken from` });
   }
   if (e.reverses) chips.push({ key: 'rev', label: 'Original', id: e.reverses.id, title: 'Open the entry this one reverses' });
   if (e.reversedBy) {
@@ -240,11 +252,12 @@ function LinkCard({ icon, title, detail, onClick }: { icon: ReactNode; title: st
 export function relatedScopes(e: LedgerEntry, currentWalletId?: string | null) {
   const scopes: { key: string; label: string; filters: Partial<LedgerFilters> }[] = [];
   const seen = new Set<string>();
+  // Member and team wallets only: escrow is covered by "This contract", and the platform
+  // wallet's full history is the Platform wallet tile on the overview.
   for (const p of e.isAdjustment ? [e.source] : [e.source, e.destination]) {
-    if (!p.walletId || p.walletId === currentWalletId || seen.has(p.walletId)) continue;
+    if (!p.walletId || p.walletType !== 'Account' || p.walletId === currentWalletId || seen.has(p.walletId)) continue;
     seen.add(p.walletId);
-    const who = p.walletType === 'Platform' ? 'Platform wallet' : p.walletType === 'Escrow' ? 'This escrow wallet' : p.name;
-    scopes.push({ key: `w-${p.walletId}`, label: who, filters: { walletId: p.walletId } });
+    scopes.push({ key: `w-${p.walletId}`, label: p.name, filters: { walletId: p.walletId } });
   }
   const contractId = e.source.contractId || e.destination.contractId;
   if (contractId) scopes.push({ key: 'contract', label: 'This contract', filters: { contractId, sort: 'oldest' } });
@@ -374,13 +387,11 @@ export function LedgerEntryDetail({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <DetailFact label="Transaction ID" value={<CopyId value={e.id} className="text-xs text-zinc-200" />} />
-        <DetailFact label="What" value={`${entryTitle(e)} · ${e.category}`} />
         <DetailFact label="From wallet" value={walletValue(e.source)} />
         <DetailFact label="To wallet" value={e.isAdjustment ? 'Same wallet' : walletValue(e.destination)} />
-        <DetailFact
-          label={referenceLabel(e.referenceTable)}
-          value={e.referenceId ? <CopyId value={e.referenceId} className="text-xs text-zinc-200" /> : null}
-        />
+        {e.referenceId && (
+          <DetailFact label={referenceLabel(e.referenceTable)} value={<CopyId value={e.referenceId} className="text-xs text-zinc-200" />} />
+        )}
         {e.relatedDisputeId && <DetailFact label="Dispute" value={<CopyId value={e.relatedDisputeId} className="text-xs text-zinc-200" />} />}
         {contractId && <DetailFact label="Escrow contract" value={<CopyId value={contractId} className="text-xs text-zinc-200" />} />}
         {e.cashout && (

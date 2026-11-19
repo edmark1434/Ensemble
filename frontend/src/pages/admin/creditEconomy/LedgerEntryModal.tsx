@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Filter, Link2, Loader2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Filter, Loader2, X } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import {
   CopyId,
@@ -63,7 +63,6 @@ export default function LedgerEntryModal({
   const [loading, setLoading] = useState(!data);
   const [error, setError] = useState('');
   const [trail, setTrail] = useState<string[]>([]);
-  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     const hit = peekStaffGet(url)?.data;
@@ -104,13 +103,6 @@ export default function LedgerEntryModal({
     if (!prev) return;
     setTrail((t) => t.slice(0, -1));
     onNavigate(prev);
-  };
-
-  const copyLink = () => {
-    void navigator.clipboard?.writeText(window.location.href).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    });
   };
 
   const entry = data?.entry && String(data.entry.id) === String(transactionId) ? data.entry : null;
@@ -186,15 +178,6 @@ export default function LedgerEntryModal({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={copyLink}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.1] px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.05]"
-              title="Copy a link that opens this entry"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Link2 className="h-3.5 w-3.5" />}
-              {copied ? 'Copied' : 'Copy link'}
-            </button>
             <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:text-white" aria-label="Close">
               <X className="h-5 w-5" />
             </button>

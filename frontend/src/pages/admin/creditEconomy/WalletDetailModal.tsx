@@ -6,7 +6,6 @@ import {
   Download,
   ExternalLink,
   Filter,
-  Link2,
   Loader2,
   Lock,
   PlusCircle,
@@ -92,13 +91,6 @@ export default function WalletDetailModal({
   const [profileError, setProfileError] = useState('');
   const [profileUser, setProfileUser] = useState<PlatformUserAccount | null>(null);
   const [profileTeam, setProfileTeam] = useState<PlatformTeam | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const copyLink = () => {
-    void navigator.clipboard?.writeText(window.location.href).then(() => {
-      setLinkCopied(true);
-      window.setTimeout(() => setLinkCopied(false), 1500);
-    });
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,15 +221,6 @@ export default function WalletDetailModal({
                   <ExternalLink className="h-3 w-3 text-zinc-500" />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={copyLink}
-                className="rounded-lg p-2 text-zinc-400 hover:text-white"
-                aria-label="Copy a link to this wallet"
-                title="Copy a link to this wallet"
-              >
-                {linkCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Link2 className="h-4 w-4" />}
-              </button>
               <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:text-white" aria-label="Close">
                 <X className="h-5 w-5" />
               </button>

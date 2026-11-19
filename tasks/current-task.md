@@ -6,7 +6,7 @@ The Credits & Economy desk (Admin and Support Moderator) ledger had filter gaps 
 ## Acceptance Criteria
 - Each ledger row returns `fee` (amount, status), `feeFor` (the movement a fee row was charged on), `reverses`, `reversedBy` and `cashout` (payout reference and provider status). Rows show chips for them that open the linked entry.
 - `GET /api/admin/economy/ledger/:transactionId` (Admin, Support Moderator) returns the entry, its direct links and up to 25 rows of each group (contract escrow, same reference, same dispute) with totals and the ledger filter for "show all". Support gets 404 for rows touching staff wallets, and staff rows are left out of links and groups.
-- `?tx=<id>` opens `LedgerEntryModal` from any tab, the wallet modal, the overview's latest entries and a wallet's staff adjustments. Linked rows open in place with Back. Copy link opens the same entry.
+- `?tx=<id>` opens `LedgerEntryModal` from any tab, the wallet modal, the overview's latest entries and a wallet's staff adjustments. Linked rows open in place with Back.
 - Ledger filters live in the URL (shareable, survive reload and Back). New: max amount; wallet scope with In/Out; account, contract, reference and dispute scopes as removable chips; categories for staff grants, staff deductions, adjustments with no recorded direction, unpaid cashouts and reversing entries; quick views; date presets; reset from the empty state.
 - From / To use the viewer's calendar days (`tzOffset`), not the database's.
 - Search ignores a leading `@` and escapes `%` / `_`. A full UUID matches any id on the row exactly (transaction, wallets, the account's wallet, reference, dispute, contract escrow, fee and reversal links). Other text matches names, handles, member name and email, adjustment reason and author, reference type, cashout reference, and the start of any id.
@@ -22,7 +22,7 @@ The Credits & Economy desk (Admin and Support Moderator) ledger had filter gaps 
 - Money movement is split without overlap: Issued to members (top-ups, returned by the platform, other platform payouts, staff grants), Collected by the platform (platform fees, cashouts, other, staff deductions), Between members (escrow funded / released / refunded, marketplace sales / refunds, transfers). Fixed: escrow "paid out" counted fees taken from escrow; "Refunds" mixed platform refunds into member activity; "Between members" total showed all movement.
 - Support Moderator figures (flow, pending, failed, unpaid cashouts) leave out rows touching staff wallets, as its ledger does. Unpaid cashouts are counted from their ledger rows, so the count and credits match the ledger.
 - Locked in escrow opens contracts still holding escrow; Platform wallet opens its entries; wallet-health counts open the matching wallet filter.
-- Wallets and Holds filters live in the URL too; Copy link (desk header and wallet window) shares the exact view. Overview links add a history step so Back returns to the overview.
+- Wallets and Holds filters live in the URL too (reload and Back keep the exact view). Overview links add a history step so Back returns to the overview.
 - Simpler UI: alerts only on Overview (count badge on its tab); one "Show" picker replaces Category + Type, with fees grouped under "Platform fees"; plain row titles ("Marketplace sale", "Platform fee", "Staff grant"); one short chip per link (Fee 50 · Source · Original · Reversal); 5 quick views; Period picker; dates and amounts under More; one Export CSV.
 
 ---
@@ -68,6 +68,11 @@ Automatic punishments no longer follow Platform Merit live. When a warning takes
 - Unfreeze (Admin / Support): `POST /api/admin/accounts/:id/merit-penalties/end` `{ reason, penaltyIds?, effects? }` ends several (default all) running bands and mutes; the member is told what ended and what is still running. UI: Users list row menu "Unfreeze (end automatic limits)" (shown when something is running) → modal with checkboxes; "Unfreeze all" in the Automatic punishments panel (history modal, Restrictions desk).
 - Status next to merit: merit tiers cut at the ladder levels (Trusted / Good 96–99 / Fair 86–95 / Low 76–85 / Very low ≤75). Owner: profile merit ring and Performance card list what is running ("Mute · Nov 24, 3:00 PM" or "No limits running"); Record shows "Running now". Staff: running punishments next to merit in the Users list, history, profile, Restrictions desk, jobs and marketplace moderator detail, ticket case panel (`meritPenalties` in those payloads). Visitors see the tier and public chips only.
 
+### Follow-up: ladder starts at merit 60, "You're unfrozen" notice
+- Migration `1829700000000_merit-punishments-start-at-60`: 60 Limited 1d, 55 Mute 1d, 50 Mute 2d, 45 Restricted 2d, 40 Frozen access 3d, 30 auto-suspend 3d, 20 auto-suspend 7d. Untouched seeded rows only. Running punishments from seeded rules that the new ladder would not give at current merit end via the sweep (`end_reason = 'rebalanced'`); automatic suspensions left with no record get `suspension_ends_at = NOW()` and the standing sweep lifts them.
+- One ending notice for every path (`notifyPunishmentsEnded`): time ran out, Unfreeze / End early, pardon (new), appeal, rescind / reverse, rule change. Frozen access ending → "You're unfrozen: …" (`ACCOUNT_UNFROZEN`, green "YOU'RE UNFROZEN" toast); others `MERIT_LIMIT_ENDED`; starts `MERIT_LIMIT_STARTED`. Labels and icons for these plus `WARNING_UP` / `WARNING_DOWN` in `notificationTypes`.
+- Merit tiers: Trusted 100, Good 80–99, Fair 61–79, Low 41–60, Very low ≤40.
+
 ---
 
 # Task (parallel): Editor ChunkLoadError after deploys
@@ -107,4 +112,19 @@ Staff grants, deductions and credit holds are self-transfers on the ledger. The 
 - Staff Users / Teams credit feed: 8 rows per account. Grants are +, deductions −, an old adjustment with no recorded direction is neutral, and holds are amber (− when frozen, + when released) with the reason and release time.
 - Freeze takes optional `amount`: empty means every spendable credit. More than is spendable is a 409. The rest stays spendable and the member's notice names the amount held. Release: until reviewed, after N days, or an exact `endsAt` date and time (future, at most 365 days). The same form (`CreditHoldFields`) is used in the economy desk Freeze dialog (in bulk, the amount applies to each wallet) and in the Users / Teams credit modal.
 - No migration.
+- User preference: do not run automated build or verification commands.
+
+---
+
+# Task (parallel): Moderator desks on staff.ensemble.software
+
+## Implementation Objective
+Signing in as staff (moderator roles) ended on `ensemble.software/moderator/...` instead of `staff.ensemble.software`. Every moderator role's home is `/moderator/<desk>`, the staff host only served `/dashboard` and `/platform-view`, so the console router sent the browser back to the main site. Moderator desks now live on the staff host, as Admin's console lives on the admin host.
+
+## Acceptance Criteria
+- `staff.ensemble.software` (and `staff.localhost:5173`) serves `/moderator/*` with the same path (`staff.ensemble.software/moderator/support`); `/`, `/dashboard`, `/platform-view` keep mapping to `/staff/*`.
+- Signing in on the staff portal lands on the moderator's desk on the staff host. Signing in on the member `/login` as a moderator, or any main-site navigation to `/moderator/*` (page load or in-app), goes to the staff host with the same path, query and hash.
+- Desk links to member pages still leave for the main site; moderator sign-out returns to the staff portal login.
+- Production keeps the shared member/staff session (no proxy change). Locally `staff.localhost` keeps its own session.
+- No backend change, no migration.
 - User preference: do not run automated build or verification commands.

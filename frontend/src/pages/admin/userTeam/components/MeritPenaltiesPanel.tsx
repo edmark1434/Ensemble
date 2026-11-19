@@ -18,6 +18,7 @@ const END_REASON: Record<string, string> = {
   appeal: 'ended after an accepted appeal',
   rescinded: 'its warning was rescinded',
   reversed: 'its warning was reversed',
+  rebalanced: 'ended when the rules were eased',
 };
 
 function when(value?: string | null) {

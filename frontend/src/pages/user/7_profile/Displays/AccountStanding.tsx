@@ -74,6 +74,7 @@ const PUNISHMENT_END: Record<string, string> = {
   appeal: 'ended after your appeal',
   rescinded: 'ended: the warning behind it was withdrawn',
   reversed: 'ended: the warning behind it was withdrawn',
+  rebalanced: 'ended when the punishment rules were eased',
 };
 
 function formatWhen(value?: string | null) {

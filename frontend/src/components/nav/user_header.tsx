@@ -513,6 +513,41 @@ export function useRealtimeNotifications(onWalletUpdated?: (nextBalance: number)
               </div>
             </SwipeToast>
           ), { ...toastOptions, duration: Infinity });
+        } else if (
+          notification.reference_prefix === 'ACCOUNT_UNFROZEN' ||
+          notification.reference_prefix === 'MERIT_LIMIT_ENDED'
+        ) {
+          // An automatic merit punishment ended (staff, pardon, appeal, rescind, or its time ran
+          // out). "You're unfrozen" gets its own heading so it is easy to spot.
+          const unfrozen = notification.reference_prefix === 'ACCOUNT_UNFROZEN';
+          const def = getNotificationIcon(notification.reference_prefix);
+          toast.custom((t) => (
+            <SwipeToast
+              open={t.visible}
+              onClose={() => toast.dismiss(t.id)}
+              duration={8000}
+              fuseColor="#10b981"
+              onClick={() => {
+                toast.dismiss(t.id);
+                markReadAndNavigate(notification.reference_path || '/profile');
+              }}
+              className="w-[356px] max-w-[calc(100vw-32px)] border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 flex"
+            >
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
+                  {unfrozen ? "YOU'RE UNFROZEN" : 'LIMIT ENDED'}
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start justify-between">
+                <p className="mr-3 flex-1 mt-2 text-sm text-gray-800 dark:text-gray-200 line-clamp-4">
+                  {notification.message}
+                </p>
+                <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${def.bg} ${def.text}`}>
+                  {def.icon}
+                </div>
+              </div>
+            </SwipeToast>
+          ), { ...toastOptions, duration: Infinity });
         } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
           showAccountWarningToast({
             violationId: notification.reference_id,

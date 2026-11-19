@@ -15,8 +15,8 @@ const MIN_DURATION_DAYS = 1;
 const MAX_DURATION_DAYS = 365;
 const WARNING_DURATION_DAYS = [3, 5, 7, 10, 14, 21, 30, 45, 60, 90];
 const RESTRICTED_PROPOSAL_DAILY_CAP = 3;
-/** Lowest seeded auto-suspend trigger (merit 70), still sent with warning notices. */
-const AUTO_SUSPEND_POINTS = 30;
+/** Lowest seeded auto-suspend trigger (merit 30), still sent with warning notices. */
+const AUTO_SUSPEND_POINTS = 70;
 const AUTO_SUSPEND_DAYS = 3;
 /** A row can trigger anywhere from merit 99 (1 point) down to merit 0 (100 points). */
 const MIN_TRIGGER_POINTS = 1;
@@ -47,19 +47,19 @@ const BAND_PHRASES = { limited: 'Limited access', restricted: 'Restricted access
 const NO_BAND = Object.freeze({ id: 'none', min: 0, max: 0, label: 'Clear', endsAt: null });
 
 /**
- * The live ladder seeded by `1829600000000_rebalance-merit-punishments` (and the fallback when
- * the table cannot be read). Merit = 100 − minPoints. Gentle on purpose: a single minor or
- * moderate warning starts nothing or a one-day limit; punishments only get long after several
- * warnings pile up.
+ * The live ladder seeded by `1829700000000_merit-punishments-start-at-60` (and the fallback
+ * when the table cannot be read). Merit = 100 − minPoints. Nothing automatic happens above
+ * merit 60: warnings alone handle the first offences, and punishments only start once many
+ * active warnings have piled up.
  */
 const DEFAULT_PUNISHMENT_LADDER = Object.freeze([
-  { minPoints: 5, effect: 'limited', label: 'Limited 1 day', durationDays: 1 },
-  { minPoints: 10, effect: 'mute', label: 'Mute 1 day', durationDays: 1 },
-  { minPoints: 15, effect: 'mute', label: 'Mute 2 days', durationDays: 2 },
-  { minPoints: 20, effect: 'restricted', label: 'Restricted 2 days', durationDays: 2 },
-  { minPoints: 25, effect: 'frozen', label: 'Frozen access 3 days', durationDays: 3 },
-  { minPoints: 30, effect: 'auto_suspend', label: 'Auto-suspend 3 days', durationDays: 3 },
-  { minPoints: 40, effect: 'auto_suspend', label: 'Auto-suspend 7 days', durationDays: 7 },
+  { minPoints: 40, effect: 'limited', label: 'Limited 1 day', durationDays: 1 },
+  { minPoints: 45, effect: 'mute', label: 'Mute 1 day', durationDays: 1 },
+  { minPoints: 50, effect: 'mute', label: 'Mute 2 days', durationDays: 2 },
+  { minPoints: 55, effect: 'restricted', label: 'Restricted 2 days', durationDays: 2 },
+  { minPoints: 60, effect: 'frozen', label: 'Frozen access 3 days', durationDays: 3 },
+  { minPoints: 70, effect: 'auto_suspend', label: 'Auto-suspend 3 days', durationDays: 3 },
+  { minPoints: 80, effect: 'auto_suspend', label: 'Auto-suspend 7 days', durationDays: 7 },
 ]);
 
 /**

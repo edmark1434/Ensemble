@@ -254,7 +254,7 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet, onOpenTrans
               </FlowColumn>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs">
-              <span className="text-zinc-400" title="Issued minus collected: how much the credits in members' hands grew or shrank">
+              <span className="text-zinc-400" title="Issued minus collected: how much the credits outside the platform wallet (member wallets plus escrow) grew or shrank">
                 Net change{' '}
                 <span className={`font-semibold tabular-nums ${flow.net >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{formatSigned(flow.net)}</span>
               </span>

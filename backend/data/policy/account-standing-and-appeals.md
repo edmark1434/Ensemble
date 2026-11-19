@@ -6,13 +6,13 @@ In addition to automatic Platform Merit limits from warnings, Ensemble can apply
 
 ## Automatic Platform Merit limits
 
-Platform Merit is 100 minus your active warning points. When a new warning takes it down to certain levels, a short automatic limit starts and runs for a set time, even if your merit recovers sooner: Limited for 1 day at 95, a Mute for 1 day at 90 and 2 days at 85, Restricted for 2 days at 80, Frozen access for 3 days at 75, and a suspension at 70 (3 days) or 60 (7 days). A Mute pauses forum posts, marketplace comments and new conversations; existing job, gig and contract threads stay open. What is running and when it ends shows under your merit on `/profile`, in your Account Record, and on the standing bar ("How to fix"). Staff can end a limit early, and each one can be appealed.
+Platform Merit is 100 minus your active warning points. Nothing automatic happens while it stays above 60. When new warnings take it down to certain levels, a short automatic limit starts and runs for a set time, even if your merit recovers sooner: Limited for 1 day at 60, a Mute for 1 day at 55 and 2 days at 50, Restricted for 2 days at 45, Frozen access for 3 days at 40, and a suspension at 30 (3 days) or 20 (7 days). A Mute pauses forum posts, marketplace comments and new conversations; existing job, gig and contract threads stay open. What is running and when it ends shows under your merit on `/profile`, in your Account Record, and on the standing bar ("How to fix"). Staff can end a limit early, and each one can be appealed. When a limit ends you get a notification; when Frozen access ends it says "You're unfrozen".
 
 ## Types of account standing
 
 - **Active:** Normal account status with full access (subject only to any active Platform Merit limits).
 - **Forum Timeout:** Temporary restriction on forum writing. You can still read forums and use all other parts of Ensemble (jobs, gigs, marketplace, inbox, editor, contracts, and payouts).
-- **Suspended:** Read-only access across Ensemble for a set period (such as 1 to 30 days manually, or 3 to 7 days automatically when Platform Merit drops to 70 or 60). You cannot post listings, send proposals, message in chat, submit deliverables, buy credits, or cash out while suspended.
+- **Suspended:** Read-only access across Ensemble for a set period (such as 1 to 30 days manually, or 3 to 7 days automatically when Platform Merit drops to 30 or 20). You cannot post listings, send proposals, message in chat, submit deliverables, buy credits, or cash out while suspended.
 - **Locked:** Applied during an investigation (for example, suspected account compromise, impersonation, or fraudulent identity documents). Access is restricted to appeals, tickets, and active disputes until an investigation concludes.
 - **Banned:** Temporary or permanent removal of normal platform access for severe violations or confirmed dispute convictions. Banned member accounts can sign in only to submit an appeal and view their tickets and disputes.
 

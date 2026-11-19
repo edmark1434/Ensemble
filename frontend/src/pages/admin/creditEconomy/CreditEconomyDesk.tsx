@@ -3,10 +3,8 @@ import {
   AlertOctagon,
   AlertTriangle,
   BarChart3,
-  Check,
   CheckCircle2,
   Info,
-  Link2,
   LayoutGrid,
   Lock,
   RefreshCw,
@@ -137,7 +135,7 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
 
   /**
    * Every tab keeps its filters in the URL, so any view can be reloaded, opened with Back
-   * and shared with Copy link. Switching tabs drops the old tab's filters. Clicking the
+   * and shared by its URL. Switching tabs drops the old tab's filters. Clicking the
    * current tab keeps them; a link with filters (an overview figure, an alert) replaces them.
    * Links from the overview add a history step so Back returns to the overview.
    */
@@ -173,13 +171,6 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
     );
   };
 
-  const [copied, setCopied] = useState(false);
-  const copyLink = () => {
-    void navigator.clipboard?.writeText(window.location.href).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    });
-  };
 
   const refreshAll = () => {
     void load();
@@ -243,15 +234,6 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
                 </Link>
               </>
             )}
-            <button
-              type="button"
-              onClick={copyLink}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2 text-xs text-zinc-300 hover:text-white"
-              title="Copy a link to exactly this view: tab, filters and any open wallet or entry"
-            >
-              {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Link2 className="h-4 w-4" />}
-              {copied ? 'Copied' : 'Copy link'}
-            </button>
             <button
               type="button"
               onClick={refreshAll}

@@ -45,6 +45,18 @@ const END_REASON_TEXT = {
   appeal: 'appeal accepted',
   rescinded: 'the warning behind it was rescinded',
   reversed: 'the warning behind it was reversed',
+  rebalanced: 'the punishment rules were eased',
+};
+
+/** Why a punishment ended, as the member reads it. */
+const END_CAUSE_TEXT = {
+  expired: 'its time ran out',
+  staff: 'staff ended it early',
+  pardoned: 'your account was pardoned',
+  appeal: 'your appeal was accepted',
+  rescinded: 'the warning behind it was withdrawn',
+  reversed: 'the warning behind it was withdrawn',
+  rebalanced: 'the punishment rules were eased',
 };
 
 const EFFECT_ORDER = { auto_suspend: 5, frozen: 4, restricted: 3, mute: 2, limited: 1 };
@@ -319,7 +331,7 @@ async function announceStarted(accountId, rows, points, staffId) {
     `Your Platform Merit dropped to ${merit}. Automatic punishment: ${parts.join('; ')}. ${
       rows.length === 1 ? 'It runs' : 'They run'
     } the full time, even if your merit recovers. See How to fix on the status bar for what is paused.`,
-    { prefix: 'WARNING_DOWN' }
+    { prefix: 'MERIT_LIMIT_STARTED' }
   );
 }
 
@@ -465,6 +477,45 @@ async function liftEndedAutoSuspension(accountId, { staffId = null, reason }) {
   return true;
 }
 
+/**
+ * Tell the member that automatic punishments ended, once, whatever ended them. When Frozen
+ * access ends (and no other Frozen access is still running) the notice leads with "You're
+ * unfrozen" and uses its own type (`ACCOUNT_UNFROZEN`) so it stands out; otherwise it is a
+ * `MERIT_LIMIT_ENDED` notice. Either way it says what is still running, if anything.
+ * Automatic suspensions are announced by the standing change instead.
+ * @param {string} accountId
+ * @param {{ effect: string }[]} endedRows
+ * @param {{ cause?: string }} [options]
+ */
+async function notifyPunishmentsEnded(accountId, endedRows, { cause = 'expired' } = {}) {
+  const visible = (endedRows || []).filter((row) => row && row.effect !== 'auto_suspend');
+  if (!visible.length) return null;
+  const still = await getActiveMeritPunishments(accountId);
+  const stillRunning = still.list.filter((p) => p.effect !== 'auto_suspend');
+  const unfrozen = visible.some((row) => row.effect === 'frozen') && !stillRunning.some((p) => p.effect === 'frozen');
+  const why = END_CAUSE_TEXT[cause] || END_CAUSE_TEXT.expired;
+  const others = visible.filter((row) => row.effect !== 'frozen');
+  const runningText = stillRunning.length
+    ? ` Still running: ${stillRunning.map((p) => `${p.label} until ${formatWhen(p.endsAt)}`).join('; ')}.`
+    : '';
+
+  let message;
+  if (unfrozen) {
+    message = `You're unfrozen: Frozen access has ended because ${why}.${
+      others.length ? ` ${endedList(others)} ended too.` : ''
+    }${
+      runningText ||
+      ' Proposals, new conversations, cash out, and new jobs, gigs and listings are open again.'
+    }`;
+  } else {
+    message = `Your automatic ${endedList(visible)} has ended because ${why}.${
+      runningText || ' Everything it paused is open again.'
+    }`;
+  }
+  await notifyMember(accountId, message, { prefix: unfrozen ? 'ACCOUNT_UNFROZEN' : 'MERIT_LIMIT_ENDED' });
+  return { unfrozen, message };
+}
+
 /** Shared checks for staff ending punishments early. */
 async function assertCanEndEarly(accountId, staffId, reason) {
   if (!staffId) throw penaltyError('Staff session required', 401);
@@ -486,18 +537,9 @@ async function assertCanEndEarly(accountId, staffId, reason) {
 
 async function announceEndedEarly(accountId, ended, staffId, note) {
   await recordEnded(accountId, ended, { reason: 'staff', staffId, note });
-  const still = await getActiveMeritPunishments(accountId);
-  const frozen = ended.some((row) => row.effect === 'frozen');
-  await notifyMember(
-    accountId,
-    `Staff ended your automatic ${endedList(ended)} early${frozen ? ': your account is unfrozen' : ''}.${
-      still.list.length
-        ? ` Still running: ${still.list.map((p) => `${p.label} until ${formatWhen(p.endsAt)}`).join('; ')}.`
-        : ' Nothing automatic is running now.'
-    }`,
-    { prefix: 'WARNING_UP' }
-  );
+  await notifyPunishmentsEnded(accountId, ended, { cause: 'staff' });
   await broadcastPunishmentChange(accountId);
+  const still = await getActiveMeritPunishments(accountId);
   return still.list;
 }
 
@@ -596,14 +638,7 @@ async function endMeritPenaltiesForWarning(accountId, violationId, { reason = 'r
       console.warn('Automatic suspension end skipped:', err.message)
     );
   }
-  const others = ended.filter((row) => row.effect !== 'auto_suspend');
-  if (others.length) {
-    await notifyMember(
-      accountId,
-      `The warning behind your automatic ${endedList(others)} was withdrawn, so ${others.length === 1 ? 'it has' : 'they have'} ended.`,
-      { prefix: 'WARNING_UP' }
-    );
-  }
+  await notifyPunishmentsEnded(accountId, ended, { cause: reason });
   await broadcastPunishmentChange(accountId);
   return ended.map(publicPenalty);
 }
@@ -665,20 +700,13 @@ async function sweepElapsedMeritPenalties({ limit = 200 } = {}) {
   for (const [accountId, rows] of byAccount) {
     try {
       await recordEnded(accountId, rows, { reason: 'expired' });
-      const visible = rows.filter((row) => row.effect !== 'auto_suspend');
-      if (visible.length) {
-        const still = await getActiveMeritPunishments(accountId);
-        const appeal = visible.some((row) => row.endReason === 'appeal');
-        await notifyMember(
-          accountId,
-          `Your automatic ${endedList(visible)} has ended${appeal ? ' after your appeal' : ''}.${
-            still.list.length
-              ? ` Still running: ${still.list.map((p) => `${p.label} until ${formatWhen(p.endsAt)}`).join('; ')}.`
-              : ' Everything it paused is open again.'
-          }`,
-          { prefix: 'WARNING_UP' }
-        );
-      }
+      // An appeal or a rule change that shortened the clock says so; otherwise it simply ran out.
+      const cause = rows.some((row) => row.endReason === 'appeal')
+        ? 'appeal'
+        : rows.some((row) => row.endReason === 'rebalanced')
+          ? 'rebalanced'
+          : 'expired';
+      await notifyPunishmentsEnded(accountId, rows, { cause });
       await broadcastPunishmentChange(accountId);
     } catch (err) {
       console.warn('Merit punishment end notice skipped:', err.message);
@@ -699,6 +727,7 @@ module.exports = {
   runningPunishmentsFor,
   endMeritPenaltiesForWarning,
   endAllMeritPenalties,
+  notifyPunishmentsEnded,
   closeAutoSuspensionRecords,
   shortenMeritPenaltiesForAppeal,
   sweepElapsedMeritPenalties,

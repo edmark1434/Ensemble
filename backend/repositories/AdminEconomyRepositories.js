@@ -308,13 +308,14 @@ const FLOW_KIND_SQL = {
   flow_fees: `(${TO_PLATFORM} AND ct.type::text IN ${FEE_TYPES})`,
   flow_cashouts: `(${TO_PLATFORM} AND ct.type::text = 'Cashout')`,
   flow_other_collected: `(${TO_PLATFORM} AND ct.type::text NOT IN ${FEE_TYPES} AND ct.type::text <> 'Cashout')`,
-  // Between members.
-  flow_escrow_funded: `(${D_TYPE} = 'escrow wallets' AND ${S_TYPE} <> 'escrow wallets')`,
+  // Between members: member and escrow wallets only, so nothing here is also Issued or
+  // Collected (a platform-paid refund is "returned by the platform", not a member refund).
+  flow_escrow_funded: `(${D_TYPE} = 'escrow wallets' AND ${S_TYPE} = 'account wallets')`,
   flow_escrow_released: `(${S_TYPE} = 'escrow wallets' AND ${D_TYPE} = 'account wallets' AND ct.type::text <> 'Escrow Refund')`,
   flow_escrow_refunded: `(${S_TYPE} = 'escrow wallets' AND ${D_TYPE} = 'account wallets' AND ct.type::text = 'Escrow Refund')`,
   flow_transfers: `(${S_TYPE} = 'account wallets' AND ${D_TYPE} = 'account wallets' AND NOT ${IS_SELF} AND ct.type::text = 'Fund Transfer')`,
-  flow_sales: `(ct.type::text = 'Asset Purchase')`,
-  flow_sale_refunds: `(ct.type::text = 'Asset Refund')`,
+  flow_sales: `(${S_TYPE} = 'account wallets' AND ${D_TYPE} = 'account wallets' AND ct.type::text = 'Asset Purchase')`,
+  flow_sale_refunds: `(${S_TYPE} = 'account wallets' AND ${D_TYPE} = 'account wallets' AND ct.type::text = 'Asset Refund')`,
 };
 
 const LEDGER_KIND_SQL = {

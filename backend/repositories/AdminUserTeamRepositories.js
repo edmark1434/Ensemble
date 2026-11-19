@@ -2028,7 +2028,9 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       const { refreshWarningBand } = require('../services/WarningBandServices');
       await refreshWarningBand(accountId, 0);
       if (punishmentsEnded.length) {
-        const { broadcastPunishmentChange } = require('../services/MeritPenaltyServices');
+        // The member hears that the pardon ended their automatic limits ("You're unfrozen").
+        const { broadcastPunishmentChange, notifyPunishmentsEnded } = require('../services/MeritPenaltyServices');
+        await notifyPunishmentsEnded(accountId, punishmentsEnded, { cause: 'pardoned' });
         await broadcastPunishmentChange(accountId);
       }
     } catch (err) {

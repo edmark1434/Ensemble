@@ -268,7 +268,8 @@ export default function LedgerTab({ variant, refreshToken, onOpenWallet, onOpenT
   if (filters.disputeId) chips.push({ key: 'd', label: `Dispute ${shortId(filters.disputeId)}`, clear: { disputeId: '' } });
   if (period === 'other') chips.push({ key: 's', label: `Last ${formatHours(filters.sinceHours)}`, clear: { sinceHours: '' } });
   if (filters.olderThanHours) chips.push({ key: 'o', label: `Older than ${formatHours(filters.olderThanHours)}`, clear: { olderThanHours: '' } });
-  if (filters.minAmount || filters.maxAmount) {
+  // The amount inputs are under More; while that is closed, the range shows as a chip.
+  if (!showMore && (filters.minAmount || filters.maxAmount)) {
     const label = filters.minAmount && filters.maxAmount
       ? `${formatCredits(Number(filters.minAmount))}–${formatCredits(Number(filters.maxAmount))} credits`
       : filters.minAmount

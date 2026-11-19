@@ -63,7 +63,7 @@ const EFFECTS: { id: PunishmentEffect; label: string; hint: string; days: number
 const DAY_CHIPS = [1, 3, 5, 7, 10, 14, 21, 30];
 
 const emptyForm = (): ThresholdForm => ({
-  merit: 90,
+  merit: 60,
   effect: 'mute',
   label: '',
   durationDays: 1,
@@ -294,7 +294,7 @@ export default function AdminWarningThresholdsPanel() {
                   {editor === 'create' ? 'New punishment rule' : 'Edit punishment rule'}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Example: merit 90 → Mute 1 day, merit 85 → Mute 2 days. Keep early levels short; one rule per
+                  Example: merit 55 → Mute 1 day, merit 50 → Mute 2 days. Keep early levels short; one rule per
                   punishment type at each level.
                 </p>
               </div>

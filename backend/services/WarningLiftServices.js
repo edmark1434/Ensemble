@@ -49,7 +49,7 @@ async function assertLiftAvailable() {
 
 /**
  * Where a lift would take the member. One quick option per threshold level they are at or
- * below ("back above merit 85"), plus the full ladder so the desk can show which levels a lift
+ * below ("back above merit 55"), plus the full ladder so the desk can show which levels a lift
  * clears. Running punishments come along so staff see that a lift does not end them.
  */
 async function getWarningLiftPreview(accountId) {

@@ -44,16 +44,16 @@ Active points = sum of unexpired, unrescinded warning points. Merit = 100 − ac
 
 When a new warning takes merit down to a rule's level, that rule's punishment starts and runs
 for its own number of days (admin CRUD, seeded as):
-  merit 95 or lower   Limited         1 day
-  merit 90 or lower   Mute            1 day
-  merit 85 or lower   Mute            2 days
-  merit 80 or lower   Restricted      2 days
-  merit 75 or lower   Frozen access   3 days
-  merit 70 or lower   Auto-suspend    3 days
-  merit 60 or lower   Auto-suspend    7 days
+  merit 60 or lower   Limited         1 day
+  merit 55 or lower   Mute            1 day
+  merit 50 or lower   Mute            2 days
+  merit 45 or lower   Restricted      2 days
+  merit 40 or lower   Frozen access   3 days
+  merit 30 or lower   Auto-suspend    3 days
+  merit 20 or lower   Auto-suspend    7 days
 
-Gentle on purpose: one minor warning starts nothing, one moderate warning
-at most a 1-day limit. Long punishments need several warnings piled up.
+Nothing automatic happens above merit 60: ordinary warnings are only on the
+record. Automatic punishments need many active warnings piled up.
 
 It runs its full time. A warning expiring, staff lifting points, or merit recovering does NOT
 end it, and the punishment never changes merit. Dropping further crosses harsher rules, so
@@ -72,7 +72,7 @@ The engine never auto-bans, never seizes the wallet, never cancels live work.
 - Points 1–10. Duration 1–365 days is set on the catalog row. Always expires. Staff cannot change the clock when issuing.
 - Issued row is a `violations` record. Catalog edits do not rewrite old cases.
 - Active points stack into Platform Merit. Crossing a rule in §8 (`warning_thresholds`, admin CRUD on the same page) starts a **timed punishment** (`merit_penalties`).
-- Seeded auto-suspend: **merit 70 → 3 days**, **merit 60 → 7 days**. A suspension already running is extended when the new one ends later, never shortened. Bans and locks are never overwritten.
+- Seeded auto-suspend: **merit 30 → 3 days**, **merit 20 → 7 days**. A suspension already running is extended when the new one ends later, never shortened. Bans and locks are never overwritten.
 - Lapsed warnings are marked `expired` on the next account-access pass and by the one-minute sweep: merit recovers, punishments keep running.
 - Rescind one row (ends the punishments that warning started). Pardon clears all warnings and ends every punishment. Appeal is per penalty.
 - Product limits come from the strictest running band punishment, not from the live point total.
@@ -201,15 +201,15 @@ Admin CRUD is at `/admin/warnings` → Merit punishments. Each row: **when Platf
 
 | Merit drops to | Active points | Punishment | How long |
 |---|---|---|---|
-| **95** | 5+ | **Limited** | 1 day |
-| **90** | 10+ | **Mute** | 1 day |
-| **85** | 15+ | **Mute** | 2 days |
-| **80** | 20+ | **Restricted** | 2 days |
-| **75** | 25+ | **Frozen access** | 3 days |
-| **70** | 30+ | **Auto-suspend** | 3 days |
-| **60** | 40+ | **Auto-suspend** | 7 days |
+| **60** | 40+ | **Limited** | 1 day |
+| **55** | 45+ | **Mute** | 1 day |
+| **50** | 50+ | **Mute** | 2 days |
+| **45** | 55+ | **Restricted** | 2 days |
+| **40** | 60+ | **Frozen access** | 3 days |
+| **30** | 70+ | **Auto-suspend** | 3 days |
+| **20** | 80+ | **Auto-suspend** | 7 days |
 
-Migration `1829600000000_rebalance-merit-punishments` replaced the first, harsher seed (97 Limited 3d … 70 suspend 14d) wherever an admin had not edited it, and shortened bands and mutes those rows had already started to the new length of their kind.
+Seed history: the first seed started at merit 97 (`1829300000000`), the second at 95 (`1829600000000`, shorter lengths). `1829700000000_merit-punishments-start-at-60` moved it to 60. Each migration only replaces seeded rows nobody edited. The last one also ended running punishments from seeded rules that the new ladder would not give at the member's current merit (`end_reason = 'rebalanced'`) and released automatic suspensions left without a record; members are told by the sweeps.
 
 **When it starts.** A rule starts when a new warning takes the member from above its level to at or below it ("once per drop"). The engine works this out from the warning's own place in time (active points from warnings issued before it, plus its weight), so two warnings issued together cannot hide a crossing. One warning can cross several rules; per punishment type the longest one starts. A member who recovers above a level and drops past it again gets that punishment again.
 
@@ -231,7 +231,7 @@ Standing (timeout / suspend / lock / ban) is checked first. If standing already 
 
 Legend: **OK** = allowed. **NO** = blocked.
 
-Each column is a running punishment (seeded at merit 95 / 80 / 75), not a point range. Mute is its own column.
+Each column is a running punishment (seeded at merit 60 / 45 / 40), not a point range. Mute is its own column.
 
 | Action | Limited | Restricted | Frozen access | Mute |
 |---|---|---|---|---|
@@ -315,9 +315,11 @@ A Restricted user who is also suspended still cannot write. A Frozen-access user
 | Appeal accepted on a punishment | Support / Admin | unchanged | it ends within 24 hours (or now / an earlier date) |
 | Appeal denied | Support | unchanged | unchanged; 12-month hold on that penalty |
 
-Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`) and by the one-minute `reconcileExpiredStandings` sweep. The member is told their merit recovered and that running punishments keep their end dates. The same sweep closes punishments whose clock ran out (`sweepElapsedMeritPenalties`) and tells the member what ended and what is still running. A rescind always notifies the member with their new merit.
+Expired warnings are marked `expired` when account access is rebuilt (`expireElapsedWarnings`) and by the one-minute `reconcileExpiredStandings` sweep. The member is told their merit recovered and that running punishments keep their end dates. The same sweep closes punishments whose clock ran out (`sweepElapsedMeritPenalties`).
 
-A lift lowers `violations.points` (what still counts) and keeps the issued value in `violations.points_original`, so the Record shows "3 of 8 lifted". Staff must write a reason (staff-only; the member never sees it). Activity `WARNING_POINTS_LIFTED`. The member is notified with their new merit. Nobody lifts on their own account; only Admin lifts on a staff account. The desks offer quick lifts per level ("Back above merit 85 · lift 3 → merit 86") and say plainly that running punishments are not ended by a lift.
+**Ending notice.** Whatever ends an automatic punishment (time ran out, Unfreeze / End early, pardon, appeal, rescind / reverse, rule change), the member gets one notice (`notifyPunishmentsEnded`) saying why and what is still running. When Frozen access ends it leads with **"You're unfrozen"** (notification type `ACCOUNT_UNFROZEN`, green toast); other ends are `MERIT_LIMIT_ENDED`. Starts are `MERIT_LIMIT_STARTED`. Open tabs refresh their standing at the same time. A rescind always notifies the member with their new merit.
+
+A lift lowers `violations.points` (what still counts) and keeps the issued value in `violations.points_original`, so the Record shows "3 of 8 lifted". Staff must write a reason (staff-only; the member never sees it). Activity `WARNING_POINTS_LIFTED`. The member is notified with their new merit. Nobody lifts on their own account; only Admin lifts on a staff account. The desks offer quick lifts per level ("Back above merit 55 · lift 3 → merit 56") and say plainly that running punishments are not ended by a lift.
 
 ## 13. Who can warn
 
@@ -339,7 +341,7 @@ Admin and Support see every catalog row. Other desks only see rows whose `desks`
 
 **Owner Record:** Platform Merit with "Running now" (what is paused and until when), standing, each warning (type, merit taken, expiry, status), and each automatic punishment (what, started at which merit, when it ends or why it ended). The owner's profile merit ring shows the same running list.
 
-**Merit tier** (everyone): Trusted 100, Good 96–99, Fair 86–95, Low 76–85, Very low 75 and below. The tier never names a punishment; only the owner and staff see what is running.
+**Merit tier** (everyone): Trusted 100, Good 80–99, Fair 61–79, Low 41–60, Very low 40 and below. The tier never names a punishment; only the owner and staff see what is running.
 
 **Staff:** every place merit appears on a desk (Users list, history, profile, Restrictions desk, jobs and marketplace detail, ticket case file) shows the running automatic punishments next to it. Admin / Support **Unfreeze** from the Users list row menu ("Unfreeze (end automatic limits)"), or **Unfreeze all** / **End early** in the Automatic punishments panel (history modal and Restrictions desk).
 
@@ -368,29 +370,23 @@ When points or standing change, do not strand the other party or their credits.
 
 ## 16. Worked examples (seeded ladder)
 
-**Off-topic flood (1 pt) or offensive language (2 pt)**  
-Merit 99 / 98. No rule crossed. The warning is on the record; nothing is paused.
+**One, two, or a few warnings**  
+Merit stays above 60. Nothing automatic happens; the warnings are on the record and merit recovers as they expire.
 
-**Harassment (5 pt) on a clean account**  
-Merit 95: crosses 95 → **Limited 1 day** (no urgent jobs, listings go to review). The warning lasts 14 days; Limited ends after 1.
+**Many warnings still active (40 points: four 10s, eight 5s …)**  
+Merit 60: **Limited 1 day**.
 
-**Hate speech (8 pt) on a clean account**  
-Merit 92: **Limited 1 day**. Nothing else.
+**More on top (45 / 50)**  
+Merit 55: **Mute 1 day**. Merit 50: **Mute 2 days**.
 
-**A 10 on a clean account**  
-Merit 90: crosses 95 and 90 → Limited 1 day and **Mute 1 day**. Staff decide whether threats also need a suspension.
+**55 / 60 points**  
+Merit 45: **Restricted 2 days**. Merit 40: **Frozen access 3 days**.
 
-**Then a 5 a few days later (15)**  
-Merit 85: crosses 85 → **Mute 2 days** from now.
+**Then warnings expire**  
+Merit recovers. Nothing that is running ends early; when Frozen access ends the member is told "You're unfrozen".
 
-**Then the first warning expires**  
-Merit back to 95. Nothing that is running ends early. Drop to 85 again later and a new 2-day mute starts.
-
-**Four 5s still active (20)**  
-Merit 80: **Restricted 2 days** (plus the milder rules each warning crossed on the way).
-
-**Several serious warnings (25 / 30 / 40)**  
-Merit 75: **Frozen access 3 days**. Merit 70: **3-day auto-suspend**. Merit 60: **7-day auto-suspend** (extends a shorter one still running). Staff look at ban.
+**70 / 80 points**  
+Merit 30: **3-day auto-suspend**. Merit 20: **7-day auto-suspend** (extends a shorter one still running). Staff look at ban.
 
 ## 17. Data, APIs, files
 
@@ -438,8 +434,8 @@ Merit 75: **Frozen access 3 days**. Merit 70: **3-day auto-suspend**. Merit 60: 
 ## 18. Balance rules
 
 1. Use **active points**, not warning count. Three 1-point slaps must not suspend anyone.
-2. **Early levels are short.** One moderate warning (5 points) is at most Limited for 1 day; the warning itself still lasts its catalog time.
-3. **Real lockdowns need a pile-up.** Restricted starts at merit 80, Frozen access at 75, suspensions at 70.
+2. **Warnings first.** Nothing automatic happens above merit 60; ordinary warnings only go on the record.
+3. **Real lockdowns need a pile-up.** Restricted starts at merit 45, Frozen access at 40, suspensions at 30.
 4. Auto-suspend is a **cooldown**, not a loop.
 5. **Punishments are timed.** They start on a drop past a level and run their full days. Merit recovering never ends them; a deeper drop starts a harsher one.
 6. Live work is sacred. Restricted and Frozen access never cancel an open contract, gig order, or existing team project.

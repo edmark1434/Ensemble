@@ -18,7 +18,7 @@ Active warning points are the same sum the backend already uses: unrescinded `vi
 
 When a warning expires or is rescinded, merit comes back by itself. Admin and Support can also **lift points** (a number of points, or up to a target merit) without deleting the warnings; the Record shows how much was lifted. Completions, reviews, verification, credits, and subscriptions never change merit.
 
-**Merit triggers punishments; punishments do not follow merit.** When a warning takes merit down to a threshold level, that level's punishment starts and runs a fixed number of days (seeded: 95 Limited 1d, 90 Mute 1d, 85 Mute 2d, 80 Restricted 2d, 75 Frozen access 3d, 70 suspend 3d, 60 suspend 7d). It runs its full time even if merit recovers, and it never changes merit. Lower levels carry harsher punishments, so they add up as merit keeps dropping. See [warning-system.md](warning-system.md) §8.
+**Merit triggers punishments; punishments do not follow merit.** When a warning takes merit down to a threshold level, that level's punishment starts and runs a fixed number of days (seeded: 60 Limited 1d, 55 Mute 1d, 50 Mute 2d, 45 Restricted 2d, 40 Frozen access 3d, 30 suspend 3d, 20 suspend 7d; nothing automatic above 60). It runs its full time even if merit recovers, and it never changes merit. Lower levels carry harsher punishments, so they add up as merit keeps dropping. See [warning-system.md](warning-system.md) §8.
 
 ---
 
@@ -37,10 +37,10 @@ Display tiers (from remaining merit), cut at the seeded punishment levels. They 
 | Merit | Label | Seeded levels inside it |
 |---|---|---|
 | **100** | Trusted | — |
-| **96–99** | Good | none |
-| **86–95** | Fair | Limited (95), Mute (90) |
-| **76–85** | Low | Mute (85), Restricted (80) |
-| **75 and below** | Very low | Frozen access (75), suspensions (70, 60) |
+| **80–99** | Good | none |
+| **61–79** | Fair | none |
+| **41–60** | Low | Limited (60), Mute (55, 50), Restricted (45) |
+| **40 and below** | Very low | Frozen access (40), suspensions (30, 20) |
 
 What is actually paused comes from the running automatic punishments. The owner sees them under their merit ring and on the Record ("Running now: Mute until …", or "No limits running"); staff see them next to merit on every desk. Visitors see the tier only.
 
