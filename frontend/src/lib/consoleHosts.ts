@@ -110,16 +110,14 @@ export function isAdminConsoleHost(hostname: string = window.location.hostname):
 }
 
 /**
- * Hosts that call /api on their own origin, so their session cookie is separate.
- * The admin console never shares the member site's session. The staff portal does
- * in production because moderator desks live on the main site; locally it cannot,
- * since staff.localhost and localhost are different sites for cookies.
+ * Console hosts call /api and /socket.io on their own origin, so each keeps its
+ * own session cookie: signing in on the member site never replaces the admin or
+ * staff session, and console cookies never reach the member site. The production
+ * proxy must forward both paths on admin.ensemble.software and staff.ensemble.software.
  */
 export function consoleApiOrigin(): string | null {
   if (typeof window === 'undefined') return null;
-  const host = bareHost(window.location.hostname);
-  if (isAdminConsoleHost(host) || host === 'staff.localhost') return window.location.origin;
-  return null;
+  return consoleIdFromHostname(window.location.hostname) ? window.location.origin : null;
 }
 
 export function stripConsolePrefix(pathname: string, id: ConsoleId): string | null {

@@ -10,8 +10,8 @@ import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
 import { notifyOnboardingCompleted, notifyOnboardingStepChanged } from "@/lib/onboardingEvents";
-import { getStaffHomePath, isAdminAccount } from "@/lib/staffRoutes";
-import { consoleEntryUrl, isAdminConsoleHost } from "@/lib/consoleHosts";
+import { consoleIdForAccount, getStaffHomePath } from "@/lib/staffRoutes";
+import { consoleEntryUrl, consoleIdFromHostname } from "@/lib/consoleHosts";
 import { Eye, EyeOff, KeyRound, Shield } from "lucide-react";
 import { AccountRestrictionCard, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 import { APPEAL_PATH, isAppealLimitedMember } from "@/lib/appealAccess";
@@ -524,9 +524,12 @@ export default function LoginPage({
         }
 
         const loggedInUser = result.data.credentials ?? result.data.user;
-        if (isAdminAccount(loggedInUser) && !isAdminConsoleHost()) {
+        // Admin and staff sessions live on their console host, never on the member site.
+        const accountConsole = consoleIdForAccount(loggedInUser);
+        if (accountConsole && consoleIdFromHostname(window.location.hostname) !== accountConsole) {
           await api.post("/api/users/logout").catch(() => {});
-          setErrors({ password: `Admin accounts sign in at ${new URL(consoleEntryUrl("admin"), window.location.origin).host}.` });
+          const label = accountConsole === "admin" ? "Admin" : "Staff";
+          setErrors({ password: `${label} accounts sign in at ${new URL(consoleEntryUrl(accountConsole), window.location.origin).host}.` });
           return;
         }
         setUser(loggedInUser);

@@ -130,18 +130,13 @@ Staff grants, deductions and credit holds are self-transfers on the ledger. The 
    - Recent sales transaction history
 
 ## Acceptance Criteria
-- Trash Tab:
-  - `AssetCard.tsx`: When `view === "trash"`, only display the "Restore" button; remove the "Delete permanently" button.
-  - `AssetDetails.tsx`: When `asset.trashed_at` is true, only display the "Restore" button; remove "Delete permanently".
-  - `AssetsLibrary.tsx`: Remove permanent deletion prompt in Trash view.
-- Seller Dashboard Backend:
-  - Add repository function `getSellerAssetMetricsRepository(accountId)` in `backend/repositories/AssetRepositories.js` calculating total revenue, total sales, unique buyers count, per-asset breakdown, and recent sales.
-  - Add service `getSellerAssetMetricsServices(accountId)` in `backend/services/AssetServices.js`.
-  - Add controller `getSellerAssetMetricsController(req, res)` in `backend/controllers/AssetControllers.js`.
-  - Mount route `GET /api/assets/seller/metrics` in `backend/routes/Asset.js` (protected with `[checkSession, requireAuth]`).
-- Seller Dashboard Frontend:
-  - Add `/assets/seller` route in `frontend/src/App.tsx`.
-  - Add `"seller"` view to `AssetView` in `frontend/src/pages/user/5_assets/AssetsLibrary.tsx`.
-  - Create `frontend/src/pages/user/5_assets/AssetSellerDashboard.tsx` with summary cards, per-asset breakdown table, and recent sales feed using standard theme (no gradients).
-- User Preference:
-  - Do not run builds, type checks, or lint.
+- `staff.ensemble.software` (and `staff.localhost:5173`) serves `/moderator/*` with the same path (`staff.ensemble.software/moderator/support`); `/`, `/dashboard`, `/platform-view` keep mapping to `/staff/*`.
+- Signing in on the staff portal lands on the moderator's desk on the staff host. Any main-site navigation to `/moderator/*` (page load or in-app) goes to the staff host with the same path, query and hash.
+- Desk links to member pages still leave for the main site; moderator sign-out returns to the staff portal login.
+- No backend change, no migration.
+- User preference: do not run automated build or verification commands.
+
+### Follow-up: member login no longer signs staff out
+- Cause: in production the staff host called the shared API host, so staff and member sessions used the same `sessionId` / `accessToken` / `refreshToken` cookies; a member login in the same browser overwrote the staff session.
+- The staff host now calls `/api` and `/socket.io` on its own origin, like the admin host (`consoleApiOrigin`), so it keeps its own session. Ops (outside the repo): the production proxy must forward `/api` and `/socket.io` (with WebSocket upgrade) on `staff.ensemble.software` to the API, as it does for `admin.ensemble.software`, before this frontend is deployed. Moderators sign in once more on the staff host after the deploy.
+- The member site signs out any staff session it finds and the member `/login` refuses staff accounts with "Staff accounts sign in at staff.ensemble.software." (same rule as admin, via `consoleIdForAccount`).
