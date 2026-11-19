@@ -1,8 +1,8 @@
-// One explicit save: the project document and its scene documents, captured together.
 export interface ProjectSaveSummary {
   id: string;
+  previewUrl: string;
+  isInitial: boolean;
   createdAt: string;
-  createdBy: { name: string; avatarUrl: string | null } | null;
 }
 
 export interface ProjectSavesPage {

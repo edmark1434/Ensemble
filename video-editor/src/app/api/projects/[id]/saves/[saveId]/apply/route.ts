@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
-import { prepareProjectSaveApply, ProjectSaveError, SAVE_UUID, savesUpgradeUrl } from "@/lib/project-saves";
+import { prepareProjectSaveApply, ProjectSaveError, SAVE_UUID, isSaveId, savesUpgradeUrl } from "@/lib/project-saves";
 
 const headers = { "Cache-Control": "no-store" };
 
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const session = token ? await verifyEditorSession(token) : null;
   if (!session) return NextResponse.json({ error: "Sign in to apply saves." }, { status: 401, headers });
   const { id, saveId } = await params;
-  if (!SAVE_UUID.test(id) || !SAVE_UUID.test(saveId)) {
+  if (!SAVE_UUID.test(id) || !isSaveId(saveId)) {
     return NextResponse.json({ error: "Invalid project or save." }, { status: 400, headers });
   }
   try {

@@ -17,7 +17,7 @@ export async function prepareTemplateCopy(snapshotId: number, name: string) {
   const prepared = await copyTemplate(decodeTemplate(source.document), name,
     async id => {
       if (!uuid.test(id)) return null;
-      const row = await readSceneAtSnapshot(id, source.project_id, source.created_at);
+      const row = await readSceneAtSnapshot(id, source.project_id, snapshotId);
       return row ? decodeTemplate(row.document) : null;
     },
     async item => {

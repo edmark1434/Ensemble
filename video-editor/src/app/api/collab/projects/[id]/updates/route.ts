@@ -6,13 +6,10 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
-import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
-import { compactProject } from "@/lib/collab/persistence-store";
+import { checkpointAfterUpdates } from "@/lib/collab/persistence-store";
 import { isProjectFrozen } from "@/lib/db/projects";
 import { canApplyCompositionUpdate } from "@/lib/collab/composition-size-policy";
 import { COMPOSITION_SIZE_PLAN_MESSAGE } from "@/lib/composition-size-plan";
-
-const COMPACT_AFTER_UPDATE_COUNT = 200;
 
 export async function POST(
   request: NextRequest,
@@ -80,15 +77,7 @@ export async function POST(
     );
   }
 
-  const { count } = await db
-    .selectFrom("project_yjs_updates")
-    .where("project_id", "=", projectId)
-    .select(db.fn.countAll().as("count"))
-    .executeTakeFirstOrThrow();
-
-  if (Number(count) >= COMPACT_AFTER_UPDATE_COUNT) {
-    await withProjectSnapshotLock(projectId, () => compactProject(projectId));
-  }
+  await checkpointAfterUpdates(projectId, { kind: "project", id: projectId });
 
   return NextResponse.json({ ok: true });
 }

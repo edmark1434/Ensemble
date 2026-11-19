@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MediaPlaceholder } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
 import { isMissingMediaSource } from "../../utils/missing-media";
@@ -22,8 +22,6 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
   const src = useMarketAssetSource(item);
   const projectId = useStore(state => state.projectId);
   const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
-  const [loaded, setLoaded] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
   const playbackRate = item.playbackRate || 1;
   const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
   const trimBefore = ((item.trim?.from ?? 0) / 1000) * fps;
@@ -44,26 +42,58 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
   }
 
   if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
-  if (!src) return <MediaPlaceholder />;
+  if (!src) return <MediaPlaceholder item={item} />;
+  return <PreviewVideo key={src} item={item} src={src} trimBefore={trimBefore} trimAfter={trimAfter} />;
+};
+
+const RETRY_DELAYS_MS = [350, 1000, 2500];
+
+function PreviewVideo({ item, src, trimBefore, trimAfter }: {
+  item: IVideo; src: string; trimBefore: number; trimAfter?: number;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const video = useRef<HTMLVideoElement>(null);
+  const retryDelay = RETRY_DELAYS_MS[attempt];
+
+  useEffect(() => {
+    if (status !== "error" || retryDelay === undefined) return;
+    const timer = window.setTimeout(() => {
+      setAttempt(current => current + 1);
+      setStatus("loading");
+    }, retryDelay);
+    return () => window.clearTimeout(timer);
+  }, [status, retryDelay]);
+
   return (<>
-    {failed !== src && <Html5Video
+    {status !== "error" && <Html5Video
+      key={attempt}
+      ref={video}
       trimBefore={trimBefore}
       trimAfter={trimAfter}
-      playbackRate={playbackRate}
+      playbackRate={item.playbackRate || 1}
       src={src}
-      volume={volume}
-      onLoadedData={() => setLoaded(src)}
-      onWaiting={() => setLoaded(null)}
-      onPlaying={() => setLoaded(src)}
-      onCanPlay={() => setLoaded(src)}
-      onError={() => setFailed(src)}
+      volume={(item.details.volume ?? 100) / 100}
+      onLoadedData={() => setStatus("ready")}
+      onWaiting={() => setStatus("loading")}
+      onPlaying={() => setStatus("ready")}
+      onCanPlay={() => setStatus("ready")}
+      onError={() => {
+        if (retryDelay === undefined) {
+          const error = video.current?.error;
+          console.warn("Canvas video exhausted its load retries", {
+            itemId: item.id, code: error?.code, message: error?.message,
+          });
+        }
+        setStatus("error");
+      }}
       preload="auto"
       pauseWhenBuffering={false}
-      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      style={{ visibility: status === "ready" ? "visible" : "hidden", width: "100%", height: "100%", objectFit: "cover", display: "block" }}
     />}
-    {(loaded !== src || failed === src) && <MediaPlaceholder failed={failed === src} />}
+    {status !== "ready" && <MediaPlaceholder item={item} failed={status === "error" && retryDelay === undefined} />}
   </>);
-};
+}
 
 export const Video = ({
   item,

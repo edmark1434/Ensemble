@@ -28,13 +28,7 @@ function decode(document: Uint8Array): DocSnapshot {
 
 type SceneDocumentReader = (blockId: string) => Promise<Uint8Array | null>;
 
-// Scenes resolve against the capture time by default; a save passes the exact
-// scene documents it was taken with.
-async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string | null; created_at: Date }, readScene?: SceneDocumentReader) {
-  const { project_id: sourceProjectId, created_at: capturedAt } = saved;
-  const readSceneDocument: SceneDocumentReader = readScene ?? (blockId => sourceProjectId
-    ? readSceneAtSnapshot(blockId, sourceProjectId, capturedAt).then(row => row?.document ?? null)
-    : Promise.resolve(null));
+async function hydrateSnapshot(saved: { document: Uint8Array }, readSceneDocument: SceneDocumentReader) {
   const snapshot = decode(saved.document);
   const scenes: Record<string, DocSnapshot> = {};
   const media: ITrackItem[] = [];
@@ -65,15 +59,15 @@ async function hydrateSnapshot(saved: { document: Uint8Array; project_id: string
 export async function loadSnapshotPreview(snapshotId: number, userId: string) {
   const saved = await readPreviewSnapshot(snapshotId, userId);
   if (!saved) return null;
-  const { snapshot, scenes, media } = await hydrateSnapshot(saved);
+  const { snapshot, scenes, media } = await hydrateSnapshot(saved, async id =>
+    (await readSceneAtSnapshot(id, saved.project_id, snapshotId))?.document ?? null);
   return preparePrivatePreview(snapshot, scenes, media, saved.project_id, userId, saved.name);
 }
 
 // Read-only playback of a save. Access is checked by the caller.
 export async function loadProjectSavePreview(save: { document: Uint8Array; project_id: string; created_at: Date; name: string },
-  sceneDocuments: Map<string, Uint8Array>, userId: string) {
-  const { snapshot, scenes, media } = await hydrateSnapshot(save, async blockId => sceneDocuments.get(blockId)
-    ?? (await readSceneAtSnapshot(blockId, save.project_id, save.created_at))?.document ?? null);
+  readScene: SceneDocumentReader, userId: string) {
+  const { snapshot, scenes, media } = await hydrateSnapshot(save, readScene);
   return preparePrivatePreview(snapshot, scenes, media, save.project_id, userId, save.name);
 }
 
@@ -117,7 +111,7 @@ export async function loadPortfolioComposition(projectId: string) {
   const blocks = await db.selectFrom("blocks").select("block_id").where("project_id", "=", projectId)
     .where("deleted_at", "is", null).execute();
   const allowed = new Set(blocks.map(block => block.block_id));
-  const content = await hydrateSnapshot({ document, project_id: projectId, created_at: new Date() }, async blockId => {
+  const content = await hydrateSnapshot({ document }, async blockId => {
     if (!allowed.has(blockId)) return null;
     return currentDocument("block", blockId);
   });
@@ -136,7 +130,8 @@ export async function loadMarketTemplatePreview(assetId: string, snapshotId?: nu
   const source = await readPublishedMarketTemplate(assetId);
   // UUID links follow the current listing; legacy tokens stay bound to their snapshot.
   if (!source || (snapshotId !== undefined && Number(source.snapshot_id) !== snapshotId)) return null;
-  const { snapshot, scenes, media } = await hydrateSnapshot(source);
+  const { snapshot, scenes, media } = await hydrateSnapshot(source, async id => source.project_id
+    ? (await readSceneAtSnapshot(id, source.project_id, source.snapshot_id))?.document ?? null : null);
   const missing = new Set<string>();
   const marketCache = new Map<string, ReturnType<typeof readTemplateMarketMedia>>();
   const uploadCache = new Map<string, ReturnType<typeof readTemplateUpload>>();

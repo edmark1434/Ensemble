@@ -1,3 +1,7 @@
+# Task: Timestamp-based saves and private preview links
+
+Capture changed scenes and the project at one database timestamp. Preview and Apply resolve scenes at that cutoff using the original snapshot tables and columns. Open previews exclusively at `/saves/<project-id>?preview=<token>` with account-bound tokens.
+
 # Task: Admin Dashboard "Team on duty" Online/Offline Presence
 
 ## Implementation Objective

@@ -28,6 +28,7 @@ import axios from "axios";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
+import { useObjectUrl, useVideoPoster } from "../hooks/use-media-poster";
 import useFileDropUpload from "@/features/editor/hooks/use-file-drop-upload";
 import {
   Select,
@@ -85,73 +86,6 @@ const buildNormalizedVideoPayload = (video: any) => {
 
 const formatDuration = (seconds: number) =>
   millisecondsToHHMMSS(Math.floor(seconds) * 1000);
-
-// Our own uploads don't come with a Pexels-style static thumbnail, so we
-// generate a poster frame client-side. This is what feeds
-// metadata.previewUrl, which the timeline's Video class reads
-// unconditionally - without it, dropping a video on the timeline throws.
-// Falls back to "" (no crash, just no fallback thumbnail) if the source
-// blocks canvas reads via CORS - your S3/CDN needs a permissive
-// crossorigin policy on video objects for this to succeed.
-const extractVideoThumbnailFromUrl = (src: string): Promise<string> => {
-  return new Promise((resolve) => {
-    const video = document.createElement("video");
-    video.crossOrigin = "anonymous";
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "metadata";
-
-    const timeout = setTimeout(() => finish(""), 8000);
-    const finish = (result: string) => {
-      clearTimeout(timeout);
-      video.onloadeddata = null;
-      video.onseeked = null;
-      video.onerror = null;
-      video.removeAttribute("src");
-      video.load(); // aborts any in-flight download
-      resolve(result);
-    };
-
-    video.onloadeddata = () => {
-      try {
-        video.currentTime = Math.min(1, (video.duration || 2) / 2);
-      } catch {
-        finish("");
-      }
-    };
-    video.onseeked = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        finish(canvas.toDataURL("image/jpeg", 0.7));
-      } catch {
-        // Tainted canvas (CORS) or decode failure - fall back gracefully.
-        finish("");
-      }
-    };
-    video.onerror = () => finish("");
-    video.src = src;
-  });
-};
-
-// Local blob preview for a File that hasn't finished uploading yet.
-// Created once per file, revoked on cleanup so we don't leak blob URLs.
-const useObjectUrl = (file?: File) => {
-  const [url, setUrl] = useState("");
-  useEffect(() => {
-    if (!file) {
-      setUrl("");
-      return;
-    }
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
-  return url;
-};
 
 // Classifies an in-flight upload (from useUploadStore) as image/video/audio.
 // Adjust this if your store's shape for pending/active uploads differs.
@@ -328,7 +262,8 @@ const UploadImageItem = ({
       ...item,
       metadata: {
         ...item.metadata,
-        name: displayName
+        name: displayName,
+        previewUrl: item.thumbnailUrl || item.preview || undefined
       },
       details: {
         ...item.details,
@@ -456,17 +391,7 @@ const UploadVideoItem = ({
   const displayName = item.fileName || item.file?.name || item.name || "Untitled";
 
   // Keep a still for drag previews; cards play the short preview on hover.
-  const [posterDataUrl, setPosterDataUrl] = useState("");
-  useEffect(() => {
-    if (!videoSrc) return;
-    let cancelled = false;
-    extractVideoThumbnailFromUrl(item.videoPreviewUrl || videoSrc).then((url) => {
-      if (!cancelled && url) setPosterDataUrl(url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [videoSrc, item.videoPreviewUrl]);
+  const posterDataUrl = useVideoPoster(item.videoPreviewUrl || videoSrc);
 
   // Fallback width/height/duration probe for assets the DB doesn't have yet,
   // done on a detached video element since we no longer render one visibly.

@@ -58,6 +58,7 @@ export function attachPersistence(
   onStatusChange?: (status: PersistenceStatus) => void,
 ): PersistenceHandle {
   let pending: Uint8Array[] = [];
+  const inFlight = new Set<Promise<boolean>>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   const setStatus = (status: PersistenceStatus) => onStatusChange?.(status);
@@ -69,14 +70,14 @@ export function attachPersistence(
     return merged;
   };
 
-  const flush = (): Promise<void> => {
+  const flush = (): Promise<boolean> => {
     flushTimer = null;
     const merged = mergePending();
-    if (!merged) return Promise.resolve();
+    if (!merged) return Promise.resolve(true);
 
     setStatus("saving");
 
-    return fetch(`${collabApiBase(target)}/updates?sessionId=${sessionId}`, {
+    const request = fetch(`${collabApiBase(target)}/updates?sessionId=${sessionId}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: toArrayBuffer(merged),
@@ -87,17 +88,24 @@ export function attachPersistence(
           // scene capped below Editor). Retrying can never succeed, so drop
           // the update instead of requeuing it forever.
           console.warn("collab update rejected: no write access, dropping it");
+          setStatus("error");
+          return false;
         } else if (!res.ok) {
           throw new Error(`persist failed: ${res.status}`);
         }
-        if (pending.length === 0 && !flushTimer) setStatus("saved");
+        if (pending.length === 0 && !flushTimer && inFlight.size === 1) setStatus("saved");
+        return true;
       })
       .catch((err) => {
         console.error("Failed to persist collab update, requeuing", err);
         pending.unshift(merged);
         setStatus("error");
         if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
+        return false;
       });
+    inFlight.add(request);
+    void request.finally(() => inFlight.delete(request));
+    return request;
   };
 
   // Unlike fetch, sendBeacon is guaranteed by the browser to be sent even
@@ -130,12 +138,13 @@ export function attachPersistence(
 
   // Skips the debounce and persists whatever's queued right now. A no-op
   // if there's nothing pending (i.e. already saved).
-  const forceFlush = (): Promise<void> => {
+  const forceFlush = async (): Promise<void> => {
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    return flush();
+    const results = await Promise.all([...inFlight, flush()]);
+    if (results.includes(false)) throw new Error("Could not save your latest edits. Please try again.");
   };
 
   const teardown = () => {

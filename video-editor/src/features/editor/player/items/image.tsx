@@ -24,7 +24,7 @@ function MarketImage({ item, ...props }: { item: IImage } & Omit<React.Component
   if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
   return <>
     {src && failed !== src && <Img {...props} src={src} onLoad={() => setLoaded(src)} onError={() => setFailed(src)} />}
-    {(!src || loaded !== src || failed === src) && <MediaPlaceholder failed={preparationFailed || (!!src && failed === src)} />}
+    {(!src || loaded !== src || failed === src) && <MediaPlaceholder item={item} failed={preparationFailed || (!!src && failed === src)} />}
   </>;
 }
 
