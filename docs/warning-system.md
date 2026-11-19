@@ -107,6 +107,16 @@ Permanent warnings are rejected. Client `duration: 'permanent'` or a custom `day
 
 Ticket/report “staff follow-up” maps to `staff_follow_up` (3 points) when no named row fits.
 
+### 4a. Automatic warning: missed contract review
+
+A contract stays `Done` until both parties review each other (then `Completed`). Each **member** party has **7 days** from `contracts.ended_at` to review the other party.
+
+1. With 24 hours or less left, the party gets one reminder notification (`CONTRACT_REVIEW_REMINDER`, links to the contract). Contracts that ended more than 14 days ago are never reminded.
+2. After the deadline, and at least 24 hours after the reminder, the system issues the `missed_review` catalog row (seeded 2 points, 5 days) with no staff author (`violations.staff_id IS NULL`). It then runs the same path as a staff warning: activity `ACCOUNT_WARNED`, `account:warning`, §8 punishments.
+3. Each party is reminded and warned at most once per contract (`contract_review_obligations`). Team accounts and contracts with an open dispute are skipped. Hiding the `missed_review` row at `/admin/warnings` turns these warnings off; editing it changes points and duration.
+
+Hourly job at :50 (`reconcileMissedReviews` in `MissedReviewServices`, queries in `MissedReviewRepositories`). Staff rescind it like any warning.
+
 ---
 
 ## 5. Points and duration
@@ -153,6 +163,7 @@ Severe crime (CSAM, payment theft in progress) is **lock or ban**, not “just a
 | Other (moderate) | 5 | 14d | Other | all |
 | Job fee evasion | 6 | 21d | Jobs | admin, support, jobs |
 | Review manipulation | 6 | 21d | Jobs | admin, support, jobs |
+| No review after a finished contract | 2 | 5d | Jobs | admin, support, jobs — issued automatically (§4a) |
 | Marketplace fee evasion | 6 | 21d | Marketplace | admin, support, marketplace |
 | Copyright infringement (listing) | 7 | 30d | Marketplace | admin, support, marketplace |
 | Hate speech | 8 | 45d | Conduct | all |
@@ -395,7 +406,8 @@ Merit 30: **3-day auto-suspend**. Merit 20: **7-day auto-suspend** (extends a sh
 - `warning_defs` — named library: slug, label, category, points 1–10, duration_days 1–365, desks jsonb, note, is_system, sort_order, deleted_at. Migration `1826400000000_warning-defs` plus `1826600000000_warning-duration-and-thresholds`.
 - `warning_thresholds` — the punishment ladder: min_points (merit = 100 − min_points), effect (`limited` / `restricted` / `frozen` / `mute` / `auto_suspend`), label, duration_days 1–365, note, is_system, deleted_at. One active row per (min_points, effect). Migration `1829300000000_timed-merit-punishments` added duration_days and `mute`, retired the `none` / `record` rows and dropped `suspend_days` / `lift_at_merit`.
 - `merit_penalties` — punishments the engine started: account_id, warning_threshold_id, violation_id (the warning that crossed it), effect, label, min_points, points_at_start, duration_days, starts_at, ends_at, ended_at, end_reason (`expired` / `staff` / `pardoned` / `appeal` / `rescinded` / `reversed`), ended_by_staff_id, end_note. Running = `ended_at IS NULL AND ends_at > NOW()`. Unique per (violation_id, effect, min_points).
-- `violations` — issued cases: type (label), reason, points (what still counts), points_original (set on the first lift), status (`active` … `rescinded` / `lifted` / `expired` / `pardoned`), staff_id, expires_at.
+- `violations` — issued cases: type (label), reason, points (what still counts), points_original (set on the first lift), status (`active` … `rescinded` / `lifted` / `expired` / `pardoned`), staff_id (NULL for system warnings, §4a), expires_at.
+- `contract_review_obligations` — per (contract_id, reviewer_account_id): reminded_at, warned_at, violation_id. Migration `1829800000000_missed-review-warnings`.
 - `accounts.suspension_source` (`auto` for engine suspensions). `accounts.auto_suspend_lift_merit` was dropped with early recovery lifts.
 - `punishment_defs` — named ban / suspend / timeout library. See [punishment-system.md](punishment-system.md) and [database.md](database.md).
 

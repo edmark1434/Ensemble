@@ -169,10 +169,11 @@ async function getDashboardOverview() {
       ORDER BY count DESC
     `),
     pool.query(`
-      SELECT status, COUNT(*)::int AS count
+      -- Older rows store the same status in different cases ('Active' / 'active'); group them as one.
+      SELECT INITCAP(LOWER(TRIM(status))) AS status, COUNT(*)::int AS count
       FROM accounts
       WHERE type = 'User'
-      GROUP BY status
+      GROUP BY INITCAP(LOWER(TRIM(status)))
       ORDER BY count DESC
     `),
     getForumCounts(),

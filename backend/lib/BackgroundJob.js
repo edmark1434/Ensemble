@@ -621,6 +621,25 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Missed contract reviews: remind parties before the review deadline, then warn (merit) — hourly at :50.
+    let isMissedReviewJobRunning = false;
+    cron.schedule("50 * * * *", async () => {
+        if (isMissedReviewJobRunning) return;
+        isMissedReviewJobRunning = true;
+        try {
+            const { reconcileMissedReviews } = require('../services/MissedReviewServices');
+            const result = await reconcileMissedReviews();
+            if (result.reminded || result.warned) {
+                console.log(`Missed reviews: reminded ${result.reminded}, warned ${result.warned}`);
+            }
+        } catch (err) {
+            // The obligations table arrives with a migration; stay quiet until it exists.
+            if (err.code !== '42P01') console.error("Missed review reconciliation failed:", err.message);
+        } finally {
+            isMissedReviewJobRunning = false;
+        }
+    });
+
     // Dispute payouts: pay out money rulings whose release date has come — runs every minute.
     // Payouts of a reopened case wait; failed ones retry hourly (see releaseDuePayouts).
     let isDisputePayoutJobRunning = false;

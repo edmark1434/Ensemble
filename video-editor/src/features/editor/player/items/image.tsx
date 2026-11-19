@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { Gif } from "@remotion/gif";
+import { getPreparedImageType } from "../../utils/prepared-image-cache";
 import { MediaPlaceholder } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
 import { isMissingMediaSource } from "../../utils/missing-media";
@@ -12,7 +14,7 @@ import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
 import { Img, useRemotionEnvironment } from "remotion";
 
-function MarketImage({ item, ...props }: { item: IImage } & Omit<React.ComponentProps<typeof Img>, "src">) {
+function MarketImage({ item }: { item: IImage }) {
   const src = useMarketAssetSource(item);
   const preparationFailed = useMarketImageFailed(item);
   const { isRendering } = useRemotionEnvironment();
@@ -20,11 +22,34 @@ function MarketImage({ item, ...props }: { item: IImage } & Omit<React.Component
   const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
   const [loaded, setLoaded] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  if (isRendering) return <Img {...props} src={item.details.src} />;
-  if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
+  const source = isRendering ? item.details.src : src;
+  const onLoad = useCallback(() => setLoaded(source), [source]);
+  const onError = useCallback(() => setFailed(source), [source]);
+
+  if (!isRendering && (missing || isMissingMediaSource(item.details.src))) {
+    return <MediaPlaceholder missing />;
+  }
+  if (!source || (!isRendering && failed === source)) {
+    return <MediaPlaceholder item={item} failed={preparationFailed || (!!source && failed === source)} />;
+  }
+
+  const mimeType = getPreparedImageType(source);
+  const isGif = mimeType?.startsWith("image/")
+    ? mimeType === "image/gif"
+    : [source, item.details.src].some(value => /^(?:data:image\/gif[;,]|[^?#]*\.gif(?:[?#]|$))/i.test(value));
+  const events = isRendering ? {} : { onLoad, onError };
   return <>
-    {src && failed !== src && <Img {...props} src={src} onLoad={() => setLoaded(src)} onError={() => setFailed(src)} />}
-    {(!src || loaded !== src || failed === src) && <MediaPlaceholder item={item} failed={preparationFailed || (!!src && failed === src)} />}
+    {isGif ? (
+      <Gif key={source} data-id={item.id} src={source}
+        width={item.details.width} height={item.details.height} fit="cover"
+        playbackRate={item.playbackRate} style={{ position: "absolute", inset: 0, display: "block" }}
+        {...events} />
+    ) : (
+      <Img key={source} data-id={item.id} src={source}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        {...events} />
+    )}
+    {!isRendering && loaded !== source && <MediaPlaceholder item={item} failed={preparationFailed} />}
   </>;
 }
 
@@ -86,19 +111,7 @@ function ImageContent({
             id={`${item.id}-reveal-mask`}
             style={calculateMediaStyles(details, crop)}
           >
-            <MarketImage
-              item={item}
-              data-id={item.id}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block"
-              }}
-            />
+            <MarketImage item={item} />
           </div>
         </MaskAnim>
       </ContentAnim>

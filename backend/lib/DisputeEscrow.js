@@ -13,17 +13,31 @@ const OPEN_DISPUTE_SQL = `
 `;
 
 // A closed dispute still freezes the contract while its ruling has credits waiting to be paid.
-const PENDING_PAYOUT_DISPUTE_SQL = `
-  SELECT d.dispute_id, d.dispute_number, d.status
+// One row per contract ($1 = contract ids): the latest such dispute, with `payout_status`
+// 'failed' when any of its pending payouts failed (else 'scheduled') and the latest `release_at`.
+const PENDING_PAYOUT_DISPUTES_SQL = `
+  SELECT DISTINCT ON (d.contract_id)
+    d.contract_id,
+    d.dispute_id,
+    d.dispute_number,
+    d.status,
+    d.by_account_id,
+    d.visibility,
+    pending.payout_status,
+    pending.release_at
   FROM disputes d
-  WHERE d.contract_id = $1
+  JOIN LATERAL (
+    SELECT
+      CASE WHEN bool_or(p.status = 'failed') THEN 'failed' ELSE 'scheduled' END AS payout_status,
+      MAX(p.release_at) AS release_at
+    FROM dispute_payouts p
+    WHERE p.dispute_id = d.dispute_id
+      AND p.status IN ('scheduled', 'failed')
+    HAVING COUNT(*) > 0
+  ) pending ON true
+  WHERE d.contract_id = ANY($1::uuid[])
     AND d.deleted_at IS NULL
-    AND EXISTS (
-      SELECT 1 FROM dispute_payouts p
-      WHERE p.dispute_id = d.dispute_id
-        AND p.status IN ('scheduled', 'failed')
-    )
-  LIMIT 1
+  ORDER BY d.contract_id, d.created_at DESC
 `;
 
 function frozenEscrowError(dispute, { pendingPayout = false } = {}) {
@@ -182,10 +196,21 @@ const DISPUTE_FILING_WINDOW_DAYS = 30;
  *   DISPUTE_ALREADY_FILED  each side files at most one dispute per contract; its ruling is final
  *                          and anything new goes through reopening that case
  *   DISPUTE_WINDOW_CLOSED  the contract ended more than DISPUTE_FILING_WINDOW_DAYS ago
+ *   DISPUTE_PAYOUT_PENDING an earlier dispute (by either side) was ruled with a payout that is
+ *                          still scheduled or failed; its credits stay earmarked, and a new case
+ *                          would see them as unsettled escrow and could split them again
  * `previousDispute` is the filer's own earlier dispute on the contract (not deleted).
+ * `pendingPayout` is a row from getPendingPayoutContractDispute; its dispute number is named only
+ * when the case is open to both parties or the viewer filed it (`viewerAccountIds`).
+ * The permanent blocks are reported first.
  * @returns {{ code: string, message: string } | null}
  */
-function disputeFilingBlock({ previousDispute = null, windowClosed = false } = {}) {
+function disputeFilingBlock({
+  previousDispute = null,
+  windowClosed = false,
+  pendingPayout = null,
+  viewerAccountIds = [],
+} = {}) {
   if (previousDispute) {
     const number = previousDispute.dispute_number ? ` ${previousDispute.dispute_number}` : '';
     return {
@@ -199,7 +224,30 @@ function disputeFilingBlock({ previousDispute = null, windowClosed = false } = {
       message: `This contract ended more than ${DISPUTE_FILING_WINDOW_DAYS} days ago, so it can no longer be disputed. To report a member's behavior, contact Support.`,
     };
   }
+  if (pendingPayout) {
+    const dispute = pendingPayoutDisputeLabel(pendingPayout, viewerAccountIds);
+    return {
+      code: 'DISPUTE_PAYOUT_PENDING',
+      message: pendingPayout.payout_status === 'failed'
+        ? `The payout from ${dispute} on this contract didn't go through and is waiting for staff to retry it. You can file a new dispute once it's paid. If it isn't resolved soon, contact Support.`
+        : `The payout from ${dispute} on this contract hasn't been paid yet. You can file a new dispute once it's paid. To challenge that ruling, contact Support.`,
+    };
+  }
   return null;
+}
+
+/** Whether the viewer may see the number (and open) the dispute holding a pending payout. */
+function pendingPayoutDisputeVisible(pendingPayout, viewerAccountIds = []) {
+  if (!pendingPayout) return false;
+  if (pendingPayout.visibility) return true;
+  const viewers = (viewerAccountIds || []).map(String);
+  return viewers.includes(String(pendingPayout.by_account_id));
+}
+
+function pendingPayoutDisputeLabel(pendingPayout, viewerAccountIds) {
+  return pendingPayoutDisputeVisible(pendingPayout, viewerAccountIds) && pendingPayout.dispute_number
+    ? `dispute ${pendingPayout.dispute_number}`
+    : 'an earlier dispute';
 }
 
 async function getOpenContractDispute(db, contractId) {
@@ -218,12 +266,22 @@ async function payoutsTableExists(runner) {
   return payoutsTableReady;
 }
 
+/** Map of contract id → the dispute whose ruled payout is still pending on it (see SQL above). */
+async function getPendingPayoutDisputesForContracts(db, contractIds) {
+  const map = new Map();
+  const ids = [...new Set((contractIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return map;
+  const runner = db || pool;
+  if (!(await payoutsTableExists(runner))) return map;
+  const result = await runner.query(PENDING_PAYOUT_DISPUTES_SQL, [ids]);
+  for (const row of result.rows) map.set(String(row.contract_id), row);
+  return map;
+}
+
 async function getPendingPayoutContractDispute(db, contractId) {
   if (!contractId) return null;
-  const runner = db || pool;
-  if (!(await payoutsTableExists(runner))) return null;
-  const result = await runner.query(PENDING_PAYOUT_DISPUTE_SQL, [contractId]);
-  return result.rows[0] || null;
+  const map = await getPendingPayoutDisputesForContracts(db, [contractId]);
+  return map.get(String(contractId)) || null;
 }
 
 async function assertNoOpenContractDispute(db, contractId) {
@@ -291,6 +349,8 @@ module.exports = {
   FROZEN_ESCROW_MESSAGE,
   getOpenContractDispute,
   getPendingPayoutContractDispute,
+  getPendingPayoutDisputesForContracts,
+  pendingPayoutDisputeVisible,
   assertNoOpenContractDispute,
   freezeContractEscrowForDispute,
   remainingContractEscrowCredits,

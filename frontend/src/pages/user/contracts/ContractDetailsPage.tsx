@@ -50,7 +50,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DetailedContract, MilestoneItem, MilestoneStatus, ContractStatus, CancellationRequest } from "./contracts";
 import { ActiveMilestoneTimerCard } from "./ActiveMilestoneTimerCard";
-import { contractDisputeBlockLabel, contractDisputeDetail, contractDisputePath } from "./contractDispute";
+import {
+  contractDisputeBlockLabel,
+  contractDisputeBlockingDispute,
+  contractDisputeDetail,
+  contractDisputePath,
+} from "./contractDispute";
 
 export interface ContractTeamMember {
   account_id: string;
@@ -1429,18 +1434,22 @@ export const ContractDetailsPage: React.FC = () => {
                         </div>
                       )
                     ) : contract.disputeFiling && !contract.disputeFiling.canFile ? (
-                      contractDisputePath(contract.disputeFiling.previousDispute) ? (
+                      contractDisputePath(contractDisputeBlockingDispute(contract.disputeFiling)) ? (
                         <button
                           title={contract.disputeFiling.reason || undefined}
                           onClick={() => {
                             setActionsMenuOpen(false);
-                            const path = contractDisputePath(contract.disputeFiling?.previousDispute);
+                            const path = contractDisputePath(contractDisputeBlockingDispute(contract.disputeFiling));
                             if (path) navigate(path);
                           }}
                           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
                         >
                           <AlertCircle className="w-4 h-4 text-zinc-400" />
-                          <span>View your dispute</span>
+                          <span>
+                            {contractDisputeBlockingDispute(contract.disputeFiling)?.filedByViewer
+                              ? "View your dispute"
+                              : "View dispute (payout pending)"}
+                          </span>
                         </button>
                       ) : (
                         <div

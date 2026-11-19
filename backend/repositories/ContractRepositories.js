@@ -4,6 +4,8 @@ const {
     freezeContractEscrowForDispute,
     assertNoOpenContractDispute,
     getPendingPayoutContractDispute,
+    getPendingPayoutDisputesForContracts,
+    pendingPayoutDisputeVisible,
     isContractEnded,
     DISPUTE_FILING_WINDOW_DAYS,
     disputeFilingBlock,
@@ -610,8 +612,10 @@ async function openDisputesForContracts(contractIds, viewerAccountIds) {
 /**
  * Whether the viewer may file a new dispute on each contract, under the same rules
  * `createContractDispute` enforces (an open dispute is reported separately as `active_dispute`):
- * { canFile, code, reason, endedAt, windowEndsAt, previousDispute }. `previousDispute` is the
- * viewer's own earlier case, so its id and number are theirs to see.
+ * { canFile, code, reason, endedAt, windowEndsAt, previousDispute, pendingPayout }.
+ * `previousDispute` is the viewer's own earlier case, so its id and number are theirs to see.
+ * `pendingPayout` is the case (by either side) whose ruled payout still holds the contract's
+ * credits; its id and number are included only when the viewer may open that case.
  */
 async function disputeFilingForContracts(contractIds, viewerAccountIds) {
     const map = new Map();
@@ -621,8 +625,9 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
 
     let contractsRes;
     let previousRes;
+    let pendingPayouts;
     try {
-        [contractsRes, previousRes] = await Promise.all([
+        [contractsRes, previousRes, pendingPayouts] = await Promise.all([
             pool.query(`
                 SELECT
                     contract_id,
@@ -647,6 +652,7 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
                   AND deleted_at IS NULL
                 ORDER BY contract_id, created_at DESC
             `, [ids, viewers]),
+            getPendingPayoutDisputesForContracts(pool, ids),
         ]);
     } catch (err) {
         // Before migration 1828800000000_contract-ended-at the column is missing; the contract
@@ -658,10 +664,14 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
     const previousByContract = new Map(previousRes.rows.map((row) => [String(row.contract_id), row]));
     for (const row of contractsRes.rows) {
         const previous = previousByContract.get(String(row.contract_id)) || null;
+        const pending = pendingPayouts.get(String(row.contract_id)) || null;
+        const pendingVisible = pendingPayoutDisputeVisible(pending, viewers);
         const ended = isContractEnded(row.status);
         const block = disputeFilingBlock({
             previousDispute: previous,
             windowClosed: ended && Boolean(row.window_closed),
+            pendingPayout: pending,
+            viewerAccountIds: viewers,
         });
         map.set(String(row.contract_id), {
             canFile: !block,
@@ -677,6 +687,17 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
                     status: previous.status,
                     viewerRole: 'disputer',
                     filedByViewer: true,
+                }
+                : null,
+            pendingPayout: pending
+                ? {
+                    id: pendingVisible ? pending.dispute_id : null,
+                    number: pendingVisible ? pending.dispute_number || null : null,
+                    visibility: Boolean(pending.visibility),
+                    status: pending.status,
+                    filedByViewer: viewers.includes(String(pending.by_account_id)),
+                    payoutStatus: pending.payout_status,
+                    releaseAt: pending.release_at || null,
                 }
                 : null,
         });
@@ -977,14 +998,8 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
         if (existing.rows.length) throw openDisputeError();
         // A closed case whose payout is still scheduled keeps the contract's credits earmarked;
         // a second case would see them as unsettled escrow and could split them again.
+        // Reported through disputeFilingBlock below (DISPUTE_PAYOUT_PENDING).
         const pendingPayout = await getPendingPayoutContractDispute(client, contractId);
-        if (pendingPayout) {
-            const error = new Error(
-                `Dispute ${pendingPayout.dispute_number || ''} on this contract has a payout scheduled. A new dispute can be filed once it is paid, or contact Support to appeal it.`
-            );
-            error.statusCode = 409;
-            throw error;
-        }
 
         // An ended contract can still be disputed (to report conduct) for a limited window, but
         // its milestone payments are final: the case is flagged so staff can only record an
@@ -1012,6 +1027,8 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
         const filingBlock = disputeFilingBlock({
             previousDispute: previousRes.rows[0] || null,
             windowClosed: contractEndedAtFiling && Boolean(statusRes.rows[0]?.window_closed),
+            pendingPayout,
+            viewerAccountIds: accountIds,
         });
         if (filingBlock) {
             const error = new Error(filingBlock.message);
