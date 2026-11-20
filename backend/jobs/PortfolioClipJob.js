@@ -29,30 +29,34 @@ async function fetchRenderOutput(url, renderOrigin, headers) {
   throw new Error('Unable to retrieve render output');
 }
 
-async function processClip(job) {
-  const base = process.env.RENDER_SERVER_URL || 'http://localhost:3001';
-  const headers = { 'x-user-id': job.user_id, 'x-internal-secret': process.env.INTERNAL_API_SECRET };
-  const renderUrl = new URL('/renders/' + encodeURIComponent(job.render_id), base);
+async function releaseRender(renderUrl, headers) {
+  const response = await fetch(renderUrl, { method: 'DELETE', headers, signal: AbortSignal.timeout(15000) });
+  return response.ok || response.status === 404 || response.status === 410;
+}
+
+async function processClip(job, renderUrl, headers) {
   if (job.status !== 'pending') {
-    const deleted = await fetch(renderUrl, { method: 'DELETE', headers, signal: AbortSignal.timeout(15000) });
-    return deleted.ok || deleted.status === 404 ? { released: true } : { retry: true };
+    return await releaseRender(renderUrl, headers) ? { released: true } : { retry: true };
   }
   const status = await fetch(renderUrl, {
     headers, signal: AbortSignal.timeout(15000),
   });
-  if (status.status === 404 || status.status === 410) return { error: 'The source export expired. Please export the clip again.' };
+  if (status.status === 404 || status.status === 410) return { error: 'The source export expired. Please export the clip again.', released: true };
   if (!status.ok) throw new Error('Render status unavailable');
   const render = await status.json();
-  if (render.status === 'failed' || render.status === 'cancelled') return { error: 'The project render failed. Please try again.' };
+  if (render.status === 'failed' || render.status === 'cancelled') {
+    return { error: render.errorCode === 'RENDER_TIMEOUT'
+      ? 'The render timed out before the export finished.' : 'The project render failed. Please try again.' };
+  }
   if (render.status !== 'completed') return {};
   if (!Array.isArray(render.data?.portfolioFrameRange)) return { error: 'The renderer did not confirm a clip range.' };
 
-  const outputUrl = new URL(render.videoUrl, base);
+  const outputUrl = new URL(render.videoUrl, renderUrl.origin);
   const workDir = await makeWorkDir();
   try {
     const clip = path.join(workDir, 'clip.mp4');
     const poster = path.join(workDir, 'poster.jpg');
-    const output = await fetchRenderOutput(outputUrl, new URL(base).origin, headers);
+    const output = await fetchRenderOutput(outputUrl, renderUrl.origin, headers);
     if (!output.ok || !output.body) throw new Error('Render output unavailable');
     await pipeline(Readable.fromWeb(output.body), fs.createWriteStream(clip));
     await makePortfolioPoster(clip, poster, job.start_ms, job.end_ms);
@@ -71,11 +75,23 @@ async function processClip(job) {
 }
 
 exports.processNextPortfolioClip = () => withDueClip(async job => {
-  try { return await processClip(job); }
+  const base = process.env.RENDER_SERVER_URL || 'http://localhost:3001';
+  const headers = { 'x-user-id': job.user_id, 'x-internal-secret': process.env.INTERNAL_API_SECRET };
+  const renderUrl = new URL('/renders/' + encodeURIComponent(job.render_id), base);
+  let result;
+  try { result = await processClip(job, renderUrl, headers); }
   catch (error) {
     if (job.status !== 'pending') return { retry: true };
-    if (error.statusCode) return { error: error.message };
-    console.error('Portfolio clip processing failed', { renderId: job.render_id, error: error.name });
-    return job.failures >= 4 ? { error: 'Unable to prepare the portfolio video. Please try exporting again.' } : { retry: true };
+    if (error.statusCode) result = { error: error.message };
+    else {
+      console.error('Portfolio clip processing failed', { renderId: job.render_id, error: error.name });
+      if (job.failures < 4) return { retry: true };
+      result = { error: 'Unable to prepare the portfolio video. Please try exporting again.' };
+    }
   }
+  if (result.error && !result.released) {
+    // Keep the failure and let the worker retry cleanup if the renderer is unreachable.
+    result.released = await releaseRender(renderUrl, headers).catch(() => false);
+  }
+  return result;
 });
