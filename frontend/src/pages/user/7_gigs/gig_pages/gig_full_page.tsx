@@ -59,6 +59,7 @@ const GigFullPage: React.FC = () => {
             ...g,
             client_account_id: creatorAccountId,
             freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
+            freelancerIsVerified: Boolean(g.freelancerIsVerified ?? g.freelancer_is_verified),
             termsOfService: resolvedTos,
             terms_of_service: resolvedTos,
             thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",

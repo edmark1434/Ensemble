@@ -4,6 +4,7 @@ import { Star, ArrowRight, Wrench, Bookmark, ShoppingCart, Clock, Layers, Trendi
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { NewListingBadge } from "../../7_gigs/gig_components/NewListingBadge";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
 import api from "@/lib/axios";
 import { formatDistanceToNow } from "date-fns";
@@ -56,6 +57,7 @@ export const HomeFeaturedGigs: React.FC = () => {
               const mappedGig = {
                 ...g,
                 freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
+                freelancerIsVerified: Boolean(g.freelancerIsVerified ?? g.freelancer_is_verified),
                 thumbnail: mappedThumb,
                 clientAvatar: mappedAvatar,
               };
@@ -338,6 +340,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                       <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300 truncate">
                         {gig.postedBy}
                       </span>
+                      <VerificationIcon verified={gig.freelancerIsVerified} />
                       <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
                     </div>
                     <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">

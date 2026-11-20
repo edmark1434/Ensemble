@@ -315,6 +315,7 @@ const GigMain: React.FC = () => {
               ...g,
               client_account_id: creatorAccountId,
               freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
+              freelancerIsVerified: Boolean(g.freelancerIsVerified ?? g.freelancer_is_verified),
               thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
               clientAvatar: resolveAvatarPath(g.clientAvatar || g.client_avatar_path),
               gallery: (g.gallery || []).map((p: string) => mapUrl(p))

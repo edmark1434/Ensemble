@@ -90,6 +90,7 @@ export interface Gig {
   /** Seller's Platform Merit from the backend (100 minus active, unexpired warning points). */
   freelancerMerit?: number;
   freelancerSubscriptionPlan?: string;
+  freelancerIsVerified?: boolean;
   discoveryOrderKey?: number;
   team_id?: string | null;
   teamId?: string | null;
