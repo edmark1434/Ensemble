@@ -425,6 +425,17 @@ async function endContractAfterSettlement(client, contractId, { disputeId = null
     [contractId]
   );
 
+  // A pending mutual cancellation request is moot once the ruling ends the contract.
+  const withdrawnRequests = await client.query(
+    `
+    UPDATE contract_cancellation_requests
+    SET status = 'withdrawn', responded_at = NOW()
+    WHERE contract_id = $1 AND status = 'pending'
+    RETURNING request_id
+    `,
+    [contractId]
+  );
+
   // Team workspaces this end archives (and only those) are un-archived if the ruling is withdrawn.
   const liveTeams = await client.query(
     `
@@ -458,6 +469,7 @@ async function endContractAfterSettlement(client, contractId, { disputeId = null
     milestones: cancelled.rows.map((row) => ({ id: row.id, status: row.previous_status })),
     gigRequests: gigRequests.rows.map((row) => ({ id: row.id, status: row.previous_status })),
     archivedTeamIds: archivedTeams.rows.map((row) => row.team_id),
+    cancellationRequestIds: withdrawnRequests.rows.map((row) => row.request_id),
   };
   // A savepoint keeps a missing column (migration not run yet) from aborting the transaction.
   await client.query('SAVEPOINT dispute_settlement_snapshot');
@@ -473,6 +485,22 @@ async function endContractAfterSettlement(client, contractId, { disputeId = null
   }
 
   return { contractStatus, cancelledMilestones: cancelled.rowCount || 0, alreadyEnded: false };
+}
+
+/** End, in its own transaction, a live contract whose settlement ruling still stands. */
+async function endContractForStandingSettlement(contractId, disputeId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await endContractAfterSettlement(client, contractId, { disputeId });
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -528,6 +556,13 @@ async function restoreContractAfterWithdrawnSettlement(client, contractId, dispu
       `UPDATE teams SET is_archived = FALSE, archived_at = NULL
        WHERE team_id = ANY($1::uuid[]) AND is_archived = TRUE`,
       [snapshot.archivedTeamIds]
+    );
+  }
+  if ((snapshot.cancellationRequestIds || []).length) {
+    await client.query(
+      `UPDATE contract_cancellation_requests SET status = 'pending', responded_at = NULL
+       WHERE request_id = ANY($1::uuid[]) AND status = 'withdrawn'`,
+      [snapshot.cancellationRequestIds]
     );
   }
   return {
@@ -1475,4 +1510,5 @@ module.exports = {
   releaseDuePayouts,
   listDisputePayouts,
   endContractAfterSettlement,
+  endContractForStandingSettlement,
 };

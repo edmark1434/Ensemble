@@ -365,6 +365,14 @@ export const DisputeFormPage: React.FC = () => {
                       >
                         {blockingDispute?.filedByViewer ? "View your dispute" : "View dispute"}
                       </button>
+                    ) : filing.code === "DISPUTE_DECISION_PENDING" && selectedContractId ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/contracts/${selectedContractId}`)}
+                        className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                      >
+                        Go to contract
+                      </button>
                     ) : null}
                   </div>
                 )}

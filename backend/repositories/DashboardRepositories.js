@@ -753,7 +753,9 @@ async function recordMilestoneAction({
         let milestoneRelease = null;
         let contractCompletion = null;
         if (releaseOnContractCompletion && milestoneStatus === 'completed') {
-            await assertNoOpenContractDispute(client, contractId);
+            // While the parties decide whether to continue after a dispute, the client may still
+            // approve delivered work (they must review it before they can end the contract).
+            await assertNoOpenContractDispute(client, contractId, { allowDecision: true });
             const milestoneCredits = Number(milestone.credits);
             if (Number.isSafeInteger(milestoneCredits) && milestoneCredits > 0) {
                 const existingReleaseResult = await client.query(
